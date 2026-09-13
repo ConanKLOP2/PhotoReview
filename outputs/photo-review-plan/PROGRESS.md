@@ -6,7 +6,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 ## Hiện trạng
 
 - Tài liệu kế hoạch: hoàn tất phiên bản đầu.
-- Audit hiện tại: 5 DONE, 14 PARTIAL, 16 TODO, 2 DEFERRED trong 39 task bản đầu.
+- Audit hiện tại: 5 DONE, 19 PARTIAL, 13 TODO, 2 DEFERRED trong 39 task bản đầu.
 - Benchmark trên bộ 242 ảnh: chưa chạy; ảnh gốc chưa thao tác.
 - Ứng dụng đã có solution/source và release artifacts; chưa coi toàn bộ plan là hoàn tất.
 
@@ -28,6 +28,19 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 3. Bổ sung EXIF test, LRU/quota cache, recovery UI và benchmark report.
 
 Đường dẫn bộ 242 ảnh hiện chưa biết; đây là điều kiện để nghiệm thu/benchmark, không phải lỗi implementation.
+
+## Evidence đã xác nhận
+
+- Debug/Release build: PASS, 0 warning/0 error.
+- `PhotoReview.Tests`: PASS persistence, journal/pending journal, keyboard contract và association contract.
+- `tools/smoke-test.ps1`: PASS Move/Undo bytes, conflict, session atomic write, Recycle Bin và cleanup.
+- `tools/verify-release.ps1`: PASS release files và executable hash.
+
+## Nhật ký audit
+
+| Ngày | Kết quả |
+|---|---|
+| 2026-09-13 | Đối chiếu lại source, tests và release artifacts; cập nhật trạng thái trong TASKS.md. Chưa đủ bằng chứng để tuyên bố toàn bộ plan hoàn thành. |
 
 ## Nhật ký
 
