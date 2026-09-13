@@ -13,7 +13,6 @@ public partial class MainWindow : Window
 {
     private readonly ConcurrentDictionary<string, BitmapImage> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _files = [];
-    private readonly Dictionary<string, int> _categories = new(StringComparer.OrdinalIgnoreCase);
     private int _index = -1;
     private long _generation;
     private readonly AppSettings _settings = AppSettings.Load();
@@ -46,7 +45,7 @@ public partial class MainWindow : Window
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
         var files = await Task.Run(() => Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p)))
             .OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase).ToList());
-        _files.Clear(); _files.AddRange(files); _categories.Clear(); _index = -1; _cache.Clear(); _cacheBytes = 0;
+        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _cacheBytes = 0;
         _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
         var resumePath = initialPath ?? _session.CurrentPath;
@@ -65,8 +64,7 @@ public partial class MainWindow : Window
             if (token != _generation) return;
             MainImage.Source = image;
             SetZoom(1);
-            var label = _categories.TryGetValue(path, out var c) ? $"Loại {c}" : "Chưa phân loại";
-            StatusText.Text = $"{index + 1}/{_files.Count} | {label} | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
+            StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             _ = PreloadAroundAsync(index, token);
         }
@@ -96,7 +94,24 @@ public partial class MainWindow : Window
             else
             {
                 bitmap = DecodeSource(path);
-                try { Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!); using var output = File.Create(cachePath); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); encoder.Save(output); } catch { }
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+                    var tempPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    try
+                    {
+                        using (var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                        {
+                            var encoder = new PngBitmapEncoder();
+                            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                            encoder.Save(output);
+                            output.Flush(true);
+                        }
+                        File.Move(tempPath, cachePath, true);
+                    }
+                    finally { try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { } }
+                }
+                catch { }
             }
             lock (_cacheGate)
             {
@@ -168,9 +183,10 @@ public partial class MainWindow : Window
             var info = new FileInfo(source);
             if (category == 3)
             {
-                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "RecycleBin", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                var operationId = Guid.NewGuid().ToString("N");
+                _journal.Append(new JournalEntry(operationId, "RecycleBin", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "RecycleBin", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, "RecycleBin", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
             }
             else
             {
@@ -179,11 +195,12 @@ public partial class MainWindow : Window
                 Directory.CreateDirectory(destinationFolder);
                 var destination = Path.Combine(destinationFolder, Path.GetFileName(source));
                 if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
-                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                var operationId = Guid.NewGuid().ToString("N");
+                _journal.Append(new JournalEntry(operationId, "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 File.Move(source, destination);
                 var movedInfo = new FileInfo(destination);
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
-                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _moveHistory.Push((source, destination));
             }
             _files.RemoveAt(_index); _cache.TryRemove(source, out _);

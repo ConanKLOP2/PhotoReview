@@ -5,9 +5,7 @@ namespace PhotoReview.App;
 
 public sealed class AppSettings
 {
-    public string Folder1Name { get; set; } = "Loai-1";
     public string Folder2Name { get; set; } = "Loai-2";
-    public bool MoveImmediately { get; set; } = true;
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
 
     public static AppSettings Load()

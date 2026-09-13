@@ -219,12 +219,12 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Bằng chứng: chưa có
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
-### PR-014 — Command phân loại đúng ID
+### PR-014 — Command phân loại theo phím tắt
 
 - Trạng thái: TODO
 - Mốc: M2; ưu tiên: P1
 - Phụ thuộc: PR-013, PR-009
-- Phạm vi làm: 1/2/3, chống key repeat, binding displayed ID, auto-next sau commit nhãn.
+- Phạm vi làm: Mũi tên chỉ duyệt/để nguyên ở nguồn; Enter Move vào folder 2; Delete gửi Recycle Bin; chống key repeat và auto-next sau commit.
 - Hoàn thành khi: T03 pass; xử lý lỗi lưu nhãn không báo đã lưu giả.
 - Đối chiếu yêu cầu/test: FR-04
 - Người phụ trách: chưa phân công
@@ -232,12 +232,12 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Bằng chứng: chưa có
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
-### PR-015 — Skip, history và Undo nhãn
+### PR-015 — Skip, history và Undo thao tác file
 
 - Trạng thái: TODO
 - Mốc: M2; ưu tiên: P1
 - Phụ thuộc: PR-014
-- Phạm vi làm: State riêng skip, history navigation, Undo/đổi loại có previous state.
+- Phạm vi làm: State riêng skip, history navigation, Ctrl+Z cho Move khi fingerprint còn khớp; không Undo Recycle Bin tự động.
 - Hoàn thành khi: Bộ đếm đúng; Undo trả nhãn và vị trí theo UX đã định nghĩa.
 - Đối chiếu yêu cầu/test: FR-05,FR-06
 - Người phụ trách: chưa phân công
@@ -284,12 +284,12 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Bằng chứng: chưa có
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
-### PR-019 — Cấu hình loại và chế độ
+### PR-019 — Cấu hình folder đích
 
 - Trạng thái: TODO
 - Mốc: M2; ưu tiên: P1
 - Phụ thuộc: PR-013, PR-017
-- Phạm vi làm: Tên/đích ba loại, mode Copy/Move/deferred, validate path; không chạy mutation lúc đổi setting.
+- Phạm vi làm: Cấu hình folder 2 và validate path; loại 1 không có folder/action riêng, loại 3 luôn là Windows Recycle Bin; Enter/Delete thực hiện ngay.
 - Hoàn thành khi: Setting được lưu; đích invalid bị chặn với lý do rõ.
 - Đối chiếu yêu cầu/test: FR-12
 - Người phụ trách: chưa phân công
@@ -349,12 +349,12 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Bằng chứng: chưa có
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
-### PR-024 — Copy và cross-volume Move
+### PR-024 — Cross-volume Move (ngoài MVP)
 
-- Trạng thái: TODO
+- Trạng thái: DEFERRED
 - Mốc: M3; ưu tiên: P0
 - Phụ thuộc: PR-022
-- Phạm vi làm: Temp unique, flush/verify/hash, rename no overwrite, kiểm tra nguồn trước bỏ, source-remains state.
+- Phạm vi làm: Không thuộc workflow MVP; chỉ mở lại nếu cần chuyển giữa volume khác nhau.
 - Hoàn thành khi: T12/T13/T15/T27 pass; kiểm thử đúng hai volume hoặc ghi chưa test.
 - Đối chiếu yêu cầu/test: R03
 - Người phụ trách: chưa phân công
@@ -388,12 +388,12 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Bằng chứng: chưa có
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
-### PR-027 — Hàng đợi và tích hợp chế độ
+### PR-027 — Hàng đợi và tích hợp chế độ (ngoài MVP)
 
-- Trạng thái: TODO
+- Trạng thái: DEFERRED
 - Mốc: M3; ưu tiên: P0
 - Phụ thuộc: PR-026, PR-019
-- Phạm vi làm: Deferred apply/Move ngay/Copy; progress, retry có kiểm tra, close khi pending.
+- Phạm vi làm: MVP không có hàng đợi/deferred/copy; Enter và Delete là thao tác tức thời.
 - Hoàn thành khi: T28 pass; nhãn và trạng thái chuyển hiển thị riêng.
 - Đối chiếu yêu cầu/test: FR-07
 - Người phụ trách: chưa phân công
@@ -558,6 +558,14 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
 ## Backlog mở rộng — không tính vào tiến độ bản đầu
+
+### FUT-009 — Settings UI và shortcut mapping
+
+- Trạng thái: DEFERRED
+- Phạm vi dự kiến: Nút Settings nhỏ; cấu hình phím mũi tên và phím action; ánh xạ từng action tới folder đích; Recycle Bin, cache, preload, zoom và resume.
+- Hoàn thành khi: restart giữ cấu hình; test conflict shortcut, config hỏng, folder không hợp lệ và migration đều pass.
+- Yêu cầu an toàn: hiển thị rõ thao tác tức thời, validate quyền ghi, chặn folder nguồn, có reset mặc định và lưu config nguyên tử.
+- Người phụ trách / lịch / bằng chứng: chưa có.
 
 ### FUT-001 — So sánh hai ảnh và đồng bộ zoom
 

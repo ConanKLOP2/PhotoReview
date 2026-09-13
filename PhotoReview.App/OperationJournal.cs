@@ -31,4 +31,23 @@ public sealed class OperationJournal
         }
         return entries;
     }
+
+    public IReadOnlyList<JournalEntry> ReadPendingOperations()
+    {
+        if (!File.Exists(_path)) return [];
+        var prepared = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in File.ReadLines(_path))
+        {
+            try
+            {
+                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                if (entry is null) continue;
+                if (entry.State == "Prepared") prepared[entry.Id] = entry;
+                if (entry.State is "Committed" or "Failed") completed.Add(entry.Id);
+            }
+            catch (JsonException) { }
+        }
+        return prepared.Where(x => !completed.Contains(x.Key)).Select(x => x.Value).ToList();
+    }
 }

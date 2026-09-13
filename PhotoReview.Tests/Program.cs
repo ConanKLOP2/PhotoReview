@@ -19,11 +19,13 @@ try
     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
     File.WriteAllBytes(source, [1, 2, 3, 4]);
     var info = new FileInfo(source);
-    journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+    var operationId = Guid.NewGuid().ToString("N");
+    journal.Append(new JournalEntry(operationId, "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
     File.Move(source, destination);
-    journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+    journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
     var committed = journal.ReadCommittedMoves();
     Check(committed.Any(x => x.Source == source && x.Destination == destination), "Journal committed Move", failures);
+    Check(journal.ReadPendingOperations().Count == 0, "Journal has no pending committed Move", failures);
     Check(File.ReadAllBytes(destination).SequenceEqual(new byte[] { 1, 2, 3, 4 }), "Move preserves bytes", failures);
 
     if (failures.Count > 0) { foreach (var failure in failures) Console.Error.WriteLine("FAIL: " + failure); Environment.ExitCode = 1; }

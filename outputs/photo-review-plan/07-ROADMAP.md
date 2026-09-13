@@ -27,6 +27,12 @@ JPG/PNG, folder, fit/100%, mũi tên/Enter/Delete, file loại 1 để nguyên n
 V1.1: so hai ảnh, đồng bộ zoom, remap phím, profile folder, xuất danh sách.
 V1.2: nhóm tên (1)/(2), hash duplicate, near-duplicate có đánh giá false positive.
 Theo nhu cầu: RAW/HEIC/AVIF, controller, tích hợp Explorer.
+
+## Future settings UI
+
+Thêm một nút Settings nhỏ trên thanh công cụ. Hộp thoại này tập trung toàn bộ cấu hình: phím tắt điều hướng, phím tắt từng hành động phân loại, folder đích tương ứng từng phím, Recycle Bin, cache RAM/disk, preload, zoom và resume.
+
+Settings phải kiểm tra trùng phím, có nút khôi phục mặc định, lưu nguyên tử, kiểm tra quyền ghi và cảnh báo khi folder đích trỏ vào folder nguồn.
 Chỉ sau bằng chứng nhu cầu: AI chấm nét, HDR chuyên nghiệp, nhiều nền tảng, cloud.
 
 ## Khi gate không đạt
