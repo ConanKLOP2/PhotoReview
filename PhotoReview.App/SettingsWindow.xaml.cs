@@ -35,7 +35,7 @@ public partial class SettingsWindow : Window
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Fast"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
