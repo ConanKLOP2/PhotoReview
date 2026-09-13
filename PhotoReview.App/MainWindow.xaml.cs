@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
+    private CancellationTokenSource _preloadCts = new();
+    private readonly SemaphoreSlim _preloadSlots = new(2, 2);
     private const long MaxCacheBytes = 1024L * 1024 * 1024;
 
     public MainWindow(string? initialPath = null)
@@ -155,13 +157,31 @@ public partial class MainWindow : Window
 
     private async Task PreloadAroundAsync(int center, long token)
     {
-        foreach (var offset in new[] { 1, -1, 2, -2, 3 })
+        _preloadCts.Cancel();
+        _preloadCts.Dispose();
+        _preloadCts = new CancellationTokenSource();
+        var cancellationToken = _preloadCts.Token;
+        var offsets = Enumerable.Range(1, 8).Concat([-1, -2]);
+        foreach (var offset in offsets)
         {
-            if (token != _generation) return;
+            if (token != _generation || cancellationToken.IsCancellationRequested) return;
             var i = center + offset;
-            if (i >= 0 && i < _files.Count) _ = GetPreviewAsync(_files[i]);
+            if (i >= 0 && i < _files.Count) _ = PreloadOneAsync(_files[i], cancellationToken);
         }
         await Task.CompletedTask;
+    }
+
+    private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _preloadSlots.WaitAsync(cancellationToken);
+            try { await GetPreviewAsync(path); }
+            finally { _preloadSlots.Release(); }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (NotSupportedException) { }
     }
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
