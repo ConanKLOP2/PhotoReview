@@ -6,31 +6,28 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 ## Hiện trạng
 
 - Tài liệu kế hoạch: hoàn tất phiên bản đầu.
-- Triển khai: 3/39 task DONE (7.7% theo số task, không đại diện khối lượng).
-- TODO: 31; IN_PROGRESS: 4; BLOCKED: 0.
-- Mở rộng: 8 task DEFERRED, không tính vào bản đầu.
-- Benchmark: chưa chạy.
-- Ứng dụng: chưa tạo.
-- Ảnh gốc: chưa thao tác.
+- Audit hiện tại: 5 DONE, 14 PARTIAL, 16 TODO, 2 DEFERRED trong 39 task bản đầu.
+- Benchmark trên bộ 242 ảnh: chưa chạy; ảnh gốc chưa thao tác.
+- Ứng dụng đã có solution/source và release artifacts; chưa coi toàn bộ plan là hoàn tất.
 
 ## Milestone
 
 | Mốc | Task | DONE/tổng | Gate | Trạng thái |
 |---|---|---|---|---|
-| M0 Khảo sát | PR-001–004 | 0/4 | G0 | Chưa bắt đầu |
-| M1 Prototype | PR-005–012 | 3/8 DONE, 5 IN_PROGRESS | G1 | Đang triển khai |
-| M2 Review | PR-013–020 | 0/8 | G2 | Chưa bắt đầu |
-| M3 File an toàn | PR-021–028 | 0/8 | G3 | Chưa bắt đầu |
-| M4 Cache hoàn chỉnh | PR-029–034 | 0/6 | G4 | Chưa bắt đầu |
-| M5 Release | PR-035–039 | 0/5 | G5 | Chưa bắt đầu |
+| M0 Khảo sát | PR-001–004 | PARTIAL | G0 | Chưa có hồ sơ môi trường, bộ ảnh và baseline |
+| M1 Prototype | PR-005–012 | PARTIAL | G1 | Viewer/scanner/cache có; EXIF, scheduler đầy đủ và benchmark thiếu |
+| M2 Review | PR-013–020 | PARTIAL | G2 | Workflow cơ bản có; Settings UI, filter, counter và gate GUI thiếu |
+| M3 File an toàn | PR-021–028 | PARTIAL | G3 | Move/journal/Undo guard có; recovery UI/fault injection thiếu; PR-024/027 deferred |
+| M4 Cache hoàn chỉnh | PR-029–034 | PARTIAL | G4 | Cache cơ bản có; LRU/quota/telemetry/benchmark thiếu |
+| M5 Release | PR-035–039 | PARTIAL | G5 | Build/test/package có; GUI acceptance, regression report và installer thiếu |
 
 ## Ba bước tiếp theo
 
-1. PR-008: hoàn thiện zoom 100%, pan và EXIF orientation.
-2. PR-009/PR-010: tách scheduler và thêm byte budget/eviction cho RAM cache.
-3. PR-001–003: ghi cấu hình, bộ ảnh mẫu và baseline Photos/FastStone.
+1. Chạy GUI acceptance trên bộ 242 ảnh thật và lưu evidence workflow/resume.
+2. Hoàn thiện Settings UI cho shortcut mapping, folder đích, validation và config.
+3. Bổ sung EXIF test, LRU/quota cache, recovery UI và benchmark report.
 
-Đường dẫn bộ 242 ảnh hiện chưa biết. Đây là thông tin cần cho benchmark, chưa ghi BLOCKED vì task chưa bắt đầu. Công việc skeleton/spec có thể chuẩn bị khi phạm vi triển khai được yêu cầu.
+Đường dẫn bộ 242 ảnh hiện chưa biết; đây là điều kiện để nghiệm thu/benchmark, không phải lỗi implementation.
 
 ## Nhật ký
 
@@ -42,6 +39,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-13 | Thêm zoom, Ctrl+Z cho Move và cập nhật phím tắt; build PASS | MainWindow.xaml/.cs; dotnet build 0 warning/0 error |
 | 2026-09-13 | Thêm session store, journal và instance lock; smoke test script được tạo | SessionStore.cs, OperationJournal.cs, InstanceLock.cs |
 | 2026-09-13 | Đơn giản hóa workflow theo yêu cầu: mũi tên để nguyên loại 1, Enter Move loại 2, Delete Recycle Bin; thêm test project và smoke tests PASS | MainWindow.xaml/.cs, PhotoReview.Tests, tools/smoke-test.ps1 |
+| 2026-09-13 | Audit lại trạng thái theo implementation/evidence; hạ các task chưa đủ test từ DONE xuống PARTIAL và ghi rõ gap | TASKS.md; build/test/smoke/release evidence |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 

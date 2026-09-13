@@ -9,6 +9,7 @@
     <DockPanel Margin="12">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <Button Content="Mở folder" Padding="14,7" Click="OpenFolder_Click" />
+            <Button Content="⚙ Settings" Padding="10,7" Margin="8,0,0,0" Click="Settings_Click" />
             <TextBlock x:Name="FolderText" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="12,0,0,0" Text="Chưa mở folder" />
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">

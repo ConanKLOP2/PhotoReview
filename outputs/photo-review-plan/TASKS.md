@@ -1,6 +1,8 @@
-# Backlog chi tiết
+# Backlog chi tiết và audit trạng thái
 
-Ngày khởi tạo: 2026-09-13. 39 task bản đầu đều TODO; 8 task mở rộng DEFERRED. Không task triển khai nào đã chạy.
+Cập nhật audit: 2026-09-13. Bảng dưới đây là nguồn trạng thái hiện tại; các mục chi tiết bên dưới được đối chiếu theo cùng ID.
+
+Quy ước: DONE = có implementation và evidence đủ; PARTIAL = implementation/evidence chưa đủ; TODO = chưa có; DEFERRED = ngoài MVP. Workflow hiện tại là Left/Right để nguyên file nguồn (loại 1), Enter Move folder 2, Delete Recycle Bin (loại 3), Space skip, Ctrl+Z Undo Move. Không còn yêu cầu phím số 1.
 
 ## Bảng task bản đầu
 
@@ -9,42 +11,42 @@ Ngày khởi tạo: 2026-09-13. 39 task bản đầu đều TODO; 8 task mở r�
 | PR-001 | M0 | Khảo sát môi trường | TODO | — |
 | PR-002 | M0 | Lập bộ ảnh mẫu và fixture | TODO | PR-001 |
 | PR-003 | M0 | Đo baseline Photos/FastStone | TODO | PR-001, PR-002 |
-| PR-004 | M0 | Chốt phạm vi và gate G0 | TODO | PR-003 |
+| PR-004 | M0 | Chốt phạm vi và gate G0 | PARTIAL | PR-003 |
 | PR-005 | M1 | Khởi tạo solution và build | DONE | PR-004 |
 | PR-006 | M1 | Scanner và natural sort | DONE | PR-005 |
-| PR-007 | M1 | Decoder adapter và metadata | DONE | PR-005, PR-002 |
-| PR-008 | M1 | Viewer fit và 100% | IN_PROGRESS | PR-007 |
-| PR-009 | M1 | Scheduler và chống stale frame | IN_PROGRESS | PR-006, PR-008 |
-| PR-010 | M1 | RAM cache prototype | IN_PROGRESS | PR-009 |
+| PR-007 | M1 | Decoder adapter và metadata | PARTIAL | PR-005, PR-002 |
+| PR-008 | M1 | Viewer fit và 100% | PARTIAL | PR-007 |
+| PR-009 | M1 | Scheduler và chống stale frame | PARTIAL | PR-006, PR-008 |
+| PR-010 | M1 | RAM cache prototype | PARTIAL | PR-009 |
 | PR-011 | M1 | Instrumentation benchmark | TODO | PR-005 |
 | PR-012 | M1 | Benchmark và quyết định G1 | TODO | PR-003, PR-010, PR-011 |
-| PR-013 | M2 | Schema phiên và persistence | TODO | PR-012 |
-| PR-014 | M2 | Command phân loại đúng ID | TODO | PR-013, PR-009 |
-| PR-015 | M2 | Skip, history và Undo nhãn | TODO | PR-014 |
-| PR-016 | M2 | Focus và bộ shortcut | TODO | PR-014 |
-| PR-017 | M2 | Giao diện review và bộ đếm | TODO | PR-015, PR-016 |
+| PR-013 | M2 | Schema phiên và persistence | PARTIAL | PR-012 |
+| PR-014 | M2 | Command phân loại đúng ID | DONE | PR-013, PR-009 |
+| PR-015 | M2 | Skip, history và Undo nhãn | PARTIAL | PR-014 |
+| PR-016 | M2 | Focus và bộ shortcut | PARTIAL | PR-014 |
+| PR-017 | M2 | Giao diện review và bộ đếm | PARTIAL | PR-015, PR-016 |
 | PR-018 | M2 | Tìm lọc và thumbnail strip | TODO | PR-017 |
-| PR-019 | M2 | Cấu hình loại và chế độ | TODO | PR-013, PR-017 |
+| PR-019 | M2 | Cấu hình loại và chế độ | PARTIAL | PR-013, PR-017 |
 | PR-020 | M2 | Gate G2 review/resume | TODO | PR-015, PR-016, PR-018, PR-019 |
-| PR-021 | M3 | File operation planner | TODO | PR-020 |
-| PR-022 | M3 | Journal và state machine | TODO | PR-021 |
-| PR-023 | M3 | Same-volume Move | TODO | PR-022 |
-| PR-024 | M3 | Copy và cross-volume Move | TODO | PR-022 |
-| PR-025 | M3 | Undo file operations | TODO | PR-023, PR-024 |
-| PR-026 | M3 | Recovery và khóa phiên | TODO | PR-022, PR-025 |
-| PR-027 | M3 | Hàng đợi và tích hợp chế độ | TODO | PR-026, PR-019 |
+| PR-021 | M3 | File operation planner | PARTIAL | PR-020 |
+| PR-022 | M3 | Journal và state machine | PARTIAL | PR-021 |
+| PR-023 | M3 | Same-volume Move | DONE | PR-022 |
+| PR-024 | M3 | Copy và cross-volume Move | DEFERRED | PR-022 |
+| PR-025 | M3 | Undo file operations | PARTIAL | PR-023, PR-024 |
+| PR-026 | M3 | Recovery và khóa phiên | PARTIAL | PR-022, PR-025 |
+| PR-027 | M3 | Hàng đợi và tích hợp chế độ | DEFERRED | PR-026, PR-019 |
 | PR-028 | M3 | Gate G3 dữ liệu | TODO | PR-027 |
-| PR-029 | M4 | Disk cache có version | TODO | PR-012, PR-013 |
+| PR-029 | M4 | Disk cache có version | PARTIAL | PR-012, PR-013 |
 | PR-030 | M4 | Prepare cả folder | TODO | PR-029, PR-010 |
 | PR-031 | M4 | RAM pressure và I/O tuning | TODO | PR-030, PR-027 |
 | PR-032 | M4 | Riêng tư và quản lý cache | TODO | PR-029 |
-| PR-033 | M4 | Thay đổi ngoài app và lỗi ổ | TODO | PR-027, PR-029 |
+| PR-033 | M4 | Thay đổi ngoài app và lỗi ổ | PARTIAL | PR-027, PR-029 |
 | PR-034 | M4 | Gate G4 hiệu năng tổng thể | TODO | PR-031, PR-032, PR-033, PR-028 |
-| PR-035 | M5 | Hoàn thiện UX và accessibility | TODO | PR-034 |
-| PR-036 | M5 | Đóng gói self-contained | TODO | PR-035 |
-| PR-037 | M5 | Regression và known issues | TODO | PR-036 |
+| PR-035 | M5 | Hoàn thiện UX và accessibility | PARTIAL | PR-034 |
+| PR-036 | M5 | Đóng gói self-contained | DONE | PR-035 |
+| PR-037 | M5 | Regression và known issues | PARTIAL | PR-036 |
 | PR-038 | M5 | Nghiệm thu workflow thật | TODO | PR-037 |
-| PR-039 | M5 | Bàn giao và baseline phát hành | TODO | PR-038 |
+| PR-039 | M5 | Bàn giao và baseline phát hành | PARTIAL | PR-038 |
 
 ## Chi tiết thực thi
 

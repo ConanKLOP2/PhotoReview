@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -11,18 +10,18 @@ namespace PhotoReview.App;
 
 public partial class MainWindow : Window
 {
-    private readonly ConcurrentDictionary<string, BitmapImage> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly BoundedLruCache<string, BitmapImage> _cache = new(
+        MaxCacheBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4),
+        StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _files = [];
     private int _index = -1;
     private long _generation;
-    private readonly AppSettings _settings = AppSettings.Load();
+    private AppSettings _settings = AppSettings.Load();
     private readonly OperationJournal _journal = new();
     private readonly SessionStore _sessionStore = new();
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
-    private long _cacheBytes;
-    private readonly object _cacheGate = new();
     private const long MaxCacheBytes = 1024L * 1024 * 1024;
 
     public MainWindow(string? initialPath = null)
@@ -40,12 +39,18 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == Forms.DialogResult.OK) _ = LoadFolderAsync(dialog.SelectedPath);
     }
 
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SettingsWindow(_settings) { Owner = this };
+        if (dialog.ShowDialog() == true) _settings = AppSettings.Load();
+    }
+
     private async Task LoadFolderAsync(string folder, string? initialPath = null)
     {
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
         var files = await Task.Run(() => Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p)))
             .OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase).ToList());
-        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _cacheBytes = 0;
+        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear();
         _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
         var resumePath = initialPath ?? _session.CurrentPath;
@@ -73,7 +78,7 @@ public partial class MainWindow : Window
 
     private async Task<BitmapImage> GetPreviewAsync(string path)
     {
-        if (_cache.TryGetValue(path, out var cached)) return cached;
+        if (_cache.TryGet(path, out var cached)) return cached;
         return await Task.Run(() =>
         {
             var bitmap = new BitmapImage();
@@ -113,12 +118,7 @@ public partial class MainWindow : Window
                 }
                 catch { }
             }
-            lock (_cacheGate)
-            {
-                var bytes = Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4);
-                if (_cacheBytes + bytes > MaxCacheBytes) { _cache.Clear(); _cacheBytes = 0; }
-                _cache[path] = bitmap; _cacheBytes += bytes;
-            }
+            _cache.Set(path, bitmap);
             return bitmap;
         });
     }
@@ -153,15 +153,17 @@ public partial class MainWindow : Window
     {
         if (_index < 0) return;
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
-        if (e.Key == Key.Enter) { e.Handled = true; await ClassifyCurrentAsync(2); return; }
-        if (e.Key == Key.Delete) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
+        if (Matches(e.Key, _settings.Shortcuts.MoveToFolder2)) { e.Handled = true; await ClassifyCurrentAsync(2); return; }
+        if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
         if (e.Key == Key.Space) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
         if (e.Key == Key.Z) { e.Handled = true; SetZoom(_zoom == 1 ? 2 : 1); return; }
         if (e.Key is Key.Add or Key.OemPlus) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
         if (e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
-        if (e.Key == Key.Right) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
-        if (e.Key == Key.Left) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+        if (Matches(e.Key, _settings.Shortcuts.Next)) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
+        if (Matches(e.Key, _settings.Shortcuts.Previous)) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
     }
+
+    private static bool Matches(Key key, string configured) => Enum.TryParse<Key>(configured, true, out var parsed) && key == parsed;
 
     private void ImageScroll_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
@@ -203,7 +205,7 @@ public partial class MainWindow : Window
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _moveHistory.Push((source, destination));
             }
-            _files.RemoveAt(_index); _cache.TryRemove(source, out _);
+            _files.RemoveAt(_index); _cache.Remove(source);
             if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
             else { MainImage.Source = null; StatusText.Text = "Đã xử lý hết ảnh trong folder."; }
