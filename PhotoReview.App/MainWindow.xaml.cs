@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private AppSettings _settings = AppSettings.Load();
     private readonly OperationJournal _journal = new();
     private readonly SessionStore _sessionStore = new();
+    private readonly ThumbnailCache _thumbnailCache = new();
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
@@ -65,6 +66,11 @@ public partial class MainWindow : Window
         StatusText.Text = $"Đang tải {index + 1}/{_files.Count}: {Path.GetFileName(path)}";
         try
         {
+            var thumbnail = await _thumbnailCache.GetAsync(path);
+            if (token != _generation) return;
+            MainImage.Source = thumbnail;
+            ApplyInitialViewMode();
+            StatusText.Text = $"{index + 1}/{_files.Count} | Đang tải ảnh rõ hơn: {Path.GetFileName(path)}";
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;
@@ -82,7 +88,8 @@ public partial class MainWindow : Window
         return await Task.Run(() =>
         {
             var bitmap = new BitmapImage();
-            var cachePath = GetDiskCachePath(path);
+            var targetWidth = GetTargetDecodeWidth();
+            var cachePath = GetDiskCachePath(path, targetWidth);
             if (File.Exists(cachePath))
             {
                 try
@@ -93,12 +100,12 @@ public partial class MainWindow : Window
                 catch (Exception) when (File.Exists(cachePath))
                 {
                     try { File.Delete(cachePath); } catch { }
-                    bitmap = DecodeSource(path);
+                    bitmap = DecodeSource(path, targetWidth);
                 }
             }
             else
             {
-                bitmap = DecodeSource(path);
+                bitmap = DecodeSource(path, targetWidth);
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -123,18 +130,25 @@ public partial class MainWindow : Window
         });
     }
 
-    private static BitmapImage DecodeSource(string path)
+    private static BitmapImage DecodeSource(string path, int targetWidth)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var bitmap = new BitmapImage();
-        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 2200;
+        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = targetWidth;
         bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
     }
 
-    private static string GetDiskCachePath(string path)
+    private int GetTargetDecodeWidth()
+    {
+        var viewport = ImageScroll.ActualWidth > 1 ? ImageScroll.ActualWidth : 2200;
+        var dpi = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
+        return AdaptivePreviewPolicy.CalculateTargetDecodeWidth(viewport, dpi, 1.15);
+    }
+
+    private static string GetDiskCachePath(string path, int targetWidth)
     {
         var info = new FileInfo(path);
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|2200")));
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{targetWidth}")));
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", key + ".png");
     }
 
