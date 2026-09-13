@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:PhotoReview.App"
         mc:Ignorable="d"
         Title="Photo Review" Height="800" Width="1200" WindowState="Maximized" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" KeyDown="Window_KeyDown" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded">
-    <DockPanel Margin="0">
+    <DockPanel Margin="0" LastChildFill="True">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <Button Content="Mở folder" Padding="14,7" Click="OpenFolder_Click" />
             <Button Content="⚙ Settings" Padding="10,7" Margin="8,0,0,0" Click="Settings_Click" />
@@ -16,8 +16,8 @@
             <TextBlock x:Name="StatusText" Foreground="#BBBBBB" FontSize="14" />
             <TextBlock Foreground="#888888" Margin="0,5,0,0" Text="↑ / ← / → / ↓: duyệt, để nguyên = loại 1   Enter: chuyển vào loại 2   Delete: Thùng rác   Space: bỏ qua" />
         </StackPanel>
-        <Border Background="#101010" CornerRadius="4" ClipToBounds="True" MouseLeftButtonDown="Image_LeftClick" MouseRightButtonDown="Image_RightClick">
-            <ScrollViewer x:Name="ImageScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
+        <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" CornerRadius="4" ClipToBounds="True" MouseLeftButtonDown="Image_LeftClick" MouseRightButtonDown="Image_RightClick">
+            <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
                 <Image x:Name="MainImage" Stretch="None" RenderTransformOrigin="0.5,0.5" MouseLeftButtonDown="Image_LeftClick" MouseRightButtonDown="Image_RightClick">
                     <Image.RenderTransform><ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1" /></Image.RenderTransform>
                 </Image>
