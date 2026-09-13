@@ -91,28 +91,16 @@ public sealed class ThumbnailCache : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
                 64 * 1024, FileOptions.SequentialScan);
-            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-            var frame = decoder.Frames[0];
-            var width = Math.Min(MaxThumbnailWidth, frame.PixelWidth);
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
-            bitmap.StreamSource = new MemoryStream(EncodeFrame(frame), writable: false);
-            bitmap.DecodePixelWidth = width;
+            bitmap.StreamSource = stream;
+            bitmap.DecodePixelWidth = MaxThumbnailWidth;
             bitmap.EndInit();
             bitmap.Freeze();
             return (BitmapSource)bitmap;
         }, cancellationToken);
-    }
-
-    private static byte[] EncodeFrame(BitmapFrame frame)
-    {
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(frame);
-        using var output = new MemoryStream();
-        encoder.Save(output);
-        return output.ToArray();
     }
 
     private static async Task WriteAtomicallyAsync(BitmapSource image, string cachePath, CancellationToken cancellationToken)
