@@ -191,20 +191,11 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.F11)
         {
-            e.Handled = true;
-            if (WindowStyle == WindowStyle.None)
-            {
-                WindowStyle = WindowStyle.SingleBorderWindow;
-                WindowState = WindowState.Normal;
-                ResizeMode = ResizeMode.CanResize;
-            }
-            else
-            {
-                ResizeMode = ResizeMode.NoResize;
-                WindowStyle = WindowStyle.None;
-                WindowState = WindowState.Maximized;
-            }
-            return;
+            e.Handled = true; ToggleFullscreen(); return;
+        }
+        if (e.Key == Key.Escape && WindowStyle == WindowStyle.None)
+        {
+            e.Handled = true; ExitFullscreen(); return;
         }
         if (_index < 0) return;
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
@@ -216,6 +207,25 @@ public partial class MainWindow : Window
         if (e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
         if (Matches(e.Key, _settings.Shortcuts.Next) || e.Key == Key.Down) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
         if (Matches(e.Key, _settings.Shortcuts.Previous) || e.Key == Key.Up) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+    }
+
+    private void ToggleFullscreen()
+    {
+        if (WindowStyle == WindowStyle.None) ExitFullscreen();
+        else
+        {
+            ResizeMode = ResizeMode.NoResize;
+            WindowStyle = WindowStyle.None;
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void ExitFullscreen()
+    {
+        WindowStyle = WindowStyle.SingleBorderWindow;
+        ResizeMode = ResizeMode.CanResize;
+        WindowState = WindowState.Normal;
+        WindowState = WindowState.Maximized;
     }
 
     private static bool Matches(Key key, string configured) => Enum.TryParse<Key>(configured, true, out var parsed) && key == parsed;

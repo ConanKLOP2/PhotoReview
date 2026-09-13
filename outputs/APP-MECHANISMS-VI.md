@@ -22,7 +22,8 @@ Tài liệu này mô tả code hiện tại để người dùng tự preview, g
 | Enter | Move vào folder 2 |
 | Delete | Gửi vào Windows Recycle Bin |
 | Ctrl+Z | Undo Move gần nhất nếu file chưa bị sửa |
-| F11 | Đổi fullscreen/cửa sổ có khung |
+| F11 | Vào/đổi fullscreen |
+| Esc | Thoát fullscreen về cửa sổ có khung |
 
 File còn ở folder nguồn mặc nhiên là loại 1; app không cần tạo folder hay marker cho loại này.
 
