@@ -68,11 +68,14 @@ public partial class MainWindow : Window
         StatusText.Text = $"Đang tải {index + 1}/{_files.Count}: {Path.GetFileName(path)}";
         try
         {
-            var thumbnail = await _thumbnailCache.GetAsync(path);
-            if (token != _generation) return;
-            MainImage.Source = thumbnail;
-            ApplyInitialViewMode();
-            StatusText.Text = $"{index + 1}/{_files.Count} | Đang tải ảnh rõ hơn: {Path.GetFileName(path)}";
+            if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase))
+            {
+                var thumbnail = await _thumbnailCache.GetAsync(path);
+                if (token != _generation) return;
+                MainImage.Source = thumbnail;
+                ApplyInitialViewMode();
+                StatusText.Text = $"{index + 1}/{_files.Count} | Đang tải ảnh rõ hơn: {Path.GetFileName(path)}";
+            }
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;

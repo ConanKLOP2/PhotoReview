@@ -7,6 +7,7 @@ public sealed class AppSettings
 {
     public string Folder2Name { get; set; } = "Loai-2";
     public string InitialViewMode { get; set; } = "Fit";
+    public string LoadingMode { get; set; } = "Fast";
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
 
@@ -18,6 +19,7 @@ public sealed class AppSettings
             {
                 var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(ConfigPath)) ?? new();
                 loaded.Shortcuts ??= ShortcutMappings.Default();
+                loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
                 return loaded;
             }
         }
@@ -34,6 +36,13 @@ public sealed class AppSettings
         File.WriteAllText(temp, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temp, ConfigPath, true);
     }
+
+    public static string NormalizeLoadingMode(string? value) =>
+        string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase) ? "Preview" : "Fast";
+
+    public static bool IsValidLoadingMode(string? value) =>
+        string.Equals(value, "Fast", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ShortcutMappings

@@ -14,6 +14,7 @@ public partial class SettingsWindow : Window
         {
             Folder2Name = current.Folder2Name,
             InitialViewMode = current.InitialViewMode,
+            LoadingMode = current.LoadingMode is "Preview" ? "Preview" : "Fast",
             Shortcuts = new ShortcutMappings
             {
                 Next = current.Shortcuts.Next, Previous = current.Shortcuts.Previous,
@@ -29,11 +30,12 @@ public partial class SettingsWindow : Window
         NextText.Text = Settings.Shortcuts.Next; PreviousText.Text = Settings.Shortcuts.Previous;
         MoveText.Text = Settings.Shortcuts.MoveToFolder2; RecycleText.Text = Settings.Shortcuts.SendToRecycleBin;
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { "100%" => 1, "200%" => 2, "400%" => 3, _ => 0 };
+        LoadingModeCombo.SelectedIndex = Settings.LoadingMode == "Preview" ? 1 : 0;
     }
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Fast"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -45,6 +47,7 @@ public partial class SettingsWindow : Window
         }
         Settings.Folder2Name = Folder2Text.Text.Trim();
         Settings.InitialViewMode = (ViewModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content?.ToString() ?? "Fit";
+        Settings.LoadingMode = (LoadingModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content?.ToString() ?? "Fast";
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.MoveToFolder2 = MoveText.Text.Trim(); Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         AppSettings.Save(Settings); DialogResult = true;

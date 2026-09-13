@@ -40,6 +40,13 @@ try
     Check(cache.CurrentSize <= 4, "LRU enforces byte capacity", failures);
 
     var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs"));
+    var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
+    Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
+    Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal), "LoadingMode has Fast and Preview options", failures);
+    Check(appSettings.Contains("= \"Fast\"", StringComparison.Ordinal) || appSettings.Contains("= LoadingMode.Fast", StringComparison.Ordinal), "LoadingMode defaults to Fast", failures);
+    Check(appSettings.Contains("IsValidLoadingMode", StringComparison.Ordinal) || appSettings.Contains("ValidateLoadingMode", StringComparison.Ordinal) || appSettings.Contains("Invalid LoadingMode", StringComparison.Ordinal), "LoadingMode validation exists", failures);
+    Check(mainWindow.Contains("LoadingMode", StringComparison.Ordinal), "MainWindow reads LoadingMode", failures);
+    Check(mainWindow.Contains("Thumbnail", StringComparison.Ordinal) && mainWindow.Contains("Preview", StringComparison.Ordinal), "MainWindow loading modes have thumbnail/preview contract", failures);
     var shortcuts = ShortcutMappings.Default();
     Check(shortcuts.Next == "Right" && shortcuts.Previous == "Left" && mainWindow.Contains("Matches(e.Key, _settings.Shortcuts.Next)") && mainWindow.Contains("Matches(e.Key, _settings.Shortcuts.Previous)"), "Keyboard navigation uses arrow keys", failures);
     Check(shortcuts.MoveToFolder2 == "Enter" && mainWindow.Contains("ClassifyCurrentAsync(2)"), "Enter maps to category 2 move", failures);
