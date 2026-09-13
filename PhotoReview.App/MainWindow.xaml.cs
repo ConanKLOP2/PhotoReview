@@ -85,10 +85,11 @@ public partial class MainWindow : Window
     private async Task<BitmapImage> GetPreviewAsync(string path)
     {
         if (_cache.TryGet(path, out var cached)) return cached;
+        // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
+        var targetWidth = GetTargetDecodeWidth();
         return await Task.Run(() =>
         {
             var bitmap = new BitmapImage();
-            var targetWidth = GetTargetDecodeWidth();
             var cachePath = GetDiskCachePath(path, targetWidth);
             if (File.Exists(cachePath))
             {
