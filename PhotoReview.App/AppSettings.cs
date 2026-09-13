@@ -6,6 +6,7 @@ namespace PhotoReview.App;
 public sealed class AppSettings
 {
     public string Folder2Name { get; set; } = "Loai-2";
+    public string InitialViewMode { get; set; } = "Fit";
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
 

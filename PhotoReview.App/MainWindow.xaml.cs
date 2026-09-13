@@ -68,7 +68,7 @@ public partial class MainWindow : Window
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;
-            SetZoom(1);
+            ApplyInitialViewMode();
             StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             _ = PreloadAroundAsync(index, token);
@@ -170,10 +170,35 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers == ModifierKeys.Control) { SetZoom(Math.Clamp(_zoom + (e.Delta > 0 ? .25 : -.25), .25, 4)); e.Handled = true; }
     }
 
+    private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (string.Equals(_settings.InitialViewMode, "Fit", StringComparison.OrdinalIgnoreCase))
+        {
+            MainImage.Width = Math.Max(1, ImageScroll.ViewportWidth);
+            MainImage.Height = Math.Max(1, ImageScroll.ViewportHeight);
+        }
+    }
+
     private void SetZoom(double value)
     {
+        MainImage.Stretch = System.Windows.Media.Stretch.None;
+        MainImage.Width = double.NaN; MainImage.Height = double.NaN;
         _zoom = value; ImageScale.ScaleX = value; ImageScale.ScaleY = value;
         if (_index >= 0) StatusText.Text = $"{_index + 1}/{_files.Count} | Zoom {_zoom:0.##}x | {Path.GetFileName(_files[_index])}";
+    }
+
+    private void ApplyInitialViewMode()
+    {
+        if (string.Equals(_settings.InitialViewMode, "Fit", StringComparison.OrdinalIgnoreCase))
+        {
+            _zoom = 1;
+            ImageScale.ScaleX = 1; ImageScale.ScaleY = 1;
+            MainImage.Stretch = System.Windows.Media.Stretch.Uniform;
+        }
+        else
+        {
+            SetZoom(_settings.InitialViewMode switch { "200%" => 2, "400%" => 4, _ => 1 });
+        }
     }
 
     private async Task ClassifyCurrentAsync(int category)

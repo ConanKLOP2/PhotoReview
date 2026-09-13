@@ -17,7 +17,7 @@
             <TextBlock Foreground="#888888" Margin="0,5,0,0" Text="← / →: duyệt, để nguyên = loại 1   Enter: chuyển vào loại 2   Delete: Thùng rác   Space: bỏ qua" />
         </StackPanel>
         <Border Background="#101010" CornerRadius="4" ClipToBounds="True">
-            <ScrollViewer x:Name="ImageScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
+            <ScrollViewer x:Name="ImageScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
                 <Image x:Name="MainImage" Stretch="None" RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform><ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1" /></Image.RenderTransform>
                 </Image>
