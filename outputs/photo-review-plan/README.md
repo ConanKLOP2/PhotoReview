@@ -1,7 +1,7 @@
 # Photo Review — Bộ kế hoạch và theo dõi tiến độ
 
 Ngày lập: 2026-09-13. Ngôn ngữ tài liệu: tiếng Việt.
-Trạng thái: solution/prototype M1 đang triển khai; chưa benchmark và chưa có thao tác Move/Undo.
+Trạng thái: solution/prototype M1 đang triển khai; workflow đã chốt là mũi tên để nguyên loại 1, Enter Move loại 2, Delete Recycle Bin.
 Phạm vi yêu cầu hiện tại: tạo tài liệu và task, không thay đổi ảnh người dùng.
 
 ## Bắt đầu ở đâu

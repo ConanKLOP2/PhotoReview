@@ -38,8 +38,10 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 |---|---|---|
 | 2026-09-13 | Tạo bộ kế hoạch và backlog, chưa triển khai | README.md và TASKS.md |
 | 2026-09-13 | Tạo solution WPF và prototype folder/viewer/cache/preload; build PASS | PhotoReview.slnx; build 0 warning/0 error |
-| 2026-09-13 | Thêm mở file từ Explorer, config folder 1/2, Move và Recycle Bin cho phím 1/2/3; build đang sửa lỗi config | App.xaml.cs, AppSettings.cs, association script |
+| 2026-09-13 | Thêm mở file từ Explorer, config folder 1/2, Enter Move loại 2 và Delete Recycle Bin; workflow phím số đã bỏ | App.xaml.cs, AppSettings.cs, association script |
 | 2026-09-13 | Thêm zoom, Ctrl+Z cho Move và cập nhật phím tắt; build PASS | MainWindow.xaml/.cs; dotnet build 0 warning/0 error |
+| 2026-09-13 | Thêm session store, journal và instance lock; smoke test script được tạo | SessionStore.cs, OperationJournal.cs, InstanceLock.cs |
+| 2026-09-13 | Đơn giản hóa workflow theo yêu cầu: mũi tên để nguyên loại 1, Enter Move loại 2, Delete Recycle Bin; thêm test project và smoke tests PASS | MainWindow.xaml/.cs, PhotoReview.Tests, tools/smoke-test.ps1 |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 

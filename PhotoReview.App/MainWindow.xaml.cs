@@ -138,11 +138,8 @@ public partial class MainWindow : Window
     {
         if (_index < 0) return;
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
-        if (e.Key is Key.D1 or Key.NumPad1 or Key.D2 or Key.NumPad2 or Key.D3 or Key.NumPad3)
-        {
-            var category = e.Key is Key.D1 or Key.NumPad1 ? 1 : e.Key is Key.D2 or Key.NumPad2 ? 2 : 3;
-            e.Handled = true; await ClassifyCurrentAsync(category); return;
-        }
+        if (e.Key == Key.Enter) { e.Handled = true; await ClassifyCurrentAsync(2); return; }
+        if (e.Key == Key.Delete) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
         if (e.Key == Key.Space) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
         if (e.Key == Key.Z) { e.Handled = true; SetZoom(_zoom == 1 ? 2 : 1); return; }
         if (e.Key is Key.Add or Key.OemPlus) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
@@ -177,7 +174,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                var folderName = category == 1 ? _settings.Folder1Name : _settings.Folder2Name;
+                var folderName = _settings.Folder2Name;
                 var destinationFolder = Path.IsPathRooted(folderName) ? folderName : Path.Combine(Path.GetDirectoryName(source)!, folderName);
                 Directory.CreateDirectory(destinationFolder);
                 var destination = Path.Combine(destinationFolder, Path.GetFileName(source));

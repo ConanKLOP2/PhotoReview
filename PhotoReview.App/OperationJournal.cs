@@ -7,7 +7,7 @@ public sealed record JournalEntry(string Id, string Type, string State, string S
 
 public sealed class OperationJournal
 {
-    private readonly string _path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "Data", "operations.jsonl");
+    private readonly string _path = Path.Combine(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "Data"), "operations.jsonl");
     private readonly object _gate = new();
 
     public void Append(JournalEntry entry)

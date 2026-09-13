@@ -3,7 +3,7 @@
 ## Tầng kiểm thử
 
 Unit: natural sort, ánh xạ nhãn, cache key, eviction budget, state transition, path planning.
-Integration: SQLite/session, decoder thực, filesystem Copy/Move/Undo/recovery.
+Integration: session/journal, decoder thực, filesystem Move/Recycle Bin/Undo/recovery.
 UI/manual: focus, key repeat, DPI, zoom, stale frame, fullscreen.
 Performance: theo 04-PERFORMANCE.md.
 Không dùng unit test thay cho kiểm tra file thật và crash recovery.
@@ -62,4 +62,3 @@ Test cross-volume cần hai volume thực hoặc môi trường mô phỏng đư
 
 Mỗi test: build/commit, OS, fixture, bước chạy, expected/actual, PASS/FAIL/NOT_TESTED, log hoặc ảnh chụp khi hữu ích.
 Báo cáo release phải link benchmark, test report và known issues.
-

@@ -1,6 +1,7 @@
 ﻿using System.Configuration;
 using System.Data;
 using System.Windows;
+using System.IO;
 
 namespace PhotoReview.App;
 
@@ -16,7 +17,7 @@ public partial class App : System.Windows.Application
         _instanceLock = new InstanceLock(initial is null ? null : Path.GetDirectoryName(initial));
         if (!_instanceLock.IsOwner)
         {
-            MessageBox.Show("Folder này đang được mở trong một Photo Review khác.", "Photo Review", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show("Folder này đang được mở trong một Photo Review khác.", "Photo Review", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }

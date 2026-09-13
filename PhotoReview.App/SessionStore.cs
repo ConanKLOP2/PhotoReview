@@ -14,7 +14,7 @@ public sealed class SessionState
 public sealed class SessionStore
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
-    private static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "Data", "Sessions");
+    private static string Root => Path.Combine(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "Data"), "Sessions");
 
     public SessionState Load(string folder)
     {
