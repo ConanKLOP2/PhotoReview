@@ -159,8 +159,8 @@ public partial class MainWindow : Window
         if (e.Key == Key.Z) { e.Handled = true; SetZoom(_zoom == 1 ? 2 : 1); return; }
         if (e.Key is Key.Add or Key.OemPlus) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
         if (e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
-        if (Matches(e.Key, _settings.Shortcuts.Next)) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
-        if (Matches(e.Key, _settings.Shortcuts.Previous)) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+        if (Matches(e.Key, _settings.Shortcuts.Next) || e.Key == Key.Down) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
+        if (Matches(e.Key, _settings.Shortcuts.Previous) || e.Key == Key.Up) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
     }
 
     private static bool Matches(Key key, string configured) => Enum.TryParse<Key>(configured, true, out var parsed) && key == parsed;
@@ -185,8 +185,10 @@ public partial class MainWindow : Window
         var height = ImageScroll.ActualHeight - ImageScroll.BorderThickness.Top - ImageScroll.BorderThickness.Bottom;
         if (width > 1 && height > 1)
         {
-            MainImage.Width = width;
-            MainImage.Height = height;
+            MainImage.Width = double.NaN;
+            MainImage.Height = double.NaN;
+            MainImage.MaxWidth = width;
+            MainImage.MaxHeight = height;
         }
     }
 
@@ -194,6 +196,7 @@ public partial class MainWindow : Window
     {
         MainImage.Stretch = System.Windows.Media.Stretch.None;
         MainImage.Width = double.NaN; MainImage.Height = double.NaN;
+        MainImage.MaxWidth = double.PositiveInfinity; MainImage.MaxHeight = double.PositiveInfinity;
         _zoom = value; ImageScale.ScaleX = value; ImageScale.ScaleY = value;
         if (_index >= 0) StatusText.Text = $"{_index + 1}/{_files.Count} | Zoom {_zoom:0.##}x | {Path.GetFileName(_files[_index])}";
     }
@@ -205,6 +208,7 @@ public partial class MainWindow : Window
             _zoom = 1;
             ImageScale.ScaleX = 1; ImageScale.ScaleY = 1;
             MainImage.Stretch = System.Windows.Media.Stretch.Uniform;
+            MainImage.Width = double.NaN; MainImage.Height = double.NaN;
         }
         else
         {
