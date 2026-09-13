@@ -189,6 +189,23 @@ public partial class MainWindow : Window
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.F11)
+        {
+            e.Handled = true;
+            if (WindowStyle == WindowStyle.None)
+            {
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                WindowState = WindowState.Normal;
+                ResizeMode = ResizeMode.CanResize;
+            }
+            else
+            {
+                ResizeMode = ResizeMode.NoResize;
+                WindowStyle = WindowStyle.None;
+                WindowState = WindowState.Maximized;
+            }
+            return;
+        }
         if (_index < 0) return;
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
         if (Matches(e.Key, _settings.Shortcuts.MoveToFolder2)) { e.Handled = true; await ClassifyCurrentAsync(2); return; }
