@@ -7,7 +7,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 - Tài liệu kế hoạch: hoàn tất phiên bản đầu.
 - Triển khai: 3/39 task DONE (7.7% theo số task, không đại diện khối lượng).
-- TODO: 32; IN_PROGRESS: 3; BLOCKED: 0.
+- TODO: 31; IN_PROGRESS: 4; BLOCKED: 0.
 - Mở rộng: 8 task DEFERRED, không tính vào bản đầu.
 - Benchmark: chưa chạy.
 - Ứng dụng: chưa tạo.
@@ -26,7 +26,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 ## Ba bước tiếp theo
 
-1. PR-008: bổ sung zoom 100%, pan và EXIF orientation.
+1. PR-008: hoàn thiện zoom 100%, pan và EXIF orientation.
 2. PR-009/PR-010: tách scheduler và thêm byte budget/eviction cho RAM cache.
 3. PR-001–003: ghi cấu hình, bộ ảnh mẫu và baseline Photos/FastStone.
 
@@ -39,6 +39,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-13 | Tạo bộ kế hoạch và backlog, chưa triển khai | README.md và TASKS.md |
 | 2026-09-13 | Tạo solution WPF và prototype folder/viewer/cache/preload; build PASS | PhotoReview.slnx; build 0 warning/0 error |
 | 2026-09-13 | Thêm mở file từ Explorer, config folder 1/2, Move và Recycle Bin cho phím 1/2/3; build đang sửa lỗi config | App.xaml.cs, AppSettings.cs, association script |
+| 2026-09-13 | Thêm zoom, Ctrl+Z cho Move và cập nhật phím tắt; build PASS | MainWindow.xaml/.cs; dotnet build 0 warning/0 error |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 

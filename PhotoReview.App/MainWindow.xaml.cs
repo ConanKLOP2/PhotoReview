@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Text.Json;
 using Forms = System.Windows.Forms;
 using Microsoft.VisualBasic.FileIO;
 
@@ -16,10 +17,20 @@ public partial class MainWindow : Window
     private int _index = -1;
     private long _generation;
     private readonly AppSettings _settings = AppSettings.Load();
+    private readonly OperationJournal _journal = new();
+    private readonly SessionStore _sessionStore = new();
+    private SessionState? _session;
+    private double _zoom = 1;
+    private readonly Stack<(string Source, string Destination)> _moveHistory = [];
+    private long _cacheBytes;
+    private readonly object _cacheGate = new();
+    private const long MaxCacheBytes = 1024L * 1024 * 1024;
 
     public MainWindow(string? initialPath = null)
     {
         InitializeComponent();
+        foreach (var move in _journal.ReadCommittedMoves())
+            if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));
         if (!string.IsNullOrWhiteSpace(initialPath) && File.Exists(initialPath))
             _ = LoadFolderAsync(Path.GetDirectoryName(initialPath)!, initialPath);
     }
@@ -35,9 +46,11 @@ public partial class MainWindow : Window
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
         var files = await Task.Run(() => Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p)))
             .OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase).ToList());
-        _files.Clear(); _files.AddRange(files); _categories.Clear(); _index = -1; _cache.Clear();
+        _files.Clear(); _files.AddRange(files); _categories.Clear(); _index = -1; _cache.Clear(); _cacheBytes = 0;
+        _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
-        if (_files.Count > 0) await ShowImageAsync(initialPath is null ? 0 : Math.Max(0, _files.IndexOf(Path.GetFullPath(initialPath))));
+        var resumePath = initialPath ?? _session.CurrentPath;
+        if (_files.Count > 0) await ShowImageAsync(resumePath is null ? 0 : Math.Max(0, _files.IndexOf(Path.GetFullPath(resumePath))));
         else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ."; }
     }
 
@@ -51,8 +64,10 @@ public partial class MainWindow : Window
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;
+            SetZoom(1);
             var label = _categories.TryGetValue(path, out var c) ? $"Loại {c}" : "Chưa phân loại";
             StatusText.Text = $"{index + 1}/{_files.Count} | {label} | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
+            if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             _ = PreloadAroundAsync(index, token);
         }
         catch (Exception ex) { StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
@@ -63,11 +78,49 @@ public partial class MainWindow : Window
         if (_cache.TryGetValue(path, out var cached)) return cached;
         return await Task.Run(() =>
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             var bitmap = new BitmapImage();
-            bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 2200;
-            bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); _cache[path] = bitmap; return bitmap;
+            var cachePath = GetDiskCachePath(path);
+            if (File.Exists(cachePath))
+            {
+                try
+                {
+                    using var cacheStream = File.OpenRead(cachePath);
+                    bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
+                }
+                catch (Exception) when (File.Exists(cachePath))
+                {
+                    try { File.Delete(cachePath); } catch { }
+                    bitmap = DecodeSource(path);
+                }
+            }
+            else
+            {
+                bitmap = DecodeSource(path);
+                try { Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!); using var output = File.Create(cachePath); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap)); encoder.Save(output); } catch { }
+            }
+            lock (_cacheGate)
+            {
+                var bytes = Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4);
+                if (_cacheBytes + bytes > MaxCacheBytes) { _cache.Clear(); _cacheBytes = 0; }
+                _cache[path] = bitmap; _cacheBytes += bytes;
+            }
+            return bitmap;
         });
+    }
+
+    private static BitmapImage DecodeSource(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 2200;
+        bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
+    }
+
+    private static string GetDiskCachePath(string path)
+    {
+        var info = new FileInfo(path);
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|2200")));
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", key + ".png");
     }
 
     private async Task PreloadAroundAsync(int center, long token)
@@ -84,14 +137,29 @@ public partial class MainWindow : Window
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (_index < 0) return;
+        if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
         if (e.Key is Key.D1 or Key.NumPad1 or Key.D2 or Key.NumPad2 or Key.D3 or Key.NumPad3)
         {
             var category = e.Key is Key.D1 or Key.NumPad1 ? 1 : e.Key is Key.D2 or Key.NumPad2 ? 2 : 3;
             e.Handled = true; await ClassifyCurrentAsync(category); return;
         }
-        if (e.Key == Key.Space) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
+        if (e.Key == Key.Space) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
+        if (e.Key == Key.Z) { e.Handled = true; SetZoom(_zoom == 1 ? 2 : 1); return; }
+        if (e.Key is Key.Add or Key.OemPlus) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
+        if (e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
         if (e.Key == Key.Right) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
         if (e.Key == Key.Left) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+    }
+
+    private void ImageScroll_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control) { SetZoom(Math.Clamp(_zoom + (e.Delta > 0 ? .25 : -.25), .25, 4)); e.Handled = true; }
+    }
+
+    private void SetZoom(double value)
+    {
+        _zoom = value; ImageScale.ScaleX = value; ImageScale.ScaleY = value;
+        if (_index >= 0) StatusText.Text = $"{_index + 1}/{_files.Count} | Zoom {_zoom:0.##}x | {Path.GetFileName(_files[_index])}";
     }
 
     private async Task ClassifyCurrentAsync(int category)
@@ -100,8 +168,13 @@ public partial class MainWindow : Window
         var source = _files[_index];
         try
         {
+            var info = new FileInfo(source);
             if (category == 3)
+            {
+                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "RecycleBin", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "RecycleBin", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+            }
             else
             {
                 var folderName = category == 1 ? _settings.Folder1Name : _settings.Folder2Name;
@@ -109,13 +182,38 @@ public partial class MainWindow : Window
                 Directory.CreateDirectory(destinationFolder);
                 var destination = Path.Combine(destinationFolder, Path.GetFileName(source));
                 if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
+                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 File.Move(source, destination);
+                var movedInfo = new FileInfo(destination);
+                if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
+                _journal.Append(new JournalEntry(Guid.NewGuid().ToString("N"), "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _moveHistory.Push((source, destination));
             }
             _files.RemoveAt(_index); _cache.TryRemove(source, out _);
+            if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
             else { MainImage.Source = null; StatusText.Text = "Đã xử lý hết ảnh trong folder."; }
         }
         catch (Exception ex) { StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}"; }
+    }
+
+    private async Task UndoLastMoveAsync()
+    {
+        if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
+        var move = _moveHistory.Pop();
+        try
+        {
+            if (!File.Exists(move.Destination) || File.Exists(move.Source)) throw new IOException("Nguồn hoặc đích đã thay đổi.");
+            var destinationInfo = new FileInfo(move.Destination);
+            var committed = _journal.ReadCommittedMoves().LastOrDefault(x => x.Destination == move.Destination);
+            if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
+                throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
+            File.Move(move.Destination, move.Source);
+            if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
+            _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(NaturalKey(Path.GetFileName(a)), NaturalKey(Path.GetFileName(b))));
+            await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
     }
 
     private static string NaturalKey(string name) => System.Text.RegularExpressions.Regex.Replace(name.ToLowerInvariant(), "\\d+", m => m.Value.PadLeft(12, '0'));
