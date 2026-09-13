@@ -208,6 +208,18 @@ public partial class MainWindow : Window
         if (Keyboard.Modifiers == ModifierKeys.Control) { SetZoom(Math.Clamp(_zoom + (e.Delta > 0 ? .25 : -.25), .25, 4)); e.Handled = true; }
     }
 
+    private async void Image_LeftClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (_index >= 0) await ShowImageAsync(Math.Max(_index - 1, 0));
+    }
+
+    private async void Image_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (_index >= 0) await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1));
+    }
+
     private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         UpdateFitSize();
