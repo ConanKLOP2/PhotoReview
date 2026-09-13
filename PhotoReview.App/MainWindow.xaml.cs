@@ -172,10 +172,21 @@ public partial class MainWindow : Window
 
     private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (string.Equals(_settings.InitialViewMode, "Fit", StringComparison.OrdinalIgnoreCase))
+        UpdateFitSize();
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e) => UpdateFitSize();
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
+
+    private void UpdateFitSize()
+    {
+        if (!string.Equals(_settings.InitialViewMode, "Fit", StringComparison.OrdinalIgnoreCase)) return;
+        var width = ImageScroll.ActualWidth - ImageScroll.BorderThickness.Left - ImageScroll.BorderThickness.Right;
+        var height = ImageScroll.ActualHeight - ImageScroll.BorderThickness.Top - ImageScroll.BorderThickness.Bottom;
+        if (width > 1 && height > 1)
         {
-            MainImage.Width = Math.Max(1, ImageScroll.ViewportWidth);
-            MainImage.Height = Math.Max(1, ImageScroll.ViewportHeight);
+            MainImage.Width = width;
+            MainImage.Height = height;
         }
     }
 
