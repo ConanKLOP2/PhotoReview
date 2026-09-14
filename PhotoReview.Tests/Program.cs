@@ -49,12 +49,13 @@ try
     Check(mainWindow.Contains("Thumbnail", StringComparison.Ordinal) && mainWindow.Contains("Preview", StringComparison.Ordinal), "MainWindow loading modes have thumbnail/preview contract", failures);
     var shortcuts = ShortcutMappings.Default();
     Check(shortcuts.Next == "Right" && shortcuts.Previous == "Left" && mainWindow.Contains("Matches(e.Key, _settings.Shortcuts.Next)") && mainWindow.Contains("Matches(e.Key, _settings.Shortcuts.Previous)"), "Keyboard navigation uses arrow keys", failures);
-    Check(shortcuts.MoveToFolder2 == "Enter" && mainWindow.Contains("ClassifyCurrentAsync(2)"), "Enter maps to category 2 move", failures);
+    Check(shortcuts.MoveToFolder2 == "Enter" && mainWindow.Contains("ReviewAction") && mainWindow.Contains("ExecuteActionAsync(action)"), "Enter/action profiles drive configurable operations", failures);
     Check(shortcuts.SendToRecycleBin == "Delete" && mainWindow.Contains("ClassifyCurrentAsync(3)"), "Delete maps to Recycle Bin", failures);
     Check(!mainWindow.Contains("Key.D1") && !mainWindow.Contains("Key.NumPad1"), "No number-1 shortcut required", failures);
     Check(mainWindow.Contains("Key.Space"), "Space skip shortcut exists", failures);
     Check(mainWindow.Contains("Key.PageUp") && mainWindow.Contains("Key.PageDown") && mainWindow.Contains("NavigateSiblingFolderAsync"), "PageUp/PageDown navigate sibling folders", failures);
     Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
+    Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("Xác nhận xử lý hàng loạt"), "Actions and batch operations require confirmation", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);

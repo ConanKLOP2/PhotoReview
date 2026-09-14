@@ -64,12 +64,18 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 
 | Lane | Đã xác nhận | Đang làm | Tiếp theo | Blocker |
 |---|---|---|---|---|
-| A | Source inventory bắt đầu | A01 | A02 build/review | — |
-| B | Config legacy + action JSON tồn tại | B01 | B02 editor UI | UI hiện còn JSON thủ công |
+| A | Source inventory; build PASS | A03 | A04 tách service | — |
+| B | Config legacy + action JSON; action confirm đã được thực thi | B01 | B02 editor UI | UI hiện còn JSON thủ công |
 | C | Name/PortraitFirst, compare cơ bản tồn tại | C01 | C02 test pair/EXIF | Chưa có GUI acceptance |
-| D | Move/Copy/Recycle/hash batch cơ bản tồn tại | D01 | D02/D03 dry-run | Batch hiện cần tăng safety/preview |
+| D | Move/Copy/Recycle/hash batch; batch có confirm | D01 | D02/D03 dry-run | Chưa có journal/report cho batch |
 | E | LRU/preload/preview cache tồn tại | E01 | E02 telemetry | Chưa có benchmark định lượng |
 | F | Build đã PASS trước đó | F01 | F02/F03 | Cần fixture và test GUI |
+
+## Nhật ký audit
+
+- 2026-09-14 — `AUD-A01/A02`: đọc inventory source/test/tooling; build Debug PASS 0 warning/0 error.
+- 2026-09-14 — `AUD-B01/D01`: phát hiện `ReviewAction.Confirm` chưa có hiệu lực và batch chưa hỏi xác nhận; đã sửa và thêm contract test.
+- 2026-09-14 — Test cũ về `ClassifyCurrentAsync(2)` đã được cập nhật theo contract action profile, không giữ assertion implementation cũ.
 
 ## Template cập nhật task
 

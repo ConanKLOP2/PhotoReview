@@ -303,6 +303,9 @@ public partial class MainWindow : Window
         }
         foreach (var group in groups.Values.Where(group => group.Count > 1))
             remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
+        if (remove.Count == 0) { StatusText.Text = "Không có duplicate cùng hash phù hợp."; return; }
+        var answer = System.Windows.MessageBox.Show(this, $"Đưa {remove.Count} file vào Recycle Bin? File còn lại sẽ được giữ nguyên.", "Xác nhận xử lý hàng loạt", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != System.Windows.MessageBoxResult.Yes) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
         foreach (var path in remove) if (File.Exists(path)) FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
         StatusText.Text = $"Đã đưa {remove.Count} file trùng hash vào Recycle Bin.";
         if (remove.Count > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
@@ -458,6 +461,11 @@ public partial class MainWindow : Window
 
     private async Task ExecuteActionAsync(ReviewAction action)
     {
+        if (action.Confirm)
+        {
+            var answer = System.Windows.MessageBox.Show(this, $"Thực hiện action '{action.Name}' trên ảnh hiện tại?", "Xác nhận action", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != System.Windows.MessageBoxResult.Yes) return;
+        }
         if (action.Operation.Equals("Recycle", StringComparison.OrdinalIgnoreCase) || action.Operation.Equals("Delete", StringComparison.OrdinalIgnoreCase))
         {
             await ClassifyCurrentAsync(3);
