@@ -68,7 +68,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 | B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save; runtime shortcut wiring | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
 | C | Name/PortraitFirst, compare cơ bản, EXIF orientation sort | C01 | C02 test pair/GUI | Chưa có fixture EXIF/GUI acceptance |
 | D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile; recovery UI | D04 | Fault injection/reconcile edge cases | Fault injection đầy đủ còn thiếu |
-| E | LRU/preload/preview cache; 16 GB budget/full-folder threshold; 80% pressure guard; in-process metrics | E01 | Benchmark/decoded telemetry | Chưa có benchmark GUI định lượng |
+| E | LRU/preload/preview cache; 16 GB budget/full-folder threshold; 80% pressure guard; in-process metrics; diagnostics view | E01 | Benchmark/decoded telemetry | Chưa có benchmark GUI định lượng |
 | F | Build/test/smoke/release gate PASS; contract test action/sort/navigation | F01 | F02/F03 GUI acceptance | Cần fixture và test GUI |
 
 ## Nhật ký audit
@@ -95,6 +95,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-E02`: cache budget nâng lên 16 GB và folder có tổng source bytes dưới 16 GB được preload toàn bộ, vẫn qua cancellation/LRU; build/test PASS. Cần đo decoded footprint và memory-pressure guard trước release.
 - 2026-09-14 — `AUD-E03`: preload nền dừng khi GC memory load đạt 80% available memory; thêm contract test; build/test PASS.
 - 2026-09-14 — `AUD-E01`: thêm `ReviewMetrics` đếm cache hit/miss, source bytes và decode milliseconds trong process, không ghi disk/network; build/test PASS.
+- 2026-09-14 — `AUD-E01`: thêm Diagnostics view hiển thị cache hit/miss/rate, source bytes và decode time; BOM MainWindow được giữ; build/test PASS.
 
 ## Template cập nhật task
 

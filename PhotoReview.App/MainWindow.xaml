@@ -30,6 +30,7 @@
                 <Button Content="Mở folder" Padding="10,4" Click="OpenFolder_Click" />
                 <Button Content="⚙" ToolTip="Settings" Padding="8,4" Margin="5,0,0,0" Click="Settings_Click" />
                 <Button Content="Recovery" Padding="8,4" Margin="5,0,0,0" Click="Recovery_Click" />
+                <Button Content="Diagnostics" Padding="8,4" Margin="5,0,0,0" Click="Diagnostics_Click" />
                 <Button Content="Bỏ bản (1) trùng hash" Padding="8,4" Margin="5,0,0,0" Click="RemoveNumberedDuplicates_Click" />
                 <Button Content="Bỏ original trùng hash" Padding="8,4" Margin="5,0,0,0" Click="RemoveOriginalDuplicates_Click" />
                 <TextBlock x:Name="FolderText" Foreground="#EEEEEE" VerticalAlignment="Center" Margin="9,0,0,0" Text="Chưa mở folder" TextTrimming="CharacterEllipsis" />

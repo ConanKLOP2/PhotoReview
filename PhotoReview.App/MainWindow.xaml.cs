@@ -276,6 +276,12 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    private void Diagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new DiagnosticsWindow(_metrics.Snapshot()) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private List<string> SortFiles(List<string> files)
     {
         var byName = files.OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase);
