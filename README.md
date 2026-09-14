@@ -2,13 +2,24 @@
 
 PhotoReview là ứng dụng Windows WPF tối ưu cho việc duyệt và phân loại ảnh nhanh theo thứ tự đang hiển thị trong File Explorer.
 
+## Điều làm PhotoReview khác biệt
+
+PhotoReview được xây dựng như một công cụ review ảnh tốc độ cao, ưu tiên cảm giác “mở folder là duyệt ngay” thay vì chỉ là trình xem ảnh:
+
+- **Giữ đúng thứ tự Windows Explorer** — đọc thứ tự native từ Explorer, bao gồm Name/Date/Size và chiều ASC/DESC; khi Shell chưa sẵn sàng, ảnh vẫn hiện ngay bằng thứ tự fallback rồi tự đồng bộ lại.
+- **Tận dụng RAM để giảm I/O** — cache preview theo LRU, preload ảnh lân cận và mở rộng tới toàn bộ folder khi dung lượng phù hợp; có memory-pressure guard để không làm treo máy.
+- **Review không phá hủy dữ liệu** — Delete đưa file vào Recycle Bin thay vì xóa vĩnh viễn; Undo có thể khôi phục lại file đúng vị trí ban đầu. Move/Copy/Delete đều có journal, fingerprint và recovery để tránh mất dữ liệu khi gián đoạn.
+- **Tập trung tối đa vào vùng ảnh** — toolbar gọn, tên folder nằm trên title bar, fullscreen/zoom/Fit và chuyển ảnh bằng bàn phím giúp giảm thao tác thừa.
+- **Compare và xử lý hàng loạt an toàn** — chọn cặp ảnh để so sánh, kiểm tra hash/kích thước tùy chọn, duplicate batch luôn có màn hình dry-run trước khi thực hiện.
+- **Làm việc cục bộ, minh bạch** — không upload ảnh hoặc đường dẫn; có diagnostics nội bộ, lưu session/vị trí cửa sổ và khôi phục trạng thái làm việc lần trước.
+
 ## Tính năng
 
 - Đọc thứ tự item native từ cửa sổ Windows Explorer qua `IFolderView2`, gồm Name/Date/Size và hướng sắp xếp khi Shell cung cấp.
 - Hiển thị ảnh fallback nhanh, sau đó cập nhật theo thứ tự Explorer mà không đọc lại ảnh đã cache.
 - Cache preview trong RAM có giới hạn, preload ảnh lân cận và bảo vệ theo áp lực bộ nhớ.
 - Chế độ tải Fast/Preview/Original, zoom, Fit và fullscreen.
-- Workflow review: mũi tên duyệt ảnh, Enter Move sang folder 2, Delete vào Recycle Bin, Space bỏ qua, Ctrl+Z Undo Move.
+- Workflow review: mũi tên duyệt ảnh, Enter Move sang folder 2, Delete vào Recycle Bin, Space bỏ qua, Ctrl+Z Undo thao tác gần nhất (Move/Delete).
 - Compare cặp ảnh, tùy chọn hash/kích thước, xử lý duplicate theo batch có màn hình xác nhận.
 - Journal an toàn cho Move/Copy/Recycle, recovery và retry có kiểm tra fingerprint.
 - Lưu session, vị trí cửa sổ và cấu hình người dùng.
