@@ -61,6 +61,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Evidence: `CompareHashEnabled` và `CompareSizeEnabled` được lưu trong Settings; runtime chỉ đọc hash/kích thước khi option bật, contract tests xác nhận (`1150f88`, `0807efd`).
 - Impact: workflow review nhanh có thể tắt các phép đọc phụ; mặc định vẫn bật để giữ thông tin kiểm tra duplicate.
 
+### P2 — Recovery retry: core safety đã có, UI còn mở
+
+- Evidence: `RecoveryRetryService.RetryMoveOrCopy` kiểm tra source fingerprint, từ chối đích đã tồn tại, journal từng transition và không retry Recycle Bin (`c130ac6`); contract tests PASS.
+- Remaining: cần nối service vào Recovery UI với chọn entry, confirm và hiển thị kết quả; chưa đánh dấu task recovery hoàn tất.
+
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.
