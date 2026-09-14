@@ -30,7 +30,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P1 — Shortcut config còn fallback hardcode
 
-- Evidence: runtime đã đọc các field chính, nhưng một số action legacy và mouse/keyboard paths vẫn nằm trực tiếp trong `MainWindow`.
+- Evidence: runtime đã đọc các field chính; click ảnh thường không còn handler điều hướng, compare preview giữ handler chọn riêng. Một số action legacy và keyboard paths vẫn nằm trực tiếp trong `MainWindow`.
 - Impact: thay đổi config có thể không bao phủ toàn bộ interaction.
 - Task: `AUD-A04`, `AUD-C03` — command registry duy nhất và test mọi binding.
 
