@@ -262,6 +262,13 @@ public partial class MainWindow : Window
             await ShowImageAsync(0);
             return;
         }
+        if (Matches(e.Key, _settings.Shortcuts.Compare))
+        {
+            if (ComparePanel.Visibility != Visibility.Visible && FindComparePair(_files[_index]) is null) return;
+            e.Handled = true;
+            ComparePanel.Visibility = ComparePanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            return;
+        }
         if (Matches(e.Key, _settings.Shortcuts.Undo) && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
         foreach (var action in _settings.Actions)
         {

@@ -77,6 +77,7 @@ try
     Check(siblings.SequenceEqual(new[] { folder1, folder2, folder10 }, StringComparer.OrdinalIgnoreCase) && SiblingFolderService.GetTarget(folder2, 1) == folder10 && SiblingFolderService.GetTarget(folder2, -1) == folder1, "Sibling folder navigation uses natural order", failures);
     Check(mainWindow.Contains("Shortcuts.FirstImage") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
+    Check(mainWindow.Contains("_settings.Shortcuts.Compare") && mainWindow.Contains("ComparePanel.Visibility"), "Compare shortcut toggles compare panel", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
