@@ -61,7 +61,7 @@ public partial class MainWindow : Window
     private async Task LoadFolderAsync(string folder, string? initialPath = null)
     {
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
-        var files = await Task.Run(() => SortFiles(Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p))).ToList()));
+        var files = await Task.Run(() => ImageSortService.Sort(Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p))), _settings.ImageSortMode));
         _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashCache.Clear();
         _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
@@ -290,36 +290,6 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    private List<string> SortFiles(List<string> files)
-    {
-        var byName = files.OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase);
-        if (!string.Equals(_settings.ImageSortMode, "PortraitFirst", StringComparison.OrdinalIgnoreCase)) return byName.ToList();
-        return byName.Select(path => (Path: path, Orientation: GetOrientation(path)))
-            .OrderBy(item => item.Orientation == 1 ? 0 : item.Orientation == 2 ? 1 : 2)
-            .ThenBy(item => NaturalKey(Path.GetFileName(item.Path)), StringComparer.OrdinalIgnoreCase)
-            .Select(item => item.Path).ToList();
-    }
-
-    private static int GetOrientation(string path)
-    {
-        try
-        {
-            using var stream = File.OpenRead(path);
-            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
-            var frame = decoder.Frames[0];
-            var width = frame.PixelWidth;
-            var height = frame.PixelHeight;
-            if (frame.Metadata is BitmapMetadata metadata)
-            {
-                var orientation = metadata.GetQuery("/app1/ifd/{ushort=274}");
-                if (orientation is ushort value && value is 5 or 6 or 7 or 8) (width, height) = (height, width);
-                else if (orientation is byte byteValue && byteValue is 5 or 6 or 7 or 8) (width, height) = (height, width);
-            }
-            return height > width ? 1 : width > height ? 2 : 3;
-        }
-        catch { return 3; }
-    }
-
     private (string Left, string Right)? FindComparePair(string path)
     {
         var stem = Path.GetFileNameWithoutExtension(path);
@@ -401,7 +371,7 @@ public partial class MainWindow : Window
         if (parent is null) return;
 
         var siblingFolders = await Task.Run(() => Directory.EnumerateDirectories(parent.FullName)
-            .OrderBy(path => NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => ImageSortService.NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase)
             .ToList());
         var currentIndex = siblingFolders.FindIndex(path => string.Equals(Path.GetFullPath(path), currentFolder, StringComparison.OrdinalIgnoreCase));
         var targetIndex = currentIndex + direction;
@@ -576,11 +546,10 @@ public partial class MainWindow : Window
                 throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
             File.Move(move.Destination, move.Source);
             if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
-            _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(NaturalKey(Path.GetFileName(a)), NaturalKey(Path.GetFileName(b))));
+            _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
             await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
         }
         catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
     }
 
-    private static string NaturalKey(string name) => System.Text.RegularExpressions.Regex.Replace(name.ToLowerInvariant(), "\\d+", m => m.Value.PadLeft(12, '0'));
 }

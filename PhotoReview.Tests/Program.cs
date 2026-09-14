@@ -41,6 +41,7 @@ try
 
     var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs"));
     var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
+    var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
     Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
     Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal) && appSettings.Contains("Original", StringComparison.Ordinal), "LoadingMode has Fast, Preview, and Original options", failures);
     Check(appSettings.Contains("= \"Preview\"", StringComparison.Ordinal) || appSettings.Contains("= LoadingMode.Preview", StringComparison.Ordinal), "LoadingMode defaults to Preview", failures);
@@ -56,7 +57,8 @@ try
     Check(mainWindow.Contains("Key.PageUp") && mainWindow.Contains("Key.PageDown") && mainWindow.Contains("NavigateSiblingFolderAsync"), "PageUp/PageDown navigate sibling folders", failures);
     Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
-    Check(mainWindow.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && mainWindow.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
+    Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
+    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
