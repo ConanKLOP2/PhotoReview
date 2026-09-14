@@ -31,7 +31,9 @@ public partial class MainWindow : Window
     private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
     private const double PreloadMemoryLoadLimit = 0.80;
     private string? _compareSelectedPath;
-    private readonly Dictionary<string, (long Length, DateTime LastWriteUtc, string Hash)> _hashCache = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record HashCacheEntry(long Length, DateTime LastWriteUtc, string Hash);
+    private readonly BoundedLruCache<string, HashCacheEntry> _hashCache = new(
+        16L * 1024 * 1024, _ => 128, StringComparer.OrdinalIgnoreCase);
     private readonly ReviewMetrics _metrics = new();
 
     public MainWindow(string? initialPath = null)
@@ -60,7 +62,7 @@ public partial class MainWindow : Window
     {
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
         var files = await Task.Run(() => SortFiles(Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p))).ToList()));
-        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear();
+        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashCache.Clear();
         _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
         var resumePath = initialPath ?? _session.CurrentPath;
@@ -381,10 +383,10 @@ public partial class MainWindow : Window
     private async Task<string> GetHashAsync(string path)
     {
         var info = new FileInfo(path);
-        if (_hashCache.TryGetValue(path, out var cached) && cached.Length == info.Length && cached.LastWriteUtc == info.LastWriteTimeUtc) return cached.Hash;
+        if (_hashCache.TryGet(path, out var cached) && cached.Length == info.Length && cached.LastWriteUtc == info.LastWriteTimeUtc) return cached.Hash;
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024, true);
         var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream));
-        _hashCache[path] = (info.Length, info.LastWriteTimeUtc, hash);
+        _hashCache.Set(path, new HashCacheEntry(info.Length, info.LastWriteTimeUtc, hash));
         return hash;
     }
 
