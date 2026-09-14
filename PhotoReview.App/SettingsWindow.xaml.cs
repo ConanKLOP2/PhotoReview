@@ -18,6 +18,7 @@ public partial class SettingsWindow : Window
             LoadingMode = AppSettings.NormalizeLoadingMode(current.LoadingMode),
             ImageSortMode = AppSettings.NormalizeImageSortMode(current.ImageSortMode),
             CompareHashEnabled = current.CompareHashEnabled,
+            CompareSizeEnabled = current.CompareSizeEnabled,
             Actions = current.Actions.Select(action => new ReviewAction
             {
                 Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
@@ -49,6 +50,7 @@ public partial class SettingsWindow : Window
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { "Preview" => 1, "Original" => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Settings.ImageSortMode == "Name" ? 1 : 0;
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
+        CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
     }
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
@@ -69,6 +71,7 @@ public partial class SettingsWindow : Window
         var loadingItem = LoadingModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
         Settings.LoadingMode = loadingItem?.Tag?.ToString() ?? loadingItem?.Content?.ToString() ?? "Fast";
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
+        Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.MoveToFolder2 = MoveText.Text.Trim(); Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();
