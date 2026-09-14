@@ -107,6 +107,14 @@ try
     var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
     Check(!mainWindow.Contains("Image_LeftClick") && !mainWindow.Contains("Image_RightClick") && !mainWindowXaml.Contains("Image_LeftClick") && !mainWindowXaml.Contains("Image_RightClick"), "Image click does not navigate; compare owns click selection", failures);
     Check(mainWindow.Contains("_compareSelectedPath ?? _files[_index]") && mainWindow.Contains("_files.Remove(source)"), "Compare selection drives file actions", failures);
+    var hashFixture = Path.Combine(root, "hash-fixture.bin");
+    File.WriteAllBytes(hashFixture, [1, 2, 3]);
+    var hashService = new FileHashService();
+    var firstHash = await hashService.GetAsync(hashFixture);
+    var cachedHash = await hashService.GetAsync(hashFixture);
+    File.WriteAllBytes(hashFixture, [1, 2, 4]);
+    var changedHash = await hashService.GetAsync(hashFixture);
+    Check(firstHash == cachedHash && firstHash != changedHash, "File hash service caches and invalidates by file fingerprint", failures);
     Check(mainWindow.Contains("_compareSelectedPath = null;") && mainWindow.Contains("var token = Interlocked.Increment(ref _generation);"), "Compare selection resets on navigation", failures);
     Check(mainWindowXaml.Contains("AutomationProperties.Name=\"Mở thư mục ảnh\"") && mainWindowXaml.Contains("AutomationProperties.Name=\"Mở cài đặt\""), "Primary controls expose accessible names", failures);
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
