@@ -83,10 +83,16 @@ public sealed class AppSettings
         string.Equals(value, "Original", StringComparison.OrdinalIgnoreCase);
 
     public static string NormalizeImageSortMode(string? value) =>
-        string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ? "Name" : "PortraitFirst";
+        value?.ToUpperInvariant() switch
+        {
+            "NAME" => "Name",
+            "SIZE" => "Size",
+            _ => "PortraitFirst"
+        };
 
     public static bool IsValidImageSortMode(string? value) =>
         string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "Size", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "PortraitFirst", StringComparison.OrdinalIgnoreCase);
 
     public static string? ValidateShortcuts(AppSettings settings)

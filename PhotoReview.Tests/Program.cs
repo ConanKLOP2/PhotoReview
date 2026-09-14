@@ -95,6 +95,7 @@ try
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(imageSortService.Contains("StrCmpLogicalW") && imageSortService.Contains("ExplorerComparer"), "Name sort uses Windows Explorer logical ordering", failures);
+    Check(appSettings.Contains("Size") && imageSortService.Contains("OrderByDescending(GetFileSize)") && settingsWindow.Contains("Size"), "Size sort is configurable", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
     var compareOriginal = Path.Combine(root, "CocCocSetup.jpg");
     var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
@@ -108,6 +109,9 @@ try
     Check(Path.GetFileName(nameSorted[0]) == "img1.jpg" && Path.GetFileName(nameSorted[1]) == "img2.jpg" && Path.GetFileName(nameSorted[2]) == "img10.jpg", "Natural filename sort orders numeric suffixes", failures);
     var portraitFallbackSorted = ImageSortService.Sort(sortFixture, "PortraitFirst");
     Check(portraitFallbackSorted.SequenceEqual(nameSorted), "Portrait-first keeps natural name order when metadata is unavailable", failures);
+    File.WriteAllBytes(sortFixture[0], [1]); File.WriteAllBytes(sortFixture[1], [1, 2, 3]); File.WriteAllBytes(sortFixture[2], [1, 2]);
+    var sizeSorted = ImageSortService.Sort(sortFixture, "Size");
+    Check(Path.GetFileName(sizeSorted[0]) == "img2.jpg" && Path.GetFileName(sizeSorted[2]) == "img10.jpg", "Size sort orders files by descending bytes", failures);
     var landscapePath = Path.Combine(root, "landscape.jpg");
     var exifPortraitPath = Path.Combine(root, "exif-portrait.jpg");
     WriteJpegFixture(landscapePath, 40, 20);

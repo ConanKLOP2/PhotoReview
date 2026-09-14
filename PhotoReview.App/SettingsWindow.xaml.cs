@@ -48,7 +48,7 @@ public partial class SettingsWindow : Window
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, new JsonSerializerOptions { WriteIndented = true });
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { "100%" => 1, "200%" => 2, "400%" => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { "Preview" => 1, "Original" => 2, _ => 0 };
-        SortModeCombo.SelectedIndex = Settings.ImageSortMode == "Name" ? 1 : 0;
+        SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { "Name" => 1, "Size" => 2, _ => 0 };
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
     }
@@ -67,7 +67,7 @@ public partial class SettingsWindow : Window
         }
         Settings.Folder2Name = Folder2Text.Text.Trim();
         Settings.InitialViewMode = (ViewModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content?.ToString() ?? "Fit";
-        Settings.ImageSortMode = ((System.Windows.Controls.ComboBoxItem)SortModeCombo.SelectedItem)?.Tag?.ToString() ?? "PortraitFirst";
+        Settings.ImageSortMode = AppSettings.NormalizeImageSortMode(((System.Windows.Controls.ComboBoxItem)SortModeCombo.SelectedItem)?.Tag?.ToString());
         var loadingItem = LoadingModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
         Settings.LoadingMode = loadingItem?.Tag?.ToString() ?? loadingItem?.Content?.ToString() ?? "Fast";
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
