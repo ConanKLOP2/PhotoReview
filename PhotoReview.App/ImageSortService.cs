@@ -1,27 +1,48 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 
 namespace PhotoReview.App;
 
 public static class ImageSortService
 {
+    private static readonly StringComparer ExplorerNameComparer = new ExplorerComparer();
     private static readonly BoundedLruCache<string, int> OrientationCache = new(
         1L * 1024 * 1024, _ => 64, StringComparer.OrdinalIgnoreCase);
 
     public static List<string> Sort(IEnumerable<string> files, string? mode)
     {
-        var byName = files.OrderBy(path => NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase);
+        var byName = files.OrderBy(path => Path.GetFileName(path), ExplorerNameComparer);
         if (!string.Equals(mode, "PortraitFirst", StringComparison.OrdinalIgnoreCase)) return byName.ToList();
 
         return byName.Select(path => (Path: path, Orientation: GetCachedOrientation(path)))
             .OrderBy(item => item.Orientation == 1 ? 0 : item.Orientation == 2 ? 1 : 2)
-            .ThenBy(item => NaturalKey(Path.GetFileName(item.Path)), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => Path.GetFileName(item.Path), ExplorerNameComparer)
             .Select(item => item.Path)
             .ToList();
     }
 
     public static string NaturalKey(string name) =>
         System.Text.RegularExpressions.Regex.Replace(name.ToLowerInvariant(), "\\d+", match => match.Value.PadLeft(12, '0'));
+
+    private sealed class ExplorerComparer : StringComparer
+    {
+        [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+        private static extern int StrCmpLogicalW(string x, string y);
+
+        public override int Compare(string? x, string? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+            try { return StrCmpLogicalW(x, y); }
+            catch (DllNotFoundException) { return StringComparer.OrdinalIgnoreCase.Compare(NaturalKey(x), NaturalKey(y)); }
+            catch (EntryPointNotFoundException) { return StringComparer.OrdinalIgnoreCase.Compare(NaturalKey(x), NaturalKey(y)); }
+        }
+
+        public override bool Equals(string? x, string? y) => Compare(x, y) == 0;
+        public override int GetHashCode(string obj) => StringComparer.OrdinalIgnoreCase.GetHashCode(obj);
+    }
 
     private static int GetCachedOrientation(string path)
     {

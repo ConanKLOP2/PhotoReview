@@ -94,6 +94,7 @@ try
     Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml")).Contains("AutomationProperties.Name=\"Thử lại Move hoặc Copy đã lỗi\""), "Recovery retry button is accessible", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
+    Check(imageSortService.Contains("StrCmpLogicalW") && imageSortService.Contains("ExplorerComparer"), "Name sort uses Windows Explorer logical ordering", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
     var compareOriginal = Path.Combine(root, "CocCocSetup.jpg");
     var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
