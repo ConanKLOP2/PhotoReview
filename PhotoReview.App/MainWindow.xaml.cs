@@ -297,7 +297,7 @@ public partial class MainWindow : Window
     private void Recovery_Click(object sender, RoutedEventArgs e)
     {
         var entries = _journal.ReadPendingOperations().Concat(_journal.ReadFailedOperations()).ToList();
-        var dialog = new RecoveryWindow(entries) { Owner = this };
+        var dialog = new RecoveryWindow(entries, entry => RecoveryRetryService.RetryMoveOrCopy(entry, _journal)) { Owner = this };
         dialog.ShowDialog();
     }
 

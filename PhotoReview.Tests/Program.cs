@@ -90,6 +90,7 @@ try
     var retryResult = RecoveryRetryService.RetryMoveOrCopy(retryEntry, journal);
     Check(retryResult.Succeeded && File.Exists(retryDestination) && !File.Exists(retrySource), "Recovery retry validates fingerprint and journals success", failures);
     Check(File.Exists(retryDestination) && RecoveryRetryService.RetryMoveOrCopy(retryEntry with { Source = retryDestination }, journal).Succeeded == false, "Recovery retry rejects invalid source state", failures);
+    Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml")).Contains("Retry Move/Copy") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml.cs")).Contains("Retry_Click"), "Recovery retry is exposed with confirmation in UI", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
