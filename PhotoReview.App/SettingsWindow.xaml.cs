@@ -17,6 +17,11 @@ public partial class SettingsWindow : Window
             InitialViewMode = current.InitialViewMode,
             LoadingMode = AppSettings.NormalizeLoadingMode(current.LoadingMode),
             ImageSortMode = AppSettings.NormalizeImageSortMode(current.ImageSortMode),
+            Actions = current.Actions.Select(action => new ReviewAction
+            {
+                Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
+                Destination = action.Destination, Confirm = action.Confirm
+            }).ToList(),
             Shortcuts = new ShortcutMappings
             {
                 Next = current.Shortcuts.Next, Previous = current.Shortcuts.Previous,
@@ -62,7 +67,16 @@ public partial class SettingsWindow : Window
         Settings.Shortcuts.MoveToFolder2 = MoveText.Text.Trim(); Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();
         Settings.Shortcuts.FirstImage = FirstImageText.Text.Trim(); Settings.Shortcuts.ZoomIn = ZoomInText.Text.Trim(); Settings.Shortcuts.ZoomOut = ZoomOutText.Text.Trim(); Settings.Shortcuts.ToggleFit = ToggleFitText.Text.Trim();
-        try { Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? ReviewAction.Defaults(); }
+        try
+        {
+            Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
+            if (Settings.Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) ||
+                !Enum.TryParse<Key>(action.Shortcut, true, out _) ||
+                !new[] { "Move", "Copy", "Recycle", "Delete" }.Contains(action.Operation, StringComparer.OrdinalIgnoreCase)))
+                throw new JsonException("Action thiếu tên/phím tắt hoặc có Operation không hợp lệ.");
+            if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+                throw new JsonException("Các action không được trùng phím tắt.");
+        }
         catch { System.Windows.MessageBox.Show(this, "Action profiles JSON không hợp lệ.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         AppSettings.Save(Settings); DialogResult = true;
     }
