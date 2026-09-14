@@ -1,7 +1,7 @@
-<Window x:Class="PhotoReview.App.DiagnosticsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Diagnostics" Width="520" Height="360" WindowStartupLocation="CenterOwner" Background="#171717" Foreground="#F5F5F5">
+<Window x:Class="PhotoReview.App.DiagnosticsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Diagnostics" Width="620" Height="430" WindowStartupLocation="CenterOwner" Background="#171717" Foreground="#F5F5F5">
     <Grid Margin="24"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel><TextBlock Text="Performance diagnostics" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Số liệu chỉ tồn tại trong phiên hiện tại; không gửi ra ngoài." Foreground="#AAAAAA" Margin="0,6,0,16"/></StackPanel>
-        <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
             <TextBlock Text="Cache hits"/><TextBlock x:Name="CacheHitsText" Grid.Column="1"/>
             <TextBlock Text="Cache misses" Grid.Row="1"/><TextBlock x:Name="CacheMissesText" Grid.Row="1" Grid.Column="1"/>
             <TextBlock Text="Cache hit rate" Grid.Row="2"/><TextBlock x:Name="HitRateText" Grid.Row="2" Grid.Column="1"/>
@@ -9,6 +9,8 @@
             <TextBlock Text="Source file reads" Grid.Row="4"/><TextBlock x:Name="SourceReadsText" Grid.Row="4" Grid.Column="1"/>
             <TextBlock Text="Decode time" Grid.Row="5"/><TextBlock x:Name="DecodeTimeText" Grid.Row="5" Grid.Column="1"/>
             <TextBlock Text="Key-to-present latency" Grid.Row="6"/><TextBlock x:Name="PresentLatencyText" Grid.Row="6" Grid.Column="1"/>
+            <TextBlock Text="Explorer order" Grid.Row="7"/><TextBlock x:Name="ExplorerOrderText" Grid.Row="7" Grid.Column="1" TextWrapping="Wrap"/>
+            <TextBlock Text="Explorer sort/group" Grid.Row="8"/><TextBlock x:Name="ExplorerMetadataText" Grid.Row="8" Grid.Column="1" TextWrapping="Wrap"/>
         </Grid><Button Grid.Row="2" Content="Đóng" IsCancel="True" HorizontalAlignment="Right" Padding="18,8" Margin="0,16,0,0"/>
     </Grid>
 </Window>

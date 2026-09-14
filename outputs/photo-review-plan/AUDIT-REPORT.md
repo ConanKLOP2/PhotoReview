@@ -10,7 +10,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Contract executable tests: PASS.
 - File-operation smoke test: PASS.
 - Framework-dependent `win-x64` publish và `verify-all.ps1`: PASS.
-- Sau khi thêm `RuntimeIdentifiers=win-x64`, publish `--no-restore` chạy đúng và verifier kiểm tra artifact mới nhất; sau các thay đổi gần nhất, release gate lại PASS: EXE 162,304 bytes, SHA-256 `953A45AA7ECC40DDE89B5257FF0F02DCDC059689C5E3BAC12C2F02C4381B768C`.
+- Framework-dependent và self-contained win-x64 phiên bản 1.0.1 đã publish; verifier kiểm tra FileVersion khớp `.csproj`. Release gate PASS: EXE 162,304 bytes, SHA-256 `C80E9B23F638F4FDFD69CC03B8AEE09DF213981B5BD49683EBCA144EAA7344DB`.
 - Không có ảnh người dùng nào bị dùng làm fixture hoặc bị mutation trong audit.
 
 ## Findings theo severity
@@ -111,4 +111,4 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - GUI acceptance trên máy sạch hoặc môi trường Windows tương đương.
 ## Explorer sort-state parity (2026-09-14)
 
-Current evidence proves configurable approximations, not live Explorer state parity. `ImageSortService` supports Explorer-like logical filename ordering plus size ascending/descending and PortraitFirst. A file association launch normally supplies the selected path, not the Explorer view's active sort column and direction; therefore PhotoReview cannot currently guarantee identical ordering when Explorer is sorted by an arbitrary column or custom view. This remains an open audit item: implement and runtime-test a Windows Shell folder-view adapter, with the existing configured sort as fallback when Shell state is unavailable.
+PhotoReview now queries the matching Explorer window through `IServiceProvider`/`IShellBrowser` and reads item order, sort columns, and group state from native `IFolderView2`. Direct COM vtable calls avoid the unregistered Shell type-library failure seen with RCW projection. Runtime evidence on `Machi馬吉 - Hot Springs` confirms Name DESC `(37).jpg` through `(1).jpg`. Snapshot validation rejects missing, duplicate, and out-of-folder results; configured sort remains the fallback. Date/Size and grouped-view cases still require the remaining native integration matrix before claiming complete parity.

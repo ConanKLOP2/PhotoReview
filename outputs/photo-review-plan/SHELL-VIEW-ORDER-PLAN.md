@@ -19,7 +19,7 @@ Khi người dùng mở một folder đang xem trong Windows Explorer, PhotoRevi
 
 ## Thiết kế chốt
 
-- `ExplorerOrderService`: abstraction `TryGetOrderAsync(folder, cancellationToken)`.
+- `IExplorerOrderProvider`: abstraction `TryGetSnapshotAsync(folder, timeout, cancellationToken)`; `ExplorerOrderService` là native implementation.
 - `ShellExplorerOrderService`: Windows implementation, isolated interop/COM and HRESULT handling.
 - `FolderScanService`: one snapshot, supported-extension filter, duplicate/path validation.
 - `MainWindow`: request order asynchronously; show first item from fast fallback immediately; replace list only if Shell order result is valid and current folder/generation unchanged.

@@ -2,6 +2,17 @@ using PhotoReview.App;
 using System.IO;
 using System.Windows.Media;
 
+if (args.Length == 2 && args[0] == "--explorer-probe")
+{
+    var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(probe, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
+    var scanned = Directory.EnumerateFiles(args[1]).Where(path => supported.Contains(Path.GetExtension(path))).ToArray();
+    var accepted = ExplorerSnapshotValidator.TryValidate(probe, scanned, out var ordered, out var reason);
+    Console.WriteLine($"VALIDATOR: accepted={accepted}, scanned={scanned.Length}, ordered={ordered.Count}, reason={reason ?? "none"}");
+    return;
+}
+
 var failures = new List<string>();
 var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
 if (!File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs")))
@@ -125,6 +136,22 @@ try
     Check(Path.GetFileName(sizeSorted[0]) == "img2.jpg" && Path.GetFileName(sizeSorted[2]) == "img10.jpg", "Size sort orders files by descending bytes", failures);
     var sizeAscending = ImageSortService.Sort(sortFixture, "SizeAscending");
     Check(Path.GetFileName(sizeAscending[0]) == "img10.jpg" && Path.GetFileName(sizeAscending[2]) == "img2.jpg", "Size sort orders files by ascending bytes", failures);
+    var explorerFolder = Path.Combine(root, "explorer-order");
+    Directory.CreateDirectory(explorerFolder);
+    var explorerA = Path.Combine(explorerFolder, "a.jpg");
+    var explorerB = Path.Combine(explorerFolder, "b.jpg");
+    var validExplorerSnapshot = new ExplorerViewSnapshot(explorerFolder, [explorerB, explorerA], [], ExplorerGroupState.None, ExplorerOrderStatus.Available, null, DateTime.UtcNow);
+    Check(ExplorerSnapshotValidator.TryValidate(validExplorerSnapshot, [explorerA, explorerB], out var nativeOrder, out _) && nativeOrder.SequenceEqual(new[] { explorerB, explorerA }, StringComparer.OrdinalIgnoreCase), "Explorer snapshot accepts a complete native order", failures);
+    Check(!ExplorerSnapshotValidator.TryValidate(validExplorerSnapshot with { OrderedPaths = [explorerA] }, [explorerA, explorerB], out _, out _), "Explorer snapshot rejects missing images", failures);
+    Check(!ExplorerSnapshotValidator.TryValidate(validExplorerSnapshot with { OrderedPaths = [explorerA, explorerA, explorerB] }, [explorerA, explorerB], out _, out _), "Explorer snapshot rejects duplicate paths", failures);
+    Check(!ExplorerSnapshotValidator.TryValidate(validExplorerSnapshot with { OrderedPaths = [explorerA, Path.Combine(root, "outside.jpg")] }, [explorerA, explorerB], out _, out _), "Explorer snapshot rejects paths outside the folder", failures);
+    Check(!ExplorerSnapshotValidator.TryValidate(validExplorerSnapshot with { Status = ExplorerOrderStatus.TimedOut, Reason = "timeout" }, [explorerA, explorerB], out _, out var unavailableReason) && unavailableReason == "timeout", "Explorer snapshot exposes provider fallback reason", failures);
+    IExplorerOrderProvider fakeExplorerProvider = new FakeExplorerOrderProvider(validExplorerSnapshot);
+    Check((await fakeExplorerProvider.TryGetSnapshotAsync(explorerFolder, TimeSpan.FromSeconds(2), CancellationToken.None)).OrderedPaths[0] == explorerB, "Explorer provider contract is fakeable without COM", failures);
+    Check(!mainWindow.Contains("files.Count < 100") && mainWindow.Contains("TryGetSnapshotAsync") && mainWindow.Contains("loadGeneration != _folderGeneration"), "Explorer order applies below and above 100 files and rejects stale folder results", failures);
+    Check(mainWindow.IndexOf("await ShowImageAsync", StringComparison.Ordinal) < mainWindow.IndexOf("await explorerTask", StringComparison.Ordinal), "First image is presented before waiting for Explorer order", failures);
+    Check(mainWindow.Contains("mayReplaceInitialFallback") && mainWindow.Contains("await ShowImageAsync(0)"), "Folder open replaces untouched fallback with the first native Explorer item", failures);
+    Check(mainWindow.Contains("currentSet.SetEquals(scannedFiles)") && mainWindow.Contains("else if (_index >= 0) await ShowImageAsync(_index)"), "Native reindex refreshes the counter and rejects a changed catalog", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
@@ -213,4 +240,10 @@ static bool operationJournalTextContainsFailed()
 {
     var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
     return File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "OperationJournal.cs")).Contains("ReadFailedOperations", StringComparison.Ordinal);
+}
+
+sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplorerOrderProvider
+{
+    public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
+        => Task.FromResult(snapshot);
 }

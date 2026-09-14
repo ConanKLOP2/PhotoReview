@@ -16,5 +16,5 @@ foreach ($extension in '.jpg', '.jpeg', '.png') {
     New-ItemProperty -Path "$classes\$extension\OpenWithProgids" -Name $progId -Value '' -PropertyType String -Force | Out-Null
 }
 
-Write-Host 'Đã đăng ký Photo Review trong Open with.'
-Write-Host 'Để đặt làm mặc định: Settings > Apps > Default apps > chọn .jpg > Photo Review.'
+Write-Host 'Photo Review was registered in Open with.'
+Write-Host 'To set it as default: Windows Settings > Apps > Default apps > choose .jpg > Photo Review.'
