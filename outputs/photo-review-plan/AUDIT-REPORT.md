@@ -5,6 +5,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 ## Evidence đã chạy
 
 - Debug build: PASS, 0 warning/0 error.
+- Warning-as-error build riêng cho App và Tests: PASS, 0 warning/0 error.
 - Release build solution: PASS, 0 warning/0 error.
 - Contract executable tests: PASS.
 - File-operation smoke test: PASS.
