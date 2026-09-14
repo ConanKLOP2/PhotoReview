@@ -63,7 +63,7 @@ try
     Check(mainWindow.Contains("16L * 1024 * 1024 * 1024") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold", failures);
     Check(mainWindow.Contains("BoundedLruCache<string, HashCacheEntry>") && mainWindow.Contains("_hashCache.Set"), "Hash metadata cache is bounded and evictable", failures);
     Check(mainWindow.Contains("GetGCMemoryInfo") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordCacheHit") && mainWindow.Contains("RecordSourceRead"), "Review performance metrics record cache and source decode", failures);
+    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordCacheHit") && mainWindow.Contains("RecordSourceRead") && mainWindow.Contains("RecordPresented"), "Review performance metrics record cache, source decode, and present latency", failures);
     Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view", failures);
     Check(mainWindow.Contains("var sourceRead = false") && mainWindow.Contains("if (sourceRead)"), "Source byte metrics exclude disk-cache hits", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);

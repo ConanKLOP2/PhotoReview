@@ -73,6 +73,7 @@ public partial class MainWindow : Window
     private async Task ShowImageAsync(int index)
     {
         if (index < 0 || index >= _files.Count) return;
+        var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
         StatusText.Text = $"Đang tải {index + 1}/{_files.Count}: {Path.GetFileName(path)}";
         try
@@ -111,6 +112,8 @@ public partial class MainWindow : Window
                 StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
             }
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+            presentStopwatch.Stop();
+            _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
             _ = PreloadAroundAsync(index, token);
         }
         catch (Exception ex) { StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }

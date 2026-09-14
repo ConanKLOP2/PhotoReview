@@ -13,5 +13,6 @@ public partial class DiagnosticsWindow : Window
         HitRateText.Text = total == 0 ? "N/A" : $"{(double)snapshot.CacheHits / total:P1}";
         SourceBytesText.Text = $"{snapshot.SourceBytesRead:N0} bytes";
         DecodeTimeText.Text = $"{snapshot.DecodeMilliseconds:N0} ms";
+        PresentLatencyText.Text = snapshot.PresentedImages == 0 ? "N/A" : $"{snapshot.PresentMilliseconds / (double)snapshot.PresentedImages:N0} ms/ảnh ({snapshot.PresentedImages:N0})";
     }
 }
