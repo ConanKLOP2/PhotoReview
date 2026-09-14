@@ -38,7 +38,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 ### P2 — Sort orientation đọc metadata toàn folder đồng bộ theo task
 
 - Evidence: `ImageSortService.Sort` gọi decoder cho từng file trước khi hiển thị folder; logic đã tách khỏi code-behind, có test natural numeric ordering, fallback metadata và JPEG fixture thật với EXIF orientation 6.
-- Impact: folder nhiều ảnh có thể chậm mở lần đầu và tăng I/O; EXIF orientation chưa được kiểm chứng bằng fixture.
+- Impact: folder nhiều ảnh có thể chậm mở lần đầu và tăng I/O; EXIF orientation 5/6/7/8 đã được kiểm chứng bằng JPEG fixture.
 - Task: `AUD-C01`, `AUD-E01` — metadata cache/background scan, đo latency, test portrait/landscape/square/EXIF.
 
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
@@ -67,7 +67,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P3 — GUI/accessibility chưa có evidence
 
-- Evidence: chưa có automated UI/keyboard-only acceptance trên fixture; chưa kiểm tra DPI, focus indicator, screen reader.
+- Evidence: đã có accessible names, focusable compare previews và keyboard selection contract; chưa có automated UI/keyboard-only acceptance trên fixture thực tế, chưa kiểm tra DPI/focus indicator/screen reader.
 - Impact: build xanh chưa chứng minh UX public-ready.
 - Task: `AUD-C04`, `AUD-F03`.
 
