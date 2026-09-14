@@ -71,3 +71,9 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 3. Ghi kết quả gate; không suy ra gate đạt chỉ vì code đã viết.
 4. Thêm nhật ký kết quả thực tế, không chỉ số giờ.
 5. Chọn tối đa ba bước tiếp theo theo phụ thuộc.
+### 2026-09-14 — Explorer-order audit clarification
+
+- Đã xác nhận PhotoReview hiện không nhận được trạng thái sort column/direction đang hiển thị trong một cửa sổ Explorer chỉ từ đường dẫn file được double-click.
+- Fallback hiện tại đã có: `Name` dùng `StrCmpLogicalW` (logical filename như Explorer), `SizeAscending`, `SizeDescending`, và `PortraitFirst` mặc định.
+- Phần còn thiếu để đạt parity với Windows Photos là một adapter Windows Shell lấy danh sách theo folder view hiện hành; cần kiểm thử runtime trên Explorer thật trước khi coi là hoàn tất.
+- Evidence: commits `86e50ee`, `20637ee`, `b07752a`; contract tests/build PASS.

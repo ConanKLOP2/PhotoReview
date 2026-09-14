@@ -109,3 +109,6 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Fixture EXIF/sort/compare/hash có manifest.
 - Fault-injection matrix và recovery evidence.
 - GUI acceptance trên máy sạch hoặc môi trường Windows tương đương.
+## Explorer sort-state parity (2026-09-14)
+
+Current evidence proves configurable approximations, not live Explorer state parity. `ImageSortService` supports Explorer-like logical filename ordering plus size ascending/descending and PortraitFirst. A file association launch normally supplies the selected path, not the Explorer view's active sort column and direction; therefore PhotoReview cannot currently guarantee identical ordering when Explorer is sorted by an arbitrary column or custom view. This remains an open audit item: implement and runtime-test a Windows Shell folder-view adapter, with the existing configured sort as fallback when Shell state is unavailable.
