@@ -31,7 +31,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P1 — Shortcut config còn fallback hardcode
 
-- Evidence: runtime đã đọc các field chính và thêm mapping cấu hình cho Skip/Undo/Fullscreen; click ảnh thường không còn handler điều hướng, compare preview giữ handler chọn riêng và action file dùng đúng preview đã chọn. Một số action legacy và keyboard paths vẫn nằm trực tiếp trong `MainWindow`.
+- Evidence: runtime đã đọc các field chính và thêm mapping cấu hình cho Skip/Undo/Fullscreen; click ảnh thường không còn handler điều hướng, compare preview giữ handler chọn riêng, action file dùng đúng preview đã chọn và selection được reset khi điều hướng. Một số action legacy và keyboard paths vẫn nằm trực tiếp trong `MainWindow`.
 - Impact: thay đổi config có thể không bao phủ toàn bộ interaction.
 - Task: `AUD-A04`, `AUD-C03` — command registry duy nhất và test mọi binding.
 

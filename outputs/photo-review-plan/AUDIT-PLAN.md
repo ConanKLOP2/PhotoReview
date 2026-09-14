@@ -112,6 +112,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-D04`: journal append chuyển sang `WriteThrough` và `Flush(true)`; test xác minh JSONL được ghi; build/test PASS. Commit `ae25313`.
 - 2026-09-14 — `AUD-C01`: mở rộng JPEG EXIF fixture matrix cho orientation 5/6/7/8; tất cả được nhận diện là portrait trong PortraitFirst; build/test PASS. Commit `fbc6205`.
 - 2026-09-14 — `AUD-C02`/`AUD-D01`: phát hiện và sửa lỗi action trong Compare thao tác nhầm ảnh gốc; Move/Copy/Recycle/Delete dùng `_compareSelectedPath`; contract test/build PASS. Commit `4d76735`.
+- 2026-09-14 — `AUD-C02`: phát hiện state selection Compare bị giữ qua lần điều hướng; reset selection khi bắt đầu hiển thị ảnh mới; contract test/build PASS. Commit `2cb4954`.
 
 ## Template cập nhật task
 
