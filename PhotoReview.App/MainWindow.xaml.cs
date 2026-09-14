@@ -291,14 +291,7 @@ public partial class MainWindow : Window
     }
 
     private (string Left, string Right)? FindComparePair(string path)
-    {
-        var stem = Path.GetFileNameWithoutExtension(path);
-        var match = System.Text.RegularExpressions.Regex.Match(stem, "^(.*) \\(\\d+\\)$");
-        var baseStem = match.Success ? match.Groups[1].Value : stem;
-        var original = _files.FirstOrDefault(p => Path.GetFileNameWithoutExtension(p).Equals(baseStem, StringComparison.OrdinalIgnoreCase));
-        var numbered = _files.FirstOrDefault(p => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(p), $"^{System.Text.RegularExpressions.Regex.Escape(baseStem)} \\(\\d+\\)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
-        return original is not null && numbered is not null ? (original, numbered) : null;
-    }
+        => ComparePairService.Find(_files, path);
 
     private void UpdateCompareSelection()
     {

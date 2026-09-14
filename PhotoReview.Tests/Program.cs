@@ -64,6 +64,10 @@ try
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
+    var compareOriginal = Path.Combine(root, "CocCocSetup.jpg");
+    var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
+    var comparePair = ComparePairService.Find(new[] { compareOriginal, compareNumbered }, compareNumbered);
+    Check(comparePair is not null && comparePair.Value.Left == compareOriginal && comparePair.Value.Right == compareNumbered, "Compare pair detection works from numbered filename", failures);
     var sortFixture = new[] { Path.Combine(root, "img10.jpg"), Path.Combine(root, "img2.jpg"), Path.Combine(root, "img1.jpg") };
     var nameSorted = ImageSortService.Sort(sortFixture, "Name");
     Check(Path.GetFileName(nameSorted[0]) == "img1.jpg" && Path.GetFileName(nameSorted[1]) == "img2.jpg" && Path.GetFileName(nameSorted[2]) == "img10.jpg", "Natural filename sort orders numeric suffixes", failures);
