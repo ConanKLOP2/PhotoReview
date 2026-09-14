@@ -6,6 +6,7 @@ using System.Text.Json;
 using Forms = System.Windows.Forms;
 using Microsoft.VisualBasic.FileIO;
 using System.Security.Cryptography;
+using System.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private const double PreloadMemoryLoadLimit = 0.80;
     private string? _compareSelectedPath;
     private readonly Dictionary<string, (long Length, DateTime LastWriteUtc, string Hash)> _hashCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ReviewMetrics _metrics = new();
 
     public MainWindow(string? initialPath = null)
     {
@@ -114,12 +116,14 @@ public partial class MainWindow : Window
 
     private async Task<BitmapImage> GetPreviewAsync(string path)
     {
-        if (_cache.TryGet(path, out var cached)) return cached;
+        if (_cache.TryGet(path, out var cached)) { _metrics.RecordCacheHit(); return cached; }
+        _metrics.RecordCacheMiss();
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
         var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
         var targetWidth = isOriginal ? 0 : GetTargetDecodeWidth();
         return await Task.Run(() =>
         {
+            var stopwatch = Stopwatch.StartNew();
             var bitmap = new BitmapImage();
             var cachePath = GetDiskCachePath(path, targetWidth);
             if (File.Exists(cachePath))
@@ -158,6 +162,8 @@ public partial class MainWindow : Window
                 catch { }
             }
             _cache.Set(path, bitmap);
+            stopwatch.Stop();
+            try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
             return bitmap;
         });
     }

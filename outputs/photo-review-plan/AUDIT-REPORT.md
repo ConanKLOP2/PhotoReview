@@ -17,6 +17,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 ### P1 — Cache RAM chưa đáp ứng policy hiệu năng
 
 - Evidence: đã nâng `MaxCacheBytes` lên 16 GB, preload full-folder khi source folder dưới 16 GB và dừng preload nền ở 80% memory load; chưa có decoded-footprint telemetry.
+- Evidence bổ sung: `ReviewMetrics` đã ghi cache hit/miss, source bytes và decode milliseconds trong process; chưa có GUI benchmark tự động.
 - Impact: policy đã được phản ánh trong code với guard nền, nhưng cần benchmark để xác định decoded footprint khi ảnh giải nén lớn.
 - Task: `AUD-E02`, `AUD-E03` — memory-pressure guard, adaptive decoded budget và đo cache hit/RAM thực tế.
 
