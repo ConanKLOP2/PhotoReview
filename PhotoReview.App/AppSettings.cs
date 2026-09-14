@@ -27,6 +27,11 @@ public sealed class AppSettings
                 loaded.Actions ??= ReviewAction.Defaults();
                 loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
                 loaded.ImageSortMode = NormalizeImageSortMode(loaded.ImageSortMode);
+                if (ValidateShortcuts(loaded) is not null)
+                {
+                    loaded.Shortcuts = ShortcutMappings.Default();
+                    loaded.Actions = ReviewAction.Defaults();
+                }
                 return loaded;
             }
         }
