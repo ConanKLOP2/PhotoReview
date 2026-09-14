@@ -149,6 +149,10 @@ try
     Check(mainWindowXaml.Contains("Focusable=\"True\"") && mainWindow.Contains("CompareLeft_KeyDown") && mainWindow.Contains("CompareRight_KeyDown"), "Compare previews support keyboard selection", failures);
     Check(mainWindow.Contains("GetGCMemoryInfo") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
     Check(mainWindowXaml.Contains("Closed=\"Window_Closed\"") && mainWindow.Contains("_thumbnailCache.Dispose()") && mainWindow.Contains("_preloadCts.Dispose()"), "Window shutdown disposes preload and thumbnail resources", failures);
+    var placementService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "WindowPlacementService.cs"));
+    Check(mainWindowXaml.Contains("SourceInitialized=\"Window_SourceInitialized\"") && mainWindowXaml.Contains("Closing=\"Window_Closing\""), "Main window restores and saves native placement instead of always using the startup default", failures);
+    Check(mainWindow.Contains("WindowPlacementService.Restore(this)") && mainWindow.Contains("WindowPlacementService.Save(this)") && placementService.Contains("GetWindowPlacement") && placementService.Contains("SetWindowPlacement"), "Native window placement persists monitor, bounds, and maximized state", failures);
+    Check(placementService.Contains("Screen.AllScreens") && placementService.Contains("WorkingArea"), "Saved placement is rejected when its monitor is no longer connected", failures);
     var thumbnailCacheText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ThumbnailCache.cs"));
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation", failures);
     Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException) { }") && thumbnailCacheText.Contains("catch (IOException) { }"), "Disk cache cleanup tolerates filesystem access failures", failures);

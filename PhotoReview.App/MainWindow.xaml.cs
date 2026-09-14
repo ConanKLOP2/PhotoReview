@@ -8,6 +8,7 @@ using Microsoft.VisualBasic.FileIO;
 using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Windows.Interop;
+using System.ComponentModel;
 
 namespace PhotoReview.App;
 
@@ -500,8 +501,10 @@ public partial class MainWindow : Window
         UpdateFitSize();
     }
 
+    private void Window_SourceInitialized(object? sender, EventArgs e) => WindowPlacementService.Restore(this);
     private void Window_Loaded(object sender, RoutedEventArgs e) => UpdateFitSize();
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
+    private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
         _preloadCts.Cancel();
