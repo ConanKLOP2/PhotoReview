@@ -60,6 +60,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-14 | Nối `ShortcutMappings.Compare` vào toggle ComparePanel; giữ click preview là chọn ảnh, không điều hướng | `0c8f335`; build solution PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Tách tùy chọn Compare hash và Compare size để giảm I/O theo workflow; cả hai được lưu trong Settings | `1150f88`, `0807efd`; build solution PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Thêm core retry an toàn cho Move/Copy theo fingerprint, journal Prepared/Committed/Failed; không retry Recycle Bin | `c130ac6`; build solution PASS; PhotoReview.Tests PASS |
+| 2026-09-14 | Nối retry vào Recovery UI: chọn operation, xác nhận, chỉ cho Move/Copy và hiển thị kết quả | `8532f0f`; build solution PASS; PhotoReview.Tests PASS |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 
