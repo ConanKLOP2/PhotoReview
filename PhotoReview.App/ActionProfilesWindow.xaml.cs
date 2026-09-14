@@ -41,7 +41,7 @@ public partial class ActionProfilesWindow : Window
         if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
         try
         {
-            var imported = JsonSerializer.Deserialize<List<ReviewAction>>(File.ReadAllText(dialog.FileName));
+            var imported = JsonSerializer.Deserialize<List<ReviewAction>>(System.IO.File.ReadAllText(dialog.FileName));
             if (imported is null || imported.Count == 0) throw new JsonException();
             Actions.Clear(); Actions.AddRange(imported.Select(Clone)); ActionList.Items.Refresh(); ActionList.SelectedIndex = 0;
         }
@@ -52,7 +52,7 @@ public partial class ActionProfilesWindow : Window
     {
         SaveCurrent();
         using var dialog = new Forms.SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "photoreview-actions.json" };
-        if (dialog.ShowDialog() == Forms.DialogResult.OK) File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, new JsonSerializerOptions { WriteIndented = true }));
+        if (dialog.ShowDialog() == Forms.DialogResult.OK) System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, new JsonSerializerOptions { WriteIndented = true }));
     }
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
