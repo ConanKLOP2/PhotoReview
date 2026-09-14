@@ -475,7 +475,11 @@ public partial class MainWindow : Window
         var source = _files[_index];
         try
         {
+            if (string.IsNullOrWhiteSpace(action.Destination)) throw new IOException("Action chưa có thư mục đích.");
             var destinationFolder = Path.IsPathRooted(action.Destination) ? action.Destination : Path.Combine(Path.GetDirectoryName(source)!, action.Destination);
+            destinationFolder = Path.GetFullPath(destinationFolder);
+            var sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source)!);
+            if (IsSamePath(destinationFolder, sourceFolder)) throw new IOException("Không thể Move/Copy vào chính folder nguồn.");
             Directory.CreateDirectory(destinationFolder);
             var destination = Path.Combine(destinationFolder, Path.GetFileName(source));
             if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
@@ -486,6 +490,13 @@ public partial class MainWindow : Window
             else { MainImage.Source = null; StatusText.Text = $"Đã thực hiện: {action.Name}"; }
         }
         catch (Exception ex) { StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}"; }
+    }
+
+    private static bool IsSamePath(string first, string second)
+    {
+        var normalizedFirst = Path.TrimEndingDirectorySeparator(Path.GetFullPath(first));
+        var normalizedSecond = Path.TrimEndingDirectorySeparator(Path.GetFullPath(second));
+        return string.Equals(normalizedFirst, normalizedSecond, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task UndoLastMoveAsync()
