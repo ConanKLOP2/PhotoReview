@@ -308,9 +308,29 @@ public partial class MainWindow : Window
         if (remove.Count == 0) { StatusText.Text = "Không có duplicate cùng hash phù hợp."; return; }
         var review = new BatchReviewWindow(remove) { Owner = this };
         if (review.ShowDialog() != true) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
-        foreach (var path in remove) if (File.Exists(path)) FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-        StatusText.Text = $"Đã đưa {remove.Count} file trùng hash vào Recycle Bin.";
-        if (remove.Count > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
+        var failures = new List<string>();
+        var succeeded = 0;
+        foreach (var path in remove)
+        {
+            if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
+            var info = new FileInfo(path);
+            var operationId = Guid.NewGuid().ToString("N");
+            _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+            try
+            {
+                FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                succeeded++;
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{Path.GetFileName(path)}: {ex.Message}");
+                _journal.Append(new JournalEntry(operationId, "Recycle", "Failed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
+            }
+        }
+        StatusText.Text = $"Batch hoàn tất: {succeeded} thành công, {failures.Count} lỗi.";
+        if (failures.Count > 0) System.Windows.MessageBox.Show(this, string.Join(Environment.NewLine, failures), "Báo cáo lỗi batch", MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (succeeded > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
     }
 
     private async Task<string> GetHashAsync(string path)

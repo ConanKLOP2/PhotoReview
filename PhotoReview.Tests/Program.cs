@@ -59,6 +59,7 @@ try
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
+    Check(mainWindow.Contains("\"Recycle\", \"Prepared\"") && mainWindow.Contains("\"Recycle\", \"Committed\"") && mainWindow.Contains("\"Recycle\", \"Failed\""), "Batch operations journal success and failures", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);
