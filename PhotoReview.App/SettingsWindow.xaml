@@ -24,6 +24,7 @@
             <ComboBox x:Name="LoadingModeCombo" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="Fast"/><ComboBoxItem Content="Preview"/><ComboBoxItem Content="Original (chất lượng cao nhất)" Tag="Original"/></ComboBox>
             <TextBlock Text="Thứ tự ảnh" Grid.Row="3" Margin="0,7,10,7"/>
             <ComboBox x:Name="SortModeCombo" Grid.Row="3" Grid.Column="1"><ComboBoxItem Content="Ảnh dọc → ảnh ngang → tên" Tag="PortraitFirst"/><ComboBoxItem Content="Theo tên (mặc định cũ)" Tag="Name"/></ComboBox>
+            <CheckBox x:Name="CompareHashCheck" Grid.Row="4" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" Margin="0,4,0,8" IsChecked="True"/>
             </Grid></GroupBox>
             <GroupBox Header="Phím tắt · nhấn phím trực tiếp vào ô để cấu hình"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

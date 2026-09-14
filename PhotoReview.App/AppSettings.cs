@@ -11,6 +11,7 @@ public sealed class AppSettings
     public string InitialViewMode { get; set; } = "Fit";
     public string LoadingMode { get; set; } = "Preview";
     public string ImageSortMode { get; set; } = "PortraitFirst";
+    public bool CompareHashEnabled { get; set; } = true;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");

@@ -99,11 +99,10 @@ public partial class MainWindow : Window
                 CompareRightImage.Source = await GetPreviewAsync(pair.Value.Right);
                 _compareSelectedPath = path;
                 UpdateCompareSelection();
-                var leftHash = await GetHashAsync(pair.Value.Left);
-                var rightHash = await GetHashAsync(pair.Value.Right);
                 var leftInfo = new FileInfo(pair.Value.Left);
                 var rightInfo = new FileInfo(pair.Value.Right);
-                StatusText.Text = $"{index + 1}/{_files.Count} | Compare | {Path.GetFileName(pair.Value.Left)} ({leftInfo.Length:N0} B) ↔ {Path.GetFileName(pair.Value.Right)} ({rightInfo.Length:N0} B) | hash {(leftHash == rightHash ? "TRÙNG" : "KHÁC")} | click để chọn";
+                var hashText = _settings.CompareHashEnabled ? $" | hash {(await GetHashAsync(pair.Value.Left) == await GetHashAsync(pair.Value.Right) ? "TRÙNG" : "KHÁC")}" : " | hash tắt";
+                StatusText.Text = $"{index + 1}/{_files.Count} | Compare | {Path.GetFileName(pair.Value.Left)} ({leftInfo.Length:N0} B) ↔ {Path.GetFileName(pair.Value.Right)} ({rightInfo.Length:N0} B){hashText} | click để chọn";
             }
             if (pair is null)
             {
