@@ -51,6 +51,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Evidence: `AppSettings.ValidateShortcuts` kiểm tra key hợp lệ và duplicate trên toàn bộ `ShortcutMappings` + `ReviewAction`; Settings gọi validator trước khi lưu (`6c1f40e`). Contract test và Release build PASS.
 - Remaining: recorder hiện chỉ hỗ trợ một phím đơn; chord modifier/profile theo context vẫn là phạm vi mở rộng, chưa coi là đã triển khai.
 
+### P2 — Compare shortcut đã được nối vào runtime
+
+- Evidence: `_settings.Shortcuts.Compare` bật/tắt `ComparePanel`; test contract xác nhận binding (`0c8f335`). Preview click/keyboard vẫn chỉ thay đổi file được chọn để thao tác.
+- Remaining: chưa có GUI acceptance đo thao tác thực tế và chưa có đồng bộ zoom/pan giữa hai preview.
+
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.

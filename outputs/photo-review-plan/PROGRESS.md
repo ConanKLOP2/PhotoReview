@@ -57,6 +57,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-14 | Loại bỏ fallback phím điều hướng/zoom hardcode; runtime chỉ dùng shortcut trong Settings (Escape vẫn là thoát fullscreen/modal) | `891f403`; build Release PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Gom validation shortcut toàn cục và action profile; chặn xung đột phím trước khi lưu Settings | `6c1f40e`; build Release PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Chạy verify-all và publish lại release để loại bỏ evidence artifact stale | `verify-all.ps1` PASS; `verify-release.ps1` PASS; SHA256 `525E094A...` |
+| 2026-09-14 | Nối `ShortcutMappings.Compare` vào toggle ComparePanel; giữ click preview là chọn ảnh, không điều hướng | `0c8f335`; build solution PASS; PhotoReview.Tests PASS |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 
