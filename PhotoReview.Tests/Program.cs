@@ -82,6 +82,14 @@ try
     Check(appSettings.Contains("CompareSizeEnabled") && mainWindow.Contains("CompareSizeEnabled") && settingsWindow.Contains("CompareSizeCheck"), "Compare size is optional", failures);
     Check(mainWindow.Contains("Task.WhenAll(GetHashAsync(pair.Value.Left), GetHashAsync(pair.Value.Right))"), "Compare hashes are requested concurrently", failures);
     Check(settingsWindow.Contains("CompareHashEnabled = true") && settingsWindow.Contains("CompareSizeEnabled = true"), "Settings defaults reset compare options", failures);
+    var retrySource = Path.Combine(root, "retry.jpg");
+    var retryDestination = Path.Combine(root, "retry-dest", "retry.jpg");
+    File.WriteAllBytes(retrySource, [7, 8, 9]);
+    var retryInfo = new FileInfo(retrySource);
+    var retryEntry = new JournalEntry("old-failed", "Move", "Failed", retrySource, retryDestination, retryInfo.Length, retryInfo.LastWriteTimeUtc, DateTime.UtcNow, "previous failure");
+    var retryResult = RecoveryRetryService.RetryMoveOrCopy(retryEntry, journal);
+    Check(retryResult.Succeeded && File.Exists(retryDestination) && !File.Exists(retrySource), "Recovery retry validates fingerprint and journals success", failures);
+    Check(File.Exists(retryDestination) && RecoveryRetryService.RetryMoveOrCopy(retryEntry with { Source = retryDestination }, journal).Succeeded == false, "Recovery retry rejects invalid source state", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
