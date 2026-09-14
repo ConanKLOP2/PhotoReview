@@ -106,6 +106,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-B03`/`AUD-A03`: thêm shortcut config riêng cho Skip, Undo và Fullscreen; Settings UI/runtime/contract test PASS. Commits `3befc76`, `230014e`.
 - 2026-09-14 — `AUD-C01`/`AUD-F01`: contract test gọi trực tiếp `ImageSortService.Sort`, xác minh natural numeric ordering và thứ tự ổn định khi metadata không đọc được; build/test PASS. Commit `533209c`.
 - 2026-09-14 — `AUD-C01`/`AUD-F01`: thêm JPEG fixture thật 40×20 với EXIF orientation 6; PortraitFirst xếp ảnh dọc EXIF trước landscape; build/test PASS. Commit `346846c`.
+- 2026-09-14 — `AUD-E01`: thêm counter số lần đọc file nguồn thực tế vào `ReviewMetrics` và Diagnostics, bên cạnh bytes/decode/present latency; build/test PASS. Commit `da2b961`.
 
 ## Template cập nhật task
 
