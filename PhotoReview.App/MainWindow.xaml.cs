@@ -274,7 +274,15 @@ public partial class MainWindow : Window
             using var stream = File.OpenRead(path);
             var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
             var frame = decoder.Frames[0];
-            return frame.PixelHeight > frame.PixelWidth ? 1 : frame.PixelWidth > frame.PixelHeight ? 2 : 3;
+            var width = frame.PixelWidth;
+            var height = frame.PixelHeight;
+            if (frame.Metadata is BitmapMetadata metadata)
+            {
+                var orientation = metadata.GetQuery("/app1/ifd/{ushort=274}");
+                if (orientation is ushort value && value is 5 or 6 or 7 or 8) (width, height) = (height, width);
+                else if (orientation is byte byteValue && byteValue is 5 or 6 or 7 or 8) (width, height) = (height, width);
+            }
+            return height > width ? 1 : width > height ? 2 : 3;
         }
         catch { return 3; }
     }

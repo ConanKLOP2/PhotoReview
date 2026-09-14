@@ -66,7 +66,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 |---|---|---|---|---|
 | A | Source inventory; build PASS | A03 | A04 tách service | — |
 | B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save; runtime shortcut wiring | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
-| C | Name/PortraitFirst, compare cơ bản tồn tại | C01 | C02 test pair/EXIF | Chưa có GUI acceptance |
+| C | Name/PortraitFirst, compare cơ bản, EXIF orientation sort | C01 | C02 test pair/GUI | Chưa có fixture EXIF/GUI acceptance |
 | D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile; recovery UI | D04 | Fault injection/reconcile edge cases | Fault injection đầy đủ còn thiếu |
 | E | LRU/preload/preview cache tồn tại | E01 | E02 telemetry | Chưa có benchmark định lượng |
 | F | Build/test/smoke/release gate PASS; contract test action/sort/navigation | F01 | F02/F03 GUI acceptance | Cần fixture và test GUI |
@@ -90,6 +90,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-D04`: Recovery UI đọc cả pending và failed journal entries; build/test PASS.
 - 2026-09-14 — `AUD-F04`: `verify-all.ps1 -Configuration Release` PASS sau restore/publish `win-x64`; framework-dependent EXE verified (162,304 bytes, SHA-256 `22D4D8F414BE3B9685F1F9FF042232DA09334E83C180E18F3937ECAD5C8D01F4`).
 - 2026-09-14 — Audit finding P1: Settings có shortcut NextFolder/PreviousFolder/FirstImage/Zoom nhưng runtime hardcode key; đã nối config vào Window_KeyDown và thêm contract test; build/test PASS.
+- 2026-09-14 — `AUD-C01`: PortraitFirst sort tính EXIF orientation 5/6/7/8 trước khi phân loại dọc/ngang; build/test PASS. Fixture ảnh EXIF thật vẫn cần bổ sung.
 
 ## Template cập nhật task
 
