@@ -55,9 +55,10 @@ try
     Check(mainWindow.Contains("Key.Space"), "Space skip shortcut exists", failures);
     Check(mainWindow.Contains("Key.PageUp") && mainWindow.Contains("Key.PageDown") && mainWindow.Contains("NavigateSiblingFolderAsync"), "PageUp/PageDown navigate sibling folders", failures);
     Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
-    Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("Xác nhận xử lý hàng loạt"), "Actions and batch operations require confirmation", failures);
+    Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
+    Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);
