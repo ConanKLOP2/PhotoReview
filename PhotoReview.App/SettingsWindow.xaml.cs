@@ -30,6 +30,8 @@ public partial class SettingsWindow : Window
                 FirstImage = current.Shortcuts.FirstImage, ZoomIn = current.Shortcuts.ZoomIn, ZoomOut = current.Shortcuts.ZoomOut, ToggleFit = current.Shortcuts.ToggleFit
             }
         };
+        foreach (var textBox in new[] { NextText, PreviousText, MoveText, RecycleText, CompareText, NextFolderText, PreviousFolderText, FirstImageText, ZoomInText, ZoomOutText, ToggleFitText })
+            textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
         LoadFields();
     }
 
