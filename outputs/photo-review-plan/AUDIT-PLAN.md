@@ -89,6 +89,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-D04`: thêm Recovery UI hiển thị pending operations và cảnh báo không replay tự động; build/test PASS.
 - 2026-09-14 — `AUD-D04`: Recovery UI đọc cả pending và failed journal entries; build/test PASS.
 - 2026-09-14 — `AUD-F04`: `verify-all.ps1 -Configuration Release` PASS sau restore/publish `win-x64`; framework-dependent EXE verified (162,304 bytes, SHA-256 `22D4D8F414BE3B9685F1F9FF042232DA09334E83C180E18F3937ECAD5C8D01F4`).
+- 2026-09-14 — Audit finding release: publish `--no-restore` fail `NETSDK1047` vì project thiếu RuntimeIdentifiers và verifier tiếp tục sau lỗi; thêm `RuntimeIdentifiers=win-x64`, thêm guard fail-fast cho publish, publish/verifier mới PASS (162,304 bytes, SHA-256 `C3F1886E40984A96AB85F9F3822DFCE0C7797E36B9A5C2C217D12D772CF6051F`).
 - 2026-09-14 — Audit finding P1: Settings có shortcut NextFolder/PreviousFolder/FirstImage/Zoom nhưng runtime hardcode key; đã nối config vào Window_KeyDown và thêm contract test; build/test PASS.
 - 2026-09-14 — `AUD-C01`: PortraitFirst sort tính EXIF orientation 5/6/7/8 trước khi phân loại dọc/ngang; build/test PASS. Fixture ảnh EXIF thật vẫn cần bổ sung.
 
