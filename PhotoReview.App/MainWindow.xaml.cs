@@ -124,6 +124,7 @@ public partial class MainWindow : Window
         return await Task.Run(() =>
         {
             var stopwatch = Stopwatch.StartNew();
+            var sourceRead = false;
             var bitmap = new BitmapImage();
             var cachePath = GetDiskCachePath(path, targetWidth);
             if (File.Exists(cachePath))
@@ -136,11 +137,13 @@ public partial class MainWindow : Window
                 catch (Exception) when (File.Exists(cachePath))
                 {
                     try { File.Delete(cachePath); } catch { }
+                    sourceRead = true;
                     bitmap = DecodeSource(path, targetWidth);
                 }
             }
             else
             {
+                sourceRead = true;
                 bitmap = DecodeSource(path, targetWidth);
                 try
                 {
@@ -163,7 +166,7 @@ public partial class MainWindow : Window
             }
             _cache.Set(path, bitmap);
             stopwatch.Stop();
-            try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
+            if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
             return bitmap;
         });
     }
