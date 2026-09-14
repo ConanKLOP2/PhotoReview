@@ -24,7 +24,7 @@ Khi người dùng mở một folder đang xem trong Windows Explorer, PhotoRevi
 - `FolderScanService`: one snapshot, supported-extension filter, duplicate/path validation.
 - `MainWindow`: request order asynchronously; show first item from fast fallback immediately; replace list only if Shell order result is valid and current folder/generation unchanged.
 - Fallback: `ImageSortService.Sort(snapshot, "Name")`.
-- Threshold 100: metadata/EXIF sorting only below 100 files; 100+ uses Explorer/Shell order or name fallback.
+- Threshold 100: dưới 100 file dùng Settings nhưng không đọc EXIF; từ 100 file dùng Explorer/Shell order hoặc name fallback.
 
 ## Checklist triển khai
 

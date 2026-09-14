@@ -8,7 +8,7 @@ Tài liệu này mô tả code hiện tại để người dùng tự preview, g
 - App đọc config tại `%LOCALAPPDATA%\PhotoReview\config.json` và khóa folder để tránh mở trùng phiên.
 - Cửa sổ có title bar Windows, mở maximized; vùng preview kéo đầy phần client.
 - Overlay phía trên ảnh chỉ giữ nút icon mở folder, Settings và nút công cụ phụ `⋮`; công cụ ít dùng nằm trong popup. Status nằm overlay phía dưới; dòng hướng dẫn phím tắt được ẩn để tối đa hóa diện tích ảnh.
-- Folder dưới 100 ảnh được phép sort theo metadata/Settings; folder từ 100 ảnh dùng thứ tự tên kiểu Windows Explorer để tránh EXIF scan toàn bộ trước khi review.
+- Folder dưới 100 ảnh sort theo Settings nhưng không đọc EXIF; folder từ 100 ảnh dùng thứ tự Windows Explorer hoặc fallback tên.
 - `F11` chuyển giữa cửa sổ có khung và fullscreen không viền.
 
 ## 2. Điều khiển

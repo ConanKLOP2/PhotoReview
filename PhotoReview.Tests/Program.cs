@@ -1,7 +1,6 @@
 using PhotoReview.App;
 using System.IO;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 var failures = new List<string>();
 var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
@@ -92,8 +91,6 @@ try
     Check(File.Exists(retryDestination) && RecoveryRetryService.RetryMoveOrCopy(retryEntry with { Source = retryDestination }, journal).Succeeded == false, "Recovery retry rejects invalid source state", failures);
     Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml")).Contains("Retry Move/Copy") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml.cs")).Contains("Retry_Click"), "Recovery retry is exposed with confirmation in UI", failures);
     Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml")).Contains("AutomationProperties.Name=\"Thử lại Move hoặc Copy đã lỗi\""), "Recovery retry button is accessible", failures);
-    Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
-    Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(imageSortService.Contains("StrCmpLogicalW") && imageSortService.Contains("ExplorerComparer"), "Name sort uses Windows Explorer logical ordering", failures);
     Check(appSettings.Contains("Size") && imageSortService.Contains("OrderByDescending(GetFileSize)") && settingsWindow.Contains("Size"), "Size sort is configurable", failures);
     Check(imageSortService.Contains("SizeAscending") && settingsWindow.Contains("SizeAscending"), "Size sort direction is configurable", failures);
@@ -108,26 +105,11 @@ try
     var sortFixture = new[] { Path.Combine(root, "img10.jpg"), Path.Combine(root, "img2.jpg"), Path.Combine(root, "img1.jpg") };
     var nameSorted = ImageSortService.Sort(sortFixture, "Name");
     Check(Path.GetFileName(nameSorted[0]) == "img1.jpg" && Path.GetFileName(nameSorted[1]) == "img2.jpg" && Path.GetFileName(nameSorted[2]) == "img10.jpg", "Natural filename sort orders numeric suffixes", failures);
-    var portraitFallbackSorted = ImageSortService.Sort(sortFixture, "PortraitFirst");
-    Check(portraitFallbackSorted.SequenceEqual(nameSorted), "Portrait-first keeps natural name order when metadata is unavailable", failures);
     File.WriteAllBytes(sortFixture[0], [1]); File.WriteAllBytes(sortFixture[1], [1, 2, 3]); File.WriteAllBytes(sortFixture[2], [1, 2]);
     var sizeSorted = ImageSortService.Sort(sortFixture, "Size");
     Check(Path.GetFileName(sizeSorted[0]) == "img2.jpg" && Path.GetFileName(sizeSorted[2]) == "img10.jpg", "Size sort orders files by descending bytes", failures);
     var sizeAscending = ImageSortService.Sort(sortFixture, "SizeAscending");
     Check(Path.GetFileName(sizeAscending[0]) == "img10.jpg" && Path.GetFileName(sizeAscending[2]) == "img2.jpg", "Size sort orders files by ascending bytes", failures);
-    var landscapePath = Path.Combine(root, "landscape.jpg");
-    var exifPortraitPath = Path.Combine(root, "exif-portrait.jpg");
-    WriteJpegFixture(landscapePath, 40, 20);
-    WriteJpegFixture(exifPortraitPath, 40, 20, 6);
-    var exifSorted = ImageSortService.Sort(new[] { landscapePath, exifPortraitPath }, "PortraitFirst");
-    Check(string.Equals(exifSorted[0], exifPortraitPath, StringComparison.OrdinalIgnoreCase), "Portrait-first honors EXIF orientation 6 fixture", failures);
-    foreach (var orientation in new ushort[] { 5, 7, 8 })
-    {
-        var rotatedPath = Path.Combine(root, $"exif-{orientation}.jpg");
-        WriteJpegFixture(rotatedPath, 40, 20, orientation);
-        var rotatedSorted = ImageSortService.Sort(new[] { landscapePath, rotatedPath }, "PortraitFirst");
-        Check(string.Equals(rotatedSorted[0], rotatedPath, StringComparison.OrdinalIgnoreCase), $"Portrait-first honors EXIF orientation {orientation} fixture", failures);
-    }
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
@@ -207,17 +189,6 @@ try
 finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 
 static void Check(bool condition, string name, List<string> failures) { if (condition) Console.WriteLine("PASS: " + name); else failures.Add(name); }
-
-static void WriteJpegFixture(string path, int width, int height, ushort? orientation = null)
-{
-    var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
-    var metadata = new BitmapMetadata("jpg");
-    if (orientation.HasValue) metadata.SetQuery("/app1/ifd/{ushort=274}", orientation.Value);
-    var encoder = new JpegBitmapEncoder();
-    encoder.Frames.Add(BitmapFrame.Create(bitmap, null, metadata, null));
-    using var stream = File.Create(path);
-    encoder.Save(stream);
-}
 
 static bool operationJournalTextContainsFailed()
 {

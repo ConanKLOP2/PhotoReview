@@ -4,7 +4,7 @@
 
 Không hứa nhanh hơn Photos trước khi đo. Không suy đoán Photos chỉ dùng preview. So sánh cùng mức nhìn được và full-resolution riêng biệt. Hiển thị thumbnail mờ sớm không được tính là hoàn thành ảnh rõ.
 
-Runtime hiện dùng sort theo Settings và đọc metadata khi folder dưới 100 ảnh; từ 100 ảnh trở lên dùng thứ tự tên kiểu Windows Explorer, không chạy EXIF scan toàn folder trên critical path. Log chẩn đoán nằm tại `%LOCALAPPDATA%\PhotoReview\logs\app.log`.
+Runtime hiện dùng sort theo Settings khi folder dưới 100 ảnh nhưng không đọc EXIF; từ 100 ảnh trở lên dùng thứ tự Windows Explorer hoặc fallback tên, không chạy EXIF scan. Log chẩn đoán nằm tại `%LOCALAPPDATA%\PhotoReview\logs\app.log`.
 
 ## Khảo sát bắt buộc
 

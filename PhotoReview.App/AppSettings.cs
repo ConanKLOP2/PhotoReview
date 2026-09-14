@@ -10,7 +10,7 @@ public sealed class AppSettings
     public string Folder2Name { get; set; } = "Loai-2";
     public string InitialViewMode { get; set; } = "Fit";
     public string LoadingMode { get; set; } = "Preview";
-    public string ImageSortMode { get; set; } = "PortraitFirst";
+    public string ImageSortMode { get; set; } = "Name";
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
@@ -88,7 +88,8 @@ public sealed class AppSettings
             "NAME" => "Name",
             "SIZE" or "SIZEDESCENDING" => "SizeDescending",
             "SIZEASCENDING" => "SizeAscending",
-            _ => "PortraitFirst"
+            "PORTRAITFIRST" => "Name",
+            _ => "Name"
         };
 
     public static bool IsValidImageSortMode(string? value) =>
@@ -96,7 +97,7 @@ public sealed class AppSettings
         string.Equals(value, "Size", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "SizeAscending", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "SizeDescending", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "PortraitFirst", StringComparison.OrdinalIgnoreCase);
+        string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase);
 
     public static string? ValidateShortcuts(AppSettings settings)
     {
