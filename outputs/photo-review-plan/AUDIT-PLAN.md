@@ -109,6 +109,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-E01`: thêm counter số lần đọc file nguồn thực tế vào `ReviewMetrics` và Diagnostics, bên cạnh bytes/decode/present latency; build/test PASS. Commit `da2b961`.
 - 2026-09-14 — `AUD-A02`/`AUD-F04`: build App và Tests với `-warnaserror --no-restore` đều PASS, 0 warning/0 error; worktree sạch.
 - 2026-09-14 — `AUD-F04`: rebuild/publish `win-x64` sau các commit mới và chạy `verify-all.ps1 -Configuration Release` PASS; EXE 162,304 bytes, SHA-256 `953A45AA7ECC40DDE89B5257FF0F02DCDC059689C5E3BAC12C2F02C4381B768C`.
+- 2026-09-14 — `AUD-D04`: journal append chuyển sang `WriteThrough` và `Flush(true)`; test xác minh JSONL được ghi; build/test PASS. Commit `ae25313`.
 
 ## Template cập nhật task
 

@@ -25,7 +25,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P1 — Batch mutation chưa có fault-injection thật
 
-- Evidence: journal/reconcile và dry-run có contract test, gồm source còn tồn tại và destination sai kích thước đều bị đánh dấu Failed; chưa mô phỏng crash tại từng ranh giới filesystem/Recycle Bin.
+- Evidence: journal/reconcile và dry-run có contract test, gồm source còn tồn tại và destination sai kích thước đều bị đánh dấu Failed; append journal dùng WriteThrough/Flush(true); chưa mô phỏng crash tại từng ranh giới filesystem/Recycle Bin.
 - Impact: chưa chứng minh recovery trên máy thật qua mọi trạng thái lỗi.
 - Task: `AUD-D04`, `AUD-F02` — injectable operation executor, fixture fault points và recovery matrix.
 
