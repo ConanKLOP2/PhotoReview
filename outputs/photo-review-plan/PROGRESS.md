@@ -13,7 +13,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 - Tài liệu kế hoạch: hoàn tất phiên bản đầu.
 - Audit hiện tại: 5 DONE, 19 PARTIAL, 13 TODO, 2 DEFERRED trong 39 task bản đầu.
-- Benchmark trên bộ 242 ảnh: chưa chạy; ảnh gốc chưa thao tác.
+- Benchmark trên bộ 242 ảnh thật: chưa chạy; đã thêm `tools/benchmark-folder.ps1` để đo baseline đọc storage mà không sửa ảnh.
 - Ứng dụng đã có solution/source và release artifacts; chưa coi toàn bộ plan là hoàn tất.
 - Gate tích hợp gần nhất: PASS; release đã publish lại từ source hiện tại, SHA256 `525E094AE7BF1C4BCAD4066E7E945E6F98E92517B1AB4C2EB46328F2BAD1ACA9`.
 
@@ -30,9 +30,9 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 ## Ba bước tiếp theo
 
-1. Chạy GUI acceptance trên bộ 242 ảnh thật và lưu evidence workflow/resume.
-2. Hoàn thiện command registry và validation shortcut để mọi interaction public đều cấu hình tập trung.
-3. Bổ sung benchmark report, fault-injection matrix và GUI acceptance trên Windows sạch.
+1. Chạy `tools/benchmark-folder.ps1` trên bộ 242 ảnh thật và lưu median/P95 theo từng ổ đĩa.
+2. Chạy GUI acceptance trên bộ ảnh thật và lưu evidence workflow/resume.
+3. Bổ sung benchmark decode WPF và GUI acceptance trên Windows sạch.
 
 Đường dẫn bộ 242 ảnh hiện chưa biết; đây là điều kiện để nghiệm thu/benchmark, không phải lỗi implementation.
 
@@ -41,6 +41,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 - Debug/Release build: PASS, 0 warning/0 error.
 - `PhotoReview.Tests`: PASS persistence, journal/pending journal, keyboard contract và association contract.
 - `tools/smoke-test.ps1`: PASS Move/Undo bytes, conflict, session atomic write, Recycle Bin và cleanup.
+- `tools/fault-injection-test.ps1`: PASS conflict, prepared/interrupted operation và byte preservation.
 - `tools/verify-release.ps1`: PASS release files và executable hash.
 
 ## Nhật ký audit

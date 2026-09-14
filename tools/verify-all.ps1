@@ -26,6 +26,9 @@ Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')
 }
+Invoke-Gate 'Run fault-injection safety test' {
+    & (Join-Path $PSScriptRoot 'fault-injection-test.ps1')
+}
 Invoke-Gate 'Verify framework-dependent release' {
     & (Join-Path $PSScriptRoot 'verify-release.ps1') -ReleaseDirectory $ReleaseDirectory
 }
