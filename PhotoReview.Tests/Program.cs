@@ -88,6 +88,21 @@ try
     journal.Append(new JournalEntry(pendingMoveId, "Move", "Prepared", pendingMoveSource, pendingMoveDestination, 3, DateTime.UtcNow, DateTime.UtcNow));
     var moveReconciled = journal.ReconcilePendingOperations();
     Check(moveReconciled.Any(x => x.Id == pendingMoveId && x.State == "Committed"), "Pending move is committed only when source is absent and destination fingerprint matches", failures);
+    var mismatchedSource = Path.Combine(root, "pending-mismatch.jpg");
+    var mismatchedDestination = Path.Combine(root, "pending-mismatch-dest.jpg");
+    File.WriteAllBytes(mismatchedDestination, [1, 2]);
+    var mismatchId = Guid.NewGuid().ToString("N");
+    journal.Append(new JournalEntry(mismatchId, "Copy", "Prepared", mismatchedSource, mismatchedDestination, 3, DateTime.UtcNow, DateTime.UtcNow));
+    var mismatchReconciled = journal.ReconcilePendingOperations();
+    Check(mismatchReconciled.Any(x => x.Id == mismatchId && x.State == "Failed") && journal.ReadPendingOperations().All(x => x.Id != mismatchId), "Pending copy with mismatched destination is failed without replay", failures);
+    var sourceStillExists = Path.Combine(root, "pending-source-exists.jpg");
+    var sourceStillDestination = Path.Combine(root, "pending-source-exists-dest.jpg");
+    File.WriteAllBytes(sourceStillExists, [4, 5, 6]);
+    File.WriteAllBytes(sourceStillDestination, [4, 5, 6]);
+    var sourceExistsId = Guid.NewGuid().ToString("N");
+    journal.Append(new JournalEntry(sourceExistsId, "Move", "Prepared", sourceStillExists, sourceStillDestination, 3, DateTime.UtcNow, DateTime.UtcNow));
+    var sourceExistsReconciled = journal.ReconcilePendingOperations();
+    Check(sourceExistsReconciled.Any(x => x.Id == sourceExistsId && x.State == "Failed"), "Pending move with source still present is failed without replay", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);
