@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         {
             folder = Path.GetFullPath(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
+            Title = $"Photo Review — {folder}";
             var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
@@ -139,6 +140,7 @@ public partial class MainWindow : Window
             AppLog.Error($"LoadFolder failed: {folder}", ex);
             MainImage.Source = null;
             FolderText.Text = folder;
+            Title = $"Photo Review — {folder}";
             StatusText.Text = $"Không mở được folder: {ex.Message}";
         }
     }
