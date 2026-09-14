@@ -60,6 +60,12 @@ try
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
     Check(mainWindow.Contains("\"Recycle\", \"Prepared\"") && mainWindow.Contains("\"Recycle\", \"Committed\"") && mainWindow.Contains("\"Recycle\", \"Failed\""), "Batch operations journal success and failures", failures);
+    var journalSource = Path.Combine(root, "pending-recycle.jpg");
+    File.WriteAllBytes(journalSource, [1, 2, 3]);
+    var pendingId = Guid.NewGuid().ToString("N");
+    journal.Append(new JournalEntry(pendingId, "Recycle", "Prepared", journalSource, null, 3, File.GetLastWriteTimeUtc(journalSource), DateTime.UtcNow));
+    var reconciled = journal.ReconcilePendingOperations();
+    Check(reconciled.Any(x => x.Id == pendingId && x.State == "Failed"), "Pending recycle is reconciled without replay when source remains", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);

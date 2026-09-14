@@ -50,4 +50,20 @@ public sealed class OperationJournal
         }
         return prepared.Where(x => !completed.Contains(x.Key)).Select(x => x.Value).ToList();
     }
+
+    public IReadOnlyList<JournalEntry> ReconcilePendingOperations()
+    {
+        var reconciled = new List<JournalEntry>();
+        foreach (var pending in ReadPendingOperations())
+        {
+            if (pending.Type == "Recycle")
+            {
+                var state = File.Exists(pending.Source) ? "Failed" : "Committed";
+                var error = state == "Failed" ? "Nguồn vẫn tồn tại sau khi khôi phục phiên." : null;
+                var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
+                Append(entry); reconciled.Add(entry);
+            }
+        }
+        return reconciled;
+    }
 }

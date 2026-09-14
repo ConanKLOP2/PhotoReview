@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     public MainWindow(string? initialPath = null)
     {
         InitializeComponent();
+        _journal.ReconcilePendingOperations();
         foreach (var move in _journal.ReadCommittedMoves())
             if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));
         if (!string.IsNullOrWhiteSpace(initialPath) && File.Exists(initialPath))
