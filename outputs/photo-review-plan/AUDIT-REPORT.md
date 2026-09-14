@@ -36,7 +36,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P2 — Sort orientation đọc metadata toàn folder đồng bộ theo task
 
-- Evidence: `SortFiles` gọi decoder cho từng file trước khi hiển thị folder.
+- Evidence: `ImageSortService.Sort` gọi decoder cho từng file trước khi hiển thị folder; logic đã tách khỏi code-behind để kiểm thử độc lập.
 - Impact: folder nhiều ảnh có thể chậm mở lần đầu và tăng I/O; EXIF orientation chưa được kiểm chứng bằng fixture.
 - Task: `AUD-C01`, `AUD-E01` — metadata cache/background scan, đo latency, test portrait/landscape/square/EXIF.
 
