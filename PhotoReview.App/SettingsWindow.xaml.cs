@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Text.Json;
+using System.Reflection;
 
 namespace PhotoReview.App;
 
@@ -11,6 +12,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings current)
     {
         InitializeComponent();
+        VersionText.Text = $"Phiên bản {Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "unknown"}";
         Settings = new AppSettings
         {
             Folder2Name = current.Folder2Name,

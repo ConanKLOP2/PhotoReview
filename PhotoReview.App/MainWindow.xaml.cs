@@ -38,6 +38,9 @@ public partial class MainWindow : Window
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
     private readonly ExplorerOrderService _explorerOrder = new();
+    private CancellationTokenSource _folderLoadCts = new();
+    private long _folderGeneration;
+    private ExplorerViewSnapshot? _lastExplorerSnapshot;
     private readonly Dictionary<string, (int Width, int Height)> _originalDimensions = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow(string? initialPath = null)
@@ -69,6 +72,11 @@ public partial class MainWindow : Window
 
     private async Task LoadFolderAsync(string folder, string? initialPath = null)
     {
+        _folderLoadCts.Cancel();
+        _folderLoadCts.Dispose();
+        _folderLoadCts = new CancellationTokenSource();
+        var loadToken = _folderLoadCts.Token;
+        var loadGeneration = Interlocked.Increment(ref _folderGeneration);
         AppLog.Info($"LoadFolder start: {folder}");
         try
         {
@@ -78,23 +86,14 @@ public partial class MainWindow : Window
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
                 .Where(p => supported.Contains(Path.GetExtension(p))).ToList());
-            var metadataSort = files.Count < 100;
-            var sortMode = metadataSort ? _settings.ImageSortMode : "Name";
-            if (!metadataSort)
-            {
-                var explorerOrder = await _explorerOrder.TryGetOrderAsync(folder, TimeSpan.FromSeconds(2), CancellationToken.None);
-                if (explorerOrder is not null)
-                {
-                    var rank = explorerOrder.Select((path, index) => (path, index)).ToDictionary(x => x.path, x => x.index, StringComparer.OrdinalIgnoreCase);
-                    files = files.OrderBy(path => rank.TryGetValue(path, out var index) ? index : int.MaxValue).ThenBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase).ToList();
-                    sortMode = "Windows Explorer view";
-                }
-                else files = await Task.Run(() => ImageSortService.Sort(files, "Name"));
-            }
-            else files = await Task.Run(() => ImageSortService.Sort(files, sortMode));
-            AppLog.Info($"LoadFolder scan complete: {files.Count} files, sort={sortMode}, metadataSort={files.Count < 100}");
+            var sortMode = _settings.ImageSortMode;
+            var scannedFiles = files.ToArray();
+            var explorerTask = _explorerOrder.TryGetSnapshotAsync(folder, TimeSpan.FromSeconds(2), loadToken);
+            files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
+            if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
+            AppLog.Info($"LoadFolder scan complete: {files.Count} files, initialSort={sortMode}");
             _preloadCts.Cancel();
-            _totalSourceBytes = await Task.Run(() => files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }));
+            _totalSourceBytes = long.MaxValue;
             _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear(); _originalDimensions.Clear();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
@@ -105,7 +104,25 @@ public partial class MainWindow : Window
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
             else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
+
+            var totalBytesTask = Task.Run(() => scannedFiles.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }), loadToken);
+            var explorerSnapshot = await explorerTask;
+            if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
+            _lastExplorerSnapshot = explorerSnapshot;
+            if (ExplorerSnapshotValidator.TryValidate(explorerSnapshot, scannedFiles, out var explorerOrder, out var fallbackReason))
+            {
+                var currentPath = _index >= 0 && _index < _files.Count ? _files[_index] : null;
+                _preloadCts.Cancel();
+                _files.Clear(); _files.AddRange(explorerOrder);
+                _index = currentPath is null ? -1 : _files.FindIndex(path => string.Equals(path, currentPath, StringComparison.OrdinalIgnoreCase));
+                FolderText.Text = $"{folder}  ({_files.Count} ảnh) · Explorer";
+                if (_index >= 0) _ = PreloadAroundAsync(_index, _generation);
+                AppLog.Info($"Explorer native order applied: {explorerOrder.Count} files");
+            }
+            else AppLog.Info($"Explorer view fallback: status={explorerSnapshot.Status}, reason={fallbackReason}");
+            _totalSourceBytes = await totalBytesTask;
         }
+        catch (OperationCanceledException) when (loadToken.IsCancellationRequested) { }
         catch (Exception ex)
         {
             AppLog.Error($"LoadFolder failed: {folder}", ex);
@@ -382,7 +399,7 @@ public partial class MainWindow : Window
 
     private void Diagnostics_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new DiagnosticsWindow(_metrics.Snapshot()) { Owner = this };
+        var dialog = new DiagnosticsWindow(_metrics.Snapshot(), _lastExplorerSnapshot) { Owner = this };
         dialog.ShowDialog();
     }
 
@@ -509,6 +526,8 @@ public partial class MainWindow : Window
     {
         _preloadCts.Cancel();
         _preloadCts.Dispose();
+        _folderLoadCts.Cancel();
+        _folderLoadCts.Dispose();
         _thumbnailCache.Dispose();
         _hashService.Clear();
     }

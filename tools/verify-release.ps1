@@ -16,7 +16,16 @@ if ($missing.Count -gt 0) {
 
 $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
 if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
+$projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'PhotoReview.App\PhotoReview.App.csproj'
+[xml]$project = Get-Content -LiteralPath $projectFile
+$expectedFileVersion = [string]$project.Project.PropertyGroup.FileVersion
+$actualFileVersion = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo.FileVersion
+if ($actualFileVersion -ne $expectedFileVersion) {
+    Write-Error "Release version mismatch: expected $expectedFileVersion, found $actualFileVersion"
+    exit 1
+}
 Write-Output "PASS: release files present ($resolved)"
+Write-Output "File version: $actualFileVersion"
 Write-Output "EXE bytes: $($exe.Length)"
 Write-Output "EXE SHA256: $((Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash)"
 if ($SelfContained) { Write-Output 'PASS: self-contained runtime files present' }

@@ -8,6 +8,10 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 - 2026-09-14: hỗ trợ mở folder qua command line; hiển thị ảnh đầu tiên trước khi decode EXIF toàn folder; thêm fallback decode, dimension render/gốc, log tập trung và bắt phím ở `PreviewKeyDown`. Settings đã bỏ shortcut chuyển loại 2 trùng Action JSON. Build và test PASS.
 - 2026-09-14: lập kế hoạch Shell Explorer order tại `SHELL-VIEW-ORDER-PLAN.md`; đã review rủi ro COM/UI freeze/fallback/100-file boundary. Chưa triển khai adapter.
 - 2026-09-14: triển khai Shell order provider cho folder từ 100 ảnh, có timeout 2 giây, COM cleanup và fallback sort tên; build/test PASS.
+- 2026-09-14: tạo kế hoạch triển khai native `IFolderView2`, snapshot/validator, sort/group state, versioning và native integration matrix tại `IFOLDERVIEW2-IMPLEMENTATION-PLAN.md`. Chưa đánh dấu implementation hoàn tất.
+- 2026-09-14: triển khai native `IFolderView2` trên STA worker, snapshot validator, timeout/cancellation/generation guard, sort/group diagnostics và fake-provider tests. Build Release 0 warning/0 error, test PASS; native Explorer matrix FVW-011 vẫn cần chạy trước khi bump 1.1.0/publish.
+- 2026-09-14: sửa regression DESC do Explorer provider trước đó chỉ chạy từ 100 ảnh; mọi kích thước folder giờ đều truy vấn native view, fallback về sort Settings khi Explorer unavailable.
+- 2026-09-14: debug native trên Explorer folder `Machi馬吉 - Hot Springs`; sửa lỗi RCW `0x80131165 Typelib export` bằng COM vtable calls. Probe thật trả `Available`, Name Descending và order `(37).jpg` đến `(1).jpg`.
 
 ## Hiện trạng
 
@@ -15,7 +19,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 - Audit hiện tại: 5 DONE, 19 PARTIAL, 13 TODO, 2 DEFERRED trong 39 task bản đầu.
 - Benchmark trên bộ 242 ảnh thật: chưa chạy; đã thêm `tools/benchmark-folder.ps1` để đo baseline đọc storage mà không sửa ảnh.
 - Ứng dụng đã có solution/source và release artifacts; chưa coi toàn bộ plan là hoàn tất.
-- Gate tích hợp gần nhất: PASS; release đã publish lại từ source hiện tại, SHA256 `525E094AE7BF1C4BCAD4066E7E945E6F98E92517B1AB4C2EB46328F2BAD1ACA9`.
+- Gate tích hợp gần nhất: PASS; release 1.0.1 đã publish lại từ source hiện tại, EXE SHA256 `E9A92C264F1402DBB02DDC3CAA2AD4045DE40D173AAC237A2DEB164EF73A05E6`.
 
 ## Milestone
 
@@ -70,6 +74,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-14 | Nối retry vào Recovery UI: chọn operation, xác nhận, chỉ cho Move/Copy và hiển thị kết quả | `8532f0f`; build solution PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Sửa wording/accessibility Recovery và publish release chứa đầy đủ Recovery UI mới nhất | `207bca6`; `verify-release.ps1` PASS; SHA256 `8CE35B7C...` |
 | 2026-09-14 | Đổi Name sort sang Windows logical ordering (`StrCmpLogicalW`), giữ PortraitFirst grouping trước bước sort tên | `86e50ee`; build solution PASS; PhotoReview.Tests PASS |
+| 2026-09-14 | Native Explorer order dùng COM vtable, hiển thị ảnh fallback trước khi chờ Shell, tách folder generation, thêm version gate và publish 1.0.1 | Native Name DESC probe PASS; `verify-all.ps1` + self-contained verification PASS; SHA256 `E9A92C26...` |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 

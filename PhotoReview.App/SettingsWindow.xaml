@@ -12,7 +12,7 @@
     </Window.Resources>
     <Grid Margin="24">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <StackPanel><TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA"/></StackPanel>
+        <StackPanel><TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA"/><TextBlock x:Name="VersionText" Foreground="#777777" Margin="0,6,0,0"/></StackPanel>
         <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8"><StackPanel KeyboardNavigation.TabNavigation="Local">
             <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

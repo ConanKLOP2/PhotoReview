@@ -19,6 +19,7 @@ Phạm vi yêu cầu hiện tại: tạo tài liệu và task, không thay đổ
 | 01-PRODUCT.md | Mục tiêu, phạm vi, yêu cầu và tiêu chí nghiệm thu |
 | 02-UX.md | Luồng sử dụng, phím tắt, trạng thái giao diện |
 | 03-ARCHITECTURE.md | Thành phần, dữ liệu, cache, concurrency |
+| IFOLDERVIEW2-IMPLEMENTATION-PLAN.md | Kế hoạch native Explorer order, COM, version và test |
 | 04-PERFORMANCE.md | Bộ mẫu, cách benchmark và các cổng quyết định |
 | 05-DATA-SAFETY.md | Copy/Move, Undo, phục hồi và xung đột |
 | 06-TESTING.md | Ma trận test, dữ liệu mẫu và release gate |
