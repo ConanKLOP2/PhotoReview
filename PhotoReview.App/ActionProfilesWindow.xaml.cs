@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Text.Json;
+using Forms = System.Windows.Forms;
 
 namespace PhotoReview.App;
 
@@ -33,6 +35,25 @@ public partial class ActionProfilesWindow : Window
 
     private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = "Action mới", Shortcut = "F6", Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
     private void Remove_Click(object sender, RoutedEventArgs e) { if (ActionList.SelectedItem is ReviewAction action) { Actions.Remove(action); ActionList.Items.Refresh(); if (Actions.Count > 0) ActionList.SelectedIndex = 0; } }
+    private void Import_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new Forms.OpenFileDialog { Filter = "JSON (*.json)|*.json|All files (*.*)|*.*" };
+        if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
+        try
+        {
+            var imported = JsonSerializer.Deserialize<List<ReviewAction>>(File.ReadAllText(dialog.FileName));
+            if (imported is null || imported.Count == 0) throw new JsonException();
+            Actions.Clear(); Actions.AddRange(imported.Select(Clone)); ActionList.Items.Refresh(); ActionList.SelectedIndex = 0;
+        }
+        catch { System.Windows.MessageBox.Show(this, "File action profile không hợp lệ.", "Import thất bại", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
+    private void Export_Click(object sender, RoutedEventArgs e)
+    {
+        SaveCurrent();
+        using var dialog = new Forms.SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "photoreview-actions.json" };
+        if (dialog.ShowDialog() == Forms.DialogResult.OK) File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, new JsonSerializerOptions { WriteIndented = true }));
+    }
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();

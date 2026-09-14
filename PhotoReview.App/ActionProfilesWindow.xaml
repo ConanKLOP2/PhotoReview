@@ -5,7 +5,7 @@
         <DockPanel Margin="0,0,16,0">
             <TextBlock DockPanel.Dock="Top" Text="Actions" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,12"/>
             <ListBox x:Name="ActionList" DisplayMemberPath="Name" SelectionChanged="ActionList_SelectionChanged" Background="#252525" Foreground="#FFFFFF"/>
-            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0"><Button Content="+ Thêm" Click="Add_Click" Padding="12,6"/><Button Content="Xóa" Click="Remove_Click" Padding="12,6" Margin="8,0,0,0"/></StackPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0"><Button Content="+ Thêm" Click="Add_Click" Padding="12,6"/><Button Content="Xóa" Click="Remove_Click" Padding="12,6" Margin="8,0,0,0"/><Button Content="Import" Click="Import_Click" Padding="12,6" Margin="8,0,0,0"/><Button Content="Export" Click="Export_Click" Padding="12,6" Margin="8,0,0,0"/></StackPanel>
         </DockPanel>
         <StackPanel Grid.Column="1">
             <TextBlock Text="Chi tiết action" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,16"/>
