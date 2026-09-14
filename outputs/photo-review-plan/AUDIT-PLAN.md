@@ -69,7 +69,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 | C | Name/PortraitFirst, compare cơ bản tồn tại | C01 | C02 test pair/EXIF | Chưa có GUI acceptance |
 | D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile; recovery UI | D04 | Fault injection/reconcile edge cases | Fault injection đầy đủ còn thiếu |
 | E | LRU/preload/preview cache tồn tại | E01 | E02 telemetry | Chưa có benchmark định lượng |
-| F | Build/test PASS; contract test action/sort/navigation | F01 | F02/F03 | Cần fixture và test GUI |
+| F | Build/test/smoke/release gate PASS; contract test action/sort/navigation | F01 | F02/F03 GUI acceptance | Cần fixture và test GUI |
 
 ## Nhật ký audit
 
@@ -88,6 +88,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-D04`: reconcile thêm Move/Copy; chỉ ghi Committed khi source mất và destination tồn tại đúng size, trường hợp khác ghi Failed không replay; build/test PASS.
 - 2026-09-14 — `AUD-D04`: thêm Recovery UI hiển thị pending operations và cảnh báo không replay tự động; build/test PASS.
 - 2026-09-14 — `AUD-D04`: Recovery UI đọc cả pending và failed journal entries; build/test PASS.
+- 2026-09-14 — `AUD-F04`: `verify-all.ps1 -Configuration Release` PASS sau restore/publish `win-x64`; framework-dependent EXE verified (162,304 bytes, SHA-256 `22D4D8F414BE3B9685F1F9FF042232DA09334E83C180E18F3937ECAD5C8D01F4`).
 
 ## Template cập nhật task
 
