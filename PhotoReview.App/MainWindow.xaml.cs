@@ -249,6 +249,13 @@ public partial class MainWindow : Window
         if (Matches(e.Key, _settings.Shortcuts.Previous) || e.Key == Key.Up) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
     }
 
+    private void Recovery_Click(object sender, RoutedEventArgs e)
+    {
+        var entries = _journal.ReadPendingOperations();
+        var dialog = new RecoveryWindow(entries) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private List<string> SortFiles(List<string> files)
     {
         var byName = files.OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase);

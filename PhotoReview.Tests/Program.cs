@@ -59,6 +59,7 @@ try
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
+    Check(mainWindow.Contains("RecoveryWindow") && mainWindow.Contains("ReadPendingOperations"), "Recovery UI exposes pending operations without replay", failures);
     Check(mainWindow.Contains("\"Recycle\", \"Prepared\"") && mainWindow.Contains("\"Recycle\", \"Committed\"") && mainWindow.Contains("\"Recycle\", \"Failed\""), "Batch operations journal success and failures", failures);
     var journalSource = Path.Combine(root, "pending-recycle.jpg");
     File.WriteAllBytes(journalSource, [1, 2, 3]);
