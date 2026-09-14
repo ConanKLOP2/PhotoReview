@@ -31,9 +31,7 @@ public partial class MainWindow : Window
     private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
     private const double PreloadMemoryLoadLimit = 0.80;
     private string? _compareSelectedPath;
-    private sealed record HashCacheEntry(long Length, DateTime LastWriteUtc, string Hash);
-    private readonly BoundedLruCache<string, HashCacheEntry> _hashCache = new(
-        16L * 1024 * 1024, _ => 128, StringComparer.OrdinalIgnoreCase);
+    private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
 
     public MainWindow(string? initialPath = null)
@@ -62,7 +60,7 @@ public partial class MainWindow : Window
     {
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
         var files = await Task.Run(() => ImageSortService.Sort(Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p))), _settings.ImageSortMode));
-        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashCache.Clear();
+        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear();
         _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
         var resumePath = initialPath ?? _session.CurrentPath;
@@ -359,15 +357,7 @@ public partial class MainWindow : Window
         if (succeeded > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
     }
 
-    private async Task<string> GetHashAsync(string path)
-    {
-        var info = new FileInfo(path);
-        if (_hashCache.TryGet(path, out var cached) && cached.Length == info.Length && cached.LastWriteUtc == info.LastWriteTimeUtc) return cached.Hash;
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024, true);
-        var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream));
-        _hashCache.Set(path, new HashCacheEntry(info.Length, info.LastWriteTimeUtc, hash));
-        return hash;
-    }
+    private Task<string> GetHashAsync(string path) => _hashService.GetAsync(path);
 
     private async Task NavigateSiblingFolderAsync(int direction)
     {
@@ -421,6 +411,7 @@ public partial class MainWindow : Window
         _preloadCts.Cancel();
         _preloadCts.Dispose();
         _thumbnailCache.Dispose();
+        _hashService.Clear();
     }
 
     private void UpdateFitSize()
