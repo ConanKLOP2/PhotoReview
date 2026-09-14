@@ -75,6 +75,13 @@ try
     WriteJpegFixture(exifPortraitPath, 40, 20, 6);
     var exifSorted = ImageSortService.Sort(new[] { landscapePath, exifPortraitPath }, "PortraitFirst");
     Check(string.Equals(exifSorted[0], exifPortraitPath, StringComparison.OrdinalIgnoreCase), "Portrait-first honors EXIF orientation 6 fixture", failures);
+    foreach (var orientation in new ushort[] { 5, 7, 8 })
+    {
+        var rotatedPath = Path.Combine(root, $"exif-{orientation}.jpg");
+        WriteJpegFixture(rotatedPath, 40, 20, orientation);
+        var rotatedSorted = ImageSortService.Sort(new[] { landscapePath, rotatedPath }, "PortraitFirst");
+        Check(string.Equals(rotatedSorted[0], rotatedPath, StringComparison.OrdinalIgnoreCase), $"Portrait-first honors EXIF orientation {orientation} fixture", failures);
+    }
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
