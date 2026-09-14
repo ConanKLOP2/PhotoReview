@@ -115,6 +115,8 @@ try
     File.WriteAllBytes(hashFixture, [1, 2, 4]);
     var changedHash = await hashService.GetAsync(hashFixture);
     Check(firstHash == cachedHash && firstHash != changedHash, "File hash service caches and invalidates by file fingerprint", failures);
+    var concurrentHashes = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => hashService.GetAsync(hashFixture)));
+    Check(concurrentHashes.All(hash => hash == changedHash), "File hash service deduplicates concurrent reads", failures);
     Check(mainWindow.Contains("_compareSelectedPath = null;") && mainWindow.Contains("var token = Interlocked.Increment(ref _generation);"), "Compare selection resets on navigation", failures);
     Check(mainWindowXaml.Contains("AutomationProperties.Name=\"Mở thư mục ảnh\"") && mainWindowXaml.Contains("AutomationProperties.Name=\"Mở cài đặt\""), "Primary controls expose accessible names", failures);
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
