@@ -35,6 +35,8 @@ try
     Check(new FileInfo(journalFile).Length > 0 && File.ReadAllLines(journalFile).All(line => line.StartsWith("{", StringComparison.Ordinal)), "Journal entries are durably written as JSONL", failures);
     File.AppendAllText(journalFile, "{not-valid-json}" + Environment.NewLine);
     Check(journal.ReadCommittedMoves().Any(x => x.Id == operationId) && journal.ReadPendingOperations().Count == 0, "Journal readers tolerate an invalid JSONL line", failures);
+    Parallel.For(0, 8, i => journal.Append(new JournalEntry($"parallel-{i}", "Move", "Committed", source, destination, 4, info.LastWriteTimeUtc, DateTime.UtcNow)));
+    Check(journal.ReadCommittedMoves().Count(x => x.Id.StartsWith("parallel-", StringComparison.Ordinal)) == 8, "Journal concurrent append/read remains line-consistent", failures);
     Check(File.ReadAllBytes(destination).SequenceEqual(new byte[] { 1, 2, 3, 4 }), "Move preserves bytes", failures);
 
     var cache = new BoundedLruCache<string, string>(4, value => value.Length, StringComparer.Ordinal);

@@ -26,9 +26,10 @@ public sealed class OperationJournal
 
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
-        if (!File.Exists(_path)) return [];
+        var lines = ReadLinesSnapshot();
+        if (lines.Length == 0) return [];
         var entries = new List<JournalEntry>();
-        foreach (var line in File.ReadLines(_path))
+        foreach (var line in lines)
         {
             try { var entry = JsonSerializer.Deserialize<JournalEntry>(line); if (entry is not null && entry.Type == "Move" && entry.State == "Committed") entries.Add(entry); }
             catch (JsonException) { }
@@ -38,10 +39,11 @@ public sealed class OperationJournal
 
     public IReadOnlyList<JournalEntry> ReadPendingOperations()
     {
-        if (!File.Exists(_path)) return [];
+        var lines = ReadLinesSnapshot();
+        if (lines.Length == 0) return [];
         var prepared = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
         var completed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var line in File.ReadLines(_path))
+        foreach (var line in lines)
         {
             try
             {
@@ -57,9 +59,10 @@ public sealed class OperationJournal
 
     public IReadOnlyList<JournalEntry> ReadFailedOperations()
     {
-        if (!File.Exists(_path)) return [];
+        var lines = ReadLinesSnapshot();
+        if (lines.Length == 0) return [];
         var failures = new List<JournalEntry>();
-        foreach (var line in File.ReadLines(_path))
+        foreach (var line in lines)
         {
             try
             {
@@ -69,6 +72,14 @@ public sealed class OperationJournal
             catch (JsonException) { }
         }
         return failures;
+    }
+
+    private string[] ReadLinesSnapshot()
+    {
+        lock (_gate)
+        {
+            return File.Exists(_path) ? File.ReadAllLines(_path) : [];
+        }
     }
 
     public IReadOnlyList<JournalEntry> ReconcilePendingOperations()
