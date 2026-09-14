@@ -68,6 +68,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Remaining: cần GUI acceptance thực tế trên Windows để xác nhận focus, dialog và thao tác end-to-end.
 - Release evidence: artifact đã publish lại sau UX/accessibility fix, SHA256 `8CE35B7CA26ABB22536B8690E14601A2F5D9471505AA99CA7B077966C8C2EEA7`.
 
+### P1 — Name ordering aligned with Windows Explorer logical sort
+
+- Evidence: `ImageSortService` dùng `StrCmpLogicalW`, fallback natural sort khi API không khả dụng; contract test xác nhận (`86e50ee`).
+- Scope: áp dụng cho Name sort và tie-breaker của PortraitFirst; không làm thay đổi ưu tiên dọc/ngang đã cấu hình.
+
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.

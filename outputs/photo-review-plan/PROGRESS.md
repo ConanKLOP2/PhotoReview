@@ -62,6 +62,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-14 | Thêm core retry an toàn cho Move/Copy theo fingerprint, journal Prepared/Committed/Failed; không retry Recycle Bin | `c130ac6`; build solution PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Nối retry vào Recovery UI: chọn operation, xác nhận, chỉ cho Move/Copy và hiển thị kết quả | `8532f0f`; build solution PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Sửa wording/accessibility Recovery và publish release chứa đầy đủ Recovery UI mới nhất | `207bca6`; `verify-release.ps1` PASS; SHA256 `8CE35B7C...` |
+| 2026-09-14 | Đổi Name sort sang Windows logical ordering (`StrCmpLogicalW`), giữ PortraitFirst grouping trước bước sort tên | `86e50ee`; build solution PASS; PhotoReview.Tests PASS |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 
