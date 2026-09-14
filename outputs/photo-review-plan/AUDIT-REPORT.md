@@ -56,6 +56,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Evidence: `_settings.Shortcuts.Compare` bật/tắt `ComparePanel`; test contract xác nhận binding (`0c8f335`). Preview click/keyboard vẫn chỉ thay đổi file được chọn để thao tác.
 - Remaining: chưa có GUI acceptance đo thao tác thực tế và chưa có đồng bộ zoom/pan giữa hai preview.
 
+### P2 — Compare hash/size có thể cấu hình độc lập
+
+- Evidence: `CompareHashEnabled` và `CompareSizeEnabled` được lưu trong Settings; runtime chỉ đọc hash/kích thước khi option bật, contract tests xác nhận (`1150f88`, `0807efd`).
+- Impact: workflow review nhanh có thể tắt các phép đọc phụ; mặc định vẫn bật để giữ thông tin kiểm tra duplicate.
+
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.
