@@ -108,7 +108,12 @@ public partial class MainWindow : Window
                     leftSize = $" ({leftInfo.Length:N0} B)";
                     rightSize = $" ({rightInfo.Length:N0} B)";
                 }
-                var hashText = _settings.CompareHashEnabled ? $" | hash {(await GetHashAsync(pair.Value.Left) == await GetHashAsync(pair.Value.Right) ? "TRÙNG" : "KHÁC")}" : " | hash tắt";
+                var hashText = " | hash tắt";
+                if (_settings.CompareHashEnabled)
+                {
+                    var hashes = await Task.WhenAll(GetHashAsync(pair.Value.Left), GetHashAsync(pair.Value.Right));
+                    hashText = $" | hash {(hashes[0] == hashes[1] ? "TRÙNG" : "KHÁC")}";
+                }
                 StatusText.Text = $"{index + 1}/{_files.Count} | Compare | {Path.GetFileName(pair.Value.Left)}{leftSize} ↔ {Path.GetFileName(pair.Value.Right)}{rightSize}{hashText} | click để chọn";
             }
             if (pair is null)
