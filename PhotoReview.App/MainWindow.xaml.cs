@@ -200,7 +200,7 @@ public partial class MainWindow : Window
             {
                 ApplyInitialViewMode();
                 var original = await GetOriginalDimensionsAsync(path);
-            StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · {Path.GetFileName(path)} · {original.Width}×{original.Height}";
+            StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · {original.Width}×{original.Height} · {Path.GetFileName(path)}";
             }
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             presentStopwatch.Stop();
