@@ -80,4 +80,15 @@ public partial class SettingsWindow : Window
         catch { System.Windows.MessageBox.Show(this, "Action profiles JSON không hợp lệ.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         AppSettings.Save(Settings); DialogResult = true;
     }
+
+    private void EditActions_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? ReviewAction.Defaults();
+            var editor = new ActionProfilesWindow(actions) { Owner = this };
+            if (editor.ShowDialog() == true) ActionsText.Text = JsonSerializer.Serialize(editor.Actions, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { System.Windows.MessageBox.Show(this, "Action profiles JSON hiện tại không hợp lệ.", "Không thể mở editor", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
 }

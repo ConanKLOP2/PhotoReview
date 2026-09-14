@@ -47,6 +47,7 @@
             <TextBox x:Name="RecycleText" Grid.Row="4" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
             <TextBlock Text="Action profiles (JSON)" Grid.Row="5" Margin="0,7,10,7"/>
             <TextBox x:Name="ActionsText" Grid.Row="5" Grid.Column="1" Height="100" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+            <Button Content="Mở trình chỉnh sửa action" Grid.Row="6" Grid.Column="1" HorizontalAlignment="Left" Padding="12,7" Click="EditActions_Click"/>
             </Grid></GroupBox>
         </StackPanel></ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
