@@ -96,6 +96,9 @@ public sealed class ShortcutMappings
     public string ZoomIn { get; set; } = "Add";
     public string ZoomOut { get; set; } = "Subtract";
     public string ToggleFit { get; set; } = "F";
+    public string Skip { get; set; } = "Space";
+    public string Undo { get; set; } = "Z";
+    public string Fullscreen { get; set; } = "F11";
 
     public static ShortcutMappings Default() => new();
 }

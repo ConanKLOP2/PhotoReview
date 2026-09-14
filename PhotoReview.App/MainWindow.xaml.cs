@@ -241,7 +241,7 @@ public partial class MainWindow : Window
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.F11)
+        if (Matches(e.Key, _settings.Shortcuts.Fullscreen))
         {
             e.Handled = true; ToggleFullscreen(); return;
         }
@@ -263,13 +263,13 @@ public partial class MainWindow : Window
             await ShowImageAsync(0);
             return;
         }
-        if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
+        if (Matches(e.Key, _settings.Shortcuts.Undo) && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
         foreach (var action in _settings.Actions)
         {
             if (Matches(e.Key, action.Shortcut)) { e.Handled = true; await ExecuteActionAsync(action); return; }
         }
         if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
-        if (e.Key == Key.Space) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
+        if (Matches(e.Key, _settings.Shortcuts.Skip)) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
         if (e.Key == Key.Z) { e.Handled = true; SetZoom(_zoom == 1 ? 2 : 1); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomIn) || e.Key is Key.Add or Key.OemPlus) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomOut) || e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }

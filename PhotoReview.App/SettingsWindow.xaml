@@ -27,7 +27,7 @@
             </Grid></GroupBox>
             <GroupBox Header="Phím tắt · nhấn phím trực tiếp vào ô để cấu hình"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <TextBlock Text="Ảnh tiếp theo"/><TextBox x:Name="NextText" Grid.Column="1"/>
             <TextBlock Text="Ảnh trước" Grid.Row="1"/><TextBox x:Name="PreviousText" Grid.Row="1" Grid.Column="1"/>
             <TextBlock Text="Compare" Grid.Row="2"/><TextBox x:Name="CompareText" Grid.Row="2" Grid.Column="1"/>
@@ -37,6 +37,9 @@
             <TextBlock Text="Zoom in" Grid.Row="3"/><TextBox x:Name="ZoomInText" Grid.Row="3" Grid.Column="1"/>
             <TextBlock Text="Zoom out" Grid.Row="3" Grid.Column="2"/><TextBox x:Name="ZoomOutText" Grid.Row="3" Grid.Column="3"/>
             <TextBlock Text="Fit ảnh" Grid.Row="4"/><TextBox x:Name="ToggleFitText" Grid.Row="4" Grid.Column="1"/>
+            <TextBlock Text="Bỏ qua ảnh" Grid.Row="5"/><TextBox x:Name="SkipText" Grid.Row="5" Grid.Column="1"/>
+            <TextBlock Text="Undo (Ctrl + phím)" Grid.Row="6" Grid.Column="2"/><TextBox x:Name="UndoText" Grid.Row="6" Grid.Column="3"/>
+            <TextBlock Text="Fullscreen" Grid.Row="7"/><TextBox x:Name="FullscreenText" Grid.Row="7" Grid.Column="1"/>
             </Grid></GroupBox>
             <GroupBox Header="Xử lý file"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

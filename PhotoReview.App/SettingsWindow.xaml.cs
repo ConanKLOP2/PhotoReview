@@ -27,10 +27,11 @@ public partial class SettingsWindow : Window
                 Next = current.Shortcuts.Next, Previous = current.Shortcuts.Previous,
                 MoveToFolder2 = current.Shortcuts.MoveToFolder2, SendToRecycleBin = current.Shortcuts.SendToRecycleBin,
                 Compare = current.Shortcuts.Compare, NextFolder = current.Shortcuts.NextFolder, PreviousFolder = current.Shortcuts.PreviousFolder,
-                FirstImage = current.Shortcuts.FirstImage, ZoomIn = current.Shortcuts.ZoomIn, ZoomOut = current.Shortcuts.ZoomOut, ToggleFit = current.Shortcuts.ToggleFit
+                FirstImage = current.Shortcuts.FirstImage, ZoomIn = current.Shortcuts.ZoomIn, ZoomOut = current.Shortcuts.ZoomOut, ToggleFit = current.Shortcuts.ToggleFit,
+                Skip = current.Shortcuts.Skip, Undo = current.Shortcuts.Undo, Fullscreen = current.Shortcuts.Fullscreen
             }
         };
-        foreach (var textBox in new[] { NextText, PreviousText, MoveText, RecycleText, CompareText, NextFolderText, PreviousFolderText, FirstImageText, ZoomInText, ZoomOutText, ToggleFitText })
+        foreach (var textBox in new[] { NextText, PreviousText, MoveText, RecycleText, CompareText, NextFolderText, PreviousFolderText, FirstImageText, ZoomInText, ZoomOutText, ToggleFitText, SkipText, UndoText, FullscreenText })
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
         LoadFields();
     }
@@ -41,7 +42,7 @@ public partial class SettingsWindow : Window
         NextText.Text = Settings.Shortcuts.Next; PreviousText.Text = Settings.Shortcuts.Previous;
         MoveText.Text = Settings.Shortcuts.MoveToFolder2; RecycleText.Text = Settings.Shortcuts.SendToRecycleBin;
         CompareText.Text = Settings.Shortcuts.Compare; NextFolderText.Text = Settings.Shortcuts.NextFolder; PreviousFolderText.Text = Settings.Shortcuts.PreviousFolder;
-        FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit;
+        FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit; SkipText.Text = Settings.Shortcuts.Skip; UndoText.Text = Settings.Shortcuts.Undo; FullscreenText.Text = Settings.Shortcuts.Fullscreen;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, new JsonSerializerOptions { WriteIndented = true });
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { "100%" => 1, "200%" => 2, "400%" => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { "Preview" => 1, "Original" => 2, _ => 0 };
@@ -55,7 +56,7 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        var values = new[] { NextText.Text, PreviousText.Text, MoveText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text };
+        var values = new[] { NextText.Text, PreviousText.Text, MoveText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
         if (string.IsNullOrWhiteSpace(Folder2Text.Text) || values.Any(v => !Enum.TryParse<Key>(v, true, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
             System.Windows.MessageBox.Show(this, "Folder không được trống; các phím phải hợp lệ và không được trùng nhau.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return;
@@ -68,7 +69,7 @@ public partial class SettingsWindow : Window
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.MoveToFolder2 = MoveText.Text.Trim(); Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();
-        Settings.Shortcuts.FirstImage = FirstImageText.Text.Trim(); Settings.Shortcuts.ZoomIn = ZoomInText.Text.Trim(); Settings.Shortcuts.ZoomOut = ZoomOutText.Text.Trim(); Settings.Shortcuts.ToggleFit = ToggleFitText.Text.Trim();
+        Settings.Shortcuts.FirstImage = FirstImageText.Text.Trim(); Settings.Shortcuts.ZoomIn = ZoomInText.Text.Trim(); Settings.Shortcuts.ZoomOut = ZoomOutText.Text.Trim(); Settings.Shortcuts.ToggleFit = ToggleFitText.Text.Trim(); Settings.Shortcuts.Skip = SkipText.Text.Trim(); Settings.Shortcuts.Undo = UndoText.Text.Trim(); Settings.Shortcuts.Fullscreen = FullscreenText.Text.Trim();
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
