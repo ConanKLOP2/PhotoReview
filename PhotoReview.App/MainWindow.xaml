@@ -26,6 +26,11 @@
         </Style>
     </Window.Resources>
     <Grid Background="#101010" ClipToBounds="True">
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Undo thao tác vừa thực hiện" AutomationProperties.Name="Hoàn tác thao tác vừa thực hiện" Click="UndoLastAction_Click" />
+            </ContextMenu>
+        </Grid.ContextMenu>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Border Grid.Row="1" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">

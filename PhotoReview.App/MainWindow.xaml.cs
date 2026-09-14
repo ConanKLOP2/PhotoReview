@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
+    private UndoAction? _lastUndoAction;
     private CancellationTokenSource _preloadCts = new();
     private readonly Dictionary<string, Task<BitmapImage>> _previewLoads = new(StringComparer.OrdinalIgnoreCase);
     private long _totalSourceBytes;
@@ -368,6 +369,12 @@ public partial class MainWindow : Window
         {
             e.Handled = true; ExitFullscreen(); return;
         }
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close();
+            return;
+        }
         if (_index < 0) return;
         if (Matches(e.Key, _settings.Shortcuts.NextFolder) || Matches(e.Key, _settings.Shortcuts.PreviousFolder))
         {
@@ -540,6 +547,8 @@ public partial class MainWindow : Window
         }
         UpdateFitSize();
     }
+
+    private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await UndoLastActionAsync();
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
@@ -603,6 +612,7 @@ public partial class MainWindow : Window
                 _journal.Append(new JournalEntry(operationId, "RecycleBin", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
                 _journal.Append(new JournalEntry(operationId, "RecycleBin", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
             }
             else
             {
@@ -618,6 +628,7 @@ public partial class MainWindow : Window
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _moveHistory.Push((source, destination));
+                _lastUndoAction = new UndoAction("Move", source, destination, info.Length, info.LastWriteTimeUtc);
             }
             _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null;
             if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
@@ -679,11 +690,30 @@ public partial class MainWindow : Window
             if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
                 throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
             File.Move(move.Destination, move.Source);
+            _lastUndoAction = null;
             if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
             _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
             await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
         }
         catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
     }
+
+    private async Task UndoLastActionAsync()
+    {
+        if (_lastUndoAction is null) { StatusText.Text = "Không có Move/Delete vừa thực hiện để hoàn tác."; return; }
+        var action = _lastUndoAction;
+        if (action.Operation == "Move") { await UndoLastMoveAsync(); return; }
+        var restored = await Task.Run(() => RecycleBinRestoreService.TryRestore(action.Source, action.Size, action.LastWriteUtc));
+        if (!restored)
+        {
+            StatusText.Text = $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}";
+            return;
+        }
+        _lastUndoAction = null;
+        if (_session is not null) { _session.CurrentPath = action.Source; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+        await LoadFolderAsync(Path.GetDirectoryName(action.Source)!);
+    }
+
+    private sealed record UndoAction(string Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc);
 
 }

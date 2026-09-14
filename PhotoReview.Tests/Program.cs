@@ -171,6 +171,8 @@ try
     var concurrentHashes = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => hashService.GetAsync(hashFixture)));
     Check(concurrentHashes.All(hash => hash == changedHash), "File hash service deduplicates concurrent reads", failures);
     Check(mainWindow.Contains("_compareSelectedPath = null;") && mainWindow.Contains("var token = Interlocked.Increment(ref _generation);"), "Compare selection resets on navigation", failures);
+    Check(mainWindowXaml.Contains("UndoLastAction_Click") && mainWindow.Contains("e.Key == Key.Escape") && mainWindow.Contains("Close();"), "Context-menu Undo and Escape exit are wired", failures);
+    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "RecycleBinRestoreService.cs")) && mainWindow.Contains("RecycleBinRestoreService.TryRestore"), "Delete Undo restores through Recycle Bin Shell", failures);
     Check(mainWindowXaml.Contains("AutomationProperties.Name=\"Mở thư mục ảnh\"") && mainWindowXaml.Contains("AutomationProperties.Name=\"Mở cài đặt\""), "Primary controls expose accessible names", failures);
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
     Check(mainWindowXaml.Contains("Focusable=\"True\"") && mainWindow.Contains("CompareLeft_KeyDown") && mainWindow.Contains("CompareRight_KeyDown"), "Compare previews support keyboard selection", failures);
