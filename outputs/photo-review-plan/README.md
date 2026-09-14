@@ -27,6 +27,7 @@ Phạm vi yêu cầu hiện tại: tạo tài liệu và task, không thay đổ
 | TASKS.md | Nguồn sự thật về task và trạng thái |
 | PROGRESS.md | Tổng hợp milestone và bước tiếp theo |
 | TEMPLATES.md | Mẫu báo cáo công việc, lỗi, benchmark, release |
+| AUDIT-PLAN.md | Kế hoạch audit theo lane, task nhỏ, phụ thuộc và resume |
 
 ## Quy tắc theo dõi
 
