@@ -62,6 +62,8 @@ try
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
     Check(mainWindow.Contains("16L * 1024 * 1024 * 1024") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold", failures);
     Check(mainWindow.Contains("BoundedLruCache<string, HashCacheEntry>") && mainWindow.Contains("_hashCache.Set"), "Hash metadata cache is bounded and evictable", failures);
+    var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
+    Check(!mainWindow.Contains("Image_LeftClick") && !mainWindow.Contains("Image_RightClick") && !mainWindowXaml.Contains("Image_LeftClick") && !mainWindowXaml.Contains("Image_RightClick"), "Image click does not navigate; compare owns click selection", failures);
     Check(mainWindow.Contains("GetGCMemoryInfo") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordCacheHit") && mainWindow.Contains("RecordSourceRead") && mainWindow.Contains("RecordPresented"), "Review performance metrics record cache, source decode, and present latency", failures);
     Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view", failures);
