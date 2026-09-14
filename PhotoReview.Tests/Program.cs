@@ -115,6 +115,7 @@ try
     Check(mainWindowXaml.Contains("Closed=\"Window_Closed\"") && mainWindow.Contains("_thumbnailCache.Dispose()") && mainWindow.Contains("_preloadCts.Dispose()"), "Window shutdown disposes preload and thumbnail resources", failures);
     var thumbnailCacheText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ThumbnailCache.cs"));
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation", failures);
+    Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException) { }") && thumbnailCacheText.Contains("catch (IOException) { }"), "Disk cache cleanup tolerates filesystem access failures", failures);
     Check(mainWindowXaml.Contains("ClearCache_Click") && mainWindow.Contains("_thumbnailCache.ClearDisk()"), "Disk cache can be cleared from UI without changing source images", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordCacheHit") && mainWindow.Contains("RecordSourceRead") && mainWindow.Contains("RecordPresented") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"), "Review metrics record source reads, cache, decode, and present latency", failures);
     var metrics = new ReviewMetrics();

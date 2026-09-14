@@ -91,22 +91,32 @@ public sealed class ThumbnailCache : IDisposable
     public void ClearDisk()
     {
         if (!Directory.Exists(_diskDirectory)) return;
-        foreach (var path in Directory.EnumerateFiles(_diskDirectory, "*.png")) TryDelete(path);
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(_diskDirectory, "*.png")) TryDelete(path);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     private void PruneDiskCache()
     {
         if (!Directory.Exists(_diskDirectory)) return;
-        var files = Directory.EnumerateFiles(_diskDirectory, "*.png")
-            .Select(path => new FileInfo(path)).Where(info => info.Exists)
-            .OrderBy(info => info.LastAccessTimeUtc).ThenBy(info => info.CreationTimeUtc).ToList();
-        var total = files.Sum(info => info.Length);
-        foreach (var info in files)
+        try
         {
-            if (total <= _maxDiskBytes) break;
-            TryDelete(info.FullName);
-            total -= info.Length;
+            var files = Directory.EnumerateFiles(_diskDirectory, "*.png")
+                .Select(path => new FileInfo(path)).Where(info => info.Exists)
+                .OrderBy(info => info.LastAccessTimeUtc).ThenBy(info => info.CreationTimeUtc).ToList();
+            var total = files.Sum(info => info.Length);
+            foreach (var info in files)
+            {
+                if (total <= _maxDiskBytes) break;
+                TryDelete(info.FullName);
+                total -= info.Length;
+            }
         }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     private static Task<BitmapSource> DecodeAsync(string path, CancellationToken cancellationToken)
