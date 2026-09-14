@@ -5,6 +5,8 @@ namespace PhotoReview.App;
 
 public sealed class AppSettings
 {
+    public const int CurrentConfigVersion = 2;
+    public int ConfigVersion { get; set; } = CurrentConfigVersion;
     public string Folder2Name { get; set; } = "Loai-2";
     public string InitialViewMode { get; set; } = "Fit";
     public string LoadingMode { get; set; } = "Preview";
@@ -20,6 +22,7 @@ public sealed class AppSettings
             if (File.Exists(ConfigPath))
             {
                 var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(ConfigPath)) ?? new();
+                Migrate(loaded);
                 loaded.Shortcuts ??= ShortcutMappings.Default();
                 loaded.Actions ??= ReviewAction.Defaults();
                 loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
@@ -27,7 +30,10 @@ public sealed class AppSettings
                 return loaded;
             }
         }
-        catch { }
+        catch
+        {
+            try { File.Copy(ConfigPath, ConfigPath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), overwrite: false); } catch { }
+        }
         var settings = new AppSettings();
         Save(settings);
         return settings;
@@ -36,9 +42,24 @@ public sealed class AppSettings
     public static void Save(AppSettings settings)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
+        settings.ConfigVersion = CurrentConfigVersion;
         var temp = ConfigPath + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
+        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+        using (var writer = new StreamWriter(stream)) { writer.Write(json); writer.Flush(); stream.Flush(flushToDisk: true); }
         File.Move(temp, ConfigPath, true);
+    }
+
+    private static void Migrate(AppSettings settings)
+    {
+        if (settings.ConfigVersion < 2)
+        {
+            settings.Actions ??= ReviewAction.Defaults();
+            settings.ImageSortMode = NormalizeImageSortMode(settings.ImageSortMode);
+            settings.ConfigVersion = CurrentConfigVersion;
+        }
+        settings.Actions ??= ReviewAction.Defaults();
+        settings.Shortcuts ??= ShortcutMappings.Default();
     }
 
     public static string NormalizeLoadingMode(string? value) =>
