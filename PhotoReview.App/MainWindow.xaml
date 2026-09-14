@@ -31,6 +31,7 @@
                 <Button Content="⚙" AutomationProperties.Name="Mở cài đặt" ToolTip="Settings" Padding="8,4" Margin="5,0,0,0" Click="Settings_Click" />
                 <Button Content="Recovery" AutomationProperties.Name="Mở phục hồi thao tác" Padding="8,4" Margin="5,0,0,0" Click="Recovery_Click" />
                 <Button Content="Diagnostics" AutomationProperties.Name="Mở chẩn đoán hiệu năng" Padding="8,4" Margin="5,0,0,0" Click="Diagnostics_Click" />
+                <Button Content="Xóa cache preview" AutomationProperties.Name="Xóa cache preview" Padding="8,4" Margin="5,0,0,0" Click="ClearCache_Click" />
                 <Button Content="Bỏ bản (1) trùng hash" AutomationProperties.Name="Xóa hàng loạt bản đánh số trùng hash" Padding="8,4" Margin="5,0,0,0" Click="RemoveNumberedDuplicates_Click" />
                 <Button Content="Bỏ original trùng hash" AutomationProperties.Name="Xóa hàng loạt original trùng hash" Padding="8,4" Margin="5,0,0,0" Click="RemoveOriginalDuplicates_Click" />
                 <TextBlock x:Name="FolderText" Foreground="#EEEEEE" VerticalAlignment="Center" Margin="9,0,0,0" Text="Chưa mở folder" TextTrimming="CharacterEllipsis" />

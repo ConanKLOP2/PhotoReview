@@ -291,6 +291,16 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    private void ClearCache_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = System.Windows.MessageBox.Show(this, "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.", "Xác nhận xóa cache", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != System.Windows.MessageBoxResult.Yes) return;
+        _thumbnailCache.ClearDisk();
+        _thumbnailCache.ClearMemory();
+        _cache.Clear();
+        StatusText.Text = "Đã xóa cache preview.";
+    }
+
     private (string Left, string Right)? FindComparePair(string path)
         => ComparePairService.Find(_files, path);
 
