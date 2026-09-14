@@ -73,6 +73,7 @@ try
     Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
+    Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
     var compareOriginal = Path.Combine(root, "CocCocSetup.jpg");
     var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
