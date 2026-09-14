@@ -51,6 +51,22 @@ public sealed class OperationJournal
         return prepared.Where(x => !completed.Contains(x.Key)).Select(x => x.Value).ToList();
     }
 
+    public IReadOnlyList<JournalEntry> ReadFailedOperations()
+    {
+        if (!File.Exists(_path)) return [];
+        var failures = new List<JournalEntry>();
+        foreach (var line in File.ReadLines(_path))
+        {
+            try
+            {
+                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                if (entry?.State == "Failed") failures.Add(entry);
+            }
+            catch (JsonException) { }
+        }
+        return failures;
+    }
+
     public IReadOnlyList<JournalEntry> ReconcilePendingOperations()
     {
         var reconciled = new List<JournalEntry>();

@@ -87,6 +87,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-D04`: thêm `ReconcilePendingOperations`; pending Recycle không replay mù, source còn ghi Failed, source mất ghi Committed; build/test PASS.
 - 2026-09-14 — `AUD-D04`: reconcile thêm Move/Copy; chỉ ghi Committed khi source mất và destination tồn tại đúng size, trường hợp khác ghi Failed không replay; build/test PASS.
 - 2026-09-14 — `AUD-D04`: thêm Recovery UI hiển thị pending operations và cảnh báo không replay tự động; build/test PASS.
+- 2026-09-14 — `AUD-D04`: Recovery UI đọc cả pending và failed journal entries; build/test PASS.
 
 ## Template cập nhật task
 
