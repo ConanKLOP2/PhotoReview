@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
+    private readonly ExplorerOrderService _explorerOrder = new();
     private readonly Dictionary<string, (int Width, int Height)> _originalDimensions = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow(string? initialPath = null)
@@ -74,8 +75,20 @@ public partial class MainWindow : Window
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
                 .Where(p => supported.Contains(Path.GetExtension(p))).ToList());
-            var sortMode = files.Count < 100 ? _settings.ImageSortMode : "Name";
-            files = await Task.Run(() => ImageSortService.Sort(files, sortMode));
+            var metadataSort = files.Count < 100;
+            var sortMode = metadataSort ? _settings.ImageSortMode : "Name";
+            if (!metadataSort)
+            {
+                var explorerOrder = await _explorerOrder.TryGetOrderAsync(folder, TimeSpan.FromSeconds(2), CancellationToken.None);
+                if (explorerOrder is not null)
+                {
+                    var rank = explorerOrder.Select((path, index) => (path, index)).ToDictionary(x => x.path, x => x.index, StringComparer.OrdinalIgnoreCase);
+                    files = files.OrderBy(path => rank.TryGetValue(path, out var index) ? index : int.MaxValue).ThenBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase).ToList();
+                    sortMode = "Windows Explorer view";
+                }
+                else files = await Task.Run(() => ImageSortService.Sort(files, "Name"));
+            }
+            else files = await Task.Run(() => ImageSortService.Sort(files, sortMode));
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, sort={sortMode}, metadataSort={files.Count < 100}");
             _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear(); _originalDimensions.Clear();
             _session = _sessionStore.Load(folder);

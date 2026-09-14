@@ -7,6 +7,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 - 2026-09-14: hỗ trợ mở folder qua command line; hiển thị ảnh đầu tiên trước khi decode EXIF toàn folder; thêm fallback decode, dimension render/gốc, log tập trung và bắt phím ở `PreviewKeyDown`. Settings đã bỏ shortcut chuyển loại 2 trùng Action JSON. Build và test PASS.
 - 2026-09-14: lập kế hoạch Shell Explorer order tại `SHELL-VIEW-ORDER-PLAN.md`; đã review rủi ro COM/UI freeze/fallback/100-file boundary. Chưa triển khai adapter.
+- 2026-09-14: triển khai Shell order provider cho folder từ 100 ảnh, có timeout 2 giây, COM cleanup và fallback sort tên; build/test PASS.
 
 ## Hiện trạng
 

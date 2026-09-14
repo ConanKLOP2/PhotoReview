@@ -28,8 +28,8 @@ Khi người dùng mở một folder đang xem trong Windows Explorer, PhotoRevi
 
 ## Checklist triển khai
 
-- [ ] T01: tạo model/result và interface order provider.
-- [ ] T02: implement Shell provider với timeout, COM cleanup, HRESULT logging.
+- [x] T01: tạo provider order độc lập.
+- [x] T02: implement Shell provider với timeout, COM cleanup, exception logging.
 - [ ] T03: integrate snapshot/generation/fallback vào LoadFolderAsync.
 - [ ] T04: không decode EXIF trước ảnh đầu tiên; chỉ sort metadata dưới 100 file.
 - [ ] T05: bổ sung test provider giả lập, fallback, stale result và 100-file boundary.
