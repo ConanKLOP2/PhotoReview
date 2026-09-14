@@ -31,15 +31,14 @@
                 <MenuItem Header="Undo thao tác vừa thực hiện" AutomationProperties.Name="Hoàn tác thao tác vừa thực hiện" Click="UndoLastAction_Click" />
             </ContextMenu>
         </Grid.ContextMenu>
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <Border Grid.Row="1" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
                 <Image x:Name="MainImage" Stretch="None" RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform><ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1" /></Image.RenderTransform>
                 </Image>
             </ScrollViewer>
         </Border>
-        <Border Grid.Row="1" x:Name="ComparePanel" Visibility="Collapsed" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8">
+        <Border x:Name="ComparePanel" Visibility="Collapsed" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                 <Border x:Name="CompareLeftBorder" AutomationProperties.Name="Preview ảnh bên trái, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click" PreviewKeyDown="CompareLeft_KeyDown">
@@ -50,7 +49,7 @@
                 </Border>
             </Grid>
         </Border>
-        <Border Grid.Row="0" Panel.ZIndex="100" Background="#181818" HorizontalAlignment="Stretch" VerticalAlignment="Top" Padding="8,4" BorderBrush="#303030" BorderThickness="0,0,0,1">
+        <Border Panel.ZIndex="100" Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="📂" AutomationProperties.Name="Mở thư mục ảnh" ToolTip="Mở folder ảnh" FontSize="16" Padding="8,2" Click="OpenFolder_Click" />
@@ -71,7 +70,7 @@
                 </StackPanel>
             </StackPanel>
         </Border>
-        <Border Grid.Row="2" Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
+        <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <TextBlock x:Name="StatusText" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
                 <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown folder   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" Visibility="Collapsed" />
