@@ -517,7 +517,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                if (Directory.EnumerateFiles(folders[i], "*", SearchOption.TopDirectoryOnly).Any(path => supported.Contains(Path.GetExtension(path)))) return folders[i];
+                if (Directory.EnumerateFiles(folders[i], "*", System.IO.SearchOption.TopDirectoryOnly).Any(path => supported.Contains(Path.GetExtension(path)))) return folders[i];
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
