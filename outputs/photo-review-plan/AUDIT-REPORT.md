@@ -10,7 +10,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Contract executable tests: PASS.
 - File-operation smoke test: PASS.
 - Framework-dependent `win-x64` publish và `verify-all.ps1`: PASS.
-- Sau khi thêm `RuntimeIdentifiers=win-x64`, publish `--no-restore` chạy đúng và verifier kiểm tra artifact mới nhất; sau các thay đổi metrics/cache, release gate lại PASS: EXE 162,304 bytes, SHA-256 `AC256C96D5E73DAF203CEEFF20DFB588E086EA6C58F3C5FB31F3307795D9BCF3`.
+- Sau khi thêm `RuntimeIdentifiers=win-x64`, publish `--no-restore` chạy đúng và verifier kiểm tra artifact mới nhất; sau các thay đổi gần nhất, release gate lại PASS: EXE 162,304 bytes, SHA-256 `953A45AA7ECC40DDE89B5257FF0F02DCDC059689C5E3BAC12C2F02C4381B768C`.
 - Không có ảnh người dùng nào bị dùng làm fixture hoặc bị mutation trong audit.
 
 ## Findings theo severity
