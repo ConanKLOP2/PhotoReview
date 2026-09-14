@@ -11,6 +11,21 @@ Directory.CreateDirectory(root);
 Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", Path.Combine(root, "app-data"));
 try
 {
+    Check(!new AppSettings().LoggingEnabled && !AppLog.Enabled, "Logging defaults off", failures);
+    var legacySettings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":2}");
+    Check(legacySettings is { LoggingEnabled: false }, "Existing config without logging flag keeps logging off", failures);
+    AppLog.Info("disabled-info");
+    AppLog.Error("disabled-error", new Exception("test"));
+    Check(!Directory.Exists(Path.GetDirectoryName(AppLog.FilePath)), "Disabled logging creates no directory or file, including errors", failures);
+    AppLog.Enabled = true;
+    AppLog.Info("enabled-info");
+    AppLog.Error("enabled-error");
+    var logContents = File.ReadAllText(AppLog.FilePath);
+    Check(logContents.Contains("enabled-info") && logContents.Contains("enabled-error"), "Explicitly enabled logging writes diagnostics", failures);
+    AppLog.Enabled = false;
+    AppLog.Info("disabled-again");
+    AppLog.Error("disabled-again");
+    Check(File.ReadAllText(AppLog.FilePath) == logContents, "Turning logging off stops all diagnostic writes", failures);
     var sessionStore = new SessionStore();
     var state = new SessionState { Folder = root, CurrentPath = Path.Combine(root, "one.jpg"), Skipped = [Path.Combine(root, "skip.jpg")] };
     sessionStore.Save(state);

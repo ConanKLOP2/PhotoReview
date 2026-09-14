@@ -19,11 +19,12 @@ public sealed class ThumbnailCache : IDisposable
     private readonly string _diskDirectory;
     private readonly long _maxRamBytes;
     private readonly long _maxDiskBytes;
+    private readonly bool _persistNewThumbnails;
     private readonly BoundedLruCache<string, BitmapSource> _ramCache;
     private readonly ConcurrentDictionary<string, Lazy<Task<BitmapSource>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _disposeCts = new();
 
-    public ThumbnailCache(string? diskDirectory = null, long maxRamBytes = 256L * 1024 * 1024, long maxDiskBytes = DefaultMaxDiskBytes)
+    public ThumbnailCache(string? diskDirectory = null, long maxRamBytes = 256L * 1024 * 1024, long maxDiskBytes = DefaultMaxDiskBytes, bool persistNewThumbnails = true)
     {
         if (maxRamBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxRamBytes));
         if (maxDiskBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxDiskBytes));
@@ -32,6 +33,7 @@ public sealed class ThumbnailCache : IDisposable
             "PhotoReview", "thumbnails");
         _maxRamBytes = maxRamBytes;
         _maxDiskBytes = maxDiskBytes;
+        _persistNewThumbnails = persistNewThumbnails;
         _ramCache = new BoundedLruCache<string, BitmapSource>(_maxRamBytes, EstimateBytes);
     }
 
@@ -82,6 +84,7 @@ public sealed class ThumbnailCache : IDisposable
         }
 
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+        if (!_persistNewThumbnails) return image;
         try { await WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); PruneDiskCache(); }
         catch (IOException) { /* The RAM result remains usable when disk cache is unavailable. */ }
         catch (UnauthorizedAccessException) { /* Same fallback for read-only locations. */ }

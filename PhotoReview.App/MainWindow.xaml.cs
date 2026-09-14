@@ -22,11 +22,13 @@ public partial class MainWindow : Window
     private AppSettings _settings = AppSettings.Load();
     private readonly OperationJournal _journal = new();
     private readonly SessionStore _sessionStore = new();
-    private readonly ThumbnailCache _thumbnailCache = new();
+    private readonly ThumbnailCache _thumbnailCache = new(persistNewThumbnails: false);
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
     private CancellationTokenSource _preloadCts = new();
+    private readonly Dictionary<string, Task<BitmapImage>> _previewLoads = new(StringComparer.OrdinalIgnoreCase);
+    private long _totalSourceBytes;
     private readonly SemaphoreSlim _preloadSlots = new(2, 2);
     private const long MaxCacheBytes = 16L * 1024 * 1024 * 1024;
     private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
@@ -90,6 +92,8 @@ public partial class MainWindow : Window
             }
             else files = await Task.Run(() => ImageSortService.Sort(files, sortMode));
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, sort={sortMode}, metadataSort={files.Count < 100}");
+            _preloadCts.Cancel();
+            _totalSourceBytes = await Task.Run(() => files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }));
             _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear(); _originalDimensions.Clear();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
@@ -119,7 +123,8 @@ public partial class MainWindow : Window
         StatusText.Text = $"Đang tải {index + 1}/{_files.Count}: {Path.GetFileName(path)}";
         try
         {
-            if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
+                && !_cache.TryGet(path, out _) && !_previewLoads.ContainsKey(path))
             {
                 var thumbnail = await _thumbnailCache.GetAsync(path);
                 if (token != _generation) return;
@@ -130,6 +135,7 @@ public partial class MainWindow : Window
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;
+            _ = PreloadAroundAsync(index, token);
             var pair = FindComparePair(path);
             ComparePanel.Visibility = pair is null ? Visibility.Collapsed : Visibility.Visible;
             if (pair is not null)
@@ -167,20 +173,19 @@ public partial class MainWindow : Window
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             presentStopwatch.Stop();
             _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
-            _ = PreloadAroundAsync(index, token);
         }
         catch (Exception ex) { AppLog.Error($"ShowImage failed: {path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
     }
 
     private async Task<BitmapImage> GetPreviewAsync(string path)
     {
-        AppLog.Info($"Preview request: {path}, mode={_settings.LoadingMode}");
         if (_cache.TryGet(path, out var cached)) { _metrics.RecordCacheHit(); return cached; }
+        if (_previewLoads.TryGetValue(path, out var pending)) return await pending;
         _metrics.RecordCacheMiss();
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
         var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
         var targetWidth = isOriginal ? 0 : GetTargetDecodeWidth();
-        return await Task.Run(() =>
+        var load = Task.Run(() =>
         {
             var stopwatch = Stopwatch.StartNew();
             var sourceRead = false;
@@ -204,31 +209,16 @@ public partial class MainWindow : Window
             {
                 sourceRead = true;
                 bitmap = DecodeWithFallback(path, targetWidth);
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-                    var tempPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                    try
-                    {
-                        using (var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                        {
-                            var encoder = new PngBitmapEncoder();
-                            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                            encoder.Save(output);
-                            output.Flush(true);
-                        }
-                        File.Move(tempPath, cachePath, true);
-                    }
-                    finally { try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { } }
-                }
-                catch { }
+                // Keep decoded previews in RAM; PNG encoding and durable writes delay review.
             }
             _cache.Set(path, bitmap);
             stopwatch.Stop();
             if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
-            AppLog.Info($"Preview ready: {path}, size={bitmap.PixelWidth}x{bitmap.PixelHeight}, sourceRead={sourceRead}");
             return bitmap;
         });
+        _previewLoads[path] = load;
+        try { return await load; }
+        finally { _previewLoads.Remove(path); }
     }
 
     private static BitmapImage DecodeSource(string path, int targetWidth)
@@ -285,25 +275,36 @@ public partial class MainWindow : Window
         _preloadCts.Dispose();
         _preloadCts = new CancellationTokenSource();
         var cancellationToken = _preloadCts.Token;
-        var totalSourceBytes = _files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
-        var offsets = totalSourceBytes < FullFolderRamThresholdBytes
-            ? Enumerable.Range(0, _files.Count).Where(i => i != center).Select(i => i - center)
-            : Enumerable.Range(1, 8).Concat([-1, -2]);
+        var nearby = Enumerable.Range(1, 8).Concat([-1, -2]);
+        var offsets = _totalSourceBytes < FullFolderRamThresholdBytes
+            ? nearby.Concat(Enumerable.Range(center + 1, _files.Count - center - 1).Select(i => i - center))
+                .Concat(Enumerable.Range(0, center).Reverse().Select(i => i - center)).Distinct()
+            : nearby;
+        var files = _files.ToArray();
+        var batch = new List<Task>(2);
         foreach (var offset in offsets)
         {
+            // Even RAM hits must let input/rendering run. Never enqueue the whole folder.
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
             if (token != _generation || cancellationToken.IsCancellationRequested) return;
             if (!HasPreloadHeadroom()) return;
             var i = center + offset;
-            if (i >= 0 && i < _files.Count) _ = PreloadOneAsync(_files[i], cancellationToken);
+            if (i < 0 || i >= files.Length || _cache.TryGet(files[i], out _)) continue;
+            batch.Add(PreloadOneAsync(files[i], cancellationToken));
+            if (batch.Count == 2)
+            {
+                await Task.WhenAll(batch);
+                batch.Clear();
+            }
         }
-        await Task.CompletedTask;
+        await Task.WhenAll(batch);
     }
 
     private static bool HasPreloadHeadroom()
     {
         var memory = GC.GetGCMemoryInfo();
-        return memory.TotalAvailableMemoryBytes <= 0 ||
-            (double)memory.MemoryLoadBytes / memory.TotalAvailableMemoryBytes < PreloadMemoryLoadLimit;
+        return PhysicalMemory.HasHeadroom(PreloadMemoryLoadLimit) && (memory.TotalAvailableMemoryBytes <= 0 ||
+            (double)memory.MemoryLoadBytes / memory.TotalAvailableMemoryBytes < PreloadMemoryLoadLimit);
     }
 
     private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
@@ -311,18 +312,23 @@ public partial class MainWindow : Window
         try
         {
             await _preloadSlots.WaitAsync(cancellationToken);
-            try { await GetPreviewAsync(path); }
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!HasPreloadHeadroom()) return;
+                await GetPreviewAsync(path);
+            }
             finally { _preloadSlots.Release(); }
         }
         catch (OperationCanceledException) { }
         catch (IOException) { }
         catch (NotSupportedException) { }
+        catch (Exception ex) { AppLog.Error($"Preload failed: {path}", ex); }
     }
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
-        AppLog.Info($"Key pressed: {pressedKey}, index={_index}");
         if (Matches(pressedKey, _settings.Shortcuts.Fullscreen))
         {
             e.Handled = true; ToggleFullscreen(); return;

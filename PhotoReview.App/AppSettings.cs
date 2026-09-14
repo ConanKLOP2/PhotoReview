@@ -10,6 +10,7 @@ public sealed class AppSettings
     public string Folder2Name { get; set; } = "Loai-2";
     public string InitialViewMode { get; set; } = "Fit";
     public string LoadingMode { get; set; } = "Preview";
+    public bool LoggingEnabled { get; set; } = false;
     public string ImageSortMode { get; set; } = "Name";
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
@@ -34,6 +35,7 @@ public sealed class AppSettings
                     loaded.Shortcuts = ShortcutMappings.Default();
                     loaded.Actions = ReviewAction.Defaults();
                 }
+                AppLog.Enabled = loaded.LoggingEnabled;
                 return loaded;
             }
         }
@@ -55,6 +57,7 @@ public sealed class AppSettings
         using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
         using (var writer = new StreamWriter(stream)) { writer.Write(json); writer.Flush(); stream.Flush(flushToDisk: true); }
         File.Move(temp, ConfigPath, true);
+        AppLog.Enabled = settings.LoggingEnabled;
     }
 
     private static void Migrate(AppSettings settings)

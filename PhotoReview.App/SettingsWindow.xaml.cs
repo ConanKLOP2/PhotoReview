@@ -19,6 +19,7 @@ public partial class SettingsWindow : Window
             ImageSortMode = AppSettings.NormalizeImageSortMode(current.ImageSortMode),
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
+            LoggingEnabled = current.LoggingEnabled,
             Actions = current.Actions.Select(action => new ReviewAction
             {
                 Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
@@ -62,10 +63,12 @@ public partial class SettingsWindow : Window
         SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { "SizeAscending" => 1, "SizeDescending" => 2, _ => 0 };
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
+        LoggingCheck.IsChecked = Settings.LoggingEnabled;
     }
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
+        Settings.LoggingEnabled = false;
         Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.ImageSortMode = "Name"; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
@@ -84,6 +87,7 @@ public partial class SettingsWindow : Window
         Settings.LoadingMode = loadingItem?.Tag?.ToString() ?? loadingItem?.Content?.ToString() ?? "Fast";
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
+        Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();

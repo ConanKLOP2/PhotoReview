@@ -13,7 +13,8 @@ public partial class App : System.Windows.Application
     private InstanceLock? _instanceLock;
     private void App_Startup(object sender, StartupEventArgs e)
     {
-        AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
+        AppLog.Enabled = AppSettings.Load().LoggingEnabled;
+        if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
         DispatcherUnhandledException += (_, a) => AppLog.Error("Dispatcher exception", a.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
