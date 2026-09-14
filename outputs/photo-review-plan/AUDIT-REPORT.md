@@ -66,6 +66,7 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Evidence: `RecoveryRetryService.RetryMoveOrCopy` kiểm tra source fingerprint, từ chối đích đã tồn tại, journal từng transition và không retry Recycle Bin (`c130ac6`); contract tests PASS.
 - Evidence bổ sung: Recovery UI có chọn entry, nút Retry Move/Copy, confirm và hiển thị kết quả (`8532f0f`).
 - Remaining: cần GUI acceptance thực tế trên Windows để xác nhận focus, dialog và thao tác end-to-end.
+- Release evidence: artifact đã publish lại sau UX/accessibility fix, SHA256 `8CE35B7CA26ABB22536B8690E14601A2F5D9471505AA99CA7B077966C8C2EEA7`.
 
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
