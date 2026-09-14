@@ -53,8 +53,7 @@ public partial class MainWindow : Window
     private async Task LoadFolderAsync(string folder, string? initialPath = null)
     {
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
-        var files = await Task.Run(() => Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p)))
-            .OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase).ToList());
+        var files = await Task.Run(() => SortFiles(Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p))).ToList()));
         _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear();
         _session = _sessionStore.Load(folder);
         FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
@@ -246,6 +245,28 @@ public partial class MainWindow : Window
         if (e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
         if (Matches(e.Key, _settings.Shortcuts.Next) || e.Key == Key.Down) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
         if (Matches(e.Key, _settings.Shortcuts.Previous) || e.Key == Key.Up) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+    }
+
+    private List<string> SortFiles(List<string> files)
+    {
+        var byName = files.OrderBy(p => NaturalKey(Path.GetFileName(p)), StringComparer.OrdinalIgnoreCase);
+        if (!string.Equals(_settings.ImageSortMode, "PortraitFirst", StringComparison.OrdinalIgnoreCase)) return byName.ToList();
+        return byName.Select(path => (Path: path, Orientation: GetOrientation(path)))
+            .OrderBy(item => item.Orientation == 1 ? 0 : item.Orientation == 2 ? 1 : 2)
+            .ThenBy(item => NaturalKey(Path.GetFileName(item.Path)), StringComparer.OrdinalIgnoreCase)
+            .Select(item => item.Path).ToList();
+    }
+
+    private static int GetOrientation(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            return frame.PixelHeight > frame.PixelWidth ? 1 : frame.PixelWidth > frame.PixelHeight ? 2 : 3;
+        }
+        catch { return 3; }
     }
 
     private (string Left, string Right)? FindComparePair(string path)

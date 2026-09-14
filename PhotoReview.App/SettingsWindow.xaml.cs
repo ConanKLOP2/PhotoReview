@@ -16,6 +16,7 @@ public partial class SettingsWindow : Window
             Folder2Name = current.Folder2Name,
             InitialViewMode = current.InitialViewMode,
             LoadingMode = AppSettings.NormalizeLoadingMode(current.LoadingMode),
+            ImageSortMode = AppSettings.NormalizeImageSortMode(current.ImageSortMode),
             Shortcuts = new ShortcutMappings
             {
                 Next = current.Shortcuts.Next, Previous = current.Shortcuts.Previous,
@@ -37,11 +38,12 @@ public partial class SettingsWindow : Window
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, new JsonSerializerOptions { WriteIndented = true });
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { "100%" => 1, "200%" => 2, "400%" => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { "Preview" => 1, "Original" => 2, _ => 0 };
+        SortModeCombo.SelectedIndex = Settings.ImageSortMode == "Name" ? 1 : 0;
     }
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.ImageSortMode = "PortraitFirst"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -53,6 +55,7 @@ public partial class SettingsWindow : Window
         }
         Settings.Folder2Name = Folder2Text.Text.Trim();
         Settings.InitialViewMode = (ViewModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content?.ToString() ?? "Fit";
+        Settings.ImageSortMode = ((System.Windows.Controls.ComboBoxItem)SortModeCombo.SelectedItem)?.Tag?.ToString() ?? "PortraitFirst";
         var loadingItem = LoadingModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
         Settings.LoadingMode = loadingItem?.Tag?.ToString() ?? loadingItem?.Content?.ToString() ?? "Fast";
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();

@@ -8,6 +8,7 @@ public sealed class AppSettings
     public string Folder2Name { get; set; } = "Loai-2";
     public string InitialViewMode { get; set; } = "Fit";
     public string LoadingMode { get; set; } = "Preview";
+    public string ImageSortMode { get; set; } = "PortraitFirst";
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
@@ -22,6 +23,7 @@ public sealed class AppSettings
                 loaded.Shortcuts ??= ShortcutMappings.Default();
                 loaded.Actions ??= ReviewAction.Defaults();
                 loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
+                loaded.ImageSortMode = NormalizeImageSortMode(loaded.ImageSortMode);
                 return loaded;
             }
         }
@@ -51,6 +53,13 @@ public sealed class AppSettings
         string.Equals(value, "Fast", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "Original", StringComparison.OrdinalIgnoreCase);
+
+    public static string NormalizeImageSortMode(string? value) =>
+        string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ? "Name" : "PortraitFirst";
+
+    public static bool IsValidImageSortMode(string? value) =>
+        string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "PortraitFirst", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ShortcutMappings
