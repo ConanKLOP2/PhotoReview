@@ -63,14 +63,14 @@ try
     Check(!mainWindow.Contains("Key.D1") && !mainWindow.Contains("Key.NumPad1"), "No number-1 shortcut required", failures);
     Check(appSettings.Contains("Skip") && mainWindow.Contains("Shortcuts.Skip"), "Space skip shortcut exists", failures);
     Check(appSettings.Contains("Skip") && appSettings.Contains("Undo") && appSettings.Contains("Fullscreen") && mainWindow.Contains("Shortcuts.Skip") && mainWindow.Contains("Shortcuts.Undo") && mainWindow.Contains("Shortcuts.Fullscreen"), "Skip, undo, and fullscreen shortcuts are configurable", failures);
-    Check(mainWindow.Contains("Key.PageUp") && mainWindow.Contains("Key.PageDown") && mainWindow.Contains("NavigateSiblingFolderAsync"), "PageUp/PageDown navigate sibling folders", failures);
+    Check(mainWindow.Contains("Shortcuts.NextFolder") && mainWindow.Contains("Shortcuts.PreviousFolder") && mainWindow.Contains("NavigateSiblingFolderAsync"), "Configured shortcuts navigate sibling folders", failures);
     var siblingRoot = Path.Combine(root, "folders"); Directory.CreateDirectory(siblingRoot);
     var folder1 = Directory.CreateDirectory(Path.Combine(siblingRoot, "Folder1")).FullName;
     var folder2 = Directory.CreateDirectory(Path.Combine(siblingRoot, "Folder2")).FullName;
     var folder10 = Directory.CreateDirectory(Path.Combine(siblingRoot, "Folder10")).FullName;
     var siblings = SiblingFolderService.GetSorted(folder10);
     Check(siblings.SequenceEqual(new[] { folder1, folder2, folder10 }, StringComparer.OrdinalIgnoreCase) && SiblingFolderService.GetTarget(folder2, 1) == folder10 && SiblingFolderService.GetTarget(folder2, -1) == folder1, "Sibling folder navigation uses natural order", failures);
-    Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
+    Check(mainWindow.Contains("Shortcuts.FirstImage") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
     Check(imageSortService.Contains("GetQuery(\"/app1/ifd/{ushort=274}\")") && imageSortService.Contains("value is 5 or 6 or 7 or 8"), "Portrait-first sort accounts for EXIF orientation", failures);
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
