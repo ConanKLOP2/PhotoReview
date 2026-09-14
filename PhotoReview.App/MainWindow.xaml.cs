@@ -152,7 +152,7 @@ public partial class MainWindow : Window
         var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
         _compareSelectedPath = null;
-        StatusText.Text = $"Đang tải {index + 1}/{_files.Count}: {Path.GetFileName(path)}";
+        StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải";
         try
         {
             if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
@@ -162,7 +162,7 @@ public partial class MainWindow : Window
                 if (token != _generation) return;
                 MainImage.Source = thumbnail;
                 ApplyInitialViewMode();
-                StatusText.Text = $"{index + 1}/{_files.Count} | Đang tải ảnh rõ hơn: {Path.GetFileName(path)}";
+                StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
             }
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
@@ -200,7 +200,7 @@ public partial class MainWindow : Window
             {
                 ApplyInitialViewMode();
                 var original = await GetOriginalDimensionsAsync(path);
-                StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | render {image.PixelWidth}×{image.PixelHeight} · gốc {original.Width}×{original.Height}";
+            StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · {Path.GetFileName(path)} · {original.Width}×{original.Height}";
             }
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             presentStopwatch.Stop();
@@ -548,6 +548,15 @@ public partial class MainWindow : Window
         UpdateFitSize();
     }
 
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        var value = (double)Math.Max(0, bytes);
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return unit == 0 ? $"{value:0} {units[unit]}" : $"{value:0.##} {units[unit]}";
+    }
+
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await UndoLastActionAsync();
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
@@ -581,7 +590,7 @@ public partial class MainWindow : Window
         MainImage.Width = double.NaN; MainImage.Height = double.NaN;
         MainImage.MaxWidth = double.PositiveInfinity; MainImage.MaxHeight = double.PositiveInfinity;
         _zoom = value; ImageScale.ScaleX = value; ImageScale.ScaleY = value;
-        if (_index >= 0) StatusText.Text = $"{_index + 1}/{_files.Count} | Zoom {_zoom:0.##}x | {Path.GetFileName(_files[_index])}";
+        if (_index >= 0) StatusText.Text = $"{_index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(_files[_index]).Length)} · Zoom {_zoom:0.##}x";
     }
 
     private void ApplyInitialViewMode()
