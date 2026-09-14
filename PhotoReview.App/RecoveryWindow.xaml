@@ -3,7 +3,7 @@
         <StackPanel><TextBlock Text="Recovery operations" FontSize="24" FontWeight="SemiBold"/><TextBlock x:Name="SummaryText" Foreground="#BBBBBB" Margin="0,6,0,14"/></StackPanel>
         <ListBox x:Name="EntriesList" Grid.Row="1" Background="#252525" Foreground="#FFFFFF"/>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button x:Name="RetryButton" Content="Retry Move/Copy" Click="Retry_Click" Padding="14,8" Margin="0,0,8,0" IsEnabled="False"/>
+            <Button x:Name="RetryButton" Content="Retry Move/Copy" AutomationProperties.Name="Thử lại Move hoặc Copy đã lỗi" Click="Retry_Click" Padding="14,8" Margin="0,0,8,0" IsEnabled="False"/>
             <Button Content="Đóng" IsCancel="True" Padding="18,8"/>
         </StackPanel>
     </Grid>

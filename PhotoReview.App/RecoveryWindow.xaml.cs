@@ -15,7 +15,7 @@ public partial class RecoveryWindow : Window
         _retry = retry;
         EntriesList.ItemsSource = entries.Select(entry => $"{entry.State} · {entry.Type} · {Path.GetFileName(entry.Source)} · {entry.Source}{(entry.Error is null ? string.Empty : $" · {entry.Error}")}").ToList();
         EntriesList.SelectionChanged += (_, _) => RetryButton.IsEnabled = _retry is not null && EntriesList.SelectedIndex >= 0 && _entries[EntriesList.SelectedIndex].Type is "Move" or "Copy";
-        SummaryText.Text = entries.Count == 0 ? "Không có operation pending/failed cần xem." : $"Có {entries.Count} operation pending/failed. Không có thao tác nào tự động được thực hiện.";
+        SummaryText.Text = entries.Count == 0 ? "Không có operation pending/failed cần xem." : $"Có {entries.Count} operation pending/failed. Chọn Move/Copy để retry thủ công có kiểm tra an toàn.";
     }
 
     private void Retry_Click(object sender, RoutedEventArgs e)
