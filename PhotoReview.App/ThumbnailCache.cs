@@ -14,20 +14,24 @@ namespace PhotoReview.App;
 public sealed class ThumbnailCache : IDisposable
 {
     public const int MaxThumbnailWidth = 800;
+    public const long DefaultMaxDiskBytes = 1L * 1024 * 1024 * 1024;
 
     private readonly string _diskDirectory;
     private readonly long _maxRamBytes;
+    private readonly long _maxDiskBytes;
     private readonly BoundedLruCache<string, BitmapSource> _ramCache;
     private readonly ConcurrentDictionary<string, Lazy<Task<BitmapSource>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _disposeCts = new();
 
-    public ThumbnailCache(string? diskDirectory = null, long maxRamBytes = 256L * 1024 * 1024)
+    public ThumbnailCache(string? diskDirectory = null, long maxRamBytes = 256L * 1024 * 1024, long maxDiskBytes = DefaultMaxDiskBytes)
     {
         if (maxRamBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxRamBytes));
+        if (maxDiskBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxDiskBytes));
         _diskDirectory = diskDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PhotoReview", "thumbnails");
         _maxRamBytes = maxRamBytes;
+        _maxDiskBytes = maxDiskBytes;
         _ramCache = new BoundedLruCache<string, BitmapSource>(_maxRamBytes, EstimateBytes);
     }
 
@@ -78,10 +82,31 @@ public sealed class ThumbnailCache : IDisposable
         }
 
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
-        try { await WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); }
+        try { await WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); PruneDiskCache(); }
         catch (IOException) { /* The RAM result remains usable when disk cache is unavailable. */ }
         catch (UnauthorizedAccessException) { /* Same fallback for read-only locations. */ }
         return image;
+    }
+
+    public void ClearDisk()
+    {
+        if (!Directory.Exists(_diskDirectory)) return;
+        foreach (var path in Directory.EnumerateFiles(_diskDirectory, "*.png")) TryDelete(path);
+    }
+
+    private void PruneDiskCache()
+    {
+        if (!Directory.Exists(_diskDirectory)) return;
+        var files = Directory.EnumerateFiles(_diskDirectory, "*.png")
+            .Select(path => new FileInfo(path)).Where(info => info.Exists)
+            .OrderBy(info => info.LastAccessTimeUtc).ThenBy(info => info.CreationTimeUtc).ToList();
+        var total = files.Sum(info => info.Length);
+        foreach (var info in files)
+        {
+            if (total <= _maxDiskBytes) break;
+            TryDelete(info.FullName);
+            total -= info.Length;
+        }
     }
 
     private static Task<BitmapSource> DecodeAsync(string path, CancellationToken cancellationToken)
