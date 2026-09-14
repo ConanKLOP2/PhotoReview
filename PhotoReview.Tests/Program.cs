@@ -110,6 +110,7 @@ try
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
     Check(mainWindowXaml.Contains("Focusable=\"True\"") && mainWindow.Contains("CompareLeft_KeyDown") && mainWindow.Contains("CompareRight_KeyDown"), "Compare previews support keyboard selection", failures);
     Check(mainWindow.Contains("GetGCMemoryInfo") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
+    Check(mainWindowXaml.Contains("Closed=\"Window_Closed\"") && mainWindow.Contains("_thumbnailCache.Dispose()") && mainWindow.Contains("_preloadCts.Dispose()"), "Window shutdown disposes preload and thumbnail resources", failures);
     var thumbnailCacheText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ThumbnailCache.cs"));
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation", failures);
     Check(mainWindowXaml.Contains("ClearCache_Click") && mainWindow.Contains("_thumbnailCache.ClearDisk()"), "Disk cache can be cleared from UI without changing source images", failures);

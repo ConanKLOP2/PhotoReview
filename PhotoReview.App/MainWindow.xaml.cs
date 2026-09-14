@@ -416,6 +416,12 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e) => UpdateFitSize();
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
+    private void Window_Closed(object? sender, EventArgs e)
+    {
+        _preloadCts.Cancel();
+        _preloadCts.Dispose();
+        _thumbnailCache.Dispose();
+    }
 
     private void UpdateFitSize()
     {
