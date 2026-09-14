@@ -497,7 +497,7 @@ public partial class MainWindow : Window
     {
         if (_session is null) return;
         var currentFolder = Path.GetFullPath(_session.Folder);
-        var targetFolder = await Task.Run(() => SiblingFolderService.GetTarget(currentFolder, direction));
+        var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction));
         if (targetFolder is null)
         {
             StatusText.Text = direction > 0 ? "Đã ở folder cuối cùng cùng cấp." : "Đã ở folder đầu tiên cùng cấp.";
@@ -505,6 +505,24 @@ public partial class MainWindow : Window
         }
 
         await LoadFolderAsync(targetFolder);
+    }
+
+    private static string? FindNextImageFolder(string currentFolder, int direction)
+    {
+        var folders = SiblingFolderService.GetSorted(currentFolder);
+        var index = folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return null;
+        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
+        for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
+        {
+            try
+            {
+                if (Directory.EnumerateFiles(folders[i], "*", SearchOption.TopDirectoryOnly).Any(path => supported.Contains(Path.GetExtension(path)))) return folders[i];
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return null;
     }
 
     private void ToggleFullscreen()
