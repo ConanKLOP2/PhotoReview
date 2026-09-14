@@ -68,6 +68,9 @@ try
     var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
     var comparePair = ComparePairService.Find(new[] { compareOriginal, compareNumbered }, compareNumbered);
     Check(comparePair is not null && comparePair.Value.Left == compareOriginal && comparePair.Value.Right == compareNumbered, "Compare pair detection works from numbered filename", failures);
+    var compareFromOriginal = ComparePairService.Find(new[] { compareOriginal, compareNumbered }, compareOriginal);
+    Check(compareFromOriginal is not null && compareFromOriginal.Value.Left == compareOriginal && compareFromOriginal.Value.Right == compareNumbered, "Compare pair detection works from original filename", failures);
+    Check(ComparePairService.Find(new[] { compareOriginal }, compareOriginal) is null, "Compare pair detection rejects an incomplete pair", failures);
     var sortFixture = new[] { Path.Combine(root, "img10.jpg"), Path.Combine(root, "img2.jpg"), Path.Combine(root, "img1.jpg") };
     var nameSorted = ImageSortService.Sort(sortFixture, "Name");
     Check(Path.GetFileName(nameSorted[0]) == "img1.jpg" && Path.GetFileName(nameSorted[1]) == "img2.jpg" && Path.GetFileName(nameSorted[2]) == "img10.jpg", "Natural filename sort orders numeric suffixes", failures);
