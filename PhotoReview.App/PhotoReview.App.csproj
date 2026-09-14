@@ -12,7 +12,8 @@
     <Version>1.0.1</Version>
     <AssemblyVersion>1.0.1.0</AssemblyVersion>
     <FileVersion>1.0.1.0</FileVersion>
-    <InformationalVersion>1.0.1</InformationalVersion>
+    <BuildStamp>$([System.DateTime]::UtcNow.ToString('yyyyMMdd.HHmmss'))</BuildStamp>
+    <InformationalVersion>1.0.1+build.$(BuildStamp)</InformationalVersion>
   </PropertyGroup>
 
 </Project>

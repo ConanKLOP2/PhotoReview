@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource _folderLoadCts = new();
     private long _folderGeneration;
     private ExplorerViewSnapshot? _lastExplorerSnapshot;
+    private bool _placementRestored;
     private readonly Dictionary<string, (int Width, int Height)> _originalDimensions = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow(string? initialPath = null)
@@ -528,8 +529,15 @@ public partial class MainWindow : Window
         UpdateFitSize();
     }
 
-    private void Window_SourceInitialized(object? sender, EventArgs e) => WindowPlacementService.Restore(this);
-    private void Window_Loaded(object sender, RoutedEventArgs e) => UpdateFitSize();
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (!_placementRestored)
+        {
+            _placementRestored = true;
+            WindowPlacementService.Restore(this);
+        }
+        UpdateFitSize();
+    }
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
