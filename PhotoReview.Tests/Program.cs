@@ -31,6 +31,8 @@ try
     var committed = journal.ReadCommittedMoves();
     Check(committed.Any(x => x.Source == source && x.Destination == destination), "Journal committed Move", failures);
     Check(journal.ReadPendingOperations().Count == 0, "Journal has no pending committed Move", failures);
+    var journalFile = Directory.GetFiles(Path.Combine(root, "app-data"), "operations.jsonl").Single();
+    Check(new FileInfo(journalFile).Length > 0 && File.ReadAllLines(journalFile).All(line => line.StartsWith("{", StringComparison.Ordinal)), "Journal entries are durably written as JSONL", failures);
     Check(File.ReadAllBytes(destination).SequenceEqual(new byte[] { 1, 2, 3, 4 }), "Move preserves bytes", failures);
 
     var cache = new BoundedLruCache<string, string>(4, value => value.Length, StringComparer.Ordinal);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.IO;
+using System.Text;
 
 namespace PhotoReview.App;
 
@@ -16,7 +17,10 @@ public sealed class OperationJournal
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             var line = JsonSerializer.Serialize(entry) + Environment.NewLine;
-            File.AppendAllText(_path, line);
+            using var stream = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read, 4096, FileOptions.WriteThrough);
+            var bytes = Encoding.UTF8.GetBytes(line);
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush(flushToDisk: true);
         }
     }
 
