@@ -65,10 +65,10 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 | Lane | Đã xác nhận | Đang làm | Tiếp theo | Blocker |
 |---|---|---|---|---|
 | A | Source inventory; build PASS | A03 | A04 tách service | — |
-| B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save; runtime shortcut wiring | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
-| C | Name/PortraitFirst, compare cơ bản, EXIF orientation sort | C01 | C02 test pair/GUI | Chưa có fixture EXIF/GUI acceptance |
+| B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save; runtime shortcut wiring; Skip/Undo/Fullscreen mapping | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
+| C | Name/PortraitFirst, compare cơ bản, EXIF fixture orientation, isolated sort service, no image click navigation | C02 | Compare pair/GUI | GUI acceptance còn thiếu |
 | D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile; recovery UI | D04 | Fault injection/reconcile edge cases | Fault injection đầy đủ còn thiếu |
-| E | LRU/preload/preview cache; 16 GB budget/full-folder threshold; 80% pressure guard; in-process metrics; diagnostics view | E01 | Benchmark/decoded telemetry | Chưa có benchmark GUI định lượng |
+| E | LRU/preload/preview cache; 16 GB budget/full-folder threshold; 80% pressure guard; source-read/decode/present metrics; diagnostics view | E01 | Automated benchmark/decoded telemetry | Chưa có benchmark GUI định lượng |
 | F | Build/test/smoke/release gate PASS; contract test action/sort/navigation | F01 | F02/F03 GUI acceptance | Cần fixture và test GUI |
 
 ## Nhật ký audit
