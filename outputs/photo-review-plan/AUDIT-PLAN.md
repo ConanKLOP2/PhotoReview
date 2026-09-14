@@ -111,6 +111,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-F04`: rebuild/publish `win-x64` sau các commit mới và chạy `verify-all.ps1 -Configuration Release` PASS; EXE 162,304 bytes, SHA-256 `953A45AA7ECC40DDE89B5257FF0F02DCDC059689C5E3BAC12C2F02C4381B768C`.
 - 2026-09-14 — `AUD-D04`: journal append chuyển sang `WriteThrough` và `Flush(true)`; test xác minh JSONL được ghi; build/test PASS. Commit `ae25313`.
 - 2026-09-14 — `AUD-C01`: mở rộng JPEG EXIF fixture matrix cho orientation 5/6/7/8; tất cả được nhận diện là portrait trong PortraitFirst; build/test PASS. Commit `fbc6205`.
+- 2026-09-14 — `AUD-C02`/`AUD-D01`: phát hiện và sửa lỗi action trong Compare thao tác nhầm ảnh gốc; Move/Copy/Recycle/Delete dùng `_compareSelectedPath`; contract test/build PASS. Commit `4d76735`.
 
 ## Template cập nhật task
 
