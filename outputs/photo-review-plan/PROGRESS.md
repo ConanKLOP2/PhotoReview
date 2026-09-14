@@ -1,6 +1,6 @@
 # Tiến độ Photo Review
 
-Cập nhật: 2026-09-13.
+Cập nhật: 2026-09-14.
 Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 ## Hiện trạng
@@ -9,6 +9,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 - Audit hiện tại: 5 DONE, 19 PARTIAL, 13 TODO, 2 DEFERRED trong 39 task bản đầu.
 - Benchmark trên bộ 242 ảnh: chưa chạy; ảnh gốc chưa thao tác.
 - Ứng dụng đã có solution/source và release artifacts; chưa coi toàn bộ plan là hoàn tất.
+- Gate tích hợp gần nhất: PASS; release đã publish lại từ source hiện tại, SHA256 `525E094AE7BF1C4BCAD4066E7E945E6F98E92517B1AB4C2EB46328F2BAD1ACA9`.
 
 ## Milestone
 
@@ -55,6 +56,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-13 | Audit lại trạng thái theo implementation/evidence; hạ các task chưa đủ test từ DONE xuống PARTIAL và ghi rõ gap | TASKS.md; build/test/smoke/release evidence |
 | 2026-09-14 | Loại bỏ fallback phím điều hướng/zoom hardcode; runtime chỉ dùng shortcut trong Settings (Escape vẫn là thoát fullscreen/modal) | `891f403`; build Release PASS; PhotoReview.Tests PASS |
 | 2026-09-14 | Gom validation shortcut toàn cục và action profile; chặn xung đột phím trước khi lưu Settings | `6c1f40e`; build Release PASS; PhotoReview.Tests PASS |
+| 2026-09-14 | Chạy verify-all và publish lại release để loại bỏ evidence artifact stale | `verify-all.ps1` PASS; `verify-release.ps1` PASS; SHA256 `525E094A...` |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 
