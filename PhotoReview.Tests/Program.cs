@@ -66,6 +66,14 @@ try
     journal.Append(new JournalEntry(pendingId, "Recycle", "Prepared", journalSource, null, 3, File.GetLastWriteTimeUtc(journalSource), DateTime.UtcNow));
     var reconciled = journal.ReconcilePendingOperations();
     Check(reconciled.Any(x => x.Id == pendingId && x.State == "Failed"), "Pending recycle is reconciled without replay when source remains", failures);
+    var pendingMoveSource = Path.Combine(root, "pending-move.jpg");
+    var pendingMoveDestination = Path.Combine(root, "pending-dest", "pending-move.jpg");
+    Directory.CreateDirectory(Path.GetDirectoryName(pendingMoveDestination)!);
+    File.WriteAllBytes(pendingMoveDestination, [8, 9, 10]);
+    var pendingMoveId = Guid.NewGuid().ToString("N");
+    journal.Append(new JournalEntry(pendingMoveId, "Move", "Prepared", pendingMoveSource, pendingMoveDestination, 3, DateTime.UtcNow, DateTime.UtcNow));
+    var moveReconciled = journal.ReconcilePendingOperations();
+    Check(moveReconciled.Any(x => x.Id == pendingMoveId && x.State == "Committed"), "Pending move is committed only when source is absent and destination fingerprint matches", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);

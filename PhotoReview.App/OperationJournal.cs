@@ -63,6 +63,16 @@ public sealed class OperationJournal
                 var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
                 Append(entry); reconciled.Add(entry);
             }
+            else if (pending.Type is "Move" or "Copy")
+            {
+                var sourceExists = File.Exists(pending.Source);
+                var destinationExists = pending.Destination is not null && File.Exists(pending.Destination);
+                var destinationMatches = destinationExists && new FileInfo(pending.Destination!).Length == pending.Size;
+                var state = !sourceExists && destinationMatches ? "Committed" : "Failed";
+                var error = state == "Failed" ? "Không thể xác nhận operation pending; không tự động replay." : null;
+                var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
+                Append(entry); reconciled.Add(entry);
+            }
         }
         return reconciled;
     }

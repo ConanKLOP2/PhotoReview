@@ -67,7 +67,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 | A | Source inventory; build PASS | A03 | A04 tách service | — |
 | B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
 | C | Name/PortraitFirst, compare cơ bản tồn tại | C01 | C02 test pair/EXIF | Chưa có GUI acceptance |
-| D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile | D04 | Recovery UI/fault injection | Chưa có recovery UI/fault injection đầy đủ |
+| D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile cho Recycle/Move/Copy | D04 | Recovery UI/fault injection | Chưa có recovery UI/fault injection đầy đủ |
 | E | LRU/preload/preview cache tồn tại | E01 | E02 telemetry | Chưa có benchmark định lượng |
 | F | Build/test PASS; contract test action/sort/navigation | F01 | F02/F03 | Cần fixture và test GUI |
 
@@ -85,6 +85,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-D03`: thêm `BatchReviewWindow` hiển thị danh sách file, dung lượng và yêu cầu xác nhận riêng trước Recycle Bin; build/test PASS. Commit `16f7523`.
 - 2026-09-14 — `AUD-D04`: batch Recycle ghi journal từng file ở trạng thái Prepared/Committed/Failed và hiển thị báo cáo lỗi; build/test PASS.
 - 2026-09-14 — `AUD-D04`: thêm `ReconcilePendingOperations`; pending Recycle không replay mù, source còn ghi Failed, source mất ghi Committed; build/test PASS.
+- 2026-09-14 — `AUD-D04`: reconcile thêm Move/Copy; chỉ ghi Committed khi source mất và destination tồn tại đúng size, trường hợp khác ghi Failed không replay; build/test PASS.
 
 ## Template cập nhật task
 
