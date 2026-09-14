@@ -17,10 +17,10 @@
         <Border x:Name="ComparePanel" Visibility="Collapsed" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8,65,8,65">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <Border x:Name="CompareLeftBorder" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click">
+                <Border x:Name="CompareLeftBorder" AutomationProperties.Name="Preview ảnh bên trái, nhấn để chọn" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click">
                     <Image x:Name="CompareLeftImage" Stretch="Uniform"/>
                 </Border>
-                <Border x:Name="CompareRightBorder" Grid.Column="1" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click">
+                <Border x:Name="CompareRightBorder" AutomationProperties.Name="Preview ảnh bên phải, nhấn để chọn" Grid.Column="1" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click">
                     <Image x:Name="CompareRightImage" Stretch="Uniform"/>
                 </Border>
             </Grid>
