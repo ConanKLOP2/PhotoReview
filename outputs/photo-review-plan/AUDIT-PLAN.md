@@ -99,6 +99,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-E01`: thêm Diagnostics view hiển thị cache hit/miss/rate, source bytes và decode time; BOM MainWindow được giữ; build/test PASS.
 - 2026-09-14 — `AUD-E01`: sửa metrics chỉ cộng source bytes khi thực sự decode file gốc, không tính disk-cache hit; build/test PASS. Commit `d5d830c`.
 - 2026-09-14 — `AUD-E01`: bổ sung present-latency metrics từ lúc bắt đầu `ShowImageAsync` đến khi gắn ảnh vào UI; Diagnostics hiển thị ms/ảnh và số mẫu; build/test PASS. Commit `ce7474f`.
+- 2026-09-14 — `AUD-F04`: sau các commit mới, restore/publish `win-x64` và `verify-all.ps1 -Configuration Release` PASS; EXE 162,304 bytes, SHA-256 `AC256C96D5E73DAF203CEEFF20DFB588E086EA6C58F3C5FB31F3307795D9BCF3`.
 
 ## Template cập nhật task
 
