@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _preloadSlots = new(2, 2);
     private const long MaxCacheBytes = 1024L * 1024 * 1024;
     private string? _compareSelectedPath;
+    private readonly Dictionary<string, (long Length, DateTime LastWriteUtc, string Hash)> _hashCache = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow(string? initialPath = null)
     {
@@ -294,8 +295,9 @@ public partial class MainWindow : Window
     private async Task RemoveDuplicatesAsync(bool removeNumbered)
     {
         var remove = new List<string>();
+        var sizeGroups = _files.GroupBy(path => new FileInfo(path).Length).Where(group => group.Count() > 1).ToList();
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in _files)
+        foreach (var path in sizeGroups.SelectMany(group => group))
         {
             var hash = await GetHashAsync(path);
             if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
@@ -311,10 +313,14 @@ public partial class MainWindow : Window
         if (remove.Count > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
     }
 
-    private static async Task<string> GetHashAsync(string path)
+    private async Task<string> GetHashAsync(string path)
     {
+        var info = new FileInfo(path);
+        if (_hashCache.TryGetValue(path, out var cached) && cached.Length == info.Length && cached.LastWriteUtc == info.LastWriteTimeUtc) return cached.Hash;
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024, true);
-        return Convert.ToHexString(await SHA256.HashDataAsync(stream));
+        var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream));
+        _hashCache[path] = (info.Length, info.LastWriteTimeUtc, hash);
+        return hash;
     }
 
     private async Task NavigateSiblingFolderAsync(int direction)

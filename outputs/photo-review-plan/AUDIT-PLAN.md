@@ -67,7 +67,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 | A | Source inventory; build PASS | A03 | A04 tách service | — |
 | B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
 | C | Name/PortraitFirst, compare cơ bản tồn tại | C01 | C02 test pair/EXIF | Chưa có GUI acceptance |
-| D | Move/Copy/Recycle/hash batch; batch có confirm | D01 | D02/D03 dry-run | Chưa có journal/report cho batch |
+| D | Move/Copy/Recycle/hash batch; batch có confirm; size-first/hash cache | D02 | D03 dry-run/report | Chưa có journal/report cho batch |
 | E | LRU/preload/preview cache tồn tại | E01 | E02 telemetry | Chưa có benchmark định lượng |
 | F | Build/test PASS; contract test action/sort/navigation | F01 | F02/F03 | Cần fixture và test GUI |
 
@@ -81,6 +81,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-B03`: shortcut recorder bắt phím trực tiếp; action profile Import/Export JSON; build/test PASS. Commit `b6db27d`.
 - 2026-09-14 — `AUD-B04`: Move/Copy action chặn destination rỗng và chính folder nguồn; build/test PASS. Destination relative như `Loai-2` vẫn hợp lệ.
 - 2026-09-14 — `AUD-B04`: thêm `ConfigVersion`, migration v1→v2, backup config hỏng và atomic write `WriteThrough`/`Flush(true)`; build/test PASS.
+- 2026-09-14 — `AUD-D02`: duplicate scan lọc theo file size trước khi SHA-256 và cache hash theo path/length/last-write; build/test PASS.
 
 ## Template cập nhật task
 
