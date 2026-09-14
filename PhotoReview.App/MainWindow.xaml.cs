@@ -26,7 +26,8 @@ public partial class MainWindow : Window
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
     private CancellationTokenSource _preloadCts = new();
     private readonly SemaphoreSlim _preloadSlots = new(2, 2);
-    private const long MaxCacheBytes = 1024L * 1024 * 1024;
+    private const long MaxCacheBytes = 16L * 1024 * 1024 * 1024;
+    private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
     private string? _compareSelectedPath;
     private readonly Dictionary<string, (long Length, DateTime LastWriteUtc, string Hash)> _hashCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -189,7 +190,10 @@ public partial class MainWindow : Window
         _preloadCts.Dispose();
         _preloadCts = new CancellationTokenSource();
         var cancellationToken = _preloadCts.Token;
-        var offsets = Enumerable.Range(1, 8).Concat([-1, -2]);
+        var totalSourceBytes = _files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
+        var offsets = totalSourceBytes < FullFolderRamThresholdBytes
+            ? Enumerable.Range(0, _files.Count).Where(i => i != center).Select(i => i - center)
+            : Enumerable.Range(1, 8).Concat([-1, -2]);
         foreach (var offset in offsets)
         {
             if (token != _generation || cancellationToken.IsCancellationRequested) return;

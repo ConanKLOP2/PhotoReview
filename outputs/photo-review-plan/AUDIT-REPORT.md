@@ -16,9 +16,9 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P1 — Cache RAM chưa đáp ứng policy hiệu năng
 
-- Evidence: `MainWindow` đặt `MaxCacheBytes = 1 GB`; cache chưa adaptive theo tổng folder và chưa có telemetry RAM.
-- Impact: không thực hiện mục tiêu load toàn bộ folder nhỏ hơn 16 GB; chuyển ảnh lớn có thể đọc/decode lại.
-- Task: `AUD-E02`, `AUD-E03` — cache budget adaptive, preload full-folder có giới hạn an toàn, memory pressure và đo cache hit.
+- Evidence: đã nâng `MaxCacheBytes` lên 16 GB và preload full-folder khi source folder dưới 16 GB; chưa có decoded-footprint telemetry hoặc pressure guard.
+- Impact: policy đã được phản ánh trong code nhưng cần benchmark để tránh OOM trên ảnh giải nén lớn.
+- Task: `AUD-E02`, `AUD-E03` — memory-pressure guard, adaptive decoded budget và đo cache hit/RAM thực tế.
 
 ### P1 — Batch mutation chưa có fault-injection thật
 
