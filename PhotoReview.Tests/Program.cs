@@ -49,6 +49,7 @@ try
 
     var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs"));
     var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
+    var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
     Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
     Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal) && appSettings.Contains("Original", StringComparison.Ordinal), "LoadingMode has Fast, Preview, and Original options", failures);
@@ -63,6 +64,7 @@ try
     Check(!mainWindow.Contains("Key.D1") && !mainWindow.Contains("Key.NumPad1"), "No number-1 shortcut required", failures);
     Check(appSettings.Contains("Skip") && mainWindow.Contains("Shortcuts.Skip"), "Space skip shortcut exists", failures);
     Check(appSettings.Contains("Skip") && appSettings.Contains("Undo") && appSettings.Contains("Fullscreen") && mainWindow.Contains("Shortcuts.Skip") && mainWindow.Contains("Shortcuts.Undo") && mainWindow.Contains("Shortcuts.Fullscreen"), "Skip, undo, and fullscreen shortcuts are configurable", failures);
+    Check(appSettings.Contains("ValidateShortcuts") && settingsWindow.Contains("ValidateShortcuts"), "Shortcut conflicts are validated across global and action bindings", failures);
     Check(mainWindow.Contains("Shortcuts.NextFolder") && mainWindow.Contains("Shortcuts.PreviousFolder") && mainWindow.Contains("NavigateSiblingFolderAsync"), "Configured shortcuts navigate sibling folders", failures);
     var siblingRoot = Path.Combine(root, "folders"); Directory.CreateDirectory(siblingRoot);
     var folder1 = Directory.CreateDirectory(Path.Combine(siblingRoot, "Folder1")).FullName;

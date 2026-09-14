@@ -81,6 +81,8 @@ public partial class SettingsWindow : Window
                 throw new JsonException("Các action không được trùng phím tắt.");
         }
         catch { System.Windows.MessageBox.Show(this, "Action profiles JSON không hợp lệ.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        var shortcutError = AppSettings.ValidateShortcuts(Settings);
+        if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         AppSettings.Save(Settings); DialogResult = true;
     }
 

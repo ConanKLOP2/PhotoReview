@@ -81,6 +81,26 @@ public sealed class AppSettings
     public static bool IsValidImageSortMode(string? value) =>
         string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "PortraitFirst", StringComparison.OrdinalIgnoreCase);
+
+    public static string? ValidateShortcuts(AppSettings settings)
+    {
+        var bindings = new List<(string Name, string Value)>();
+        foreach (var property in typeof(ShortcutMappings).GetProperties())
+        {
+            var value = property.GetValue(settings.Shortcuts)?.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(value) || !Enum.TryParse<System.Windows.Input.Key>(value, true, out _))
+                return $"Shortcut {property.Name} không hợp lệ.";
+            bindings.Add((property.Name, value));
+        }
+        foreach (var action in settings.Actions ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(action.Name) || !Enum.TryParse<System.Windows.Input.Key>(action.Shortcut, true, out _))
+                return "Action phải có tên và phím tắt hợp lệ.";
+            bindings.Add(($"Action: {action.Name}", action.Shortcut.Trim()));
+        }
+        var duplicate = bindings.GroupBy(item => item.Value, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
+        return duplicate is null ? null : $"Phím {duplicate.Key} bị dùng trùng bởi: {string.Join(", ", duplicate.Select(item => item.Name))}.";
+    }
 }
 
 public sealed class ShortcutMappings
