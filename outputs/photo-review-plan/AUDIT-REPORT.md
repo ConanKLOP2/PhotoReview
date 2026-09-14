@@ -41,6 +41,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Impact: folder nhiều ảnh có thể chậm mở lần đầu và tăng I/O; EXIF orientation 5/6/7/8 đã được kiểm chứng bằng JPEG fixture.
 - Task: `AUD-C01`, `AUD-E01` — metadata cache/background scan, đo latency, test portrait/landscape/square/EXIF.
 
+### P1 — Shortcut runtime đã chuyển sang cấu hình tập trung
+
+- Evidence: navigation, sibling-folder, Home, zoom, Skip, Undo, Fullscreen và action profiles đều kiểm tra `_settings.Shortcuts`; không còn fallback phím điều hướng/zoom hardcode. Contract test và Release build PASS (`891f403`).
+- Remaining: command registry duy nhất và kiểm thử mọi binding ở mức UI vẫn thuộc `AUD-A04`, `AUD-C03`.
+
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.

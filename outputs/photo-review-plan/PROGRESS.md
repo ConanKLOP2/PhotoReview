@@ -24,8 +24,8 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 ## Ba bước tiếp theo
 
 1. Chạy GUI acceptance trên bộ 242 ảnh thật và lưu evidence workflow/resume.
-2. Hoàn thiện Settings UI cho shortcut mapping, folder đích, validation và config.
-3. Bổ sung EXIF test, LRU/quota cache, recovery UI và benchmark report.
+2. Hoàn thiện command registry và validation shortcut để mọi interaction public đều cấu hình tập trung.
+3. Bổ sung benchmark report, fault-injection matrix và GUI acceptance trên Windows sạch.
 
 Đường dẫn bộ 242 ảnh hiện chưa biết; đây là điều kiện để nghiệm thu/benchmark, không phải lỗi implementation.
 
@@ -53,6 +53,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-13 | Thêm session store, journal và instance lock; smoke test script được tạo | SessionStore.cs, OperationJournal.cs, InstanceLock.cs |
 | 2026-09-13 | Đơn giản hóa workflow theo yêu cầu: mũi tên để nguyên loại 1, Enter Move loại 2, Delete Recycle Bin; thêm test project và smoke tests PASS | MainWindow.xaml/.cs, PhotoReview.Tests, tools/smoke-test.ps1 |
 | 2026-09-13 | Audit lại trạng thái theo implementation/evidence; hạ các task chưa đủ test từ DONE xuống PARTIAL và ghi rõ gap | TASKS.md; build/test/smoke/release evidence |
+| 2026-09-14 | Loại bỏ fallback phím điều hướng/zoom hardcode; runtime chỉ dùng shortcut trong Settings (Escape vẫn là thoát fullscreen/modal) | `891f403`; build Release PASS; PhotoReview.Tests PASS |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 
