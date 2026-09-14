@@ -1,0 +1,93 @@
+# PhotoReview
+
+PhotoReview là ứng dụng Windows WPF tối ưu cho việc duyệt và phân loại ảnh nhanh theo thứ tự đang hiển thị trong File Explorer.
+
+## Tính năng
+
+- Đọc thứ tự item native từ cửa sổ Windows Explorer qua `IFolderView2`, gồm Name/Date/Size và hướng sắp xếp khi Shell cung cấp.
+- Hiển thị ảnh fallback nhanh, sau đó cập nhật theo thứ tự Explorer mà không đọc lại ảnh đã cache.
+- Cache preview trong RAM có giới hạn, preload ảnh lân cận và bảo vệ theo áp lực bộ nhớ.
+- Chế độ tải Fast/Preview/Original, zoom, Fit và fullscreen.
+- Workflow review: mũi tên duyệt ảnh, Enter Move sang folder 2, Delete vào Recycle Bin, Space bỏ qua, Ctrl+Z Undo Move.
+- Compare cặp ảnh, tùy chọn hash/kích thước, xử lý duplicate theo batch có màn hình xác nhận.
+- Journal an toàn cho Move/Copy/Recycle, recovery và retry có kiểm tra fingerprint.
+- Lưu session, vị trí cửa sổ và cấu hình người dùng.
+- Diagnostics nội bộ; không gửi path hoặc dữ liệu ảnh ra ngoài.
+
+## Yêu cầu
+
+- Windows 10/11 x64.
+- .NET 10 Windows Desktop Runtime nếu dùng bản framework-dependent.
+- Bản self-contained đã kèm runtime .NET.
+
+## Build và chạy
+
+Build solution:
+
+```powershell
+dotnet build PhotoReview.slnx -c Release
+dotnet run --project PhotoReview.Tests -c Release
+```
+
+Publish artifact chính vào thư mục mặc định của SDK:
+
+```powershell
+dotnet publish PhotoReview.App\PhotoReview.App.csproj -c Release --self-contained false
+```
+
+Executable nằm tại:
+
+```text
+PhotoReview.App\bin\Release\net10.0-windows\publish\PhotoReview.App.exe
+```
+
+Publish bản self-contained x64:
+
+```powershell
+dotnet publish PhotoReview.App\PhotoReview.App.csproj -c Release -r win-x64 --self-contained true -o outputs\release\PhotoReview-self-contained
+```
+
+Mỗi build tự ghi build stamp UTC vào Settings, ví dụ `1.0.1+build.20260914.164707`.
+
+## File association
+
+Đăng ký PhotoReview trong Open With cho `.jpg`, `.jpeg` và `.png`:
+
+```powershell
+.\outputs\install-photo-review-association.ps1 -ExePath "C:\duong-dan\PhotoReview.App.exe"
+```
+
+Gỡ đăng ký:
+
+```powershell
+.\outputs\uninstall-photo-review-association.ps1
+```
+
+## Giới hạn native Explorer order
+
+PhotoReview chỉ dùng snapshot native khi Shell trả đủ item regular-file thuộc đúng folder. Nếu Explorer đóng, đang tải, trả item thiếu/virtual hoặc vượt timeout 2 giây, ứng dụng fallback về sort đã cấu hình. Grouped view và các sort property tùy biến còn phụ thuộc API Shell của phiên bản Windows.
+
+## Kiểm thử
+
+Các gate chính:
+
+```powershell
+.\tools\verify-all.ps1 -RequireSelfContained
+```
+
+Probe thứ tự native của một folder Explorer đang mở:
+
+```powershell
+dotnet run --project PhotoReview.Tests -c Release -- --explorer-probe "C:\duong-dan\folder-anh"
+```
+
+## Cấu trúc
+
+- `PhotoReview.App/` — ứng dụng WPF và các service cache, journal, Shell interop.
+- `PhotoReview.Tests/` — contract/persistence/safety tests và native Explorer probe.
+- `tools/` — build, publish verification, smoke test và fault-injection test.
+- `outputs/photo-review-plan/` — product, architecture, performance và audit plans.
+
+## Trạng thái
+
+Release hiện tại: `1.0.1`. Native Name DESC đã được kiểm thử trực tiếp trên Explorer; matrix Date/Size/Group và GUI acceptance đầy đủ vẫn là các hạng mục mở trong kế hoạch.
