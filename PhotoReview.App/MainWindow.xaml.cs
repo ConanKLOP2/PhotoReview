@@ -459,7 +459,7 @@ public partial class MainWindow : Window
     private async Task ClassifyCurrentAsync(int category)
     {
         if (_index < 0 || _index >= _files.Count) return;
-        var source = _files[_index];
+        var source = _compareSelectedPath ?? _files[_index];
         try
         {
             var info = new FileInfo(source);
@@ -485,7 +485,7 @@ public partial class MainWindow : Window
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _moveHistory.Push((source, destination));
             }
-            _files.RemoveAt(_index); _cache.Remove(source);
+            _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null;
             if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
             else { MainImage.Source = null; StatusText.Text = "Đã xử lý hết ảnh trong folder."; }
@@ -506,7 +506,7 @@ public partial class MainWindow : Window
             return;
         }
         if (_index < 0 || _index >= _files.Count) return;
-        var source = _files[_index];
+        var source = _compareSelectedPath ?? _files[_index];
         try
         {
             if (string.IsNullOrWhiteSpace(action.Destination)) throw new IOException("Action chưa có thư mục đích.");
@@ -519,7 +519,7 @@ public partial class MainWindow : Window
             if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
             if (action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) File.Copy(source, destination);
             else File.Move(source, destination);
-            if (!action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) { _files.RemoveAt(_index); _cache.Remove(source); }
+            if (!action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) { _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null; }
             if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
             else { MainImage.Source = null; StatusText.Text = $"Đã thực hiện: {action.Name}"; }
         }
