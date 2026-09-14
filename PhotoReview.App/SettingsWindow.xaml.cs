@@ -83,6 +83,16 @@ public partial class SettingsWindow : Window
         AppSettings.Save(Settings); DialogResult = true;
     }
 
+    private static void ShortcutText_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox textBox) return;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+        textBox.Text = key.ToString();
+        textBox.SelectAll();
+        e.Handled = true;
+    }
+
     private void EditActions_Click(object sender, RoutedEventArgs e)
     {
         try
