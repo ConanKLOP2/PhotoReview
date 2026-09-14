@@ -103,6 +103,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-C02`: loại bỏ handler click ảnh cũ có thể điều hướng ngầm; compare vẫn dùng click riêng trên từng preview; contract test PASS. Commit `a5a5dcf`.
 - 2026-09-14 — `AUD-C01`/`AUD-F01`: tách sort Name/PortraitFirst và EXIF orientation thành `ImageSortService`; cập nhật contract test; build/test PASS. Commit `a5005ca`.
 - 2026-09-14 — `AUD-D04`/`AUD-F02`: bổ sung matrix pending Move/Copy cho source còn tồn tại và destination sai kích thước; cả hai đều Failed, không replay; build/test PASS. Commit `17bc78a`.
+- 2026-09-14 — `AUD-B03`/`AUD-A03`: thêm shortcut config riêng cho Skip, Undo và Fullscreen; Settings UI/runtime/contract test PASS. Commits `3befc76`, `230014e`.
 
 ## Template cập nhật task
 
