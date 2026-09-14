@@ -102,6 +102,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-F04`: sau các commit mới, restore/publish `win-x64` và `verify-all.ps1 -Configuration Release` PASS; EXE 162,304 bytes, SHA-256 `AC256C96D5E73DAF203CEEFF20DFB588E086EA6C58F3C5FB31F3307795D9BCF3`.
 - 2026-09-14 — `AUD-C02`: loại bỏ handler click ảnh cũ có thể điều hướng ngầm; compare vẫn dùng click riêng trên từng preview; contract test PASS. Commit `a5a5dcf`.
 - 2026-09-14 — `AUD-C01`/`AUD-F01`: tách sort Name/PortraitFirst và EXIF orientation thành `ImageSortService`; cập nhật contract test; build/test PASS. Commit `a5005ca`.
+- 2026-09-14 — `AUD-D04`/`AUD-F02`: bổ sung matrix pending Move/Copy cho source còn tồn tại và destination sai kích thước; cả hai đều Failed, không replay; build/test PASS. Commit `17bc78a`.
 
 ## Template cập nhật task
 
