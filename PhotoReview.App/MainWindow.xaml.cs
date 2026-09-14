@@ -363,21 +363,14 @@ public partial class MainWindow : Window
     {
         if (_session is null) return;
         var currentFolder = Path.GetFullPath(_session.Folder);
-        var parent = Directory.GetParent(currentFolder);
-        if (parent is null) return;
-
-        var siblingFolders = await Task.Run(() => Directory.EnumerateDirectories(parent.FullName)
-            .OrderBy(path => ImageSortService.NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase)
-            .ToList());
-        var currentIndex = siblingFolders.FindIndex(path => string.Equals(Path.GetFullPath(path), currentFolder, StringComparison.OrdinalIgnoreCase));
-        var targetIndex = currentIndex + direction;
-        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblingFolders.Count)
+        var targetFolder = await Task.Run(() => SiblingFolderService.GetTarget(currentFolder, direction));
+        if (targetFolder is null)
         {
             StatusText.Text = direction > 0 ? "Đã ở folder cuối cùng cùng cấp." : "Đã ở folder đầu tiên cùng cấp.";
             return;
         }
 
-        await LoadFolderAsync(siblingFolders[targetIndex]);
+        await LoadFolderAsync(targetFolder);
     }
 
     private void ToggleFullscreen()
