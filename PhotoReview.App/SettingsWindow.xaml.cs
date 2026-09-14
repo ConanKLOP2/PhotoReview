@@ -55,7 +55,7 @@ public partial class SettingsWindow : Window
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.ImageSortMode = "PortraitFirst"; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.ImageSortMode = "PortraitFirst"; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
