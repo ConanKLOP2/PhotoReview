@@ -103,6 +103,7 @@ public sealed class AppSettings
         var bindings = new List<(string Name, string Value)>();
         foreach (var property in typeof(ShortcutMappings).GetProperties())
         {
+            if (property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue; // Legacy alias; Enter is owned by ReviewAction.
             var value = property.GetValue(settings.Shortcuts)?.ToString()?.Trim();
             if (string.IsNullOrWhiteSpace(value) || !Enum.TryParse<System.Windows.Input.Key>(value, true, out _))
                 return $"Shortcut {property.Name} không hợp lệ.";

@@ -4,6 +4,8 @@
 
 Không hứa nhanh hơn Photos trước khi đo. Không suy đoán Photos chỉ dùng preview. So sánh cùng mức nhìn được và full-resolution riêng biệt. Hiển thị thumbnail mờ sớm không được tính là hoàn thành ảnh rõ.
 
+Runtime hiện dùng sort theo Settings và đọc metadata khi folder dưới 100 ảnh; từ 100 ảnh trở lên dùng thứ tự tên kiểu Windows Explorer, không chạy EXIF scan toàn folder trên critical path. Log chẩn đoán nằm tại `%LOCALAPPDATA%\PhotoReview\logs\app.log`.
+
 ## Khảo sát bắt buộc
 
 Ghi OS/build, CPU, RAM, GPU/driver, màn hình/DPI, ổ lưu nguồn và cache, dung lượng trống, phiên bản Photos/FastStone, chế độ hiển thị. Không đọc dữ liệu cá nhân ngoài bộ mẫu được đặt trong phạm vi.
@@ -75,4 +77,3 @@ Mỗi lần chỉ thay ít biến, giữ raw results và cấu hình. Không t�
 PASS: người dùng có thể xem liên tục ở chất lượng phù hợp; mục tiêu đã chốt đạt hoặc có tradeoff được ghi nhận; không lỗi stale ảnh.
 FAIL: tiếp tục profiling, chưa đầu tư nhiều vào tính năng phụ.
 Báo rõ nhanh hơn/ngang/chậm hơn từng ứng dụng trong từng điều kiện; không lấy một kịch bản để tuyên bố thắng toàn bộ.
-

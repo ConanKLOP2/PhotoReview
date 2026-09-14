@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:PhotoReview.App"
         mc:Ignorable="d"
-        Title="Photo Review" Height="800" Width="1200" WindowState="Maximized" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" KeyDown="Window_KeyDown" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closed="Window_Closed">
+        Title="Photo Review" Height="800" Width="1200" WindowState="Maximized" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" PreviewKeyDown="Window_KeyDown" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closed="Window_Closed">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="Background" Value="#252525"/>
@@ -44,7 +44,7 @@
                 </Border>
             </Grid>
         </Border>
-        <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
+        <Border Panel.ZIndex="100" Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="📂" AutomationProperties.Name="Mở thư mục ảnh" ToolTip="Mở folder ảnh" FontSize="16" Padding="8,2" Click="OpenFolder_Click" />
@@ -68,7 +68,7 @@
         <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <TextBlock x:Name="StatusText" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
-                <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown folder   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" />
+                <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown folder   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" Visibility="Collapsed" />
             </StackPanel>
         </Border>
     </Grid>

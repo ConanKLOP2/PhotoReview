@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Photo Review · Settings" Width="760" Height="680"
-        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="680" MinHeight="560" Background="#171717" Foreground="#F5F5F5">
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="680" MinHeight="560" Background="#171717" Foreground="#F5F5F5" Loaded="SettingsWindow_Loaded">
     <Window.Resources>
         <Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,5"/><Setter Property="Foreground" Value="#E5E5E5"/></Style>
         <Style TargetType="TextBox"><Setter Property="Padding" Value="9,7"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="Background" Value="#252525"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#505050"/></Style>
@@ -13,7 +13,7 @@
     <Grid Margin="24">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel><TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA"/></StackPanel>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,18,0,8"><StackPanel>
+        <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8"><StackPanel KeyboardNavigation.TabNavigation="Local">
             <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -29,31 +29,32 @@
             <CheckBox x:Name="CompareSizeCheck" Grid.Row="5" Grid.Column="1" Content="Compare kích thước file" Margin="0,4,0,8" IsChecked="True"/>
             </Grid></GroupBox>
             <GroupBox Header="Phím tắt · nhấn phím trực tiếp vào ô để cấu hình"><Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <TextBlock Text="Ảnh tiếp theo"/><TextBox x:Name="NextText" Grid.Column="1"/>
-            <TextBlock Text="Ảnh trước" Grid.Row="1"/><TextBox x:Name="PreviousText" Grid.Row="1" Grid.Column="1"/>
-            <TextBlock Text="Compare" Grid.Row="2"/><TextBox x:Name="CompareText" Grid.Row="2" Grid.Column="1"/>
-            <TextBlock Text="Folder tiếp theo" Grid.Column="2"/><TextBox x:Name="NextFolderText" Grid.Column="3"/>
-            <TextBlock Text="Folder trước" Grid.Row="1" Grid.Column="2"/><TextBox x:Name="PreviousFolderText" Grid.Row="1" Grid.Column="3"/>
-            <TextBlock Text="Ảnh đầu tiên" Grid.Row="2" Grid.Column="2"/><TextBox x:Name="FirstImageText" Grid.Row="2" Grid.Column="3"/>
-            <TextBlock Text="Zoom in" Grid.Row="3"/><TextBox x:Name="ZoomInText" Grid.Row="3" Grid.Column="1"/>
-            <TextBlock Text="Zoom out" Grid.Row="3" Grid.Column="2"/><TextBox x:Name="ZoomOutText" Grid.Row="3" Grid.Column="3"/>
-            <TextBlock Text="Fit ảnh" Grid.Row="4"/><TextBox x:Name="ToggleFitText" Grid.Row="4" Grid.Column="1"/>
-            <TextBlock Text="Bỏ qua ảnh" Grid.Row="5"/><TextBox x:Name="SkipText" Grid.Row="5" Grid.Column="1"/>
-            <TextBlock Text="Undo (Ctrl + phím)" Grid.Row="6" Grid.Column="2"/><TextBox x:Name="UndoText" Grid.Row="6" Grid.Column="3"/>
-            <TextBlock Text="Fullscreen" Grid.Row="7"/><TextBox x:Name="FullscreenText" Grid.Row="7" Grid.Column="1"/>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Ảnh tiếp theo" Width="210" VerticalAlignment="Center"/><TextBox x:Name="NextText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Ảnh trước" Width="210" VerticalAlignment="Center"/><TextBox x:Name="PreviousText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Compare" Width="210" VerticalAlignment="Center"/><TextBox x:Name="CompareText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Zoom in" Width="210" VerticalAlignment="Center"/><TextBox x:Name="ZoomInText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Fit ảnh" Width="210" VerticalAlignment="Center"/><TextBox x:Name="ToggleFitText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Bỏ qua ảnh" Width="210" VerticalAlignment="Center"/><TextBox x:Name="SkipText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Fullscreen" Width="210" VerticalAlignment="Center"/><TextBox x:Name="FullscreenText" Width="110"/></StackPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Folder tiếp theo" Width="210" VerticalAlignment="Center"/><TextBox x:Name="NextFolderText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Folder trước" Width="210" VerticalAlignment="Center"/><TextBox x:Name="PreviousFolderText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Ảnh đầu tiên" Width="210" VerticalAlignment="Center"/><TextBox x:Name="FirstImageText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Zoom out" Width="210" VerticalAlignment="Center"/><TextBox x:Name="ZoomOutText" Width="110"/></StackPanel>
+                <StackPanel Orientation="Horizontal"><TextBlock Text="Undo (Ctrl + phím)" Width="210" VerticalAlignment="Center"/><TextBox x:Name="UndoText" Width="110"/></StackPanel>
+            </StackPanel>
             </Grid></GroupBox>
             <GroupBox Header="Xử lý file"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <TextBlock Text="Phím chuyển loại 2" Grid.Row="0" Margin="0,7,10,7"/>
-            <TextBox x:Name="MoveText" Grid.Row="0" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
-            <TextBlock Text="Phím đưa vào thùng rác" Grid.Row="1" Margin="0,7,10,7"/>
-            <TextBox x:Name="RecycleText" Grid.Row="1" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
-            <TextBlock Text="Action profiles (JSON)" Grid.Row="2" Margin="0,7,10,7"/>
-            <TextBox x:Name="ActionsText" Grid.Row="2" Grid.Column="1" Height="100" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
-            <Button Content="Mở trình chỉnh sửa action" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Left" Padding="12,7" Click="EditActions_Click"/>
+            <TextBlock Text="Phím đưa vào thùng rác" Grid.Row="0" Margin="0,7,10,7"/>
+            <TextBox x:Name="RecycleText" Grid.Row="0" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
+            <TextBlock Text="Action profiles (JSON)" Grid.Row="1" Margin="0,7,10,7"/>
+            <TextBox x:Name="ActionsText" Grid.Row="1" Grid.Column="1" Height="100" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+            <Button Content="Mở trình chỉnh sửa action" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Padding="12,7" Click="EditActions_Click"/>
             </Grid></GroupBox>
         </StackPanel></ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

@@ -7,7 +7,8 @@ Tài liệu này mô tả code hiện tại để người dùng tự preview, g
 - Mở bằng ảnh sẽ chọn đúng ảnh đó trong folder; mở không tham số thì bấm **Mở folder**.
 - App đọc config tại `%LOCALAPPDATA%\PhotoReview\config.json` và khóa folder để tránh mở trùng phiên.
 - Cửa sổ có title bar Windows, mở maximized; vùng preview kéo đầy phần client.
-- Nút và folder nằm overlay phía trên ảnh; status/hướng dẫn nằm overlay phía dưới.
+- Overlay phía trên ảnh chỉ giữ nút icon mở folder, Settings và nút công cụ phụ `⋮`; công cụ ít dùng nằm trong popup. Status nằm overlay phía dưới; dòng hướng dẫn phím tắt được ẩn để tối đa hóa diện tích ảnh.
+- Folder dưới 100 ảnh được phép sort theo metadata/Settings; folder từ 100 ảnh dùng thứ tự tên kiểu Windows Explorer để tránh EXIF scan toàn bộ trước khi review.
 - `F11` chuyển giữa cửa sổ có khung và fullscreen không viền.
 
 ## 2. Điều khiển
@@ -81,7 +82,7 @@ Chỉ Move được Undo nếu nguồn không tồn tại, đích còn tồn t�
 
 - Session lưu folder, ảnh hiện tại và danh sách bỏ qua.
 - Journal nằm tại `%LOCALAPPDATA%\PhotoReview\Data\operations.jsonl`.
-- Settings hiện có folder 2, shortcut, Fit/100/200/400 và Fast/Preview.
+- Settings hiện có folder 2, shortcut, Fit/100/200/400 và Fast/Preview/Original; chuyển loại 2 được quản lý bởi Action JSON, không còn ô cấu hình trùng.
 - Settings kiểm tra shortcut trùng, có khôi phục mặc định và lưu config qua file tạm.
 - Pending journal có thể được phát hiện; màn hình recovery chi tiết vẫn là hạng mục cần mở rộng.
 
@@ -91,8 +92,8 @@ Chỉ Move được Undo nếu nguồn không tồn tại, đích còn tồn t�
 - [ ] Kiểm tra vùng preview sát hai mép client, không có margin layout thừa.
 - [ ] Resize cửa sổ; Fit cập nhật và ảnh nhỏ không bị phóng đại.
 - [ ] Thử trái/lên/phải/xuống và click chuột trái/phải.
-- [ ] Thử Fast và Preview trong Settings.
-- [ ] Kiểm tra thumbnail xuất hiện trước preview trong Preview mode.
+- [ ] Thử Fast, Preview và Original trong Settings.
+- [ ] Kiểm tra thumbnail xuất hiện trước preview trong Preview mode; mở folder không chờ decode EXIF toàn bộ.
 - [ ] Đổi Fit/100/200/400 và kiểm tra zoom.
 - [ ] Thử Enter, Delete, conflict tên file và Ctrl+Z.
 - [ ] Đóng/mở lại app để kiểm tra resume.

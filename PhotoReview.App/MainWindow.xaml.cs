@@ -7,6 +7,7 @@ using Forms = System.Windows.Forms;
 using Microsoft.VisualBasic.FileIO;
 using System.Security.Cryptography;
 using System.Diagnostics;
+using System.Windows.Interop;
 
 namespace PhotoReview.App;
 
@@ -33,6 +34,7 @@ public partial class MainWindow : Window
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
+    private readonly Dictionary<string, (int Width, int Height)> _originalDimensions = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow(string? initialPath = null)
     {
@@ -40,32 +42,59 @@ public partial class MainWindow : Window
         _journal.ReconcilePendingOperations();
         foreach (var move in _journal.ReadCommittedMoves())
             if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));
-        if (!string.IsNullOrWhiteSpace(initialPath) && File.Exists(initialPath))
-            _ = LoadFolderAsync(Path.GetDirectoryName(initialPath)!, initialPath);
+        if (!string.IsNullOrWhiteSpace(initialPath))
+        {
+            if (File.Exists(initialPath)) _ = LoadFolderAsync(Path.GetDirectoryName(initialPath)!, initialPath);
+            else if (Directory.Exists(initialPath)) _ = LoadFolderAsync(initialPath);
+        }
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
+        AppLog.Info("Open folder button clicked");
         using var dialog = new Forms.FolderBrowserDialog { Description = "Chọn folder ảnh để review" };
-        if (dialog.ShowDialog() == Forms.DialogResult.OK) _ = LoadFolderAsync(dialog.SelectedPath);
+        if (dialog.ShowDialog(new WindowHandle(this)) == Forms.DialogResult.OK) _ = LoadFolderAsync(dialog.SelectedPath);
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
+        AppLog.Info("Settings button clicked");
         var dialog = new SettingsWindow(_settings) { Owner = this };
         if (dialog.ShowDialog() == true) _settings = AppSettings.Load();
     }
 
     private async Task LoadFolderAsync(string folder, string? initialPath = null)
     {
-        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
-        var files = await Task.Run(() => ImageSortService.Sort(Directory.EnumerateFiles(folder).Where(p => supported.Contains(Path.GetExtension(p))), _settings.ImageSortMode));
-        _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear();
-        _session = _sessionStore.Load(folder);
-        FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
-        var resumePath = initialPath ?? _session.CurrentPath;
-        if (_files.Count > 0) await ShowImageAsync(resumePath is null ? 0 : Math.Max(0, _files.IndexOf(Path.GetFullPath(resumePath))));
-        else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ."; }
+        AppLog.Info($"LoadFolder start: {folder}");
+        try
+        {
+            folder = Path.GetFullPath(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
+            var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
+            StatusText.Text = "Đang quét folder ảnh…";
+            var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
+                .Where(p => supported.Contains(Path.GetExtension(p))).ToList());
+            var sortMode = files.Count < 100 ? _settings.ImageSortMode : "Name";
+            files = await Task.Run(() => ImageSortService.Sort(files, sortMode));
+            AppLog.Info($"LoadFolder scan complete: {files.Count} files, sort={sortMode}, metadataSort={files.Count < 100}");
+            _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear(); _originalDimensions.Clear();
+            _session = _sessionStore.Load(folder);
+            FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
+            var resumePath = initialPath ?? _session.CurrentPath;
+            if (_files.Count > 0)
+            {
+                var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
+                await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
+            }
+            else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"LoadFolder failed: {folder}", ex);
+            MainImage.Source = null;
+            FolderText.Text = folder;
+            StatusText.Text = $"Không mở được folder: {ex.Message}";
+        }
     }
 
     private async Task ShowImageAsync(int index)
@@ -119,18 +148,20 @@ public partial class MainWindow : Window
             if (pair is null)
             {
                 ApplyInitialViewMode();
-                StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
+                var original = await GetOriginalDimensionsAsync(path);
+                StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | render {image.PixelWidth}×{image.PixelHeight} · gốc {original.Width}×{original.Height}";
             }
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             presentStopwatch.Stop();
             _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
             _ = PreloadAroundAsync(index, token);
         }
-        catch (Exception ex) { StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
+        catch (Exception ex) { AppLog.Error($"ShowImage failed: {path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
     }
 
     private async Task<BitmapImage> GetPreviewAsync(string path)
     {
+        AppLog.Info($"Preview request: {path}, mode={_settings.LoadingMode}");
         if (_cache.TryGet(path, out var cached)) { _metrics.RecordCacheHit(); return cached; }
         _metrics.RecordCacheMiss();
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
@@ -153,13 +184,13 @@ public partial class MainWindow : Window
                 {
                     try { File.Delete(cachePath); } catch { }
                     sourceRead = true;
-                    bitmap = DecodeSource(path, targetWidth);
+                    bitmap = DecodeWithFallback(path, targetWidth);
                 }
             }
             else
             {
                 sourceRead = true;
-                bitmap = DecodeSource(path, targetWidth);
+                bitmap = DecodeWithFallback(path, targetWidth);
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -182,6 +213,7 @@ public partial class MainWindow : Window
             _cache.Set(path, bitmap);
             stopwatch.Stop();
             if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
+            AppLog.Info($"Preview ready: {path}, size={bitmap.PixelWidth}x{bitmap.PixelHeight}, sourceRead={sourceRead}");
             return bitmap;
         });
     }
@@ -193,6 +225,31 @@ public partial class MainWindow : Window
         bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
         if (targetWidth > 0) bitmap.DecodePixelWidth = targetWidth;
         bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
+    }
+
+    private sealed class WindowHandle(Window window) : Forms.IWin32Window
+    {
+        public IntPtr Handle => new WindowInteropHelper(window).Handle;
+    }
+
+    private async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path)
+    {
+        if (_originalDimensions.TryGetValue(path, out var dimensions)) return dimensions;
+        dimensions = await Task.Run(() =>
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            return (frame.PixelWidth, frame.PixelHeight);
+        });
+        _originalDimensions[path] = dimensions;
+        return dimensions;
+    }
+
+    private static BitmapImage DecodeWithFallback(string path, int targetWidth)
+    {
+        try { return DecodeSource(path, targetWidth); }
+        catch when (targetWidth > 0) { return DecodeSource(path, 0); }
     }
 
     private int GetTargetDecodeWidth()
@@ -251,7 +308,9 @@ public partial class MainWindow : Window
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (Matches(e.Key, _settings.Shortcuts.Fullscreen))
+        var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
+        AppLog.Info($"Key pressed: {pressedKey}, index={_index}");
+        if (Matches(pressedKey, _settings.Shortcuts.Fullscreen))
         {
             e.Handled = true; ToggleFullscreen(); return;
         }
