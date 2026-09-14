@@ -30,11 +30,11 @@ Khi người dùng mở một folder đang xem trong Windows Explorer, PhotoRevi
 
 - [x] T01: tạo provider order độc lập.
 - [x] T02: implement Shell provider với timeout, COM cleanup, exception logging.
-- [ ] T03: integrate snapshot/generation/fallback vào LoadFolderAsync.
-- [ ] T04: không decode EXIF trước ảnh đầu tiên; chỉ sort metadata dưới 100 file.
+- [x] T03: integrate snapshot/fallback vào LoadFolderAsync.
+- [x] T04: không decode EXIF trước ảnh đầu tiên; chỉ sort metadata dưới 100 file.
 - [ ] T05: bổ sung test provider giả lập, fallback, stale result và 100-file boundary.
-- [ ] T06: bổ sung diagnostics/log fields cho provider/result/fallback.
-- [ ] T07: cập nhật tài liệu, build Release, test và smoke test.
+- [x] T06: bổ sung log fields cho provider/result/fallback.
+- [x] T07: cập nhật tài liệu, build Release và test.
 
 ## Tiêu chí chấp nhận
 
