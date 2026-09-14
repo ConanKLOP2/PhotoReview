@@ -43,9 +43,15 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
-- Evidence: `_hashCache` là dictionary theo phiên, không có quota hoặc clear policy.
-- Impact: folder cực lớn có thể giữ metadata không cần thiết; thay đổi file vẫn được kiểm tra stamp nhưng entry cũ không eviction.
-- Task: `AUD-D02`, `AUD-E04` — đã hoàn tất byte bound LRU 16 MB, clear khi đổi folder và fingerprint invalidation; còn quota cấu hình/telemetry là cải tiến sau.
+- Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.
+- Impact: memory growth không còn vô hạn; quota cấu hình và hit/eviction telemetry vẫn là cải tiến sau nếu public quy mô lớn.
+- Task: `AUD-D02`, `AUD-E04` — core eviction/invalidation đã hoàn tất; quota cấu hình/telemetry nâng cao còn mở.
+
+### Ghi chú về các catch có chủ đích
+
+- JSONL journal bỏ qua từng dòng hỏng để không làm mất khả năng đọc các entry hợp lệ còn lại.
+- Image sort coi EXIF không đọc được là square/unknown và tiếp tục mở folder.
+- Disk preview cache hỏng được xóa và fallback về source; lỗi ghi cache không chặn việc review ảnh.
 
 ### P2 — Recovery UI chỉ xem, chưa có thao tác retry có kiểm soát
 
