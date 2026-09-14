@@ -83,7 +83,7 @@ public partial class SettingsWindow : Window
         AppSettings.Save(Settings); DialogResult = true;
     }
 
-    private static void ShortcutText_PreviewKeyDown(object sender, KeyEventArgs e)
+    private static void ShortcutText_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (sender is not System.Windows.Controls.TextBox textBox) return;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
