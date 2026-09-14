@@ -1,5 +1,7 @@
 using PhotoReview.App;
 using System.IO;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 var failures = new List<string>();
 var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
@@ -65,6 +67,12 @@ try
     Check(Path.GetFileName(nameSorted[0]) == "img1.jpg" && Path.GetFileName(nameSorted[1]) == "img2.jpg" && Path.GetFileName(nameSorted[2]) == "img10.jpg", "Natural filename sort orders numeric suffixes", failures);
     var portraitFallbackSorted = ImageSortService.Sort(sortFixture, "PortraitFirst");
     Check(portraitFallbackSorted.SequenceEqual(nameSorted), "Portrait-first keeps natural name order when metadata is unavailable", failures);
+    var landscapePath = Path.Combine(root, "landscape.jpg");
+    var exifPortraitPath = Path.Combine(root, "exif-portrait.jpg");
+    WriteJpegFixture(landscapePath, 40, 20);
+    WriteJpegFixture(exifPortraitPath, 40, 20, 6);
+    var exifSorted = ImageSortService.Sort(new[] { landscapePath, exifPortraitPath }, "PortraitFirst");
+    Check(string.Equals(exifSorted[0], exifPortraitPath, StringComparison.OrdinalIgnoreCase), "Portrait-first honors EXIF orientation 6 fixture", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
@@ -120,6 +128,17 @@ try
 finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 
 static void Check(bool condition, string name, List<string> failures) { if (condition) Console.WriteLine("PASS: " + name); else failures.Add(name); }
+
+static void WriteJpegFixture(string path, int width, int height, ushort? orientation = null)
+{
+    var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+    var metadata = new BitmapMetadata("jpg");
+    if (orientation.HasValue) metadata.SetQuery("/app1/ifd/{ushort=274}", orientation.Value);
+    var encoder = new JpegBitmapEncoder();
+    encoder.Frames.Add(BitmapFrame.Create(bitmap, null, metadata, null));
+    using var stream = File.Create(path);
+    encoder.Save(stream);
+}
 
 static bool operationJournalTextContainsFailed()
 {
