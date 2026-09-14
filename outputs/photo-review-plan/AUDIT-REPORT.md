@@ -40,11 +40,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Impact: folder nhiều ảnh có thể chậm mở lần đầu và tăng I/O; EXIF orientation chưa được kiểm chứng bằng fixture.
 - Task: `AUD-C01`, `AUD-E01` — metadata cache/background scan, đo latency, test portrait/landscape/square/EXIF.
 
-### P2 — Hash cache chưa có giới hạn/eviction riêng
+### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` là dictionary theo phiên, không có quota hoặc clear policy.
 - Impact: folder cực lớn có thể giữ metadata không cần thiết; thay đổi file vẫn được kiểm tra stamp nhưng entry cũ không eviction.
-- Task: `AUD-D02`, `AUD-E04` — byte/count bound, clear khi đổi folder và invalidation watcher.
+- Task: `AUD-D02`, `AUD-E04` — đã hoàn tất byte bound LRU 16 MB, clear khi đổi folder và fingerprint invalidation; còn quota cấu hình/telemetry là cải tiến sau.
 
 ### P2 — Recovery UI chỉ xem, chưa có thao tác retry có kiểm soát
 

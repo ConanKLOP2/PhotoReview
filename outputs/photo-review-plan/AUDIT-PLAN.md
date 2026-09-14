@@ -82,6 +82,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-B04`: Move/Copy action chặn destination rỗng và chính folder nguồn; build/test PASS. Destination relative như `Loai-2` vẫn hợp lệ.
 - 2026-09-14 — `AUD-B04`: thêm `ConfigVersion`, migration v1→v2, backup config hỏng và atomic write `WriteThrough`/`Flush(true)`; build/test PASS.
 - 2026-09-14 — `AUD-D02`: duplicate scan lọc theo file size trước khi SHA-256 và cache hash theo path/length/last-write; build/test PASS.
+- 2026-09-14 — `AUD-D02`/`AUD-E04`: hash metadata cache chuyển sang `BoundedLruCache` 16 MB, clear khi đổi folder; contract test và build PASS; commit `fca8ae5`.
 - 2026-09-14 — `AUD-D03`: thêm `BatchReviewWindow` hiển thị danh sách file, dung lượng và yêu cầu xác nhận riêng trước Recycle Bin; build/test PASS. Commit `16f7523`.
 - 2026-09-14 — `AUD-D04`: batch Recycle ghi journal từng file ở trạng thái Prepared/Committed/Failed và hiển thị báo cáo lỗi; build/test PASS.
 - 2026-09-14 — `AUD-D04`: thêm `ReconcilePendingOperations`; pending Recycle không replay mù, source còn ghi Failed, source mất ghi Committed; build/test PASS.
