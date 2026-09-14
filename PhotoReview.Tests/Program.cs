@@ -42,7 +42,7 @@ try
     var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs"));
     var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
     Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
-    Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal), "LoadingMode has Fast and Preview options", failures);
+    Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal) && appSettings.Contains("Original", StringComparison.Ordinal), "LoadingMode has Fast, Preview, and Original options", failures);
     Check(appSettings.Contains("= \"Preview\"", StringComparison.Ordinal) || appSettings.Contains("= LoadingMode.Preview", StringComparison.Ordinal), "LoadingMode defaults to Preview", failures);
     Check(appSettings.Contains("IsValidLoadingMode", StringComparison.Ordinal) || appSettings.Contains("ValidateLoadingMode", StringComparison.Ordinal) || appSettings.Contains("Invalid LoadingMode", StringComparison.Ordinal), "LoadingMode validation exists", failures);
     Check(mainWindow.Contains("LoadingMode", StringComparison.Ordinal), "MainWindow reads LoadingMode", failures);
@@ -53,6 +53,8 @@ try
     Check(shortcuts.SendToRecycleBin == "Delete" && mainWindow.Contains("ClassifyCurrentAsync(3)"), "Delete maps to Recycle Bin", failures);
     Check(!mainWindow.Contains("Key.D1") && !mainWindow.Contains("Key.NumPad1"), "No number-1 shortcut required", failures);
     Check(mainWindow.Contains("Key.Space"), "Space skip shortcut exists", failures);
+    Check(mainWindow.Contains("Key.PageUp") && mainWindow.Contains("Key.PageDown") && mainWindow.Contains("NavigateSiblingFolderAsync"), "PageUp/PageDown navigate sibling folders", failures);
+    Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
 
     var association = Path.Combine(projectRoot, "outputs", "install-photo-review-association.ps1");
     var associationText = File.ReadAllText(association);

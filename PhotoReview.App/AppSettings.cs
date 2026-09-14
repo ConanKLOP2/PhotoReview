@@ -38,11 +38,17 @@ public sealed class AppSettings
     }
 
     public static string NormalizeLoadingMode(string? value) =>
-        string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase) ? "Preview" : "Fast";
+        value?.ToUpperInvariant() switch
+        {
+            "ORIGINAL" => "Original",
+            "PREVIEW" => "Preview",
+            _ => "Fast"
+        };
 
     public static bool IsValidLoadingMode(string? value) =>
         string.Equals(value, "Fast", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase);
+        string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "Original", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ShortcutMappings
@@ -51,6 +57,13 @@ public sealed class ShortcutMappings
     public string Previous { get; set; } = "Left";
     public string MoveToFolder2 { get; set; } = "Enter";
     public string SendToRecycleBin { get; set; } = "Delete";
+    public string Compare { get; set; } = "C";
+    public string NextFolder { get; set; } = "PageDown";
+    public string PreviousFolder { get; set; } = "PageUp";
+    public string FirstImage { get; set; } = "Home";
+    public string ZoomIn { get; set; } = "Add";
+    public string ZoomOut { get; set; } = "Subtract";
+    public string ToggleFit { get; set; } = "F";
 
     public static ShortcutMappings Default() => new();
 }

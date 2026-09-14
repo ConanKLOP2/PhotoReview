@@ -7,24 +7,37 @@
         mc:Ignorable="d"
         Title="Photo Review" Height="800" Width="1200" WindowState="Maximized" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" KeyDown="Window_KeyDown" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded">
     <Grid Background="#101010" ClipToBounds="True">
-        <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MouseLeftButtonDown="Image_LeftClick" MouseRightButtonDown="Image_RightClick">
+        <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
-                <Image x:Name="MainImage" Stretch="None" RenderTransformOrigin="0.5,0.5" MouseLeftButtonDown="Image_LeftClick" MouseRightButtonDown="Image_RightClick">
+                <Image x:Name="MainImage" Stretch="None" RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform><ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1" /></Image.RenderTransform>
                 </Image>
             </ScrollViewer>
+        </Border>
+        <Border x:Name="ComparePanel" Visibility="Collapsed" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8,65,8,65">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Border x:Name="CompareLeftBorder" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click">
+                    <Image x:Name="CompareLeftImage" Stretch="Uniform"/>
+                </Border>
+                <Border x:Name="CompareRightBorder" Grid.Column="1" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click">
+                    <Image x:Name="CompareRightImage" Stretch="Uniform"/>
+                </Border>
+            </Grid>
         </Border>
         <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel Orientation="Horizontal">
                 <Button Content="Mở folder" Padding="10,4" Click="OpenFolder_Click" />
                 <Button Content="⚙" ToolTip="Settings" Padding="8,4" Margin="5,0,0,0" Click="Settings_Click" />
+                <Button Content="Bỏ bản (1) trùng hash" Padding="8,4" Margin="5,0,0,0" Click="RemoveNumberedDuplicates_Click" />
+                <Button Content="Bỏ original trùng hash" Padding="8,4" Margin="5,0,0,0" Click="RemoveOriginalDuplicates_Click" />
                 <TextBlock x:Name="FolderText" Foreground="#EEEEEE" VerticalAlignment="Center" Margin="9,0,0,0" Text="Chưa mở folder" TextTrimming="CharacterEllipsis" />
             </StackPanel>
         </Border>
         <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <TextBlock x:Name="StatusText" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
-                <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" />
+                <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown folder   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" />
             </StackPanel>
         </Border>
     </Grid>

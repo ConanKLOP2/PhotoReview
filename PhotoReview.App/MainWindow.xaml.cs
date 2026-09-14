@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using System.Text.Json;
 using Forms = System.Windows.Forms;
 using Microsoft.VisualBasic.FileIO;
+using System.Security.Cryptography;
 
 namespace PhotoReview.App;
 
@@ -26,6 +27,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource _preloadCts = new();
     private readonly SemaphoreSlim _preloadSlots = new(2, 2);
     private const long MaxCacheBytes = 1024L * 1024 * 1024;
+    private string? _compareSelectedPath;
 
     public MainWindow(string? initialPath = null)
     {
@@ -79,8 +81,28 @@ public partial class MainWindow : Window
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;
-            ApplyInitialViewMode();
-            StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
+            var pair = FindComparePair(path);
+            ComparePanel.Visibility = pair is null ? Visibility.Collapsed : Visibility.Visible;
+            if (pair is not null)
+            {
+                MainImage.Source = null;
+                CompareLeftImage.Tag = pair.Value.Left;
+                CompareRightImage.Tag = pair.Value.Right;
+                CompareLeftImage.Source = await GetPreviewAsync(pair.Value.Left);
+                CompareRightImage.Source = await GetPreviewAsync(pair.Value.Right);
+                _compareSelectedPath = path;
+                UpdateCompareSelection();
+                var leftHash = await GetHashAsync(pair.Value.Left);
+                var rightHash = await GetHashAsync(pair.Value.Right);
+                var leftInfo = new FileInfo(pair.Value.Left);
+                var rightInfo = new FileInfo(pair.Value.Right);
+                StatusText.Text = $"{index + 1}/{_files.Count} | Compare | {Path.GetFileName(pair.Value.Left)} ({leftInfo.Length:N0} B) ↔ {Path.GetFileName(pair.Value.Right)} ({rightInfo.Length:N0} B) | hash {(leftHash == rightHash ? "TRÙNG" : "KHÁC")} | click để chọn";
+            }
+            if (pair is null)
+            {
+                ApplyInitialViewMode();
+                StatusText.Text = $"{index + 1}/{_files.Count} | Đang ở nguồn (chưa tác động) | {Path.GetFileName(path)} | {image.PixelWidth}×{image.PixelHeight}";
+            }
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             _ = PreloadAroundAsync(index, token);
         }
@@ -91,7 +113,8 @@ public partial class MainWindow : Window
     {
         if (_cache.TryGet(path, out var cached)) return cached;
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
-        var targetWidth = GetTargetDecodeWidth();
+        var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+        var targetWidth = isOriginal ? 0 : GetTargetDecodeWidth();
         return await Task.Run(() =>
         {
             var bitmap = new BitmapImage();
@@ -140,7 +163,8 @@ public partial class MainWindow : Window
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var bitmap = new BitmapImage();
-        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = targetWidth;
+        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        if (targetWidth > 0) bitmap.DecodePixelWidth = targetWidth;
         bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
     }
 
@@ -198,6 +222,18 @@ public partial class MainWindow : Window
             e.Handled = true; ExitFullscreen(); return;
         }
         if (_index < 0) return;
+        if (e.Key is Key.PageUp or Key.PageDown)
+        {
+            e.Handled = true;
+            await NavigateSiblingFolderAsync(e.Key == Key.PageDown ? 1 : -1);
+            return;
+        }
+        if (e.Key == Key.Home)
+        {
+            e.Handled = true;
+            await ShowImageAsync(0);
+            return;
+        }
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
         if (Matches(e.Key, _settings.Shortcuts.MoveToFolder2)) { e.Handled = true; await ClassifyCurrentAsync(2); return; }
         if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
@@ -207,6 +243,72 @@ public partial class MainWindow : Window
         if (e.Key is Key.Subtract or Key.OemMinus) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
         if (Matches(e.Key, _settings.Shortcuts.Next) || e.Key == Key.Down) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
         if (Matches(e.Key, _settings.Shortcuts.Previous) || e.Key == Key.Up) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+    }
+
+    private (string Left, string Right)? FindComparePair(string path)
+    {
+        var stem = Path.GetFileNameWithoutExtension(path);
+        var match = System.Text.RegularExpressions.Regex.Match(stem, "^(.*) \\(\\d+\\)$");
+        var baseStem = match.Success ? match.Groups[1].Value : stem;
+        var original = _files.FirstOrDefault(p => Path.GetFileNameWithoutExtension(p).Equals(baseStem, StringComparison.OrdinalIgnoreCase));
+        var numbered = _files.FirstOrDefault(p => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(p), $"^{System.Text.RegularExpressions.Regex.Escape(baseStem)} \\(\\d+\\)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+        return original is not null && numbered is not null ? (original, numbered) : null;
+    }
+
+    private void UpdateCompareSelection()
+    {
+        CompareLeftBorder.BorderBrush = string.Equals(_compareSelectedPath, CompareLeftImage.Tag as string, StringComparison.OrdinalIgnoreCase) ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.Gray;
+        CompareRightBorder.BorderBrush = string.Equals(_compareSelectedPath, CompareRightImage.Tag as string, StringComparison.OrdinalIgnoreCase) ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.Gray;
+    }
+
+    private void CompareLeft_Click(object sender, MouseButtonEventArgs e) { _compareSelectedPath = CompareLeftImage.Tag as string; UpdateCompareSelection(); e.Handled = true; }
+    private void CompareRight_Click(object sender, MouseButtonEventArgs e) { _compareSelectedPath = CompareRightImage.Tag as string; UpdateCompareSelection(); e.Handled = true; }
+
+    private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await RemoveDuplicatesAsync(true);
+    private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await RemoveDuplicatesAsync(false);
+
+    private async Task RemoveDuplicatesAsync(bool removeNumbered)
+    {
+        var remove = new List<string>();
+        var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in _files)
+        {
+            var hash = await GetHashAsync(path);
+            if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
+            group.Add(path);
+        }
+        foreach (var group in groups.Values.Where(group => group.Count > 1))
+            remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
+        foreach (var path in remove) if (File.Exists(path)) FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        StatusText.Text = $"Đã đưa {remove.Count} file trùng hash vào Recycle Bin.";
+        if (remove.Count > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
+    }
+
+    private static async Task<string> GetHashAsync(string path)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024, true);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream));
+    }
+
+    private async Task NavigateSiblingFolderAsync(int direction)
+    {
+        if (_session is null) return;
+        var currentFolder = Path.GetFullPath(_session.Folder);
+        var parent = Directory.GetParent(currentFolder);
+        if (parent is null) return;
+
+        var siblingFolders = await Task.Run(() => Directory.EnumerateDirectories(parent.FullName)
+            .OrderBy(path => NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase)
+            .ToList());
+        var currentIndex = siblingFolders.FindIndex(path => string.Equals(Path.GetFullPath(path), currentFolder, StringComparison.OrdinalIgnoreCase));
+        var targetIndex = currentIndex + direction;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblingFolders.Count)
+        {
+            StatusText.Text = direction > 0 ? "Đã ở folder cuối cùng cùng cấp." : "Đã ở folder đầu tiên cùng cấp.";
+            return;
+        }
+
+        await LoadFolderAsync(siblingFolders[targetIndex]);
     }
 
     private void ToggleFullscreen()
