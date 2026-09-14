@@ -8,6 +8,7 @@ public sealed class AppSettings
     public string Folder2Name { get; set; } = "Loai-2";
     public string InitialViewMode { get; set; } = "Fit";
     public string LoadingMode { get; set; } = "Preview";
+    public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
 
@@ -19,6 +20,7 @@ public sealed class AppSettings
             {
                 var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(ConfigPath)) ?? new();
                 loaded.Shortcuts ??= ShortcutMappings.Default();
+                loaded.Actions ??= ReviewAction.Defaults();
                 loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
                 return loaded;
             }
@@ -66,4 +68,21 @@ public sealed class ShortcutMappings
     public string ToggleFit { get; set; } = "F";
 
     public static ShortcutMappings Default() => new();
+}
+
+public sealed class ReviewAction
+{
+    public string Name { get; set; } = "Loại 2";
+    public string Shortcut { get; set; } = "Enter";
+    public string Operation { get; set; } = "Move";
+    public string Destination { get; set; } = "Loai-2";
+    public bool Confirm { get; set; }
+
+    public static List<ReviewAction> Defaults() =>
+    [
+        new() { Name = "Loại 2", Shortcut = "Enter", Operation = "Move", Destination = "Loai-2" },
+        new() { Name = "Loại 3", Shortcut = "F3", Operation = "Move", Destination = "Loai-3" },
+        new() { Name = "Loại 4", Shortcut = "F4", Operation = "Move", Destination = "Loai-4" },
+        new() { Name = "Backup", Shortcut = "F5", Operation = "Copy", Destination = "Backup" }
+    ];
 }

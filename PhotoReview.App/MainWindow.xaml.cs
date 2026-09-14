@@ -235,7 +235,10 @@ public partial class MainWindow : Window
             return;
         }
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
-        if (Matches(e.Key, _settings.Shortcuts.MoveToFolder2)) { e.Handled = true; await ClassifyCurrentAsync(2); return; }
+        foreach (var action in _settings.Actions)
+        {
+            if (Matches(e.Key, action.Shortcut)) { e.Handled = true; await ExecuteActionAsync(action); return; }
+        }
         if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
         if (e.Key == Key.Space) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
         if (e.Key == Key.Z) { e.Handled = true; SetZoom(_zoom == 1 ? 2 : 1); return; }
@@ -430,6 +433,30 @@ public partial class MainWindow : Window
             else { MainImage.Source = null; StatusText.Text = "Đã xử lý hết ảnh trong folder."; }
         }
         catch (Exception ex) { StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}"; }
+    }
+
+    private async Task ExecuteActionAsync(ReviewAction action)
+    {
+        if (action.Operation.Equals("Recycle", StringComparison.OrdinalIgnoreCase) || action.Operation.Equals("Delete", StringComparison.OrdinalIgnoreCase))
+        {
+            await ClassifyCurrentAsync(3);
+            return;
+        }
+        if (_index < 0 || _index >= _files.Count) return;
+        var source = _files[_index];
+        try
+        {
+            var destinationFolder = Path.IsPathRooted(action.Destination) ? action.Destination : Path.Combine(Path.GetDirectoryName(source)!, action.Destination);
+            Directory.CreateDirectory(destinationFolder);
+            var destination = Path.Combine(destinationFolder, Path.GetFileName(source));
+            if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
+            if (action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) File.Copy(source, destination);
+            else File.Move(source, destination);
+            if (!action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) { _files.RemoveAt(_index); _cache.Remove(source); }
+            if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
+            else { MainImage.Source = null; StatusText.Text = $"Đã thực hiện: {action.Name}"; }
+        }
+        catch (Exception ex) { StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}"; }
     }
 
     private async Task UndoLastMoveAsync()

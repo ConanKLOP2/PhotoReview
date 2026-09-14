@@ -13,7 +13,7 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel><TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA"/></StackPanel>
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,18,0,8"><StackPanel>
-            <GroupBox Header="Hiển thị & hiệu năng"><Grid>
+            <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <TextBlock Text="Folder chuyển tới (loại 2)" Margin="0,7,10,7"/>
@@ -43,6 +43,8 @@
             <TextBox x:Name="MoveText" Grid.Row="3" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
             <TextBlock Text="Phím đưa vào thùng rác" Grid.Row="4" Margin="0,7,10,7"/>
             <TextBox x:Name="RecycleText" Grid.Row="4" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
+            <TextBlock Text="Action profiles (JSON)" Grid.Row="5" Margin="0,7,10,7"/>
+            <TextBox x:Name="ActionsText" Grid.Row="5" Grid.Column="1" Height="100" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
             </Grid></GroupBox>
         </StackPanel></ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
