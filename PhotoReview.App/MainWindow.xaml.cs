@@ -75,6 +75,7 @@ public partial class MainWindow : Window
         if (index < 0 || index >= _files.Count) return;
         var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
+        _compareSelectedPath = null;
         StatusText.Text = $"Đang tải {index + 1}/{_files.Count}: {Path.GetFileName(path)}";
         try
         {
