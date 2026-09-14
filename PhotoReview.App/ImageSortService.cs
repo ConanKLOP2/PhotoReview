@@ -12,8 +12,10 @@ public static class ImageSortService
 
     public static List<string> Sort(IEnumerable<string> files, string? mode)
     {
-        if (string.Equals(mode, "Size", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(mode, "Size", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "SizeDescending", StringComparison.OrdinalIgnoreCase))
             return files.OrderByDescending(GetFileSize).ThenBy(path => Path.GetFileName(path), ExplorerNameComparer).ToList();
+        if (string.Equals(mode, "SizeAscending", StringComparison.OrdinalIgnoreCase))
+            return files.OrderBy(GetFileSize).ThenBy(path => Path.GetFileName(path), ExplorerNameComparer).ToList();
         var byName = files.OrderBy(path => Path.GetFileName(path), ExplorerNameComparer);
         if (!string.Equals(mode, "PortraitFirst", StringComparison.OrdinalIgnoreCase)) return byName.ToList();
 

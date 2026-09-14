@@ -86,13 +86,16 @@ public sealed class AppSettings
         value?.ToUpperInvariant() switch
         {
             "NAME" => "Name",
-            "SIZE" => "Size",
+            "SIZE" or "SIZEDESCENDING" => "SizeDescending",
+            "SIZEASCENDING" => "SizeAscending",
             _ => "PortraitFirst"
         };
 
     public static bool IsValidImageSortMode(string? value) =>
         string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "Size", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "SizeAscending", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "SizeDescending", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "PortraitFirst", StringComparison.OrdinalIgnoreCase);
 
     public static string? ValidateShortcuts(AppSettings settings)

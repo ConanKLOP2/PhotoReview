@@ -96,6 +96,7 @@ try
     Check(imageSortService.Contains("OrientationCache") && imageSortService.Contains("LastWriteTimeUtc.Ticks"), "EXIF orientation metadata cache is bounded and fingerprinted", failures);
     Check(imageSortService.Contains("StrCmpLogicalW") && imageSortService.Contains("ExplorerComparer"), "Name sort uses Windows Explorer logical ordering", failures);
     Check(appSettings.Contains("Size") && imageSortService.Contains("OrderByDescending(GetFileSize)") && settingsWindow.Contains("Size"), "Size sort is configurable", failures);
+    Check(imageSortService.Contains("SizeAscending") && settingsWindow.Contains("SizeAscending"), "Size sort direction is configurable", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service", failures);
     var compareOriginal = Path.Combine(root, "CocCocSetup.jpg");
     var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
@@ -112,6 +113,8 @@ try
     File.WriteAllBytes(sortFixture[0], [1]); File.WriteAllBytes(sortFixture[1], [1, 2, 3]); File.WriteAllBytes(sortFixture[2], [1, 2]);
     var sizeSorted = ImageSortService.Sort(sortFixture, "Size");
     Check(Path.GetFileName(sizeSorted[0]) == "img2.jpg" && Path.GetFileName(sizeSorted[2]) == "img10.jpg", "Size sort orders files by descending bytes", failures);
+    var sizeAscending = ImageSortService.Sort(sortFixture, "SizeAscending");
+    Check(Path.GetFileName(sizeAscending[0]) == "img10.jpg" && Path.GetFileName(sizeAscending[2]) == "img2.jpg", "Size sort orders files by ascending bytes", failures);
     var landscapePath = Path.Combine(root, "landscape.jpg");
     var exifPortraitPath = Path.Combine(root, "exif-portrait.jpg");
     WriteJpegFixture(landscapePath, 40, 20);
