@@ -54,6 +54,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 | 2026-09-13 | Đơn giản hóa workflow theo yêu cầu: mũi tên để nguyên loại 1, Enter Move loại 2, Delete Recycle Bin; thêm test project và smoke tests PASS | MainWindow.xaml/.cs, PhotoReview.Tests, tools/smoke-test.ps1 |
 | 2026-09-13 | Audit lại trạng thái theo implementation/evidence; hạ các task chưa đủ test từ DONE xuống PARTIAL và ghi rõ gap | TASKS.md; build/test/smoke/release evidence |
 | 2026-09-14 | Loại bỏ fallback phím điều hướng/zoom hardcode; runtime chỉ dùng shortcut trong Settings (Escape vẫn là thoát fullscreen/modal) | `891f403`; build Release PASS; PhotoReview.Tests PASS |
+| 2026-09-14 | Gom validation shortcut toàn cục và action profile; chặn xung đột phím trước khi lưu Settings | `6c1f40e`; build Release PASS; PhotoReview.Tests PASS |
 
 ## Cách cập nhật cuối mỗi phiên làm việc
 

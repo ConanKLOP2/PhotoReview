@@ -46,6 +46,11 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Evidence: navigation, sibling-folder, Home, zoom, Skip, Undo, Fullscreen và action profiles đều kiểm tra `_settings.Shortcuts`; không còn fallback phím điều hướng/zoom hardcode. Contract test và Release build PASS (`891f403`).
 - Remaining: command registry duy nhất và kiểm thử mọi binding ở mức UI vẫn thuộc `AUD-A04`, `AUD-C03`.
 
+### P1 — Conflict shortcut giữa global bindings và action profiles đã được chặn
+
+- Evidence: `AppSettings.ValidateShortcuts` kiểm tra key hợp lệ và duplicate trên toàn bộ `ShortcutMappings` + `ReviewAction`; Settings gọi validator trước khi lưu (`6c1f40e`). Contract test và Release build PASS.
+- Remaining: recorder hiện chỉ hỗ trợ một phím đơn; chord modifier/profile theo context vẫn là phạm vi mở rộng, chưa coi là đã triển khai.
+
 ### P2 — Hash cache đã được giới hạn; cần bổ sung quota/telemetry nếu public quy mô lớn
 
 - Evidence: `_hashCache` hiện là `BoundedLruCache` LRU 16 MB, clear khi đổi folder và kiểm tra lại length/last-write trước khi dùng.
