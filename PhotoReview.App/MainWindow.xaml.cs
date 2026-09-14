@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _preloadSlots = new(2, 2);
     private const long MaxCacheBytes = 16L * 1024 * 1024 * 1024;
     private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
+    private const double PreloadMemoryLoadLimit = 0.80;
     private string? _compareSelectedPath;
     private readonly Dictionary<string, (long Length, DateTime LastWriteUtc, string Hash)> _hashCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -197,10 +198,18 @@ public partial class MainWindow : Window
         foreach (var offset in offsets)
         {
             if (token != _generation || cancellationToken.IsCancellationRequested) return;
+            if (!HasPreloadHeadroom()) return;
             var i = center + offset;
             if (i >= 0 && i < _files.Count) _ = PreloadOneAsync(_files[i], cancellationToken);
         }
         await Task.CompletedTask;
+    }
+
+    private static bool HasPreloadHeadroom()
+    {
+        var memory = GC.GetGCMemoryInfo();
+        return memory.TotalAvailableMemoryBytes <= 0 ||
+            (double)memory.MemoryLoadBytes / memory.TotalAvailableMemoryBytes < PreloadMemoryLoadLimit;
     }
 
     private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)

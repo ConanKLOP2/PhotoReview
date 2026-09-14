@@ -68,7 +68,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 | B | Config version/migration; action validation/editor/recorder/import-export; destination validation; durable atomic save; runtime shortcut wiring | B04 | Migration failure/backup tests | GUI config failure acceptance còn thiếu |
 | C | Name/PortraitFirst, compare cơ bản, EXIF orientation sort | C01 | C02 test pair/GUI | Chưa có fixture EXIF/GUI acceptance |
 | D | Move/Copy/Recycle/hash batch; confirm; size-first/hash cache; dry-run; per-file journal/report; pending reconcile; recovery UI | D04 | Fault injection/reconcile edge cases | Fault injection đầy đủ còn thiếu |
-| E | LRU/preload/preview cache; 16 GB budget/full-folder threshold | E02 | E01/E03 telemetry and pressure tuning | Chưa có benchmark định lượng/pressure guard |
+| E | LRU/preload/preview cache; 16 GB budget/full-folder threshold; 80% preload pressure guard | E02/E03 | E01 telemetry/benchmark | Chưa có benchmark định lượng/decoded telemetry |
 | F | Build/test/smoke/release gate PASS; contract test action/sort/navigation | F01 | F02/F03 GUI acceptance | Cần fixture và test GUI |
 
 ## Nhật ký audit
@@ -93,6 +93,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — Audit finding P1: Settings có shortcut NextFolder/PreviousFolder/FirstImage/Zoom nhưng runtime hardcode key; đã nối config vào Window_KeyDown và thêm contract test; build/test PASS.
 - 2026-09-14 — `AUD-C01`: PortraitFirst sort tính EXIF orientation 5/6/7/8 trước khi phân loại dọc/ngang; build/test PASS. Fixture ảnh EXIF thật vẫn cần bổ sung.
 - 2026-09-14 — `AUD-E02`: cache budget nâng lên 16 GB và folder có tổng source bytes dưới 16 GB được preload toàn bộ, vẫn qua cancellation/LRU; build/test PASS. Cần đo decoded footprint và memory-pressure guard trước release.
+- 2026-09-14 — `AUD-E03`: preload nền dừng khi GC memory load đạt 80% available memory; thêm contract test; build/test PASS.
 
 ## Template cập nhật task
 
