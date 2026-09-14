@@ -1,6 +1,7 @@
 using System.Collections;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Globalization;
 
 namespace PhotoReview.App;
 
@@ -26,13 +27,13 @@ public static class RecycleBinRestoreService
                     var name = (string?)item.Name;
                     if (!string.Equals(deletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
                         && !string.Equals(Path.Combine(deletedFrom ?? string.Empty, name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase)) continue;
-                    var size = Convert.ToInt64(item.Size);
-                    if (size != expectedSize) continue;
+                    var sizeText = Convert.ToString(item.Size, CultureInfo.InvariantCulture);
+                    if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size) || size != expectedSize) continue;
                     var restoredVerb = false;
                     foreach (dynamic verb in (IEnumerable)item.Verbs())
                     {
-                        var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant();
-                        if (!verbName.Contains("restore") && !verbName.Contains("khôi phục") && !verbName.Contains("zurück")) continue;
+                        var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
+                        if (!verbName.Contains("restore") && !verbName.Contains("khôi") && !verbName.Contains("wiederher")) continue;
                         verb.DoIt();
                         restoredVerb = true;
                         Release(verb);
