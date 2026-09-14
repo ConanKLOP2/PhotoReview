@@ -98,6 +98,7 @@ Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên 
 - 2026-09-14 — `AUD-E01`: thêm `ReviewMetrics` đếm cache hit/miss, source bytes và decode milliseconds trong process, không ghi disk/network; build/test PASS.
 - 2026-09-14 — `AUD-E01`: thêm Diagnostics view hiển thị cache hit/miss/rate, source bytes và decode time; BOM MainWindow được giữ; build/test PASS.
 - 2026-09-14 — `AUD-E01`: sửa metrics chỉ cộng source bytes khi thực sự decode file gốc, không tính disk-cache hit; build/test PASS. Commit `d5d830c`.
+- 2026-09-14 — `AUD-E01`: bổ sung present-latency metrics từ lúc bắt đầu `ShowImageAsync` đến khi gắn ảnh vào UI; Diagnostics hiển thị ms/ảnh và số mẫu; build/test PASS. Commit `ce7474f`.
 
 ## Template cập nhật task
 
