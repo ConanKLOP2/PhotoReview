@@ -53,7 +53,8 @@ try
     Check(shortcuts.MoveToFolder2 == "Enter" && mainWindow.Contains("ReviewAction") && mainWindow.Contains("ExecuteActionAsync(action)"), "Enter/action profiles drive configurable operations", failures);
     Check(shortcuts.SendToRecycleBin == "Delete" && mainWindow.Contains("ClassifyCurrentAsync(3)"), "Delete maps to Recycle Bin", failures);
     Check(!mainWindow.Contains("Key.D1") && !mainWindow.Contains("Key.NumPad1"), "No number-1 shortcut required", failures);
-    Check(mainWindow.Contains("Key.Space"), "Space skip shortcut exists", failures);
+    Check(appSettings.Contains("Skip") && mainWindow.Contains("Shortcuts.Skip"), "Space skip shortcut exists", failures);
+    Check(appSettings.Contains("Skip") && appSettings.Contains("Undo") && appSettings.Contains("Fullscreen") && mainWindow.Contains("Shortcuts.Skip") && mainWindow.Contains("Shortcuts.Undo") && mainWindow.Contains("Shortcuts.Fullscreen"), "Skip, undo, and fullscreen shortcuts are configurable", failures);
     Check(mainWindow.Contains("Key.PageUp") && mainWindow.Contains("Key.PageDown") && mainWindow.Contains("NavigateSiblingFolderAsync"), "PageUp/PageDown navigate sibling folders", failures);
     Check(mainWindow.Contains("Key.Home") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
