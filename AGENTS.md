@@ -7,9 +7,10 @@
 3. **Ưu tiên tốc độ review:** Mọi thiết kế và tối ưu phải ưu tiên tốc độ chuyển ảnh, hiển thị ảnh và thao tác review nhanh.
 4. **Ưu tiên chất lượng ảnh:** Khi có thể, bắt buộc load và hiển thị ảnh ở chất lượng tốt nhất có thể, hạn chế giảm chất lượng hoặc dùng ảnh xem trước nếu không cần thiết.
 
-## Quy trình build và publish bắt buộc
+## Quy trình build, publish và push Git bắt buộc
 
 - Sau mỗi thay đổi hoàn thiện và mỗi commit, luôn chạy test/build Release trước khi bàn giao.
+- “Public” trong quy trình này nghĩa là push commit lên remote GitHub `origin` (không chỉ tạo thư mục publish cục bộ).
 - Luôn publish bản kiểm tra vào đúng thư mục mặc định:
 
   `PhotoReview.App/bin/Release/net10.0-windows/publish`
@@ -21,3 +22,8 @@
   `dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish`
 
 - Không coi công việc là hoàn tất nếu chưa publish thành công vào thư mục trên. Quy trình này áp dụng trên mọi máy làm việc với project.
+- Sau khi commit hoàn tất và test/publish thành công, push branch hiện tại lên remote:
+
+  `git push origin master`
+
+- Không coi công việc là hoàn tất nếu chưa kiểm tra push thành công (trừ khi remote từ chối hoặc thiếu quyền, khi đó phải báo rõ lỗi).
