@@ -22,7 +22,7 @@ public sealed class BenchmarkEngine
         var samples = new List<double>();
         ReviewMetricsSnapshot? metrics = null;
         var allCorrect = true;
-        var total = Math.Max(1, profile.Iterations);
+        var total = profile.Iterations;
         for (var i = 0; i < total; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -44,7 +44,7 @@ public sealed class BenchmarkEngine
             }
             sw.Stop();
             samples.Add(sw.Elapsed.TotalMilliseconds);
-            metrics ??= result.Metrics;
+            metrics = result.Metrics ?? metrics;
             allCorrect &= result.Correct;
             AppLog.Info($"Benchmark sample runId={runId} profile={profile.Id} phase={profile.Workload} iteration={i + 1}/{total} elapsedMs={sw.Elapsed.TotalMilliseconds:F1} correct={result.Correct}");
             progress?.Report(new(profile.Id, profile.Workload, i + 1, total, result.Correct ? "OK" : "Correctness failed"));

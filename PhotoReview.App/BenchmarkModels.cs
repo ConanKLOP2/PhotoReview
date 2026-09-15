@@ -48,11 +48,13 @@ public sealed record BenchmarkSample(string ProfileId, BenchmarkWorkload Workloa
 public sealed record BenchmarkPhaseResult(string ProfileId, BenchmarkWorkload Workload,
     IReadOnlyList<double> Samples, BenchmarkResultStatus Status, string? Message = null)
 {
+    private readonly Lazy<double[]> _sorted = new(() => Samples.OrderBy(x => x).ToArray());
+
     public int Count => Samples.Count;
-    public double P50 => BenchmarkStatistics.Percentile(Samples, .50);
-    public double P95 => BenchmarkStatistics.Percentile(Samples, .95);
-    public double P99 => BenchmarkStatistics.Percentile(Samples, .99);
-    public double Max => Samples.Count == 0 ? 0 : Samples.Max();
+    public double P50 => BenchmarkStatistics.Percentile(_sorted.Value, .50);
+    public double P95 => BenchmarkStatistics.Percentile(_sorted.Value, .95);
+    public double P99 => BenchmarkStatistics.Percentile(_sorted.Value, .99);
+    public double Max => Samples.Count == 0 ? 0 : _sorted.Value[^1];
 }
 
 public sealed record BenchmarkReport(string RunId, DateTimeOffset StartedUtc,
@@ -68,7 +70,7 @@ public static class BenchmarkStatistics
     {
         if (values.Count == 0) return 0;
         if (percentile is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(percentile));
-        var ordered = values.OrderBy(x => x).ToArray();
+        var ordered = values as double[] ?? values.OrderBy(x => x).ToArray();
         var position = (ordered.Length - 1) * percentile;
         var lower = (int)Math.Floor(position);
         var upper = (int)Math.Ceiling(position);
