@@ -1,5 +1,14 @@
 # Quy tắc ưu tiên bắt buộc cho ứng dụng PhotoReview
 
+## Quy trình bắt buộc trước khi thay đổi
+
+- Trước mọi thay đổi mã nguồn, cấu hình, giao diện hoặc cấu trúc dữ liệu, phải lập một plan chi tiết để người dùng xác nhận.
+- Plan phải nêu rõ: mục tiêu, nguyên nhân/phạm vi, các file hoặc khu vực dự kiến thay đổi, thứ tự thực hiện, tiêu chí hoàn thành, cách kiểm thử, rủi ro và phương án rollback.
+- Plan phải có danh sách task đánh số. Mỗi task cần ghi trạng thái `TODO`, `IN PROGRESS`, `BLOCKED` hoặc `DONE` trong quá trình thực hiện.
+- Phải đánh dấu task nào có thể chạy độc lập để chia cho multi-agent, nêu rõ đầu ra của từng agent và cách hợp nhất kết quả.
+- Không được bắt đầu chỉnh sửa hoặc commit trước khi người dùng xác nhận plan. Các bước đọc code, đọc log, phân tích hiện trạng và chuẩn bị plan được phép thực hiện trước khi xác nhận.
+- Nếu phát hiện phạm vi thay đổi khác với plan đã xác nhận, phải cập nhật plan và chờ người dùng xác nhận lại trước khi tiếp tục phần thay đổi mới.
+
 Ứng dụng phải ưu tiên các nguyên tắc sau khi xử lý và review ảnh:
 
 1. **Hạn chế đọc từ đĩa:** Luôn luôn đọc dữ liệu từ đĩa ít nhất có thể. Ưu tiên tái sử dụng dữ liệu đã đọc, cache và các cơ chế đọc tuần tự hiệu quả để tránh I/O dư thừa.

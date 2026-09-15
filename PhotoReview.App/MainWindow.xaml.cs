@@ -134,7 +134,8 @@ public partial class MainWindow : Window
                     AppLog.Info($"Explorer progressive progress items={p.ItemsRead}/{p.ItemCount} comCalls={p.ComCalls}");
                 }
             });
-            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);\n            ExplorerOrderService.ExplorerSnapshot? explorerSnapshot = null;
+            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);
+            ExplorerViewSnapshot? explorerSnapshot = null;
             files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
             if (initialPath is not null)
             {
@@ -161,7 +162,17 @@ public partial class MainWindow : Window
             var presentationGeneration = _generation;
             var interactionGeneration = Volatile.Read(ref _catalogInteractionGeneration);
             var resumePath = initialPath ?? _session.CurrentPath;
-            if (initialPath is not null)\n            {\n                // A direct file open must wait for the complete Explorer snapshot\n                // before presenting the first frame. This prevents a provisional\n                // fallback index from flashing before native order is known.\n                explorerSnapshot = await explorerTask;\n                if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;\n            }\n            if (_files.Count > 0)\n            {\n                var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
+            if (initialPath is not null)
+            {
+                // A direct file open must wait for the complete Explorer snapshot
+                // before presenting the first frame. This prevents a provisional
+                // fallback index from flashing before native order is known.
+                explorerSnapshot = await explorerTask;
+                if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
+            }
+            if (_files.Count > 0)
+            {
+                var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
             else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
@@ -1011,3 +1022,5 @@ public partial class MainWindow : Window
     private sealed record UndoAction(string Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc);
 
 }
+
+
