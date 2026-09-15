@@ -123,7 +123,9 @@ public partial class MainWindow : Window
                 .Where(ImageFileTypes.IsSupported).ToList(), loadToken);
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
-            var explorerTask = _explorerOrder.TryGetSnapshotAsync(folder, TimeSpan.FromSeconds(2), loadToken);
+            var explorerProgress = new Progress<ExplorerOrderService.ExplorerQueryProgress>(p =>
+                AppLog.Info($"Explorer progressive progress items={p.ItemsRead}/{p.ItemCount} comCalls={p.ComCalls}"));
+            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);
             files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, initialSort={sortMode}");

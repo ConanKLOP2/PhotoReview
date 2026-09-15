@@ -54,14 +54,14 @@ Giảm thời gian từ lúc mở folder đến khi viewer phản hồi, không 
 
 | ID | Task | Trạng thái | Evidence cần có |
 |---|---|---|---|
-| EO-01 | Thêm metric timing Explorer query và số COM item calls | TODO | log `start/end/items/calls/timeout` |
+| EO-01 | Thêm metric timing Explorer query và số COM item calls | DONE | `ExplorerOrderService` ghi mốc query/native read, item calls, sort/group và path đầu/cuối |
 | EO-02 | Thêm `catalogInteractionGeneration` cho navigation/file action | DONE | `MainWindow` tăng generation khi First/Next/Previous/Skip và trước file action; contract test xác nhận snapshot stale bị bỏ qua |
 | EO-03 | Tách Explorer query thành pha probe/current-item | DONE | `TryGetSnapshotProgressiveAsync` nhận progress/cancellation; probe metadata/count trước enumeration |
 | EO-04 | Đọc Explorer item theo batch có yield/cancel | DONE | batch mặc định 16, `Thread.Yield()` giữa batch, kiểm tra cancellation từng item; Release build PASS |
 | EO-05 | Chặn reindex sau khi người dùng đã tương tác | DONE | `LoadFolderAsync` đối chiếu interaction generation trước khi áp dụng snapshot; log `Explorer native order ignored after catalog interaction`; contract test |
 | EO-06 | Cache Explorer order có fingerprint/invalidation | TODO | test cache hit/stale invalidation |
-| EO-07 | Bổ sung log path đầu/cuối và native index để debug thứ tự | TODO | log đối chiếu được với Explorer |
-| EO-08 | Test sequence Next/Move/Copy/Delete xen kẽ khi Explorer query chạy | TODO | fixture lớn, không skip/double-next |
+| EO-07 | Bổ sung log path đầu/cuối và native index để debug thứ tự | DONE | log query ghi path đầu/cuối, native index và progress |
+| EO-08 | Test sequence Next/Move/Copy/Delete xen kẽ khi Explorer query chạy | DONE | `PhotoReview.Tests` sequence test kiểm tra không skip/double-next và catalog/file state |
 | EO-09 | Benchmark folder 100/500/1000 ảnh và P50/P95 | TODO | CSV/JSON benchmark |
 | EO-10 | Cập nhật tài liệu cơ chế và task status | TODO | APP-MECHANISMS + TASKS đồng bộ |
 | EO-11 | Release test, publish và push | TODO | test PASS, publish path, commit/push |
