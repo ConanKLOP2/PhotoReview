@@ -676,7 +676,7 @@ Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều 
 | BM-13 — UI probe | DONE | Agent real_benchmark_probe | 30/30 warm navigation, median 12ms, P95 21ms, max 21ms |
 | BM-14 — Audit race toàn hệ thống | DONE | Agent audit | Reviewed preload/cache/Explorer/action/logging/cancel; BenchmarkEngine now logs cancellation and phase failures; regression coverage exists |
 | BM-15 — Logging chi tiết | DONE | Agent audit | Benchmark start/sample/complete/cancel/failure records include runId, profile, phase, iteration, elapsed and status |
-| BM-16 — Diagnostics integration | TODO | Agent chính | Hiển thị metrics benchmark và đường dẫn report |
+| BM-16 — Diagnostics integration | DONE | Agent chính | Benchmark window hiển thị profile/progress/P50/P95 và đường dẫn report; DiagnosticsWindow hiện hữu giữ metrics viewer |
 | BM-17 — Resource matrix | DONE | Agent chính | Có profile workers/RAM/ảnh lớn; real preload benchmark đã có trong LocalImageBenchmark |
 | BM-18 — Tài liệu | DONE | Agent audit | Added profile interpretation, debug workflow, result evidence and privacy guidance in `BENCHMARK-PROFILES.md` and `BENCHMARK-RESULTS.md` |
 | BM-19 — Merge/audit | DONE | Agent chính | Engine/image executor/CLI/UI merged; Release build and tests pass |
