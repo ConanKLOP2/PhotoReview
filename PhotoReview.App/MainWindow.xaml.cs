@@ -257,6 +257,8 @@ public partial class MainWindow : Window
         catch (Exception ex) when (token == _generation) { AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
     }
 
+    private void FitImage_Click(object sender, RoutedEventArgs e) => ResetFitView();
+
     private static bool TryGetCurrentFileSize(string path, out long size)
     {
         try
@@ -499,7 +501,7 @@ public partial class MainWindow : Window
         }
         if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
         if (Matches(e.Key, _settings.Shortcuts.Skip)) { e.Handled = true; if (_session is not null) { _session.Skipped.Add(_files[_index]); _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); } await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
-        if (Matches(e.Key, _settings.Shortcuts.ToggleFit)) { e.Handled = true; ApplyInitialViewMode(); return; }
+        if (Matches(e.Key, _settings.Shortcuts.ToggleFit)) { e.Handled = true; ResetFitView(); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomIn)) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomOut)) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
         if (Matches(e.Key, _settings.Shortcuts.Next)) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
@@ -793,6 +795,15 @@ public partial class MainWindow : Window
             StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}";
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
+    }
+
+    private void ResetFitView()
+    {
+        _zoom = 1;
+        ImageScale.ScaleX = 1; ImageScale.ScaleY = 1;
+        MainImage.Stretch = System.Windows.Media.Stretch.Uniform;
+        MainImage.Width = double.NaN; MainImage.Height = double.NaN;
+        UpdateFitSize();
     }
 
     private void StopImageReadsForAction()
