@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -17,9 +18,67 @@ public interface IExplorerOrderProvider
     Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken);
 }
 
-public sealed class ExplorerOrderService : IExplorerOrderProvider
+public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 {
     public sealed record ExplorerQueryProgress(int ItemsRead, int ItemCount, int ComCalls);
+
+    /// <summary>
+    /// A single, long-lived STA thread that serializes all Explorer COM calls onto one OS thread.
+    /// Explorer's IFolderView2/related COM objects are apartment-bound and must be accessed from the
+    /// same STA thread that created/obtained them; this pump avoids the cost of spinning up a brand-new
+    /// STA thread per query while still guaranteeing one-call-at-a-time execution.
+    /// </summary>
+    private sealed class StaThreadPump : IDisposable
+    {
+        private readonly BlockingCollection<Action> _queue = new();
+        private readonly Thread _thread;
+
+        public StaThreadPump()
+        {
+            _thread = new Thread(RunLoop) { IsBackground = true, Name = "PhotoReview Explorer view" };
+            _thread.SetApartmentState(ApartmentState.STA);
+            _thread.Start();
+        }
+
+        private void RunLoop()
+        {
+            foreach (var action in _queue.GetConsumingEnumerable())
+            {
+                action();
+            }
+        }
+
+        public Task<ExplorerViewSnapshot> Enqueue(Func<ExplorerViewSnapshot> work)
+        {
+            var completion = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                _queue.Add(() =>
+                {
+                    try { completion.TrySetResult(work()); }
+                    catch (OperationCanceledException ex) { completion.TrySetException(ex); }
+                    catch (Exception ex) { completion.TrySetException(ex); }
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                // Queue was completed/disposed concurrently with shutdown.
+                completion.TrySetException(new ObjectDisposedException(nameof(StaThreadPump)));
+            }
+            return completion.Task;
+        }
+
+        public void Dispose()
+        {
+            _queue.CompleteAdding();
+            _thread.Join(TimeSpan.FromSeconds(5));
+            _queue.Dispose();
+        }
+    }
+
+    private readonly StaThreadPump _pump = new();
+
+    public void Dispose() => _pump.Dispose();
 
     /// <summary>Progressive variant used by the UI: enumeration yields between small batches and can be cancelled.</summary>
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
@@ -37,20 +96,17 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
         if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
-        var completion = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var worker = new Thread(() =>
+        var workTask = _pump.Enqueue(() =>
         {
-            try { completion.TrySetResult(QueryShell(canonicalFolder, cancellationToken, progress, batchSize)); }
-            catch (OperationCanceledException) { completion.TrySetResult(Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration")); }
-            catch (Exception ex) { AppLog.Error("Explorer native view query failed", ex); completion.TrySetResult(Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name)); }
-        }) { IsBackground = true, Name = "PhotoReview Explorer view" };
-        worker.SetApartmentState(ApartmentState.STA);
-        worker.Start();
+            try { return QueryShell(canonicalFolder, cancellationToken, progress, batchSize); }
+            catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
+            catch (Exception ex) { AppLog.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
+        });
         try
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(timeout);
-            return await completion.Task.WaitAsync(timeoutCts.Token);
+            return await workTask.WaitAsync(timeoutCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -84,6 +140,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
                     catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
                 }
                 catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+                catch (Exception ex) { AppLog.Error($"Explorer window inspection failed after {windowsInspected} window(s)", ex); }
                 finally { Release(window); }
             }
             var unavailable = Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, $"No matching Explorer window among {windowsInspected} window(s)");
