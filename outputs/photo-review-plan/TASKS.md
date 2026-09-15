@@ -654,3 +654,34 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 | P09 — release/review | DONE | Test Release và probe WPF 30 lượt PASS; publish đúng thư mục và push `origin/master` theo quy trình bắt buộc. |
 
 Benchmark decoder được chạy bằng `dotnet run --project PhotoReview.Tests -c Release -- --preload-bench <folder> <workers>`; probe WPF read-only bằng `dotnet run --project PhotoReview.Tests -c Release -- --ui-next-probe <folder>`.
+
+## Đợt benchmark nhiều profile trong ứng dụng — 2026-09-15
+
+Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều profile load/navigation/cache/RAM/action race trên ảnh thật local. `Original` chỉ chạy correctness lane, không xếp hạng tốc độ. Action Move/Delete/Copy luôn dùng temp copy; không retry; điều hướng chỉ một lần và bắt đầu trước filesystem operation.
+
+| Task | Trạng thái | Agent/phạm vi | Tiêu chí hoàn thành |
+|---|---|---|---|
+| BM-01 — Benchmark models | TODO | Agent benchmark_models | Model immutable, validation, serialization |
+| BM-02 — Profile registry | TODO | Agent benchmark_models | Có đủ profile tốc độ, preview, cache, storage, action, logging; ID không trùng |
+| BM-03 — Benchmark engine | TODO | Agent benchmark_engine | Chạy phase tuần tự, progress, cancellation, không khóa UI |
+| BM-04 — Tích hợp decoder/cache | TODO | Agent benchmark_engine | Dùng chung cache key/epoch/preload; không làm đổi settings thật |
+| BM-05 — Action race workload | TODO | Agent chính/agent audit | Move/Delete/Copy trên temp copy, đo navigation trước action, không retry/double navigation |
+| BM-06 — Metrics/ranking | TODO | Agent benchmark_engine | P50/P95/P99, PASS/WARN/FAIL tương đối, loại Original khỏi speed ranking |
+| BM-07 — Benchmark window | TODO | Agent chính | Chọn folder/profile, Run/Cancel, progress, bảng so sánh |
+| BM-08 — Mở log/report | TODO | Agent chính | Nút mở log, result folder, export JSON/CSV |
+| BM-09 — CLI benchmark | TODO | Agent benchmark_tests_cli | Có lệnh list/profile/all/actions/report, exit code đúng |
+| BM-10 — Unit test engine/profile | TODO | Agent benchmark_tests_cli | Test percentile, profile, ranking, cancellation, serialization, isolation |
+| BM-11 — Regression lỗi lịch sử | TODO | Agent benchmark_tests_cli | Bao phủ ERROR-HISTORY và các lỗi index/cache/action/loading |
+| BM-12 — Ảnh thật local | TODO | Agent chính | Chạy read-only trên `C:\Xiuren\[[DONE]`; action dùng temp copy |
+| BM-13 — UI probe | TODO | Agent benchmark_tests_cli | Probe mở/chạy/hủy benchmark, viewer không bị đổi trạng thái |
+| BM-14 — Audit race toàn hệ thống | TODO | Agent audit (sau khi có code) | Rà preload/cache/Explorer/action/logging/cancel và bổ sung test |
+| BM-15 — Logging chi tiết | TODO | Agent chính/agent audit | Run ID, phase, key, epoch, timing, RAM, HRESULT/error stage |
+| BM-16 — Diagnostics integration | TODO | Agent chính | Hiển thị metrics benchmark và đường dẫn report |
+| BM-17 — Resource matrix | TODO | Agent chính | Worker/RAM/ảnh lớn/ folder lớn/SSD-HDD/network theo ngưỡng tương đối |
+| BM-18 — Tài liệu | TODO | Agent chính | `BENCHMARK-PROFILES.md`, `BENCHMARK-RESULTS.md`, hướng dẫn debug |
+| BM-19 — Merge/audit | TODO | Agent chính | Merge không mất sửa lỗi hiện hữu; `git diff --check` sạch |
+| BM-20 — Release validation | TODO | Agent chính | Release test, publish đúng thư mục, commit và push `origin/master` |
+
+Profile bắt buộc: Instant Review, Fast Sequential, Fast Balanced, Fast Aggressive, Preview Light/Balanced/Quality/High Quality, No Preload Baseline, Nearby Only, Full Folder Warm, Large Folder Safe, Huge Image Safe, SSD High Throughput, HDD Conservative, Network Safe, Low Memory, RAM Maximizer, Rapid Key Press, Random Navigation, Action During Decode, Move Race, Delete To Recycle Bin Race, Copy During Decode, Interleaved Actions, Explorer Reindex, Logging On/Off, Recommended Auto và Original Correctness.
+
+Quy tắc phối hợp: agent chỉ sửa phạm vi được giao; agent chính hợp nhất thay đổi và xử lý conflict. Nếu phát sinh phạm vi mới ngoài BM-01..BM-20, cập nhật plan và dừng phần mới để xin xác nhận lại.
