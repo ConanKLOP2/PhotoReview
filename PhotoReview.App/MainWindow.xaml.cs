@@ -706,6 +706,13 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    private void Benchmark_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = _files.Count > 0 ? Path.GetDirectoryName(_files[Math.Clamp(_index, 0, _files.Count - 1)]) : null;
+        var dialog = new BenchmarkWindow(folder) { Owner = this };
+        dialog.Show();
+    }
+
     private void ClearCache_Click(object sender, RoutedEventArgs e)
     {
         var answer = System.Windows.MessageBox.Show(this, "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.", "Xác nhận xóa cache", MessageBoxButton.YesNo, MessageBoxImage.Warning);

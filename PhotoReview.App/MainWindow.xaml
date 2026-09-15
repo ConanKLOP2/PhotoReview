@@ -61,6 +61,7 @@
                         <StackPanel>
                             <Button Content="Recovery" AutomationProperties.Name="Mở phục hồi thao tác" Margin="0,0,0,5" Click="Recovery_Click" />
                             <Button Content="Diagnostics" AutomationProperties.Name="Mở chẩn đoán hiệu năng" Margin="0,0,0,5" Click="Diagnostics_Click" />
+                            <Button Content="Benchmark" AutomationProperties.Name="Chạy benchmark load ảnh" Margin="0,0,0,5" Click="Benchmark_Click" />
                             <Button Content="Xóa cache preview" AutomationProperties.Name="Xóa cache preview" Margin="0,0,0,5" Click="ClearCache_Click" />
                             <Button Content="Bỏ bản (1) trùng hash" AutomationProperties.Name="Xóa hàng loạt bản đánh số trùng hash" Margin="0,0,0,5" Click="RemoveNumberedDuplicates_Click" />
                             <Button Content="Bỏ original trùng hash" AutomationProperties.Name="Xóa hàng loạt original trùng hash" Click="RemoveOriginalDuplicates_Click" />
