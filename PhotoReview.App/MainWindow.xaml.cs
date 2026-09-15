@@ -123,8 +123,17 @@ public partial class MainWindow : Window
                 .Where(ImageFileTypes.IsSupported).ToList(), loadToken);
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
+            var lastExplorerProgressLog = 0;
             var explorerProgress = new Progress<ExplorerOrderService.ExplorerQueryProgress>(p =>
-                AppLog.Info($"Explorer progressive progress items={p.ItemsRead}/{p.ItemCount} comCalls={p.ComCalls}"));
+            {
+                // Do not enqueue one log record per COM item; that turns the
+                // diagnostic path into another source of Explorer latency.
+                if (p.ItemsRead == p.ItemCount || p.ItemsRead - lastExplorerProgressLog >= 16)
+                {
+                    lastExplorerProgressLog = p.ItemsRead;
+                    AppLog.Info($"Explorer progressive progress items={p.ItemsRead}/{p.ItemCount} comCalls={p.ComCalls}");
+                }
+            });
             var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);
             files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
