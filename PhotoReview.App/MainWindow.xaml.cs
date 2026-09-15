@@ -25,20 +25,14 @@ public partial class MainWindow : Window
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
     private UndoAction? _lastUndoAction;
-    private CancellationTokenSource _preloadCts = new();
-    private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
     private long _totalSourceBytes;
-    private readonly SemaphoreSlim _preloadSlots = new(AppConstants.PreloadWorkerCount, AppConstants.PreloadWorkerCount);
-    private Task? _preloadSchedulerTask;
-    private CancellationTokenSource? _preloadSchedulerCts;
-    private int _preloadCenter;
-    private long _preloadPriorityVersion;
     private const long FullFolderRamThresholdBytes = AppConstants.ImageCacheCapacityBytes;
     private const double PreloadMemoryLoadLimit = AppConstants.PreloadMemoryLoadLimit;
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
     private readonly PreviewImageService _previewService;
+    private readonly PreloadScheduler _preloadScheduler;
     private readonly ExplorerOrderService _explorerOrder = new();
     private CancellationTokenSource _folderLoadCts = new();
     private long _folderGeneration;
@@ -54,6 +48,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes);
+        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => _files.ToArray(), () => _totalSourceBytes,
+            FullFolderRamThresholdBytes, PreloadMemoryLoadLimit);
         _journal.ReconcilePendingOperations();
         foreach (var move in _journal.ReadCommittedMoves())
             if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));
@@ -106,7 +102,7 @@ public partial class MainWindow : Window
             UpdateFolderTitle();
             if (!string.Equals(previousMode, _settings.LoadingMode, StringComparison.OrdinalIgnoreCase))
             {
-                _preloadCts.Cancel();
+                _preloadScheduler.Cancel();
                 if (_index >= 0 && _index < _files.Count)
                     _ = PreloadAroundAsync(_index, _generation);
             }
@@ -165,11 +161,11 @@ public partial class MainWindow : Window
             }
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, initialSort={sortMode}");
-            _preloadCts.Cancel();
+            _preloadScheduler.Cancel();
             _totalSourceBytes = long.MaxValue;
             _files.Clear(); _files.AddRange(files); _index = -1;
             _previewService.ClearCache();
-            _preloadedKeys.Clear();
+            _preloadScheduler.ClearPreloadedKeys();
             _hashService.Clear(); _previewService.ClearOriginalDimensions();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
@@ -212,7 +208,7 @@ public partial class MainWindow : Window
                 }
                 var currentPath = _index >= 0 && _index < _files.Count ? _files[_index] : null;
                 var mayReplaceInitialFallback = initialPath is null && _generation == presentationGeneration;
-                _preloadCts.Cancel();
+                _preloadScheduler.Cancel();
                 _files.Clear(); _files.AddRange(explorerOrder);
                 _index = currentPath is null ? -1 : _files.FindIndex(path => string.Equals(path, currentPath, StringComparison.OrdinalIgnoreCase));
                 FolderText.Text = $"{folder}  ({_files.Count} ảnh) · Explorer";
@@ -275,7 +271,7 @@ public partial class MainWindow : Window
         var ramReady = TryGetCachedPreview(currentKey, out var readyBitmap);
         if (ramReady)
         {
-            if (_preloadedKeys.Remove(currentKey)) _metrics.RecordPreloadHit();
+            if (_preloadScheduler.TryConsumePreloadedKey(currentKey)) _metrics.RecordPreloadHit();
         }
         StatusText.Text = ramReady
             ? $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · {Path.GetFileName(path)}"
@@ -409,7 +405,7 @@ public partial class MainWindow : Window
 
     private void EvictCachedPath(string path)
         => _previewService.EvictCachedPath(path, normalized =>
-            _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal)));
+            _preloadScheduler.RemovePreloadedKeysForPath(normalized));
 
     private sealed class WindowHandle(Window window) : Forms.IWin32Window
     {
@@ -427,112 +423,9 @@ public partial class MainWindow : Window
 
     private Task PreloadAroundAsync(int center, long token)
     {
-        // Navigation changes priority, but an already running decode is useful
-        // and must remain available to ShowImageAsync through _previewLoads.
+        // A navigation that has already been superseded must not re-prioritize preload.
         if (token != _generation) return Task.CompletedTask;
-        if (_preloadCts.IsCancellationRequested)
-        {
-            _preloadCts.Dispose();
-            _preloadCts = new CancellationTokenSource();
-        }
-        _preloadCenter = center;
-        _preloadPriorityVersion++;
-        if (_preloadSchedulerTask is { IsCompleted: false } &&
-            ReferenceEquals(_preloadSchedulerCts, _preloadCts)) return _preloadSchedulerTask;
-        _preloadSchedulerCts = _preloadCts;
-        _preloadSchedulerTask = RunPreloadSchedulerAsync(_files.ToArray(), _preloadCts.Token);
-        return _preloadSchedulerTask;
-    }
-
-    private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
-    {
-        const int workers = AppConstants.PreloadWorkerCount; // must match _preloadSlots capacity above
-        var running = new Dictionary<Task, string>();
-        var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenVersion = -1L;
-        IEnumerator<int>? order = null;
-        var examinedSinceYield = 0;
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                if (seenVersion != _preloadPriorityVersion)
-                {
-                    order?.Dispose();
-                    order = PreloadOrderService.Build(_preloadCenter, files.Length,
-                        _totalSourceBytes < FullFolderRamThresholdBytes).GetEnumerator();
-                    seenVersion = _preloadPriorityVersion;
-                }
-                while (running.Count < workers && order!.MoveNext())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (!HasPreloadHeadroom())
-                    {
-                        if (AppLog.Enabled)
-                        {
-                            var memory = PhysicalMemory.GetSnapshot();
-                            AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_previewService.CacheCount} cacheBytes={_previewService.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
-                        }
-                        return;
-                    }
-                    var path = files[order.Current];
-                    if (queued.Contains(path) || TryGetCachedPreview(path, out _)) continue;
-                    queued.Add(path);
-                    running.Add(PreloadOneAsync(path, cancellationToken), path);
-                    // Yield only after actual queue work; give input/rendering a
-                    // chance without limiting every batch to two decodes.
-                    if (++examinedSinceYield >= workers)
-                    {
-                        examinedSinceYield = 0;
-                        if (AppLog.Enabled)
-                        {
-                            var memory = PhysicalMemory.GetSnapshot();
-                            AppLog.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_previewService.CacheCount} cacheBytes={_previewService.CacheBytes} availableBytes={memory?.AvailableBytes}");
-                        }
-                        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
-                    }
-                }
-                if (running.Count == 0) return;
-                var finished = await Task.WhenAny(running.Keys);
-                running.Remove(finished);
-                await finished;
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        // Any other exception (unexpected cancellation source, or a genuine
-        // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
-        // unobserved once the discarded fire-and-forget task
-        // (`_ = PreloadAroundAsync(...)`) is garbage collected.
-        catch (Exception ex) { AppLog.Error("Preload scheduler failed", ex); }
-        finally { order?.Dispose(); }
-    }
-
-    private static bool HasPreloadHeadroom()
-    {
-        return PhysicalMemory.HasHeadroom(PreloadMemoryLoadLimit);
-    }
-
-    private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var queueWait = Stopwatch.StartNew();
-            await _preloadSlots.WaitAsync(cancellationToken);
-            _metrics.RecordQueueWait(queueWait.ElapsedMilliseconds);
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!HasPreloadHeadroom()) return;
-                var key = GetCurrentCacheKey(path);
-                await GetPreviewAsync(path, key);
-                if (_previewService.TryGetCachedPreview(key, out _)) _preloadedKeys.Add(key);
-            }
-            finally { _preloadSlots.Release(); }
-        }
-        catch (OperationCanceledException) { }
-        catch (IOException) { }
-        catch (NotSupportedException) { }
-        catch (Exception ex) { AppLog.Error($"Preload failed: {path}", ex); }
+        return _preloadScheduler.PreloadAroundAsync(center);
     }
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -618,11 +511,11 @@ public partial class MainWindow : Window
     {
         var answer = System.Windows.MessageBox.Show(this, "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.", "Xác nhận xóa cache", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != System.Windows.MessageBoxResult.Yes) return;
-        _preloadCts.Cancel();
+        _preloadScheduler.Cancel();
         _thumbnailCache.ClearDisk();
         _thumbnailCache.ClearMemory();
         _previewService.ClearCache();
-        _preloadedKeys.Clear();
+        _preloadScheduler.ClearPreloadedKeys();
         StatusText.Text = "Đã xóa cache preview.";
     }
 
@@ -790,8 +683,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
-        _preloadCts.Cancel();
-        _preloadCts.Dispose();
+        _preloadScheduler.Dispose();
         _folderLoadCts.Cancel();
         _folderLoadCts.Dispose();
         _thumbnailCache.Dispose();
@@ -909,7 +801,7 @@ public partial class MainWindow : Window
         // Invalidate an Explorer snapshot/load that started before the action.
         Interlocked.Increment(ref _folderGeneration);
         Interlocked.Increment(ref _catalogInteractionGeneration);
-        _preloadCts.Cancel();
+        _preloadScheduler.Cancel();
         AppLog.Info($"FileAction stop-reads generation={_generation} folderGeneration={_folderGeneration} index={_index}");
         // Keep the current frame visible while Move/Delete runs. Clearing the
         // source here creates a black flash before the next image is ready.
