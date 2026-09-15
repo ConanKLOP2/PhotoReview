@@ -1,5 +1,7 @@
 # Kế hoạch lấy thứ tự folder theo Windows Explorer
 
+Đối chiếu runtime 2026-09-15: ngưỡng 100 ảnh và tên service đề xuất bên dưới đã bị thay bởi provider `ExplorerOrderService` gọi cho mọi folder, hiển thị fallback sớm rồi native reorder nếu hợp lệ. Checklist Date/Size/group, timeout stress và malformed native path còn mở.
+
 Cập nhật: 2026-09-14
 
 ## Mục tiêu

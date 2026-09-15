@@ -1,10 +1,12 @@
 # Kế hoạch hiệu năng và benchmark
 
+Đối chiếu runtime 2026-09-15: provider Explorer được gọi cho mọi kích thước folder, không còn ngưỡng 100 ảnh. Log mặc định tắt và chỉ ghi khi Settings bật. `ReviewMetrics` đo counter nội bộ; `benchmark-folder.ps1` chỉ đo storage read. Chưa có key-to-visible P95/so sánh Photos/FastStone, do đó G1 vẫn NOT_TESTED. Mọi ngưỡng dưới đây là mục tiêu cần đo.
+
 ## Nguyên tắc
 
 Không hứa nhanh hơn Photos trước khi đo. Không suy đoán Photos chỉ dùng preview. So sánh cùng mức nhìn được và full-resolution riêng biệt. Hiển thị thumbnail mờ sớm không được tính là hoàn thành ảnh rõ.
 
-Runtime hiện dùng sort theo Settings khi folder dưới 100 ảnh nhưng không đọc EXIF; từ 100 ảnh trở lên dùng thứ tự Windows Explorer hoặc fallback tên, không chạy EXIF scan. Log chẩn đoán nằm tại `%LOCALAPPDATA%\PhotoReview\logs\app.log`.
+Runtime hiện scan folder top-level, sort fallback theo Settings và truy vấn native Explorer snapshot ở mọi kích thước folder; nếu snapshot không hợp lệ sẽ giữ fallback. Log chẩn đoán chỉ ghi khi bật logging trong Settings.
 
 ## Khảo sát bắt buộc
 

@@ -1,5 +1,7 @@
 # An toàn thao tác file và phục hồi
 
+Đối chiếu runtime 2026-09-15: Move/Copy action, Recycle Bin, JSONL journal và Recovery UI đã có; staged cross-volume copy, hash-based verification và crash-boundary state machine dưới đây là yêu cầu chưa triển khai đầy đủ. Reconcile hiện kiểm tra destination Move/Copy theo size, pending Copy còn source có thể bị đánh Failed; không tuyên bố G3 PASS trước fixture/fault matrix.
+
 ## Bất biến
 
 1. Không overwrite file đích.

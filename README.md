@@ -1,5 +1,7 @@
 # PhotoReview
 
+Trạng thái source 2026-09-15: `1.0.1` tại commit `5189298`; chi tiết audit function, gate chưa có evidence và thứ tự tối ưu xem [CURRENT-STATE.md](outputs/photo-review-plan/CURRENT-STATE.md) và [FUNCTION-AUDIT-PLAN.md](outputs/photo-review-plan/FUNCTION-AUDIT-PLAN.md).
+
 PhotoReview là ứng dụng Windows WPF tối ưu cho việc duyệt và phân loại ảnh nhanh theo thứ tự đang hiển thị trong File Explorer.
 
 ## Điều làm PhotoReview khác biệt
@@ -44,7 +46,7 @@ dotnet run --project PhotoReview.Tests -c Release
 Publish artifact chính vào thư mục mặc định của SDK:
 
 ```powershell
-dotnet publish PhotoReview.App\PhotoReview.App.csproj -c Release --self-contained false
+dotnet publish PhotoReview.App\PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish
 ```
 
 Executable nằm tại:
@@ -82,6 +84,8 @@ PhotoReview chỉ dùng snapshot native khi Shell trả đủ item regular-file 
 ## Kiểm thử
 
 Các gate chính:
+
+`verify-all.ps1` hiện mặc định kiểm tra artifact trong `outputs/release/PhotoReview-framework-dependent`. Khi dùng thư mục publish bắt buộc ở trên, truyền `-ReleaseDirectory PhotoReview.App/bin/Release/net10.0-windows/publish`; self-contained verification cần artifact riêng tại `outputs/release/PhotoReview-self-contained`.
 
 ```powershell
 .\tools\verify-all.ps1 -RequireSelfContained

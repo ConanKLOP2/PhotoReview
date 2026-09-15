@@ -1,5 +1,7 @@
 # PhotoReview — Kế hoạch audit và thực thi theo lane
 
+Đối chiếu 2026-09-15: các lane AUD-A..F và bảng tiến độ bên dưới là lịch sử audit 2026-09-14. Plan thực hiện mới theo từng function là [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md); F02/F03, benchmark định lượng và release provenance vẫn mở. Release test/publish/verify sau `5189298` đã PASS, còn GUI/native/fault gate không tự được nâng lên DONE.
+
 Cập nhật: 2026-09-14. Đây là kế hoạch điều phối cho các phiên làm việc tiếp theo. `TASKS.md` vẫn là backlog nền; file này là checklist audit hiện hành.
 
 ## Nguyên tắc điều phối

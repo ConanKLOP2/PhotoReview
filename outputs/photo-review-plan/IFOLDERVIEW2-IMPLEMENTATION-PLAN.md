@@ -1,5 +1,7 @@
 # Kế hoạch triển khai IFolderView2 và version ứng dụng
 
+Đối chiếu 2026-09-15: runtime có `ExplorerOrderService`, native COM vtable interop và snapshot validator; cấu trúc/interface đề xuất bên dưới không khớp một-một với file hiện tại. Native Name DESC có một probe trước đây, Date/Size/group matrix và FVW-011 vẫn mở. Version source giữ `1.0.1`; ví dụ bump `1.1.0` là kế hoạch, chưa áp dụng.
+
 Cập nhật: 2026-09-14
 Phạm vi: PhotoReview trên Windows 10/11, WPF .NET 10, Explorer desktop.
 

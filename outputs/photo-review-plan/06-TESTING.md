@@ -1,5 +1,7 @@
 # Kiểm thử và nghiệm thu
 
+Đối chiếu 2026-09-15: Release contract runner PASS sau `5189298`, nhưng nhiều assertion chỉ kiểm tra chuỗi source. Smoke/fault scripts dùng fixture độc lập, chưa fault-inject executor của app. T02/T03, T12/T16/T21/T24/T26 và GUI/native Explorer matrix chưa có evidence PASS; ghi NOT_TESTED trong báo cáo nghiệm thu.
+
 ## Tầng kiểm thử
 
 Unit: natural sort, ánh xạ nhãn, cache key, eviction budget, state transition, path planning.

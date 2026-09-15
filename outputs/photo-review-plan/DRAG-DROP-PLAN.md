@@ -1,5 +1,7 @@
 # PhotoReview — Kế hoạch kéo-thả ảnh/thư mục
 
+Đối chiếu runtime 2026-09-15: `DragDropInputService.Parse`, `ImageFileTypes` và Window drag handlers đã có. Đây là design/acceptance plan; cam kết giữ session cũ khi load lỗi, mixed Unicode input và overlapping-load cancellation chưa có test hành vi đầy đủ. Trạng thái hiện hành xem [DRAG-DROP-TASKS.md](DRAG-DROP-TASKS.md).
+
 ## 1. Mục tiêu
 
 Cho phép người dùng kéo ảnh hoặc thư mục từ Windows Explorer vào cửa sổ PhotoReview để mở review nhanh, không làm thay đổi dữ liệu nguồn.

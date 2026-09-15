@@ -1,5 +1,7 @@
 # Đặc tả sản phẩm
 
+Đối chiếu runtime 2026-09-15: app hiện scan top-level và hỗ trợ JPG/JPEG/PNG/BMP/GIF/TIF/TIFF; recursive scan, search/filter, RAM-only option và progress/cancel đầy đủ là yêu cầu chưa xác nhận. Recycle Bin có Undo trong menu/handler riêng, nhưng phím Ctrl+Z hiện không chứng minh được Undo Delete ở mọi trạng thái. Phần dưới là đặc tả mục tiêu.
+
 ## Vấn đề
 
 Người dùng thấy FastStone xem ảnh lớn chậm, Windows Photos nhanh hơn trên máy của mình nhưng thiếu workflow phân loại nhanh. Cần phần mềm Windows chuyên review: dùng mũi tên để duyệt và để file loại 1 nguyên tại nguồn, Enter để chuyển loại 2 vào folder config, Delete để đưa loại 3 vào Thùng rác.

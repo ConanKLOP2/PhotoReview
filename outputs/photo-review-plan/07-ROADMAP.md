@@ -1,5 +1,7 @@
 # Roadmap
 
+Đối chiếu runtime 2026-09-15: Compare, action profiles/Settings và hash duplicate batch đã có core trong 1.0.1, nên các mục ấy ở phần “Sau bản đầu” là lịch sử roadmap, không còn là chức năng hoàn toàn chưa bắt đầu. Đồng bộ zoom/pan, near-duplicate, GUI/fault/performance gate và codec bổ sung vẫn mở.
+
 Không ước tính ngày hoàn tất trước khi có bộ mẫu, người thực hiện và kết quả prototype. Các milestone là thứ tự có điều kiện, không phải cam kết lịch.
 
 | Mốc | Nội dung | Gate |

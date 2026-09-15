@@ -2,17 +2,19 @@
 
 | ID | Task | Kết quả/tiêu chí nghiệm thu | Trạng thái |
 |---|---|---|---|
-| DD-01 | Chốt contract input | Quy định rõ folder, ảnh đơn, nhiều ảnh, input không hợp lệ | TODO |
-| DD-02 | Kiểm tra extension/filter hiện có | Có một nguồn sự thật cho extension ảnh; không duplicate logic | TODO |
-| DD-03 | Tạo parser/helper kéo-thả | Input được phân loại thuần, có thể test không cần UI | TODO |
-| DD-04 | Thêm WPF drag events | `AllowDrop`, `DragOver`, `Drop`; không ảnh hưởng zoom/compare | TODO |
-| DD-05 | Nối parser với `LoadFolderAsync` | Folder mở đúng; ảnh mở parent và chọn đúng path | TODO |
-| DD-06 | Xử lý lỗi và cancellation | Access denied/path mất/đang loading không crash, không ghi đè session mới | TODO |
-| DD-07 | Thêm logging và UX feedback | Status/tooltip/log thể hiện input hợp lệ, đang mở và lỗi | TODO |
-| DD-08 | Viết unit/integration tests | Bao phủ parser, filter, multi-input, invalid path và initial image | TODO |
+| DD-01 | Chốt contract input | Quy định rõ folder, ảnh đơn, nhiều ảnh, input không hợp lệ | PARTIAL |
+| DD-02 | Kiểm tra extension/filter hiện có | Có một nguồn sự thật cho extension ảnh; không duplicate logic | DONE |
+| DD-03 | Tạo parser/helper kéo-thả | Input được phân loại thuần, có thể test không cần UI | DONE |
+| DD-04 | Thêm WPF drag events | `AllowDrop`, `DragOver`, `Drop`; không ảnh hưởng zoom/compare | PARTIAL |
+| DD-05 | Nối parser với `LoadFolderAsync` | Folder mở đúng; ảnh mở parent và chọn đúng path | PARTIAL |
+| DD-06 | Xử lý lỗi và cancellation | Access denied/path mất/đang loading không crash, không ghi đè session mới | PARTIAL |
+| DD-07 | Thêm logging và UX feedback | Status/tooltip/log thể hiện input hợp lệ, đang mở và lỗi | PARTIAL |
+| DD-08 | Viết unit/integration tests | Bao phủ parser, filter, multi-input, invalid path và initial image | PARTIAL |
 | DD-09 | Manual test Windows Explorer | Test path Unicode, folder lớn, nhiều ảnh, file không hỗ trợ | TODO |
-| DD-10 | Build và regression verification | `dotnet build`, test hiện có và kiểm tra review/cache/preload đều pass | TODO |
-| DD-11 | Cập nhật README/release notes | Có hướng dẫn kéo-thả và ghi chú phiên bản | TODO |
+| DD-10 | Build và regression verification | `dotnet build`, test hiện có và kiểm tra review/cache/preload đều pass | PARTIAL |
+| DD-11 | Cập nhật README/release notes | Có hướng dẫn kéo-thả và ghi chú phiên bản | PARTIAL |
+
+Đối chiếu 2026-09-15: registry `ImageFileTypes` và parser đã có. Các test mặc định chỉ bao phủ ca parser cơ bản và wiring; manual Explorer, multi-input, Unicode, cancellation/race và release notes chưa đủ evidence. Vì vậy trạng thái là 2 DONE, 8 PARTIAL, 1 TODO; không dùng tổng 11/11 trước đây làm release gate.
 
 ## Chi tiết thực hiện
 

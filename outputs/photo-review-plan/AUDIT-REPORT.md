@@ -1,6 +1,6 @@
 # PhotoReview — Audit report hiện hành
 
-Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `PhotoReview.Tests`, `tools` và release verification.
+Cập nhật nguồn findings: 2026-09-15. Evidence SHA-256 cũ trong các đoạn 2026-09-14 là lịch sử; findings superseded bởi ngày mới nếu mâu thuẫn. Đối chiếu từng function và task xem [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md).
 
 ## Evidence đã chạy
 
@@ -86,6 +86,8 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 - Disk preview cache hỏng được xóa và fallback về source; lỗi ghi cache không chặn việc review ảnh.
 
 ### P2 — Recovery UI chỉ xem, chưa có thao tác retry có kiểm soát
+
+> Finding này đã được xử lý một phần bởi `RecoveryRetryService` và nút Retry Move/Copy; phần chưa có evidence là GUI/fault acceptance. Không đọc tiêu đề lịch sử như mô tả runtime 2026-09-15.
 
 - Evidence: `RecoveryWindow` hiển thị pending/failed và không replay.
 - Impact: user phải tự xử lý ngoài app; chưa có retry theo fingerprint và destination conflict policy.

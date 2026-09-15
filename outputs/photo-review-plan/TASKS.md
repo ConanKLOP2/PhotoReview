@@ -1,6 +1,6 @@
 # Backlog chi tiết và audit trạng thái
 
-Cập nhật audit: 2026-09-13. Bảng dưới đây là nguồn trạng thái hiện tại; các mục chi tiết bên dưới được đối chiếu theo cùng ID.
+Cập nhật nguồn lịch sử: 2026-09-13. Bảng và block chi tiết bên dưới là snapshot PR-xxx cũ, chưa được đồng bộ sau implementation 2026-09-14/15; không dùng chúng làm kết luận gate hiện tại. Trạng thái audit hiện hành và việc cần làm xem [CURRENT-STATE.md](CURRENT-STATE.md) và [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md). Khi làm tiếp PR-xxx, phải sửa đồng thời bảng và block chi tiết bằng evidence.
 
 Quy ước: DONE = có implementation và evidence đủ; PARTIAL = implementation/evidence chưa đủ; TODO = chưa có; DEFERRED = ngoài MVP. Workflow hiện tại là Left/Right để nguyên file nguồn (loại 1), Enter Move folder 2, Delete Recycle Bin (loại 3), Space skip, Ctrl+Z Undo Move. Không còn yêu cầu phím số 1.
 

@@ -1,5 +1,7 @@
 # Kiến trúc kỹ thuật
 
+Đối chiếu runtime 2026-09-15: đây là kiến trúc dự kiến. Code hiện dùng WPF code-behind ở `MainWindow`, `SessionStore` JSON, `OperationJournal` JSONL, RAM LRU và thumbnail cache; không có SQLite, ViewModel riêng, DecodeScheduler/FolderScanner/FileOperationService độc lập hay folder watcher. Các module/bất biến bên dưới là mục tiêu refactor theo [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md).
+
 ## Lựa chọn dự kiến
 
 C# + WPF + .NET còn được hỗ trợ tại thời điểm triển khai. WPF/WIC là decoder đầu tiên để đo, chưa là kết luận hiệu năng. SQLite lưu phiên và journal; cấu hình đơn giản lưu JSON. Bản Windows self-contained x64 trước.

@@ -1,5 +1,7 @@
 # Quyết định, giả định và rủi ro
 
+Đối chiếu 2026-09-15: quyết định vận hành hiện hành là WPF/.NET 10, JSON session/config, JSONL journal và publish framework-dependent vào path `AGENTS.md`; SQLite/RAM-only/delayed apply ở các bảng dưới chỉ là proposal cũ. Nhật ký “implementation chưa bắt đầu” là ghi nhận tại 2026-09-13, không áp dụng cho source `5189298`.
+
 ## Quyết định đề xuất
 
 | ID | Quyết định | Trạng thái / lý do |

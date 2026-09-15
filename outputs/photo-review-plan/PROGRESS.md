@@ -1,7 +1,6 @@
 # Tiến độ Photo Review
 
-Cập nhật: 2026-09-14.
-Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
+Cập nhật trạng thái: 2026-09-15. Các bảng đếm và SHA-256 trong phần nhật ký dưới đây là snapshot 2026-09-14, không phải release hiện hành. [CURRENT-STATE.md](CURRENT-STATE.md) là snapshot source hiện hành; [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md) là backlog audit mới.
 
 ## Cập nhật runtime gần nhất
 
@@ -19,7 +18,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 - Audit hiện tại: 5 DONE, 19 PARTIAL, 13 TODO, 2 DEFERRED trong 39 task bản đầu.
 - Benchmark trên bộ 242 ảnh thật: chưa chạy; đã thêm `tools/benchmark-folder.ps1` để đo baseline đọc storage mà không sửa ảnh.
 - Ứng dụng đã có solution/source và release artifacts; chưa coi toàn bộ plan là hoàn tất.
-- Gate tích hợp gần nhất: PASS; release 1.0.1 đã publish lại từ source hiện tại, EXE SHA256 `C80E9B23F638F4FDFD69CC03B8AEE09DF213981B5BD49683EBCA144EAA7344DB`.
+- Gate 2026-09-14: PASS ở artifact lịch sử, EXE SHA256 `C80E9B23F638F4FDFD69CC03B8AEE09DF213981B5BD49683EBCA144EAA7344DB`. Sau commit `5189298`, Release test/publish bắt buộc/verify-release PASS; GUI/benchmark/fault matrix vẫn NOT_TESTED.
 
 ## Milestone
 
@@ -34,7 +33,7 @@ Nguồn trạng thái chi tiết: [TASKS.md](TASKS.md).
 
 ## Ba bước tiếp theo
 
-1. Chạy `tools/benchmark-folder.ps1` trên bộ 242 ảnh thật và lưu median/P95 theo từng ổ đĩa.
+1. Tạo fixture manifest và đo baseline storage riêng; `tools/benchmark-folder.ps1` chỉ đo sequential read, không cho P95 WPF review.
 2. Chạy GUI acceptance trên bộ ảnh thật và lưu evidence workflow/resume.
 3. Bổ sung benchmark decode WPF và GUI acceptance trên Windows sạch.
 
