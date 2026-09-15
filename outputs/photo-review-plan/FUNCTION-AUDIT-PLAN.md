@@ -1,6 +1,6 @@
 # PhotoReview — Audit từng function và plan tối ưu
 
-Cập nhật 2026-09-15, baseline `5189298`. Bốn lane audit bằng subagent: UI/interaction; cache, hash, sort; journal/native/recovery; tests/tools/docs. Đây là plan thực hiện, chưa phải tuyên bố các fix đã triển khai. Mức P1: có thể sai ảnh/sai file/sai trạng thái hoặc mất an toàn; P2: tác động đáng kể tới tốc độ/độ bền; P3: tối ưu nhỏ. Mỗi task cần fixture và test hành vi tương ứng trước khi đổi DONE.
+Cập nhật 2026-09-15, baseline `c87d14a`. Bốn lane audit bằng subagent: UI/interaction; cache, hash, sort; journal/native/recovery; tests/tools/docs. Đây là plan thực hiện, chưa phải tuyên bố các fix đã triển khai. Mức P1: có thể sai ảnh/sai file/sai trạng thái hoặc mất an toàn; P2: tác động đáng kể tới tốc độ/độ bền; P3: tối ưu nhỏ. Mỗi task cần fixture và test hành vi tương ứng trước khi đổi DONE.
 
 ### Evidence implementation đợt 1 — 2026-09-15
 

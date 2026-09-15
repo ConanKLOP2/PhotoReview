@@ -1,140 +1,89 @@
 # Photo Review — Cơ chế hoạt động và checklist preview
 
-Tài liệu này mô tả code hiện tại để người dùng tự preview, góp ý và chỉnh sửa app.
+Cập nhật 2026-09-15 theo source master tại commit c87d14a. Tài liệu này mô tả cơ chế đang có và phân biệt phần đã có bằng chứng với phần còn cần nghiệm thu trên Windows.
 
-## 1. Khởi động và giao diện
+## 1. Khởi động và luồng mở folder
 
-- Mở bằng ảnh sẽ chọn đúng ảnh đó trong folder; mở không tham số thì bấm **Mở folder**.
-- App đọc config tại `%LOCALAPPDATA%\PhotoReview\config.json` và khóa folder để tránh mở trùng phiên.
-- Cửa sổ có title bar Windows, mở maximized; vùng preview kéo đầy phần client.
-- Overlay phía trên ảnh chỉ giữ nút icon mở folder, Settings và nút công cụ phụ `⋮`; công cụ ít dùng nằm trong popup. Status nằm overlay phía dưới; dòng hướng dẫn phím tắt được ẩn để tối đa hóa diện tích ảnh.
-- Folder dưới 100 ảnh sort theo Settings nhưng không đọc EXIF; folder từ 100 ảnh dùng thứ tự Windows Explorer hoặc fallback tên.
-- `F11` chuyển giữa cửa sổ có khung và fullscreen không viền.
+- App là WPF trên .NET 10, bản project 1.0.1; source chính ở PhotoReview.App.
+- Mở bằng command line, nút chọn folder hoặc kéo-thả. Scan top-level dùng ImageFileTypes làm registry extension chung cho scan, drag-drop và sibling-folder.
+- App đọc config/session tại %LOCALAPPDATA%\PhotoReview, khóa folder và lưu folder, ảnh hiện tại, danh sách bỏ qua.
+- App luôn thử lấy thứ tự native từ Windows Explorer cho mọi folder qua STA worker/IFolderView2. Ảnh được hiển thị trước theo sort cấu hình; snapshot hợp lệ mới thay thế fallback.
+- Snapshot thiếu, timeout, duplicate, path ngoài folder hoặc catalog thay đổi thì giữ thứ tự fallback. Date/Size/grouped Explorer parity vẫn cần kiểm thử thêm.
+- Load folder nhận cancellation/generation token để load cũ không cập nhật UI sau khi chuyển folder.
 
-## 2. Điều khiển
+## 2. Giao diện và điều khiển
 
 | Tác động | Kết quả |
 |---|---|
 | Mũi tên trái/lên | Ảnh trước |
 | Mũi tên phải/xuống | Ảnh kế tiếp |
-| Click chuột trái trong viewer | Ảnh trước |
-| Click chuột phải trong viewer | Ảnh kế tiếp |
-| Space | Bỏ qua, file vẫn ở nguồn |
-| Enter | Move vào folder 2 |
-| Delete | Gửi vào Windows Recycle Bin |
-| Ctrl+Z | Undo Move gần nhất nếu file chưa bị sửa |
-| F11 | Vào/đổi fullscreen |
-| Esc | Thoát fullscreen về cửa sổ có khung |
+| Click preview chính | Không chuyển ảnh; vùng Compare trái/phải dùng để chọn ảnh thao tác |
+| Space | Bỏ qua, lưu ngay vào session; file vẫn ở nguồn |
+| Action shortcut | Thực thi Move/Copy/Recycle theo profile đang cấu hình |
+| Ctrl+Z | Undo Move gần nhất nếu path, size và LastWriteUtc còn khớp |
+| F11 / Esc | Vào fullscreen / thoát về cửa sổ có khung |
 
-File còn ở folder nguồn mặc nhiên là loại 1; app không cần tạo folder hay marker cho loại này.
+Action profile có tên, shortcut, operation và destination; không hợp lệ thì bị từ chối, không tự động đổi thành Move. Chord modifier đầy đủ và command registry độc lập chưa hoàn tất.
 
-## 3. Hai chế độ tải ảnh
+## 3. Preview, adaptive decode và Fit
 
-### Fast
+Fast decode adaptive preview không chờ thumbnail. Preview decode thumbnail tối đa khoảng 800px rồi decode adaptive preview rõ hơn; đây là mode mặc định. Original ưu tiên ảnh gốc theo pipeline hiện tại.
 
-Decode trực tiếp một adaptive preview cho ảnh hiện tại, không chờ thumbnail. Đây là chế độ nhanh nhất.
+Target decode tính theo viewport, DPI và quality multiplier, giới hạn 1200–4000px. Disk preview key có path, length, last-write và target width; RAM preview và các loading task trong MainWindow hiện chủ yếu keyed theo path, nên resize/mode chưa được biểu diễn đầy đủ trong RAM key.
 
-### Preview
+- Fit/100%/200%/400% là chế độ hiển thị/zoom; target decode vẫn tính động theo viewport và DPI.
+- Dải đen khi tỷ lệ ảnh khác vùng xem là bình thường; viewer vẫn kéo đầy client.
 
-Decode thumbnail tối đa 800px để hiện trước, sau đó decode adaptive preview rõ hơn. Đây là chế độ mặc định hiện tại và có thể đổi trong Settings.
+## 4. Cache và preload
 
-Preload ảnh kế tiếp hoạt động ở cả hai chế độ.
+- Preview RAM cache chính có giới hạn 16 GB theo policy hiện tại. ThumbnailCache có RAM quota mặc định 256 MB và disk quota mặc định 1 GB.
+- ThumbnailCache hỗ trợ ghi PNG atomically qua file tạm, flush và rename; instance hiện dùng trong MainWindow tắt persist thumbnail mới. Preview adaptive chỉ đọc disk cache nếu có và giữ bitmap trong RAM.
+- Generation/cancellation guard ngăn waiter bị hủy làm hỏng công việc dùng chung và ngăn clear/dispose nạp kết quả cũ vào cache. Decode WPF đang chạy có thể vẫn hoàn thành background vì cancellation không ngắt được mọi bước decode đồng bộ.
+- Preload ưu tiên ảnh lân cận và có memory-pressure guard khi preload rộng; lợi ích thực tế phải đo bằng benchmark key-to-visible-frame.
+- Hash kiểm tra lại length/last-write sau khi đọc; đây là fingerprint cơ bản, không phải checksum bất biến.
 
-## 4. Adaptive preview và Fit
+## 5. File operation, journal và recovery
 
-Target decode được tính theo vùng xem và DPI:
+- Move/Copy tạo folder đích khi cần, không overwrite, ghi JSONL Prepared, thực thi, kiểm tra destination và ghi Committed hoặc Failed.
+- Delete ghi journal loại Recycle và gửi file vào Windows Recycle Bin. Ctrl+Z chỉ gọi Undo Move; menu context có thể xử lý Move hoặc restore Recycle Bin khi thao tác cuối còn hợp lệ.
+- Recovery UI hiển thị pending/failed và hỗ trợ retry có kiểm soát cho Move/Copy theo fingerprint/no-overwrite policy; không tự động replay pending khi khởi động.
+- Reconcile hiện chủ yếu dựa trên source/destination path và size, có kiểm tra LastWriteUtc ở tuyến Undo; chưa có identity/hash mạnh. Dòng JSONL lỗi hoặc torn record cuối hiện bị bỏ qua im lặng.
 
-```text
-targetWidth = viewportWidth × dpiScale × qualityMultiplier
-```
+## 6. Compare, sort và metadata
 
-Giá trị bị giới hạn trong khoảng 1200–4000px. Cache key bao gồm đường dẫn, kích thước file, thời gian sửa đổi và target width.
+- Compare bật hash/size độc lập; pairing giới hạn trong folder đang chọn và cùng extension.
+- Name sort dùng Windows logical sort khi API khả dụng, fallback natural sort xử lý đúng dãy số dài hơn 12 chữ số.
+- Sort orientation có thể đọc metadata từng file; folder lớn có thể mở chậm. Metadata cache/background scan và benchmark còn mở.
 
-- `Fit`: ảnh lớn thu nhỏ vừa vùng xem, ảnh nhỏ không phóng đại.
-- `100%`, `200%`, `400%`: chọn trong Settings.
-- `+/-`, `Z`, Ctrl+mouse wheel: zoom tạm thời.
+## 7. Persistence và kiến trúc
 
-Dải đen do tỉ lệ ảnh khác tỉ lệ vùng xem là bình thường; khung preview vẫn phải kéo đầy cửa sổ.
+- Session/config là JSON; operation journal là JSONL tại %LOCALAPPDATA%\PhotoReview\Data\operations.jsonl và được đọc incremental bằng StreamReader.
+- MainWindow.xaml.cs vẫn chứa scan, navigation, preview orchestration, compare, batch và một phần mutation. Tách service là backlog audit.
+- Không có SQLite, folder watcher, installer hoặc cloud/API bắt buộc trong workflow hiện tại.
 
-## 5. Cache và preload
+## 8. Checklist preview trên Windows
 
-- RAM cache dùng bounded LRU, giới hạn mặc định khoảng 1GB cho preview.
-- Thumbnail cache có LRU riêng, thumbnail tối đa 800px.
-- Disk cache ghi qua file tạm, flush rồi rename atomic; cache hỏng được decode lại.
-- Preload ưu tiên ảnh `+1…+8`, sau đó `-1/-2`, tối đa 2 decode đồng thời.
-- Khi đổi ảnh nhanh, hàng preload cũ được hủy.
+- [ ] Mở PhotoReview.App/bin/Release/net10.0-windows/publish/PhotoReview.App.exe; kiểm tra cửa sổ, resize, Fit và ảnh nhỏ.
+- [ ] Thử navigation, click vùng Compare trái/phải, Space, action Enter/F3/F4/F5, Delete, Ctrl+Z, Fast/Preview/Original, zoom, F11/Esc và DPI.
+- [ ] Thử Move, Copy, Recycle, conflict tên, Recovery pending/failed/retry và resume sau khi mở lại.
+- [ ] Thử JPG/PNG lớn, Unicode, ảnh hỏng, tên dài, folder rỗng và Explorer ordering dưới/trên 100 ảnh.
+- [ ] Kiểm tra Explorer timeout, snapshot thiếu/duplicate/out-of-folder, rapid navigation và đổi folder liên tục.
 
-## 6. File operation
+Contract test/build xanh không thay thế GUI automation, Explorer matrix hoặc fault-injection.
 
-### Enter — Move loại 2
+## 9. Giới hạn và việc cần đo
 
-App tạo folder đích, không overwrite, ghi journal `Prepared`, Move file, kiểm tra kích thước và ghi `Committed`. File được loại khỏi danh sách hiện tại.
+1. Chưa có benchmark chuẩn cho key-to-visible-frame, P50/P95, source reads, decoded RAM/GC và preload contention.
+2. Contract tests thiên về source/behavior contract; chưa thay thế GUI automation.
+3. Recovery crash boundary, torn journal, cùng-size destination và filesystem fault-injection chưa được chứng minh đầy đủ.
+4. Native Explorer Date/Size/grouped parity, COM timeout worker, DPI/focus/accessibility và MainWindow decomposition còn mở.
 
-### Delete — loại 3
-
-App ghi journal `Prepared`, gửi file vào Recycle Bin, rồi ghi `Committed`. Không có Undo tự động cho Recycle Bin.
-
-### Ctrl+Z
-
-Chỉ Move được Undo nếu nguồn không tồn tại, đích còn tồn tại và fingerprint cơ bản trong journal vẫn khớp. Nếu file đích đã bị sửa, app không tự động Undo.
-
-## 7. Persistence, journal và Settings
-
-- Session lưu folder, ảnh hiện tại và danh sách bỏ qua.
-- Journal nằm tại `%LOCALAPPDATA%\PhotoReview\Data\operations.jsonl`.
-- Settings hiện có folder 2, shortcut, Fit/100/200/400 và Fast/Preview/Original; chuyển loại 2 được quản lý bởi Action JSON, không còn ô cấu hình trùng.
-- Settings kiểm tra shortcut trùng, có khôi phục mặc định và lưu config qua file tạm.
-- Pending journal có thể được phát hiện; màn hình recovery chi tiết vẫn là hạng mục cần mở rộng.
-
-## 8. Checklist preview toàn app
-
-- [ ] Mở EXE self-contained và kiểm tra cửa sổ có khung.
-- [ ] Kiểm tra vùng preview sát hai mép client, không có margin layout thừa.
-- [ ] Resize cửa sổ; Fit cập nhật và ảnh nhỏ không bị phóng đại.
-- [ ] Thử trái/lên/phải/xuống và click chuột trái/phải.
-- [ ] Thử Fast, Preview và Original trong Settings.
-- [ ] Kiểm tra thumbnail xuất hiện trước preview trong Preview mode; mở folder không chờ decode EXIF toàn bộ.
-- [ ] Đổi Fit/100/200/400 và kiểm tra zoom.
-- [ ] Thử Enter, Delete, conflict tên file và Ctrl+Z.
-- [ ] Đóng/mở lại app để kiểm tra resume.
-- [ ] Thử folder có ảnh JPG/PNG lớn, Unicode, ảnh hỏng và tên dài.
-- [ ] Thử DPI 100/150/200% hoặc màn hình khác.
-
-## 9. Đề xuất tối ưu tốc độ
-
-Ưu tiên cao:
-
-1. Dùng `Fast` nếu mục tiêu là chuyển ảnh liên tục.
-2. Giữ preload 1–2 ảnh nếu ổ đĩa chậm; tăng lên 8 chỉ khi benchmark chứng minh có lợi.
-3. Dùng JPEG cache cho JPG, PNG chỉ cho ảnh có alpha.
-4. Không ghi disk cache đồng bộ trên đường hiển thị ảnh.
-5. Chỉ decode lại khi kích thước viewport thay đổi đáng kể, ví dụ trên 15%.
-6. Thêm quota/LRU cho disk cache.
-
-## 10. Đề xuất tối ưu chi phí
-
-- Giữ toàn bộ xử lý local; không cần server, cloud, API hay AI cho workflow cơ bản.
-- Không upload ảnh và không dùng telemetry mặc định.
-- Dùng .NET/WPF/WIC có sẵn trước khi thêm thư viện ngoài.
-- Benchmark trước khi mua thư viện decoder hoặc phần cứng.
-- Giới hạn disk cache để không lãng phí dung lượng.
-
-## 11. Giới hạn hiện tại
-
-- Chưa có benchmark chính thức trên bộ 242 ảnh.
-- Test contract chưa thay thế hoàn toàn UI automation trên máy thật.
-- Recovery pending chưa có màn hình xử lý chi tiết.
-- Shortcut modifier Ctrl/Alt/Shift và thumbnail strip là phần mở rộng.
-
-## 12. Lệnh verification
+## 10. Lệnh verification bắt buộc
 
 ```powershell
-$env:DOTNET_CLI_HOME = (Join-Path (Get-Location) 'work\dotnet-home')
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\verify-all.ps1 -Configuration Release -RequireSelfContained
+dotnet run --project PhotoReview.Tests -c Release
+dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\verify-release.ps1 -ReleaseDirectory 'PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
-Bản chạy trực tiếp:
-
-```text
-outputs\release\PhotoReview-self-contained\PhotoReview.App.exe
-```
+verify-all.ps1 là tiện ích lịch sử có default artifact khác; không dùng thay cho publish đúng path theo AGENTS.md.

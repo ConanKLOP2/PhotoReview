@@ -1,6 +1,6 @@
 # Photo Review — Bộ kế hoạch và theo dõi tiến độ
 
-Trạng thái hiện hành tại `5189298`: app WPF 1.0.1 đã có viewer, action profiles, Compare, cache, native Explorer query, drag-drop và Recovery UI. [CURRENT-STATE.md](CURRENT-STATE.md) là snapshot runtime; [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md) là plan tối ưu từng function. Các file dưới đây giữ cả yêu cầu dự kiến và nhật ký cũ.
+Trạng thái hiện hành tại `c87d14a`: app WPF 1.0.1 đã có viewer, action profiles, Compare, cache, native Explorer query, drag-drop và Recovery UI; đợt audit function đầu tiên đã triển khai một phần. [CURRENT-STATE.md](CURRENT-STATE.md) là snapshot runtime; [FUNCTION-AUDIT-PLAN.md](FUNCTION-AUDIT-PLAN.md) là plan tối ưu từng function; [APP-MECHANISMS-VI.md](../APP-MECHANISMS-VI.md) là mô tả cơ chế và checklist preview.
 
 Ngày lập: 2026-09-13. Ngôn ngữ tài liệu: tiếng Việt.
 Snapshot ban đầu 2026-09-13 là prototype M1. Hiện source đã có thêm Compare/action/cache/native Explorer; phạm vi audit này cập nhật tài liệu và plan, không thao tác ảnh người dùng.
@@ -35,6 +35,7 @@ Snapshot ban đầu 2026-09-13 là prototype M1. Hiện source đã có thêm Co
 | AUDIT-REPORT.md | Findings theo severity, evidence và điều kiện không được bỏ qua |
 | SHELL-VIEW-ORDER-PLAN.md | Thiết kế Shell Explorer order lịch sử |
 | DRAG-DROP-PLAN.md / DRAG-DROP-TASKS.md / DRAG-DROP-PROGRESS.md | Thiết kế và trạng thái kéo-thả |
+| ../APP-MECHANISMS-VI.md | Cơ chế runtime hiện hành và checklist preview Windows |
 
 ## Quy tắc theo dõi
 

@@ -1,6 +1,6 @@
 # PhotoReview
 
-Trạng thái source 2026-09-15: `1.0.1` tại commit `5189298`; chi tiết audit function, gate chưa có evidence và thứ tự tối ưu xem [CURRENT-STATE.md](outputs/photo-review-plan/CURRENT-STATE.md) và [FUNCTION-AUDIT-PLAN.md](outputs/photo-review-plan/FUNCTION-AUDIT-PLAN.md).
+Trạng thái source 2026-09-15: `1.0.1` tại commit `c87d14a`; chi tiết audit function, gate chưa có evidence và cơ chế preview xem [CURRENT-STATE.md](outputs/photo-review-plan/CURRENT-STATE.md), [FUNCTION-AUDIT-PLAN.md](outputs/photo-review-plan/FUNCTION-AUDIT-PLAN.md) và [APP-MECHANISMS-VI.md](outputs/APP-MECHANISMS-VI.md).
 
 PhotoReview là ứng dụng Windows WPF tối ưu cho việc duyệt và phân loại ảnh nhanh theo thứ tự đang hiển thị trong File Explorer.
 

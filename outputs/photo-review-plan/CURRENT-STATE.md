@@ -1,6 +1,6 @@
 # PhotoReview — Trạng thái hiện hành
 
-Cập nhật 2026-09-15. Source baseline: `master` tại commit `5189298`. Tài liệu này phân biệt chức năng đã có trong code, bằng chứng kiểm thử, và các gate còn thiếu. Các plan lập từ 2026-09-13/14 vẫn hữu ích như thiết kế hoặc lịch sử, nhưng không thay thế source hiện hành.
+Cập nhật 2026-09-15. Source baseline: `master` tại commit `c87d14a`. Tài liệu này phân biệt chức năng đã có trong code, bằng chứng kiểm thử, và các gate còn thiếu. Các plan lập từ 2026-09-13/14 vẫn hữu ích như thiết kế hoặc lịch sử, nhưng không thay thế source hiện hành.
 
 ## Runtime và phạm vi
 
@@ -14,7 +14,7 @@ Cập nhật 2026-09-15. Source baseline: `master` tại commit `5189298`. Tài 
 
 ## Bằng chứng xác nhận
 
-- Commit `5189298` đã được push lên `origin/master`; local/remote cùng revision.
+- Commit `c87d14a` đã được push lên `origin/master`; local/remote cùng revision tại thời điểm snapshot.
 - Sau commit: `dotnet run --project PhotoReview.Tests -c Release` PASS; `dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish` PASS; release-file verifier PASS, FileVersion `1.0.1.0`.
 - Contract tests gồm nhiều assertion theo chuỗi source; PASS không đồng nghĩa GUI, latency hoặc crash recovery đã đạt.
 - Native Name DESC đã có probe trên một folder thực trước đây. Date/Size/grouped view và Unicode/large-folder matrix chưa được xác nhận đầy đủ.
