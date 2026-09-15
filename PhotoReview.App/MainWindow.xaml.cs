@@ -134,7 +134,7 @@ public partial class MainWindow : Window
                     AppLog.Info($"Explorer progressive progress items={p.ItemsRead}/{p.ItemCount} comCalls={p.ComCalls}");
                 }
             });
-            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);
+            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);\n            ExplorerOrderService.ExplorerSnapshot? explorerSnapshot = null;
             files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
             if (initialPath is not null)
             {
@@ -161,14 +161,12 @@ public partial class MainWindow : Window
             var presentationGeneration = _generation;
             var interactionGeneration = Volatile.Read(ref _catalogInteractionGeneration);
             var resumePath = initialPath ?? _session.CurrentPath;
-            if (_files.Count > 0)
-            {
-                var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
+            if (initialPath is not null)\n            {\n                // A direct file open must wait for the complete Explorer snapshot\n                // before presenting the first frame. This prevents a provisional\n                // fallback index from flashing before native order is known.\n                explorerSnapshot = await explorerTask;\n                if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;\n            }\n            if (_files.Count > 0)\n            {\n                var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
             else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
             var totalBytesTask = Task.Run(() => scannedFiles.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }), loadToken);
-            var explorerSnapshot = await explorerTask;
+            explorerSnapshot ??= await explorerTask;
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             if (interactionGeneration != Volatile.Read(ref _catalogInteractionGeneration))
             {
@@ -177,14 +175,6 @@ public partial class MainWindow : Window
                 return;
             }
             _lastExplorerSnapshot = explorerSnapshot;
-            if (initialPath is not null)
-            {
-                // Keep an explicit file launch stable; late Explorer reindex would
-                // render the same image again and change its counter.
-                AppLog.Info("Explorer native order skipped for explicit file open; catalog remains stable");
-                _totalSourceBytes = await totalBytesTask;
-                return;
-            }
             if (ExplorerSnapshotValidator.TryValidate(explorerSnapshot, scannedFiles, out var explorerOrder, out var fallbackReason))
             {
                 var currentSet = new HashSet<string>(_files, StringComparer.OrdinalIgnoreCase);
@@ -201,8 +191,13 @@ public partial class MainWindow : Window
                 _index = currentPath is null ? -1 : _files.FindIndex(path => string.Equals(path, currentPath, StringComparison.OrdinalIgnoreCase));
                 FolderText.Text = $"{folder}  ({_files.Count} ảnh) · Explorer";
                 if (mayReplaceInitialFallback && _files.Count > 0) await ShowImageAsync(0);
-                else if (_index >= 0) await ShowImageAsync(_index);
-                AppLog.Info($"Explorer native order applied: {explorerOrder.Count} files");
+                else if (_index >= 0)
+                {
+                    // Reindex the catalog without decoding/presenting the same path
+                    // a second time. The counter is updated immediately.
+                    StatusText.Text = $"{_index + 1}/{_files.Count}";
+                }
+                AppLog.Info($"Explorer native order applied: {explorerOrder.Count} files, currentIndex={_index}, currentPath={currentPath}");
             }
             else AppLog.Info($"Explorer view fallback: status={explorerSnapshot.Status}, reason={fallbackReason}");
             _totalSourceBytes = await totalBytesTask;
