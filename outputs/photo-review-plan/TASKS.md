@@ -4,6 +4,12 @@ Cập nhật nguồn lịch sử: 2026-09-13. Bảng và block chi tiết bên d
 
 Quy ước: DONE = có implementation và evidence đủ; PARTIAL = implementation/evidence chưa đủ; TODO = chưa có; DEFERRED = ngoài MVP. Workflow hiện tại là Left/Right để nguyên file nguồn (loại 1), Enter Move folder 2, Delete Recycle Bin (loại 3), Space skip, Ctrl+Z Undo Move. Không còn yêu cầu phím số 1.
 
+## Đồng bộ trạng thái theo source master — 2026-09-15
+
+Bảng PR-xxx bên dưới là snapshot lịch sử và đã lệch sau các đợt implementation. Theo source hiện tại, các task đã có implementation và contract test tương ứng là **PR-005–010, PR-013–017, PR-019, PR-021–023, PR-025–026, PR-029, PR-031–032** (DONE về implementation). Các gate GUI, benchmark, fault-injection và native matrix vẫn là điều kiện nghiệm thu riêng, chưa tự động đạt.
+
+Các task còn mở: **PR-001–004, PR-011–012, PR-018, PR-020, PR-028, PR-030, PR-033–035, PR-037–039**. **PR-024, PR-027** và backlog `FUT-*` vẫn DEFERRED ngoài phạm vi MVP. Evidence ưu tiên: `CURRENT-STATE.md`, `FUNCTION-AUDIT-PLAN.md`, test Release và publish Release trên `origin/master`.
+
 ## Bảng task bản đầu
 
 | ID | Mốc | Task | Trạng thái | Phụ thuộc |
