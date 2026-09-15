@@ -34,6 +34,24 @@ Input folder/file
 
 Điểm thiết kế quan trọng: Explorer query và scan/sort không nằm hoàn toàn trên đường critical path của ảnh đầu tiên. App cố gắng hiển thị theo fallback trước, rồi mới thay bằng native Explorer order. Vì vậy khi tối ưu, phải đo riêng first-visible và final-order; không nên làm Explorer query đồng bộ trước ảnh đầu tiên.
 
+### 2.1 So sánh chi tiết ba mode tải ảnh
+
+Settings → **Chế độ tải ảnh** có **Fast**, **Preview** (mặc định) và **Original**. Ba lựa chọn dùng chung `GetPreviewAsync`, RAM cache và preload; khác nhau ở bước thumbnail và kích thước decode khi ảnh chưa được cache.
+
+| Mode | Trình tự hiển thị khi RAM cache chưa có ảnh | Pixel được decode | Ưu tiên và chi phí |
+|---|---|---|---|
+| **Fast** | Decode bản adaptive rồi hiện ảnh, không chờ thumbnail. | `viewportWidth × DPI × 1.15`, giới hạn 1200–4000px. | Bỏ một bước đọc/decode thumbnail; thích hợp khi chuyển ảnh liên tục. |
+| **Preview** | Decode/đọc thumbnail tối đa 800px và hiện trước, sau đó thay bằng bản adaptive. Nếu bản adaptive đang có task tải dở, app bỏ bước thumbnail và chờ task đó. | Bản rõ cùng target với Fast. | Thấy ảnh sớm hơn trong nhiều trường hợp, đổi lại có thể đọc/decode cùng nguồn hai lần trên RAM miss. |
+| **Original** | Decode và hiện ảnh nguyên độ phân giải, không qua thumbnail. | `targetWidth=0`, nên WPF không đặt `DecodePixelWidth`. | Giữ nhiều pixel gốc nhất để xem chi tiết; ảnh lớn thường tốn RAM và thời gian decode hơn. |
+
+Khi RAM cache đã có ảnh theo path, cả ba mode lấy bitmap đó ngay; Preview không hiện thumbnail. Đổi mode trong Settings hiện không xóa RAM cache, nên ảnh đã cache có thể tiếp tục dùng bitmap của mode trước. Original vì vậy không đảm bảo hiện pixel gốc đối với ảnh đã cache từ Fast/Preview cho đến khi cache được làm mới. Preload dùng cùng mode đang chọn, không tạo thumbnail trước.
+
+### 2.2 Mode hiển thị và mode sắp xếp là lựa chọn riêng
+
+Settings → **Chế độ mở ảnh** mặc định **Fit**: co ảnh lớn vừa viewport, không phóng đại ảnh nhỏ và cập nhật giới hạn khi resize. **100%**, **200%**, **400%** lần lượt scale bitmap đang hiển thị 1×, 2×, 4×, không đổi độ phân giải decode. Do đó zoom 400% ở Fast/Preview chỉ phóng bitmap adaptive; muốn xem tối đa pixel gốc phải dùng Original.
+
+Settings → **Chế độ sắp xếp ảnh** có **Theo tên kiểu Explorer** (`Name`, mặc định, so sánh tên tự nhiên), **Theo kích thước tăng dần** (`SizeAscending`) và **Theo kích thước giảm dần** (`SizeDescending`). Khi bằng kích thước, app phân thứ tự theo tên kiểu Explorer. Đây là fallback sort khi scan; snapshot hợp lệ từ Windows Explorer sẽ ghi đè thứ tự của cả ba mode. Vì vậy cần đo riêng fallback sort và final order khi benchmark.
+
 ## 3. Mở folder: từng bước và chi phí
 
 ### 3.1 Hủy request cũ
