@@ -668,8 +668,8 @@ Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều 
 | BM-05 — Action race workload | TODO | Agent chính/agent audit | Move/Delete/Copy trên temp copy, đo navigation trước action, không retry/double navigation |
 | BM-06 — Metrics/ranking | DONE | Agent benchmark_engine | P50/P95/P99 và ranking loại Original |
 | BM-07 — Benchmark window | DONE | Agent chính | Nút Benchmark mở cửa sổ chạy read-only profile Fast Sequential |
-| BM-08 — Mở log/report | TODO | Agent chính | Nút mở log, result folder, export JSON/CSV |
-| BM-09 — CLI benchmark | TODO | Agent benchmark_tests_cli | Có lệnh list/profile/all/actions/report, exit code đúng |
+| BM-08 — Mở log/report | IN PROGRESS | Agent chính | Có nút mở report JSON; export CSV/result folder còn hoàn thiện |
+| BM-09 — CLI benchmark | DONE | Agent benchmark_tests_cli | list/benchmark/benchmark-all/benchmark-actions và report JSON |
 | BM-10 — Unit test engine/profile | DONE | Agent benchmark_tests_cli | Profile registry, ranking và scenario tests đã gọi trong runner |
 | BM-11 — Regression lỗi lịch sử | DONE | Agent benchmark_tests_cli | Action race/index/double-navigation/no-retry regression pass |
 | BM-12 — Ảnh thật local | TODO | Agent chính | Chạy read-only trên `C:\Xiuren\[[DONE]`; action dùng temp copy |
@@ -680,7 +680,7 @@ Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều 
 | BM-17 — Resource matrix | TODO | Agent chính | Worker/RAM/ảnh lớn/ folder lớn/SSD-HDD/network theo ngưỡng tương đối |
 | BM-18 — Tài liệu | DONE | Agent audit | Added profile interpretation, debug workflow, result evidence and privacy guidance in `BENCHMARK-PROFILES.md` and `BENCHMARK-RESULTS.md` |
 | BM-19 — Merge/audit | TODO | Agent chính | Merge không mất sửa lỗi hiện hữu; `git diff --check` sạch |
-| BM-20 — Release validation | TODO | Agent chính | Release test, publish đúng thư mục, commit và push `origin/master` |
+| BM-20 — Release validation | IN PROGRESS | Agent chính | Release test/pass, publish/pass, push/pass; còn probe ảnh thật và cập nhật trạng thái cuối |
 
 Profile bắt buộc: Instant Review, Fast Sequential, Fast Balanced, Fast Aggressive, Preview Light/Balanced/Quality/High Quality, No Preload Baseline, Nearby Only, Full Folder Warm, Large Folder Safe, Huge Image Safe, SSD High Throughput, HDD Conservative, Network Safe, Low Memory, RAM Maximizer, Rapid Key Press, Random Navigation, Action During Decode, Move Race, Delete To Recycle Bin Race, Copy During Decode, Interleaved Actions, Explorer Reindex, Logging On/Off, Recommended Auto và Original Correctness.
 
