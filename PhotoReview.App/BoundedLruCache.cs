@@ -59,6 +59,15 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
     }
 
     public bool Remove(TKey key) { lock (_gate) return RemoveCore(key); }
+    public int RemoveWhere(Func<TKey, bool> predicate)
+    {
+        lock (_gate)
+        {
+            var keys = _items.Keys.Where(predicate).ToArray();
+            foreach (var key in keys) RemoveCore(key);
+            return keys.Length;
+        }
+    }
     public void Clear() { lock (_gate) { _items.Clear(); _lru.Clear(); _size = 0; } }
 
     private bool RemoveCore(TKey key)

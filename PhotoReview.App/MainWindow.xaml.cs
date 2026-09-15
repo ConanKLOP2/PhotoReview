@@ -14,9 +14,8 @@ namespace PhotoReview.App;
 
 public partial class MainWindow : Window
 {
-    private readonly BoundedLruCache<string, BitmapImage> _cache = new(
-        MaxCacheBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4),
-        StringComparer.OrdinalIgnoreCase);
+    private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache = new(
+        MaxCacheBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
     private readonly List<string> _files = [];
     private int _index = -1;
     private long _generation;
@@ -29,9 +28,16 @@ public partial class MainWindow : Window
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
     private UndoAction? _lastUndoAction;
     private CancellationTokenSource _preloadCts = new();
-    private readonly Dictionary<string, Task<BitmapImage>> _previewLoads = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(ImageCacheKey Key, long Epoch), Task<BitmapImage>> _previewLoads = [];
+    private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
+    private long _cacheEpoch;
+    private readonly object _cacheLifecycleGate = new();
     private long _totalSourceBytes;
     private readonly SemaphoreSlim _preloadSlots = new(8, 8);
+    private Task? _preloadSchedulerTask;
+    private CancellationTokenSource? _preloadSchedulerCts;
+    private int _preloadCenter;
+    private long _preloadPriorityVersion;
     private const long MaxCacheBytes = 16L * 1024 * 1024 * 1024;
     private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
     private const double PreloadMemoryLoadLimit = 0.80;
@@ -48,7 +54,7 @@ public partial class MainWindow : Window
     private ExplorerViewSnapshot? _lastExplorerSnapshot;
     private bool _placementRestored;
     private int _fileActionInProgress;
-    private readonly Dictionary<string, (int Width, int Height)> _originalDimensions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<ImageCacheKey, (int Width, int Height)> _originalDimensions = [];
 
     public MainWindow(string? initialPath = null)
     {
@@ -100,8 +106,15 @@ public partial class MainWindow : Window
         var dialog = new SettingsWindow(_settings) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
+            var previousMode = _settings.LoadingMode;
             _settings = AppSettings.Load();
             UpdateFolderTitle();
+            if (!string.Equals(previousMode, _settings.LoadingMode, StringComparison.OrdinalIgnoreCase))
+            {
+                _preloadCts.Cancel();
+                if (_index >= 0 && _index < _files.Count)
+                    _ = PreloadAroundAsync(_index, _generation);
+            }
         }
     }
 
@@ -123,6 +136,9 @@ public partial class MainWindow : Window
                 .Where(ImageFileTypes.IsSupported).ToList(), loadToken);
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
+            // Collect source sizes while the first Explorer query runs, so the
+            // very first preload pass can decide whether to queue the folder.
+            var totalBytesTask = Task.Run(() => scannedFiles.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }), loadToken);
             var lastExplorerProgressLog = 0;
             var explorerProgress = new Progress<ExplorerOrderService.ExplorerQueryProgress>(p =>
             {
@@ -156,7 +172,10 @@ public partial class MainWindow : Window
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, initialSort={sortMode}");
             _preloadCts.Cancel();
             _totalSourceBytes = long.MaxValue;
-            _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear(); _originalDimensions.Clear();
+            _files.Clear(); _files.AddRange(files); _index = -1;
+            lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
+            _preloadedKeys.Clear();
+            _hashService.Clear(); _originalDimensions.Clear();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
             var presentationGeneration = _generation;
@@ -170,13 +189,14 @@ public partial class MainWindow : Window
                 explorerSnapshot = await explorerTask;
                 if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             }
+            _totalSourceBytes = await totalBytesTask;
+            if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             if (_files.Count > 0)
             {
                 var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
             else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
-            var totalBytesTask = Task.Run(() => scannedFiles.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }), loadToken);
             explorerSnapshot ??= await explorerTask;
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             if (interactionGeneration != Volatile.Read(ref _catalogInteractionGeneration))
@@ -207,6 +227,9 @@ public partial class MainWindow : Window
                     // Reindex the catalog without decoding/presenting the same path
                     // a second time. The counter is updated immediately.
                     StatusText.Text = $"{_index + 1}/{_files.Count}";
+                    // The provisional catalog's preload was canceled above;
+                    // resume against the complete Explorer order from this path.
+                    _ = PreloadAroundAsync(_index, _generation);
                 }
                 AppLog.Info($"Explorer native order applied: {explorerOrder.Count} files, currentIndex={_index}, currentPath={currentPath}");
             }
@@ -248,11 +271,22 @@ public partial class MainWindow : Window
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
-        StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải";
+        var ramReady = TryGetCachedPreview(path, out var readyBitmap);
+        if (ramReady)
+        {
+            var preloadKey = ImageCacheKey.Create(path,
+                string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase),
+                GetTargetDecodeWidth());
+            if (_preloadedKeys.Remove(preloadKey)) _metrics.RecordPreloadHit();
+        }
+        StatusText.Text = ramReady
+            ? $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · {Path.GetFileName(path)}"
+            : $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải";
+        AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_cache.CurrentSize}");
         try
         {
             if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
-                && !_cache.TryGet(path, out _) && !_previewLoads.ContainsKey(path))
+                && !ramReady && !HasInflightPreview(path))
             {
                 var thumbnail = await _thumbnailCache.GetAsync(path);
                 if (token != _generation) return;
@@ -261,9 +295,12 @@ public partial class MainWindow : Window
                 ApplyInitialViewMode();
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
             }
-            var image = await GetPreviewAsync(path);
+            var image = ramReady ? readyBitmap : await GetPreviewAsync(path);
+            if (ramReady) _metrics.RecordCacheHit();
             if (token != _generation) return;
+            var uiAssign = Stopwatch.StartNew();
             MainImage.Source = image;
+            _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
             AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={_settings.LoadingMode}");
             _ = PreloadAroundAsync(index, token);
             var pair = FindComparePair(path);
@@ -354,24 +391,32 @@ public partial class MainWindow : Window
 
     private async Task<BitmapImage> GetPreviewAsync(string path)
     {
-        if (_cache.TryGet(path, out var cached)) { _metrics.RecordCacheHit(); return cached; }
-        if (_previewLoads.TryGetValue(path, out var pending)) return await pending;
-        _metrics.RecordCacheMiss();
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
         var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
         var targetWidth = isOriginal ? 0 : GetTargetDecodeWidth();
+        var key = ImageCacheKey.Create(path, isOriginal, targetWidth);
+        if (_cache.TryGet(key, out var cached)) { _metrics.RecordCacheHit(); return cached; }
+        var cacheEpoch = Volatile.Read(ref _cacheEpoch);
+        var loadKey = (key, cacheEpoch);
+        if (_previewLoads.TryGetValue(loadKey, out var pending))
+        {
+            _metrics.RecordInflightJoin();
+            return await pending;
+        }
+        _metrics.RecordCacheMiss();
         var load = Task.Run(() =>
         {
             var stopwatch = Stopwatch.StartNew();
             var sourceRead = false;
             var bitmap = new BitmapImage();
-            var cachePath = GetDiskCachePath(path, targetWidth);
+            var cachePath = GetDiskCachePath(key);
             if (File.Exists(cachePath))
             {
                 try
                 {
                     using var cacheStream = File.OpenRead(cachePath);
                     bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
+                    _metrics.RecordDiskCacheHit();
                 }
                 catch (Exception) when (File.Exists(cachePath))
                 {
@@ -386,14 +431,53 @@ public partial class MainWindow : Window
                 bitmap = DecodeWithFallback(path, targetWidth);
                 // Keep decoded previews in RAM; PNG encoding and durable writes delay review.
             }
-            _cache.Set(path, bitmap);
+            // A path can be replaced while decode is in flight. Never publish
+            // the old pixels under the new source's identity.
+            if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
+            lock (_cacheLifecycleGate)
+                if (cacheEpoch == _cacheEpoch) _cache.Set(key, bitmap);
             stopwatch.Stop();
             if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
             return bitmap;
         });
-        _previewLoads[path] = load;
+        _previewLoads[loadKey] = load;
         try { return await load; }
-        finally { _previewLoads.Remove(path); }
+        finally { _previewLoads.Remove(loadKey); }
+    }
+
+    private bool TryGetCachedPreview(string path, out BitmapImage bitmap)
+    {
+        try
+        {
+            var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+            var key = ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : GetTargetDecodeWidth());
+            return _cache.TryGet(key, out bitmap);
+        }
+        catch (IOException) { bitmap = default!; return false; }
+        catch (UnauthorizedAccessException) { bitmap = default!; return false; }
+    }
+
+    private bool HasInflightPreview(string path)
+    {
+        try
+        {
+            var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+            var key = ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : GetTargetDecodeWidth());
+            return _previewLoads.ContainsKey((key, Volatile.Read(ref _cacheEpoch)));
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private void EvictCachedPath(string path)
+    {
+        var normalized = Path.GetFullPath(path).ToUpperInvariant();
+        lock (_cacheLifecycleGate)
+        {
+            _cacheEpoch++;
+            _cache.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
+            _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
+        }
     }
 
     private static BitmapImage DecodeSource(string path, int targetWidth)
@@ -415,15 +499,19 @@ public partial class MainWindow : Window
 
     private async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path)
     {
-        if (_originalDimensions.TryGetValue(path, out var dimensions)) return dimensions;
+        var key = ImageCacheKey.Create(path, true, 0);
+        if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
         dimensions = await Task.Run(() =>
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
+            // PixelWidth/Height only need the image header. OnLoad forced WIC
+            // to read/decode the source a second time on every warm Next.
+            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
             var frame = decoder.Frames[0];
             return (frame.PixelWidth, frame.PixelHeight);
         });
-        _originalDimensions[path] = dimensions;
+        if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
+        _originalDimensions[key] = dimensions;
         return dimensions;
     }
 
@@ -440,51 +528,81 @@ public partial class MainWindow : Window
         return AdaptivePreviewPolicy.CalculateTargetDecodeWidth(viewport, dpi, 1.15);
     }
 
-    private static string GetDiskCachePath(string path, int targetWidth)
+    private static string GetDiskCachePath(ImageCacheKey key)
     {
-        long length = 0;
-        long lastWriteTicks = 0;
-        try
-        {
-            var info = new FileInfo(path);
-            if (info.Exists) { length = info.Length; lastWriteTicks = info.LastWriteTimeUtc.Ticks; }
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{length}|{lastWriteTicks}|{targetWidth}")));
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", key + ".png");
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}")));
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", hash + ".png");
     }
 
-    private async Task PreloadAroundAsync(int center, long token)
+    private Task PreloadAroundAsync(int center, long token)
     {
-        _preloadCts.Cancel();
-        _preloadCts.Dispose();
-        _preloadCts = new CancellationTokenSource();
-        var cancellationToken = _preloadCts.Token;
-        var nearby = Enumerable.Range(1, 32).Concat(Enumerable.Range(-1, 8));
-        var offsets = _totalSourceBytes < FullFolderRamThresholdBytes
-            ? nearby.Concat(Enumerable.Range(center + 1, _files.Count - center - 1).Select(i => i - center))
-                .Concat(Enumerable.Range(0, center).Reverse().Select(i => i - center)).Distinct()
-            : nearby;
-        var files = _files.ToArray();
-        var batch = new List<Task>(2);
-        foreach (var offset in offsets)
+        // Navigation changes priority, but an already running decode is useful
+        // and must remain available to ShowImageAsync through _previewLoads.
+        if (token != _generation) return Task.CompletedTask;
+        if (_preloadCts.IsCancellationRequested)
         {
-            // Even RAM hits must let input/rendering run. Never enqueue the whole folder.
-            if ((batch.Count & 7) == 0)
-                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
-            if (token != _generation || cancellationToken.IsCancellationRequested) return;
-            if (!HasPreloadHeadroom()) return;
-            var i = center + offset;
-            if (i < 0 || i >= files.Length || _cache.TryGet(files[i], out _)) continue;
-            batch.Add(PreloadOneAsync(files[i], cancellationToken));
-            if (batch.Count == 2)
+            _preloadCts.Dispose();
+            _preloadCts = new CancellationTokenSource();
+        }
+        _preloadCenter = center;
+        _preloadPriorityVersion++;
+        if (_preloadSchedulerTask is { IsCompleted: false } &&
+            ReferenceEquals(_preloadSchedulerCts, _preloadCts)) return _preloadSchedulerTask;
+        _preloadSchedulerCts = _preloadCts;
+        _preloadSchedulerTask = RunPreloadSchedulerAsync(_files.ToArray(), _preloadCts.Token);
+        return _preloadSchedulerTask;
+    }
+
+    private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
+    {
+        const int workers = 8;
+        var running = new Dictionary<Task, string>();
+        var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenVersion = -1L;
+        IEnumerator<int>? order = null;
+        var examinedSinceYield = 0;
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
             {
-                await Task.WhenAll(batch);
-                batch.Clear();
+                if (seenVersion != _preloadPriorityVersion)
+                {
+                    order?.Dispose();
+                    order = PreloadOrderService.Build(_preloadCenter, files.Length,
+                        _totalSourceBytes < FullFolderRamThresholdBytes).GetEnumerator();
+                    seenVersion = _preloadPriorityVersion;
+                }
+                while (running.Count < workers && order!.MoveNext())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!HasPreloadHeadroom())
+                    {
+                        var memory = PhysicalMemory.GetSnapshot();
+                        AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
+                        return;
+                    }
+                    var path = files[order.Current];
+                    if (queued.Contains(path) || TryGetCachedPreview(path, out _)) continue;
+                    queued.Add(path);
+                    running.Add(PreloadOneAsync(path, cancellationToken), path);
+                    // Yield only after actual queue work; give input/rendering a
+                    // chance without limiting every batch to two decodes.
+                    if (++examinedSinceYield >= workers)
+                    {
+                        examinedSinceYield = 0;
+                        var memory = PhysicalMemory.GetSnapshot();
+                        AppLog.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes}");
+                        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                    }
+                }
+                if (running.Count == 0) return;
+                var finished = await Task.WhenAny(running.Keys);
+                running.Remove(finished);
+                await finished;
             }
         }
-        await Task.WhenAll(batch);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        finally { order?.Dispose(); }
     }
 
     private static bool HasPreloadHeadroom()
@@ -496,12 +614,17 @@ public partial class MainWindow : Window
     {
         try
         {
+            var queueWait = Stopwatch.StartNew();
             await _preloadSlots.WaitAsync(cancellationToken);
+            _metrics.RecordQueueWait(queueWait.ElapsedMilliseconds);
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!HasPreloadHeadroom()) return;
                 await GetPreviewAsync(path);
+                var original = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+                var key = ImageCacheKey.Create(path, original, original ? 0 : GetTargetDecodeWidth());
+                if (_cache.TryGet(key, out _)) _preloadedKeys.Add(key);
             }
             finally { _preloadSlots.Release(); }
         }
@@ -587,9 +710,11 @@ public partial class MainWindow : Window
     {
         var answer = System.Windows.MessageBox.Show(this, "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.", "Xác nhận xóa cache", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != System.Windows.MessageBoxResult.Yes) return;
+        _preloadCts.Cancel();
         _thumbnailCache.ClearDisk();
         _thumbnailCache.ClearMemory();
-        _cache.Clear();
+        lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
+        _preloadedKeys.Clear();
         StatusText.Text = "Đã xóa cache preview.";
     }
 
@@ -958,7 +1083,7 @@ public partial class MainWindow : Window
         // source is normally selected by _compareSelectedPath ?? _files[_index];
         // _files.Remove(source) is represented by RemoveAt to avoid a second lookup.
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
-        if (removeSource && sourceIndex >= 0) { _files.RemoveAt(sourceIndex); _cache.Remove(sourcePath); _compareSelectedPath = null; }
+        if (removeSource && sourceIndex >= 0) { _files.RemoveAt(sourceIndex); EvictCachedPath(sourcePath); _compareSelectedPath = null; }
         var nextIndex = removeSource ? Math.Min(Math.Max(sourceIndex, 0), _files.Count - 1) : Math.Min(Math.Max(sourceIndex + 1, 0), _files.Count - 1);
         if (_files.Count > 0)
         {

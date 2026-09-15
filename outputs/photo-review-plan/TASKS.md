@@ -638,3 +638,19 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 - Phạm vi dự kiến: Chỉ lên lịch khi có nhu cầu; đánh giá chi phí backend/UI.
 - Hoàn thành khi: có tiêu chí riêng được lập trước triển khai, test và bằng chứng tương ứng.
 - Người phụ trách / lịch / bằng chứng: chưa có.
+
+## Đợt preload/Next đã xác nhận 2026-09-15
+
+| Task | Trạng thái | Bằng chứng / việc còn lại |
+|---|---|---|
+| P01 — đo cache/preload | DONE | Log `ShowImage cache-state`, `Preload progress`, `Preload paused for memory`; metrics RAM/inflight/disk/queue/UI assignment. |
+| P02 — cache hit không hiện loading | DONE | `ShowImageAsync` dùng bitmap RAM ngay; WPF probe trên ảnh thật đã PASS tại ảnh 2/147. |
+| P03 — scheduler liên tục | DONE | Next đổi priority mà giữ decode đang chạy; đổi folder/Explorer reindex làm mới scheduler. |
+| P04 — worker/yield | DONE | 8 worker thực; yield sau mỗi 8 job. Benchmark 30 ảnh thật: 2 worker 27.9s, 4 worker 18.9s, 8 worker 15.3s. |
+| P05 — byte folder trước preload | DONE | Tổng source bytes được tính trước `ShowImageAsync` đầu tiên. |
+| P06 — cache identity/epoch | DONE | Key theo fingerprint/mode/width; epoch ngăn decode cũ refill sau Clear/Move/Delete/đổi folder. |
+| P07 — test hành vi | DONE | Test key, priority, action sequence và 30 lượt WPF warm Next trên ảnh thật PASS; không thao tác Move/Delete trực tiếp trên ảnh nguồn. |
+| P08 — benchmark local | DONE | Folder ảnh thật mới dưới `C:\Xiuren\[[DONE]`. Sau sửa metadata decode, 30 lượt WPF warm Next: median 11ms, P95 25ms, max 34ms; trước sửa: median 1751ms, P95 4315ms, max 4550ms. Cả 30 lượt không hiện loading hoặc sai index. |
+| P09 — release/review | DONE | Test Release và probe WPF 30 lượt PASS; publish đúng thư mục và push `origin/master` theo quy trình bắt buộc. |
+
+Benchmark decoder được chạy bằng `dotnet run --project PhotoReview.Tests -c Release -- --preload-bench <folder> <workers>`; probe WPF read-only bằng `dotnet run --project PhotoReview.Tests -c Release -- --ui-next-probe <folder>`.

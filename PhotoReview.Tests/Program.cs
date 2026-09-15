@@ -2,6 +2,18 @@ using PhotoReview.App;
 using System.IO;
 using System.Windows.Media;
 
+if (args.Length == 2 && args[0] == "--ui-next-probe")
+{
+    await LocalUiNextProbe.RunAsync(args[1]);
+    return;
+}
+
+if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
+{
+    await LocalImageBenchmark.RunAsync(args[1], args.Length == 3 ? int.Parse(args[2]) : 8);
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--explorer-probe")
 {
     var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
@@ -19,6 +31,7 @@ if (!File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.c
     projectRoot = Directory.GetCurrentDirectory();
 var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
+ImageCacheKeyTests.Run(root, failures);
 Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", Path.Combine(root, "app-data"));
 try
 {
@@ -190,9 +203,9 @@ try
     IExplorerOrderProvider fakeExplorerProvider = new FakeExplorerOrderProvider(validExplorerSnapshot);
     Check((await fakeExplorerProvider.TryGetSnapshotAsync(explorerFolder, TimeSpan.FromSeconds(2), CancellationToken.None)).OrderedPaths[0] == explorerB, "Explorer provider contract is fakeable without COM", failures);
     Check(!mainWindow.Contains("files.Count < 100") && (mainWindow.Contains("TryGetSnapshotAsync") || mainWindow.Contains("TryGetSnapshotProgressiveAsync")) && mainWindow.Contains("loadGeneration != _folderGeneration"), "Explorer order applies below and above 100 files and rejects stale folder results", failures);
-    Check(mainWindow.IndexOf("await ShowImageAsync", StringComparison.Ordinal) < mainWindow.IndexOf("await explorerTask", StringComparison.Ordinal), "First image is presented before waiting for Explorer order", failures);
+    Check(mainWindow.Contains("explorerSnapshot = await explorerTask") && mainWindow.Contains("_totalSourceBytes = await totalBytesTask"), "Direct file open waits for complete Explorer snapshot and folder size before first preload", failures);
     Check(mainWindow.Contains("mayReplaceInitialFallback") && mainWindow.Contains("await ShowImageAsync(0)"), "Folder open replaces untouched fallback with the first native Explorer item", failures);
-    Check(mainWindow.Contains("currentSet.SetEquals(scannedFiles)") && mainWindow.Contains("else if (_index >= 0) await ShowImageAsync(_index)"), "Native reindex refreshes the counter and rejects a changed catalog", failures);
+    Check(mainWindow.Contains("currentSet.SetEquals(scannedFiles)") && mainWindow.Contains("StatusText.Text = $\"{_index + 1}/{_files.Count}\"") && mainWindow.Contains("PreloadAroundAsync(_index, _generation)"), "Native reindex refreshes counter and preload without duplicate render", failures);
     Check(mainWindow.Contains("_catalogInteractionGeneration") && mainWindow.Contains("Explorer native order ignored after catalog interaction"), "Explorer snapshot cannot reindex after user catalog interaction", failures);
     Check(mainWindow.Contains("Interlocked.Increment(ref _catalogInteractionGeneration)"), "Navigation and file actions advance catalog interaction generation", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
@@ -240,6 +253,37 @@ try
     metrics.RecordCacheHit(); metrics.RecordCacheMiss(); metrics.RecordSourceRead(128, 7); metrics.RecordPresented(11);
     var snapshot = metrics.Snapshot();
     Check(snapshot.CacheHits == 1 && snapshot.CacheMisses == 1 && snapshot.SourceReads == 1 && snapshot.SourceBytesRead == 128 && snapshot.DecodeMilliseconds == 7 && snapshot.PresentedImages == 1 && snapshot.PresentMilliseconds == 11, "Review metrics snapshot preserves counters", failures);
+    Parallel.For(0, 500, _ =>
+    {
+        metrics.RecordPreloadHit();
+        metrics.RecordInflightJoin();
+        metrics.RecordDiskCacheHit();
+        metrics.RecordQueueWait(2);
+        metrics.RecordUiAssign(3);
+    });
+    var preloadMetrics = metrics.Snapshot();
+    Check(preloadMetrics.PreloadHits == 500 && preloadMetrics.InflightJoins == 500 && preloadMetrics.DiskCacheHits == 500
+        && preloadMetrics.QueueWaitMilliseconds == 1000 && preloadMetrics.UiAssignMilliseconds == 1500,
+        "Concurrent preload diagnostics retain every delivery and timing event", failures);
+    var cacheIdentityPath = Path.Combine(root, "cache-identity.jpg");
+    File.WriteAllBytes(cacheIdentityPath, [1, 2, 3]);
+    var previewKey = ImageCacheKey.Create(cacheIdentityPath, isOriginal: false, targetWidth: 2048);
+    var resizedKey = ImageCacheKey.Create(cacheIdentityPath, isOriginal: false, targetWidth: 1024);
+    var originalKey = ImageCacheKey.Create(cacheIdentityPath, isOriginal: true, targetWidth: 2048);
+    Check(previewKey != resizedKey && previewKey != originalKey && previewKey.MatchesCurrentSource(),
+        "Decoded cache identity separates resize and Original quality", failures);
+    File.WriteAllBytes(cacheIdentityPath, [1, 2, 3, 4]);
+    var changedKey = ImageCacheKey.Create(cacheIdentityPath, isOriginal: false, targetWidth: 2048);
+    Check(changedKey != previewKey && !previewKey.MatchesCurrentSource(),
+        "Replacing a source at the same path invalidates its decoded bitmap", failures);
+    var preloadOrder = PreloadOrderService.Build(center: 40, count: 100, fullFolder: true).ToArray();
+    Check(preloadOrder[0] == 41 && preloadOrder[31] == 72 && preloadOrder[32] == 39
+        && preloadOrder.Distinct().Count() == 99 && !preloadOrder.Contains(40),
+        "Full-folder preload prioritizes the next 32, then prior 8, and queues every other image once", failures);
+    var shiftedOrder = PreloadOrderService.Build(center: 44, count: 100, fullFolder: false).ToArray();
+    Check(shiftedOrder[0] == 45 && shiftedOrder[1] == 46 && shiftedOrder.Contains(43)
+        && shiftedOrder.Length == 40 && shiftedOrder.Distinct().Count() == shiftedOrder.Length,
+        "Navigating changes preload priority to the new Next without duplicate jobs", failures);
     Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view", failures);
     Check(mainWindow.Contains("var sourceRead = false") && mainWindow.Contains("if (sourceRead)"), "Source byte metrics exclude disk-cache hits", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
