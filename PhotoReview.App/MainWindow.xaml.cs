@@ -703,9 +703,8 @@ public partial class MainWindow : Window
         // Generation invalidation prevents any late bitmap from being presented.
         Interlocked.Increment(ref _generation);
         _preloadCts.Cancel();
-        MainImage.Source = null;
-        CompareLeftImage.Source = null;
-        CompareRightImage.Source = null;
+        // Keep the current frame visible while Move/Delete runs. Clearing the
+        // source here creates a black flash before the next image is ready.
     }
 
     private async Task ExecuteActionAsync(ReviewAction action)
