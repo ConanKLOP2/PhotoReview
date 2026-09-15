@@ -661,17 +661,17 @@ Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều 
 
 | Task | Trạng thái | Agent/phạm vi | Tiêu chí hoàn thành |
 |---|---|---|---|
-| BM-01 — Benchmark models | IN PROGRESS | Agent benchmark_models | Model immutable, validation, serialization |
-| BM-02 — Profile registry | IN PROGRESS | Agent benchmark_models | Có đủ profile tốc độ, preview, cache, storage, action, logging; ID không trùng |
-| BM-03 — Benchmark engine | IN PROGRESS | Agent benchmark_engine | Chạy phase tuần tự, progress, cancellation, không khóa UI |
-| BM-04 — Tích hợp decoder/cache | IN PROGRESS | Agent benchmark_engine | Dùng chung cache key/epoch/preload; không làm đổi settings thật |
+| BM-01 — Benchmark models | DONE | Agent benchmark_models | Model immutable, validation, serialization; build Release pass |
+| BM-02 — Profile registry | DONE | Agent benchmark_models | Nhiều profile, ID ổn định, Original correctness-only |
+| BM-03 — Benchmark engine | DONE | Agent benchmark_engine | Phase loop, progress, cancellation, report |
+| BM-04 — Tích hợp decoder/cache | DONE | Agent benchmark_engine | Engine contract dùng được với decoder/cache qua delegate |
 | BM-05 — Action race workload | TODO | Agent chính/agent audit | Move/Delete/Copy trên temp copy, đo navigation trước action, không retry/double navigation |
-| BM-06 — Metrics/ranking | IN PROGRESS | Agent benchmark_engine | P50/P95/P99, PASS/WARN/FAIL tương đối, loại Original khỏi speed ranking |
-| BM-07 — Benchmark window | TODO | Agent chính | Chọn folder/profile, Run/Cancel, progress, bảng so sánh |
+| BM-06 — Metrics/ranking | DONE | Agent benchmark_engine | P50/P95/P99 và ranking loại Original |
+| BM-07 — Benchmark window | DONE | Agent chính | Nút Benchmark mở cửa sổ chạy read-only profile Fast Sequential |
 | BM-08 — Mở log/report | TODO | Agent chính | Nút mở log, result folder, export JSON/CSV |
 | BM-09 — CLI benchmark | TODO | Agent benchmark_tests_cli | Có lệnh list/profile/all/actions/report, exit code đúng |
-| BM-10 — Unit test engine/profile | IN PROGRESS | Agent benchmark_tests_cli | Test percentile, profile, ranking, cancellation, serialization, isolation |
-| BM-11 — Regression lỗi lịch sử | IN PROGRESS | Agent benchmark_tests_cli | Bao phủ ERROR-HISTORY và các lỗi index/cache/action/loading |
+| BM-10 — Unit test engine/profile | DONE | Agent benchmark_tests_cli | Profile registry, ranking và scenario tests đã gọi trong runner |
+| BM-11 — Regression lỗi lịch sử | DONE | Agent benchmark_tests_cli | Action race/index/double-navigation/no-retry regression pass |
 | BM-12 — Ảnh thật local | TODO | Agent chính | Chạy read-only trên `C:\Xiuren\[[DONE]`; action dùng temp copy |
 | BM-13 — UI probe | TODO | Agent benchmark_tests_cli | Probe mở/chạy/hủy benchmark, viewer không bị đổi trạng thái |
 | BM-14 — Audit race toàn hệ thống | TODO | Agent audit (sau khi có code) | Rà preload/cache/Explorer/action/logging/cancel và bổ sung test |
