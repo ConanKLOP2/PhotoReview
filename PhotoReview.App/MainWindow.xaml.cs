@@ -136,6 +136,21 @@ public partial class MainWindow : Window
             });
             var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);
             files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
+            if (initialPath is not null)
+            {
+                var requested = Path.GetFullPath(initialPath);
+                var requestedIndex = files.FindIndex(path => string.Equals(path, requested, StringComparison.OrdinalIgnoreCase));
+                if (requestedIndex > 0)
+                {
+                    // Opening a file is an explicit user selection. Keep it at
+                    // position 1 in the provisional catalog so the first frame
+                    // and counter are immediately consistent, even if Explorer
+                    // order arrives later or is skipped after interaction.
+                    var selected = files[requestedIndex];
+                    files.RemoveAt(requestedIndex);
+                    files.Insert(0, selected);
+                }
+            }
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, initialSort={sortMode}");
             _preloadCts.Cancel();
