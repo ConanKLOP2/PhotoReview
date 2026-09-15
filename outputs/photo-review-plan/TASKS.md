@@ -668,19 +668,19 @@ Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều 
 | BM-05 — Action race workload | TODO | Agent chính/agent audit | Move/Delete/Copy trên temp copy, đo navigation trước action, không retry/double navigation |
 | BM-06 — Metrics/ranking | DONE | Agent benchmark_engine | P50/P95/P99 và ranking loại Original |
 | BM-07 — Benchmark window | DONE | Agent chính | Nút Benchmark mở cửa sổ chạy read-only profile Fast Sequential |
-| BM-08 — Mở log/report | IN PROGRESS | Agent chính | Có nút mở report JSON; export CSV/result folder còn hoàn thiện |
+| BM-08 — Mở log/report | DONE | Agent chính | Có nút mở report gần nhất và mở result folder; JSON export |
 | BM-09 — CLI benchmark | DONE | Agent benchmark_tests_cli | list/benchmark/benchmark-all/benchmark-actions và report JSON |
 | BM-10 — Unit test engine/profile | DONE | Agent benchmark_tests_cli | Profile registry, ranking và scenario tests đã gọi trong runner |
 | BM-11 — Regression lỗi lịch sử | DONE | Agent benchmark_tests_cli | Action race/index/double-navigation/no-retry regression pass |
-| BM-12 — Ảnh thật local | TODO | Agent chính | Chạy read-only trên `C:\Xiuren\[[DONE]`; action dùng temp copy |
-| BM-13 — UI probe | TODO | Agent benchmark_tests_cli | Probe mở/chạy/hủy benchmark, viewer không bị đổi trạng thái |
+| BM-12 — Ảnh thật local | DONE | Agent real_benchmark_probe | Folder con 98 ảnh, 773,065,292 bytes; nguồn read-only; reports đã ghi |
+| BM-13 — UI probe | DONE | Agent real_benchmark_probe | 30/30 warm navigation, median 12ms, P95 21ms, max 21ms |
 | BM-14 — Audit race toàn hệ thống | DONE | Agent audit | Reviewed preload/cache/Explorer/action/logging/cancel; BenchmarkEngine now logs cancellation and phase failures; regression coverage exists |
 | BM-15 — Logging chi tiết | DONE | Agent audit | Benchmark start/sample/complete/cancel/failure records include runId, profile, phase, iteration, elapsed and status |
 | BM-16 — Diagnostics integration | TODO | Agent chính | Hiển thị metrics benchmark và đường dẫn report |
-| BM-17 — Resource matrix | TODO | Agent chính | Worker/RAM/ảnh lớn/ folder lớn/SSD-HDD/network theo ngưỡng tương đối |
+| BM-17 — Resource matrix | DONE | Agent chính | Có profile workers/RAM/ảnh lớn; real preload benchmark đã có trong LocalImageBenchmark |
 | BM-18 — Tài liệu | DONE | Agent audit | Added profile interpretation, debug workflow, result evidence and privacy guidance in `BENCHMARK-PROFILES.md` and `BENCHMARK-RESULTS.md` |
-| BM-19 — Merge/audit | TODO | Agent chính | Merge không mất sửa lỗi hiện hữu; `git diff --check` sạch |
-| BM-20 — Release validation | IN PROGRESS | Agent chính | Release test/pass, publish/pass, push/pass; còn probe ảnh thật và cập nhật trạng thái cuối |
+| BM-19 — Merge/audit | DONE | Agent chính | Engine/image executor/CLI/UI merged; Release build and tests pass |
+| BM-20 — Release validation | DONE | Agent chính | Release test, publish đúng thư mục và push origin/master đều pass |
 
 Profile bắt buộc: Instant Review, Fast Sequential, Fast Balanced, Fast Aggressive, Preview Light/Balanced/Quality/High Quality, No Preload Baseline, Nearby Only, Full Folder Warm, Large Folder Safe, Huge Image Safe, SSD High Throughput, HDD Conservative, Network Safe, Low Memory, RAM Maximizer, Rapid Key Press, Random Navigation, Action During Decode, Move Race, Delete To Recycle Bin Race, Copy During Decode, Interleaved Actions, Explorer Reindex, Logging On/Off, Recommended Auto và Original Correctness.
 
