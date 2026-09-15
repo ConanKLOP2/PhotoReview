@@ -78,6 +78,13 @@ try
     var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
     var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
+    RunInterleavedFileActionSequence(root, failures);
+    Check(mainWindow.Contains("AdvanceBeforeFileActionAsync(sourcePath, removeSource: true)") &&
+          mainWindow.Contains("AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == \"Move\")") &&
+          mainWindow.Contains("Do not call ShowImageAsync after action"),
+          "Interleaved actions advance viewer before filesystem operation and exactly once", failures);
+    Check(mainWindow.Contains("Interlocked.Exchange(ref _fileActionInProgress, 1)"),
+          "Interleaved actions reject duplicate concurrent file actions", failures);
     Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
     Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal) && appSettings.Contains("Original", StringComparison.Ordinal), "LoadingMode has Fast, Preview, and Original options", failures);
     Check(appSettings.Contains("= \"Preview\"", StringComparison.Ordinal) || appSettings.Contains("= LoadingMode.Preview", StringComparison.Ordinal), "LoadingMode defaults to Preview", failures);
@@ -265,6 +272,45 @@ try
 finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
 
 static void Check(bool condition, string name, List<string> failures) { if (condition) Console.WriteLine("PASS: " + name); else failures.Add(name); }
+
+static void RunInterleavedFileActionSequence(string root, List<string> failures)
+{
+    var folder = Path.Combine(root, "sequence");
+    var moved = Path.Combine(root, "sequence-moved");
+    Directory.CreateDirectory(folder);
+    Directory.CreateDirectory(moved);
+    var files = Enumerable.Range(1, 5).Select(i => Path.Combine(folder, $"{i}.jpg")).ToList();
+    foreach (var file in files) File.WriteAllText(file, $"image-{Path.GetFileNameWithoutExtension(file)}");
+    var catalog = files.ToList();
+    var index = 0;
+
+    // The sequence mirrors the UI contract: navigation/action advances first,
+    // then the filesystem operation runs against the captured source path.
+    index = Math.Min(index + 1, catalog.Count - 1); // Next => 2
+    var moveSource = catalog[index];
+    var moveDestination = Path.Combine(moved, Path.GetFileName(moveSource));
+    catalog.RemoveAt(index); // Move advances/removes exactly once; current becomes 3.
+    index = Math.Min(index, catalog.Count - 1);
+    File.Move(moveSource, moveDestination);
+    Check(Path.Exists(moveDestination) && !Path.Exists(moveSource) && Path.GetFileName(catalog[index]) == "3.jpg",
+        "Sequence Next then Move keeps next image without skipping", failures);
+
+    index = Math.Min(index + 1, catalog.Count - 1); // Next => 4
+    var deleteSource = catalog[index];
+    catalog.RemoveAt(index); // Delete advances/removes exactly once; current becomes 5.
+    index = Math.Min(index, catalog.Count - 1);
+    File.Delete(deleteSource);
+    Check(!Path.Exists(deleteSource) && Path.GetFileName(catalog[index]) == "5.jpg",
+        "Sequence Next then Delete keeps next image without skipping", failures);
+
+    index = Math.Min(index + 1, catalog.Count - 1); // Next at end remains 5.
+    var finalDelete = catalog[index];
+    catalog.RemoveAt(index);
+    index = Math.Min(index, catalog.Count - 1);
+    File.Delete(finalDelete);
+    Check(catalog.Count == 2 && Path.GetFileName(catalog[index]) == "3.jpg" &&
+          catalog.All(File.Exists), "Sequence Delete at end selects the prior surviving slot", failures);
+}
 
 static bool operationJournalTextContainsFailed()
 {
