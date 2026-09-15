@@ -8,7 +8,7 @@ namespace PhotoReview.App;
 public sealed class BenchmarkImageExecutor
 {
     private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache;
-    public BenchmarkImageExecutor(long capacityBytes = 16L * 1024 * 1024 * 1024)
+    public BenchmarkImageExecutor(long capacityBytes = AppConstants.ImageCacheCapacityBytes)
         => _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(capacityBytes, ImageBytes);
 
     public async Task<(BitmapImage Image, bool CacheHit)> DecodeAsync(string path, BenchmarkProfile profile, CancellationToken token = default)

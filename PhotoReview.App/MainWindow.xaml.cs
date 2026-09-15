@@ -33,14 +33,14 @@ public partial class MainWindow : Window
     private long _cacheEpoch;
     private readonly object _cacheLifecycleGate = new();
     private long _totalSourceBytes;
-    private readonly SemaphoreSlim _preloadSlots = new(8, 8);
+    private readonly SemaphoreSlim _preloadSlots = new(AppConstants.PreloadWorkerCount, AppConstants.PreloadWorkerCount);
     private Task? _preloadSchedulerTask;
     private CancellationTokenSource? _preloadSchedulerCts;
     private int _preloadCenter;
     private long _preloadPriorityVersion;
-    private const long MaxCacheBytes = 16L * 1024 * 1024 * 1024;
-    private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
-    private const double PreloadMemoryLoadLimit = 0.80;
+    private const long MaxCacheBytes = AppConstants.ImageCacheCapacityBytes;
+    private const long FullFolderRamThresholdBytes = AppConstants.ImageCacheCapacityBytes;
+    private const double PreloadMemoryLoadLimit = AppConstants.PreloadMemoryLoadLimit;
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
@@ -579,7 +579,7 @@ public partial class MainWindow : Window
 
     private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
     {
-        const int workers = 8;
+        const int workers = AppConstants.PreloadWorkerCount; // must match _preloadSlots capacity above
         var running = new Dictionary<Task, string>();
         var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenVersion = -1L;
