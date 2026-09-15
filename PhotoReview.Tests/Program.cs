@@ -221,7 +221,7 @@ try
     Check(settingsWindow.Contains("Path.GetDirectoryName(AppLog.FilePath)") && settingsWindow.Contains("explorer.exe") && settingsWindow.Contains("AppLog.FilePath"), "Open log location follows the configured AppLog path", failures);
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
     Check(mainWindowXaml.Contains("Focusable=\"True\"") && mainWindow.Contains("CompareLeft_KeyDown") && mainWindow.Contains("CompareRight_KeyDown"), "Compare previews support keyboard selection", failures);
-    Check(mainWindow.Contains("GetGCMemoryInfo") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
+    Check(mainWindow.Contains("PhysicalMemory.HasHeadroom") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
     Check(mainWindowXaml.Contains("Closed=\"Window_Closed\"") && mainWindow.Contains("_thumbnailCache.Dispose()") && mainWindow.Contains("_preloadCts.Dispose()"), "Window shutdown disposes preload and thumbnail resources", failures);
     var placementService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "WindowPlacementService.cs"));
     Check(mainWindowXaml.Contains("Loaded=\"Window_Loaded\"") && mainWindowXaml.Contains("Closing=\"Window_Closing\""), "Main window restores and saves native placement instead of always using the startup default", failures);
@@ -344,3 +344,4 @@ sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplore
     public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
         => Task.FromResult(snapshot);
 }
+

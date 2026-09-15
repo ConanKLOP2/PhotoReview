@@ -31,7 +31,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource _preloadCts = new();
     private readonly Dictionary<string, Task<BitmapImage>> _previewLoads = new(StringComparer.OrdinalIgnoreCase);
     private long _totalSourceBytes;
-    private readonly SemaphoreSlim _preloadSlots = new(2, 2);
+    private readonly SemaphoreSlim _preloadSlots = new(8, 8);
     private const long MaxCacheBytes = 16L * 1024 * 1024 * 1024;
     private const long FullFolderRamThresholdBytes = 16L * 1024 * 1024 * 1024;
     private const double PreloadMemoryLoadLimit = 0.80;
@@ -455,7 +455,7 @@ public partial class MainWindow : Window
         _preloadCts.Dispose();
         _preloadCts = new CancellationTokenSource();
         var cancellationToken = _preloadCts.Token;
-        var nearby = Enumerable.Range(1, 8).Concat([-1, -2]);
+        var nearby = Enumerable.Range(1, 32).Concat(Enumerable.Range(-1, 8));
         var offsets = _totalSourceBytes < FullFolderRamThresholdBytes
             ? nearby.Concat(Enumerable.Range(center + 1, _files.Count - center - 1).Select(i => i - center))
                 .Concat(Enumerable.Range(0, center).Reverse().Select(i => i - center)).Distinct()
@@ -465,7 +465,8 @@ public partial class MainWindow : Window
         foreach (var offset in offsets)
         {
             // Even RAM hits must let input/rendering run. Never enqueue the whole folder.
-            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+            if ((batch.Count & 7) == 0)
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
             if (token != _generation || cancellationToken.IsCancellationRequested) return;
             if (!HasPreloadHeadroom()) return;
             var i = center + offset;
@@ -482,9 +483,7 @@ public partial class MainWindow : Window
 
     private static bool HasPreloadHeadroom()
     {
-        var memory = GC.GetGCMemoryInfo();
-        return PhysicalMemory.HasHeadroom(PreloadMemoryLoadLimit) && (memory.TotalAvailableMemoryBytes <= 0 ||
-            (double)memory.MemoryLoadBytes / memory.TotalAvailableMemoryBytes < PreloadMemoryLoadLimit);
+        return PhysicalMemory.HasHeadroom(PreloadMemoryLoadLimit);
     }
 
     private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)

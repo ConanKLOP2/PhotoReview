@@ -27,6 +27,8 @@ internal static class PhysicalMemory
     {
         var status = new Status { Length = (uint)Marshal.SizeOf<Status>() };
         if (!GlobalMemoryStatusEx(ref status)) return false;
-        return status.Load < maximumLoad * 100 && status.AvailablePhysical >= 4UL * 1024 * 1024 * 1024;
+        // Keep a 2 GiB emergency reserve while allowing the 32 GiB review
+        // workstation to use substantially more RAM for decoded previews.
+        return status.Load < maximumLoad * 100 && status.AvailablePhysical >= 2UL * 1024 * 1024 * 1024;
     }
 }
