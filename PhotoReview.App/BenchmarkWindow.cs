@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Controls = System.Windows.Controls;
+using System.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -10,6 +11,7 @@ public sealed class BenchmarkWindow : Window
     private readonly Controls.ListBox _profiles = new() { Height = 90, SelectionMode = Controls.SelectionMode.Multiple };
     private readonly Controls.TextBlock _status = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly Controls.Button _run = new() { Content = "Run Benchmark", Padding = new Thickness(12, 5, 12, 5) };
+    private string? _lastReport;
 
     public BenchmarkWindow(string? initialFolder)
     {
@@ -24,6 +26,9 @@ public sealed class BenchmarkWindow : Window
         panel.Children.Add(_folder);
         panel.Children.Add(_profiles);
         panel.Children.Add(_run);
+        var open = new Controls.Button { Content = "Open last report", Margin = new Thickness(5,0,0,0) };
+        open.Click += (_, _) => { if (_lastReport is not null && File.Exists(_lastReport)) Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_lastReport}\"") { UseShellExecute = true }); };
+        panel.Children.Add(open);
         panel.Children.Add(_status);
         Content = panel;
     }
@@ -50,6 +55,7 @@ public sealed class BenchmarkWindow : Window
             }, progress);
             var reportPath = Path.Combine(Path.GetTempPath(), $"photoreview-benchmark-{report.RunId}.json");
             await File.WriteAllTextAsync(reportPath, report.ToJson());
+            _lastReport = reportPath;
             _status.Text = $"{profile.Name}: P50 {report.Phases[0].P50:F0} ms, P95 {report.Phases[0].P95:F0} ms — {reportPath}";
             }
         }
