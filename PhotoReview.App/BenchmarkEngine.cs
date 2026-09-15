@@ -9,11 +9,13 @@ public sealed record BenchmarkProgress(string ProfileId, BenchmarkWorkload Workl
 public sealed class BenchmarkEngine
 {
     public async Task<BenchmarkReport> RunAsync(string folder, BenchmarkProfile profile,
-        Func<BenchmarkProfile, BenchmarkWorkload, int, CancellationToken, Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>> operation,
+        BenchmarkWorkloadExecutor operation,
         IProgress<BenchmarkProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("Folder is required", nameof(folder));
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
+        BenchmarkProfileValidation.Validate(profile);
+        ArgumentNullException.ThrowIfNull(operation);
         var started = DateTimeOffset.UtcNow;
         var runId = Guid.NewGuid().ToString("N");
         AppLog.Info($"Benchmark start runId={runId} profile={profile.Id} workload={profile.Workload} folder={Path.GetFullPath(folder)} iterations={profile.Iterations} workers={profile.Workers}");

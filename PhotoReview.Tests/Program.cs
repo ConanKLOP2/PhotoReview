@@ -5,25 +5,29 @@ using System.Windows.Media;
 static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
 {
     if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
-    var reportDirectory = outputOverride is { Length: > 0 } && Path.GetExtension(outputOverride).Length == 0 ? Path.GetFullPath(outputOverride) : Path.Combine(folder, ".photoreview-benchmark");
+    var reportDirectory = outputOverride is { Length: > 0 } ? Path.GetFullPath(outputOverride) : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
     Directory.CreateDirectory(reportDirectory);
-    var engine = new BenchmarkEngine();
+    var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
+    var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly).Where(p => supported.Contains(Path.GetExtension(p))).Take(64).ToArray();
+    if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
     var reports = new List<BenchmarkReport>();
     foreach (var profile in profiles)
     {
-        Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} workers={profile.Workers}");
-        if (profile.Workload == BenchmarkWorkload.FileAction)
+        Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
+        var imageExecutor = new BenchmarkImageExecutor();
+        var report = await new BenchmarkEngine().RunAsync(folder, profile, async (_, workload, iteration, token) =>
         {
-            var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(temp);
-            try { BenchmarkScenarioTests.Run(temp, new List<string>()); } finally { try { Directory.Delete(temp, true); } catch { } }
-        }
-        var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly).Where(p => ".jpg.jpeg.png.bmp.gif.tif.tiff".Contains(Path.GetExtension(p), StringComparison.OrdinalIgnoreCase)).Take(Math.Max(2, Math.Min(30, profile.Iterations))).ToArray();
-        if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
-        var report = await engine.RunAsync(folder, profile, async (_, _, iteration, token) =>
-        {
-            var path = files[iteration % files.Length];
-            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-            var buffer = new byte[64 * 1024]; while (await stream.ReadAsync(buffer, token) > 0) { }
+            if (workload == BenchmarkWorkload.FileAction)
+            {
+                var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
+                try { await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], token), token); await imageExecutor.DecodeAsync(temp, profile, token); using var read = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); var moved = temp + ".moved"; File.Move(temp, moved); File.Delete(moved); return (true, (ReviewMetricsSnapshot?)null); }
+                finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
+            }
+            var selected = Enumerable.Range(0, Math.Min(Math.Max(1, profile.Workers), files.Length)).Select(i => files[(iteration + i) % files.Length]).ToArray();
+            await Parallel.ForEachAsync(selected, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, profile.Workers), CancellationToken = token }, async (path, ct) =>
+            {
+                await imageExecutor.DecodeAsync(path, profile, ct);
+            });
             return (true, (ReviewMetricsSnapshot?)null);
         }, new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
         reports.Add(report);
@@ -32,7 +36,6 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     }
     var summary = Path.Combine(reportDirectory, "summary.json"); await File.WriteAllTextAsync(summary, System.Text.Json.JsonSerializer.Serialize(reports, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); Console.WriteLine($"REPORT: {summary}");
 }
-
 if (args.Length == 1 && args[0] == "--benchmark-list-profiles")
 {
     foreach (var profile in BenchmarkProfiles.All)
@@ -455,6 +458,9 @@ sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplore
     public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
         => Task.FromResult(snapshot);
 }
+
+
+
 
 
 

@@ -12,6 +12,36 @@ public sealed record BenchmarkProfile(
     BenchmarkWorkload Workload, int WarmupCount = 1, int Iterations = 30,
     bool CorrectnessOnly = false);
 
+public static class BenchmarkProfileExtensions
+{
+    public static int TargetWidth(this BenchmarkProfile profile) => profile.Id switch
+    {
+        "preview-light" => 960,
+        "preview-balanced" => 1600,
+        "preview-quality" => 2400,
+        "preview-high-quality" => 3200,
+        "original-correctness" => 0,
+        _ => 1920
+    };
+}
+
+public static class BenchmarkProfileValidation
+{
+    public static void Validate(BenchmarkProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (string.IsNullOrWhiteSpace(profile.Id) || string.IsNullOrWhiteSpace(profile.LoadingMode))
+            throw new ArgumentException("Profile id and loading mode are required");
+        if (profile.Workers < 1 || profile.NextWindow < 0 || profile.PreviousWindow < 0 || profile.Iterations < 1)
+            throw new ArgumentException($"Invalid benchmark settings for profile '{profile.Id}'");
+    }
+}
+
+/// The executor must call the production decode/cache/navigation path and return
+/// false when it only measured file I/O without presenting a decoded image.
+public delegate Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> BenchmarkWorkloadExecutor(
+    BenchmarkProfile profile, BenchmarkWorkload workload, int iteration, CancellationToken cancellationToken);
+
 public sealed record BenchmarkSample(string ProfileId, BenchmarkWorkload Workload,
     double ElapsedMilliseconds, bool Correct, string? Error = null);
 
