@@ -671,7 +671,7 @@ public partial class MainWindow : Window
             {
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                RecycleImmediately(source);
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
             }
@@ -708,6 +708,30 @@ public partial class MainWindow : Window
         _preloadCts.Cancel();
         // Keep the current frame visible while Move/Delete runs. Clearing the
         // source here creates a black flash before the next image is ready.
+    }
+
+    private static void RecycleImmediately(string path)
+    {
+        // Shell recycle can briefly race an in-flight WIC read even when the
+        // stream allows Delete sharing. Retry only transient sharing/IO errors;
+        // the action itself is still started immediately and never waits for
+        // the preview task to complete.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(40);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 5)
+            {
+                Thread.Sleep(40);
+            }
+        }
     }
 
     private async Task ExecuteActionAsync(ReviewAction action)
