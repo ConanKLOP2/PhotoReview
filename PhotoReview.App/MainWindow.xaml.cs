@@ -94,7 +94,11 @@ public partial class MainWindow : Window
     {
         AppLog.Info("Settings button clicked");
         var dialog = new SettingsWindow(_settings) { Owner = this };
-        if (dialog.ShowDialog() == true) _settings = AppSettings.Load();
+        if (dialog.ShowDialog() == true)
+        {
+            _settings = AppSettings.Load();
+            UpdateFolderTitle();
+        }
     }
 
     private async Task LoadFolderAsync(string folder, string? initialPath = null)
@@ -109,7 +113,7 @@ public partial class MainWindow : Window
         {
             folder = Path.GetFullPath(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
-            Title = $"Photo Review — {folder}";
+            UpdateFolderTitle(folder);
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
                 .Where(ImageFileTypes.IsSupported).ToList(), loadToken);
@@ -165,9 +169,17 @@ public partial class MainWindow : Window
             AppLog.Error($"LoadFolder failed: {folder}", ex);
             MainImage.Source = null;
             FolderText.Text = folder;
-            Title = $"Photo Review — {folder}";
+            UpdateFolderTitle(folder);
             StatusText.Text = $"Không mở được folder: {ex.Message}";
         }
+    }
+
+    private void UpdateFolderTitle(string? folder = null)
+    {
+        folder ??= FolderText.Text;
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        // Keeps the native title format used by: Title = $"Photo Review — {folder}"
+        Title = $"Photo Review — {folder}{(AppLog.Enabled ? " · LOG" : "")}";
     }
 
     private async Task ShowImageAsync(int index)
