@@ -281,7 +281,7 @@ try
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
-    Check(mainWindow.Contains("16L * 1024 * 1024 * 1024") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold", failures);
+    Check(mainWindow.Contains("AppConstants.ImageCacheCapacityBytes") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "FileHashService.cs")) && mainWindow.Contains("_hashService.Clear()"), "Hash service is isolated with bounded cache lifecycle", failures);
     var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
     Check(!mainWindow.Contains("Image_LeftClick") && !mainWindow.Contains("Image_RightClick") && !mainWindowXaml.Contains("Image_LeftClick") && !mainWindowXaml.Contains("Image_RightClick"), "Image click does not navigate; compare owns click selection", failures);

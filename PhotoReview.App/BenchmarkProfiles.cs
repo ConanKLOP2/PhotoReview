@@ -2,7 +2,7 @@ namespace PhotoReview.App;
 
 public static class BenchmarkProfiles
 {
-    private const long Reserve = 2L * 1024 * 1024 * 1024;
+    private const long Reserve = AppConstants.MemoryReserveBytes;
     public static IReadOnlyList<BenchmarkProfile> All { get; } =
     [
         P("instant-review", "Instant Review", "Ưu tiên ảnh đầu tiên", "Fast", 2, 4, 1, false, BenchmarkWorkload.FirstFrame),

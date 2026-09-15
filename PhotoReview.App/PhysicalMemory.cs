@@ -30,7 +30,7 @@ internal static class PhysicalMemory
         if (snapshot is null) return false;
         // Keep a 2 GiB emergency reserve while allowing the 32 GiB review
         // workstation to use substantially more RAM for decoded previews.
-        return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= 2UL * 1024 * 1024 * 1024;
+        return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= (ulong)AppConstants.MemoryReserveBytes;
     }
 
     internal static MemorySnapshot? GetSnapshot()
