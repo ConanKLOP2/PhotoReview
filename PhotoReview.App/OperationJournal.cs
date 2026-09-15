@@ -26,59 +26,46 @@ public sealed class OperationJournal
 
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
-        var lines = ReadLinesSnapshot();
-        if (lines.Length == 0) return [];
         var entries = new List<JournalEntry>();
-        foreach (var line in lines)
-        {
-            try { var entry = JsonSerializer.Deserialize<JournalEntry>(line); if (entry is not null && entry.Type == "Move" && entry.State == "Committed") entries.Add(entry); }
-            catch (JsonException) { }
-        }
+        ReadEntries(entry => { if (entry.Type == "Move" && entry.State == "Committed") entries.Add(entry); });
         return entries;
     }
 
     public IReadOnlyList<JournalEntry> ReadPendingOperations()
     {
-        var lines = ReadLinesSnapshot();
-        if (lines.Length == 0) return [];
         var prepared = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
         var completed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var line in lines)
+        ReadEntries(entry =>
         {
-            try
-            {
-                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                if (entry is null) continue;
-                if (entry.State == "Prepared") prepared[entry.Id] = entry;
-                if (entry.State is "Committed" or "Failed") completed.Add(entry.Id);
-            }
-            catch (JsonException) { }
-        }
+            if (entry.State == "Prepared") prepared[entry.Id] = entry;
+            if (entry.State is "Committed" or "Failed") completed.Add(entry.Id);
+        });
         return prepared.Where(x => !completed.Contains(x.Key)).Select(x => x.Value).ToList();
     }
 
     public IReadOnlyList<JournalEntry> ReadFailedOperations()
     {
-        var lines = ReadLinesSnapshot();
-        if (lines.Length == 0) return [];
         var failures = new List<JournalEntry>();
-        foreach (var line in lines)
-        {
-            try
-            {
-                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                if (entry?.State == "Failed") failures.Add(entry);
-            }
-            catch (JsonException) { }
-        }
+        ReadEntries(entry => { if (entry.State == "Failed") failures.Add(entry); });
         return failures;
     }
 
-    private string[] ReadLinesSnapshot()
+    private void ReadEntries(Action<JournalEntry> handle)
     {
         lock (_gate)
         {
-            return File.Exists(_path) ? File.ReadAllLines(_path) : [];
+            if (!File.Exists(_path)) return;
+            using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.SequentialScan);
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            while (reader.ReadLine() is { } line)
+            {
+                try
+                {
+                    var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                    if (entry is not null) handle(entry);
+                }
+                catch (JsonException) { }
+            }
         }
     }
 

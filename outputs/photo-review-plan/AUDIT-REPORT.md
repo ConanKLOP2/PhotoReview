@@ -112,3 +112,13 @@ Cập nhật: 2026-09-14. Phạm vi: toàn bộ source `PhotoReview.App`, `Photo
 ## Explorer sort-state parity (2026-09-14)
 
 PhotoReview now queries the matching Explorer window through `IServiceProvider`/`IShellBrowser` and reads item order, sort columns, and group state from native `IFolderView2`. Direct COM vtable calls avoid the unregistered Shell type-library failure seen with RCW projection. Runtime evidence on `Machi馬吉 - Hot Springs` confirms Name DESC `(37).jpg` through `(1).jpg`. Snapshot validation rejects missing, duplicate, and out-of-folder results; configured sort remains the fallback. Date/Size and grouped-view cases still require the remaining native integration matrix before claiming complete parity.
+
+## Audit continuation (2026-09-15)
+
+- Repository cleanup: added `/work/` to `.gitignore` and removed seven tracked .NET runtime/template cache files. `outputs/copy-cosplaytele.bat` was not present or tracked in the inspected checkout, so no unrelated deletion was performed.
+- Extension consistency: added `ImageFileTypes` as the single supported-image registry and routed folder scan, drag-drop, and sibling-folder discovery through it.
+- Journal memory behavior: `OperationJournal` now parses JSONL incrementally with `StreamReader` instead of materializing the complete file via `File.ReadAllLines`.
+- Recovery correctness: Delete now writes journal type `Recycle`, matching reconciliation; configured Move/Copy actions now write `Prepared`, verify destination size, and write `Committed` or `Failed` entries with source/destination metadata.
+- Verification after these changes: Release contract tests PASS, solution/build gates PASS with 0 warnings and 0 errors, required framework-dependent publish PASS at `PhotoReview.App/bin/Release/net10.0-windows/publish`, and release-file verification PASS.
+
+Remaining items are intentionally not marked complete without stronger evidence: GUI acceptance, key-to-present and disk-I/O benchmarks, native Explorer Date/Size/group matrix, and real filesystem fault-injection across crash boundaries.

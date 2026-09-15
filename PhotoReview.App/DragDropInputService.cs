@@ -21,12 +21,7 @@ public sealed record DragDropInputResult(
 
 public static class DragDropInputService
 {
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"
-    };
-
-    public static bool IsSupportedImage(string path) => SupportedExtensions.Contains(Path.GetExtension(path));
+    public static bool IsSupportedImage(string path) => ImageFileTypes.IsSupported(path);
 
     public static DragDropInputResult Parse(IEnumerable<string>? paths)
     {

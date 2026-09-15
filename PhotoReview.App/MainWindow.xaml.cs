@@ -111,7 +111,7 @@ public partial class MainWindow : Window
             Title = $"Photo Review — {folder}";
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
-                .Where(DragDropInputService.IsSupportedImage).ToList());
+                .Where(ImageFileTypes.IsSupported).ToList());
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
             var explorerTask = _explorerOrder.TryGetSnapshotAsync(folder, TimeSpan.FromSeconds(2), loadToken);
@@ -535,12 +535,11 @@ public partial class MainWindow : Window
         var folders = SiblingFolderService.GetSorted(currentFolder);
         var index = folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
         if (index < 0) return null;
-        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
         for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
         {
             try
             {
-                if (Directory.EnumerateFiles(folders[i], "*", System.IO.SearchOption.TopDirectoryOnly).Any(path => supported.Contains(Path.GetExtension(path)))) return folders[i];
+                if (Directory.EnumerateFiles(folders[i], "*", System.IO.SearchOption.TopDirectoryOnly).Any(ImageFileTypes.IsSupported)) return folders[i];
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
@@ -659,9 +658,9 @@ public partial class MainWindow : Window
             if (category == 3)
             {
                 var operationId = Guid.NewGuid().ToString("N");
-                _journal.Append(new JournalEntry(operationId, "RecycleBin", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-                _journal.Append(new JournalEntry(operationId, "RecycleBin", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
             }
             else
@@ -702,6 +701,12 @@ public partial class MainWindow : Window
         }
         if (_index < 0 || _index >= _files.Count) return;
         var source = _compareSelectedPath ?? _files[_index];
+        var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
+        var operationId = Guid.NewGuid().ToString("N");
+        var prepared = false;
+        string? destinationPath = null;
+        long sourceSize = 0;
+        var sourceLastWriteUtc = DateTime.MinValue;
         try
         {
             if (string.IsNullOrWhiteSpace(action.Destination)) throw new IOException("Action chưa có thư mục đích.");
@@ -710,15 +715,28 @@ public partial class MainWindow : Window
             var sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source)!);
             if (IsSamePath(destinationFolder, sourceFolder)) throw new IOException("Không thể Move/Copy vào chính folder nguồn.");
             Directory.CreateDirectory(destinationFolder);
-            var destination = Path.Combine(destinationFolder, Path.GetFileName(source));
-            if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
-            if (action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) File.Copy(source, destination);
-            else File.Move(source, destination);
-            if (!action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase)) { _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null; }
+            destinationPath = Path.Combine(destinationFolder, Path.GetFileName(source));
+            if (File.Exists(destinationPath)) throw new IOException($"Đích đã tồn tại: {destinationPath}");
+            var sourceInfo = new FileInfo(source);
+            sourceSize = sourceInfo.Length;
+            sourceLastWriteUtc = sourceInfo.LastWriteTimeUtc;
+            _journal.Append(new JournalEntry(operationId, operation, "Prepared", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
+            prepared = true;
+            if (operation == "Copy") File.Copy(source, destinationPath);
+            else File.Move(source, destinationPath);
+            var destinationInfo = new FileInfo(destinationPath);
+            if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
+                throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
+            _journal.Append(new JournalEntry(operationId, operation, "Committed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
+            if (operation == "Move") { _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null; }
             if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
             else { MainImage.Source = null; StatusText.Text = $"Đã thực hiện: {action.Name}"; }
         }
-        catch (Exception ex) { StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            if (prepared) _journal.Append(new JournalEntry(operationId, operation, "Failed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
+            StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
+        }
     }
 
     private static bool IsSamePath(string first, string second)
