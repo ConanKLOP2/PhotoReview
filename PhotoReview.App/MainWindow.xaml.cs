@@ -278,7 +278,10 @@ public partial class MainWindow : Window
 
     private static BitmapImage DecodeSource(string path, int targetWidth)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        // Allow an in-flight decode to coexist with Move/Delete. The action path
+        // cancels future work and invalidates its result; Windows can still
+        // complete the file operation without waiting for this read handle.
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
         var bitmap = new BitmapImage();
         bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
         if (targetWidth > 0) bitmap.DecodePixelWidth = targetWidth;
@@ -658,6 +661,7 @@ public partial class MainWindow : Window
     {
         if (_index < 0 || _index >= _files.Count) return;
         var source = _compareSelectedPath ?? _files[_index];
+        StopImageReadsForAction();
         try
         {
             var info = new FileInfo(source);
@@ -693,6 +697,17 @@ public partial class MainWindow : Window
         catch (Exception ex) { StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}"; }
     }
 
+    private void StopImageReadsForAction()
+    {
+        // Do not await decode/preload tasks here: the file action must start now.
+        // Generation invalidation prevents any late bitmap from being presented.
+        Interlocked.Increment(ref _generation);
+        _preloadCts.Cancel();
+        MainImage.Source = null;
+        CompareLeftImage.Source = null;
+        CompareRightImage.Source = null;
+    }
+
     private async Task ExecuteActionAsync(ReviewAction action)
     {
         if (action.Operation is not ("Move" or "Copy" or "Recycle" or "Delete"))
@@ -711,6 +726,7 @@ public partial class MainWindow : Window
             return;
         }
         if (_index < 0 || _index >= _files.Count) return;
+        StopImageReadsForAction();
         var source = _compareSelectedPath ?? _files[_index];
         var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
         var operationId = Guid.NewGuid().ToString("N");
