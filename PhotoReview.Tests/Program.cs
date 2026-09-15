@@ -2,7 +2,61 @@ using PhotoReview.App;
 using PhotoReview.Tests;
 using System.IO;
 using System.Windows.Media;
+static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
+{
+    if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
+    var reportDirectory = outputOverride is { Length: > 0 } && Path.GetExtension(outputOverride).Length == 0 ? Path.GetFullPath(outputOverride) : Path.Combine(folder, ".photoreview-benchmark");
+    Directory.CreateDirectory(reportDirectory);
+    var engine = new BenchmarkEngine();
+    var reports = new List<BenchmarkReport>();
+    foreach (var profile in profiles)
+    {
+        Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} workers={profile.Workers}");
+        if (profile.Workload == BenchmarkWorkload.FileAction)
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(temp);
+            try { BenchmarkScenarioTests.Run(temp, new List<string>()); } finally { try { Directory.Delete(temp, true); } catch { } }
+        }
+        var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly).Where(p => ".jpg.jpeg.png.bmp.gif.tif.tiff".Contains(Path.GetExtension(p), StringComparison.OrdinalIgnoreCase)).Take(Math.Max(2, Math.Min(30, profile.Iterations))).ToArray();
+        if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
+        var report = await engine.RunAsync(folder, profile, async (_, _, iteration, token) =>
+        {
+            var path = files[iteration % files.Length];
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+            var buffer = new byte[64 * 1024]; while (await stream.ReadAsync(buffer, token) > 0) { }
+            return (true, (ReviewMetricsSnapshot?)null);
+        }, new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
+        reports.Add(report);
+        var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
+        var phase = report.Phases[0]; Console.WriteLine($"DONE profile={profile.Id} status={phase.Status} p50={phase.P50:F1}ms p95={phase.P95:F1}ms max={phase.Max:F1}ms report={pathOut}");
+    }
+    var summary = Path.Combine(reportDirectory, "summary.json"); await File.WriteAllTextAsync(summary, System.Text.Json.JsonSerializer.Serialize(reports, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); Console.WriteLine($"REPORT: {summary}");
+}
 
+if (args.Length == 1 && args[0] == "--benchmark-list-profiles")
+{
+    foreach (var profile in BenchmarkProfiles.All)
+        Console.WriteLine($"{profile.Id}\t{profile.Name}\t{profile.Workload}\tmode={profile.LoadingMode}\tworkers={profile.Workers}\titerations={profile.Iterations}\tcorrectnessOnly={profile.CorrectnessOnly}\t{profile.Description}");
+    return;
+}
+
+if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all" || args[0] == "--benchmark-actions"))
+{
+    var benchmarkFolder = args[1];
+    var requested = args[0] switch
+    {
+        "--benchmark-all" => BenchmarkProfiles.All.Where(p => !p.CorrectnessOnly).ToArray(),
+        "--benchmark-actions" => BenchmarkProfiles.All.Where(p => p.Workload == BenchmarkWorkload.FileAction).ToArray(),
+        _ => (args.Length >= 3
+            ? args[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(id => BenchmarkProfiles.Find(id) ?? throw new ArgumentException($"Unknown benchmark profile: {id}"))
+                .ToArray()
+            : [BenchmarkProfiles.Find("recommended-auto")!])
+    };
+    var output = args.Length >= 3 && args[0] != "--benchmark" ? args[2] : null;
+    await RunCliBenchmarksAsync(benchmarkFolder, requested, output);
+    return;
+}
 if (args.Length == 2 && args[0] == "--ui-next-probe")
 {
     await LocalUiNextProbe.RunAsync(args[1]);
@@ -401,4 +455,6 @@ sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplore
     public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
         => Task.FromResult(snapshot);
 }
+
+
 
