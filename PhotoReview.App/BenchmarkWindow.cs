@@ -39,6 +39,7 @@ public sealed class BenchmarkWindow : Window
             {
             var progress = new Progress<BenchmarkProgress>(p => _status.Text = $"{p.ProfileId}: {p.Completed}/{p.Total} — {p.Message}");
             var report = await engine.RunAsync(_folder.Text, profile, async (_, _, _, ct) =>
+            {
                 var file = Directory.EnumerateFiles(_folder.Text, "*.*", SearchOption.TopDirectoryOnly)
                     .FirstOrDefault(p => IsImage(p));
                 if (file is null) return (false, (ReviewMetricsSnapshot?)null);
