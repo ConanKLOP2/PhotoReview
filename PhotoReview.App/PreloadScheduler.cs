@@ -25,7 +25,11 @@ public sealed class PreloadScheduler : IDisposable
     private CancellationTokenSource? _preloadSchedulerCts;
     private int _preloadCenter;
     private long _preloadPriorityVersion;
+    // Written from concurrent PreloadOneAsync worker tasks (PreloadWorkerCount at once)
+    // and read/cleared from the caller's thread; a plain HashSet is not thread-safe
+    // against that, so every access goes through _preloadedKeysGate.
     private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
+    private readonly object _preloadedKeysGate = new();
 
     public PreloadScheduler(
         PreviewImageService previewService,
@@ -47,14 +51,17 @@ public sealed class PreloadScheduler : IDisposable
     public void Cancel() => _preloadCts.Cancel();
 
     /// <summary>Drops the warmed-key set (folder reload / cache clear).</summary>
-    public void ClearPreloadedKeys() => _preloadedKeys.Clear();
+    public void ClearPreloadedKeys() { lock (_preloadedKeysGate) _preloadedKeys.Clear(); }
 
     /// <summary>Removes warmed keys for one normalized (full, upper-invariant) path.</summary>
     public void RemovePreloadedKeysForPath(string normalizedPath)
-        => _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalizedPath, StringComparison.Ordinal));
+    {
+        lock (_preloadedKeysGate)
+            _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalizedPath, StringComparison.Ordinal));
+    }
 
     /// <summary>True when this key was warmed by preload; consumes the entry.</summary>
-    public bool TryConsumePreloadedKey(ImageCacheKey key) => _preloadedKeys.Remove(key);
+    public bool TryConsumePreloadedKey(ImageCacheKey key) { lock (_preloadedKeysGate) return _preloadedKeys.Remove(key); }
 
     public Task PreloadAroundAsync(int center)
     {
@@ -155,7 +162,7 @@ public sealed class PreloadScheduler : IDisposable
                 if (!HasPreloadHeadroom()) return;
                 var key = _previewService.GetCurrentCacheKey(path);
                 await _previewService.GetPreviewAsync(path, key);
-                if (_previewService.TryGetCachedPreview(key, out _)) _preloadedKeys.Add(key);
+                if (_previewService.TryGetCachedPreview(key, out _)) lock (_preloadedKeysGate) _preloadedKeys.Add(key);
             }
             finally { _preloadSlots.Release(); }
         }
