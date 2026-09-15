@@ -73,6 +73,7 @@ try
     Check(cache.CurrentSize <= 4, "LRU enforces byte capacity", failures);
 
     var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs"));
+    var dragDropXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
     var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
     var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
@@ -102,6 +103,15 @@ try
     Check(siblings.SequenceEqual(new[] { folder1, folder2, folder10 }, StringComparer.OrdinalIgnoreCase) && SiblingFolderService.GetTarget(folder2, 1) == folder10 && SiblingFolderService.GetTarget(folder2, -1) == folder1, "Sibling folder navigation uses natural order", failures);
     Check(mainWindow.Contains("Shortcuts.FirstImage") && mainWindow.Contains("ShowImageAsync(0)"), "Home navigates to first image", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.NextFolder") && mainWindow.Contains("_settings.Shortcuts.FirstImage") && mainWindow.Contains("_settings.Shortcuts.ZoomIn"), "Configurable navigation and zoom shortcuts are wired at runtime", failures);
+    var dragFolder = Directory.CreateDirectory(Path.Combine(root, "drag-folder")).FullName;
+    var dragImage = Path.Combine(dragFolder, "first.JPG"); File.WriteAllBytes(dragImage, [1]);
+    var parsedFolder = DragDropInputService.Parse([dragFolder]);
+    var parsedImage = DragDropInputService.Parse([dragImage]);
+    var parsedInvalid = DragDropInputService.Parse([Path.Combine(root, "notes.txt")]);
+    Check(parsedFolder.Kind == DragDropInputKind.Folder && parsedFolder.FolderPath == dragFolder, "Drag-drop folder parser", failures);
+    Check(parsedImage.Kind == DragDropInputKind.Image && parsedImage.FolderPath == dragFolder && parsedImage.InitialImagePath == dragImage, "Drag-drop image selects initial image", failures);
+    Check(!parsedInvalid.IsValid, "Drag-drop rejects unsupported input", failures);
+    Check(dragDropXaml.Contains("AllowDrop=\"True\"") && mainWindow.Contains("Window_PreviewDragOver") && mainWindow.Contains("Window_Drop"), "Drag-drop events are wired on the main window", failures);
     Check(mainWindow.Contains("_settings.Shortcuts.Compare") && mainWindow.Contains("ComparePanel.Visibility"), "Compare shortcut toggles compare panel", failures);
     Check(appSettings.Contains("CompareHashEnabled") && mainWindow.Contains("CompareHashEnabled") && settingsWindow.Contains("CompareHashCheck"), "Compare hash is optional", failures);
     Check(appSettings.Contains("CompareSizeEnabled") && mainWindow.Contains("CompareSizeEnabled") && settingsWindow.Contains("CompareSizeCheck"), "Compare size is optional", failures);

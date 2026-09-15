@@ -20,6 +20,7 @@ PhotoReview được xây dựng như một công cụ review ảnh tốc độ 
 - Cache preview trong RAM có giới hạn, preload ảnh lân cận và bảo vệ theo áp lực bộ nhớ.
 - Chế độ tải Fast/Preview/Original, zoom, Fit và fullscreen.
 - Workflow review: mũi tên duyệt ảnh, Enter Move sang folder 2, Delete vào Recycle Bin, Space bỏ qua, Ctrl+Z Undo thao tác gần nhất (Move/Delete).
+- Kéo-thả ảnh hoặc folder từ Windows Explorer vào cửa sổ để mở nhanh; khi kéo ảnh, ứng dụng mở folder cha và chọn đúng ảnh đó.
 - Compare cặp ảnh, tùy chọn hash/kích thước, xử lý duplicate theo batch có màn hình xác nhận.
 - Journal an toàn cho Move/Copy/Recycle, recovery và retry có kiểm tra fingerprint.
 - Lưu session, vị trí cửa sổ và cấu hình người dùng.

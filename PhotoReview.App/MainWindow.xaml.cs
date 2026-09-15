@@ -65,6 +65,30 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(new WindowHandle(this)) == Forms.DialogResult.OK) _ = LoadFolderAsync(dialog.SelectedPath);
     }
 
+    private void Window_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)) return;
+        var paths = e.Data.GetData(System.Windows.DataFormats.FileDrop) as string[];
+        var input = DragDropInputService.Parse(paths);
+        if (!input.IsValid)
+        {
+            StatusText.Text = input.Warning ?? "Không có input hợp lệ.";
+            e.Handled = true;
+            return;
+        }
+
+        if (input.Warning is not null) StatusText.Text = input.Warning;
+        AppLog.Info($"DragDrop open: kind={input.Kind}, ignored={input.IgnoredPathCount}");
+        _ = LoadFolderAsync(input.FolderPath!, input.InitialImagePath);
+        e.Handled = true;
+    }
+
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         AppLog.Info("Settings button clicked");
@@ -85,10 +109,9 @@ public partial class MainWindow : Window
             folder = Path.GetFullPath(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
             Title = $"Photo Review — {folder}";
-            var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
-                .Where(p => supported.Contains(Path.GetExtension(p))).ToList());
+                .Where(DragDropInputService.IsSupportedImage).ToList());
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
             var explorerTask = _explorerOrder.TryGetSnapshotAsync(folder, TimeSpan.FromSeconds(2), loadToken);
