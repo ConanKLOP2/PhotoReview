@@ -10,6 +10,39 @@ UI/manual: focus, key repeat, DPI, zoom, stale frame, fullscreen.
 Performance: theo 04-PERFORMANCE.md.
 Không dùng unit test thay cho kiểm tra file thật và crash recovery.
 
+## Hai cách chạy test
+
+Sau WP3.3 có hai đường chạy cùng một bộ assertion; cả hai đều phải PASS.
+
+1. Console runner (CI đang dùng, `tools/verify-all.ps1` gọi trực tiếp):
+
+   ```
+   dotnet run --project PhotoReview.Tests\PhotoReview.Tests.csproj -c Release --no-build --nologo
+   ```
+
+   Không tham số: chạy toàn bộ suite `Check(...)`, in `PASS: ...` từng dòng, exit 0 khi
+   sạch và exit 1 khi có FAIL. Project này cũng là CLI dispatcher cho
+   `--benchmark`, `--benchmark-all`, `--benchmark-actions`, `--benchmark-list-profiles`,
+   `--ui-next-probe`, `--preload-bench`, `--explorer-probe`.
+
+2. xUnit runner (mới, có isolation từng test và TRX cho CI):
+
+   ```
+   dotnet test PhotoReview.Tests.Unit
+   dotnet test PhotoReview.Tests.Unit --logger trx
+   ```
+
+   `PhotoReview.Tests.Unit` chứa 171 `[Fact]` migrate 1-1 từ các `Check(...)` của
+   `PhotoReview.Tests` (giữ nguyên chuỗi mô tả làm `DisplayName`), chia theo chủ đề:
+   PreviewImageService, PreloadScheduler, AppSettings, AppLog, OperationJournal,
+   ImageCacheKey, ImageSortService, ExplorerSnapshotValidator, SourcePresence, v.v.
+   Mỗi assertion là một test độc lập nên một lỗi sớm không làm hỏng state của các
+   check sau; TRX sinh trong `PhotoReview.Tests.Unit\TestResults\`.
+
+Đây là trùng lặp có chủ đích trong ngắn hạn: `PhotoReview.Tests` giữ nguyên để không
+ảnh hưởng CI. Việc cắt hẳn sang xUnit (xoá khối `Check(...)` khỏi `Program.cs` và đổi
+`verify-all.ps1` sang `dotnet test`) là task tiếp theo, làm khi team sẵn sàng.
+
 ## Ma trận test
 
 | ID | Ca thử | Kết quả bắt buộc |
