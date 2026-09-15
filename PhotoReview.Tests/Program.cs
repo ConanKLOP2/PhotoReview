@@ -88,6 +88,12 @@ try
     Check(shortcuts.Next == "Right" && shortcuts.Previous == "Left" && mainWindow.Contains("Matches(e.Key, _settings.Shortcuts.Next)") && mainWindow.Contains("Matches(e.Key, _settings.Shortcuts.Previous)"), "Keyboard navigation uses arrow keys", failures);
     Check(shortcuts.MoveToFolder2 == "Enter" && mainWindow.Contains("ReviewAction") && mainWindow.Contains("ExecuteActionAsync(action)"), "Enter/action profiles drive configurable operations", failures);
     Check(shortcuts.SendToRecycleBin == "Delete" && mainWindow.Contains("ClassifyCurrentAsync(3)"), "Delete maps to Recycle Bin", failures);
+    // File actions must capture paths and advance the viewer before any blocking
+    // filesystem/Shell call.  The action completion must not advance a second time.
+    Check(mainWindow.Contains("AdvanceBeforeFileActionAsync", StringComparison.Ordinal), "File actions advance viewer before filesystem operation", failures);
+    Check(mainWindow.Contains("sourcePath", StringComparison.Ordinal) && mainWindow.Contains("nextPath", StringComparison.Ordinal), "File actions snapshot source and next paths", failures);
+    Check(mainWindow.Contains("FileActionResult", StringComparison.Ordinal) || mainWindow.Contains("Task.Run", StringComparison.Ordinal), "Filesystem action is detached from UI thread", failures);
+    Check(mainWindow.Contains("Do not call ShowImageAsync after action") || mainWindow.Contains("advance exactly once", StringComparison.OrdinalIgnoreCase), "File action completion does not advance twice", failures);
     Check(!mainWindow.Contains("Key.D1") && !mainWindow.Contains("Key.NumPad1"), "No number-1 shortcut required", failures);
     Check(appSettings.Contains("Skip") && mainWindow.Contains("Shortcuts.Skip"), "Space skip shortcut exists", failures);
     Check(appSettings.Contains("Skip") && appSettings.Contains("Undo") && appSettings.Contains("Fullscreen") && mainWindow.Contains("Shortcuts.Skip") && mainWindow.Contains("Shortcuts.Undo") && mainWindow.Contains("Shortcuts.Fullscreen"), "Skip, undo, and fullscreen shortcuts are configurable", failures);
