@@ -173,12 +173,12 @@ try
     var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
     var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
-    // The decode/cache path lives in PreviewImageService (WP3.2 step 1).  Checks below that
-    // target that path read viewer glue + service together so they keep asserting the same
-    // contract after the extraction.
-    var viewerAndPreviewService = mainWindow + File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreviewImageService.cs"));
-    // Likewise, preload scheduling lives in PreloadScheduler (WP3.2 step 2).
-    var viewerAndPreloadScheduler = mainWindow + File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreloadScheduler.cs"));
+    // The decode/cache path lives in PreviewImageService and preload scheduling in
+    // PreloadScheduler (WP3.2).  Both are constructible without a WPF Window, so their
+    // contracts are asserted behaviorally below; only the few branches that cannot be
+    // driven from a console harness still read these focused service files.
+    var previewServiceText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreviewImageService.cs"));
+    var preloadSchedulerText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreloadScheduler.cs"));
     RunInterleavedFileActionSequence(root, failures);
     Check(mainWindow.Contains("AdvanceBeforeFileActionAsync(sourcePath, removeSource: true)") &&
           mainWindow.Contains("AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == \"Move\")") &&
@@ -310,8 +310,49 @@ try
     Check(settingsWindow.Contains("Path.GetDirectoryName(AppLog.FilePath)") && settingsWindow.Contains("explorer.exe") && settingsWindow.Contains("AppLog.FilePath"), "Open log location follows the configured AppLog path", failures);
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
     Check(mainWindowXaml.Contains("Focusable=\"True\"") && mainWindow.Contains("CompareLeft_KeyDown") && mainWindow.Contains("CompareRight_KeyDown"), "Compare previews support keyboard selection", failures);
-    Check(viewerAndPreloadScheduler.Contains("PhysicalMemory.HasHeadroom") && viewerAndPreloadScheduler.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);
-    Check(mainWindowXaml.Contains("Closed=\"Window_Closed\"") && mainWindow.Contains("_thumbnailCache.Dispose()") && viewerAndPreloadScheduler.Contains("_preloadCts.Dispose()"), "Window shutdown disposes preload and thumbnail resources", failures);
+    // A valid, tiny PNG keeps decode fixtures portable while exercising WPF's real decoder.
+    var previewPng = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+    // PreloadScheduler takes its memory-load limit by constructor injection, so the memory
+    // pressure guard is driven for real: a 0.0 limit can never have headroom.
+    var preloadFolder = Directory.CreateDirectory(Path.Combine(root, "preload-scheduler")).FullName;
+    var preloadFiles = Enumerable.Range(0, 4).Select(i =>
+    {
+        var path = Path.Combine(preloadFolder, $"preload-{i}.png");
+        File.WriteAllBytes(path, previewPng);
+        return path;
+    }).ToArray();
+    var guardedMetrics = new ReviewMetrics();
+    var guardedPreviewService = new PreviewImageService(guardedMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+    using (var blockedScheduler = new PreloadScheduler(guardedPreviewService, guardedMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 0.0))
+    {
+        await blockedScheduler.PreloadAroundAsync(0);
+        Check(guardedPreviewService.CacheCount == 0 && guardedMetrics.Snapshot().SourceReads == 0,
+            "Background preload memory guard decodes nothing when there is no memory headroom", failures);
+    }
+    var warmMetrics = new ReviewMetrics();
+    var warmPreviewService = new PreviewImageService(warmMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+    using (var warmScheduler = new PreloadScheduler(warmPreviewService, warmMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0))
+    {
+        await warmScheduler.PreloadAroundAsync(0);
+        Check(warmPreviewService.CacheCount > 0 && warmMetrics.Snapshot().SourceReads > 0,
+            "Background preload warms the cache around the current index when memory headroom allows", failures);
+        Check(warmPreviewService.TryGetCachedPreview(preloadFiles[1], out _),
+            "Background preload prioritizes the next image after the current index", failures);
+        var warmedKey = warmPreviewService.GetCurrentCacheKey(preloadFiles[1]);
+        Check(warmScheduler.TryConsumePreloadedKey(warmedKey) && !warmScheduler.TryConsumePreloadedKey(warmedKey),
+            "A preloaded key is reported once and then consumed so a hit is not counted twice", failures);
+        warmScheduler.Cancel();
+        var reloadedCount = warmPreviewService.CacheCount;
+        await warmScheduler.PreloadAroundAsync(2);
+        Check(warmPreviewService.CacheCount >= reloadedCount,
+            "Cancelling preload does not poison the scheduler; the next request starts a fresh lifetime", failures);
+        warmScheduler.ClearPreloadedKeys();
+        Check(!warmScheduler.TryConsumePreloadedKey(warmPreviewService.GetCurrentCacheKey(preloadFiles[0])),
+            "Clearing preloaded keys drops every warmed-key record", failures);
+    }
+    // Window shutdown itself is WPF glue (Closed handler on the Window), so it stays a
+    // source-presence check; the scheduler's own disposal is covered behaviorally above.
+    Check(mainWindowXaml.Contains("Closed=\"Window_Closed\"") && mainWindow.Contains("_thumbnailCache.Dispose()") && mainWindow.Contains("_preloadScheduler.Dispose()"), "Window shutdown disposes preload and thumbnail resources (source presence, not behavior)", failures);
     var placementService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "WindowPlacementService.cs"));
     Check(mainWindowXaml.Contains("Loaded=\"Window_Loaded\"") && mainWindowXaml.Contains("Closing=\"Window_Closing\""), "Main window restores and saves native placement instead of always using the startup default", failures);
     Check(!mainWindowXaml.Contains("WindowState=\"Maximized\""), "Main window does not force maximized state in XAML", failures);
@@ -324,7 +365,50 @@ try
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation", failures);
     Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException) { }") && thumbnailCacheText.Contains("catch (IOException) { }"), "Disk cache cleanup tolerates filesystem access failures", failures);
     Check(mainWindowXaml.Contains("ClearCache_Click") && mainWindow.Contains("_thumbnailCache.ClearDisk()"), "Disk cache can be cleared from UI without changing source images", failures);
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && viewerAndPreviewService.Contains("RecordCacheHit") && viewerAndPreviewService.Contains("RecordSourceRead") && viewerAndPreviewService.Contains("RecordPresented") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"), "Review metrics record source reads, cache, decode, and present latency", failures);
+    // PreviewImageService owns decode + the bounded RAM cache and needs no WPF Window, so the
+    // decode/cache/metrics contract is driven for real instead of grepping source text.
+    var previewFolder = Directory.CreateDirectory(Path.Combine(root, "preview-service")).FullName;
+    var previewPath = Path.Combine(previewFolder, "preview-a.png");
+    File.WriteAllBytes(previewPath, previewPng);
+    var previewMetrics = new ReviewMetrics();
+    var previewService = new PreviewImageService(previewMetrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024);
+    var decodedPreview = await previewService.GetPreviewAsync(previewPath);
+    var afterFirstDecode = previewMetrics.Snapshot();
+    Check(decodedPreview.PixelWidth > 0 && afterFirstDecode.CacheMisses == 1 && afterFirstDecode.CacheHits == 0
+        && afterFirstDecode.SourceReads == 1 && afterFirstDecode.SourceBytesRead == new FileInfo(previewPath).Length
+        && previewService.CacheCount == 1 && previewService.CacheBytes > 0,
+        "Preview decode records exactly one source read with the real source byte count", failures);
+    var secondPreview = await previewService.GetPreviewAsync(previewPath);
+    var afterCacheHit = previewMetrics.Snapshot();
+    Check(afterCacheHit.CacheHits == 1 && afterCacheHit.SourceReads == 1
+        && afterCacheHit.SourceBytesRead == afterFirstDecode.SourceBytesRead && ReferenceEquals(secondPreview, decodedPreview),
+        "Source byte metrics exclude cache deliveries and the cache returns the same decoded bitmap", failures);
+    previewService.EvictCachedPath(previewPath);
+    Check(!previewService.TryGetCachedPreview(previewPath, out _) && previewService.CacheCount == 0,
+        "Evicting a path drops its decoded bitmap from the preview cache", failures);
+    await previewService.GetPreviewAsync(previewPath);
+    Check(previewMetrics.Snapshot().SourceReads == 2 && previewService.CacheCount == 1,
+        "Eviction forces a fresh source read on the next request", failures);
+    previewService.ClearCache();
+    Check(previewService.CacheCount == 0 && previewService.CacheBytes == 0,
+        "Clearing the preview cache drops every decoded bitmap", failures);
+    var originalModeService = new PreviewImageService(previewMetrics, () => true, () => 512);
+    Check(originalModeService.IsOriginalLoadingMode() && originalModeService.GetCurrentCacheKey(previewPath).IsOriginal
+        && originalModeService.GetCurrentCacheKey(previewPath).TargetWidth == 0
+        && !previewService.GetCurrentCacheKey(previewPath).IsOriginal
+        && previewService.GetCurrentCacheKey(previewPath).TargetWidth == 512,
+        "Original loading mode decodes at full size while Preview mode uses the target decode width", failures);
+    var previewDimensions = await previewService.GetOriginalDimensionsAsync(previewPath);
+    Check(previewDimensions.Width == 1 && previewDimensions.Height == 1,
+        "Original dimensions are read from the real source header", failures);
+    // The disk-cache branch can only be entered by planting a file in the user's real
+    // LocalAppData cache directory, so it stays a grep -- but against the focused service.
+    Check(previewServiceText.Contains("RecordDiskCacheHit") && previewServiceText.Contains("if (sourceRead)"),
+        "Disk-cache deliveries are excluded from source byte metrics (source presence: priming the real disk cache is out of scope)", failures);
+    // RecordPresented times a WPF render pass, which needs a live viewer; only its wiring is checked.
+    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordPresented")
+        && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"),
+        "Viewer present latency is recorded and surfaced in diagnostics (source presence, not behavior)", failures);
     var metrics = new ReviewMetrics();
     metrics.RecordCacheHit(); metrics.RecordCacheMiss(); metrics.RecordSourceRead(128, 7); metrics.RecordPresented(11);
     var snapshot = metrics.Snapshot();
@@ -361,7 +445,6 @@ try
         && shiftedOrder.Length == 40 && shiftedOrder.Distinct().Count() == shiftedOrder.Length,
         "Navigating changes preload priority to the new Next without duplicate jobs", failures);
     Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view", failures);
-    Check(viewerAndPreviewService.Contains("var sourceRead = false") && viewerAndPreviewService.Contains("if (sourceRead)"), "Source byte metrics exclude disk-cache hits", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
     Check(mainWindow.Contains("RecoveryWindow") && mainWindow.Contains("ReadPendingOperations"), "Recovery UI exposes pending operations without replay", failures);
     Check(mainWindow.Contains("ReadFailedOperations") && operationJournalTextContainsFailed(), "Recovery UI includes failed journal operations", failures);
