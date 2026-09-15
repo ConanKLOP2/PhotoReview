@@ -177,6 +177,14 @@ public partial class MainWindow : Window
                 return;
             }
             _lastExplorerSnapshot = explorerSnapshot;
+            if (initialPath is not null)
+            {
+                // Keep an explicit file launch stable; late Explorer reindex would
+                // render the same image again and change its counter.
+                AppLog.Info("Explorer native order skipped for explicit file open; catalog remains stable");
+                _totalSourceBytes = await totalBytesTask;
+                return;
+            }
             if (ExplorerSnapshotValidator.TryValidate(explorerSnapshot, scannedFiles, out var explorerOrder, out var fallbackReason))
             {
                 var currentSet = new HashSet<string>(_files, StringComparer.OrdinalIgnoreCase);
