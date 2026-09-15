@@ -245,6 +245,11 @@ public partial class MainWindow : Window
             UpdateFolderTitle(folder);
             StatusText.Text = $"Không mở được folder: {ex.Message}";
         }
+        // Superseded by a newer folder load: don't touch UI state for a stale
+        // request, but still log — otherwise this exception is unobserved once
+        // the discarded fire-and-forget task (`_ = LoadFolderAsync(...)`) is
+        // garbage collected.
+        catch (Exception ex) { AppLog.Error($"LoadFolder failed (stale generation={loadGeneration}, current={_folderGeneration}): {folder}", ex); }
     }
 
     private void UpdateFolderTitle(string? folder = null)
@@ -354,6 +359,10 @@ public partial class MainWindow : Window
             await RemoveMissingCatalogItemAsync(path, index, token);
         }
         catch (Exception ex) when (token == _generation) { AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
+        // Superseded by a newer navigation: don't touch UI state for a stale request,
+        // but still log — otherwise this exception is unobserved once the discarded
+        // fire-and-forget task (`_ = ShowImageAsync(...)`) is garbage collected.
+        catch (Exception ex) { AppLog.Error($"ShowImage failed (stale token={token}, current={_generation}) index={index} path={path}", ex); }
     }
 
     private void FitImage_Click(object sender, RoutedEventArgs e) => ResetFitView();
@@ -602,6 +611,11 @@ public partial class MainWindow : Window
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        // Any other exception (unexpected cancellation source, or a genuine
+        // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
+        // unobserved once the discarded fire-and-forget task
+        // (`_ = PreloadAroundAsync(...)`) is garbage collected.
+        catch (Exception ex) { AppLog.Error("Preload scheduler failed", ex); }
         finally { order?.Dispose(); }
     }
 
