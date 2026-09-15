@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -45,6 +46,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
 
     private static ExplorerViewSnapshot QueryShell(string folder)
     {
+        var queryTimer = Stopwatch.StartNew();
+        AppLog.Info($"Explorer query-start: folder={folder}");
         var shellType = Type.GetTypeFromProgID("Shell.Application");
         if (shellType is null) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, "Shell.Application unavailable");
         object? shell = null, windows = null;
@@ -67,13 +70,18 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
                 catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
                 finally { Release(window); }
             }
-            return Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, $"No matching Explorer window among {windowsInspected} window(s)");
+            var unavailable = Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, $"No matching Explorer window among {windowsInspected} window(s)");
+            AppLog.Info($"Explorer query-complete: status={unavailable.Status}, windows={windowsInspected}, elapsedMs={queryTimer.ElapsedMilliseconds}");
+            return unavailable;
         }
         finally { Release(windows); Release(shell); }
     }
 
     private static ExplorerViewSnapshot TryReadNativeView(object window, string folder)
     {
+        var timer = Stopwatch.StartNew();
+        var getItemCalls = 0;
+        var displayNameCalls = 0;
         IntPtr windowPtr = IntPtr.Zero, servicePtr = IntPtr.Zero, browserPtr = IntPtr.Zero, shellViewPtr = IntPtr.Zero, folderViewPtr = IntPtr.Zero;
         try
         {
@@ -91,6 +99,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
             if (folderViewResult < 0 || folderViewPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"QueryInterface(IFolderView2) failed: 0x{folderViewResult:X8}");
             var countResult = ExplorerNativeVtable.ItemCount(folderViewPtr, ExplorerComInterop.SvgioAllView, out var count);
             if (countResult < 0 || count <= 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.ItemCount failed/empty: 0x{countResult:X8}, count={count}");
+            var itemCountElapsed = timer.ElapsedMilliseconds;
+            AppLog.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
             var paths = new List<string>(count);
             for (var index = 0; index < count; index++)
             {
@@ -98,8 +108,10 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
                 try
                 {
                     var itemIid = ExplorerComInterop.IidShellItem;
+                    getItemCalls++;
                     var itemResult = ExplorerNativeVtable.GetItem(folderViewPtr, index, ref itemIid, out itemPtr);
                     if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.GetItem({index}) failed: 0x{itemResult:X8}");
+                    displayNameCalls++;
                     var nameResult = ExplorerNativeVtable.GetDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
                     if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IShellItem.GetDisplayName({index}) failed: 0x{nameResult:X8}");
                     try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
@@ -109,6 +121,9 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
             }
             var sorts = ReadSortColumns(folderViewPtr);
             var grouped = ExplorerNativeVtable.GetGroupBy(folderViewPtr, out var groupKey, out _) >= 0 && (groupKey.fmtid != Guid.Empty || groupKey.pid != 0);
+            var first = paths.Count > 0 ? paths[0] : string.Empty;
+            var last = paths.Count > 0 ? paths[^1] : string.Empty;
+            AppLog.Info($"Explorer native-read-complete: count={paths.Count}, getItemCalls={getItemCalls}, displayNameCalls={displayNameCalls}, elapsedMs={timer.ElapsedMilliseconds}, firstPath={first}, lastPath={last}, sortColumns={sorts.Count}, grouped={grouped}");
             return new ExplorerViewSnapshot(folder, paths, sorts, grouped ? ExplorerGroupState.Active : ExplorerGroupState.None,
                 ExplorerOrderStatus.Available, null, DateTime.UtcNow);
         }
