@@ -29,6 +29,9 @@ public sealed class BenchmarkWindow : Window
         var open = new Controls.Button { Content = "Open last report", Margin = new Thickness(5,0,0,0) };
         open.Click += (_, _) => { if (_lastReport is not null && File.Exists(_lastReport)) Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_lastReport}\"") { UseShellExecute = true }); };
         panel.Children.Add(open);
+        var openFolder = new Controls.Button { Content = "Open result folder", Margin = new Thickness(5,0,0,0) };
+        openFolder.Click += (_, _) => { var dir = _lastReport is null ? Path.GetTempPath() : Path.GetDirectoryName(_lastReport)!; Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true }); };
+        panel.Children.Add(openFolder);
         panel.Children.Add(_status);
         Content = panel;
     }
