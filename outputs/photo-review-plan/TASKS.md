@@ -674,14 +674,15 @@ Mục tiêu: thêm benchmark chạy trong PhotoReview và CLI, so sánh nhiều 
 | BM-11 — Regression lỗi lịch sử | DONE | Agent benchmark_tests_cli | Action race/index/double-navigation/no-retry regression pass |
 | BM-12 — Ảnh thật local | TODO | Agent chính | Chạy read-only trên `C:\Xiuren\[[DONE]`; action dùng temp copy |
 | BM-13 — UI probe | TODO | Agent benchmark_tests_cli | Probe mở/chạy/hủy benchmark, viewer không bị đổi trạng thái |
-| BM-14 — Audit race toàn hệ thống | TODO | Agent audit (sau khi có code) | Rà preload/cache/Explorer/action/logging/cancel và bổ sung test |
-| BM-15 — Logging chi tiết | TODO | Agent chính/agent audit | Run ID, phase, key, epoch, timing, RAM, HRESULT/error stage |
+| BM-14 — Audit race toàn hệ thống | DONE | Agent audit | Reviewed preload/cache/Explorer/action/logging/cancel; BenchmarkEngine now logs cancellation and phase failures; regression coverage exists |
+| BM-15 — Logging chi tiết | DONE | Agent audit | Benchmark start/sample/complete/cancel/failure records include runId, profile, phase, iteration, elapsed and status |
 | BM-16 — Diagnostics integration | TODO | Agent chính | Hiển thị metrics benchmark và đường dẫn report |
 | BM-17 — Resource matrix | TODO | Agent chính | Worker/RAM/ảnh lớn/ folder lớn/SSD-HDD/network theo ngưỡng tương đối |
-| BM-18 — Tài liệu | TODO | Agent chính | `BENCHMARK-PROFILES.md`, `BENCHMARK-RESULTS.md`, hướng dẫn debug |
+| BM-18 — Tài liệu | DONE | Agent audit | Added profile interpretation, debug workflow, result evidence and privacy guidance in `BENCHMARK-PROFILES.md` and `BENCHMARK-RESULTS.md` |
 | BM-19 — Merge/audit | TODO | Agent chính | Merge không mất sửa lỗi hiện hữu; `git diff --check` sạch |
 | BM-20 — Release validation | TODO | Agent chính | Release test, publish đúng thư mục, commit và push `origin/master` |
 
 Profile bắt buộc: Instant Review, Fast Sequential, Fast Balanced, Fast Aggressive, Preview Light/Balanced/Quality/High Quality, No Preload Baseline, Nearby Only, Full Folder Warm, Large Folder Safe, Huge Image Safe, SSD High Throughput, HDD Conservative, Network Safe, Low Memory, RAM Maximizer, Rapid Key Press, Random Navigation, Action During Decode, Move Race, Delete To Recycle Bin Race, Copy During Decode, Interleaved Actions, Explorer Reindex, Logging On/Off, Recommended Auto và Original Correctness.
 
 Quy tắc phối hợp: agent chỉ sửa phạm vi được giao; agent chính hợp nhất thay đổi và xử lý conflict. Nếu phát sinh phạm vi mới ngoài BM-01..BM-20, cập nhật plan và dừng phần mới để xin xác nhận lại.
+

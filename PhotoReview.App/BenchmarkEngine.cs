@@ -15,22 +15,43 @@ public sealed class BenchmarkEngine
         if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("Folder is required", nameof(folder));
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         var started = DateTimeOffset.UtcNow;
+        var runId = Guid.NewGuid().ToString("N");
+        AppLog.Info($"Benchmark start runId={runId} profile={profile.Id} workload={profile.Workload} folder={Path.GetFullPath(folder)} iterations={profile.Iterations} workers={profile.Workers}");
         var samples = new List<double>();
         ReviewMetricsSnapshot? metrics = null;
+        var allCorrect = true;
         var total = Math.Max(1, profile.Iterations);
         for (var i = 0; i < total; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var sw = Stopwatch.StartNew();
-            var result = await operation(profile, profile.Workload, i, cancellationToken).ConfigureAwait(false);
+            (bool Correct, ReviewMetricsSnapshot? Metrics) result;
+            try
+            {
+                result = await operation(profile, profile.Workload, i, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                AppLog.Info($"Benchmark canceled runId={runId} profile={profile.Id} iteration={i}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error($"Benchmark phase failed runId={runId} profile={profile.Id} iteration={i}", ex);
+                throw;
+            }
             sw.Stop();
             samples.Add(sw.Elapsed.TotalMilliseconds);
             metrics ??= result.Metrics;
+            allCorrect &= result.Correct;
+            AppLog.Info($"Benchmark sample runId={runId} profile={profile.Id} phase={profile.Workload} iteration={i + 1}/{total} elapsedMs={sw.Elapsed.TotalMilliseconds:F1} correct={result.Correct}");
             progress?.Report(new(profile.Id, profile.Workload, i + 1, total, result.Correct ? "OK" : "Correctness failed"));
         }
-        var correct = samples.Count > 0;
+        var correct = samples.Count > 0 && allCorrect;
         var phase = new BenchmarkPhaseResult(profile.Id, profile.Workload, samples,
-            correct ? BenchmarkResultStatus.Pass : BenchmarkResultStatus.InsufficientData);
-        return new BenchmarkReport(Guid.NewGuid().ToString("N"), started, Path.GetFullPath(folder), [phase], metrics, Environment.MachineName);
+            samples.Count == 0 ? BenchmarkResultStatus.InsufficientData : correct ? BenchmarkResultStatus.Pass : BenchmarkResultStatus.Fail,
+            correct ? null : "One or more samples failed correctness");
+        AppLog.Info($"Benchmark complete runId={runId} profile={profile.Id} phase={profile.Workload} status={phase.Status} p50Ms={phase.P50:F1} p95Ms={phase.P95:F1} maxMs={phase.Max:F1}");
+        return new BenchmarkReport(runId, started, Path.GetFullPath(folder), [phase], metrics, Environment.MachineName);
     }
 }
