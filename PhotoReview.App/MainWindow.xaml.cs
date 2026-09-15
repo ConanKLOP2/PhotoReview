@@ -482,14 +482,6 @@ public partial class MainWindow : Window
             return;
         }
         if (_index < 0) return;
-        // Keep navigation and other keyboard commands from racing an in-flight
-        // file action. Otherwise a Next key can change _index before the action
-        // removes its source and the viewer may skip an image.
-        if (Volatile.Read(ref _fileActionInProgress) != 0)
-        {
-            e.Handled = true;
-            return;
-        }
         if (Matches(e.Key, _settings.Shortcuts.Compare))
         {
             if (ComparePanel.Visibility != Visibility.Visible && FindComparePair(_files[_index]) is null) return;
@@ -749,6 +741,7 @@ public partial class MainWindow : Window
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         var sourcePath = _compareSelectedPath ?? _files[_index];
         var source = sourcePath;
+        var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         StopImageReadsForAction();
         var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: true);
         try
@@ -781,7 +774,18 @@ public partial class MainWindow : Window
             if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
         }
-        catch (Exception ex) { StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            // The catalog is advanced optimistically before the synchronous
+            // filesystem call. Restore the source when the operation fails so
+            // a failed Delete/Move does not silently lose the image from view.
+            if (File.Exists(source) && !_files.Contains(source, StringComparer.OrdinalIgnoreCase))
+            {
+                var restoreIndex = Math.Clamp(sourceIndex < 0 ? _files.Count : sourceIndex, 0, _files.Count);
+                _files.Insert(restoreIndex, source);
+            }
+            StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}";
+        }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
@@ -872,7 +876,16 @@ public partial class MainWindow : Window
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         if (removeSource && sourceIndex >= 0) { _files.RemoveAt(sourceIndex); _cache.Remove(sourcePath); _compareSelectedPath = null; }
         var nextIndex = removeSource ? Math.Min(Math.Max(sourceIndex, 0), _files.Count - 1) : Math.Min(Math.Max(sourceIndex + 1, 0), _files.Count - 1);
-        if (_files.Count > 0) { await ShowImageAsync(Math.Max(0, nextIndex)); return _files[_index]; }
+        if (_files.Count > 0)
+        {
+            // Start presenting the next item, but do not wait for decode here.
+            // The file operation must begin immediately after the catalog change;
+            // awaiting ShowImageAsync would wait for the next image's I/O and
+            // defeat the advance-first behavior.
+            var nextPath = _files[Math.Max(0, nextIndex)];
+            _ = ShowImageAsync(Math.Max(0, nextIndex));
+            return nextPath;
+        }
         MainImage.Source = null;
         return null;
     }
