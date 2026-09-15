@@ -173,6 +173,10 @@ try
     var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
     var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
+    // The decode/cache path lives in PreviewImageService (WP3.2 step 1).  Checks below that
+    // target that path read viewer glue + service together so they keep asserting the same
+    // contract after the extraction.
+    var viewerAndPreviewService = mainWindow + File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreviewImageService.cs"));
     RunInterleavedFileActionSequence(root, failures);
     Check(mainWindow.Contains("AdvanceBeforeFileActionAsync(sourcePath, removeSource: true)") &&
           mainWindow.Contains("AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == \"Move\")") &&
@@ -318,7 +322,7 @@ try
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation", failures);
     Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException) { }") && thumbnailCacheText.Contains("catch (IOException) { }"), "Disk cache cleanup tolerates filesystem access failures", failures);
     Check(mainWindowXaml.Contains("ClearCache_Click") && mainWindow.Contains("_thumbnailCache.ClearDisk()"), "Disk cache can be cleared from UI without changing source images", failures);
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordCacheHit") && mainWindow.Contains("RecordSourceRead") && mainWindow.Contains("RecordPresented") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"), "Review metrics record source reads, cache, decode, and present latency", failures);
+    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && viewerAndPreviewService.Contains("RecordCacheHit") && viewerAndPreviewService.Contains("RecordSourceRead") && viewerAndPreviewService.Contains("RecordPresented") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"), "Review metrics record source reads, cache, decode, and present latency", failures);
     var metrics = new ReviewMetrics();
     metrics.RecordCacheHit(); metrics.RecordCacheMiss(); metrics.RecordSourceRead(128, 7); metrics.RecordPresented(11);
     var snapshot = metrics.Snapshot();
@@ -355,7 +359,7 @@ try
         && shiftedOrder.Length == 40 && shiftedOrder.Distinct().Count() == shiftedOrder.Length,
         "Navigating changes preload priority to the new Next without duplicate jobs", failures);
     Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view", failures);
-    Check(mainWindow.Contains("var sourceRead = false") && mainWindow.Contains("if (sourceRead)"), "Source byte metrics exclude disk-cache hits", failures);
+    Check(viewerAndPreviewService.Contains("var sourceRead = false") && viewerAndPreviewService.Contains("if (sourceRead)"), "Source byte metrics exclude disk-cache hits", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog", failures);
     Check(mainWindow.Contains("RecoveryWindow") && mainWindow.Contains("ReadPendingOperations"), "Recovery UI exposes pending operations without replay", failures);
     Check(mainWindow.Contains("ReadFailedOperations") && operationJournalTextContainsFailed(), "Recovery UI includes failed journal operations", failures);

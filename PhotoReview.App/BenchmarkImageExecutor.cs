@@ -24,18 +24,18 @@ public sealed class BenchmarkImageExecutor
 
     public void Clear() => _cache.Clear();
 
+    // The raw decode is shared with the viewer through PreviewImageService.DecodeSource,
+    // so there is exactly one BitmapImage decode implementation in the app.
+    //
+    // The benchmark deliberately does NOT reuse PreviewImageService.GetPreviewAsync itself:
+    // that path adds the disk-cache probe, ReviewMetrics recording and the cache-epoch
+    // lifecycle, all of which would change what a benchmark run measures, and it has no
+    // CancellationToken in its decode loop.  Merging them would require reworking the
+    // service's threading/metrics contract, which is out of scope for this refactor.
     private static BitmapImage DecodeOnWorker(ImageCacheKey key, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        using var stream = new FileStream(key.Path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 1 << 20, FileOptions.SequentialScan);
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        if (!key.IsOriginal && key.TargetWidth > 0) bitmap.DecodePixelWidth = key.TargetWidth;
-        bitmap.StreamSource = stream;
-        bitmap.EndInit();
-        bitmap.Freeze();
+        var bitmap = PreviewImageService.DecodeSource(key.Path, key.IsOriginal ? 0 : key.TargetWidth);
         token.ThrowIfCancellationRequested();
         return bitmap;
     }
