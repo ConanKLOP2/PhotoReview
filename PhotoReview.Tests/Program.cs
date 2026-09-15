@@ -335,6 +335,10 @@ try
     var firstHash = await hashService.GetAsync(hashFixture);
     var cachedHash = await hashService.GetAsync(hashFixture);
     File.WriteAllBytes(hashFixture, [1, 2, 4]);
+    // FileHashService fingerprints by (Length, LastWriteTimeUtc). Two same-size writes
+    // issued back to back can land within the same filesystem timestamp tick, so force
+    // a detectable mtime change instead of relying on wall-clock granularity.
+    File.SetLastWriteTimeUtc(hashFixture, DateTime.UtcNow.AddSeconds(1));
     var changedHash = await hashService.GetAsync(hashFixture);
     Check(firstHash == cachedHash && firstHash != changedHash, "File hash service caches and invalidates by file fingerprint", failures);
     var concurrentHashes = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => hashService.GetAsync(hashFixture)));

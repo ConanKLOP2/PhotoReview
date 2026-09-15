@@ -342,6 +342,11 @@ public sealed class FileHashServiceTests : IDisposable
         var first = await service.GetAsync(fixture);
         var cached = await service.GetAsync(fixture);
         File.WriteAllBytes(fixture, [1, 2, 4]);
+        // FileHashService fingerprints by (Length, LastWriteTimeUtc). Two same-size
+        // writes issued back to back can land within the same filesystem timestamp
+        // tick, so force a detectable mtime change instead of relying on wall-clock
+        // granularity - otherwise this assertion is flaky under fast test runners.
+        File.SetLastWriteTimeUtc(fixture, DateTime.UtcNow.AddSeconds(1));
         var changed = await service.GetAsync(fixture);
         Assert.True(first == cached && first != changed);
     }
