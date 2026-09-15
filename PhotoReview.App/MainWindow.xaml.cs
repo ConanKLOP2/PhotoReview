@@ -43,6 +43,7 @@ public partial class MainWindow : Window
     private long _folderGeneration;
     private ExplorerViewSnapshot? _lastExplorerSnapshot;
     private bool _placementRestored;
+    private int _fileActionInProgress;
     private readonly Dictionary<string, (int Width, int Height)> _originalDimensions = new(StringComparer.OrdinalIgnoreCase);
 
     public MainWindow(string? initialPath = null)
@@ -660,6 +661,7 @@ public partial class MainWindow : Window
     private async Task ClassifyCurrentAsync(int category)
     {
         if (_index < 0 || _index >= _files.Count) return;
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         var source = _compareSelectedPath ?? _files[_index];
         StopImageReadsForAction();
         try
@@ -695,6 +697,7 @@ public partial class MainWindow : Window
             else { MainImage.Source = null; StatusText.Text = "Đã xử lý hết ảnh trong folder."; }
         }
         catch (Exception ex) { StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}"; }
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private void StopImageReadsForAction()
@@ -725,6 +728,7 @@ public partial class MainWindow : Window
             return;
         }
         if (_index < 0 || _index >= _files.Count) return;
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         StopImageReadsForAction();
         var source = _compareSelectedPath ?? _files[_index];
         var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
@@ -763,6 +767,7 @@ public partial class MainWindow : Window
             if (prepared) _journal.Append(new JournalEntry(operationId, operation, "Failed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
             StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
         }
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private static bool IsSamePath(string first, string second)
