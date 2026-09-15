@@ -19,14 +19,29 @@ public interface IExplorerOrderProvider
 
 public sealed class ExplorerOrderService : IExplorerOrderProvider
 {
+    public sealed record ExplorerQueryProgress(int ItemsRead, int ItemCount, int ComCalls);
+
+    /// <summary>Progressive variant used by the UI: enumeration yields between small batches and can be cancelled.</summary>
+    public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
+        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+    {
+        batchSize = Math.Clamp(batchSize, 1, 128);
+        return TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, progress, batchSize);
+    }
+
     public async Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
+        => await TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, null, int.MaxValue);
+
+    private async Task<ExplorerViewSnapshot> TryGetSnapshotCoreAsync(string folder, TimeSpan timeout,
+        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress, int batchSize)
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
         if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
         var completion = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         var worker = new Thread(() =>
         {
-            try { completion.TrySetResult(QueryShell(canonicalFolder)); }
+            try { completion.TrySetResult(QueryShell(canonicalFolder, cancellationToken, progress, batchSize)); }
+            catch (OperationCanceledException) { completion.TrySetResult(Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration")); }
             catch (Exception ex) { AppLog.Error("Explorer native view query failed", ex); completion.TrySetResult(Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name)); }
         }) { IsBackground = true, Name = "PhotoReview Explorer view" };
         worker.SetApartmentState(ApartmentState.STA);
@@ -44,7 +59,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
         }
     }
 
-    private static ExplorerViewSnapshot QueryShell(string folder)
+    private static ExplorerViewSnapshot QueryShell(string folder, CancellationToken cancellationToken,
+        IProgress<ExplorerQueryProgress>? progress, int batchSize)
     {
         var queryTimer = Stopwatch.StartNew();
         AppLog.Info($"Explorer query-start: folder={folder}");
@@ -64,7 +80,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
                     var location = (string?)((dynamic)window).LocationURL;
                     if (!TryCanonicalizeLocation(location, out var current)) continue;
                     if (!ExplorerSnapshotValidator.SamePath(current, folder)) continue;
-                    try { return TryReadNativeView(window, folder); }
+                    try { return TryReadNativeView(window, folder, cancellationToken, progress, batchSize); }
                     catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
                 }
                 catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
@@ -77,7 +93,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
         finally { Release(windows); Release(shell); }
     }
 
-    private static ExplorerViewSnapshot TryReadNativeView(object window, string folder)
+    private static ExplorerViewSnapshot TryReadNativeView(object window, string folder, CancellationToken cancellationToken,
+        IProgress<ExplorerQueryProgress>? progress, int batchSize)
     {
         var timer = Stopwatch.StartNew();
         var getItemCalls = 0;
@@ -102,22 +119,29 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider
             var itemCountElapsed = timer.ElapsedMilliseconds;
             AppLog.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
             var paths = new List<string>(count);
+            var comCalls = 1;
             for (var index = 0; index < count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 IntPtr itemPtr = IntPtr.Zero;
                 try
                 {
                     var itemIid = ExplorerComInterop.IidShellItem;
                     getItemCalls++;
                     var itemResult = ExplorerNativeVtable.GetItem(folderViewPtr, index, ref itemIid, out itemPtr);
+                    comCalls++;
                     if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.GetItem({index}) failed: 0x{itemResult:X8}");
                     displayNameCalls++;
                     var nameResult = ExplorerNativeVtable.GetDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
+                    comCalls++;
                     if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IShellItem.GetDisplayName({index}) failed: 0x{nameResult:X8}");
                     try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
                     finally { Marshal.FreeCoTaskMem(namePtr); }
                 }
                 finally { if (itemPtr != IntPtr.Zero) Marshal.Release(itemPtr); }
+                progress?.Report(new ExplorerQueryProgress(paths.Count, count, comCalls));
+                if (batchSize != int.MaxValue && paths.Count % batchSize == 0)
+                    Thread.Yield();
             }
             var sorts = ReadSortColumns(folderViewPtr);
             var grouped = ExplorerNativeVtable.GetGroupBy(folderViewPtr, out var groupKey, out _) >= 0 && (groupKey.fmtid != Guid.Empty || groupKey.pid != 0);
