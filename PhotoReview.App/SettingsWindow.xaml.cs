@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Input;
 using System.Text.Json;
 using System.Reflection;
+using System.Diagnostics;
+using System.IO;
 
 namespace PhotoReview.App;
 
@@ -42,6 +44,13 @@ public partial class SettingsWindow : Window
         foreach (var textBox in new[] { NextText, PreviousText, RecycleText, CompareText, NextFolderText, PreviousFolderText, FirstImageText, ZoomInText, ZoomOutText, ToggleFitText, SkipText, UndoText, FullscreenText })
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
         LoadFields();
+    }
+
+    private void OpenLogLocation_Click(object sender, RoutedEventArgs e)
+    {
+        var directory = Path.GetDirectoryName(AppLog.FilePath)!;
+        Directory.CreateDirectory(directory);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{AppLog.FilePath}\"") { UseShellExecute = true });
     }
 
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)

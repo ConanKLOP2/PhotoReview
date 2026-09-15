@@ -176,7 +176,16 @@ public partial class MainWindow : Window
         var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
         _compareSelectedPath = null;
-        StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải";
+        // The catalog can become stale while Explorer order is being applied or an
+        // external move/delete completes. Do this check before touching FileInfo.Length
+        // so a vanished item is removed and the viewer advances once without logging
+        // a misleading ShowImage failure.
+        if (!TryGetCurrentFileSize(path, out var initialSize))
+        {
+            await RemoveMissingCatalogItemAsync(path, index, token);
+            return;
+        }
+        StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải";
         try
         {
             if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
@@ -200,7 +209,9 @@ public partial class MainWindow : Window
                 CompareLeftImage.Tag = pair.Value.Left;
                 CompareRightImage.Tag = pair.Value.Right;
                 CompareLeftImage.Source = await GetPreviewAsync(pair.Value.Left);
+                if (token != _generation) return;
                 CompareRightImage.Source = await GetPreviewAsync(pair.Value.Right);
+                if (token != _generation) return;
                 _compareSelectedPath = path;
                 UpdateCompareSelection();
                 var leftSize = "";
@@ -216,6 +227,7 @@ public partial class MainWindow : Window
                 if (_settings.CompareHashEnabled)
                 {
                     var hashes = await Task.WhenAll(GetHashAsync(pair.Value.Left), GetHashAsync(pair.Value.Right));
+                    if (token != _generation) return;
                     hashText = $" | hash {(hashes[0] == hashes[1] ? "TRÙNG" : "KHÁC")}";
                 }
                 StatusText.Text = $"{index + 1}/{_files.Count} | Compare | {Path.GetFileName(pair.Value.Left)}{leftSize} ↔ {Path.GetFileName(pair.Value.Right)}{rightSize}{hashText} | click để chọn";
@@ -224,13 +236,52 @@ public partial class MainWindow : Window
             {
                 ApplyInitialViewMode();
                 var original = await GetOriginalDimensionsAsync(path);
-            StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · {original.Width}×{original.Height} · {Path.GetFileName(path)}";
+                if (token != _generation) return;
+                var currentInfo = new FileInfo(path);
+                if (!currentInfo.Exists) return;
+                StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(currentInfo.Length)} · {original.Width}×{original.Height} · {Path.GetFileName(path)}";
             }
+            if (token != _generation) return;
             if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
             presentStopwatch.Stop();
             _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
         }
-        catch (Exception ex) { AppLog.Error($"ShowImage failed: {path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
+        catch (Exception ex) when (token == _generation && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
+        {
+            await RemoveMissingCatalogItemAsync(path, index, token);
+        }
+        catch (Exception ex) when (token == _generation) { AppLog.Error($"ShowImage failed: {path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
+    }
+
+    private static bool TryGetCurrentFileSize(string path, out long size)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists) { size = 0; return false; }
+            size = info.Length;
+            return true;
+        }
+        catch (FileNotFoundException) { size = 0; return false; }
+        catch (DirectoryNotFoundException) { size = 0; return false; }
+    }
+
+    private async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
+    {
+        if (token != _generation) return;
+        var removedIndex = _files.FindIndex(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        if (removedIndex < 0) return;
+        _files.RemoveAt(removedIndex);
+        if (_files.Count == 0)
+        {
+            _index = -1;
+            MainImage.Source = null;
+            StatusText.Text = "Không còn ảnh trong thư mục";
+            return;
+        }
+        var nextIndex = Math.Min(Math.Max(removedIndex, 0), _files.Count - 1);
+        _index = nextIndex;
+        await ShowImageAsync(nextIndex);
     }
 
     private async Task<BitmapImage> GetPreviewAsync(string path)
@@ -323,8 +374,16 @@ public partial class MainWindow : Window
 
     private static string GetDiskCachePath(string path, int targetWidth)
     {
-        var info = new FileInfo(path);
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{targetWidth}")));
+        long length = 0;
+        long lastWriteTicks = 0;
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.Exists) { length = info.Length; lastWriteTicks = info.LastWriteTimeUtc.Ticks; }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{path}|{length}|{lastWriteTicks}|{targetWidth}")));
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", key + ".png");
     }
 
@@ -423,6 +482,14 @@ public partial class MainWindow : Window
             return;
         }
         if (_index < 0) return;
+        // Keep navigation and other keyboard commands from racing an in-flight
+        // file action. Otherwise a Next key can change _index before the action
+        // removes its source and the viewer may skip an image.
+        if (Volatile.Read(ref _fileActionInProgress) != 0)
+        {
+            e.Handled = true;
+            return;
+        }
         if (Matches(e.Key, _settings.Shortcuts.Compare))
         {
             if (ComparePanel.Visibility != Visibility.Visible && FindComparePair(_files[_index]) is null) return;
@@ -486,13 +553,28 @@ public partial class MainWindow : Window
     private async Task RemoveDuplicatesAsync(bool removeNumbered)
     {
         var remove = new List<string>();
-        var sizeGroups = _files.GroupBy(path => new FileInfo(path).Length).Where(group => group.Count() > 1).ToList();
+        // Batch work may race with an in-flight viewer decode or another action.
+        // Snapshot only files that still have readable metadata; a file can
+        // disappear between enumeration and this pass.
+        var candidates = _files.ToArray();
+        var sizeGroups = candidates
+            .Select(path => { try { return (Path: path, Size: new FileInfo(path).Length); } catch { return (Path: path, Size: -1L); } })
+            .Where(item => item.Size >= 0)
+            .GroupBy(item => item.Size)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Select(item => item.Path).ToList())
+            .ToList();
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in sizeGroups.SelectMany(group => group))
         {
-            var hash = await GetHashAsync(path);
-            if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
-            group.Add(path);
+            try
+            {
+                var hash = await GetHashAsync(path);
+                if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
+                group.Add(path);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
         foreach (var group in groups.Values.Where(group => group.Count > 1))
             remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
@@ -501,10 +583,13 @@ public partial class MainWindow : Window
         if (review.ShowDialog() != true) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
         var failures = new List<string>();
         var succeeded = 0;
+        StopImageReadsForAction();
         foreach (var path in remove)
         {
             if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
-            var info = new FileInfo(path);
+            FileInfo info;
+            try { info = new FileInfo(path); if (!info.Exists) { failures.Add($"Không còn tồn tại: {path}"); continue; } }
+            catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); continue; }
             var operationId = Guid.NewGuid().ToString("N");
             _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
             try
@@ -705,6 +790,8 @@ public partial class MainWindow : Window
         // Do not await decode/preload tasks here: the file action must start now.
         // Generation invalidation prevents any late bitmap from being presented.
         Interlocked.Increment(ref _generation);
+        // Invalidate an Explorer snapshot/load that started before the action.
+        Interlocked.Increment(ref _folderGeneration);
         _preloadCts.Cancel();
         // Keep the current frame visible while Move/Delete runs. Clearing the
         // source here creates a black flash before the next image is ready.
@@ -779,6 +866,7 @@ public partial class MainWindow : Window
 
     private async Task UndoLastMoveAsync()
     {
+        if (Volatile.Read(ref _fileActionInProgress) != 0) return;
         if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
         var move = _moveHistory.Pop();
         try
@@ -799,6 +887,7 @@ public partial class MainWindow : Window
 
     private async Task UndoLastActionAsync()
     {
+        if (Volatile.Read(ref _fileActionInProgress) != 0) return;
         if (_lastUndoAction is null) { StatusText.Text = "Không có Move/Delete vừa thực hiện để hoàn tác."; return; }
         var action = _lastUndoAction;
         if (action.Operation == "Move") { await UndoLastMoveAsync(); return; }

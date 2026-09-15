@@ -76,6 +76,7 @@ try
     var dragDropXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
     var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
     var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
+    var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
     Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
     Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal) && appSettings.Contains("Original", StringComparison.Ordinal), "LoadingMode has Fast, Preview, and Original options", failures);
@@ -189,6 +190,8 @@ try
     Check(mainWindowXaml.Contains("UndoLastAction_Click") && mainWindow.Contains("e.Key == Key.Escape") && mainWindow.Contains("Close();"), "Context-menu Undo and Escape exit are wired", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "RecycleBinRestoreService.cs")) && mainWindow.Contains("RecycleBinRestoreService.TryRestore"), "Delete Undo restores through Recycle Bin Shell", failures);
     Check(mainWindowXaml.Contains("AutomationProperties.Name=\"Mở thư mục ảnh\"") && mainWindowXaml.Contains("AutomationProperties.Name=\"Mở cài đặt\""), "Primary controls expose accessible names", failures);
+    Check(settingsWindow.Contains("OpenLogLocation_Click") && settingsWindowXaml.Contains("AutomationProperties.Name=\"Mở vị trí file log\""), "Settings exposes an accessible Open log location control", failures);
+    Check(settingsWindow.Contains("Path.GetDirectoryName(AppLog.FilePath)") && settingsWindow.Contains("explorer.exe") && settingsWindow.Contains("AppLog.FilePath"), "Open log location follows the configured AppLog path", failures);
     Check(mainWindowXaml.Contains("Preview ảnh bên trái, nhấn để chọn") && mainWindowXaml.Contains("Preview ảnh bên phải, nhấn để chọn"), "Compare previews expose accessible selection names", failures);
     Check(mainWindowXaml.Contains("Focusable=\"True\"") && mainWindow.Contains("CompareLeft_KeyDown") && mainWindow.Contains("CompareRight_KeyDown"), "Compare previews support keyboard selection", failures);
     Check(mainWindow.Contains("GetGCMemoryInfo") && mainWindow.Contains("PreloadMemoryLoadLimit"), "Background preload has memory pressure guard", failures);

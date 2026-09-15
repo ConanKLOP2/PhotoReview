@@ -28,7 +28,7 @@
             <CheckBox x:Name="CompareHashCheck" Grid.Row="4" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" Margin="0,4,0,8" IsChecked="True"/>
             <CheckBox x:Name="CompareSizeCheck" Grid.Row="5" Grid.Column="1" Content="Compare kích thước file" Margin="0,4,0,8" IsChecked="True"/>
             </Grid></GroupBox>
-            <GroupBox Header="Chẩn đoán"><CheckBox x:Name="LoggingCheck" Content="Bật ghi log chẩn đoán (mặc định tắt)"/></GroupBox>
+            <GroupBox Header="Chẩn đoán"><StackPanel><CheckBox x:Name="LoggingCheck" Content="Bật ghi log chẩn đoán (mặc định tắt)"/><Button Content="Mở vị trí file log" AutomationProperties.Name="Mở vị trí file log" HorizontalAlignment="Left" Padding="12,7" Click="OpenLogLocation_Click"/></StackPanel></GroupBox>
             <GroupBox Header="Phím tắt · nhấn phím trực tiếp vào ô để cấu hình"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Margin="0,0,10,0">
