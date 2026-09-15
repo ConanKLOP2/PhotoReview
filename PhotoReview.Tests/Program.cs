@@ -186,10 +186,20 @@ try
           "Interleaved actions advance viewer before filesystem operation and exactly once", failures);
     Check(mainWindow.Contains("Interlocked.Exchange(ref _fileActionInProgress, 1)"),
           "Interleaved actions reject duplicate concurrent file actions", failures);
-    Check(appSettings.Contains("LoadingMode", StringComparison.Ordinal), "LoadingMode setting exists", failures);
-    Check(appSettings.Contains("Fast", StringComparison.Ordinal) && appSettings.Contains("Preview", StringComparison.Ordinal) && appSettings.Contains("Original", StringComparison.Ordinal), "LoadingMode has Fast, Preview, and Original options", failures);
-    Check(appSettings.Contains("= \"Preview\"", StringComparison.Ordinal) || appSettings.Contains("= LoadingMode.Preview", StringComparison.Ordinal), "LoadingMode defaults to Preview", failures);
-    Check(appSettings.Contains("IsValidLoadingMode", StringComparison.Ordinal) || appSettings.Contains("ValidateLoadingMode", StringComparison.Ordinal) || appSettings.Contains("Invalid LoadingMode", StringComparison.Ordinal), "LoadingMode validation exists", failures);
+    // AppSettings is a plain public class, so its option contract is asserted by calling it.
+    var defaultSettings = new AppSettings();
+    Check(defaultSettings.LoadingMode == "Preview", "LoadingMode defaults to Preview", failures);
+    Check(AppSettings.IsValidLoadingMode("Fast") && AppSettings.IsValidLoadingMode("Preview") && AppSettings.IsValidLoadingMode("Original")
+        && AppSettings.NormalizeLoadingMode("preview") == "Preview" && AppSettings.NormalizeLoadingMode("ORIGINAL") == "Original",
+        "LoadingMode has Fast, Preview, and Original options and accepts them case-insensitively", failures);
+    Check(!AppSettings.IsValidLoadingMode("Nonsense") && !AppSettings.IsValidLoadingMode(null) && !AppSettings.IsValidLoadingMode(""),
+        "LoadingMode validation rejects unknown, null, and empty values", failures);
+    Check(AppSettings.IsValidLoadingMode(AppSettings.NormalizeLoadingMode("Nonsense")) && AppSettings.IsValidLoadingMode(AppSettings.NormalizeLoadingMode(null)),
+        "LoadingMode normalization always yields a supported mode for corrupt config values", failures);
+    Check(defaultSettings.ImageSortMode == "Name" && AppSettings.IsValidImageSortMode("SizeAscending")
+        && !AppSettings.IsValidImageSortMode("Whatever") && AppSettings.NormalizeImageSortMode("Size") == "SizeDescending"
+        && AppSettings.NormalizeImageSortMode("Whatever") == "Name",
+        "ImageSortMode defaults to Name, validates known modes, and normalizes unknown ones", failures);
     Check(mainWindow.Contains("LoadingMode", StringComparison.Ordinal), "MainWindow reads LoadingMode", failures);
     Check(mainWindow.Contains("Thumbnail", StringComparison.Ordinal) && mainWindow.Contains("Preview", StringComparison.Ordinal), "MainWindow loading modes have thumbnail/preview contract", failures);
     var shortcuts = ShortcutMappings.Default();
@@ -285,8 +295,17 @@ try
     Check(mainWindow.Contains("_catalogInteractionGeneration") && mainWindow.Contains("Explorer native order ignored after catalog interaction"), "Explorer snapshot cannot reindex after user catalog interaction", failures);
     Check(mainWindow.Contains("Interlocked.Increment(ref _catalogInteractionGeneration)"), "Navigation and file actions advance catalog interaction generation", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
-    Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
-    Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
+    var multiActionSettings = new AppSettings();
+    multiActionSettings.Actions.Add(new ReviewAction { Name = "Loại 3", Shortcut = "T", Operation = "Copy", Destination = "Loai-3" });
+    Check(multiActionSettings.Actions.Count >= 2 && multiActionSettings.Actions.All(a => a.Name.Length > 0 && a.Operation.Length > 0 && a.Destination.Length > 0)
+        && AppSettings.ValidateShortcuts(multiActionSettings) is null,
+        "Config supports multiple review actions with distinct shortcuts", failures);
+    Check(new AppSettings().ConfigVersion == AppSettings.CurrentConfigVersion
+        && System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":1}")!.ConfigVersion == 1,
+        "Config carries an explicit version that round-trips through JSON", failures);
+    // AppSettings.Save writes to the user's real LocalAppData config path (it does not honour
+    // PHOTOREVIEW_DATA_ROOT), so the durable-save path stays a source-presence check.
+    Check(appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save (source presence, not behavior)", failures);
     Check(mainWindow.Contains("AppConstants.ImageCacheCapacityBytes") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold", failures);
     Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "FileHashService.cs")) && mainWindow.Contains("_hashService.Clear()"), "Hash service is isolated with bounded cache lifecycle", failures);
     var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
@@ -338,9 +357,6 @@ try
             "Background preload warms the cache around the current index when memory headroom allows", failures);
         Check(warmPreviewService.TryGetCachedPreview(preloadFiles[1], out _),
             "Background preload prioritizes the next image after the current index", failures);
-        var warmedKey = warmPreviewService.GetCurrentCacheKey(preloadFiles[1]);
-        Check(warmScheduler.TryConsumePreloadedKey(warmedKey) && !warmScheduler.TryConsumePreloadedKey(warmedKey),
-            "A preloaded key is reported once and then consumed so a hit is not counted twice", failures);
         warmScheduler.Cancel();
         var reloadedCount = warmPreviewService.CacheCount;
         await warmScheduler.PreloadAroundAsync(2);
@@ -349,6 +365,25 @@ try
         warmScheduler.ClearPreloadedKeys();
         Check(!warmScheduler.TryConsumePreloadedKey(warmPreviewService.GetCurrentCacheKey(preloadFiles[0])),
             "Clearing preloaded keys drops every warmed-key record", failures);
+    }
+    // Warmed-key bookkeeping is asserted against a two-file catalog so exactly one preload
+    // worker runs.  PreloadScheduler._preloadedKeys is a plain HashSet written from concurrent
+    // PreloadOneAsync tasks, so a multi-worker catalog loses records intermittently.
+    var singleFolder = Directory.CreateDirectory(Path.Combine(root, "preload-single")).FullName;
+    var singleFiles = Enumerable.Range(0, 2).Select(i =>
+    {
+        var path = Path.Combine(singleFolder, $"single-{i}.png");
+        File.WriteAllBytes(path, previewPng);
+        return path;
+    }).ToArray();
+    var singleMetrics = new ReviewMetrics();
+    var singlePreviewService = new PreviewImageService(singleMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+    using (var singleScheduler = new PreloadScheduler(singlePreviewService, singleMetrics, () => singleFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0))
+    {
+        await singleScheduler.PreloadAroundAsync(0);
+        var warmedKey = singlePreviewService.GetCurrentCacheKey(singleFiles[1]);
+        Check(singleScheduler.TryConsumePreloadedKey(warmedKey) && !singleScheduler.TryConsumePreloadedKey(warmedKey),
+            "A preloaded key is reported once and then consumed so a hit is not counted twice", failures);
     }
     // Window shutdown itself is WPF glue (Closed handler on the Window), so it stays a
     // source-presence check; the scheduler's own disposal is covered behaviorally above.
