@@ -176,6 +176,7 @@ public partial class MainWindow : Window
         var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
         _compareSelectedPath = null;
+        AppLog.Info($"ShowImage start index={index} count={_files.Count} token={token} path={path}");
         // The catalog can become stale while Explorer order is being applied or an
         // external move/delete completes. Do this check before touching FileInfo.Length
         // so a vanished item is removed and the viewer advances once without logging
@@ -194,12 +195,14 @@ public partial class MainWindow : Window
                 var thumbnail = await _thumbnailCache.GetAsync(path);
                 if (token != _generation) return;
                 MainImage.Source = thumbnail;
+                AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
                 ApplyInitialViewMode();
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
             }
             var image = await GetPreviewAsync(path);
             if (token != _generation) return;
             MainImage.Source = image;
+            AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={_settings.LoadingMode}");
             _ = PreloadAroundAsync(index, token);
             var pair = FindComparePair(path);
             ComparePanel.Visibility = pair is null ? Visibility.Collapsed : Visibility.Visible;
@@ -248,9 +251,10 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (token == _generation && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {
+            AppLog.Info($"ShowImage stale-file token={token} path={path}");
             await RemoveMissingCatalogItemAsync(path, index, token);
         }
-        catch (Exception ex) when (token == _generation) { AppLog.Error($"ShowImage failed: {path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
+        catch (Exception ex) when (token == _generation) { AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
     }
 
     private static bool TryGetCurrentFileSize(string path, out long size)
@@ -744,6 +748,7 @@ public partial class MainWindow : Window
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         StopImageReadsForAction();
         var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: true);
+        AppLog.Info($"FileAction classify-start category={category} source={sourcePath} next={nextPath ?? "<none>"}");
         try
         {
             var info = new FileInfo(source);
@@ -752,6 +757,7 @@ public partial class MainWindow : Window
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                AppLog.Info($"FileAction recycle-complete source={source}");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
             }
@@ -797,6 +803,7 @@ public partial class MainWindow : Window
         // Invalidate an Explorer snapshot/load that started before the action.
         Interlocked.Increment(ref _folderGeneration);
         _preloadCts.Cancel();
+        AppLog.Info($"FileAction stop-reads generation={_generation} folderGeneration={_folderGeneration} index={_index}");
         // Keep the current frame visible while Move/Delete runs. Clearing the
         // source here creates a black flash before the next image is ready.
     }
@@ -826,6 +833,7 @@ public partial class MainWindow : Window
         var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == "Move");
+        AppLog.Info($"FileAction action-start operation={operation} source={sourcePath} next={nextPath ?? "<none>"}");
         var operationId = Guid.NewGuid().ToString("N");
         var prepared = false;
         string? destinationPath = null;
@@ -848,6 +856,7 @@ public partial class MainWindow : Window
             prepared = true;
             if (operation == "Copy") File.Copy(source, destinationPath);
             else File.Move(source, destinationPath);
+            AppLog.Info($"FileAction filesystem-complete operation={operation} source={source} destination={destinationPath}");
             var destinationInfo = new FileInfo(destinationPath);
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
                 throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
@@ -863,6 +872,7 @@ public partial class MainWindow : Window
                 _files.Insert(restoreIndex, source);
             }
             StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
+            AppLog.Error($"FileAction failed operation={operation} source={source} destination={destinationPath}", ex);
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
