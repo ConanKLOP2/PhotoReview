@@ -266,7 +266,7 @@ public partial class MainWindow : Window
         var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
         _compareSelectedPath = null;
-        AppLog.Info($"ShowImage start index={index} count={_files.Count} token={token} path={path}");
+        if (AppLog.Enabled) AppLog.Info($"ShowImage start index={index} count={_files.Count} token={token} path={path}");
         // The catalog can become stale while Explorer order is being applied or an
         // external move/delete completes. Do this check before touching FileInfo.Length
         // so a vanished item is removed and the viewer advances once without logging
@@ -285,7 +285,7 @@ public partial class MainWindow : Window
         StatusText.Text = ramReady
             ? $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · {Path.GetFileName(path)}"
             : $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải";
-        AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_cache.CurrentSize}");
+        if (AppLog.Enabled) AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_cache.CurrentSize}");
         try
         {
             if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
@@ -294,7 +294,7 @@ public partial class MainWindow : Window
                 var thumbnail = await _thumbnailCache.GetAsync(path);
                 if (token != _generation) return;
                 MainImage.Source = thumbnail;
-                AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
+                if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
                 ApplyInitialViewMode();
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
             }
@@ -304,7 +304,7 @@ public partial class MainWindow : Window
             var uiAssign = Stopwatch.StartNew();
             MainImage.Source = image;
             _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
-            AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={_settings.LoadingMode}");
+            if (AppLog.Enabled) AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={_settings.LoadingMode}");
             _ = PreloadAroundAsync(index, token);
             var pair = FindComparePair(path);
             ComparePanel.Visibility = pair is null ? Visibility.Collapsed : Visibility.Visible;
@@ -355,7 +355,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (token == _generation && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {
-            AppLog.Info($"ShowImage stale-file token={token} path={path}");
+            if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file token={token} path={path}");
             await RemoveMissingCatalogItemAsync(path, index, token);
         }
         catch (Exception ex) when (token == _generation) { AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex); StatusText.Text = $"Lỗi ảnh: {Path.GetFileName(path)} — {ex.Message}"; }
@@ -601,8 +601,11 @@ public partial class MainWindow : Window
                     cancellationToken.ThrowIfCancellationRequested();
                     if (!HasPreloadHeadroom())
                     {
-                        var memory = PhysicalMemory.GetSnapshot();
-                        AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
+                        if (AppLog.Enabled)
+                        {
+                            var memory = PhysicalMemory.GetSnapshot();
+                            AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
+                        }
                         return;
                     }
                     var path = files[order.Current];
@@ -614,8 +617,11 @@ public partial class MainWindow : Window
                     if (++examinedSinceYield >= workers)
                     {
                         examinedSinceYield = 0;
-                        var memory = PhysicalMemory.GetSnapshot();
-                        AppLog.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes}");
+                        if (AppLog.Enabled)
+                        {
+                            var memory = PhysicalMemory.GetSnapshot();
+                            AppLog.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes}");
+                        }
                         await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
                     }
                 }
