@@ -41,6 +41,10 @@ public partial class MainWindow : Window
     private readonly ExplorerOrderService _explorerOrder = new();
     private CancellationTokenSource _folderLoadCts = new();
     private long _folderGeneration;
+    // Incremented by user navigation and file actions.  An Explorer snapshot
+    // started during folder load must never reindex a catalog the user has
+    // already interacted with.
+    private long _catalogInteractionGeneration;
     private ExplorerViewSnapshot? _lastExplorerSnapshot;
     private bool _placementRestored;
     private int _fileActionInProgress;
@@ -128,6 +132,8 @@ public partial class MainWindow : Window
             _files.Clear(); _files.AddRange(files); _index = -1; _cache.Clear(); _hashService.Clear(); _originalDimensions.Clear();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
+            var presentationGeneration = _generation;
+            var interactionGeneration = Volatile.Read(ref _catalogInteractionGeneration);
             var resumePath = initialPath ?? _session.CurrentPath;
             if (_files.Count > 0)
             {
@@ -135,11 +141,15 @@ public partial class MainWindow : Window
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
             else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
-            var presentationGeneration = _generation;
-
             var totalBytesTask = Task.Run(() => scannedFiles.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }), loadToken);
             var explorerSnapshot = await explorerTask;
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
+            if (interactionGeneration != Volatile.Read(ref _catalogInteractionGeneration))
+            {
+                AppLog.Info($"Explorer native order ignored after catalog interaction: loadInteraction={interactionGeneration} currentInteraction={_catalogInteractionGeneration}");
+                _totalSourceBytes = await totalBytesTask;
+                return;
+            }
             _lastExplorerSnapshot = explorerSnapshot;
             if (ExplorerSnapshotValidator.TryValidate(explorerSnapshot, scannedFiles, out var explorerOrder, out var fallbackReason))
             {
@@ -490,6 +500,7 @@ public partial class MainWindow : Window
         {
             if (_files.Count == 0) return;
             e.Handled = true;
+            Interlocked.Increment(ref _catalogInteractionGeneration);
             await ShowImageAsync(0);
             return;
         }
@@ -512,12 +523,12 @@ public partial class MainWindow : Window
             if (Matches(e.Key, action.Shortcut)) { e.Handled = true; await ExecuteActionAsync(action); return; }
         }
         if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
-        if (Matches(e.Key, _settings.Shortcuts.Skip)) { e.Handled = true; if (_session is not null) { _session.Skipped.Add(_files[_index]); _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); } await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
+        if (Matches(e.Key, _settings.Shortcuts.Skip)) { e.Handled = true; Interlocked.Increment(ref _catalogInteractionGeneration); if (_session is not null) { _session.Skipped.Add(_files[_index]); _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); } await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
         if (Matches(e.Key, _settings.Shortcuts.ToggleFit)) { e.Handled = true; ResetFitView(); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomIn)) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomOut)) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
-        if (Matches(e.Key, _settings.Shortcuts.Next)) { e.Handled = true; await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
-        if (Matches(e.Key, _settings.Shortcuts.Previous)) { e.Handled = true; await ShowImageAsync(Math.Max(_index - 1, 0)); }
+        if (Matches(e.Key, _settings.Shortcuts.Next)) { e.Handled = true; Interlocked.Increment(ref _catalogInteractionGeneration); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); }
+        if (Matches(e.Key, _settings.Shortcuts.Previous)) { e.Handled = true; Interlocked.Increment(ref _catalogInteractionGeneration); await ShowImageAsync(Math.Max(_index - 1, 0)); }
     }
 
     private void Recovery_Click(object sender, RoutedEventArgs e)
@@ -825,6 +836,7 @@ public partial class MainWindow : Window
         Interlocked.Increment(ref _generation);
         // Invalidate an Explorer snapshot/load that started before the action.
         Interlocked.Increment(ref _folderGeneration);
+        Interlocked.Increment(ref _catalogInteractionGeneration);
         _preloadCts.Cancel();
         AppLog.Info($"FileAction stop-reads generation={_generation} folderGeneration={_folderGeneration} index={_index}");
         // Keep the current frame visible while Move/Delete runs. Clearing the

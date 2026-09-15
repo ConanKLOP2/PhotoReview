@@ -193,6 +193,8 @@ try
     Check(mainWindow.IndexOf("await ShowImageAsync", StringComparison.Ordinal) < mainWindow.IndexOf("await explorerTask", StringComparison.Ordinal), "First image is presented before waiting for Explorer order", failures);
     Check(mainWindow.Contains("mayReplaceInitialFallback") && mainWindow.Contains("await ShowImageAsync(0)"), "Folder open replaces untouched fallback with the first native Explorer item", failures);
     Check(mainWindow.Contains("currentSet.SetEquals(scannedFiles)") && mainWindow.Contains("else if (_index >= 0) await ShowImageAsync(_index)"), "Native reindex refreshes the counter and rejects a changed catalog", failures);
+    Check(mainWindow.Contains("_catalogInteractionGeneration") && mainWindow.Contains("Explorer native order ignored after catalog interaction"), "Explorer snapshot cannot reindex after user catalog interaction", failures);
+    Check(mainWindow.Contains("Interlocked.Increment(ref _catalogInteractionGeneration)"), "Navigation and file actions advance catalog interaction generation", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation", failures);
     Check(appSettings.Contains("ReviewAction") && appSettings.Contains("Actions"), "Config supports multiple review actions", failures);
     Check(appSettings.Contains("CurrentConfigVersion") && appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save", failures);
