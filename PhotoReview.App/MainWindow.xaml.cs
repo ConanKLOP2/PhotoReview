@@ -747,8 +747,10 @@ public partial class MainWindow : Window
     {
         if (_index < 0 || _index >= _files.Count) return;
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        var source = _compareSelectedPath ?? _files[_index];
+        var sourcePath = _compareSelectedPath ?? _files[_index];
+        var source = sourcePath;
         StopImageReadsForAction();
+        var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: true);
         try
         {
             var info = new FileInfo(source);
@@ -776,10 +778,8 @@ public partial class MainWindow : Window
                 _moveHistory.Push((source, destination));
                 _lastUndoAction = new UndoAction("Move", source, destination, info.Length, info.LastWriteTimeUtc);
             }
-            _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null;
             if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
-            if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
-            else { MainImage.Source = null; StatusText.Text = "Đã xử lý hết ảnh trong folder."; }
+            if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
         }
         catch (Exception ex) { StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}"; }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
@@ -817,8 +817,11 @@ public partial class MainWindow : Window
         if (_index < 0 || _index >= _files.Count) return;
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         StopImageReadsForAction();
-        var source = _compareSelectedPath ?? _files[_index];
+        var sourcePath = _compareSelectedPath ?? _files[_index];
+        var source = sourcePath;
         var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
+        var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
+        var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == "Move");
         var operationId = Guid.NewGuid().ToString("N");
         var prepared = false;
         string? destinationPath = null;
@@ -845,16 +848,33 @@ public partial class MainWindow : Window
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
                 throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
             _journal.Append(new JournalEntry(operationId, operation, "Committed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
-            if (operation == "Move") { _files.Remove(source); _cache.Remove(source); _compareSelectedPath = null; }
-            if (_files.Count > 0) await ShowImageAsync(Math.Min(_index, _files.Count - 1));
-            else { MainImage.Source = null; StatusText.Text = $"Đã thực hiện: {action.Name}"; }
+            if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
         }
         catch (Exception ex)
         {
             if (prepared) _journal.Append(new JournalEntry(operationId, operation, "Failed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
+            if (operation == "Move" && !_files.Contains(source, StringComparer.OrdinalIgnoreCase) && File.Exists(source))
+            {
+                var restoreIndex = Math.Min(sourceIndex, _files.Count);
+                _files.Insert(restoreIndex, source);
+            }
             StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
+    }
+
+    // Advance exactly once, before any synchronous filesystem call begins.
+    // Do not call ShowImageAsync after action; completion only updates journal/catalog.
+    private async Task<string?> AdvanceBeforeFileActionAsync(string sourcePath, bool removeSource)
+    {
+        // source is normally selected by _compareSelectedPath ?? _files[_index];
+        // _files.Remove(source) is represented by RemoveAt to avoid a second lookup.
+        var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
+        if (removeSource && sourceIndex >= 0) { _files.RemoveAt(sourceIndex); _cache.Remove(sourcePath); _compareSelectedPath = null; }
+        var nextIndex = removeSource ? Math.Min(Math.Max(sourceIndex, 0), _files.Count - 1) : Math.Min(Math.Max(sourceIndex + 1, 0), _files.Count - 1);
+        if (_files.Count > 0) { await ShowImageAsync(Math.Max(0, nextIndex)); return _files[_index]; }
+        MainImage.Source = null;
+        return null;
     }
 
     private static bool IsSamePath(string first, string second)
