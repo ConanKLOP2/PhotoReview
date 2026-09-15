@@ -20,6 +20,13 @@ Tài liệu này ghi các lỗi thực tế đã gặp trong PhotoReview, nguyê
 | E-012 | Retry filesystem có thể thực hiện sai nguồn/đích. | Recovery không kiểm fingerprint trước khi replay. | Recovery retry fingerprint validation và failed journal tests. |
 | E-013 | Index hiển thị khác log gây hiểu nhầm. | Log dùng zero-based (`index=0` là ảnh 1/), UI dùng one-based. | Test counter và log path/currentIndex; tài liệu phải ghi rõ quy ước. |
 
+## Bộ performance/regression test bổ sung
+
+- `PerformanceTestHarness`: đo cold read, đọc song song, P50/P95/max, queue wait, working set và xuất JSON; ngưỡng là tương đối nên máy chậm chỉ sinh `WARN`.
+- `FileActionConcurrencyTests`: giữ `FileStream` mở với `FileShare.Delete` rồi Move/Delete/Copy, kiểm tra thao tác hoàn tất và chuỗi xen kẽ.
+- `CacheExplorerRegressionTests`: kiểm cache variant/fingerprint, preload order không trùng và Explorer snapshot thiếu/trùng/ngoài folder.
+- `LocalUiNextProbe`: chạy WPF STA trên folder ảnh thật, warm 30 ảnh rồi điều hướng từng index; kiểm không loading, không sai path và đo P50/P95/max.
+
 ## Quy ước bắt buộc khi thêm lỗi mới
 
 1. Ghi lại timestamp, path/folder, thao tác người dùng và log liên quan.

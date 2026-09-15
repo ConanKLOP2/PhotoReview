@@ -1,4 +1,5 @@
 using PhotoReview.App;
+using PhotoReview.Tests;
 using System.IO;
 using System.Windows.Media;
 
@@ -32,6 +33,13 @@ if (!File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.c
 var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 ImageCacheKeyTests.Run(root, failures);
+FileActionConcurrencyTests.Run(root, failures);
+CacheExplorerRegressionTests.Run(root, failures);
+var performanceFixture = PerformanceTestHarness.CreateFixture(root, 30);
+var performanceReport = await PerformanceTestHarness.RunAsync(performanceFixture, 30, workers: 4,
+    reportPath: Path.Combine(root, "performance-report.json"));
+Check(performanceReport.Samples.All(sample => sample.Status is "PASS" or "WARN"),
+    "Relative performance samples complete without hard timing failure", failures);
 Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", Path.Combine(root, "app-data"));
 try
 {
