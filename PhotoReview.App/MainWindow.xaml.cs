@@ -276,13 +276,11 @@ public partial class MainWindow : Window
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
-        var ramReady = TryGetCachedPreview(path, out var readyBitmap);
+        var currentKey = GetCurrentCacheKey(path);
+        var ramReady = TryGetCachedPreview(currentKey, out var readyBitmap);
         if (ramReady)
         {
-            var preloadKey = ImageCacheKey.Create(path,
-                string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase),
-                GetTargetDecodeWidth());
-            if (_preloadedKeys.Remove(preloadKey)) _metrics.RecordPreloadHit();
+            if (_preloadedKeys.Remove(currentKey)) _metrics.RecordPreloadHit();
         }
         StatusText.Text = ramReady
             ? $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · {Path.GetFileName(path)}"
@@ -300,7 +298,7 @@ public partial class MainWindow : Window
                 ApplyInitialViewMode();
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
             }
-            var image = ramReady ? readyBitmap : await GetPreviewAsync(path);
+            var image = ramReady ? readyBitmap : await GetPreviewAsync(path, currentKey);
             if (ramReady) _metrics.RecordCacheHit();
             if (token != _generation) return;
             var uiAssign = Stopwatch.StartNew();
@@ -342,7 +340,9 @@ public partial class MainWindow : Window
             if (pair is null)
             {
                 ApplyInitialViewMode();
-                var original = await GetOriginalDimensionsAsync(path);
+                var original = IsOriginalLoadingMode()
+                    ? (Width: image.PixelWidth, Height: image.PixelHeight)
+                    : await GetOriginalDimensionsAsync(path);
                 if (token != _generation) return;
                 var currentInfo = new FileInfo(path);
                 if (!currentInfo.Exists) return;
@@ -398,12 +398,20 @@ public partial class MainWindow : Window
         await ShowImageAsync(nextIndex);
     }
 
-    private async Task<BitmapImage> GetPreviewAsync(string path)
+    private bool IsOriginalLoadingMode() => string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+
+    private ImageCacheKey GetCurrentCacheKey(string path)
+    {
+        var isOriginal = IsOriginalLoadingMode();
+        return ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : GetTargetDecodeWidth());
+    }
+
+    private Task<BitmapImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
+
+    private async Task<BitmapImage> GetPreviewAsync(string path, ImageCacheKey key)
     {
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
-        var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
-        var targetWidth = isOriginal ? 0 : GetTargetDecodeWidth();
-        var key = ImageCacheKey.Create(path, isOriginal, targetWidth);
+        var targetWidth = key.TargetWidth;
         if (_cache.TryGet(key, out var cached)) { _metrics.RecordCacheHit(); return cached; }
         var cacheEpoch = Volatile.Read(ref _cacheEpoch);
         var loadKey = (key, cacheEpoch);
@@ -458,8 +466,16 @@ public partial class MainWindow : Window
     {
         try
         {
-            var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
-            var key = ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : GetTargetDecodeWidth());
+            return TryGetCachedPreview(GetCurrentCacheKey(path), out bitmap);
+        }
+        catch (IOException) { bitmap = default!; return false; }
+        catch (UnauthorizedAccessException) { bitmap = default!; return false; }
+    }
+
+    private bool TryGetCachedPreview(ImageCacheKey key, out BitmapImage bitmap)
+    {
+        try
+        {
             return _cache.TryGet(key, out bitmap);
         }
         catch (IOException) { bitmap = default!; return false; }
@@ -470,8 +486,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var isOriginal = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
-            var key = ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : GetTargetDecodeWidth());
+            var key = GetCurrentCacheKey(path);
             return _previewLoads.ContainsKey((key, Volatile.Read(ref _cacheEpoch)));
         }
         catch (IOException) { return false; }
@@ -635,9 +650,8 @@ public partial class MainWindow : Window
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!HasPreloadHeadroom()) return;
-                await GetPreviewAsync(path);
-                var original = string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
-                var key = ImageCacheKey.Create(path, original, original ? 0 : GetTargetDecodeWidth());
+                var key = GetCurrentCacheKey(path);
+                await GetPreviewAsync(path, key);
                 if (_cache.TryGet(key, out _)) _preloadedKeys.Add(key);
             }
             finally { _preloadSlots.Release(); }
