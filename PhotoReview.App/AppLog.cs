@@ -1,19 +1,26 @@
-using System.IO;
+using System.Collections.Concurrent;
 using System.Text;
+using System.IO;
 
 namespace PhotoReview.App;
 
 public static class AppLog
 {
+    private sealed record Entry(string Level, string Message, Exception? Exception, DateTime Timestamp, int ThreadId);
     private static readonly object Sync = new();
+    private static readonly ConcurrentQueue<Entry> Queue = new();
+    private static readonly AutoResetEvent Signal = new(false);
     private static volatile bool _enabled;
-    public static bool Enabled { get => _enabled; set { lock (Sync) _enabled = value; } }
+    private static volatile bool _stopping;
+    private static Thread? _writer;
+    public static bool Enabled { get => _enabled; set { if (value) Start(); else { _enabled = false; Signal.Set(); Flush(); } } }
     public static string FilePath => Path.Combine(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview"), "logs", "app.log");
     public static void Info(string message) => Write("INFO", message, null);
     public static void Error(string message, Exception? exception = null) => Write("ERROR", message, exception);
-    private static void Write(string level, string message, Exception? exception)
-    {
-        if (!_enabled) return;
-        try { lock (Sync) { if (!_enabled) return; Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!); File.AppendAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] [T{Environment.CurrentManagedThreadId}] {message}{Environment.NewLine}{exception}{Environment.NewLine}", Encoding.UTF8); } } catch { }
-    }
+    public static void Flush() { var end = Environment.TickCount64 + 2000; while (!Queue.IsEmpty && Environment.TickCount64 < end) { Signal.Set(); Thread.Yield(); } }
+    public static void Shutdown() { _stopping = true; _enabled = false; Signal.Set(); _writer?.Join(2000); Flush(); }
+    private static void Start() { lock (Sync) { _stopping = false; _enabled = true; if (_writer is null || !_writer.IsAlive) { _writer = new Thread(WriterLoop) { IsBackground = true, Name = "PhotoReview.LogWriter" }; _writer.Start(); } } }
+    private static void Write(string level, string message, Exception? exception) { if (!_enabled || _stopping) return; Queue.Enqueue(new Entry(level, message, exception, DateTime.Now, Environment.CurrentManagedThreadId)); Signal.Set(); }
+    private static void WriterLoop() { while (!_stopping) { Signal.WaitOne(250); Drain(); } Drain(); }
+    private static void Drain() { if (Queue.IsEmpty) return; try { Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!); using var stream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan); using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true }; while (Queue.TryDequeue(out var e)) writer.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}\n{e.Exception}"); } catch { } }
 }

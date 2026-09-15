@@ -31,12 +31,24 @@ try
     AppLog.Enabled = true;
     AppLog.Info("enabled-info");
     AppLog.Error("enabled-error");
+    FlushAppLog();
     var logContents = File.ReadAllText(AppLog.FilePath);
     Check(logContents.Contains("enabled-info") && logContents.Contains("enabled-error"), "Explicitly enabled logging writes diagnostics", failures);
     AppLog.Enabled = false;
     AppLog.Info("disabled-again");
     AppLog.Error("disabled-again");
     Check(File.ReadAllText(AppLog.FilePath) == logContents, "Turning logging off stops all diagnostic writes", failures);
+
+    AppLog.Enabled = true;
+    var concurrentMarkers = Enumerable.Range(0, 200).Select(i => $"concurrent-marker-{i}").ToArray();
+    Parallel.ForEach(concurrentMarkers, marker => AppLog.Info(marker));
+    FlushAppLog();
+    var concurrentLog = File.ReadAllText(AppLog.FilePath);
+    Check(concurrentMarkers.All(concurrentLog.Contains), "Concurrent logging preserves every entry", failures);
+    Check(concurrentLog.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+        .Count(line => line.Contains("concurrent-marker-", StringComparison.Ordinal)) >= concurrentMarkers.Length,
+        "Concurrent log entries remain line-delimited", failures);
+    AppLog.Enabled = false;
     var sessionStore = new SessionStore();
     var state = new SessionState { Folder = root, CurrentPath = Path.Combine(root, "one.jpg"), Skipped = [Path.Combine(root, "skip.jpg")] };
     sessionStore.Save(state);
@@ -310,6 +322,13 @@ static void RunInterleavedFileActionSequence(string root, List<string> failures)
     File.Delete(finalDelete);
     Check(catalog.Count == 2 && Path.GetFileName(catalog[index]) == "3.jpg" &&
           catalog.All(File.Exists), "Sequence Delete at end selects the prior surviving slot", failures);
+}
+
+static void FlushAppLog()
+{
+    // Keeps tests compatible with both synchronous and buffered logger implementations.
+    var method = typeof(AppLog).GetMethod("Flush", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+    method?.Invoke(null, null);
 }
 
 static bool operationJournalTextContainsFailed()

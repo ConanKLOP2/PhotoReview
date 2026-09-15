@@ -18,6 +18,7 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, a) => AppLog.Error("Dispatcher exception", a.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
+        Exit += (_, _) => AppLog.Shutdown();
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
         var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
