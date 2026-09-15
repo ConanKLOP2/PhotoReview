@@ -32,7 +32,7 @@ public sealed class FileHashService
 
     private async Task<string> ComputeAndCacheAsync(string path, long length, DateTime lastWriteUtc, int generation, CancellationToken cancellationToken)
     {
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024, true);
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
         var current = new FileInfo(path);
         if (current.Length != length || current.LastWriteTimeUtc != lastWriteUtc)

@@ -298,7 +298,7 @@ public partial class MainWindow : Window
         if (_originalDimensions.TryGetValue(path, out var dimensions)) return dimensions;
         dimensions = await Task.Run(() =>
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
             var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
             var frame = decoder.Frames[0];
             return (frame.PixelWidth, frame.PixelHeight);
