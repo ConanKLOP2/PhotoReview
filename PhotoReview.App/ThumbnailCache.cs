@@ -23,6 +23,9 @@ public sealed class ThumbnailCache : IDisposable
     private readonly BoundedLruCache<string, BitmapSource> _ramCache;
     private readonly ConcurrentDictionary<string, Lazy<Task<BitmapSource>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _disposeCts = new();
+    private readonly object _lifecycleGate = new();
+    private long _cacheGeneration;
+    private bool _disposed;
 
     public ThumbnailCache(string? diskDirectory = null, long maxRamBytes = 256L * 1024 * 1024, long maxDiskBytes = DefaultMaxDiskBytes, bool persistNewThumbnails = true)
     {
@@ -40,6 +43,10 @@ public sealed class ThumbnailCache : IDisposable
     public Task<BitmapSource> GetAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        lock (_lifecycleGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+        }
         var fullPath = Path.GetFullPath(sourcePath);
         var key = BuildKey(fullPath);
 
@@ -52,23 +59,33 @@ public sealed class ThumbnailCache : IDisposable
         return AwaitAndCacheAsync(key, lazy, cancellationToken);
     }
 
-    public void ClearMemory() => _ramCache.Clear();
+    public void ClearMemory()
+    {
+        lock (_lifecycleGate)
+        {
+            _cacheGeneration++;
+            _ramCache.Clear();
+        }
+    }
 
     private async Task<BitmapSource> AwaitAndCacheAsync(
         string key,
         Lazy<Task<BitmapSource>> lazy,
         CancellationToken cancellationToken)
     {
-        try
+        var generation = Volatile.Read(ref _cacheGeneration);
+        var underlyingTask = lazy.Value;
+        _ = underlyingTask.ContinueWith(
+            _ => _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<BitmapSource>>>(key, lazy)),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        var image = await underlyingTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        lock (_lifecycleGate)
         {
-            var image = await lazy.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
-            _ramCache.Set(key, image);
-            return image;
+            if (!_disposed && generation == _cacheGeneration) _ramCache.Set(key, image);
         }
-        finally
-        {
-            _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<BitmapSource>>>(key, lazy));
-        }
+        return image;
     }
 
     private async Task<BitmapSource> LoadOrCreateAsync(string sourcePath, string key, CancellationToken cancellationToken)
@@ -93,6 +110,7 @@ public sealed class ThumbnailCache : IDisposable
 
     public void ClearDisk()
     {
+        lock (_lifecycleGate) _cacheGeneration++;
         if (!Directory.Exists(_diskDirectory)) return;
         try
         {
@@ -114,8 +132,7 @@ public sealed class ThumbnailCache : IDisposable
             foreach (var info in files)
             {
                 if (total <= _maxDiskBytes) break;
-                TryDelete(info.FullName);
-                total -= info.Length;
+                if (TryDelete(info.FullName)) total -= info.Length;
             }
         }
         catch (IOException) { }
@@ -170,16 +187,28 @@ public sealed class ThumbnailCache : IDisposable
 
     private static long EstimateBytes(BitmapSource image) => (long)image.PixelWidth * image.PixelHeight * 4;
 
-    private static void TryDelete(string path)
+    private static bool TryDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        try
+        {
+            if (!File.Exists(path)) return false;
+            File.Delete(path);
+            return !File.Exists(path);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     public void Dispose()
     {
+        lock (_lifecycleGate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _cacheGeneration++;
+            _ramCache.Clear();
+        }
         _disposeCts.Cancel();
         _disposeCts.Dispose();
-        _ramCache.Clear();
     }
 }

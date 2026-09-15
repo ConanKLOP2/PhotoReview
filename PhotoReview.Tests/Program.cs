@@ -137,10 +137,15 @@ try
     Check(comparePair is not null && comparePair.Value.Left == compareOriginal && comparePair.Value.Right == compareNumbered, "Compare pair detection works from numbered filename", failures);
     var compareFromOriginal = ComparePairService.Find(new[] { compareOriginal, compareNumbered }, compareOriginal);
     Check(compareFromOriginal is not null && compareFromOriginal.Value.Left == compareOriginal && compareFromOriginal.Value.Right == compareNumbered, "Compare pair detection works from original filename", failures);
+    var compareOtherFolder = Path.Combine(root, "other", "CocCocSetup.jpg");
+    Directory.CreateDirectory(Path.GetDirectoryName(compareOtherFolder)!);
+    Check(ComparePairService.Find(new[] { compareOriginal, compareNumbered, compareOtherFolder }, compareOtherFolder) is null, "Compare pair detection stays within selected folder", failures);
     Check(ComparePairService.Find(new[] { compareOriginal }, compareOriginal) is null, "Compare pair detection rejects an incomplete pair", failures);
     var sortFixture = new[] { Path.Combine(root, "img10.jpg"), Path.Combine(root, "img2.jpg"), Path.Combine(root, "img1.jpg") };
     var nameSorted = ImageSortService.Sort(sortFixture, "Name");
     Check(Path.GetFileName(nameSorted[0]) == "img1.jpg" && Path.GetFileName(nameSorted[1]) == "img2.jpg" && Path.GetFileName(nameSorted[2]) == "img10.jpg", "Natural filename sort orders numeric suffixes", failures);
+    var largeNameSorted = ImageSortService.Sort(new[] { "img1000000000000.jpg", "img2.jpg", "img10.jpg" }, "Name");
+    Check(Path.GetFileName(largeNameSorted[0]) == "img2.jpg" && Path.GetFileName(largeNameSorted[2]) == "img1000000000000.jpg", "Natural filename sort handles numeric runs over 12 digits", failures);
     File.WriteAllBytes(sortFixture[0], [1]); File.WriteAllBytes(sortFixture[1], [1, 2, 3]); File.WriteAllBytes(sortFixture[2], [1, 2]);
     var sizeSorted = ImageSortService.Sort(sortFixture, "Size");
     Check(Path.GetFileName(sizeSorted[0]) == "img2.jpg" && Path.GetFileName(sizeSorted[2]) == "img10.jpg", "Size sort orders files by descending bytes", failures);

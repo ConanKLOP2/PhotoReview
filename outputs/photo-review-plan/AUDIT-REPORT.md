@@ -124,3 +124,10 @@ PhotoReview now queries the matching Explorer window through `IServiceProvider`/
 - Verification after these changes: Release contract tests PASS, solution/build gates PASS with 0 warnings and 0 errors, required framework-dependent publish PASS at `PhotoReview.App/bin/Release/net10.0-windows/publish`, and release-file verification PASS.
 
 Remaining items are intentionally not marked complete without stronger evidence: GUI acceptance, key-to-present and disk-I/O benchmarks, native Explorer Date/Size/group matrix, and real filesystem fault-injection across crash boundaries.
+
+## Audit implementation 1 (2026-09-15)
+
+- Fixed shared-work lifecycle in FileHashService and ThumbnailCache: a canceled waiter no longer removes work still used by other callers; clear/dispose generations prevent stale cache refill.
+- Fixed SessionStore concurrent temp collisions, canonicalized equivalent folder keys, corrected natural ordering for numeric runs over 12 digits, comparer hash consistency, compare pairing scope, and drag-drop ignored counts.
+- Added MainWindow scan cancellation input, stale-load catch guard, empty-folder folder/Undo key handling, immediate Skip persistence, and rejection of unknown action operations.
+- Added regression checks for compare pairing in the selected folder and long numeric filenames. Release contract runner PASS.

@@ -111,7 +111,7 @@ public partial class MainWindow : Window
             Title = $"Photo Review — {folder}";
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
-                .Where(ImageFileTypes.IsSupported).ToList());
+                .Where(ImageFileTypes.IsSupported).ToList(), loadToken);
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
             var explorerTask = _explorerOrder.TryGetSnapshotAsync(folder, TimeSpan.FromSeconds(2), loadToken);
@@ -159,7 +159,7 @@ public partial class MainWindow : Window
             _totalSourceBytes = await totalBytesTask;
         }
         catch (OperationCanceledException) when (loadToken.IsCancellationRequested) { }
-        catch (Exception ex)
+        catch (Exception ex) when (loadGeneration == _folderGeneration)
         {
             AppLog.Error($"LoadFolder failed: {folder}", ex);
             MainImage.Source = null;
@@ -398,7 +398,6 @@ public partial class MainWindow : Window
             Close();
             return;
         }
-        if (_index < 0) return;
         if (Matches(e.Key, _settings.Shortcuts.NextFolder) || Matches(e.Key, _settings.Shortcuts.PreviousFolder))
         {
             e.Handled = true;
@@ -408,10 +407,18 @@ public partial class MainWindow : Window
         }
         if (Matches(e.Key, _settings.Shortcuts.FirstImage))
         {
+            if (_files.Count == 0) return;
             e.Handled = true;
             await ShowImageAsync(0);
             return;
         }
+        if (Matches(e.Key, _settings.Shortcuts.Undo) && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            await UndoLastMoveAsync();
+            return;
+        }
+        if (_index < 0) return;
         if (Matches(e.Key, _settings.Shortcuts.Compare))
         {
             if (ComparePanel.Visibility != Visibility.Visible && FindComparePair(_files[_index]) is null) return;
@@ -419,13 +426,12 @@ public partial class MainWindow : Window
             ComparePanel.Visibility = ComparePanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             return;
         }
-        if (Matches(e.Key, _settings.Shortcuts.Undo) && Keyboard.Modifiers == ModifierKeys.Control) { e.Handled = true; await UndoLastMoveAsync(); return; }
         foreach (var action in _settings.Actions)
         {
             if (Matches(e.Key, action.Shortcut)) { e.Handled = true; await ExecuteActionAsync(action); return; }
         }
         if (Matches(e.Key, _settings.Shortcuts.SendToRecycleBin)) { e.Handled = true; await ClassifyCurrentAsync(3); return; }
-        if (Matches(e.Key, _settings.Shortcuts.Skip)) { e.Handled = true; if (_session is not null) _session.Skipped.Add(_files[_index]); await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
+        if (Matches(e.Key, _settings.Shortcuts.Skip)) { e.Handled = true; if (_session is not null) { _session.Skipped.Add(_files[_index]); _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); } await ShowImageAsync(Math.Min(_index + 1, _files.Count - 1)); return; }
         if (Matches(e.Key, _settings.Shortcuts.ToggleFit)) { e.Handled = true; ApplyInitialViewMode(); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomIn)) { e.Handled = true; SetZoom(Math.Min(_zoom + .25, 4)); return; }
         if (Matches(e.Key, _settings.Shortcuts.ZoomOut)) { e.Handled = true; SetZoom(Math.Max(_zoom - .25, .25)); return; }
@@ -689,6 +695,11 @@ public partial class MainWindow : Window
 
     private async Task ExecuteActionAsync(ReviewAction action)
     {
+        if (action.Operation is not ("Move" or "Copy" or "Recycle" or "Delete"))
+        {
+            StatusText.Text = $"Không thực hiện được {action.Name}: Operation không hợp lệ.";
+            return;
+        }
         if (action.Confirm)
         {
             var answer = System.Windows.MessageBox.Show(this, $"Thực hiện action '{action.Name}' trên ảnh hiện tại?", "Xác nhận action", MessageBoxButton.YesNo, MessageBoxImage.Question);

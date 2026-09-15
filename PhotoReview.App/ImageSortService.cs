@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace PhotoReview.App;
 
@@ -23,8 +24,28 @@ public static class ImageSortService
         catch { return -1; }
     }
 
-    public static string NaturalKey(string name) =>
-        System.Text.RegularExpressions.Regex.Replace(name.ToLowerInvariant(), "\\d+", match => match.Value.PadLeft(12, '0'));
+    public static string NaturalKey(string name)
+    {
+        var builder = new StringBuilder(name.Length);
+        for (var index = 0; index < name.Length;)
+        {
+            if (!char.IsDigit(name[index]))
+            {
+                builder.Append(char.ToLowerInvariant(name[index++]));
+                continue;
+            }
+
+            var end = index;
+            while (end < name.Length && char.IsDigit(name[end])) end++;
+            var digits = name[index..end].TrimStart('0');
+            if (digits.Length == 0) digits = "0";
+            builder.Append(digits.Length.ToString("D10", System.Globalization.CultureInfo.InvariantCulture));
+            builder.Append(digits);
+            builder.Append('\0');
+            index = end;
+        }
+        return builder.ToString();
+    }
 
     private sealed class ExplorerComparer : StringComparer
     {
@@ -36,13 +57,26 @@ public static class ImageSortService
             if (ReferenceEquals(x, y)) return 0;
             if (x is null) return -1;
             if (y is null) return 1;
-            try { return StrCmpLogicalW(x, y); }
-            catch (DllNotFoundException) { return StringComparer.OrdinalIgnoreCase.Compare(NaturalKey(x), NaturalKey(y)); }
-            catch (EntryPointNotFoundException) { return StringComparer.OrdinalIgnoreCase.Compare(NaturalKey(x), NaturalKey(y)); }
+            var result = CompareWithWindowsOrNatural(x, y);
+            return result != 0 ? result : StringComparer.OrdinalIgnoreCase.Compare(x, y);
         }
 
         public override bool Equals(string? x, string? y) => Compare(x, y) == 0;
-        public override int GetHashCode(string obj) => StringComparer.OrdinalIgnoreCase.GetHashCode(obj);
+        public override int GetHashCode(string obj) => StringComparer.OrdinalIgnoreCase.GetHashCode(NaturalKey(obj));
+
+        private static int CompareNatural(string x, string y)
+        {
+            var left = NaturalKey(x);
+            var right = NaturalKey(y);
+            return StringComparer.OrdinalIgnoreCase.Compare(left, right);
+        }
+
+        private static int CompareWithWindowsOrNatural(string x, string y)
+        {
+            try { return StrCmpLogicalW(x, y); }
+            catch (DllNotFoundException) { return CompareNatural(x, y); }
+            catch (EntryPointNotFoundException) { return CompareNatural(x, y); }
+        }
     }
 
 }

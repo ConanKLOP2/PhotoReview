@@ -28,14 +28,19 @@ public sealed class SessionStore
     {
         Directory.CreateDirectory(Root);
         var path = GetPath(state.Folder);
-        var temp = path + ".tmp";
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(state, Options));
         File.Move(temp, path, true);
     }
 
     private static string GetPath(string folder)
     {
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(folder))));
+        var fullPath = Path.GetFullPath(folder);
+        var root = Path.GetPathRoot(fullPath)!;
+        var canonical = fullPath.Length > root.Length
+            ? fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : root;
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonical.ToUpperInvariant())));
         return Path.Combine(Root, key + ".json");
     }
 }

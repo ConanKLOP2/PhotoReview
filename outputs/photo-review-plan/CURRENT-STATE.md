@@ -20,6 +20,11 @@ Cập nhật 2026-09-15. Source baseline: `master` tại commit `5189298`. Tài 
 - Native Name DESC đã có probe trên một folder thực trước đây. Date/Size/grouped view và Unicode/large-folder matrix chưa được xác nhận đầy đủ.
 - `tools/verify-all.ps1` mặc định đọc artifact ở `outputs/release/PhotoReview-framework-dependent`, khác thư mục publish bắt buộc trong `AGENTS.md`. Verify đúng artifact hiện hành bằng `tools/verify-release.ps1 -ReleaseDirectory PhotoReview.App/bin/Release/net10.0-windows/publish`; provenance từ HEAD/build stamp là hạng mục FA-14.
 
+## Implementation đợt 1
+
+- Hash/session/cache/sort/compare/drag-drop và một số guard MainWindow đã được triển khai sau audit. Test mới bao phủ compare pair khác folder và numeric filename vượt 12 chữ số; toàn bộ contract runner PASS.
+- Chưa đánh dấu các gate tương ứng DONE vì vẫn thiếu test GUI, cancellation stress, crash boundary, real Explorer matrix và benchmark P95.
+
 ## Gate còn mở
 
 1. Fixture manifest và benchmark lạnh/ấm: key-to-visible-frame, P50/P95, bytes/reads nguồn, decoded RAM/GC và contention của preload.

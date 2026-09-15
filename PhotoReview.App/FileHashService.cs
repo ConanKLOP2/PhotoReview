@@ -11,6 +11,7 @@ public sealed class FileHashService
     private readonly BoundedLruCache<string, HashEntry> _cache = new(
         16L * 1024 * 1024, _ => 128, StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Lazy<Task<string>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private int _generation;
 
     public async Task<string> GetAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -18,20 +19,32 @@ public sealed class FileHashService
         var info = new FileInfo(fullPath);
         if (_cache.TryGet(fullPath, out var cached) && cached.Length == info.Length && cached.LastWriteUtc == info.LastWriteTimeUtc)
             return cached.Hash;
+        var generation = Volatile.Read(ref _generation);
         var lazy = _inFlight.GetOrAdd(fullPath, _ => new Lazy<Task<string>>(
-            () => ComputeAndCacheAsync(fullPath, info.Length, info.LastWriteTimeUtc, CancellationToken.None),
+            () => ComputeAndCacheAsync(fullPath, info.Length, info.LastWriteTimeUtc, generation, CancellationToken.None),
             LazyThreadSafetyMode.ExecutionAndPublication));
-        try { return await lazy.Value.WaitAsync(cancellationToken); }
-        finally { _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<string>>>(fullPath, lazy)); }
+        var task = lazy.Value;
+        _ = task.ContinueWith(
+            _ => _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<string>>>(fullPath, lazy)),
+            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return await task.WaitAsync(cancellationToken);
     }
 
-    private async Task<string> ComputeAndCacheAsync(string path, long length, DateTime lastWriteUtc, CancellationToken cancellationToken)
+    private async Task<string> ComputeAndCacheAsync(string path, long length, DateTime lastWriteUtc, int generation, CancellationToken cancellationToken)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1024 * 1024, true);
         var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
-        _cache.Set(path, new HashEntry(length, lastWriteUtc, hash));
+        var current = new FileInfo(path);
+        if (current.Length != length || current.LastWriteTimeUtc != lastWriteUtc)
+            throw new IOException($"File changed while hashing: {path}");
+        if (generation == Volatile.Read(ref _generation))
+            _cache.Set(path, new HashEntry(length, lastWriteUtc, hash));
         return hash;
     }
 
-    public void Clear() => _cache.Clear();
+    public void Clear()
+    {
+        Interlocked.Increment(ref _generation);
+        _cache.Clear();
+    }
 }

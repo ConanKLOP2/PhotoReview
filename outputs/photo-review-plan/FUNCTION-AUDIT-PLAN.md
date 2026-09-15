@@ -2,6 +2,10 @@
 
 Cập nhật 2026-09-15, baseline `5189298`. Bốn lane audit bằng subagent: UI/interaction; cache, hash, sort; journal/native/recovery; tests/tools/docs. Đây là plan thực hiện, chưa phải tuyên bố các fix đã triển khai. Mức P1: có thể sai ảnh/sai file/sai trạng thái hoặc mất an toàn; P2: tác động đáng kể tới tốc độ/độ bền; P3: tối ưu nhỏ. Mỗi task cần fixture và test hành vi tương ứng trước khi đổi DONE.
 
+### Evidence implementation đợt 1 — 2026-09-15
+
+FA-01 đã có guard generation cho scan lỗi và xử lý phím folder/Undo khi không có ảnh; FA-02 đã từ chối operation lạ và lưu Skip ngay. FA-06 đã chống waiter cancellation/clear/dispose làm refill ThumbnailCache và sửa quota accounting. FA-07 đã giữ shared hash tới khi underlying task xong, kiểm tra fingerprint sau hash và có generation khi Clear. FA-08 đã dùng temp path unique và canonical folder key cho SessionStore. FA-09/12 đã sửa natural ordering numeric run dài, comparer hash, compare pair cùng folder/extension và ignored-count drag-drop. Contract runner Release PASS; GUI/fault/benchmark gates vẫn mở.
+
 ## Thứ tự thực hiện và dependency
 
 | Đợt | Task | Phụ thuộc | Kết quả bắt buộc |

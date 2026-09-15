@@ -46,8 +46,9 @@ public static class DragDropInputService
         if (folderPath is null)
             return new(DragDropInputKind.Invalid, null, null, validPaths.Count, "Không xác định được folder của ảnh.");
 
-        var ignoredCount = validPaths.Count - images.Count;
-        var mixedFolders = images.Any(path => !string.Equals(Path.GetDirectoryName(Normalize(path)), folderPath, StringComparison.OrdinalIgnoreCase));
+        var acceptedImages = images.Where(path => string.Equals(Path.GetDirectoryName(Normalize(path)), folderPath, StringComparison.OrdinalIgnoreCase)).ToList();
+        var ignoredCount = validPaths.Count - acceptedImages.Count;
+        var mixedFolders = acceptedImages.Count != images.Count;
         var warning = mixedFolders ? "Các ảnh khác folder; chỉ mở folder của ảnh đầu tiên." : ignoredCount > 0 ? "Một số file không được hỗ trợ và đã bị bỏ qua." : null;
         return new(DragDropInputKind.Image, folderPath, initialImage, ignoredCount, warning);
     }

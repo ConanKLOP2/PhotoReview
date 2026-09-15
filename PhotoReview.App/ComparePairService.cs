@@ -7,7 +7,13 @@ public static class ComparePairService
 {
     public static (string Left, string Right)? Find(IEnumerable<string> files, string path)
     {
-        var available = files.ToList();
+        var selectedFolder = Path.GetDirectoryName(Path.GetFullPath(path));
+        var selectedExtension = Path.GetExtension(path);
+        var available = files.Where(candidate =>
+                string.Equals(Path.GetDirectoryName(Path.GetFullPath(candidate)), selectedFolder, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Path.GetExtension(candidate), selectedExtension, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(candidate => Path.GetFullPath(candidate), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(candidate => Path.GetFullPath(candidate), StringComparer.Ordinal).ToList();
         var stem = Path.GetFileNameWithoutExtension(path);
         var match = Regex.Match(stem, "^(.*) \\(\\d+\\)$");
         var baseStem = match.Success ? match.Groups[1].Value : stem;
