@@ -107,7 +107,7 @@ public sealed class ThumbnailCache : IDisposable
 
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
         if (!_persistNewThumbnails) return image;
-        try { await DiskCacheStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); _ = Task.Run(() => PruneDiskCache()); }
+        try { await DiskCacheStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); PruneDiskCache(); }
         catch (IOException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* The RAM result remains usable when disk cache is unavailable. */ }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* Same fallback for read-only locations. */ }
         return image;
@@ -121,12 +121,9 @@ public sealed class ThumbnailCache : IDisposable
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
     }
 
-    private void PruneDiskCache()
-    {
-        try { DiskCacheStore.PruneDirectory(_diskDirectory, "*.png", _maxDiskBytes, "Thumbnail delete failed"); }
-        catch (IOException ex) { AppLog.Error($"Thumbnail disk cache prune failed: {_diskDirectory}", ex); }
-        catch (UnauthorizedAccessException ex) { AppLog.Error($"Thumbnail disk cache prune failed: {_diskDirectory}", ex); }
-    }
+    // Coalesced per directory in DiskCacheStore: concurrent thumbnail writes (folder scan
+    // pre-generating many at once) must not each spawn their own full directory scan.
+    private void PruneDiskCache() => DiskCacheStore.SchedulePrune(_diskDirectory, "*.png", _maxDiskBytes, "Thumbnail delete failed");
 
     private static Task<BitmapSource> DecodeAsync(string path, CancellationToken cancellationToken)
     {

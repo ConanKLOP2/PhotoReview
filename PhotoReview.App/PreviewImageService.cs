@@ -224,7 +224,7 @@ public sealed class PreviewImageService
         return Path.Combine(_diskCacheDirectory, hash + ".png");
     }
 
-    /// <summary>Fire-and-forget: write the decoded preview to disk and prune the cache directory to quota.</summary>
+    /// <summary>Fire-and-forget: write the decoded preview to disk, then schedule a coalesced prune.</summary>
     private static void PersistToDiskCache(BitmapImage bitmap, string cachePath, long diskCacheCapacityBytes)
     {
         _ = Task.Run(async () =>
@@ -232,7 +232,9 @@ public sealed class PreviewImageService
             try
             {
                 await DiskCacheStore.WriteAtomicallyAsync(bitmap, cachePath).ConfigureAwait(false);
-                DiskCacheStore.PruneDirectory(Path.GetDirectoryName(cachePath)!, "*.png",
+                // Coalesced per directory in DiskCacheStore: concurrent preload workers
+                // persisting several previews at once must not each scan the whole directory.
+                DiskCacheStore.SchedulePrune(Path.GetDirectoryName(cachePath)!, "*.png",
                     diskCacheCapacityBytes, "Preview disk cache delete failed");
             }
             catch (IOException ex) { AppLog.Error($"Preview disk cache write failed: {cachePath}", ex); }
