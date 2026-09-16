@@ -365,3 +365,17 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Claude Code local state: agent worktrees and per-user settings
+/.claude/worktrees/
+/.claude/settings.local.json
+
+# Performance diagnosis artifacts: raw traces, raw per-run CSVs, local-only mappings
+*.pml
+*.etl
+*.nettrace
+*.diagsession
+/docs/refactoring/diagnosis/runs/**/perf-*.csv
+/docs/refactoring/diagnosis/runs/**/raw/
+*.local.json
+*.local.csv
