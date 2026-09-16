@@ -1,0 +1,36 @@
+{
+  "R-IO": {
+    "sourceMissIoSharePct": 40,
+    "minSourceOpensPerImage": 2
+  },
+  "R-DEC": {
+    "decodeSharePct": 40
+  },
+  "R-UI": {
+    "ramHitUiSharePct": 40,
+    "ramHitP95Ms": 50,
+    "frameTimeP95Ms": 33
+  },
+  "R-PRE": {
+    "ramHitP95MaxMs": 50,
+    "nonRamHitShareS2Pct": 10,
+    "nonRamHitShareS3S4Pct": 30
+  },
+  "R-CONT": {
+    "decodeSlowdownFactor": 1.3
+  },
+  "R-THREAD": {
+    "dispatcherLongOpMs": 16,
+    "inputP95Ms": 16
+  },
+  "R-GC": {
+    "gcTimePct": 10
+  },
+  "R-DISK": {
+    "diskVsReadDecodeFactor": 1.0
+  },
+  "R-FOLDER": {
+    "folderT0ToT2Ms": 1000,
+    "explorerShareOfT2Pct": 50
+  }
+}
