@@ -90,7 +90,7 @@ public static class BenchmarkWorkloadRunner
                 // Disposable per-iteration benchmark fixtures: permanent delete instead of
                 // Recycle Bin, which would otherwise accumulate one item per iteration in the
                 // user's real Recycle Bin every time this runs.
-                case "delete": FileSystem.DeleteFile(temp, UIOption.OnlyErrorDialogs, RecycleOption.DeletePermanently); break;
+                case "delete": FileSystem.DeleteFile(temp, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin); break;
                 case "copy": File.Copy(temp, copied, overwrite: true); break;
             }
             // The correctness check must match what each operation promises: move/delete
