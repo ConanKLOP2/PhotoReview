@@ -26,6 +26,11 @@ public sealed class PreviewImageService
     private readonly Func<int> _targetDecodeWidth;
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
+    // D10: precedence is the explicit test parameter, then the diagnostic environment
+    // variable, then "disk cache enabled" (unset behavior). Read once in the constructor so
+    // a mid-process environment change never makes DecodeAndCacheAsync and PersistToDiskCache
+    // disagree about whether the disk cache is on.
+    private readonly bool _disableDiskCache;
     // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
     // needs its own bound: without one, a preload burst spawns one Task.Run per decoded
     // preview with no cap, competing with live decodes for CPU/disk and keeping each
@@ -44,7 +49,8 @@ public sealed class PreviewImageService
         Func<int> targetDecodeWidth,
         long capacityBytes = AppConstants.ImageCacheCapacityBytes,
         string? diskCacheDirectory = null,
-        long diskCacheCapacityBytes = AppConstants.PreviewDiskCacheCapacityBytes)
+        long diskCacheCapacityBytes = AppConstants.PreviewDiskCacheCapacityBytes,
+        bool? disableDiskCacheOverride = null)
     {
         _metrics = metrics;
         _isOriginalLoadingMode = isOriginalLoadingMode;
@@ -52,6 +58,7 @@ public sealed class PreviewImageService
         _diskCacheDirectory = diskCacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
+        _disableDiskCache = disableDiskCacheOverride ?? DiagOptions.DisableDiskCache;
         _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(
             capacityBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
         // Two workers: enough to keep the disk-cache warm without letting persistence
@@ -184,7 +191,10 @@ public sealed class PreviewImageService
         var downscaled = false;
         var bitmap = new BitmapImage();
         var cachePath = GetDiskCachePath(key);
-        if (File.Exists(cachePath))
+        // D10: PHOTOREVIEW_DIAG_DISABLE_DISKCACHE=1 measures decode/contention without the
+        // disk cache muddying the numbers. Treat the cache as if the file didn't exist -- this
+        // never deletes an existing entry, it just skips reading (and, below, persisting) it.
+        if (!_disableDiskCache && File.Exists(cachePath))
         {
             try
             {
@@ -228,7 +238,7 @@ public sealed class PreviewImageService
         // under the downscaled cache key, and Original-mode's full-resolution decode is
         // slower to persist than just re-decoding the source JPEG, so it would cost more
         // than it saves.
-        if (sourceRead && downscaled) PersistToDiskCache(bitmap, cachePath, cacheEpoch);
+        if (!_disableDiskCache && sourceRead && downscaled) PersistToDiskCache(bitmap, cachePath, cacheEpoch);
         stopwatch.Stop();
         if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
         return bitmap;
