@@ -41,11 +41,13 @@ public partial class BenchmarkWindow : Window
     // so IsCancel/DialogResult cannot be used on the Đóng button -- WPF throws
     // InvalidOperationException when a non-dialog Window's DialogResult is set. Cancel any
     // running benchmark before closing so the background run doesn't outlive the window.
-    private void Close_Click(object sender, RoutedEventArgs e)
-    {
-        _cts?.Cancel();
-        Close();
-    }
+private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+protected override void OnClosed(EventArgs e)
+{
+    _cts?.Cancel();
+    base.OnClosed(e);
+}
 
     private async Task RunAsync()
     {
