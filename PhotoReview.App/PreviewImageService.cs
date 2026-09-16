@@ -329,6 +329,35 @@ public sealed class PreviewImageService
 
     public static BitmapImage DecodeSource(string path, int targetWidth)
     {
+        // D05 perf: PHOTOREVIEW_DIAG_PREREAD=1 reads the whole file into a MemoryStream first (timed
+        // separately) and decodes from that instead of the FileStream, so t_read and t_decode can be
+        // told apart. This changes the I/O pattern (one sequential read into RAM instead of WIC
+        // streaming from the file handle) and exists only to measure R-4's potential benefit -- it
+        // must stay off the hot path used everywhere else. When PreRead is false, behavior below is
+        // byte-for-byte what it was before this file existed.
+        if (DiagOptions.PreRead)
+        {
+            var perf = PhotoReviewPerf.Log.IsEnabled();
+            long readStart = perf ? Stopwatch.GetTimestamp() : 0;
+            byte[] bytes;
+            using (var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan))
+            {
+                bytes = new byte[fileStream.Length];
+                var offset = 0;
+                int read;
+                while (offset < bytes.Length && (read = fileStream.Read(bytes, offset, bytes.Length - offset)) > 0) offset += read;
+            }
+            // Only SourceRead is emitted here: the caller (DecodeAndCacheAsync) already wraps this
+            // whole DecodeSource/DecodeWithFallback call in its own Decode event, so a second Decode
+            // event here would double-count decode time for every PreRead navigation.
+            if (perf) PhotoReviewPerf.Log.SourceRead(PhotoReviewPerf.NavContext, PhotoReviewPerf.PathId(path), PhotoReviewPerf.Ms(readStart), bytes.LongLength);
+            using var memoryStream = new MemoryStream(bytes, writable: false);
+            var bitmapFromMemory = new BitmapImage();
+            bitmapFromMemory.BeginInit(); bitmapFromMemory.CacheOption = BitmapCacheOption.OnLoad;
+            if (targetWidth > 0) bitmapFromMemory.DecodePixelWidth = targetWidth;
+            bitmapFromMemory.StreamSource = memoryStream; bitmapFromMemory.EndInit(); bitmapFromMemory.Freeze();
+            return bitmapFromMemory;
+        }
         // Allow an in-flight decode to coexist with Move/Delete. The action path
         // cancels future work and invalidates its result; Windows can still
         // complete the file operation without waiting for this read handle.

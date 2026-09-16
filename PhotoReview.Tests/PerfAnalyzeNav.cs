@@ -296,6 +296,11 @@ public static class PerfAnalyzeNavBuilder
             }
         }
 
+        // D05: with PHOTOREVIEW_DIAG_PREREAD the Decode event (emitted by DecodeAndCacheAsync around
+        // DecodeSource) also covers the in-memory read that SourceRead reports, so split them here.
+        if (rec.TReadMs is { } readMs && rec.TDecodeMs is { } decodeMs)
+            rec.TDecodeMs = Math.Max(0, decodeMs - readMs);
+
         rec.Kind = ClassifyKind(rec);
         return rec;
     }

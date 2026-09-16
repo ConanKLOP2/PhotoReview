@@ -96,6 +96,16 @@ if (args.Length >= 2 && args[0] == "--perf-analyze")
     return;
 }
 
+if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
+{
+    var ioWidths = args.Length >= 4
+        ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray()
+        : [0, 1920, 2560, 3840];
+    var ioMax = args.Length >= 5 ? int.Parse(args[4]) : 60;
+    await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax);
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--explorer-probe")
 {
     var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
