@@ -17,7 +17,7 @@
 
 | ID | Tên | Phụ thuộc | ∥ | Sửa code | TT |
 |---|---|---|---|---|---|
-| D00 | Chuẩn bị môi trường và fixture | T00 | | Không | TODO |
+| D00 | Chuẩn bị môi trường và fixture | T00 | | Không | DONE |
 | D01 | Phân tích nhanh từ AppLog | D00 | ∥1 | Script | TODO |
 | D02 | Đếm truy cập file (Process Monitor) | D00 | ∥1 | Không | TODO |
 | D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | TODO |
@@ -37,7 +37,7 @@
 ---
 
 ### D00 — Chuẩn bị môi trường và fixture
-- **TT:** TODO · **Files:** `docs/refactoring/diagnosis/env.md` (mới).
+- **TT:** DONE · **Files:** `docs/refactoring/diagnosis/env.md` (mới).
 - **Làm:**
   1. Ghi cấu hình máy:
      - CPU, RAM, loại ổ và model (`Get-PhysicalDisk`), phiên bản Windows, GPU và driver, màn hình, DPI.
@@ -47,7 +47,7 @@
   3. Kiểm tra công cụ đã có: `dotnet-counters`, `dotnet-trace`, PerfView, WPR/WPA, PresentMon, Process Monitor, RAMMap. **Liệt kê công cụ còn thiếu và hỏi người dùng** trước khi tải hoặc cài.
   4. Build Release tại commit hiện tại của `refactor/integration`. Ghi SHA.
 - **Xong khi:** `env.md` đầy đủ, danh sách công cụ đã được người dùng duyệt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `diag/D00-env` `de37808` · `env.md` + cài dotnet-counters/dotnet-trace 10.0.745401 + Process Monitor (SHA-256 80A6…1128, chữ ký Microsoft hợp lệ) · R1 (Opus): CHANGES (tên OS, đường dẫn công cụ, WPR không phải ADK); Coordinator đã sửa · fixture do Coordinator chọn từ thư mục người dùng cung cấp, mapping ở `work/diag/fixtures.local.json`: F1, F1b, F2, F3, F4 có; F5, F6, F7 phải sinh tạm.
 
 ### D01 — Phân tích nhanh từ AppLog ∥1
 - **Files:** `tools/diag/parse-applog.ps1` (mới), `docs/refactoring/diagnosis/log-baseline.md` (mới).

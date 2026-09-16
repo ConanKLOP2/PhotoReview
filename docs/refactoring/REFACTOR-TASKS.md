@@ -41,6 +41,8 @@
 
 **Quy ước để tiết kiệm token:**
 - Worker **không** sửa `REFACTOR-TASKS.md`, `PERF-DIAGNOSIS-TASKS.md` hay `task_on_progress.md` (tránh conflict). Worker trả nhật ký trong câu trả lời; Coordinator ghi vào file.
+- Worker **không dùng** `git add -A` hay `git add .`; chỉ `git add <file cụ thể>` nằm trong danh sách Files.
+- Worker **không sửa** chuỗi mô tả hay DisplayName của test/check có sẵn, trừ khi task yêu cầu (vì bảng parity ghép theo chuỗi này). Không gắn Trait làm test bị loại khỏi CI nếu test đó chạy headless được.
 - Worker không push. Coordinator merge vào `refactor/integration` theo thứ tự ID, chạy VERIFY đầy đủ **một lần sau mỗi đợt merge**, rồi push.
 - Worker chỉ đọc mục task của mình, mục 0 của file này và các mục plan được task tham chiếu. Không đọc toàn bộ plan.
 
@@ -94,8 +96,8 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T05 | AGENTS: quy trình PR | T00 | ∥A | ⛔Q4 | DONE |
 | T10 | Ma trận parity test | T00 | | | DONE |
 | T11 | Chuyển check CLI còn thiếu sang xUnit | T10 | ∥B | | DONE |
-| T12 | Xóa file test trùng trong CLI | T10 | ∥B | | TODO |
-| T13a | Gắn Trait Integration/Manual | T10 | ∥B | | TODO |
+| T12 | Xóa file test trùng trong CLI | T10 | ∥B | | DONE |
+| T13a | Gắn Trait Integration/Manual | T10 | ∥B | | DONE |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | TODO |
 | T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | TODO |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | TODO |
@@ -273,17 +275,19 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Nhật ký:** 2026-09-16 · Coordinator · script ghép DisplayName (`scratchpad/parity.ps1`) xác nhận 146/146 check CLI có xUnit tương ứng → không cần viết test mới. `test-parity.md` không còn MISSING.
 
 ### T12 — Xóa file trùng trong CLI ∥B
+- **TT:** DONE
 - **Files:** 5 file trùng trong `PhotoReview.Tests/`, và phần gọi chúng trong `PhotoReview.Tests/Program.cs`.
 - **Làm:** xóa file và lời gọi, chỉ với những file T10 đã xác nhận xUnit bao phủ đủ.
 - **Không làm:** đụng `LocalImageBenchmark.cs` hay `LocalUiNextProbe.cs`.
 - **Xong khi:** `dotnet run --project PhotoReview.Tests -c Release` in `PASS: all ...`.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T12-remove-dup` `ab24ecb` · xóa 4 file + 4 lời gọi `Program.cs` · xUnit 190/190, CLI đạt · R1 (Opus): CHANGES, vì agent sửa mô tả một check ngoài phạm vi; Coordinator hoàn nguyên trong commit merge · CLI in 147 dòng PASS (146 check + tổng kết).
 
 ### T13a — Trait ∥B
+- **TT:** DONE
 - **Files:** các file test trong `{UT}` **trừ** `MigratedCliChecksTests.cs`.
 - **Làm:** gắn `[Trait("Category","Integration")]` cho test dùng Recycle Bin, Explorer, registry, hoặc thời gian thực > 1 s. Gắn `Manual` cho test cần Explorer đang mở hoặc GUI. Tạo `[CollectionDefinition("GlobalState", DisableParallelization = true)]` và gán cho test đụng `AppLog` hoặc biến môi trường. Thử bỏ `DisableTestParallelization` toàn assembly; nếu còn lỗi thì giữ lại và ghi nguyên nhân.
 - **Xong khi:** `dotnet test` chạy đạt 5 lần liên tiếp. Ghi thời gian chạy trước và sau.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T13a-traits` `acca8ae` · GlobalState cho 5 class (AppLog, SessionStore, OperationJournal, JournalReconciliation, RecoveryRetry) · Integration cho 2 test > 1 s · thử chạy song song: 1/5 lần fail (`Eviction forces a fresh source read…`) nên giữ `DisableTestParallelization` và chuyển cho T13b · R1 (Opus): CHANGES, vì agent gắn `Manual` cho cả `SourcePresenceTests` làm chúng bị loại khỏi CI; Coordinator bỏ nhãn đó khi merge · kết quả: `Category!=Manual` 190/190, `Integration` 2.
 
 ### T13b — Test flaky quota prune ∥B
 - **Files:** `{UT}/DiskCacheStoreTests.cs`, `{UT}/PreviewImageServiceTests.cs` (chỉ test liên quan).
