@@ -7,7 +7,7 @@ namespace PhotoReview.App;
 /// Shared atomic-write/quota-prune primitives for on-disk PNG caches (thumbnails, previews).
 /// Callers own their directory, quota and logging context; this type has no instance state.
 /// </summary>
-internal static class DiskCacheStore
+public static class DiskCacheStore
 {
     public static async Task WriteAtomicallyAsync(BitmapSource image, string cachePath, CancellationToken cancellationToken = default)
     {

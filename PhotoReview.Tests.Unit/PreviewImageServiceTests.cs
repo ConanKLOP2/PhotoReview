@@ -23,7 +23,8 @@ public sealed class PreviewImageServiceTests : IDisposable
         var folder = _root.Dir("preview-service");
         _previewPath = Path.Combine(folder, "preview-a.png");
         File.WriteAllBytes(_previewPath, PreviewPng);
-        _service = new PreviewImageService(_metrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024);
+        _service = new PreviewImageService(_metrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: _root.Dir("disk-cache"));
     }
 
     public void Dispose() => _root.Dispose();
@@ -78,7 +79,8 @@ public sealed class PreviewImageServiceTests : IDisposable
     [Fact(DisplayName = "Original loading mode decodes at full size while Preview mode uses the target decode width")]
     public void OriginalLoadingModeDecodesAtFullSize()
     {
-        var originalModeService = new PreviewImageService(_metrics, () => true, () => 512);
+        var originalModeService = new PreviewImageService(_metrics, () => true, () => 512,
+            diskCacheDirectory: _root.Dir("disk-cache-original"));
         Assert.True(originalModeService.IsOriginalLoadingMode()
             && originalModeService.GetCurrentCacheKey(_previewPath).IsOriginal
             && originalModeService.GetCurrentCacheKey(_previewPath).TargetWidth == 0
@@ -130,7 +132,8 @@ public sealed class PreloadSchedulerTests : IDisposable
         double memoryLoadLimit = 1.0)
     {
         var metrics = new ReviewMetrics();
-        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: _root.Dir("disk-cache-" + Guid.NewGuid().ToString("N")));
         var scheduler = new PreloadScheduler(service, metrics, () => _preloadFiles, () => 0L, long.MaxValue,
             memoryLoadLimit: memoryLoadLimit);
         return (metrics, service, scheduler);
@@ -204,11 +207,126 @@ public sealed class PreloadSchedulerTests : IDisposable
     public async Task PreloadedKeyIsReportedOnceThenConsumed()
     {
         var metrics = new ReviewMetrics();
-        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: _root.Dir("disk-cache-single"));
         using var scheduler = new PreloadScheduler(service, metrics, () => _singleFiles, () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0);
         await scheduler.PreloadAroundAsync(0);
         var warmedKey = service.GetCurrentCacheKey(_singleFiles[1]);
         Assert.True(scheduler.TryConsumePreloadedKey(warmedKey) && !scheduler.TryConsumePreloadedKey(warmedKey));
+    }
+}
+
+/// <summary>
+/// PreviewImageService's disk cache (PR-029): a decoded preview is persisted in the
+/// background and served without a source read on the next request, scoped to
+/// downscaled previews only, with corruption recovery falling back to the source.
+/// The disk directory is always overridden to a TempRoot so these tests never touch
+/// the developer's real %LocalAppData%\PhotoReview\cache.
+/// </summary>
+public sealed class PreviewImageServiceDiskCacheTests : IDisposable
+{
+    private readonly TempRoot _root = new("preview-disk-cache");
+    private readonly string _previewPath;
+
+    public PreviewImageServiceDiskCacheTests()
+    {
+        var folder = _root.Dir("source");
+        _previewPath = Path.Combine(folder, "preview-a.png");
+        File.WriteAllBytes(_previewPath, PreviewImageServiceTests.PreviewPng);
+    }
+
+    public void Dispose() => _root.Dispose();
+
+    private async Task<string[]> WaitForCacheFilesAsync(string diskDir, int expectedCount = 1, int timeoutMs = 5000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        string[] files;
+        do
+        {
+            files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.png") : [];
+            if (files.Length >= expectedCount) return files;
+            await Task.Delay(25);
+        } while (DateTime.UtcNow < deadline);
+        return files;
+    }
+
+    [Fact(DisplayName = "A downscaled preview decoded from source is persisted to the disk cache")]
+    public async Task DownscaledPreviewIsPersistedToDiskCache()
+    {
+        var diskDir = _root.Dir("write");
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir);
+
+        await service.GetPreviewAsync(_previewPath);
+        var files = await WaitForCacheFilesAsync(diskDir);
+
+        Assert.True(files.Length == 1 && new FileInfo(files[0]).Length > 0);
+    }
+
+    [Fact(DisplayName = "Original (full-resolution) mode never writes to the disk cache")]
+    public async Task OriginalModeDoesNotWriteToDiskCache()
+    {
+        var diskDir = _root.Dir("original-no-write");
+        var service = new PreviewImageService(new ReviewMetrics(), () => true, () => 0, diskCacheDirectory: diskDir);
+
+        await service.GetPreviewAsync(_previewPath);
+        var files = await WaitForCacheFilesAsync(diskDir, expectedCount: 1, timeoutMs: 500);
+
+        Assert.True(files.Length == 0);
+    }
+
+    [Fact(DisplayName = "A preview found on disk is loaded without re-reading the source")]
+    public async Task DiskCacheHitAvoidsSourceRead()
+    {
+        var diskDir = _root.Dir("hit");
+        var writer = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir);
+        await writer.GetPreviewAsync(_previewPath);
+        await WaitForCacheFilesAsync(diskDir);
+
+        var readerMetrics = new ReviewMetrics();
+        var reader = new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir);
+        var image = await reader.GetPreviewAsync(_previewPath);
+        var snapshot = readerMetrics.Snapshot();
+
+        Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 0 && snapshot.DiskCacheHits == 1);
+    }
+
+    [Fact(DisplayName = "A corrupt disk cache entry is deleted and the preview is re-decoded from source")]
+    public async Task CorruptDiskCacheEntryFallsBackToSource()
+    {
+        var diskDir = _root.Dir("corrupt");
+        var writer = new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir);
+        await writer.GetPreviewAsync(_previewPath);
+        var files = await WaitForCacheFilesAsync(diskDir);
+        File.WriteAllBytes(files[0], [1, 2, 3, 4]);
+
+        var readerMetrics = new ReviewMetrics();
+        var reader = new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir);
+        var image = await reader.GetPreviewAsync(_previewPath);
+        var snapshot = readerMetrics.Snapshot();
+
+        Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
+    }
+
+    [Fact(DisplayName = "The disk cache directory is pruned instead of growing unbounded")]
+    public async Task DiskCacheIsPrunedToConfiguredQuota()
+    {
+        var diskDir = _root.Dir("quota");
+        // Five distinct target widths produce five distinct cache keys/files for the
+        // same source image; a near-zero quota forces PruneDirectory to run and evict
+        // on every write instead of letting all five accumulate.
+        foreach (var width in new[] { 100, 200, 300, 400, 500 })
+        {
+            var service = new PreviewImageService(new ReviewMetrics(), () => false, () => width,
+                diskCacheDirectory: diskDir, diskCacheCapacityBytes: 1);
+            await service.GetPreviewAsync(_previewPath);
+            // Serialize write+prune per iteration: fire-and-forget work must settle before
+            // the next iteration's own write/prune pass runs, or the count below races it.
+            var deadline = DateTime.UtcNow.AddMilliseconds(2000);
+            while (DateTime.UtcNow < deadline && Directory.GetFiles(diskDir, "*.png").Length > 1) await Task.Delay(25);
+        }
+
+        var remaining = Directory.GetFiles(diskDir, "*.png");
+        Assert.True(remaining.Length < 5);
     }
 }

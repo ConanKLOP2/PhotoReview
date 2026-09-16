@@ -363,7 +363,8 @@ try
         return path;
     }).ToArray();
     var guardedMetrics = new ReviewMetrics();
-    var guardedPreviewService = new PreviewImageService(guardedMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+    var guardedPreviewService = new PreviewImageService(guardedMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        diskCacheDirectory: Path.Combine(root, "disk-cache-guarded"));
     using (var blockedScheduler = new PreloadScheduler(guardedPreviewService, guardedMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 0.0))
     {
         await blockedScheduler.PreloadAroundAsync(0);
@@ -371,7 +372,8 @@ try
             "Background preload memory guard decodes nothing when there is no memory headroom", failures);
     }
     var warmMetrics = new ReviewMetrics();
-    var warmPreviewService = new PreviewImageService(warmMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+    var warmPreviewService = new PreviewImageService(warmMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        diskCacheDirectory: Path.Combine(root, "disk-cache-warm"));
     using (var warmScheduler = new PreloadScheduler(warmPreviewService, warmMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0))
     {
         await warmScheduler.PreloadAroundAsync(0);
@@ -399,7 +401,8 @@ try
         return path;
     }).ToArray();
     var singleMetrics = new ReviewMetrics();
-    var singlePreviewService = new PreviewImageService(singleMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024);
+    var singlePreviewService = new PreviewImageService(singleMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+        diskCacheDirectory: Path.Combine(root, "disk-cache-single"));
     using (var singleScheduler = new PreloadScheduler(singlePreviewService, singleMetrics, () => singleFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0))
     {
         await singleScheduler.PreloadAroundAsync(0);
@@ -427,7 +430,7 @@ try
     // driving the quota path here would mutate the developer's own cache directory.
     var thumbnailCacheText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ThumbnailCache.cs"));
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation (source presence, not behavior)", failures);
-    Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException) { }") && thumbnailCacheText.Contains("catch (IOException) { }"), "Disk cache cleanup tolerates filesystem access failures (source presence, not behavior)", failures);
+    Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException ex)") && thumbnailCacheText.Contains("catch (IOException ex)"), "Disk cache cleanup tolerates filesystem access failures (source presence, not behavior)", failures);
     Check(mainWindowXaml.Contains("ClearCache_Click") && mainWindow.Contains("_thumbnailCache.ClearDisk()"), "Disk cache can be cleared from UI without changing source images (source presence, not behavior)", failures);
     // PreviewImageService owns decode + the bounded RAM cache and needs no WPF Window, so the
     // decode/cache/metrics contract is driven for real instead of grepping source text.
@@ -435,7 +438,8 @@ try
     var previewPath = Path.Combine(previewFolder, "preview-a.png");
     File.WriteAllBytes(previewPath, previewPng);
     var previewMetrics = new ReviewMetrics();
-    var previewService = new PreviewImageService(previewMetrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024);
+    var previewService = new PreviewImageService(previewMetrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024,
+        diskCacheDirectory: Path.Combine(root, "disk-cache-preview"));
     var decodedPreview = await previewService.GetPreviewAsync(previewPath);
     var afterFirstDecode = previewMetrics.Snapshot();
     Check(decodedPreview.PixelWidth > 0 && afterFirstDecode.CacheMisses == 1 && afterFirstDecode.CacheHits == 0
@@ -456,7 +460,8 @@ try
     previewService.ClearCache();
     Check(previewService.CacheCount == 0 && previewService.CacheBytes == 0,
         "Clearing the preview cache drops every decoded bitmap", failures);
-    var originalModeService = new PreviewImageService(previewMetrics, () => true, () => 512);
+    var originalModeService = new PreviewImageService(previewMetrics, () => true, () => 512,
+        diskCacheDirectory: Path.Combine(root, "disk-cache-original"));
     Check(originalModeService.IsOriginalLoadingMode() && originalModeService.GetCurrentCacheKey(previewPath).IsOriginal
         && originalModeService.GetCurrentCacheKey(previewPath).TargetWidth == 0
         && !previewService.GetCurrentCacheKey(previewPath).IsOriginal
