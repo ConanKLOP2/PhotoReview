@@ -107,7 +107,7 @@ public sealed class ThumbnailCache : IDisposable
 
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
         if (!_persistNewThumbnails) return image;
-        try { await WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); PruneDiskCache(); }
+        try { await WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); _ = Task.Run(() => PruneDiskCache()); }
         catch (IOException) { /* The RAM result remains usable when disk cache is unavailable. */ }
         catch (UnauthorizedAccessException) { /* Same fallback for read-only locations. */ }
         return image;
