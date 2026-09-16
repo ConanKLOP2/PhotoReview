@@ -287,7 +287,7 @@ public partial class MainWindow : Window
     {
         folder ??= FolderText.Text;
         if (string.IsNullOrWhiteSpace(folder)) return;
-        Title = $"Photo Review — {folder}{(AppLog.Enabled ? " · LOG" : "")}";
+        Title = $"Photo Review — {folder}{(AppLog.Enabled ? " · LOG" : "")}{(DiagOptions.AnyEnabled ? " · DIAG" : "")}";
     }
 
     private async Task ShowImageAsync(int index)

@@ -18,6 +18,10 @@ public partial class App : System.Windows.Application
     {
         AppLog.Enabled = AppSettings.Load().LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
+        // D05: PHOTOREVIEW_DIAG_* variables change app behavior for measurement purposes, so their
+        // presence must be visible in the log even when logging is otherwise disabled -- same reasoning
+        // as AppSettings.LogStartupErrorForced.
+        if (DiagOptions.AnyEnabled) LogDiagModeForced();
         _perfListener = PerfCsvListener.TryStartFromEnvironment();
         if (_perfListener is not null) AppLog.Info("Perf trace enabled (PHOTOREVIEW_PERF_TRACE)");
         if (_perfListener is not null)
@@ -45,6 +49,21 @@ public partial class App : System.Windows.Application
         var window = new MainWindow(initial ?? initialFolder);
         MainWindow = window;
         window.Show();
+    }
+
+    /// <summary>
+    /// D05: DIAG mode changes app behavior for measurement purposes, so it must always be visible in
+    /// the log, even when logging is off by default -- same pattern as
+    /// <c>AppSettings.LogStartupErrorForced</c>: force logging on just long enough to persist this one
+    /// line, flush, then restore whatever state it was in.
+    /// </summary>
+    private static void LogDiagModeForced()
+    {
+        var wasEnabled = AppLog.Enabled;
+        AppLog.Enabled = true;
+        AppLog.Error($"DIAG MODE: {DiagOptions.Describe()}");
+        AppLog.Flush();
+        AppLog.Enabled = wasEnabled;
     }
 
     /// <summary>
