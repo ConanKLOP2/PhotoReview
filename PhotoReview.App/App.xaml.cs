@@ -15,7 +15,7 @@ public partial class App : System.Windows.Application
     {
         AppLog.Enabled = AppSettings.Load().LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
-        DispatcherUnhandledException += (_, a) => AppLog.Error("Dispatcher exception", a.Exception);
+        DispatcherUnhandledException += (_, a) => { AppLog.Error("Dispatcher exception", a.Exception); a.Handled = true; };
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => AppLog.Shutdown();
