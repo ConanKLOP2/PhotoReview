@@ -20,8 +20,7 @@ public static class RecoveryRetryService
         if (File.Exists(failed.Destination))
             return new(false, "Đích đã tồn tại; không ghi đè.", null);
 
-        var id = Guid.NewGuid().ToString("N");
-        var prepared = new JournalEntry(id, failed.Type, "Prepared", failed.Source, failed.Destination, sourceInfo.Length, sourceInfo.LastWriteTimeUtc, DateTime.UtcNow);
+        var prepared = new JournalEntry(failed.Id, failed.Type, "Prepared", failed.Source, failed.Destination, sourceInfo.Length, sourceInfo.LastWriteTimeUtc, DateTime.UtcNow);
         journal.Append(prepared);
         try
         {
