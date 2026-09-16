@@ -22,16 +22,23 @@ public sealed class PreviewImageService
     private readonly ReviewMetrics _metrics;
     private readonly Func<bool> _isOriginalLoadingMode;
     private readonly Func<int> _targetDecodeWidth;
+    private readonly string _diskCacheDirectory;
+    private readonly long _diskCacheCapacityBytes;
 
     public PreviewImageService(
         ReviewMetrics metrics,
         Func<bool> isOriginalLoadingMode,
         Func<int> targetDecodeWidth,
-        long capacityBytes = AppConstants.ImageCacheCapacityBytes)
+        long capacityBytes = AppConstants.ImageCacheCapacityBytes,
+        string? diskCacheDirectory = null,
+        long diskCacheCapacityBytes = AppConstants.PreviewDiskCacheCapacityBytes)
     {
         _metrics = metrics;
         _isOriginalLoadingMode = isOriginalLoadingMode;
         _targetDecodeWidth = targetDecodeWidth;
+        _diskCacheDirectory = diskCacheDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
+        _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(
             capacityBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
     }
@@ -103,7 +110,7 @@ public sealed class PreviewImageService
             // Only cache downscaled previews to disk: PNG-encoding a full-resolution
             // Original-mode decode is slower than just re-decoding the source JPEG,
             // so it would cost more than it saves.
-            if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath);
+            if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath, _diskCacheCapacityBytes);
             stopwatch.Stop();
             if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
             return bitmap;
@@ -203,14 +210,14 @@ public sealed class PreviewImageService
         catch when (targetWidth > 0) { return DecodeSource(path, 0); }
     }
 
-    private static string GetDiskCachePath(ImageCacheKey key)
+    private string GetDiskCachePath(ImageCacheKey key)
     {
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}")));
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", hash + ".png");
+        return Path.Combine(_diskCacheDirectory, hash + ".png");
     }
 
     /// <summary>Fire-and-forget: write the decoded preview to disk and prune the cache directory to quota.</summary>
-    private static void PersistToDiskCache(BitmapImage bitmap, string cachePath)
+    private static void PersistToDiskCache(BitmapImage bitmap, string cachePath, long diskCacheCapacityBytes)
     {
         _ = Task.Run(async () =>
         {
@@ -218,7 +225,7 @@ public sealed class PreviewImageService
             {
                 await DiskCacheStore.WriteAtomicallyAsync(bitmap, cachePath).ConfigureAwait(false);
                 DiskCacheStore.PruneDirectory(Path.GetDirectoryName(cachePath)!, "*.png",
-                    AppConstants.PreviewDiskCacheCapacityBytes, "Preview disk cache delete failed");
+                    diskCacheCapacityBytes, "Preview disk cache delete failed");
             }
             catch (IOException ex) { AppLog.Error($"Preview disk cache write failed: {cachePath}", ex); }
             catch (UnauthorizedAccessException ex) { AppLog.Error($"Preview disk cache write failed: {cachePath}", ex); }
