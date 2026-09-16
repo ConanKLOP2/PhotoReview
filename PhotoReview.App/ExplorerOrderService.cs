@@ -182,7 +182,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             var paths = new List<string>(count);
             var comCalls = 1;
             var getItem = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
-            ExplorerNativeVtable.GetDisplayNameDelegate? getDisplayName = null;
+            // COM does not guarantee every IShellItem from IFolderView2.GetItem shares the
+            // same implementation/vtable (in practice they usually do, within one folder
+            // view), so a delegate resolved from one item's vtable slot cannot be safely
+            // reused with another item's `this` pointer. Cache per distinct vtable address
+            // instead of per call: the common case (one shared vtable) still resolves once.
+            var getDisplayNameByVtable = new Dictionary<IntPtr, ExplorerNativeVtable.GetDisplayNameDelegate>();
             for (var index = 0; index < count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -194,7 +199,9 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                     var itemResult = getItem(folderViewPtr, index, ref itemIid, out itemPtr);
                     comCalls++;
                     if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.GetItem({index}) failed: 0x{itemResult:X8}");
-                    getDisplayName ??= ExplorerNativeVtable.ResolveGetDisplayName(itemPtr);
+                    var itemVtable = Marshal.ReadIntPtr(itemPtr);
+                    if (!getDisplayNameByVtable.TryGetValue(itemVtable, out var getDisplayName))
+                        getDisplayNameByVtable[itemVtable] = getDisplayName = ExplorerNativeVtable.ResolveGetDisplayName(itemPtr);
                     displayNameCalls++;
                     var nameResult = getDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
                     comCalls++;
