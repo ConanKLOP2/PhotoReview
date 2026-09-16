@@ -6,6 +6,7 @@
   - **C3:** giữ WPF, thay bộ giải mã ảnh (decoder) sau interface `IImageDecoder`.
 - **Trạng thái:** đã chốt hướng. Task nào gắn **⛔Qn** thì phải chờ người dùng trả lời câu hỏi Qn (mục 11) mới được làm.
 - **Danh sách task:** [`REFACTOR-TASKS.md`](REFACTOR-TASKS.md). Mỗi task đủ nhỏ để một agent hoặc một model làm trong một phiên.
+- **Chẩn đoán hiệu năng (chạy trước W1):** [`PERF-DIAGNOSIS-PLAN.md`](PERF-DIAGNOSIS-PLAN.md) · [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md) (D00–D13). Kết quả D12 quyết định thứ tự ưu tiên của WC3 và W6.
 - **Các hướng không chọn:** A (chỉ chia thư mục), C1 (WinUI 3), C2 (Avalonia), C4 (viết lại native). Lý do ở mục 3. C1 có thể mở lại qua ADR (T71).
 
 ---
@@ -104,6 +105,7 @@ Epoch và in-flight dedup (`Lazy` + `GetOrAdd`), kiểm tra fingerprint sau deco
 - Nút thắt có khả năng lớn nhất của review là **đọc đĩa và decode**. C1 vẫn decode bằng WIC nên không giải quyết nút này. C3 và R-4 giải quyết trực tiếp.
 - B là nền bắt buộc để C3 (và C1 nếu có sau này) thay thế được mà không đụng UI.
 - Chỉ mở lại C1 khi benchmark (T66) cho thấy `UiAssign`/render chiếm phần lớn thời gian key→present. Việc này được ghi trong ADR T71.
+- Nhận định "nút thắt lớn nhất là I/O và decode" ở trên **chưa được đo**. Đợt chẩn đoán D00–D12 kiểm chứng nó theo quy tắc R-IO / R-DEC / R-UI / R-PRE (xem `PERF-DIAGNOSIS-PLAN.md` mục 8). Nếu kết quả khác, D13 sắp xếp lại thứ tự WC3/W6. Hướng B vẫn giữ nguyên.
 
 ### 3.3 Ràng buộc thiết kế để B không chặn các hướng sau (K-1…K-3)
 
@@ -112,6 +114,7 @@ Epoch và in-flight dedup (`Lazy` + `GetOrAdd`), kiểm tra fingerprint sau deco
 | K-1 | Tầng Imaging (cache, preload, decoder) làm việc với `DecodedImage` (buffer BGRA32 + kích thước + metadata) hoặc một handle trừu tượng. Kiểu WPF `BitmapSource` chỉ xuất hiện trong **adapter** `WpfImageAdapter` ở biên | Test kiến trúc: namespace `PhotoReview.Imaging.Core` không tham chiếu `System.Windows.Media` |
 | K-2 | ViewModel không tham chiếu `System.Windows.*`. Dùng `IUiScheduler`, `IDialogService` và ánh xạ phím ở biên | Test kiến trúc trên namespace `PhotoReview.App.ViewModels` |
 | K-3 | Decoder được chọn qua `IImageDecoderFactory` theo setting `DecoderBackend`, có **fallback chain** (backend mới lỗi → backend WPF) | Unit test factory + test lỗi giả lập |
+| K-4 | Event `PhotoReview-Perf` (D03/D04) và biến môi trường chẩn đoán (D05/D10) **được giữ** khi code bị di chuyển hoặc tách. Mỗi giai đoạn đo vẫn phát event tương ứng | Test `PerfTraceTests` + `--perf-session`/`--perf-analyze` chạy được ở cuối mỗi wave |
 
 > **Lưu ý về K-1:** chuyển toàn bộ cache sang buffer thô làm mỗi ảnh phải copy thêm một lần sang `BitmapSource`. Phương án thực tế: cache lưu `IDecodedImage` có property `PlatformImage` (WPF `BitmapSource` đã `Freeze`) được tạo **một lần** khi decode. Ước lượng kích thước vẫn là w×h×4. Test kiến trúc chỉ cấm type WPF xuất hiện trong **chữ ký public** của cache và preload.
 
@@ -250,7 +253,8 @@ ImageCacheKey, AdaptivePreviewPolicy, PreloadOrderService
 
 | Wave | Nội dung | Task |
 |---|---|---|
-| W0 | Baseline, CI, công cụ build, quy trình git | T00–T05 |
+| W0 | Baseline, CI, công cụ build, quy trình git | T00, T02–T05 (T01 được thay bằng D07 + D12) |
+| **WD** | **Chẩn đoán hiệu năng trên code hiện tại, trước W1** | D00–D13 |
 | W1 | Gộp test, khóa hành vi INV trên code hiện tại | T10–T14 |
 | W2 | Tách Core | T20–T26 |
 | W3 | Tách Imaging và Platform, `IImageDecoder`, bỏ static | T30–T35 |
@@ -261,7 +265,7 @@ ImageCacheKey, AdaptivePreviewPolicy, PreloadOrderService
 | W7 | ADR, tài liệu, GUI acceptance, release | T71–T74 |
 
 ```text
-W0 → W1 → W2 → W3 ─┬─► W4 → W5 → W6 → W7
+W0 → WD (D00…D13) → W1 → W2 → W3 ─┬─► W4 → W5 → W6 → W7
                    └─► WC3 (T80…T86) ──► T87 (cần T40) ──► W6 (T66 đo cùng)
 ```
 
@@ -299,7 +303,7 @@ R-4 và C3 bổ trợ nhau: `DecodeRequest` nhận `ReadOnlyMemory<byte>` từ `
 1. Mỗi phiên làm **một task**. Đọc hết mục task trước khi sửa.
 2. Không sửa file ngoài danh sách **Files**. Cần sửa thêm thì đặt `BLOCKED` và ghi lý do.
 3. Không đổi hành vi ngoài phần mô tả. Không "tiện tay" refactor chỗ khác.
-4. Không xóa comment giải thích race, contract, fixture hay giới hạn WPF/Windows.
+4. Không xóa comment giải thích race, contract, fixture hay giới hạn WPF/Windows. Khi di chuyển hoặc tách code có `PhotoReviewPerf.Log.*` hoặc `DiagOptions`, phải giữ chúng lại (K-4).
 5. Chuỗi tiếng Việt hiển thị cho người dùng phải giữ nguyên văn.
 6. Hoàn thành = build, test và VERIFY đạt + nhật ký theo mẫu + trạng thái `DONE` + commit trên branch task.
 7. Không push `master`. Không `--force`. Không tắt test để cho đạt.

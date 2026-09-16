@@ -61,7 +61,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | ID | Tên | Phụ thuộc | ∥ | Cổng | TT |
 |---|---|---|---|---|---|
 | T00 | Tag baseline, branch tích hợp, ghi xác nhận Q | — | | | TODO |
-| T01 | Benchmark baseline (gồm decode) | T00 | ∥A | | TODO |
+| T01 | Benchmark baseline (gồm decode). **Được thay bằng D07 + D12** | T00 | ∥A | | TODO |
 | T02 | CI GitHub Actions | T00 | ∥A | | TODO |
 | T03 | `global.json`, `.editorconfig`, analyzer | T00 | ∥A | | TODO |
 | T04 | Central Package Management | T00 | ∥A | | TODO |
@@ -71,7 +71,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T12 | Xóa file test trùng trong CLI | T10 | ∥B | | TODO |
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | TODO |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | TODO |
-| T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a | | | TODO |
+| T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | TODO |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | TODO |
 | T14c | Test INV-5 | T14a | ∥C | | TODO |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | TODO |
@@ -143,6 +143,8 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T73 | GUI acceptance | T72 | | | TODO |
 | T74 | Release | T73 | | | TODO |
 
+**Chẩn đoán hiệu năng:** các task D00–D13 nằm trong [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md). Chúng chạy sau T00 và trước T14a (các task D sửa `MainWindow`/`PreviewImageService`/`PreloadScheduler`). Mọi task di chuyển hoặc tách code phải giữ event `PhotoReview-Perf` và biến môi trường chẩn đoán (ràng buộc **K-4**). T66 dùng lại `--perf-session`/`run-matrix.ps1`/`--perf-analyze` của D06/D11.
+
 **Nhóm chạy song song:** ∥A (W0), ∥B (W1), ∥C (test INV), ∥D (Core), ∥E (Journal/Session), ∥F (Imaging/Platform), ∥G (hạ tầng đo C3), ∥H (backend C3), ∥I (thành phần MVVM), ∥J (hậu MVVM), ∥K (hiệu năng), ∥L (tài liệu).
 
 **Chạy song song giữa hai nhánh lớn:** sau T35, nhánh C3 (T80…T86) và nhánh W4 (T40…T47) chạy cùng lúc được. Hai nhánh không sửa chung file: C3 chỉ đụng `{Imaging}`, `{ImgT}`, `{CLI}`; W4 đụng `{App}`, `{Core}/Catalog|FileActions`, `{AppT}`. Ngoại lệ:
@@ -164,6 +166,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Nhật ký:** —
 
 ### T01 — Benchmark baseline ∥A
+- **Ghi chú:** nếu D07 và D12 đã `DONE` thì đánh dấu T01 `DONE`, link tới `docs/refactoring/diagnosis/REPORT.md`, và chỉ bổ sung phần `--benchmark-all` (bước 3) nếu D07 chưa chạy.
 - **Files:** `docs/refactoring/baseline/**` (mới). Không sửa code.
 - **Làm:**
   1. Chọn fixture ảnh thật cố định: ≥ 200 JPEG 12–50 MP, ≥ 20 PNG, vài ảnh chụp dọc có EXIF orientation. Ghi đường dẫn, số lượng, tổng dung lượng.
@@ -861,6 +864,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 
 ### T66 — Benchmark cuối
 - **Files:** `docs/refactoring/results/final.md`.
+- **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
 - **Xong khi:** có bảng so sánh với baseline. Profile nào có P95 tệ hơn quá 5% thì phải có task sửa hoặc revert trước T71.
 - **Nhật ký:** —
@@ -871,7 +875,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 
 ### T71 — ADR 0002 UI framework ∥L
 - **Files:** `docs/adr/0002-ui-framework.md`.
-- **Làm:** dùng số liệu T66 (tỷ lệ UiAssign/Present so với Decode). Nếu phần UI chiếm ≥ 40% key→present ở P95 thì đề xuất spike WinUI 3 (ViewModel đã độc lập nhờ K-2). Nếu không thì ghi No-go kèm điều kiện mở lại.
+- **Làm:** dùng số liệu D12 (trước refactor) và T66 (sau refactor), trong đó quy tắc R-UI là căn cứ chính (tỷ lệ UiAssign/Present so với Decode). Nếu phần UI chiếm ≥ 40% key→present ở P95 thì đề xuất spike WinUI 3 (ViewModel đã độc lập nhờ K-2). Nếu không thì ghi No-go kèm điều kiện mở lại.
 - **Xong khi:** ADR có quyết định.
 - **Nhật ký:** —
 
