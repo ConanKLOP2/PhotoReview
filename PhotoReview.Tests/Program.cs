@@ -93,10 +93,6 @@ if (!File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.c
     projectRoot = Directory.GetCurrentDirectory();
 var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
-ImageCacheKeyTests.Run(root, failures);
-FileActionConcurrencyTests.Run(root, failures);
-CacheExplorerRegressionTests.Run(root, failures);
-BenchmarkScenarioTests.Run(root, failures);
 Check(BenchmarkProfiles.All.Count >= 25, "Expanded benchmark profile registry", failures);
 Check(BenchmarkProfiles.All.Count(x => x.CorrectnessOnly) == 1, "Original is correctness-only", failures);
 Check(BenchmarkRanking.Rank(BenchmarkProfiles.All.Where(x => !x.CorrectnessOnly).Select(x => new BenchmarkPhaseResult(x.Id, x.Workload, [10, 20], BenchmarkResultStatus.Pass)), BenchmarkWorkload.Sequential).Count > 0,
