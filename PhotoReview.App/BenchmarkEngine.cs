@@ -23,6 +23,25 @@ public sealed class BenchmarkEngine
         ReviewMetricsSnapshot? metrics = null;
         var allCorrect = true;
         var total = profile.Iterations;
+        for (var w = 0; w < profile.WarmupCount; w++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await operation(profile, profile.Workload, w, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                AppLog.Info($"Benchmark canceled runId={runId} profile={profile.Id} warmup={w}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error($"Benchmark warmup failed runId={runId} profile={profile.Id} warmup={w}", ex);
+                throw;
+            }
+        }
+        // Iterations counts only timed samples; WarmupCount runs are additional and excluded from samples.
         for (var i = 0; i < total; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
