@@ -18,8 +18,8 @@ internal static class ExplorerNativeVtable
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int QueryServiceDelegate(IntPtr self, ref Guid service, ref Guid iid, out IntPtr result);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int QueryActiveShellViewDelegate(IntPtr self, out IntPtr view);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int ItemCountDelegate(IntPtr self, uint flags, out int count);
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetItemDelegate(IntPtr self, int index, ref Guid iid, out IntPtr item);
-    [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetDisplayNameDelegate(IntPtr self, uint kind, out IntPtr name);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int GetItemDelegate(IntPtr self, int index, ref Guid iid, out IntPtr item);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int GetDisplayNameDelegate(IntPtr self, uint kind, out IntPtr name);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetSortColumnCountDelegate(IntPtr self, out int count);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetSortColumnsDelegate(IntPtr self, [Out] SORTCOLUMN[] columns, int count);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetGroupByDelegate(IntPtr self, out PROPERTYKEY key, [MarshalAs(UnmanagedType.Bool)] out bool ascending);
@@ -32,6 +32,8 @@ internal static class ExplorerNativeVtable
     internal static int GetSortColumns(IntPtr self, SORTCOLUMN[] columns, int count) => Get<GetSortColumnsDelegate>(self, 28)(self, columns, count);
     internal static int GetItem(IntPtr self, int index, ref Guid iid, out IntPtr item) => Get<GetItemDelegate>(self, 29)(self, index, ref iid, out item);
     internal static int GetDisplayName(IntPtr self, uint kind, out IntPtr name) => Get<GetDisplayNameDelegate>(self, 5)(self, kind, out name);
+    internal static GetItemDelegate ResolveGetItem(IntPtr self) => Get<GetItemDelegate>(self, 29);
+    internal static GetDisplayNameDelegate ResolveGetDisplayName(IntPtr self) => Get<GetDisplayNameDelegate>(self, 5);
 
     private static T Get<T>(IntPtr self, int slot) where T : Delegate
     {

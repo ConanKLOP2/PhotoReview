@@ -31,23 +31,22 @@ public sealed class OperationJournal
         return entries;
     }
 
-    public IReadOnlyList<JournalEntry> ReadPendingOperations()
-    {
-        var prepared = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
-        var completed = new HashSet<string>(StringComparer.Ordinal);
-        ReadEntries(entry =>
-        {
-            if (entry.State == "Prepared") prepared[entry.Id] = entry;
-            if (entry.State is "Committed" or "Failed") completed.Add(entry.Id);
-        });
-        return prepared.Where(x => !completed.Contains(x.Key)).Select(x => x.Value).ToList();
-    }
+    public IReadOnlyList<JournalEntry> ReadPendingOperations() =>
+        ComputeLatestEntries().Values.Where(entry => entry.State == "Prepared").ToList();
 
-    public IReadOnlyList<JournalEntry> ReadFailedOperations()
+    public IReadOnlyList<JournalEntry> ReadFailedOperations() =>
+        ComputeLatestEntries().Values.Where(entry => entry.State == "Failed").ToList();
+
+    // Retries append a new Prepared/Committed/Failed entry under the SAME Id as the
+    // attempt they're retrying (RecoveryRetryService.RetryMoveOrCopy), so an Id's
+    // state must be resolved from its most recent entry, not from "was any terminal
+    // entry ever appended for this Id" — otherwise an old Failed entry permanently
+    // shadows a later, still-in-flight retry under the same Id.
+    private Dictionary<string, JournalEntry> ComputeLatestEntries()
     {
-        var failures = new List<JournalEntry>();
-        ReadEntries(entry => { if (entry.State == "Failed") failures.Add(entry); });
-        return failures;
+        var latest = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
+        ReadEntries(entry => latest[entry.Id] = entry);
+        return latest;
     }
 
     private void ReadEntries(Action<JournalEntry> handle)
@@ -86,7 +85,12 @@ public sealed class OperationJournal
                 var sourceExists = File.Exists(pending.Source);
                 var destinationExists = pending.Destination is not null && File.Exists(pending.Destination);
                 var destinationMatches = destinationExists && new FileInfo(pending.Destination!).Length == pending.Size;
-                var state = !sourceExists && destinationMatches ? "Committed" : "Failed";
+                // Move must have removed the source to count as done; Copy is expected
+                // to leave the source in place, so requiring its absence would reconcile
+                // every genuinely-successful pending Copy as Failed.
+                var state = pending.Type == "Move"
+                    ? (!sourceExists && destinationMatches ? "Committed" : "Failed")
+                    : (destinationMatches ? "Committed" : "Failed");
                 var error = state == "Failed" ? "Không thể xác nhận operation pending; không tự động replay." : null;
                 var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
                 Append(entry); reconciled.Add(entry);

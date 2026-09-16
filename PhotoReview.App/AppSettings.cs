@@ -30,8 +30,9 @@ public sealed class AppSettings
                 loaded.Actions ??= ReviewAction.Defaults();
                 loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
                 loaded.ImageSortMode = NormalizeImageSortMode(loaded.ImageSortMode);
-                if (ValidateShortcuts(loaded) is not null)
+                if (ValidateShortcuts(loaded) is { } validationError)
                 {
+                    AppLog.Error($"Config validation failed, resetting shortcuts/actions to defaults: {validationError}");
                     loaded.Shortcuts = ShortcutMappings.Default();
                     loaded.Actions = ReviewAction.Defaults();
                 }
@@ -39,8 +40,9 @@ public sealed class AppSettings
                 return loaded;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            AppLog.Error("Corrupt config.json detected, resetting to defaults", ex);
             try { File.Copy(ConfigPath, ConfigPath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), overwrite: false); } catch { }
         }
         var settings = new AppSettings();

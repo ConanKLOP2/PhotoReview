@@ -3,42 +3,73 @@ using System.Windows.Media.Imaging;
 
 namespace PhotoReview.App;
 
-/// Production-compatible image executor for benchmark runs. It uses the same
-/// fingerprinted ImageCacheKey and OnLoad/frozen BitmapImage semantics as the viewer.
-public sealed class BenchmarkImageExecutor
+/// <summary>
+/// Production-compatible image executor for benchmark runs. Routes every decode through
+/// a real <see cref="PreviewImageService"/>/<see cref="PreloadScheduler"/> pair — the same
+/// RAM cache, disk-cache probe/persist path and preload-priority scheduling the viewer
+/// uses — instead of a benchmark-only cache, so P50/P95 reflect what the app actually does.
+/// The disk cache lives in a dedicated scratch directory per run so a benchmark never
+/// reads from or writes into the app's real %LocalAppData% preview cache.
+/// </summary>
+public sealed class BenchmarkImageExecutor : IAsyncDisposable
 {
-    private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache;
-    public BenchmarkImageExecutor(long capacityBytes = AppConstants.ImageCacheCapacityBytes)
-        => _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(capacityBytes, ImageBytes);
+    private readonly BenchmarkProfile _profile;
+    private readonly ReviewMetrics _metrics = new();
+    private readonly PreviewImageService _previewService;
+    private readonly PreloadScheduler _preloadScheduler;
+    private readonly string _diskCacheDirectory;
+    private Task? _lastPreloadTask;
 
-    public async Task<(BitmapImage Image, bool CacheHit)> DecodeAsync(string path, BenchmarkProfile profile, CancellationToken token = default)
+    public BenchmarkImageExecutor(BenchmarkProfile profile, string[] files, long totalSourceBytes)
     {
-        token.ThrowIfCancellationRequested();
-        var original = string.Equals(profile.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
-        var key = ImageCacheKey.Create(path, original, profile.TargetWidth());
-        if (_cache.TryGet(key, out var cached)) return (cached, true);
-        var image = await Task.Run(() => DecodeOnWorker(key, token), token).ConfigureAwait(false);
-        _cache.Set(key, image);
-        return (image, false);
+        _profile = profile;
+        _diskCacheDirectory = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Cache", Guid.NewGuid().ToString("N"));
+        var isOriginal = string.Equals(profile.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+        _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
+            AppConstants.ImageCacheCapacityBytes, _diskCacheDirectory);
+        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,
+            AppConstants.ImageCacheCapacityBytes, AppConstants.PreloadMemoryLoadLimit);
     }
 
-    public void Clear() => _cache.Clear();
-
-    private static BitmapImage DecodeOnWorker(ImageCacheKey key, CancellationToken token)
+    // FirstFrame profiles always decode files[0] regardless of iteration index, to
+    // measure cold first-decode latency. RAM eviction alone is no longer enough now
+    // that a real disk cache is in play: a prior iteration's persisted PNG could
+    // satisfy the next "cold" decode from disk instead of source, so the scratch
+    // disk cache is cleared too (cheap: at most one small file for this path).
+    public void EvictForColdDecode(string path)
     {
-        token.ThrowIfCancellationRequested();
-        using var stream = new FileStream(key.Path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 1 << 20, FileOptions.SequentialScan);
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        if (!key.IsOriginal && key.TargetWidth > 0) bitmap.DecodePixelWidth = key.TargetWidth;
-        bitmap.StreamSource = stream;
-        bitmap.EndInit();
-        bitmap.Freeze();
-        token.ThrowIfCancellationRequested();
-        return bitmap;
+        _previewService.EvictCachedPath(path, normalized => _preloadScheduler.RemovePreloadedKeysForPath(normalized));
+        _previewService.ClearDisk();
     }
 
-    private static long ImageBytes(BitmapImage image) => Math.Max(1, image.PixelWidth * (long)image.PixelHeight * 4);
+    // GetPreviewAsync has no cancellation parameter (the production decode loop doesn't
+    // either — WPF's synchronous BitmapDecoder can't be interrupted mid-frame), so
+    // cancellation here only takes effect between iterations.
+    public Task<BitmapImage> DecodeAsync(string path, CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        return _previewService.GetPreviewAsync(path);
+    }
+
+    /// <summary>
+    /// Kicks off real background preload around this navigation center, exactly as
+    /// MainWindow does right after presenting an image, so a later <see cref="DecodeAsync"/>
+    /// for a neighboring index can land as a genuine preload hit instead of a cold decode.
+    /// </summary>
+    public void WarmPreloadAround(int center) => _lastPreloadTask = _preloadScheduler.PreloadAroundAsync(center);
+
+    public async ValueTask DisposeAsync()
+    {
+        // Cancel first so the last WarmPreloadAround call (fire-and-forget by design —
+        // production doesn't await it either) unwinds via its own OperationCanceledException
+        // handling instead of still running when the scheduler/semaphore below are disposed.
+        _preloadScheduler.Cancel();
+        if (_lastPreloadTask is not null) { try { await _lastPreloadTask; } catch { } }
+        _preloadScheduler.Dispose();
+        // Only after every persist write has actually finished is it safe to delete the
+        // scratch directory without racing a worker that's still writing into it.
+        await _previewService.ShutdownPersistWorkersAsync();
+        try { if (Directory.Exists(_diskCacheDirectory)) Directory.Delete(_diskCacheDirectory, recursive: true); }
+        catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
 }

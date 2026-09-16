@@ -19,32 +19,37 @@ public static class RecycleBinRestoreService
             recycle = shellDynamic.Namespace(10);
             if (recycle is null) return false;
             dynamic recycleDynamic = recycle;
-            foreach (dynamic item in (IEnumerable)recycleDynamic.Items())
+            object? items = recycleDynamic.Items();
+            try
             {
-                try
+                foreach (dynamic item in (IEnumerable)items!)
                 {
-                    var deletedFrom = (string?)item.ExtendedProperty("System.Recycle.DeletedFrom");
-                    var name = (string?)item.Name;
-                    if (!string.Equals(deletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(Path.Combine(deletedFrom ?? string.Empty, name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase)) continue;
-                    var sizeText = Convert.ToString(item.Size, CultureInfo.InvariantCulture);
-                    if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size) || size != expectedSize) continue;
-                    var restoredVerb = false;
-                    foreach (dynamic verb in (IEnumerable)item.Verbs())
+                    try
                     {
-                        var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
-                        if (!verbName.Contains("restore") && !verbName.Contains("khôi") && !verbName.Contains("wiederher")) continue;
-                        verb.DoIt();
-                        restoredVerb = true;
-                        Release(verb);
-                        break;
+                        var deletedFrom = (string?)item.ExtendedProperty("System.Recycle.DeletedFrom");
+                        var name = (string?)item.Name;
+                        if (!string.Equals(deletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(Path.Combine(deletedFrom ?? string.Empty, name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase)) continue;
+                        var sizeText = Convert.ToString(item.Size, CultureInfo.InvariantCulture);
+                        if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size) || size != expectedSize) continue;
+                        var restoredVerb = false;
+                        foreach (dynamic verb in (IEnumerable)item.Verbs())
+                        {
+                            var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
+                            if (!verbName.Contains("restore") && !verbName.Contains("khôi") && !verbName.Contains("wiederher")) continue;
+                            verb.DoIt();
+                            restoredVerb = true;
+                            Release(verb);
+                            break;
+                        }
+                        if (!restoredVerb) item.InvokeVerb("Restore");
+                        return WaitForRestore(originalPath, expectedLastWriteUtc);
                     }
-                    if (!restoredVerb) item.InvokeVerb("Restore");
-                    return File.Exists(originalPath) || WaitForRestore(originalPath, expectedLastWriteUtc);
+                    finally { Release(item); }
                 }
-                finally { Release(item); }
+                return false;
             }
-            return false;
+            finally { Release(items); }
         }
         catch (Exception ex) { AppLog.Error($"Recycle Bin restore failed: {Path.GetFileName(originalPath)}", ex); return false; }
         finally { Release(recycle); Release(shell); }
@@ -54,10 +59,17 @@ public static class RecycleBinRestoreService
     {
         for (var i = 0; i < 10; i++)
         {
-            if (File.Exists(path)) return true;
+            if (IsExpectedFile(path, expectedLastWriteUtc)) return true;
             Thread.Sleep(50);
         }
-        return File.Exists(path);
+        return IsExpectedFile(path, expectedLastWriteUtc);
+    }
+
+    private static bool IsExpectedFile(string path, DateTime expectedLastWriteUtc)
+    {
+        try { return File.Exists(path) && new FileInfo(path).LastWriteTimeUtc == expectedLastWriteUtc; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     private static void Release(object? value)

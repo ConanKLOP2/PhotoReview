@@ -21,6 +21,8 @@ public sealed class SessionStore
         var path = GetPath(folder);
         try { if (File.Exists(path)) return JsonSerializer.Deserialize<SessionState>(File.ReadAllText(path)) ?? new(); }
         catch (JsonException) { }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
         return new SessionState { Folder = folder };
     }
 

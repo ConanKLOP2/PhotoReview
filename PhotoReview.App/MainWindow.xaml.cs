@@ -14,8 +14,6 @@ namespace PhotoReview.App;
 
 public partial class MainWindow : Window
 {
-    private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache = new(
-        MaxCacheBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
     private readonly List<string> _files = [];
     private int _index = -1;
     private long _generation;
@@ -27,23 +25,15 @@ public partial class MainWindow : Window
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
     private UndoAction? _lastUndoAction;
-    private CancellationTokenSource _preloadCts = new();
-    private readonly Dictionary<(ImageCacheKey Key, long Epoch), Task<BitmapImage>> _previewLoads = [];
-    private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
-    private long _cacheEpoch;
-    private readonly object _cacheLifecycleGate = new();
     private long _totalSourceBytes;
-    private readonly SemaphoreSlim _preloadSlots = new(AppConstants.PreloadWorkerCount, AppConstants.PreloadWorkerCount);
-    private Task? _preloadSchedulerTask;
-    private CancellationTokenSource? _preloadSchedulerCts;
-    private int _preloadCenter;
-    private long _preloadPriorityVersion;
-    private const long MaxCacheBytes = AppConstants.ImageCacheCapacityBytes;
     private const long FullFolderRamThresholdBytes = AppConstants.ImageCacheCapacityBytes;
     private const double PreloadMemoryLoadLimit = AppConstants.PreloadMemoryLoadLimit;
+    private static readonly HashSet<string> SupportedActionOperations = new(StringComparer.OrdinalIgnoreCase) { "Move", "Copy", "Recycle", "Delete" };
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
+    private readonly PreviewImageService _previewService;
+    private readonly PreloadScheduler _preloadScheduler;
     private readonly ExplorerOrderService _explorerOrder = new();
     private CancellationTokenSource _folderLoadCts = new();
     private long _folderGeneration;
@@ -54,11 +44,14 @@ public partial class MainWindow : Window
     private ExplorerViewSnapshot? _lastExplorerSnapshot;
     private bool _placementRestored;
     private int _fileActionInProgress;
-    private readonly Dictionary<ImageCacheKey, (int Width, int Height)> _originalDimensions = [];
 
     public MainWindow(string? initialPath = null)
     {
         InitializeComponent();
+        DpiChanged += MainWindow_DpiChanged;
+        _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes);
+        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => _files.ToArray(), () => _totalSourceBytes,
+            FullFolderRamThresholdBytes, PreloadMemoryLoadLimit);
         _journal.ReconcilePendingOperations();
         foreach (var move in _journal.ReadCommittedMoves())
             if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));
@@ -111,7 +104,7 @@ public partial class MainWindow : Window
             UpdateFolderTitle();
             if (!string.Equals(previousMode, _settings.LoadingMode, StringComparison.OrdinalIgnoreCase))
             {
-                _preloadCts.Cancel();
+                _preloadScheduler.Cancel();
                 if (_index >= 0 && _index < _files.Count)
                     _ = PreloadAroundAsync(_index, _generation);
             }
@@ -170,15 +163,14 @@ public partial class MainWindow : Window
             }
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             AppLog.Info($"LoadFolder scan complete: {files.Count} files, initialSort={sortMode}");
-            _preloadCts.Cancel();
+            _preloadScheduler.Cancel();
             _totalSourceBytes = long.MaxValue;
             _files.Clear(); _files.AddRange(files); _index = -1;
-            lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
-            _preloadedKeys.Clear();
-            _hashService.Clear(); _originalDimensions.Clear();
+            _previewService.ClearCache();
+            _preloadScheduler.ClearPreloadedKeys();
+            _hashService.Clear(); _previewService.ClearOriginalDimensions();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
-            var presentationGeneration = _generation;
             var interactionGeneration = Volatile.Read(ref _catalogInteractionGeneration);
             var resumePath = initialPath ?? _session.CurrentPath;
             if (initialPath is not null)
@@ -196,7 +188,26 @@ public partial class MainWindow : Window
                 var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
-            else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
+            else
+            {
+                // No ShowImageAsync call on this path, so it must invalidate
+                // _generation itself: otherwise an in-flight decode/preload
+                // continuation from the previous folder (still holding a token
+                // that matches the untouched _generation) can land after this
+                // point and repaint an empty folder with the old folder's image.
+                Interlocked.Increment(ref _generation);
+                _index = -1;
+                MainImage.Source = null;
+                _compareSelectedPath = null;
+                ComparePanel.Visibility = Visibility.Collapsed;
+                CompareLeftImage.Source = null; CompareLeftImage.Tag = null;
+                CompareRightImage.Source = null; CompareRightImage.Tag = null;
+                StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này.";
+            }
+            // Captured after the provisional frame is presented (ShowImageAsync bumps
+            // _generation as its very first step), so this reflects "no navigation has
+            // happened since presenting" rather than always mismatching.
+            var presentationGeneration = _generation;
             explorerSnapshot ??= await explorerTask;
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             if (interactionGeneration != Volatile.Read(ref _catalogInteractionGeneration))
@@ -217,7 +228,7 @@ public partial class MainWindow : Window
                 }
                 var currentPath = _index >= 0 && _index < _files.Count ? _files[_index] : null;
                 var mayReplaceInitialFallback = initialPath is null && _generation == presentationGeneration;
-                _preloadCts.Cancel();
+                _preloadScheduler.Cancel();
                 _files.Clear(); _files.AddRange(explorerOrder);
                 _index = currentPath is null ? -1 : _files.FindIndex(path => string.Equals(path, currentPath, StringComparison.OrdinalIgnoreCase));
                 FolderText.Text = $"{folder}  ({_files.Count} ảnh) · Explorer";
@@ -271,21 +282,22 @@ public partial class MainWindow : Window
         // external move/delete completes. Do this check before touching FileInfo.Length
         // so a vanished item is removed and the viewer advances once without logging
         // a misleading ShowImage failure.
-        if (!TryGetCurrentFileSize(path, out var initialSize))
+        if (!TryGetCurrentFileInfo(path, out var initialInfo))
         {
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
-        var currentKey = GetCurrentCacheKey(path);
+        var initialSize = initialInfo.Length;
+        var currentKey = GetCurrentCacheKey(initialInfo);
         var ramReady = TryGetCachedPreview(currentKey, out var readyBitmap);
         if (ramReady)
         {
-            if (_preloadedKeys.Remove(currentKey)) _metrics.RecordPreloadHit();
+            if (_preloadScheduler.TryConsumePreloadedKey(currentKey)) _metrics.RecordPreloadHit();
         }
         StatusText.Text = ramReady
             ? $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · {Path.GetFileName(path)}"
             : $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải";
-        if (AppLog.Enabled) AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_cache.CurrentSize}");
+        if (AppLog.Enabled) AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_previewService.CacheBytes}");
         try
         {
             if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
@@ -296,7 +308,7 @@ public partial class MainWindow : Window
                 MainImage.Source = thumbnail;
                 if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
                 ApplyInitialViewMode();
-                StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
+                StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải bản rõ";
             }
             var image = ramReady ? readyBitmap : await GetPreviewAsync(path, currentKey);
             if (ramReady) _metrics.RecordCacheHit();
@@ -313,10 +325,10 @@ public partial class MainWindow : Window
                 MainImage.Source = null;
                 CompareLeftImage.Tag = pair.Value.Left;
                 CompareRightImage.Tag = pair.Value.Right;
-                CompareLeftImage.Source = await GetPreviewAsync(pair.Value.Left);
+                var comparePreviews = await Task.WhenAll(GetPreviewAsync(pair.Value.Left), GetPreviewAsync(pair.Value.Right));
                 if (token != _generation) return;
-                CompareRightImage.Source = await GetPreviewAsync(pair.Value.Right);
-                if (token != _generation) return;
+                CompareLeftImage.Source = comparePreviews[0];
+                CompareRightImage.Source = comparePreviews[1];
                 _compareSelectedPath = path;
                 UpdateCompareSelection();
                 var leftSize = "";
@@ -367,17 +379,16 @@ public partial class MainWindow : Window
 
     private void FitImage_Click(object sender, RoutedEventArgs e) => ResetFitView();
 
-    private static bool TryGetCurrentFileSize(string path, out long size)
+    private static bool TryGetCurrentFileInfo(string path, out FileInfo info)
     {
         try
         {
-            var info = new FileInfo(path);
-            if (!info.Exists) { size = 0; return false; }
-            size = info.Length;
+            info = new FileInfo(path);
+            if (!info.Exists) { info = null!; return false; }
             return true;
         }
-        catch (FileNotFoundException) { size = 0; return false; }
-        catch (DirectoryNotFoundException) { size = 0; return false; }
+        catch (FileNotFoundException) { info = null!; return false; }
+        catch (DirectoryNotFoundException) { info = null!; return false; }
     }
 
     private async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
@@ -400,272 +411,49 @@ public partial class MainWindow : Window
 
     private bool IsOriginalLoadingMode() => string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
 
-    private ImageCacheKey GetCurrentCacheKey(string path)
-    {
-        var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : GetTargetDecodeWidth());
-    }
+    private ImageCacheKey GetCurrentCacheKey(string path) => _previewService.GetCurrentCacheKey(path);
 
-    private Task<BitmapImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
+    private ImageCacheKey GetCurrentCacheKey(FileInfo info) => _previewService.GetCurrentCacheKey(info);
 
-    private async Task<BitmapImage> GetPreviewAsync(string path, ImageCacheKey key)
-    {
-        // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
-        var targetWidth = key.TargetWidth;
-        if (_cache.TryGet(key, out var cached)) { _metrics.RecordCacheHit(); return cached; }
-        var cacheEpoch = Volatile.Read(ref _cacheEpoch);
-        var loadKey = (key, cacheEpoch);
-        if (_previewLoads.TryGetValue(loadKey, out var pending))
-        {
-            _metrics.RecordInflightJoin();
-            return await pending;
-        }
-        _metrics.RecordCacheMiss();
-        var load = Task.Run(() =>
-        {
-            var stopwatch = Stopwatch.StartNew();
-            var sourceRead = false;
-            var bitmap = new BitmapImage();
-            var cachePath = GetDiskCachePath(key);
-            if (File.Exists(cachePath))
-            {
-                try
-                {
-                    using var cacheStream = File.OpenRead(cachePath);
-                    bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
-                    _metrics.RecordDiskCacheHit();
-                }
-                catch (Exception) when (File.Exists(cachePath))
-                {
-                    try { File.Delete(cachePath); } catch { }
-                    sourceRead = true;
-                    bitmap = DecodeWithFallback(path, targetWidth);
-                }
-            }
-            else
-            {
-                sourceRead = true;
-                bitmap = DecodeWithFallback(path, targetWidth);
-                // Keep decoded previews in RAM; PNG encoding and durable writes delay review.
-            }
-            // A path can be replaced while decode is in flight. Never publish
-            // the old pixels under the new source's identity.
-            if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
-            lock (_cacheLifecycleGate)
-                if (cacheEpoch == _cacheEpoch) _cache.Set(key, bitmap);
-            stopwatch.Stop();
-            if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
-            return bitmap;
-        });
-        _previewLoads[loadKey] = load;
-        try { return await load; }
-        finally { _previewLoads.Remove(loadKey); }
-    }
+    private Task<BitmapImage> GetPreviewAsync(string path) => _previewService.GetPreviewAsync(path);
 
-    private bool TryGetCachedPreview(string path, out BitmapImage bitmap)
-    {
-        try
-        {
-            return TryGetCachedPreview(GetCurrentCacheKey(path), out bitmap);
-        }
-        catch (IOException) { bitmap = default!; return false; }
-        catch (UnauthorizedAccessException) { bitmap = default!; return false; }
-    }
+    private Task<BitmapImage> GetPreviewAsync(string path, ImageCacheKey key) => _previewService.GetPreviewAsync(path, key);
 
-    private bool TryGetCachedPreview(ImageCacheKey key, out BitmapImage bitmap)
-    {
-        try
-        {
-            return _cache.TryGet(key, out bitmap);
-        }
-        catch (IOException) { bitmap = default!; return false; }
-        catch (UnauthorizedAccessException) { bitmap = default!; return false; }
-    }
+    private bool TryGetCachedPreview(string path, out BitmapImage bitmap) => _previewService.TryGetCachedPreview(path, out bitmap);
 
-    private bool HasInflightPreview(string path)
-    {
-        try
-        {
-            var key = GetCurrentCacheKey(path);
-            return _previewLoads.ContainsKey((key, Volatile.Read(ref _cacheEpoch)));
-        }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-    }
+    private bool TryGetCachedPreview(ImageCacheKey key, out BitmapImage bitmap) => _previewService.TryGetCachedPreview(key, out bitmap);
+
+    private bool HasInflightPreview(string path) => _previewService.HasInflightPreview(path);
 
     private void EvictCachedPath(string path)
-    {
-        var normalized = Path.GetFullPath(path).ToUpperInvariant();
-        lock (_cacheLifecycleGate)
-        {
-            _cacheEpoch++;
-            _cache.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
-            _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
-        }
-    }
-
-    private static BitmapImage DecodeSource(string path, int targetWidth)
-    {
-        // Allow an in-flight decode to coexist with Move/Delete. The action path
-        // cancels future work and invalidates its result; Windows can still
-        // complete the file operation without waiting for this read handle.
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        if (targetWidth > 0) bitmap.DecodePixelWidth = targetWidth;
-        bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
-    }
+        => _previewService.EvictCachedPath(path, normalized =>
+            _preloadScheduler.RemovePreloadedKeysForPath(normalized));
 
     private sealed class WindowHandle(Window window) : Forms.IWin32Window
     {
         public IntPtr Handle => new WindowInteropHelper(window).Handle;
     }
 
-    private async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path)
-    {
-        var key = ImageCacheKey.Create(path, true, 0);
-        if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
-        dimensions = await Task.Run(() =>
-        {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-            // PixelWidth/Height only need the image header. OnLoad forced WIC
-            // to read/decode the source a second time on every warm Next.
-            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-            var frame = decoder.Frames[0];
-            return (frame.PixelWidth, frame.PixelHeight);
-        });
-        if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
-        _originalDimensions[key] = dimensions;
-        return dimensions;
-    }
+    private Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path) => _previewService.GetOriginalDimensionsAsync(path);
 
-    private static BitmapImage DecodeWithFallback(string path, int targetWidth)
-    {
-        try { return DecodeSource(path, targetWidth); }
-        catch when (targetWidth > 0) { return DecodeSource(path, 0); }
-    }
+    private double? _cachedDpiScale;
+
+    // DPI only changes when the window moves to a monitor with a different scale
+    // factor; caching it avoids walking the visual tree on every navigation.
+    private void MainWindow_DpiChanged(object sender, System.Windows.DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
 
     private int GetTargetDecodeWidth()
     {
         var viewport = ImageScroll.ActualWidth > 1 ? ImageScroll.ActualWidth : 2200;
-        var dpi = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
+        var dpi = _cachedDpiScale ??= PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
         return AdaptivePreviewPolicy.CalculateTargetDecodeWidth(viewport, dpi, 1.15);
-    }
-
-    private static string GetDiskCachePath(ImageCacheKey key)
-    {
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}")));
-        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache", hash + ".png");
     }
 
     private Task PreloadAroundAsync(int center, long token)
     {
-        // Navigation changes priority, but an already running decode is useful
-        // and must remain available to ShowImageAsync through _previewLoads.
+        // A navigation that has already been superseded must not re-prioritize preload.
         if (token != _generation) return Task.CompletedTask;
-        if (_preloadCts.IsCancellationRequested)
-        {
-            _preloadCts.Dispose();
-            _preloadCts = new CancellationTokenSource();
-        }
-        _preloadCenter = center;
-        _preloadPriorityVersion++;
-        if (_preloadSchedulerTask is { IsCompleted: false } &&
-            ReferenceEquals(_preloadSchedulerCts, _preloadCts)) return _preloadSchedulerTask;
-        _preloadSchedulerCts = _preloadCts;
-        _preloadSchedulerTask = RunPreloadSchedulerAsync(_files.ToArray(), _preloadCts.Token);
-        return _preloadSchedulerTask;
-    }
-
-    private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
-    {
-        const int workers = AppConstants.PreloadWorkerCount; // must match _preloadSlots capacity above
-        var running = new Dictionary<Task, string>();
-        var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenVersion = -1L;
-        IEnumerator<int>? order = null;
-        var examinedSinceYield = 0;
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                if (seenVersion != _preloadPriorityVersion)
-                {
-                    order?.Dispose();
-                    order = PreloadOrderService.Build(_preloadCenter, files.Length,
-                        _totalSourceBytes < FullFolderRamThresholdBytes).GetEnumerator();
-                    seenVersion = _preloadPriorityVersion;
-                }
-                while (running.Count < workers && order!.MoveNext())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (!HasPreloadHeadroom())
-                    {
-                        if (AppLog.Enabled)
-                        {
-                            var memory = PhysicalMemory.GetSnapshot();
-                            AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
-                        }
-                        return;
-                    }
-                    var path = files[order.Current];
-                    if (queued.Contains(path) || TryGetCachedPreview(path, out _)) continue;
-                    queued.Add(path);
-                    running.Add(PreloadOneAsync(path, cancellationToken), path);
-                    // Yield only after actual queue work; give input/rendering a
-                    // chance without limiting every batch to two decodes.
-                    if (++examinedSinceYield >= workers)
-                    {
-                        examinedSinceYield = 0;
-                        if (AppLog.Enabled)
-                        {
-                            var memory = PhysicalMemory.GetSnapshot();
-                            AppLog.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_cache.Count} cacheBytes={_cache.CurrentSize} availableBytes={memory?.AvailableBytes}");
-                        }
-                        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
-                    }
-                }
-                if (running.Count == 0) return;
-                var finished = await Task.WhenAny(running.Keys);
-                running.Remove(finished);
-                await finished;
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        // Any other exception (unexpected cancellation source, or a genuine
-        // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
-        // unobserved once the discarded fire-and-forget task
-        // (`_ = PreloadAroundAsync(...)`) is garbage collected.
-        catch (Exception ex) { AppLog.Error("Preload scheduler failed", ex); }
-        finally { order?.Dispose(); }
-    }
-
-    private static bool HasPreloadHeadroom()
-    {
-        return PhysicalMemory.HasHeadroom(PreloadMemoryLoadLimit);
-    }
-
-    private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var queueWait = Stopwatch.StartNew();
-            await _preloadSlots.WaitAsync(cancellationToken);
-            _metrics.RecordQueueWait(queueWait.ElapsedMilliseconds);
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!HasPreloadHeadroom()) return;
-                var key = GetCurrentCacheKey(path);
-                await GetPreviewAsync(path, key);
-                if (_cache.TryGet(key, out _)) _preloadedKeys.Add(key);
-            }
-            finally { _preloadSlots.Release(); }
-        }
-        catch (OperationCanceledException) { }
-        catch (IOException) { }
-        catch (NotSupportedException) { }
-        catch (Exception ex) { AppLog.Error($"Preload failed: {path}", ex); }
+        return _preloadScheduler.PreloadAroundAsync(center);
     }
 
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -751,11 +539,12 @@ public partial class MainWindow : Window
     {
         var answer = System.Windows.MessageBox.Show(this, "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.", "Xác nhận xóa cache", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != System.Windows.MessageBoxResult.Yes) return;
-        _preloadCts.Cancel();
+        _preloadScheduler.Cancel();
         _thumbnailCache.ClearDisk();
         _thumbnailCache.ClearMemory();
-        lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
-        _preloadedKeys.Clear();
+        _previewService.ClearCache();
+        _previewService.ClearDisk();
+        _preloadScheduler.ClearPreloadedKeys();
         StatusText.Text = "Đã xóa cache preview.";
     }
 
@@ -778,61 +567,94 @@ public partial class MainWindow : Window
 
     private async Task RemoveDuplicatesAsync(bool removeNumbered)
     {
-        var remove = new List<string>();
-        // Batch work may race with an in-flight viewer decode or another action.
-        // Snapshot only files that still have readable metadata; a file can
-        // disappear between enumeration and this pass.
-        var candidates = _files.ToArray();
-        var sizeGroups = candidates
-            .Select(path => { try { return (Path: path, Size: new FileInfo(path).Length); } catch { return (Path: path, Size: -1L); } })
-            .Where(item => item.Size >= 0)
-            .GroupBy(item => item.Size)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Select(item => item.Path).ToList())
-            .ToList();
-        var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in sizeGroups.SelectMany(group => group))
+        // Batch delete must not interleave with a single-item action (or another
+        // batch) touching the same catalog/session/journal state.
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+        try
         {
-            try
+            // Hashing every candidate can take a while on a large or slow folder, and
+            // nothing here blocks the user from opening a different folder in the
+            // meantime — only single-item Move/Delete/Recycle actions check
+            // _fileActionInProgress, folder navigation doesn't. Snapshot the folder
+            // generation up front so a switch mid-hash cancels the whole batch instead
+            // of hashing a now-irrelevant folder and showing a stale duplicate-review
+            // dialog for a folder the user has already left.
+            var preHashGeneration = _folderGeneration;
+            var remove = new List<string>();
+            // Batch work may race with an in-flight viewer decode or another action.
+            // Snapshot only files that still have readable metadata; a file can
+            // disappear between enumeration and this pass.
+            var candidates = _files.ToArray();
+            var sizeGroups = candidates
+                .Select(path => { try { return (Path: path, Size: new FileInfo(path).Length); } catch { return (Path: path, Size: -1L); } })
+                .Where(item => item.Size >= 0)
+                .GroupBy(item => item.Size)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Select(item => item.Path).ToList())
+                .ToList();
+            var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in sizeGroups.SelectMany(group => group))
             {
-                var hash = await GetHashAsync(path);
-                if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
-                group.Add(path);
+                try
+                {
+                    var hash = await GetHashAsync(path);
+                    if (preHashGeneration != _folderGeneration)
+                    {
+                        StatusText.Text = "Đã hủy: folder đã đổi trong lúc kiểm tra trùng lặp.";
+                        return;
+                    }
+                    if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
+                    group.Add(path);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            foreach (var group in groups.Values.Where(group => group.Count > 1))
+                remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
+            if (remove.Count == 0) { StatusText.Text = "Không có duplicate cùng hash phù hợp."; return; }
+            var review = new BatchReviewWindow(remove) { Owner = this };
+            if (review.ShowDialog() != true) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
+            var failures = new List<string>();
+            var succeeded = 0;
+            StopImageReadsForAction();
+            // StopImageReadsForAction() just bumped _folderGeneration again (a normal
+            // part of this action's own lifecycle, not a user folder switch); capture
+            // the new value so the completion below detects a real switch happening
+            // during the deletion loop itself, separately from the preHashGeneration
+            // check above. remove[] paths all come from the folder that was actually
+            // hashed, so deriving the reload target from them (below) instead of
+            // re-reading _session avoids reloading whatever folder is now current.
+            var folderGeneration = _folderGeneration;
+            foreach (var path in remove)
+            {
+                if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
+                FileInfo info;
+                try { info = new FileInfo(path); if (!info.Exists) { failures.Add($"Không còn tồn tại: {path}"); continue; } }
+                catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); continue; }
+                var operationId = Guid.NewGuid().ToString("N");
+                _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                try
+                {
+                    await Task.Run(() => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
+                    _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                    succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{Path.GetFileName(path)}: {ex.Message}");
+                    _journal.Append(new JournalEntry(operationId, "Recycle", "Failed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
+                }
+            }
+            if (folderGeneration != _folderGeneration)
+            {
+                AppLog.Info($"Batch completion ignored after folder switch: succeeded={succeeded} failures={failures.Count}");
+                return;
+            }
+            StatusText.Text = $"Batch hoàn tất: {succeeded} thành công, {failures.Count} lỗi.";
+            if (failures.Count > 0) System.Windows.MessageBox.Show(this, string.Join(Environment.NewLine, failures), "Báo cáo lỗi batch", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (succeeded > 0) await LoadFolderAsync(Path.GetDirectoryName(remove[0])!);
         }
-        foreach (var group in groups.Values.Where(group => group.Count > 1))
-            remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
-        if (remove.Count == 0) { StatusText.Text = "Không có duplicate cùng hash phù hợp."; return; }
-        var review = new BatchReviewWindow(remove) { Owner = this };
-        if (review.ShowDialog() != true) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
-        var failures = new List<string>();
-        var succeeded = 0;
-        StopImageReadsForAction();
-        foreach (var path in remove)
-        {
-            if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
-            FileInfo info;
-            try { info = new FileInfo(path); if (!info.Exists) { failures.Add($"Không còn tồn tại: {path}"); continue; } }
-            catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); continue; }
-            var operationId = Guid.NewGuid().ToString("N");
-            _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-            try
-            {
-                FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                succeeded++;
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"{Path.GetFileName(path)}: {ex.Message}");
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Failed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
-            }
-        }
-        StatusText.Text = $"Batch hoàn tất: {succeeded} thành công, {failures.Count} lỗi.";
-        if (failures.Count > 0) System.Windows.MessageBox.Show(this, string.Join(Environment.NewLine, failures), "Báo cáo lỗi batch", MessageBoxButton.OK, MessageBoxImage.Warning);
-        if (succeeded > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private Task<string> GetHashAsync(string path) => _hashService.GetAsync(path);
@@ -841,7 +663,16 @@ public partial class MainWindow : Window
     {
         if (_session is null) return;
         var currentFolder = Path.GetFullPath(_session.Folder);
+        // A slow (e.g. network) sibling lookup must not clobber a folder the user
+        // has since switched to directly (Open Folder/drag-drop), which bumps
+        // _folderGeneration via LoadFolderAsync.
+        var folderGeneration = _folderGeneration;
         var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction));
+        if (folderGeneration != _folderGeneration)
+        {
+            AppLog.Info($"Sibling folder navigation ignored after folder switch: from={currentFolder}");
+            return;
+        }
         if (targetFolder is null)
         {
             StatusText.Text = direction > 0 ? "Đã ở folder cuối cùng cùng cấp." : "Đã ở folder đầu tiên cùng cấp.";
@@ -923,12 +754,12 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
-        _preloadCts.Cancel();
-        _preloadCts.Dispose();
+        _preloadScheduler.Dispose();
         _folderLoadCts.Cancel();
         _folderLoadCts.Dispose();
         _thumbnailCache.Dispose();
         _hashService.Clear();
+        _explorerOrder.Dispose();
     }
 
     private void UpdateFitSize()
@@ -977,19 +808,26 @@ public partial class MainWindow : Window
         var source = sourcePath;
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         StopImageReadsForAction();
+        // StopImageReadsForAction() just bumped _folderGeneration; capture it so every
+        // catalog/session/status mutation below (after the Task.Run await yields the UI
+        // thread) can check the user hasn't opened a different folder in the meantime.
+        var folderGeneration = _folderGeneration;
         var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: true);
         AppLog.Info($"FileAction classify-start category={category} source={sourcePath} next={nextPath ?? "<none>"}");
         try
         {
             var info = new FileInfo(source);
+            string undoOperation;
+            string? undoDestination;
             if (category == 3)
             {
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                await Task.Run(() => FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
                 AppLog.Info($"FileAction recycle-complete source={source}");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
+                undoOperation = "RecycleBin";
+                undoDestination = null;
             }
             else
             {
@@ -1000,27 +838,45 @@ public partial class MainWindow : Window
                 if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                File.Move(source, destination);
+                await Task.Run(() => File.Move(source, destination));
                 var movedInfo = new FileInfo(destination);
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                _moveHistory.Push((source, destination));
-                _lastUndoAction = new UndoAction("Move", source, destination, info.Length, info.LastWriteTimeUtc);
+                undoOperation = "Move";
+                undoDestination = destination;
             }
-            if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
-            if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
+            // Undo state must only be registered once we know the folder hasn't
+            // been switched away from underneath this completion: otherwise a
+            // stale-folder Move/Recycle can end up pushed onto _moveHistory /
+            // _lastUndoAction and later get undone against the NEW folder's
+            // catalog/session (moving files back into a folder the user is no
+            // longer looking at, or re-inserting a foreign path into it).
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction completion ignored after folder switch: source={source}");
+            else
+            {
+                if (undoOperation == "Move") _moveHistory.Push((source, undoDestination!));
+                _lastUndoAction = new UndoAction(undoOperation, source, undoDestination, info.Length, info.LastWriteTimeUtc);
+                if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+                if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
+            }
         }
         catch (Exception ex)
         {
-            // The catalog is advanced optimistically before the synchronous
-            // filesystem call. Restore the source when the operation fails so
-            // a failed Delete/Move does not silently lose the image from view.
-            if (File.Exists(source) && !_files.Contains(source, StringComparer.OrdinalIgnoreCase))
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction failure ignored after folder switch: source={source}, error={ex.Message}");
+            else
             {
-                var restoreIndex = Math.Clamp(sourceIndex < 0 ? _files.Count : sourceIndex, 0, _files.Count);
-                _files.Insert(restoreIndex, source);
+                // The catalog is advanced optimistically before the synchronous
+                // filesystem call. Restore the source when the operation fails so
+                // a failed Delete/Move does not silently lose the image from view.
+                if (File.Exists(source) && !_files.Contains(source, StringComparer.OrdinalIgnoreCase))
+                {
+                    var restoreIndex = Math.Clamp(sourceIndex < 0 ? _files.Count : sourceIndex, 0, _files.Count);
+                    _files.Insert(restoreIndex, source);
+                }
+                StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}";
             }
-            StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}";
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
@@ -1042,7 +898,7 @@ public partial class MainWindow : Window
         // Invalidate an Explorer snapshot/load that started before the action.
         Interlocked.Increment(ref _folderGeneration);
         Interlocked.Increment(ref _catalogInteractionGeneration);
-        _preloadCts.Cancel();
+        _preloadScheduler.Cancel();
         AppLog.Info($"FileAction stop-reads generation={_generation} folderGeneration={_folderGeneration} index={_index}");
         // Keep the current frame visible while Move/Delete runs. Clearing the
         // source here creates a black flash before the next image is ready.
@@ -1050,7 +906,7 @@ public partial class MainWindow : Window
 
     private async Task ExecuteActionAsync(ReviewAction action)
     {
-        if (action.Operation is not ("Move" or "Copy" or "Recycle" or "Delete"))
+        if (!SupportedActionOperations.Contains(action.Operation))
         {
             StatusText.Text = $"Không thực hiện được {action.Name}: Operation không hợp lệ.";
             return;
@@ -1068,6 +924,10 @@ public partial class MainWindow : Window
         if (_index < 0 || _index >= _files.Count) return;
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         StopImageReadsForAction();
+        // StopImageReadsForAction() just bumped _folderGeneration; capture it so every
+        // catalog/status mutation below (after the Task.Run await yields the UI thread)
+        // can check the user hasn't opened a different folder in the meantime.
+        var folderGeneration = _folderGeneration;
         var sourcePath = _compareSelectedPath ?? _files[_index];
         var source = sourcePath;
         var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
@@ -1094,24 +954,43 @@ public partial class MainWindow : Window
             sourceLastWriteUtc = sourceInfo.LastWriteTimeUtc;
             _journal.Append(new JournalEntry(operationId, operation, "Prepared", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
             prepared = true;
-            if (operation == "Copy") File.Copy(source, destinationPath);
-            else File.Move(source, destinationPath);
+            if (operation == "Copy") await Task.Run(() => File.Copy(source, destinationPath));
+            else await Task.Run(() => File.Move(source, destinationPath));
             AppLog.Info($"FileAction filesystem-complete operation={operation} source={source} destination={destinationPath}");
             var destinationInfo = new FileInfo(destinationPath);
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
                 throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
             _journal.Append(new JournalEntry(operationId, operation, "Committed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
-            if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
+            // See ClassifyCurrentAsync: undo state must only be registered once the
+            // folder-switch guard confirms this completion still belongs to the
+            // current folder, otherwise Ctrl+Z could move a file back into a folder
+            // the user has since navigated away from.
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction completion ignored after folder switch: operation={operation} source={source}");
+            else
+            {
+                if (operation == "Move")
+                {
+                    _moveHistory.Push((source, destinationPath!));
+                    _lastUndoAction = new UndoAction("Move", source, destinationPath, sourceSize, sourceLastWriteUtc);
+                }
+                if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
+            }
         }
         catch (Exception ex)
         {
             if (prepared) _journal.Append(new JournalEntry(operationId, operation, "Failed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
-            if (operation == "Move" && !_files.Contains(source, StringComparer.OrdinalIgnoreCase) && File.Exists(source))
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction failure ignored after folder switch: operation={operation} source={source}, error={ex.Message}");
+            else
             {
-                var restoreIndex = Math.Min(sourceIndex, _files.Count);
-                _files.Insert(restoreIndex, source);
+                if (operation == "Move" && !_files.Contains(source, StringComparer.OrdinalIgnoreCase) && File.Exists(source))
+                {
+                    var restoreIndex = Math.Min(sourceIndex, _files.Count);
+                    _files.Insert(restoreIndex, source);
+                }
+                StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
             }
-            StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
             AppLog.Error($"FileAction failed operation={operation} source={source} destination={destinationPath}", ex);
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
@@ -1149,40 +1028,56 @@ public partial class MainWindow : Window
 
     private async Task UndoLastMoveAsync()
     {
-        if (Volatile.Read(ref _fileActionInProgress) != 0) return;
-        if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
-        var move = _moveHistory.Pop();
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         try
         {
-            if (!File.Exists(move.Destination) || File.Exists(move.Source)) throw new IOException("Nguồn hoặc đích đã thay đổi.");
-            var destinationInfo = new FileInfo(move.Destination);
-            var committed = _journal.ReadCommittedMoves().LastOrDefault(x => x.Destination == move.Destination);
-            if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
-                throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
-            File.Move(move.Destination, move.Source);
-            _lastUndoAction = null;
-            if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
-            _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
-            await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+            if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
+            var move = _moveHistory.Pop();
+            // Captured before the Task.Run await yields the UI thread, so a folder switch
+            // mid-undo is detected instead of adding move.Source to a different folder's catalog.
+            var folderGeneration = _folderGeneration;
+            try
+            {
+                if (!File.Exists(move.Destination) || File.Exists(move.Source)) throw new IOException("Nguồn hoặc đích đã thay đổi.");
+                var destinationInfo = new FileInfo(move.Destination);
+                var committed = _journal.ReadCommittedMoves().LastOrDefault(x => x.Destination == move.Destination);
+                if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
+                    throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
+                await Task.Run(() => File.Move(move.Destination, move.Source));
+                _lastUndoAction = null;
+                if (folderGeneration != _folderGeneration)
+                    AppLog.Info($"Undo completion ignored after folder switch: source={move.Source}");
+                else
+                {
+                    if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
+                    _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
+                    await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+                }
+            }
+            catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
         }
-        catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private async Task UndoLastActionAsync()
     {
-        if (Volatile.Read(ref _fileActionInProgress) != 0) return;
         if (_lastUndoAction is null) { StatusText.Text = "Không có Move/Delete vừa thực hiện để hoàn tác."; return; }
         var action = _lastUndoAction;
         if (action.Operation == "Move") { await UndoLastMoveAsync(); return; }
-        var restored = await Task.Run(() => RecycleBinRestoreService.TryRestore(action.Source, action.Size, action.LastWriteUtc));
-        if (!restored)
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+        try
         {
-            StatusText.Text = $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}";
-            return;
+            var restored = await Task.Run(() => RecycleBinRestoreService.TryRestore(action.Source, action.Size, action.LastWriteUtc));
+            if (!restored)
+            {
+                StatusText.Text = $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}";
+                return;
+            }
+            _lastUndoAction = null;
+            if (_session is not null) { _session.CurrentPath = action.Source; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+            await LoadFolderAsync(Path.GetDirectoryName(action.Source)!);
         }
-        _lastUndoAction = null;
-        if (_session is not null) { _session.CurrentPath = action.Source; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
-        await LoadFolderAsync(Path.GetDirectoryName(action.Source)!);
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private sealed record UndoAction(string Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc);

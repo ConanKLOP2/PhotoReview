@@ -17,6 +17,7 @@ public static class AppLog
     // queue just became idle still observes the "drained" state immediately instead
     // of racing a one-shot signal.
     private static readonly ManualResetEventSlim Drained = new(true);
+    private const long MaxLogBytes = 10 * 1024 * 1024;
     private static volatile bool _enabled;
     private static volatile bool _stopping;
     private static volatile bool _writing;
@@ -48,12 +49,20 @@ public static class AppLog
         _writing = true;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            using var stream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
-            while (Queue.TryDequeue(out var e)) writer.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}\n{e.Exception}");
+            var path = FilePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (NeedsRotation(path)) Rotate(path);
+            using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
+            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            while (Queue.TryDequeue(out var e)) writer.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}" + (e.Exception is null ? "" : $"\n{e.Exception}"));
         }
         catch { }
         finally { _writing = false; if (Queue.IsEmpty) Drained.Set(); }
+    }
+    private static bool NeedsRotation(string path) => File.Exists(path) && new FileInfo(path).Length >= MaxLogBytes;
+    private static void Rotate(string path)
+    {
+        var backup = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + ".1" + Path.GetExtension(path));
+        File.Move(path, backup, overwrite: true);
     }
 }

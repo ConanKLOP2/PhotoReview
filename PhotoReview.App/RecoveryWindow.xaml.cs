@@ -10,6 +10,7 @@ public partial class RecoveryWindow : Window
 
     public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, RecoveryRetryResult>? retry = null)
     {
+        ArgumentNullException.ThrowIfNull(entries);
         InitializeComponent();
         _entries = entries;
         _retry = retry;
@@ -23,7 +24,13 @@ public partial class RecoveryWindow : Window
         if (_retry is null || EntriesList.SelectedIndex < 0) return;
         var entry = _entries[EntriesList.SelectedIndex];
         if (System.Windows.MessageBox.Show(this, $"Retry {entry.Type} cho {Path.GetFileName(entry.Source)}?", "Xác nhận retry", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        var result = _retry(entry);
+        RecoveryRetryResult result;
+        try { result = _retry(entry); }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "Retry bị từ chối", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         System.Windows.MessageBox.Show(this, result.Message, result.Succeeded ? "Retry thành công" : "Retry bị từ chối", MessageBoxButton.OK, result.Succeeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
         if (result.Succeeded) Close();
     }

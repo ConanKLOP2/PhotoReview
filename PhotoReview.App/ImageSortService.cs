@@ -21,7 +21,7 @@ public static class ImageSortService
     private static long GetFileSize(string path)
     {
         try { return new FileInfo(path).Length; }
-        catch { return -1; }
+        catch (Exception ex) { AppLog.Error($"Failed to read file size for {path}", ex); return -1; }
     }
 
     public static string NaturalKey(string name)
