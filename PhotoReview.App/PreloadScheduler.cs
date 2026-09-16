@@ -30,6 +30,8 @@ public sealed class PreloadScheduler : IDisposable
     // against that, so every access goes through _preloadedKeysGate.
     private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
     private readonly object _preloadedKeysGate = new();
+    private readonly object _preloadCtsGate = new();
+    private bool _disposed;
 
     public PreloadScheduler(
         PreviewImageService previewService,
@@ -48,7 +50,11 @@ public sealed class PreloadScheduler : IDisposable
     }
 
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
-    public void Cancel() => _preloadCts.Cancel();
+    public void Cancel()
+    {
+        if (Volatile.Read(ref _disposed)) return;
+        lock (_preloadCtsGate) _preloadCts.Cancel();
+    }
 
     /// <summary>Drops the warmed-key set (folder reload / cache clear).</summary>
     public void ClearPreloadedKeys() { lock (_preloadedKeysGate) _preloadedKeys.Clear(); }
@@ -65,19 +71,27 @@ public sealed class PreloadScheduler : IDisposable
 
     public Task PreloadAroundAsync(int center)
     {
+        // Disposed schedulers must stay dead: without this check, a call here
+        // would resurrect a new CancellationTokenSource and background loop.
+        if (Volatile.Read(ref _disposed)) return Task.CompletedTask;
         // Navigation changes priority, but an already running decode is useful
         // and must remain available to ShowImageAsync through the in-flight map.
-        if (_preloadCts.IsCancellationRequested)
+        CancellationTokenSource cts;
+        lock (_preloadCtsGate)
         {
-            _preloadCts.Dispose();
-            _preloadCts = new CancellationTokenSource();
+            if (_preloadCts.IsCancellationRequested)
+            {
+                _preloadCts.Dispose();
+                _preloadCts = new CancellationTokenSource();
+            }
+            cts = _preloadCts;
         }
-        _preloadCenter = center;
-        _preloadPriorityVersion++;
+        Volatile.Write(ref _preloadCenter, center);
+        Interlocked.Increment(ref _preloadPriorityVersion);
         if (_preloadSchedulerTask is { IsCompleted: false } &&
-            ReferenceEquals(_preloadSchedulerCts, _preloadCts)) return _preloadSchedulerTask;
-        _preloadSchedulerCts = _preloadCts;
-        _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotFiles(), _preloadCts.Token);
+            ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
+        _preloadSchedulerCts = cts;
+        _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotFiles(), cts.Token);
         return _preloadSchedulerTask;
     }
 
@@ -93,17 +107,20 @@ public sealed class PreloadScheduler : IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (seenVersion != _preloadPriorityVersion)
+                var currentVersion = Interlocked.Read(ref _preloadPriorityVersion);
+                if (seenVersion != currentVersion)
                 {
                     order?.Dispose();
-                    order = PreloadOrderService.Build(_preloadCenter, files.Length,
+                    order = PreloadOrderService.Build(Volatile.Read(ref _preloadCenter), files.Length,
                         _totalSourceBytes() < _fullFolderRamThresholdBytes).GetEnumerator();
-                    seenVersion = _preloadPriorityVersion;
+                    seenVersion = currentVersion;
                 }
                 while (running.Count < workers && order!.MoveNext())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (!HasPreloadHeadroom())
+                    // GlobalMemoryStatusEx is a syscall; only re-check on the same
+                    // cadence as the progress log below, not on every candidate.
+                    if (examinedSinceYield == 0 && !HasPreloadHeadroom())
                     {
                         if (AppLog.Enabled)
                         {
@@ -174,7 +191,12 @@ public sealed class PreloadScheduler : IDisposable
 
     public void Dispose()
     {
-        _preloadCts.Cancel();
-        _preloadCts.Dispose();
+        Volatile.Write(ref _disposed, true);
+        lock (_preloadCtsGate)
+        {
+            _preloadCts.Cancel();
+            _preloadCts.Dispose();
+        }
+        _preloadSlots.Dispose();
     }
 }

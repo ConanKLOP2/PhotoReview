@@ -24,6 +24,7 @@ internal static class PhysicalMemory
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref Status status);
 
+    /// <param name="maximumLoad">A 0-1 fraction of physical memory load, not a percentage.</param>
     internal static bool HasHeadroom(double maximumLoad)
     {
         var snapshot = GetSnapshot();
@@ -36,6 +37,8 @@ internal static class PhysicalMemory
     internal static MemorySnapshot? GetSnapshot()
     {
         var status = new Status { Length = (uint)Marshal.SizeOf<Status>() };
-        return GlobalMemoryStatusEx(ref status) ? new(status.Load, status.AvailablePhysical) : null;
+        if (GlobalMemoryStatusEx(ref status)) return new(status.Load, status.AvailablePhysical);
+        AppLog.Error($"GlobalMemoryStatusEx failed: Win32Error={Marshal.GetLastWin32Error()}");
+        return null;
     }
 }
