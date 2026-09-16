@@ -20,25 +20,37 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     // Every PreviewImageService starts two persist workers that only stop once
     // ShutdownPersistWorkersAsync completes their channel; tracking each instance created
     // by this class (including the ones tests construct locally) lets DisposeAsync retire
-    // them all instead of leaking live background workers per test.
-    private readonly List<PreviewImageService> _services = [];
+    // them all instead of leaking live background workers per test. The disk directory is
+    // tracked alongside each service so teardown can also wait for that directory's own
+    // fire-and-forget prune pass(es) -- see DisposeAsync.
+    private readonly List<(PreviewImageService Service, string DiskDirectory)> _services = [];
 
     public PreviewImageServiceTests()
     {
         var folder = _root.Dir("preview-service");
         _previewPath = Path.Combine(folder, "preview-a.png");
         File.WriteAllBytes(_previewPath, PreviewPng);
+        var diskCache = _root.Dir("disk-cache");
         _service = Track(new PreviewImageService(_metrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024,
-            diskCacheDirectory: _root.Dir("disk-cache")));
+            diskCacheDirectory: diskCache), diskCache);
     }
 
-    private PreviewImageService Track(PreviewImageService service) { _services.Add(service); return service; }
+    private PreviewImageService Track(PreviewImageService service, string diskDirectory)
+    {
+        _services.Add((service, diskDirectory));
+        return service;
+    }
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(_services.Select(service => service.ShutdownPersistWorkersAsync()));
+        await Task.WhenAll(_services.Select(s => s.Service.ShutdownPersistWorkersAsync()));
+        // ShutdownPersistWorkersAsync only waits for the persist writes themselves; each
+        // write's SchedulePrune call is itself fire-and-forget, so wait for those to finish
+        // too, or _root.Dispose() below can race a prune worker still enumerating/deleting
+        // files in one of these directories.
+        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 
@@ -100,8 +112,9 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     [Fact(DisplayName = "Original loading mode decodes at full size while Preview mode uses the target decode width")]
     public void OriginalLoadingModeDecodesAtFullSize()
     {
+        var originalDiskCache = _root.Dir("disk-cache-original");
         var originalModeService = Track(new PreviewImageService(_metrics, () => true, () => 512,
-            diskCacheDirectory: _root.Dir("disk-cache-original")));
+            diskCacheDirectory: originalDiskCache), originalDiskCache);
         Assert.True(originalModeService.IsOriginalLoadingMode()
             && originalModeService.GetCurrentCacheKey(_previewPath).IsOriginal
             && originalModeService.GetCurrentCacheKey(_previewPath).TargetWidth == 0
@@ -129,8 +142,9 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
     private readonly string[] _singleFiles;
     // See PreviewImageServiceTests: every PreviewImageService created here (directly or via
     // NewWarmScheduler) starts persist workers that must be shut down, not just have their
-    // temp directory deleted out from under them.
-    private readonly List<PreviewImageService> _services = [];
+    // temp directory deleted out from under them; the disk directory travels with each
+    // service so DisposeAsync can also wait out that directory's fire-and-forget prune(s).
+    private readonly List<(PreviewImageService Service, string DiskDirectory)> _services = [];
 
     public PreloadSchedulerTests()
     {
@@ -155,7 +169,10 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(_services.Select(service => service.ShutdownPersistWorkersAsync()));
+        await Task.WhenAll(_services.Select(s => s.Service.ShutdownPersistWorkersAsync()));
+        // See PreviewImageServiceTests.DisposeAsync: wait for each service's own
+        // fire-and-forget prune pass(es) too, or _root.Dispose() below can race one.
+        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 
@@ -167,9 +184,10 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         Func<double, bool>? hasHeadroom = null)
     {
         var metrics = new ReviewMetrics();
+        var diskDirectory = _root.Dir("disk-cache-" + Guid.NewGuid().ToString("N"));
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
-            diskCacheDirectory: _root.Dir("disk-cache-" + Guid.NewGuid().ToString("N")));
-        _services.Add(service);
+            diskCacheDirectory: diskDirectory);
+        _services.Add((service, diskDirectory));
         var scheduler = new PreloadScheduler(service, metrics, () => _preloadFiles, () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true));
         return (metrics, service, scheduler);
@@ -243,9 +261,10 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
     public async Task PreloadedKeyIsReportedOnceThenConsumed()
     {
         var metrics = new ReviewMetrics();
+        var diskDirectory = _root.Dir("disk-cache-single");
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
-            diskCacheDirectory: _root.Dir("disk-cache-single"));
-        _services.Add(service);
+            diskCacheDirectory: diskDirectory);
+        _services.Add((service, diskDirectory));
         using var scheduler = new PreloadScheduler(service, metrics, () => _singleFiles, () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: _ => true);
         await scheduler.PreloadAroundAsync(0);
@@ -266,8 +285,10 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     private readonly TempRoot _root = new("preview-disk-cache");
     private readonly string _previewPath;
     // See PreviewImageServiceTests: every service created by a test below must have its
-    // persist workers shut down, not just its temp directory deleted.
-    private readonly List<PreviewImageService> _services = [];
+    // persist workers shut down, not just its temp directory deleted; the disk directory
+    // travels with each service so DisposeAsync can also wait out its fire-and-forget
+    // prune pass(es) before the temp root is removed.
+    private readonly List<(PreviewImageService Service, string DiskDirectory)> _services = [];
 
     public PreviewImageServiceDiskCacheTests()
     {
@@ -276,13 +297,22 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         File.WriteAllBytes(_previewPath, PreviewImageServiceTests.PreviewPng);
     }
 
-    private PreviewImageService Track(PreviewImageService service) { _services.Add(service); return service; }
+    private PreviewImageService Track(PreviewImageService service, string diskDirectory)
+    {
+        _services.Add((service, diskDirectory));
+        return service;
+    }
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(_services.Select(service => service.ShutdownPersistWorkersAsync()));
+        await Task.WhenAll(_services.Select(s => s.Service.ShutdownPersistWorkersAsync()));
+        // ShutdownPersistWorkersAsync only waits for the persist writes themselves; each
+        // write's SchedulePrune call is itself fire-and-forget, so wait for those to finish
+        // too, or _root.Dispose() below can race a prune worker still enumerating/deleting
+        // files in one of these directories.
+        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 
@@ -303,7 +333,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task DownscaledPreviewIsPersistedToDiskCache()
     {
         var diskDir = _root.Dir("write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir));
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
 
         await service.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
@@ -315,7 +345,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task OriginalModeDoesNotWriteToDiskCache()
     {
         var diskDir = _root.Dir("original-no-write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => true, () => 0, diskCacheDirectory: diskDir));
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => true, () => 0, diskCacheDirectory: diskDir), diskDir);
 
         await service.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir, expectedCount: 1, timeoutMs: 500);
@@ -327,12 +357,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task DiskCacheHitAvoidsSourceRead()
     {
         var diskDir = _root.Dir("hit");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir));
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         await WaitForCacheFilesAsync(diskDir);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir));
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -343,13 +373,13 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task CorruptDiskCacheEntryFallsBackToSource()
     {
         var diskDir = _root.Dir("corrupt");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir));
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
         File.WriteAllBytes(files[0], [1, 2, 3, 4]);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir));
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -367,7 +397,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         foreach (var width in new[] { 100, 200, 300, 400, 500 })
         {
             var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => width,
-                diskCacheDirectory: diskDir, diskCacheCapacityBytes: quotaBytes));
+                diskCacheDirectory: diskDir, diskCacheCapacityBytes: quotaBytes), diskDir);
             await service.GetPreviewAsync(_previewPath);
             // Serialize write+prune per iteration: fire-and-forget work must settle before
             // the next iteration's own write/prune pass runs, or the count below races it.
@@ -383,6 +413,16 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
             $"{Directory.GetFiles(diskDir, "*.png").Length} file(s) totaling {remainingBytes} bytes remained.");
     }
 
+    // Runs concurrently with the real fire-and-forget prune worker, which can delete a file
+    // between GetFiles listing it and FileInfo reading its length -- treat a file that
+    // vanished mid-count as already pruned (0 bytes) instead of letting the test fail.
     private static long DirectoryBytes(string directory) =>
-        Directory.Exists(directory) ? Directory.GetFiles(directory, "*.png").Sum(path => new FileInfo(path).Length) : 0;
+        Directory.Exists(directory) ? Directory.GetFiles(directory, "*.png").Sum(FileLengthOrZero) : 0;
+
+    private static long FileLengthOrZero(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch (FileNotFoundException) { return 0; }
+        catch (DirectoryNotFoundException) { return 0; }
+    }
 }

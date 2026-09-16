@@ -109,11 +109,17 @@ public static class DiskCacheStore
     /// scheduled to actually finish first, or the delete can race a worker still enumerating or
     /// deleting files in that directory.
     /// </summary>
-    public static async Task WaitForPruneAsync(string directory, TimeSpan timeout)
+    /// <returns>
+    /// <see langword="true"/> if no prune remained scheduled or running for the directory when
+    /// this returned; <see langword="false"/> if <paramref name="timeout"/> elapsed first, which
+    /// callers must treat as "still unsafe to delete", not as success.
+    /// </returns>
+    public static async Task<bool> WaitForPruneAsync(string directory, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (_pruneScheduled.ContainsKey(directory) && DateTime.UtcNow < deadline)
             await Task.Delay(20).ConfigureAwait(false);
+        return !_pruneScheduled.ContainsKey(directory);
     }
 
     public static void ClearDirectory(string directory, string searchPattern, string logContext)

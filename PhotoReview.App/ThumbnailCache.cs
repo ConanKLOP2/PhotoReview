@@ -103,7 +103,10 @@ public sealed class ThumbnailCache : IDisposable
             // WPF raises FileFormatException (not just IOException/NotSupportedException) for
             // invalid image bytes, so a corrupt cached PNG must be caught here too or it would
             // escape instead of being deleted and regenerated from the source below.
-            catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidDataException or FileFormatException)
+            // UnauthorizedAccessException is included too: a transiently ACL-blocked cache
+            // file must fall back to the source and regenerate, not break loading entirely.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+                or InvalidDataException or FileFormatException)
             {
                 AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex);
                 DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed");
