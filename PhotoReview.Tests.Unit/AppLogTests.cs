@@ -89,6 +89,27 @@ public sealed class AppLogTests : IDisposable
         Assert.True(concurrentLog.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
             .Count(line => line.Contains("concurrent-marker-", StringComparison.Ordinal)) >= concurrentMarkers.Length);
     }
+
+    [Fact(DisplayName = "Log file rotates to a .1 backup at the 10 MB threshold and new entries land in a fresh file")]
+    public void LogRotatesAtSizeThreshold()
+    {
+        var path = AppLog.FilePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // Plant an oversized file directly instead of writing 10 MB through the logger:
+        // NeedsRotation only checks the file's on-disk length, so this exercises the same
+        // rotation trigger far faster than a real 10 MB write.
+        File.WriteAllBytes(path, new byte[10 * 1024 * 1024]);
+        var backupPath = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path) + ".1" + Path.GetExtension(path));
+
+        AppLog.Enabled = true;
+        AppLog.Info("post-rotation-marker");
+        FlushAppLog();
+
+        Assert.True(File.Exists(backupPath), "Expected the oversized log to be rotated to a .1 backup.");
+        Assert.True(new FileInfo(backupPath).Length >= 10 * 1024 * 1024, "Backup should retain the oversized content that triggered rotation.");
+        Assert.True(new FileInfo(path).Length < 10 * 1024 * 1024, "New log file should start fresh after rotation instead of continuing to grow the oversized file.");
+        Assert.Contains("post-rotation-marker", File.ReadAllText(path));
+    }
 }
 
 /// <summary>Session persistence contract (migrated from Program.cs).</summary>

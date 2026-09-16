@@ -12,30 +12,40 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
     var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
     var reports = new List<BenchmarkReport>();
+    var anyFailed = false;
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
         await using var imageExecutor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
-        var report = await new BenchmarkEngine().RunAsync(folder, profile, async (_, workload, iteration, token) =>
+        var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
+        try
         {
-            if (workload == BenchmarkWorkload.FileAction)
-            {
-                var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
-                try { await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], token), token); await imageExecutor.DecodeAsync(temp, token); using var read = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); var moved = temp + ".moved"; File.Move(temp, moved); File.Delete(moved); return (true, (ReviewMetricsSnapshot?)null); }
-                finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
-            }
-            var selected = Enumerable.Range(0, Math.Min(Math.Max(1, profile.Workers), files.Length)).Select(i => files[(iteration + i) % files.Length]).ToArray();
-            await Parallel.ForEachAsync(selected, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, profile.Workers), CancellationToken = token }, async (path, ct) =>
-            {
-                await imageExecutor.DecodeAsync(path, ct);
-            });
-            return (true, (ReviewMetricsSnapshot?)null);
-        }, new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
-        reports.Add(report);
-        var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
-        var phase = report.Phases[0]; Console.WriteLine($"DONE profile={profile.Id} status={phase.Status} p50={phase.P50:F1}ms p95={phase.P95:F1}ms max={phase.Max:F1}ms report={pathOut}");
+            // Shares the exact per-iteration workload logic the WPF benchmark window uses
+            // (correctness guard for explorer-reindex/cache-recovery, real file-action
+            // mapping, real preload warm-up for Preload/WarmNext) instead of this CLI path
+            // running its own decode-only stand-in that could report Pass without
+            // exercising what a profile names.
+            var report = await new BenchmarkEngine().RunAsync(folder, profile,
+                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, token),
+                new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
+            reports.Add(report);
+            var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
+            var phase = report.Phases[0];
+            if (phase.Status == BenchmarkResultStatus.Fail) anyFailed = true;
+            Console.WriteLine($"DONE profile={profile.Id} status={phase.Status} p50={phase.P50:F1}ms p95={phase.P95:F1}ms max={phase.Max:F1}ms report={pathOut}");
+        }
+        catch (Exception ex)
+        {
+            // Mirrors the WPF benchmark window's per-profile try/catch: a profile that
+            // refuses to run (the explorer-reindex/cache-recovery correctness guard above)
+            // or otherwise throws must not abort the rest of a --benchmark-all/--benchmark-actions
+            // batch -- report it and move on to the next profile instead.
+            anyFailed = true;
+            Console.Error.WriteLine($"FAIL profile={profile.Id} error={ex.Message}");
+        }
     }
     var summary = Path.Combine(reportDirectory, "summary.json"); await File.WriteAllTextAsync(summary, System.Text.Json.JsonSerializer.Serialize(reports, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); Console.WriteLine($"REPORT: {summary}");
+    if (anyFailed) Environment.ExitCode = 1;
 }
 if (args.Length == 1 && args[0] == "--benchmark-list-profiles")
 {

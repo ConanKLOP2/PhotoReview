@@ -100,6 +100,22 @@ public static class DiskCacheStore
         });
     }
 
+    /// <summary>
+    /// Waits until no prune pass is scheduled or running for <paramref name="directory"/>, or
+    /// <paramref name="timeout"/> elapses. SchedulePrune is fire-and-forget by design for the
+    /// production singletons (ThumbnailCache/PreviewImageService), which never delete their own
+    /// cache directory out from under a pending prune -- but a short-lived caller that does
+    /// (e.g. a benchmark run cleaning up its scratch disk cache) must wait for every prune it
+    /// scheduled to actually finish first, or the delete can race a worker still enumerating or
+    /// deleting files in that directory.
+    /// </summary>
+    public static async Task WaitForPruneAsync(string directory, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (_pruneScheduled.ContainsKey(directory) && DateTime.UtcNow < deadline)
+            await Task.Delay(20).ConfigureAwait(false);
+    }
+
     public static void ClearDirectory(string directory, string searchPattern, string logContext)
     {
         if (!Directory.Exists(directory)) return;

@@ -100,14 +100,34 @@ public sealed class ThumbnailCache : IDisposable
         if (File.Exists(cachePath))
         {
             try { return await DecodeAsync(cachePath, cancellationToken).ConfigureAwait(false); }
-            catch (IOException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed"); }
-            catch (NotSupportedException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed"); }
-            catch (InvalidDataException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed"); }
+            // WPF raises FileFormatException (not just IOException/NotSupportedException) for
+            // invalid image bytes, so a corrupt cached PNG must be caught here too or it would
+            // escape instead of being deleted and regenerated from the source below.
+            catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidDataException or FileFormatException)
+            {
+                AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex);
+                DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed");
+            }
         }
 
+        var generationBeforeDecode = Volatile.Read(ref _cacheGeneration);
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
         if (!_persistNewThumbnails) return image;
-        try { await DiskCacheStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); PruneDiskCache(); }
+        // ClearDisk() bumps _cacheGeneration and wipes the directory; without this check an
+        // in-flight decode that started before the clear can still recreate a PNG right after
+        // the user asked for the disk cache to be emptied.
+        if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode) return image;
+        try
+        {
+            await DiskCacheStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false);
+            if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode)
+            {
+                // Went stale mid-write (ClearDisk ran concurrently): don't leave a
+                // freshly-written file for a cache generation that was just cleared.
+                DiskCacheStore.TryDelete(cachePath, logContext: null);
+            }
+            else PruneDiskCache();
+        }
         catch (IOException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* The RAM result remains usable when disk cache is unavailable. */ }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* Same fallback for read-only locations. */ }
         return image;

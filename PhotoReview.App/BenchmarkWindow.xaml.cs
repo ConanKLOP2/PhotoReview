@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
-using Microsoft.VisualBasic.FileIO;
 
 namespace PhotoReview.App;
 
@@ -38,12 +37,31 @@ public partial class BenchmarkWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
 
+    // This window is opened modelessly (dialog.Show() in MainWindow), not via ShowDialog(),
+    // so IsCancel/DialogResult cannot be used on the Đóng button -- WPF throws
+    // InvalidOperationException when a non-dialog Window's DialogResult is set. Cancel any
+    // running benchmark before closing so the background run doesn't outlive the window.
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        _cts?.Cancel();
+        Close();
+    }
+
     private async Task RunAsync()
     {
         if (!Directory.Exists(FolderText.Text)) { StatusText.Text = "Folder không tồn tại."; return; }
         var profiles = ProfilesList.SelectedItems.Cast<BenchmarkProfile>().ToArray();
         if (profiles.Length == 0) { StatusText.Text = "Chọn ít nhất một cấu hình để chạy."; return; }
-        var files = Directory.EnumerateFiles(FolderText.Text, "*.*", System.IO.SearchOption.TopDirectoryOnly).Where(ImageFileTypes.IsSupported).ToArray();
+        string[] files;
+        try
+        {
+            files = Directory.EnumerateFiles(FolderText.Text, "*.*", System.IO.SearchOption.TopDirectoryOnly).Where(ImageFileTypes.IsSupported).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusText.Text = $"Không thể đọc folder: {ex.Message}";
+            return;
+        }
         if (files.Length == 0) { StatusText.Text = "Không tìm thấy ảnh."; return; }
         var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
 
@@ -65,7 +83,7 @@ public partial class BenchmarkWindow : Window
                     StatusText.Text = $"[{currentIndex}/{profiles.Length}] {p.ProfileId}: {p.Completed}/{p.Total} — {p.Message}";
                 });
                 var executor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
-                var random = new Random(profile.Id.GetHashCode());
+                var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
                 // DetailedLogging distinguishes the logging-on/logging-off profiles: without
                 // toggling AppLog around the run, both profiles measured identical (whatever
                 // the app's ambient setting happened to be) logging overhead.
@@ -74,91 +92,13 @@ public partial class BenchmarkWindow : Window
                 try
                 {
                     var engine = new BenchmarkEngine();
-                    var report = await engine.RunAsync(FolderText.Text, profile, async (_, workload, iteration, ct) =>
-                    {
-                        if (workload == BenchmarkWorkload.Correctness && profile.Id is "explorer-reindex" or "cache-recovery")
-                        {
-                            // These profiles decoded a plain sequential file with no check of
-                            // Explorer native order or of cache clear/rebuild behavior, so they
-                            // could report Pass without ever exercising what their name claims.
-                            // Refuse to run rather than keep reporting a misleading Pass; a real
-                            // check needs to drive ExplorerOrderService/ClearCache from here.
-                            throw new NotSupportedException(
-                                $"Benchmark profile '{profile.Id}' does not implement a real {profile.Name} check yet; " +
-                                "a decode-only stand-in would misreport results, so it refuses to run.");
-                        }
-                        if (workload == BenchmarkWorkload.FileAction)
-                        {
-                            var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
-                            var moved = temp + ".moved";
-                            var copied = temp + ".copy";
-                            try
-                            {
-                                await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], ct), ct);
-                                var actionImage = await executor.DecodeAsync(temp, ct);
-                                // Each action profile now performs the operation its name promises
-                                // instead of every Move/Delete/Copy/Interleaved profile running the
-                                // same move+delete regardless of Id.
-                                var op = profile.Id switch
-                                {
-                                    "action-delete" => "delete",
-                                    "action-copy" => "copy",
-                                    "action-interleaved" => (iteration % 3) switch { 0 => "move", 1 => "delete", _ => "copy" },
-                                    _ => "move",
-                                };
-                                var sourceExistsAfter = true;
-                                switch (op)
-                                {
-                                    case "move": File.Move(temp, moved); File.Delete(moved); break;
-                                    case "delete": FileSystem.DeleteFile(temp, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin); break;
-                                    case "copy":
-                                        File.Copy(temp, copied, overwrite: true);
-                                        sourceExistsAfter = File.Exists(temp);
-                                        break;
-                                }
-                                return (actionImage.PixelWidth > 0 && sourceExistsAfter, (ReviewMetricsSnapshot?)null);
-                            }
-                            finally
-                            {
-                                try { if (File.Exists(temp)) File.Delete(temp); } catch { }
-                                try { if (File.Exists(moved)) File.Delete(moved); } catch { }
-                                try { if (File.Exists(copied)) File.Delete(copied); } catch { }
-                            }
-                        }
-                        if (workload == BenchmarkWorkload.FirstFrame)
-                        {
-                            var path = SelectFile(files, workload, iteration, random);
-                            executor.EvictForColdDecode(path);
-                            var image = await executor.DecodeAsync(path, ct);
-                            return (image.PixelWidth > 0 && image.PixelHeight > 0, (ReviewMetricsSnapshot?)null);
-                        }
-                        if (workload is BenchmarkWorkload.Preload or BenchmarkWorkload.WarmNext)
-                        {
-                            // One navigation step per iteration, not N parallel decodes: this
-                            // measures how fast landing on the next/previous image feels, with
-                            // the real PreloadScheduler given a chance to have already warmed it
-                            // from the previous iteration's WarmPreloadAround call below — the
-                            // actual thing these two workloads exist to measure.
-                            var center = SelectIndex(files.Length, workload, iteration, random);
-                            var image = await executor.DecodeAsync(files[center], ct);
-                            executor.WarmPreloadAround(center);
-                            return (image.PixelWidth > 0 && image.PixelHeight > 0, (ReviewMetricsSnapshot?)null);
-                        }
-                        // Workers now actually drives concurrent decodes for the remaining
-                        // workloads (Sequential/Random/Correctness), instead of being parsed
-                        // into the profile and never read by the runner.
-                        var count = Math.Min(Math.Max(1, profile.Workers), files.Length);
-                        var selected = Enumerable.Range(0, count).Select(o => SelectFile(files, workload, iteration + o, random)).ToArray();
-                        var results = new bool[selected.Length];
-                        await Parallel.ForEachAsync(Enumerable.Range(0, selected.Length),
-                            new ParallelOptions { MaxDegreeOfParallelism = count, CancellationToken = ct },
-                            async (idx, ct2) =>
-                            {
-                                var image = await executor.DecodeAsync(selected[idx], ct2);
-                                results[idx] = image.PixelWidth > 0 && image.PixelHeight > 0;
-                            });
-                        return (results.All(r => r), (ReviewMetricsSnapshot?)null);
-                    }, progress, _cts.Token);
+                    // The per-iteration workload logic (correctness guard, file-action mapping,
+                    // preload warm-up) lives in BenchmarkWorkloadRunner and is shared with the
+                    // CLI runner (PhotoReview.Tests/Program.cs) so both front ends exercise the
+                    // same real behavior instead of the CLI running a decode-only stand-in.
+                    var report = await engine.RunAsync(FolderText.Text, profile,
+                        (_, workload, iteration, ct) => BenchmarkWorkloadRunner.RunIterationAsync(executor, files, profile, workload, iteration, random, ct),
+                        progress, _cts.Token);
                     sessionReports.Add(report);
                     foreach (var phase in report.Phases) _rows.Add(new BenchmarkResultRow(profile, phase));
                     RecomputeBest();
@@ -226,18 +166,6 @@ public partial class BenchmarkWindow : Window
         var dir = _lastReport is null ? Path.GetTempPath() : Path.GetDirectoryName(_lastReport)!;
         Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
     }
-
-    private static string SelectFile(string[] files, BenchmarkWorkload workload, int iteration, Random random) =>
-        files[SelectIndex(files.Length, workload, iteration, random)];
-
-    private static int SelectIndex(int fileCount, BenchmarkWorkload workload, int iteration, Random random) => workload switch
-    {
-        BenchmarkWorkload.FirstFrame => 0,
-        BenchmarkWorkload.Random => random.Next(fileCount),
-        BenchmarkWorkload.WarmNext => iteration % 2 == 0 ? iteration / 2 % fileCount : fileCount - 1 - iteration / 2 % fileCount,
-        BenchmarkWorkload.Preload => iteration * 2 % fileCount,
-        _ => iteration % fileCount,
-    };
 
     private sealed class WindowHandle(Window window) : Forms.IWin32Window
     {

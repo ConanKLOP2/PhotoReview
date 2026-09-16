@@ -40,14 +40,39 @@ public sealed class AppSettings
                 return loaded;
             }
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
-            AppLog.Error("Corrupt config.json detected, resetting to defaults", ex);
+            // The file deserialized to garbage or failed to parse: it really is corrupt, so
+            // back it up and reset to defaults.
+            LogStartupErrorForced("Corrupt config.json detected, resetting to defaults", ex);
             try { File.Copy(ConfigPath, ConfigPath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), overwrite: false); } catch { }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file may simply be locked or briefly inaccessible (AV scan, sharing
+            // violation) rather than corrupt. Don't back it up as corrupt or overwrite a
+            // config we couldn't even read with defaults on disk -- fall back to in-memory
+            // defaults for this session only, so the next launch can retry against the
+            // real file instead of having it permanently reset.
+            LogStartupErrorForced("Config.json inaccessible, using in-memory defaults for this session", ex);
+            return new AppSettings();
         }
         var settings = new AppSettings();
         Save(settings);
         return settings;
+    }
+
+    private static void LogStartupErrorForced(string message, Exception ex)
+    {
+        // Load() runs before App_Startup assigns AppLog.Enabled from the very config this
+        // method is trying to read, so logging is still off by default here. Force it on
+        // just long enough to persist this diagnostic -- exactly the scenario where the
+        // user most needs it -- then restore whatever state it was in.
+        var wasEnabled = AppLog.Enabled;
+        AppLog.Enabled = true;
+        AppLog.Error(message, ex);
+        AppLog.Flush();
+        AppLog.Enabled = wasEnabled;
     }
 
     public static void Save(AppSettings settings)

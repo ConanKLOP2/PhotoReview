@@ -51,6 +51,11 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         return _previewService.GetPreviewAsync(path);
     }
 
+    /// <summary>Snapshot of source reads, cache hits, disk hits and preload events recorded
+    /// so far, so callers can attach it to a <see cref="BenchmarkReport"/> instead of the
+    /// report always carrying no metrics.</summary>
+    public ReviewMetricsSnapshot Metrics => _metrics.Snapshot();
+
     /// <summary>
     /// Kicks off real background preload around this navigation center, exactly as
     /// MainWindow does right after presenting an image, so a later <see cref="DecodeAsync"/>
@@ -69,6 +74,11 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         // Only after every persist write has actually finished is it safe to delete the
         // scratch directory without racing a worker that's still writing into it.
         await _previewService.ShutdownPersistWorkersAsync();
+        // ShutdownPersistWorkersAsync guarantees every write has issued its SchedulePrune
+        // call, but that call is itself fire-and-forget -- wait for the prune pass(es) it
+        // started to actually finish, or the delete below can race a worker still
+        // enumerating/deleting files in this same directory.
+        await DiskCacheStore.WaitForPruneAsync(_diskCacheDirectory, TimeSpan.FromSeconds(5));
         try { if (Directory.Exists(_diskCacheDirectory)) Directory.Delete(_diskCacheDirectory, recursive: true); }
         catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
