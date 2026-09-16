@@ -86,7 +86,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 
 | ID | Tên | Phụ thuộc | ∥ | Cổng | TT |
 |---|---|---|---|---|---|
-| T00 | Tag baseline, branch tích hợp, ghi xác nhận Q | — | | | TODO |
+| T00 | Tag baseline, branch tích hợp, ghi xác nhận Q | — | | | DONE |
 | T01 | Benchmark baseline (gồm decode). **Được thay bằng D07 + D12** | T00 | ∥A | | TODO |
 | T02 | CI GitHub Actions | T00 | ∥A | | TODO |
 | T03 | `global.json`, `.editorconfig`, analyzer | T00 | ∥A | | TODO |
@@ -189,7 +189,18 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. `git switch -c refactor/integration refactor/plan-b-c3`, `git push -u origin refactor/integration`.
   3. Ghi câu trả lời hoặc xác nhận mặc định cho Q2–Q8 của người dùng vào nhật ký T00.
 - **Xong khi:** tag và branch có trên origin, nhật ký ghi rõ trạng thái từng Q.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-16 · Opus 5 (Coordinator) · branch `refactor/integration` (từ `refactor/plan-b-c3` @ `f1f98ca`)
+    - Tag `pre-refactor-baseline` → `86282cd`.
+    - **Người dùng chấp nhận mặc định Q2–Q8** (2026-09-16):
+      - Q2: giữ `BenchmarkWindow`.
+      - Q3: chuyển project vào `src/`.
+      - Q4: quy trình PR.
+      - Q5: R-4 chỉ bật mặc định sau khi T66 đạt.
+      - Q6: đồng ý `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`, `NetArchTest.Rules`.
+      - Q7: đóng gói turbojpeg chỉ khi nhanh hơn WicDirect ≥ 15%.
+      - Q8: bật decoder mới khi đạt cổng chất lượng.
+    - Đợt 1 dừng sau W0 + T10 để người dùng kiểm tra.
 
 ### T01 — Benchmark baseline ∥A
 - **Ghi chú:** nếu D07 và D12 đã `DONE` thì đánh dấu T01 `DONE`, link tới `docs/refactoring/diagnosis/REPORT.md`, và chỉ bổ sung phần `--benchmark-all` (bước 3) nếu D07 chưa chạy.
