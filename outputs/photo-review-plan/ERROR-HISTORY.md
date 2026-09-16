@@ -19,6 +19,7 @@ Tài liệu này ghi các lỗi thực tế đã gặp trong PhotoReview, nguyê
 | E-011 | Log `ShowImage failed FileNotFoundException` xuất hiện sau Move/Delete. | Async render vẫn dùng path đã bị xóa. | Stale-file path test và `ShowImage stale-file` handling. |
 | E-012 | Retry filesystem có thể thực hiện sai nguồn/đích. | Recovery không kiểm fingerprint trước khi replay. | Recovery retry fingerprint validation và failed journal tests. |
 | E-013 | Index hiển thị khác log gây hiểu nhầm. | Log dùng zero-based (`index=0` là ảnh 1/), UI dùng one-based. | Test counter và log path/currentIndex; tài liệu phải ghi rõ quy ước. |
+| E-014 | Bật ghi cache đĩa cho `PreviewImageService` (PR-029) khiến test ghi file PNG thật vào `%LocalAppData%\PhotoReview\cache` của máy dev. | `GetDiskCachePath` hardcode `LocalApplicationData`, không có tham số override như `ThumbnailCache.diskDirectory`. | `PreviewImageServiceDiskCacheTests`/`DiskCacheStoreTests` luôn truyền `diskCacheDirectory` trỏ vào `TempRoot`; mọi nơi dựng `PreviewImageService` trong test (xUnit + console harness) đã cập nhật theo. |
 
 ## Bộ performance/regression test bổ sung
 

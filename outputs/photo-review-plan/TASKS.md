@@ -42,7 +42,7 @@ Các task còn mở: **PR-001–004, PR-011–012, PR-018, PR-020, PR-028, PR-03
 | PR-026 | M3 | Recovery và khóa phiên | PARTIAL | PR-022, PR-025 |
 | PR-027 | M3 | Hàng đợi và tích hợp chế độ | DEFERRED | PR-026, PR-019 |
 | PR-028 | M3 | Gate G3 dữ liệu | TODO | PR-027 |
-| PR-029 | M4 | Disk cache có version | PARTIAL | PR-012, PR-013 |
+| PR-029 | M4 | Disk cache có version | DONE | PR-012, PR-013 |
 | PR-030 | M4 | Prepare cả folder | TODO | PR-029, PR-010 |
 | PR-031 | M4 | RAM pressure và I/O tuning | TODO | PR-030, PR-027 |
 | PR-032 | M4 | Riêng tư và quản lý cache | TODO | PR-029 |
@@ -424,14 +424,16 @@ Cập nhật cả bảng trên và trường trạng thái khi đổi task; đâ
 
 ### PR-029 — Disk cache có version
 
-- Trạng thái: TODO
+- Trạng thái: DONE
 - Mốc: M4; ưu tiên: P1
 - Phụ thuộc: PR-012, PR-013
 - Phạm vi làm: Key/invalidation, temp-write, corruption recovery, quota/eviction.
 - Hoàn thành khi: T08 pass; cache không trỏ nhầm gốc hoặc stale preview.
 - Đối chiếu yêu cầu/test: FR-09
-- Người phụ trách: chưa phân công
-- Bắt đầu / hoàn tất / cập nhật: — / — / 2026-09-13
+- Người phụ trách: Claude (phiên 2026-09-16)
+- Bắt đầu / hoàn tất / cập nhật: 2026-09-16 / 2026-09-16 / 2026-09-16
+- Bằng chứng: `PreviewImageService` ghi preview đã downscale (targetWidth>0) ra `%LocalAppData%\PhotoReview\cache` qua `DiskCacheStore` dùng chung với `ThumbnailCache` (temp-write atomic, prune LRU theo quota 4GB, corruption recovery giữ nguyên từ nhánh đọc cũ). Original mode (full-res) chủ động không ghi disk để tránh PNG-encode chậm hơn re-decode JPEG. Test: `DiskCacheStoreTests` (5 test, đồng bộ, kiểm soát timestamp) + `PreviewImageServiceDiskCacheTests` (5 test: write→hit, Original không ghi, corruption fallback, quota prune). Commit: `ad75f65`, `9e36d72`, `81c3d59`, `2e23c32` trên `feature/wave3-architecture-testing`.
+- Blocker / bước tiếp theo: không còn blocker cho phần đã làm; PR-030 (prepare cả folder)/PR-031 (RAM pressure tuning toàn diện) vẫn là công việc riêng, chưa bắt đầu.
 - Bằng chứng: chưa có
 - Blocker / bước tiếp theo: chưa bắt đầu; thực hiện khi phụ thuộc đạt.
 
