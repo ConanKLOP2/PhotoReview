@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - master
+      - refactor/integration
+  push:
+    branches:
+      - master
+      - refactor/integration
+      - refactor/**
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore PhotoReview.slnx
+
+      - name: Build Release
+        run: dotnet build PhotoReview.slnx -c Release --no-restore
+
+      - name: Run contract tests
+        run: dotnet run --project PhotoReview.Tests -c Release --no-build
+
+      - name: Run unit tests
+        run: dotnet test PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+
+      - name: Publish Release
+        run: dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish
+
+      - name: Verify Release
+        shell: powershell
+        run: ./tools/verify-release.ps1 -ReleaseDirectory 'PhotoReview.App/bin/Release/net10.0-windows/publish'
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-publish
+          path: PhotoReview.App/bin/Release/net10.0-windows/publish
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults
