@@ -21,7 +21,7 @@
 | D00 | Chuẩn bị môi trường và fixture | T00 | | Không | DONE |
 | D01 | Phân tích nhanh từ AppLog (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Script | BLOCKED |
 | D02 | Đếm truy cập file (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Không | BLOCKED |
-| D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | TODO |
+| D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | DONE |
 | D04 | Gắn event vào các điểm đo | D03 | | Có | TODO |
 | D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | TODO |
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | TODO |
@@ -83,7 +83,7 @@
      - Channel đầy thì không block.
 - **Không làm:** gắn event vào code nghiệp vụ (thuộc D04).
 - **Xong khi:** test đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Sonnet 5 · `diag/D03-perf-eventsource` `1c9b8e6` · 24 event (id 1–24, cố định) · CSV map: nav/gen→nav, pathId, số→a..d theo thứ tự, chuỗi→text · `WriteEvent(params object[])` có guard `IsEnabled()` · xUnit 195/195 × 5 lần · chạy app không đặt biến thì không tạo file · review (Opus): APPROVE · đã merge.
 
 ### D04 — Gắn event vào các điểm đo
 - **Files:** `PhotoReview.App/MainWindow.xaml.cs`, `PreviewImageService.cs`, `ThumbnailCache.cs`, `PreloadScheduler.cs`, `FileHashService.cs`, `SessionStore.cs`, `ExplorerOrderService.cs` (chỉ mốc tổng), `App.xaml.cs` (`Dispatcher.Hooks`), `PhotoReview.Tests.Unit/PerfTraceTests.cs` (bổ sung).
