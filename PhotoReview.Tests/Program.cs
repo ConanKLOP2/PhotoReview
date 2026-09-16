@@ -76,6 +76,20 @@ if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
     return;
 }
 
+if (args.Length >= 2 && args[0] == "--perf-analyze")
+{
+    string? rulesPath = null;
+    for (var i = 2; i + 1 < args.Length; i++)
+    {
+        if (args[i] == "--rules") rulesPath = args[i + 1];
+    }
+    var analysis = await PhotoReview.Tests.PerfAnalysis.PerfAnalyze.RunAsync(args[1], rulesPath);
+    Console.WriteLine($"PERF-ANALYZE: {analysis.CsvFileCount} file, {analysis.Groups.Count} nhóm");
+    Console.WriteLine($"REPORT: {analysis.SummaryMdPath}");
+    Console.WriteLine($"REPORT: {analysis.SummaryJsonPath}");
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--explorer-probe")
 {
     var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
