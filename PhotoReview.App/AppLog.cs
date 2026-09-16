@@ -22,6 +22,8 @@ public static class AppLog
     private static volatile bool _stopping;
     private static volatile bool _writing;
     private static Thread? _writer;
+    private static FileStream? _stream;
+    private static StreamWriter? _logWriter;
     public static bool Enabled { get => _enabled; set { if (value) Start(); else { _enabled = false; Signal.Set(); Flush(); } } }
     public static string FilePath => Path.Combine(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview"), "logs", "app.log");
     public static void Info(string message) => Write("INFO", message, null);
@@ -42,7 +44,7 @@ public static class AppLog
     public static void Shutdown() { _stopping = true; _enabled = false; Signal.Set(); _writer?.Join(2000); Flush(); }
     private static void Start() { lock (Sync) { _stopping = false; _enabled = true; if (_writer is null || !_writer.IsAlive) { _writer = new Thread(WriterLoop) { IsBackground = true, Name = "PhotoReview.LogWriter" }; _writer.Start(); } } }
     private static void Write(string level, string message, Exception? exception) { if (!_enabled || _stopping) return; Drained.Reset(); Queue.Enqueue(new Entry(level, message, exception, DateTime.Now, Environment.CurrentManagedThreadId)); Signal.Set(); }
-    private static void WriterLoop() { while (!_stopping) { Signal.WaitOne(250); Drain(); } Drain(); }
+    private static void WriterLoop() { try { while (!_stopping) { Signal.WaitOne(250); Drain(); } Drain(); } finally { CloseStream(); } }
     private static void Drain()
     {
         if (Queue.IsEmpty) { Drained.Set(); return; }
@@ -50,19 +52,29 @@ public static class AppLog
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            RotateIfNeeded();
-            using var stream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
-            using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
-            while (Queue.TryDequeue(out var e)) writer.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}" + (e.Exception is null ? "" : $"\n{e.Exception}"));
+            if (NeedsRotation()) { CloseStream(); Rotate(); }
+            EnsureStreamOpen();
+            while (Queue.TryDequeue(out var e)) _logWriter!.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}" + (e.Exception is null ? "" : $"\n{e.Exception}"));
         }
         catch { }
         finally { _writing = false; if (Queue.IsEmpty) Drained.Set(); }
     }
-    private static void RotateIfNeeded()
+    private static bool NeedsRotation()
     {
-        var info = new FileInfo(FilePath);
-        if (!info.Exists || info.Length < MaxLogBytes) return;
+        var length = _stream?.Length ?? (File.Exists(FilePath) ? new FileInfo(FilePath).Length : 0);
+        return length >= MaxLogBytes;
+    }
+    private static void Rotate()
+    {
+        if (!File.Exists(FilePath)) return;
         var backup = Path.Combine(Path.GetDirectoryName(FilePath)!, Path.GetFileNameWithoutExtension(FilePath) + ".1" + Path.GetExtension(FilePath));
         File.Move(FilePath, backup, overwrite: true);
     }
+    private static void EnsureStreamOpen()
+    {
+        if (_logWriter is not null) return;
+        _stream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
+        _logWriter = new StreamWriter(_stream, new UTF8Encoding(false)) { AutoFlush = true };
+    }
+    private static void CloseStream() { _logWriter?.Dispose(); _logWriter = null; _stream = null; }
 }
