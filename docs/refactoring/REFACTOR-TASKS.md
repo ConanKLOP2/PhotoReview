@@ -98,7 +98,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T11 | Chuyển check CLI còn thiếu sang xUnit | T10 | ∥B | | DONE |
 | T12 | Xóa file test trùng trong CLI | T10 | ∥B | | DONE |
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | DONE |
-| T13b | Sửa test flaky quota prune | T10 | ∥B | | TODO |
+| T13b | Sửa test flaky quota prune | T10 | ∥B | | DONE |
 | T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | TODO |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | TODO |
 | T14c | Test INV-5 | T14a | ∥C | | TODO |
@@ -290,10 +290,11 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T13a-traits` `acca8ae` · GlobalState cho 5 class (AppLog, SessionStore, OperationJournal, JournalReconciliation, RecoveryRetry) · Integration cho 2 test > 1 s · thử chạy song song: 1/5 lần fail (`Eviction forces a fresh source read…`) nên giữ `DisableTestParallelization` và chuyển cho T13b · R1 (Opus): CHANGES, vì agent gắn `Manual` cho cả `SourcePresenceTests` làm chúng bị loại khỏi CI; Coordinator bỏ nhãn đó khi merge · kết quả: `Category!=Manual` 190/190, `Integration` 2.
 
 ### T13b — Test flaky quota prune ∥B
+- **TT:** DONE
 - **Files:** `{UT}/DiskCacheStoreTests.cs`, `{UT}/PreviewImageServiceTests.cs` (chỉ test liên quan).
 - **Làm:** tái hiện lỗi 189/190 (xem `task_on_progress.md` cũ trong git log `e6e2d49`). Sửa **test**: mỗi test dùng thư mục cache riêng và `await DiskCacheStore.WaitForPruneAsync(dir, ...)` trước khi assert hoặc xóa thư mục. Nếu lỗi nằm ở code production thì đặt `BLOCKED` và mô tả.
 - **Xong khi:** chạy toàn suite 10 lần đều đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Sonnet 5 · `refactor/T13b-flaky` `d7f6daf` · nguyên nhân: persist worker nền ghi disk cache trước request thứ 2 (test eviction), và vòng poll timeout cố định (test prune) · sửa: test eviction dùng service Original riêng; test prune dùng `ShutdownPersistWorkersAsync` + `WaitForPruneAsync`; **bỏ `DisableTestParallelization`** · trước sửa (song song) 7/10 lần đạt; sau sửa 30/30 lần đạt · không nghi ngờ bug production · review (Opus): APPROVE, kèm ghi chú bổ sung test eviction cho chế độ downscaled ở T31a · VERIFY đạt, xUnit 190/190 chạy 2 s (trước 16 s).
 
 ### T14a — STA harness + seam
 - **Files:** `{UT}/Infrastructure/StaTestHost.cs` (mới), `{App}/AssemblyInfo.cs` (thêm `InternalsVisibleTo("PhotoReview.Tests.Unit")`), `{App}/MainWindow.xaml.cs` (**chỉ** thêm seam).
@@ -484,6 +485,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 ### T31a — `DiskCacheStore` instance ∥F
 - **Files:** `{App}/DiskCacheStore.cs` → `{Imaging}/Caching/DiskCacheStore.cs`, `ThumbnailCache.cs` và `PreviewImageService.cs` (chỉ cách dùng store), test.
 - **Làm:** `new DiskCacheStore(directory, pattern, maxBytes, ILog)`. Coalesce prune trở thành field instance. Giữ `WriteAtomicallyAsync`, `SchedulePrune`, `WaitForPruneAsync`, `ClearDirectory`, `TryDelete`. Hàm tĩnh thuần có thể giữ static.
+- **Bổ sung (từ review T13b):** thêm test "eviction ở chế độ downscaled buộc đọc lại nguồn hoặc disk cache", dùng thư mục cache riêng, chờ `ShutdownPersistWorkersAsync`, rồi xóa file disk cache trước request thứ 2, để bao phủ lại đường downscaled mà T13b đã chuyển sang chế độ Original.
 - **Xong khi:** `DiskCacheStoreTests` đạt, chỉ sửa phần tạo đối tượng.
 - **Nhật ký:** —
 

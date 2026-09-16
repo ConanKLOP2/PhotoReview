@@ -1,22 +1,28 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-16 | **Branch tích hợp:** `refactor/integration` (push lên origin; CI GitHub Actions xanh)
-- **Mục tiêu:** tái cấu trúc B + C3 theo `docs/refactoring/REFACTOR-PLAN.md`, chẩn đoán hiệu năng theo `PERF-DIAGNOSIS-PLAN.md`. Mỗi task giao cho model theo bảng "Phân model và quy trình review" (mục 0 của `REFACTOR-TASKS.md`).
-- **Quyết định:** người dùng chấp nhận mặc định Q2–Q8 (xem nhật ký T00). Đợt 1 dừng sau W0 + T10 để người dùng kiểm tra.
-- **Đã xong (đợt 1):**
-  - T00: tag `pre-refactor-baseline`, tạo `refactor/integration`.
-  - T02: CI workflow.
-  - T03: `global.json`, `.editorconfig`, analyzer. Build có warning analyzer, chưa sửa.
-  - T04: Central Package Management.
-  - T10: `docs/refactoring/test-parity.md`. Không có MISSING; T12 xóa được 4 file CLI trùng.
-  - VERIFY đầy đủ (`tools/verify-all.ps1`) đạt: xUnit 190/190, smoke, fault-injection, publish, verify-release.
-- **Đang chờ người dùng:** T05. Diff `AGENTS.md` (quy trình PR) nằm trên branch `refactor/T05-agents-pr` @ `2def97f`, chưa merge.
-- **Bài học review:** Haiku tự bịa tên method khi ghép tài liệu. Task tra cứu hoặc ghép tên phải có script kiểm tên trong bước Kiểm thử, và Coordinator phải tự kiểm lại.
-- **Việc tiếp theo:**
-  - Sau khi người dùng duyệt: merge T05.
-  - Chạy D00–D02 (Haiku; cần người dùng cho phép cài công cụ và bật logging).
-  - Làm song song T11 (chỉ xác nhận), T12, T13a, T13b.
+- **Cập nhật:** 2026-09-16 | **Branch tích hợp:** `refactor/integration` (push lên origin; CI xanh ở đợt 1)
+- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`) và chẩn đoán hiệu năng (`PERF-DIAGNOSIS-PLAN.md`). Task được giao theo bảng model/review ở mục 0 của `REFACTOR-TASKS.md`.
+- **Quyết định người dùng:**
+  - Chấp nhận mặc định Q2–Q8.
+  - Duyệt T05 (quy trình PR).
+  - Fixture: ảnh trong một thư mục cục bộ; mapping ở `work/diag/fixtures.local.json` (gitignored).
+  - Cho phép cài dotnet-counters, dotnet-trace, Process Monitor, và tạm bật logging (phải sao lưu/khôi phục config).
+- **Đã xong:**
+  - Đợt 1: T00, T02, T03, T04, T05, T10.
+  - Đợt 2: T11, T12, T13a, T13b, D00. `.gitignore` bổ sung worktree agent và file trace thô.
+  - VERIFY đầy đủ đạt; xUnit 190/190 chạy song song (khoảng 2 s).
+- **BLOCKED:** D01, D02.
+  - Script phân tích đã có (`tools/diag/parse-applog.ps1`, `procmon-summary.ps1`).
+  - Việc đo thật dừng vì `SendInput` của agent rơi vào cửa sổ Claude Code trên desktop dùng chung: đã gõ A/B/C + Ctrl+A/Ctrl+C, không có Enter; clipboard bị ghi đè rồi xóa. Config người dùng đã khôi phục.
+  - `drive-app.ps1` không được merge. Đã thêm quy tắc 4 trong `PERF-DIAGNOSIS-TASKS.md`: cấm input ở mức OS và clipboard.
+  - Chạy lại sau D06 (driver trong process).
+- **Bài học review:**
+  - Haiku bịa tên method (T10), sửa ngoài phạm vi (T12), gắn Trait loại test khỏi CI (T13a). Coordinator phải kiểm diff kỹ và dùng script kiểm tên.
+  - Task có điều khiển GUI không được giao cho agent tự gửi input.
+- **Việc tiếp theo (chờ người dùng chọn):**
+  - D03 (Sonnet), rồi D04 (Opus), rồi D05/D06/D10/D11.
+  - Song song là T14a–T14d; T14a phụ thuộc D05, D06, D10.
 - **Cho AI tiếp theo:**
-  - Worker không sửa file task hay file tiến độ; Coordinator ghi nhật ký.
-  - Worktree của agent nằm ở `.claude/worktrees/` (không track); branch task `refactor/T0x-*` giữ lại để truy vết.
-  - Lỗi flaky quota prune nền đã giao cho T13b.
+  - Worker không sửa file task hay file tiến độ, không dùng `git add -A`.
+  - Worktree agent ở `.claude/worktrees/` (đã ignore).
+  - T31a có mục bổ sung test eviction cho chế độ downscaled (từ review T13b).
