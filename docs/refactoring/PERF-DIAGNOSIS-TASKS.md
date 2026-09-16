@@ -24,7 +24,7 @@
 | D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | DONE |
 | D04 | Gắn event vào các điểm đo | D03 | | Có | DONE |
 | D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | DONE |
-| D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | TODO |
+| D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | DONE |
 | D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | DONE |
 | D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | DONE |
 | D07 | Chạy ma trận kịch bản | D05, D06, D10, D11 | | Không | TODO |
@@ -144,7 +144,7 @@
   1. `PHOTOREVIEW_DIAG_PRELOAD_WORKERS=0` nghĩa là **không preload** (`PreloadAroundAsync` trả về ngay).
   2. Test: override 2 thì tối đa 2 decode chạy đồng thời (dùng decoder chậm giả, hoặc kiểm tra qua `CurrentCount` của semaphore).
 - **Xong khi:** test đạt, VERIFY đạt khi không có biến môi trường.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17 · Sonnet 5 · `diag/D10-overrides` `91f1f27` · `_workerCount` (tham số → DIAG → mặc định), 0 = không preload; `_disableDiskCache` bỏ đọc và ghi disk cache · 5 test, 250/250 × 11 lần · review (Opus): APPROVE · **Phát hiện lỗi:** `RunPreloadSchedulerAsync` gọi `Dispatcher.Yield()`; khi không có Dispatcher (CLI benchmark, hoặc continuation sau `ConfigureAwait(false)` trong `BenchmarkEngine`), lệnh này ném exception và exception bị nuốt, nên preload dừng sau lô đầu tiên. Đã chuyển cho T32 và D12.
 
 ### D06 — Driver kịch bản `--perf-session` ∥2
 - **Files:** `PhotoReview.Tests/PerfSession.cs` (mới), `PhotoReview.Tests/LocalUiNextProbe.cs` (sửa lỗi có sẵn), `PhotoReview.Tests/Program.cs` (dispatch), `tools/diag/scenarios/*.json` (mới), `tools/diag/run-matrix.ps1` (mới).
@@ -217,6 +217,7 @@
 
 ### D12 — Báo cáo và quyết định
 - **Files:** `docs/refactoring/diagnosis/REPORT.md` (mới).
+- **Lưu ý (từ D10):** số liệu preload từ `--benchmark*` / `BenchmarkWindow` trước khi sửa T32 có thể sai, vì preload dừng sau lô đầu khi không chạy trên UI dispatcher. Chỉ dùng số liệu preload từ `--perf-session` (có Dispatcher).
 - **Làm:**
   1. **Tóm tắt 1 trang:** nút thắt chính và phụ, kèm số liệu P95 của S2 và S3 theo từng mode.
   2. **Bảng tỷ trọng giai đoạn** (10% chậm nhất) theo kịch bản và mode.

@@ -517,6 +517,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. Thay `Func<double,bool>` và `PhysicalMemory.GetSnapshot` bằng `IMemoryProbe` (`HasHeadroom(limit, reserveBytes)`, `GetSnapshot()`).
   3. `PreloadOptions(WorkerCount, MemoryLoadLimit, ReserveBytes, FullFolderThresholdBytes)`, mặc định lấy từ `AppConstants`.
   4. Test dùng `ImmediateUiScheduler` (`Task.Yield`) và `FakeMemoryProbe`.
+- **Lỗi phải sửa kèm (phát hiện ở D10):** `Dispatcher.Yield()` ném exception khi thread hiện tại không có Dispatcher (benchmark CLI, continuation trên thread pool); exception bị `catch (Exception)` nuốt nên preload dừng sau lô đầu. Sau khi đổi sang `IUiScheduler`, thêm test: preload > `WorkerCount` ảnh không có Dispatcher vẫn nạp đủ; kiểm lại `BenchmarkImageExecutor.WarmPreloadAround`.
 - **Xong khi:** test preload chạy không cần Dispatcher.
 - **Nhật ký:** —
 
