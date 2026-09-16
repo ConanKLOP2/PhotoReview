@@ -47,6 +47,13 @@ public sealed class PreviewImageService
         return ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : _targetDecodeWidth());
     }
 
+    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
+    public ImageCacheKey GetCurrentCacheKey(FileInfo info)
+    {
+        var isOriginal = IsOriginalLoadingMode();
+        return ImageCacheKey.Create(info, isOriginal, isOriginal ? 0 : _targetDecodeWidth());
+    }
+
     public Task<BitmapImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
 
     public async Task<BitmapImage> GetPreviewAsync(string path, ImageCacheKey key)

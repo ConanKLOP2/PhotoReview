@@ -22,11 +22,14 @@ public readonly record struct ImageCacheKey
         TargetWidth = targetWidth;
     }
 
-    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth)
+    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth) =>
+        Create(new FileInfo(path), isOriginal, targetWidth);
+
+    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
+    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth)
     {
-        var fullPath = System.IO.Path.GetFullPath(path).ToUpperInvariant();
-        var info = new FileInfo(fullPath);
-        if (!info.Exists) throw new FileNotFoundException("Image source no longer exists", fullPath);
+        if (!info.Exists) throw new FileNotFoundException("Image source no longer exists", info.FullName);
+        var fullPath = System.IO.Path.GetFullPath(info.FullName).ToUpperInvariant();
         return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, isOriginal ? 0 : targetWidth);
     }
 

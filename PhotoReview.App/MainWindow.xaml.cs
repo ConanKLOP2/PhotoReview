@@ -265,12 +265,13 @@ public partial class MainWindow : Window
         // external move/delete completes. Do this check before touching FileInfo.Length
         // so a vanished item is removed and the viewer advances once without logging
         // a misleading ShowImage failure.
-        if (!TryGetCurrentFileSize(path, out var initialSize))
+        if (!TryGetCurrentFileInfo(path, out var initialInfo))
         {
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
-        var currentKey = GetCurrentCacheKey(path);
+        var initialSize = initialInfo.Length;
+        var currentKey = GetCurrentCacheKey(initialInfo);
         var ramReady = TryGetCachedPreview(currentKey, out var readyBitmap);
         if (ramReady)
         {
@@ -290,7 +291,7 @@ public partial class MainWindow : Window
                 MainImage.Source = thumbnail;
                 if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
                 ApplyInitialViewMode();
-                StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(new FileInfo(path).Length)} · Đang tải bản rõ";
+                StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải bản rõ";
             }
             var image = ramReady ? readyBitmap : await GetPreviewAsync(path, currentKey);
             if (ramReady) _metrics.RecordCacheHit();
@@ -361,17 +362,16 @@ public partial class MainWindow : Window
 
     private void FitImage_Click(object sender, RoutedEventArgs e) => ResetFitView();
 
-    private static bool TryGetCurrentFileSize(string path, out long size)
+    private static bool TryGetCurrentFileInfo(string path, out FileInfo info)
     {
         try
         {
-            var info = new FileInfo(path);
-            if (!info.Exists) { size = 0; return false; }
-            size = info.Length;
+            info = new FileInfo(path);
+            if (!info.Exists) { info = null!; return false; }
             return true;
         }
-        catch (FileNotFoundException) { size = 0; return false; }
-        catch (DirectoryNotFoundException) { size = 0; return false; }
+        catch (FileNotFoundException) { info = null!; return false; }
+        catch (DirectoryNotFoundException) { info = null!; return false; }
     }
 
     private async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
@@ -395,6 +395,8 @@ public partial class MainWindow : Window
     private bool IsOriginalLoadingMode() => string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
 
     private ImageCacheKey GetCurrentCacheKey(string path) => _previewService.GetCurrentCacheKey(path);
+
+    private ImageCacheKey GetCurrentCacheKey(FileInfo info) => _previewService.GetCurrentCacheKey(info);
 
     private Task<BitmapImage> GetPreviewAsync(string path) => _previewService.GetPreviewAsync(path);
 
