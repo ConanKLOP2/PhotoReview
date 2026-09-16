@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Media.Imaging;
@@ -14,8 +15,8 @@ namespace PhotoReview.App;
 public sealed class PreviewImageService
 {
     private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache;
-    private readonly Dictionary<(ImageCacheKey Key, long Epoch), Task<BitmapImage>> _previewLoads = [];
-    private readonly Dictionary<ImageCacheKey, (int Width, int Height)> _originalDimensions = [];
+    private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Task<BitmapImage>> _previewLoads = new();
+    private readonly ConcurrentDictionary<ImageCacheKey, (int Width, int Height)> _originalDimensions = new();
     private readonly object _cacheLifecycleGate = new();
     private long _cacheEpoch;
     private readonly ReviewMetrics _metrics;
@@ -99,7 +100,7 @@ public sealed class PreviewImageService
         });
         _previewLoads[loadKey] = load;
         try { return await load; }
-        finally { _previewLoads.Remove(loadKey); }
+        finally { _previewLoads.TryRemove(loadKey, out _); }
     }
 
     public bool TryGetCachedPreview(string path, out BitmapImage bitmap)
