@@ -99,17 +99,18 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
         if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+        var linkedToken = timeoutCts.Token;
         var workTask = _pump.Enqueue(() =>
         {
-            try { return QueryShell(canonicalFolder, cancellationToken, progress, batchSize); }
+            try { return QueryShell(canonicalFolder, linkedToken, progress, batchSize); }
             catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
             catch (Exception ex) { AppLog.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
         });
         try
         {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(timeout);
-            return await workTask.WaitAsync(timeoutCts.Token);
+            return await workTask.WaitAsync(linkedToken);
         }
         catch (OperationCanceledException)
         {
