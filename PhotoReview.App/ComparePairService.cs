@@ -19,8 +19,18 @@ public static class ComparePairService
         var baseStem = match.Success ? match.Groups[1].Value : stem;
         var original = available.FirstOrDefault(candidate =>
             Path.GetFileNameWithoutExtension(candidate).Equals(baseStem, StringComparison.OrdinalIgnoreCase));
-        var numbered = available.FirstOrDefault(candidate =>
-            Regex.IsMatch(Path.GetFileNameWithoutExtension(candidate), $"^{Regex.Escape(baseStem)} \\(\\d+\\)$", RegexOptions.IgnoreCase));
+        var fullPath = Path.GetFullPath(path);
+        var selected = match.Success ? available.FirstOrDefault(candidate => string.Equals(Path.GetFullPath(candidate), fullPath, StringComparison.OrdinalIgnoreCase)) : null;
+        var numbered = selected ?? available
+            .Where(candidate => Regex.IsMatch(Path.GetFileNameWithoutExtension(candidate), $"^{Regex.Escape(baseStem)} \\(\\d+\\)$", RegexOptions.IgnoreCase))
+            .OrderBy(NumberedSuffix)
+            .FirstOrDefault();
         return original is not null && numbered is not null ? (original, numbered) : null;
+    }
+
+    private static int NumberedSuffix(string candidate)
+    {
+        var match = Regex.Match(Path.GetFileNameWithoutExtension(candidate), "\\((\\d+)\\)$");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : int.MaxValue;
     }
 }

@@ -46,8 +46,13 @@ public sealed class OperationJournal
     public IReadOnlyList<JournalEntry> ReadFailedOperations()
     {
         var failures = new List<JournalEntry>();
-        ReadEntries(entry => { if (entry.State == "Failed") failures.Add(entry); });
-        return failures;
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+        ReadEntries(entry =>
+        {
+            if (entry.State == "Failed") failures.Add(entry);
+            if (entry.State == "Committed") completed.Add(entry.Id);
+        });
+        return failures.Where(entry => !completed.Contains(entry.Id)).ToList();
     }
 
     private void ReadEntries(Action<JournalEntry> handle)

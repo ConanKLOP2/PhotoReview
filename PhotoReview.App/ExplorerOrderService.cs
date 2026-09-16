@@ -44,7 +44,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         {
             foreach (var action in _queue.GetConsumingEnumerable())
             {
-                action();
+                try { action(); }
+                catch (Exception ex) { AppLog.Error("Explorer STA pump action escaped unexpectedly", ex); }
             }
         }
 
@@ -71,8 +72,10 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         public void Dispose()
         {
             _queue.CompleteAdding();
-            _thread.Join(TimeSpan.FromSeconds(5));
-            _queue.Dispose();
+            if (_thread.Join(TimeSpan.FromSeconds(5)))
+                _queue.Dispose();
+            else
+                AppLog.Error("Explorer STA pump thread did not exit within 5s; leaking queue instead of risking ObjectDisposedException on a stuck COM call");
         }
     }
 
@@ -96,17 +99,18 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
         if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+        var linkedToken = timeoutCts.Token;
         var workTask = _pump.Enqueue(() =>
         {
-            try { return QueryShell(canonicalFolder, cancellationToken, progress, batchSize); }
+            try { return QueryShell(canonicalFolder, linkedToken, progress, batchSize); }
             catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
             catch (Exception ex) { AppLog.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
         });
         try
         {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(timeout);
-            return await workTask.WaitAsync(timeoutCts.Token);
+            return await workTask.WaitAsync(linkedToken);
         }
         catch (OperationCanceledException)
         {
@@ -177,6 +181,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             AppLog.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
             var paths = new List<string>(count);
             var comCalls = 1;
+            var getItem = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
+            ExplorerNativeVtable.GetDisplayNameDelegate? getDisplayName = null;
             for (var index = 0; index < count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -185,11 +191,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 {
                     var itemIid = ExplorerComInterop.IidShellItem;
                     getItemCalls++;
-                    var itemResult = ExplorerNativeVtable.GetItem(folderViewPtr, index, ref itemIid, out itemPtr);
+                    var itemResult = getItem(folderViewPtr, index, ref itemIid, out itemPtr);
                     comCalls++;
                     if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.GetItem({index}) failed: 0x{itemResult:X8}");
+                    getDisplayName ??= ExplorerNativeVtable.ResolveGetDisplayName(itemPtr);
                     displayNameCalls++;
-                    var nameResult = ExplorerNativeVtable.GetDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
+                    var nameResult = getDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
                     comCalls++;
                     if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IShellItem.GetDisplayName({index}) failed: 0x{nameResult:X8}");
                     try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
