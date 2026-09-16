@@ -31,10 +31,10 @@
 |---|---|---|---|
 | **dotnet-counters** | Cài | 10.0.745401+cef304c50763bf24f99566cb31d55540842e7ae9 | Global tool (nuget.org) |
 | **dotnet-trace** | Cài | 10.0.745401+cef304c50763bf24f99566cb31d55540842e7ae9 | Global tool (nuget.org) |
-| **Process Monitor** | Cài | (Windows Sysinternals) | `%USERPROFILE%\..\..\..\MyProjects\PhotoReview\work\tools\procmon\Procmon64.exe` |
+| **Process Monitor** | Cài | (Windows Sysinternals) | `work\tools\procmon\Procmon64.exe` (trong repo, gitignored) |
 | **Process Monitor (ZIP)** | — | — | **Size:** 3199668 bytes · **SHA-256:** 80A6442B46AF762ED1432F6FEC3F7E20366BED62A2522B3486503398A40A1128 |
 | **Procmon64.exe (Signature)** | Valid | Microsoft Code Signing PCA 2024 | Issuer: Microsoft Corporation, Redmond, WA |
-| **WPR (Windows Performance Recorder)** | Có sẵn | — | `C:\WINDOWS\system32\wpr.exe` (Windows ADK) |
+| **WPR (Windows Performance Recorder)** | Có sẵn | — | `C:\WINDOWS\system32\wpr.exe` (có sẵn trong Windows; WPA cần cài riêng) |
 | **WPA (Windows Performance Analyzer)** | Chưa cài | — | Hỏi người dùng khi cần |
 | **PresentMon** | Chưa cài | — | Hỏi người dùng khi cần |
 | **RAMMap** | Chưa cài | — | Người dùng tự chạy để empty standby list (cần admin) |
