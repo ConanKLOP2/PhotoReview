@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Channels;
 using System.Windows.Media.Imaging;
 
 namespace PhotoReview.App;
@@ -24,6 +25,16 @@ public sealed class PreviewImageService
     private readonly Func<int> _targetDecodeWidth;
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
+    // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
+    // needs its own bound: without one, a preload burst spawns one Task.Run per decoded
+    // preview with no cap, competing with live decodes for CPU/disk and keeping each
+    // bitmap's closure (and the RAM it references) alive until its write finishes.
+    // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
+    private const int PersistWorkerCount = 2;
+    private const int PersistQueueCapacity = 32;
+    private readonly Channel<(BitmapImage Bitmap, string CachePath, long Epoch)> _persistQueue =
+        Channel.CreateBounded<(BitmapImage, string, long)>(
+            new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
 
     public PreviewImageService(
         ReviewMetrics metrics,
@@ -41,6 +52,43 @@ public sealed class PreviewImageService
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(
             capacityBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
+        // Two workers: enough to keep the disk-cache warm without letting persistence
+        // saturate CPU/disk against live decodes. Runs for the process lifetime; there is
+        // nothing to join on shutdown since each write is already atomic (temp file + move).
+        for (var i = 0; i < PersistWorkerCount; i++) _ = RunPersistWorkerAsync();
+    }
+
+    private async Task RunPersistWorkerAsync()
+    {
+        await foreach (var request in _persistQueue.Reader.ReadAllAsync())
+        {
+            // The folder/cache may have moved on since this was queued (folder switch,
+            // Clear Cache): the RAM-cache epoch check upstream only stopped the bitmap
+            // from entering _cache, not this write, so re-check before doing any I/O.
+            if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
+            try
+            {
+                await DiskCacheStore.WriteAtomicallyAsync(request.Bitmap, request.CachePath).ConfigureAwait(false);
+                if (request.Epoch != Volatile.Read(ref _cacheEpoch))
+                {
+                    // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
+                    // a freshly-written file for a cache generation that was just cleared.
+                    DiskCacheStore.TryDelete(request.CachePath, logContext: null);
+                    continue;
+                }
+                // Coalesced per directory in DiskCacheStore: concurrent preload workers
+                // persisting several previews at once must not each scan the whole directory.
+                DiskCacheStore.SchedulePrune(Path.GetDirectoryName(request.CachePath)!,
+                    "*.png", _diskCacheCapacityBytes, "Preview disk cache delete failed");
+            }
+            catch (Exception ex)
+            {
+                // Only 2 workers are started for the process lifetime (never restarted):
+                // an uncaught exception here would silently and permanently disable disk
+                // persistence instead of just failing this one write.
+                AppLog.Error($"Preview disk cache write failed: {request.CachePath}", ex);
+            }
+        }
     }
 
     public int CacheCount => _cache.Count;
@@ -76,14 +124,16 @@ public sealed class PreviewImageService
         // whichever's Task.Run finished first could remove the OTHER's still-running
         // entry from the dictionary via a bare TryRemove(key), letting a third caller
         // start yet another redundant decode.
-        var isNewLoad = false;
-        var lazy = _previewLoads.GetOrAdd(loadKey, _ =>
-        {
-            isNewLoad = true;
-            return new Lazy<Task<BitmapImage>>(() => DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
-                LazyThreadSafetyMode.ExecutionAndPublication);
-        });
-        if (isNewLoad) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
+        // GetOrAdd(key, factory) can invoke the factory more than once when callers race,
+        // discarding every result but the winner's — so a closure flag set inside the
+        // factory (e.g. "isNewLoad = true") can report CacheMiss for a caller that actually
+        // lost the race and joined someone else's in-flight decode. Constructing the
+        // candidate up front and comparing it by reference to what GetOrAdd returns
+        // identifies the true winner instead.
+        var candidate = new Lazy<Task<BitmapImage>>(() => DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
+            LazyThreadSafetyMode.ExecutionAndPublication);
+        var lazy = _previewLoads.GetOrAdd(loadKey, candidate);
+        if (ReferenceEquals(lazy, candidate)) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
         try { return await lazy.Value; }
         finally { _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<BitmapImage>>>(loadKey, lazy)); }
     }
@@ -102,7 +152,12 @@ public sealed class PreviewImageService
                 bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
                 _metrics.RecordDiskCacheHit();
             }
-            catch (Exception) when (File.Exists(cachePath))
+            // A background prune can delete cachePath between the Exists check above and
+            // here; re-checking filesystem state in the catch filter (as this used to do)
+            // lets that race turn a plain cache miss into an escaping FileNotFoundException
+            // instead of the source fallback below. Catch the actual expected read/decode
+            // failure types instead of re-querying state that can change mid-catch.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 try { File.Delete(cachePath); } catch { }
                 sourceRead = true;
@@ -122,7 +177,7 @@ public sealed class PreviewImageService
         // Only cache downscaled previews to disk: PNG-encoding a full-resolution
         // Original-mode decode is slower than just re-decoding the source JPEG,
         // so it would cost more than it saves.
-        if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath, _diskCacheCapacityBytes);
+        if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath, cacheEpoch);
         stopwatch.Stop();
         if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
         return bitmap;
@@ -180,6 +235,19 @@ public sealed class PreviewImageService
         lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
     }
 
+    /// <summary>
+    /// Deletes the on-disk preview cache. Bumping the epoch first (also done by
+    /// <see cref="ClearCache"/>, harmless to do twice) makes any in-flight persist worker
+    /// re-check and skip its write instead of recreating a file this just deleted.
+    /// </summary>
+    public void ClearDisk()
+    {
+        lock (_cacheLifecycleGate) { _cacheEpoch++; }
+        try { DiskCacheStore.ClearDirectory(_diskCacheDirectory, "*.png", "Preview disk cache delete failed"); }
+        catch (IOException ex) { AppLog.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
+        catch (UnauthorizedAccessException ex) { AppLog.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
+    }
+
     public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
     public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path)
@@ -224,21 +292,12 @@ public sealed class PreviewImageService
         return Path.Combine(_diskCacheDirectory, hash + ".png");
     }
 
-    /// <summary>Fire-and-forget: write the decoded preview to disk, then schedule a coalesced prune.</summary>
-    private static void PersistToDiskCache(BitmapImage bitmap, string cachePath, long diskCacheCapacityBytes)
+    /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
+    private void PersistToDiskCache(BitmapImage bitmap, string cachePath, long cacheEpoch)
     {
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await DiskCacheStore.WriteAtomicallyAsync(bitmap, cachePath).ConfigureAwait(false);
-                // Coalesced per directory in DiskCacheStore: concurrent preload workers
-                // persisting several previews at once must not each scan the whole directory.
-                DiskCacheStore.SchedulePrune(Path.GetDirectoryName(cachePath)!, "*.png",
-                    diskCacheCapacityBytes, "Preview disk cache delete failed");
-            }
-            catch (IOException ex) { AppLog.Error($"Preview disk cache write failed: {cachePath}", ex); }
-            catch (UnauthorizedAccessException ex) { AppLog.Error($"Preview disk cache write failed: {cachePath}", ex); }
-        });
+        if (cacheEpoch != Volatile.Read(ref _cacheEpoch)) return;
+        // Best-effort: a full queue means persistence is falling behind decode, so this
+        // preview is dropped rather than growing the backlog or blocking the caller.
+        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch));
     }
 }

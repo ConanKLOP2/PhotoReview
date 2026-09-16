@@ -11,6 +11,16 @@ public sealed class BenchmarkImageExecutor
     public BenchmarkImageExecutor(long capacityBytes = AppConstants.ImageCacheCapacityBytes)
         => _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(capacityBytes, ImageBytes);
 
+    // FirstFrame profiles always decode files[0], regardless of iteration index, to
+    // measure cold first-decode latency. Without this, the very first call (warmup or
+    // timed) populates the cache and every subsequent call — including every "timed"
+    // sample — becomes a warm-cache hit, collapsing p50/p95/Max to near-zero.
+    public void EvictForColdDecode(string path, BenchmarkProfile profile)
+    {
+        var original = string.Equals(profile.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+        _cache.Remove(ImageCacheKey.Create(path, original, profile.TargetWidth()));
+    }
+
     public async Task<(BitmapImage Image, bool CacheHit)> DecodeAsync(string path, BenchmarkProfile profile, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();

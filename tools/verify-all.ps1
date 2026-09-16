@@ -23,6 +23,9 @@ Invoke-Gate 'Build solution' { dotnet build $solution -c $Configuration --nologo
 Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
     dotnet run --project (Join-Path $root 'PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
 }
+Invoke-Gate 'Run xUnit test suite' {
+    dotnet test (Join-Path $root 'PhotoReview.Tests.Unit\PhotoReview.Tests.Unit.csproj') -c $Configuration --no-build --nologo
+}
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')
 }

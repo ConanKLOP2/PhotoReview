@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private long _totalSourceBytes;
     private const long FullFolderRamThresholdBytes = AppConstants.ImageCacheCapacityBytes;
     private const double PreloadMemoryLoadLimit = AppConstants.PreloadMemoryLoadLimit;
+    private static readonly HashSet<string> SupportedActionOperations = new(StringComparer.OrdinalIgnoreCase) { "Move", "Copy", "Recycle", "Delete" };
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
@@ -187,7 +188,22 @@ public partial class MainWindow : Window
                 var resumeIndex = resumePath is null ? 0 : _files.FindIndex(p => string.Equals(p, Path.GetFullPath(resumePath), StringComparison.OrdinalIgnoreCase));
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
-            else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
+            else
+            {
+                // No ShowImageAsync call on this path, so it must invalidate
+                // _generation itself: otherwise an in-flight decode/preload
+                // continuation from the previous folder (still holding a token
+                // that matches the untouched _generation) can land after this
+                // point and repaint an empty folder with the old folder's image.
+                Interlocked.Increment(ref _generation);
+                _index = -1;
+                MainImage.Source = null;
+                _compareSelectedPath = null;
+                ComparePanel.Visibility = Visibility.Collapsed;
+                CompareLeftImage.Source = null; CompareLeftImage.Tag = null;
+                CompareRightImage.Source = null; CompareRightImage.Tag = null;
+                StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này.";
+            }
             // Captured after the provisional frame is presented (ShowImageAsync bumps
             // _generation as its very first step), so this reflects "no navigation has
             // happened since presenting" rather than always mismatching.
@@ -527,6 +543,7 @@ public partial class MainWindow : Window
         _thumbnailCache.ClearDisk();
         _thumbnailCache.ClearMemory();
         _previewService.ClearCache();
+        _previewService.ClearDisk();
         _preloadScheduler.ClearPreloadedKeys();
         StatusText.Text = "Đã xóa cache preview.";
     }
@@ -550,61 +567,79 @@ public partial class MainWindow : Window
 
     private async Task RemoveDuplicatesAsync(bool removeNumbered)
     {
-        var remove = new List<string>();
-        // Batch work may race with an in-flight viewer decode or another action.
-        // Snapshot only files that still have readable metadata; a file can
-        // disappear between enumeration and this pass.
-        var candidates = _files.ToArray();
-        var sizeGroups = candidates
-            .Select(path => { try { return (Path: path, Size: new FileInfo(path).Length); } catch { return (Path: path, Size: -1L); } })
-            .Where(item => item.Size >= 0)
-            .GroupBy(item => item.Size)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Select(item => item.Path).ToList())
-            .ToList();
-        var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in sizeGroups.SelectMany(group => group))
+        // Batch delete must not interleave with a single-item action (or another
+        // batch) touching the same catalog/session/journal state.
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+        try
         {
-            try
+            var remove = new List<string>();
+            // Batch work may race with an in-flight viewer decode or another action.
+            // Snapshot only files that still have readable metadata; a file can
+            // disappear between enumeration and this pass.
+            var candidates = _files.ToArray();
+            var sizeGroups = candidates
+                .Select(path => { try { return (Path: path, Size: new FileInfo(path).Length); } catch { return (Path: path, Size: -1L); } })
+                .Where(item => item.Size >= 0)
+                .GroupBy(item => item.Size)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Select(item => item.Path).ToList())
+                .ToList();
+            var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in sizeGroups.SelectMany(group => group))
             {
-                var hash = await GetHashAsync(path);
-                if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
-                group.Add(path);
+                try
+                {
+                    var hash = await GetHashAsync(path);
+                    if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
+                    group.Add(path);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            foreach (var group in groups.Values.Where(group => group.Count > 1))
+                remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
+            if (remove.Count == 0) { StatusText.Text = "Không có duplicate cùng hash phù hợp."; return; }
+            var review = new BatchReviewWindow(remove) { Owner = this };
+            if (review.ShowDialog() != true) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
+            var failures = new List<string>();
+            var succeeded = 0;
+            StopImageReadsForAction();
+            // StopImageReadsForAction() just bumped _folderGeneration; capture it and
+            // the folder being processed so the completion below can detect the user
+            // switching folders mid-batch instead of reloading/reporting against
+            // whatever folder happens to be current when the loop ends.
+            var folderGeneration = _folderGeneration;
+            var originalFolder = _session?.Folder;
+            foreach (var path in remove)
+            {
+                if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
+                FileInfo info;
+                try { info = new FileInfo(path); if (!info.Exists) { failures.Add($"Không còn tồn tại: {path}"); continue; } }
+                catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); continue; }
+                var operationId = Guid.NewGuid().ToString("N");
+                _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                try
+                {
+                    await Task.Run(() => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
+                    _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                    succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"{Path.GetFileName(path)}: {ex.Message}");
+                    _journal.Append(new JournalEntry(operationId, "Recycle", "Failed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
+                }
+            }
+            if (folderGeneration != _folderGeneration)
+            {
+                AppLog.Info($"Batch completion ignored after folder switch: succeeded={succeeded} failures={failures.Count}");
+                return;
+            }
+            StatusText.Text = $"Batch hoàn tất: {succeeded} thành công, {failures.Count} lỗi.";
+            if (failures.Count > 0) System.Windows.MessageBox.Show(this, string.Join(Environment.NewLine, failures), "Báo cáo lỗi batch", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (succeeded > 0) await LoadFolderAsync(originalFolder ?? Path.GetDirectoryName(remove[0])!);
         }
-        foreach (var group in groups.Values.Where(group => group.Count > 1))
-            remove.AddRange(group.Where(path => System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileNameWithoutExtension(path), " \\(\\d+\\)$") == removeNumbered));
-        if (remove.Count == 0) { StatusText.Text = "Không có duplicate cùng hash phù hợp."; return; }
-        var review = new BatchReviewWindow(remove) { Owner = this };
-        if (review.ShowDialog() != true) { StatusText.Text = "Đã hủy xử lý hàng loạt."; return; }
-        var failures = new List<string>();
-        var succeeded = 0;
-        StopImageReadsForAction();
-        foreach (var path in remove)
-        {
-            if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
-            FileInfo info;
-            try { info = new FileInfo(path); if (!info.Exists) { failures.Add($"Không còn tồn tại: {path}"); continue; } }
-            catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); continue; }
-            var operationId = Guid.NewGuid().ToString("N");
-            _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-            try
-            {
-                await Task.Run(() => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                succeeded++;
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"{Path.GetFileName(path)}: {ex.Message}");
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Failed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
-            }
-        }
-        StatusText.Text = $"Batch hoàn tất: {succeeded} thành công, {failures.Count} lỗi.";
-        if (failures.Count > 0) System.Windows.MessageBox.Show(this, string.Join(Environment.NewLine, failures), "Báo cáo lỗi batch", MessageBoxButton.OK, MessageBoxImage.Warning);
-        if (succeeded > 0) await LoadFolderAsync(_session?.Folder ?? Path.GetDirectoryName(_files[0])!);
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private Task<string> GetHashAsync(string path) => _hashService.GetAsync(path);
@@ -613,7 +648,16 @@ public partial class MainWindow : Window
     {
         if (_session is null) return;
         var currentFolder = Path.GetFullPath(_session.Folder);
+        // A slow (e.g. network) sibling lookup must not clobber a folder the user
+        // has since switched to directly (Open Folder/drag-drop), which bumps
+        // _folderGeneration via LoadFolderAsync.
+        var folderGeneration = _folderGeneration;
         var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction));
+        if (folderGeneration != _folderGeneration)
+        {
+            AppLog.Info($"Sibling folder navigation ignored after folder switch: from={currentFolder}");
+            return;
+        }
         if (targetFolder is null)
         {
             StatusText.Text = direction > 0 ? "Đã ở folder cuối cùng cùng cấp." : "Đã ở folder đầu tiên cùng cấp.";
@@ -758,6 +802,8 @@ public partial class MainWindow : Window
         try
         {
             var info = new FileInfo(source);
+            string undoOperation;
+            string? undoDestination;
             if (category == 3)
             {
                 var operationId = Guid.NewGuid().ToString("N");
@@ -765,7 +811,8 @@ public partial class MainWindow : Window
                 await Task.Run(() => FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
                 AppLog.Info($"FileAction recycle-complete source={source}");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
+                undoOperation = "RecycleBin";
+                undoDestination = null;
             }
             else
             {
@@ -780,13 +827,21 @@ public partial class MainWindow : Window
                 var movedInfo = new FileInfo(destination);
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                _moveHistory.Push((source, destination));
-                _lastUndoAction = new UndoAction("Move", source, destination, info.Length, info.LastWriteTimeUtc);
+                undoOperation = "Move";
+                undoDestination = destination;
             }
+            // Undo state must only be registered once we know the folder hasn't
+            // been switched away from underneath this completion: otherwise a
+            // stale-folder Move/Recycle can end up pushed onto _moveHistory /
+            // _lastUndoAction and later get undone against the NEW folder's
+            // catalog/session (moving files back into a folder the user is no
+            // longer looking at, or re-inserting a foreign path into it).
             if (folderGeneration != _folderGeneration)
                 AppLog.Info($"FileAction completion ignored after folder switch: source={source}");
             else
             {
+                if (undoOperation == "Move") _moveHistory.Push((source, undoDestination!));
+                _lastUndoAction = new UndoAction(undoOperation, source, undoDestination, info.Length, info.LastWriteTimeUtc);
                 if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
                 if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
             }
@@ -836,7 +891,7 @@ public partial class MainWindow : Window
 
     private async Task ExecuteActionAsync(ReviewAction action)
     {
-        if (action.Operation is not ("Move" or "Copy" or "Recycle" or "Delete"))
+        if (!SupportedActionOperations.Contains(action.Operation))
         {
             StatusText.Text = $"Không thực hiện được {action.Name}: Operation không hợp lệ.";
             return;
@@ -891,9 +946,21 @@ public partial class MainWindow : Window
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
                 throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
             _journal.Append(new JournalEntry(operationId, operation, "Committed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
+            // See ClassifyCurrentAsync: undo state must only be registered once the
+            // folder-switch guard confirms this completion still belongs to the
+            // current folder, otherwise Ctrl+Z could move a file back into a folder
+            // the user has since navigated away from.
             if (folderGeneration != _folderGeneration)
                 AppLog.Info($"FileAction completion ignored after folder switch: operation={operation} source={source}");
-            else if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
+            else
+            {
+                if (operation == "Move")
+                {
+                    _moveHistory.Push((source, destinationPath!));
+                    _lastUndoAction = new UndoAction("Move", source, destinationPath, sourceSize, sourceLastWriteUtc);
+                }
+                if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
+            }
         }
         catch (Exception ex)
         {

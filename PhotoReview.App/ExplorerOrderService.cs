@@ -126,6 +126,11 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         AppLog.Info($"Explorer query-start: folder={folder}");
         var shellType = Type.GetTypeFromProgID("Shell.Application");
         if (shellType is null) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, "Shell.Application unavailable");
+        // The caller's timeout only cancels the Task it is awaiting; this action already
+        // started running on the single STA pump thread and must check the token itself,
+        // or a stale/superseded query keeps occupying that thread and delays whatever
+        // query was actually issued for it next (e.g. a fast folder switch).
+        if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled before native enumeration");
         object? shell = null, windows = null;
         try
         {
@@ -137,10 +142,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 try
                 {
                     windowsInspected++;
+                    if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled during window enumeration");
                     var location = (string?)((dynamic)window).LocationURL;
                     if (!TryCanonicalizeLocation(location, out var current)) continue;
                     if (!ExplorerSnapshotValidator.SamePath(current, folder)) continue;
                     try { return TryReadNativeView(window, folder, cancellationToken, progress, batchSize); }
+                    catch (OperationCanceledException) { return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
                     catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
                 }
                 catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
