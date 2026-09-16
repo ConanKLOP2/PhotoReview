@@ -181,6 +181,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             AppLog.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
             var paths = new List<string>(count);
             var comCalls = 1;
+            var getItem = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
+            ExplorerNativeVtable.GetDisplayNameDelegate? getDisplayName = null;
             for (var index = 0; index < count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -189,11 +191,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 {
                     var itemIid = ExplorerComInterop.IidShellItem;
                     getItemCalls++;
-                    var itemResult = ExplorerNativeVtable.GetItem(folderViewPtr, index, ref itemIid, out itemPtr);
+                    var itemResult = getItem(folderViewPtr, index, ref itemIid, out itemPtr);
                     comCalls++;
                     if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.GetItem({index}) failed: 0x{itemResult:X8}");
+                    getDisplayName ??= ExplorerNativeVtable.ResolveGetDisplayName(itemPtr);
                     displayNameCalls++;
-                    var nameResult = ExplorerNativeVtable.GetDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
+                    var nameResult = getDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
                     comCalls++;
                     if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IShellItem.GetDisplayName({index}) failed: 0x{nameResult:X8}");
                     try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
