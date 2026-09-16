@@ -5,6 +5,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\PhotoReview.ico</ApplicationIcon>
     <Platforms>AnyCPU;x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <Version>1.0.1</Version>
@@ -13,5 +14,9 @@
     <BuildStamp>$([System.DateTime]::UtcNow.ToString('yyyyMMdd.HHmmss'))</BuildStamp>
     <InformationalVersion>1.0.1+build.$(BuildStamp)</InformationalVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\PhotoReview.ico" />
+  </ItemGroup>
 
 </Project>
