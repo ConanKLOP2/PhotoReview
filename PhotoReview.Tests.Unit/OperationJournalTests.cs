@@ -4,7 +4,7 @@ using PhotoReview.App;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>
-/// Journal durability and Move-commit contracts (migrated from Program.cs). The constructor
+/// Journal durability and Move-commit contracts. The constructor
 /// reproduces the original suite's committed-Move setup for every test.
 /// </summary>
 public sealed class OperationJournalTests : IDisposable
@@ -75,7 +75,7 @@ public sealed class OperationJournalTests : IDisposable
         Assert.True(File.ReadAllBytes(_destination).SequenceEqual(new byte[] { 1, 2, 3, 4 }));
 }
 
-/// <summary>Pending-operation reconciliation contracts (migrated from Program.cs).</summary>
+/// <summary>Pending-operation reconciliation contracts.</summary>
 public sealed class JournalReconciliationTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
@@ -138,7 +138,7 @@ public sealed class JournalReconciliationTests : IDisposable
     }
 }
 
-/// <summary>Recovery retry contracts (migrated from Program.cs).</summary>
+/// <summary>Recovery retry contracts.</summary>
 public sealed class RecoveryRetryServiceTests : IDisposable
 {
     private readonly DataRootFixture _data = new();

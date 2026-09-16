@@ -4,8 +4,7 @@ using System.IO;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>
-/// Migrated from PhotoReview.Tests/FileActionConcurrencyTests.cs — deterministic filesystem
-/// probes for actions racing an open/read stream.
+/// Deterministic filesystem probes for actions racing an open/read stream.
 /// </summary>
 public sealed class FileActionConcurrencyTests : IDisposable
 {

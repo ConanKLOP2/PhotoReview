@@ -131,8 +131,8 @@ public sealed class ThumbnailCache : IDisposable
             }
             else PruneDiskCache();
         }
-        catch (IOException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* The RAM result remains usable when disk cache is unavailable. */ }
-        catch (UnauthorizedAccessException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* Same fallback for read-only locations. */ }
+        catch (IOException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); }
+        catch (UnauthorizedAccessException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); }
         return image;
     }
 

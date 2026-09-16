@@ -267,7 +267,6 @@ public partial class MainWindow : Window
     {
         folder ??= FolderText.Text;
         if (string.IsNullOrWhiteSpace(folder)) return;
-        // Keeps the native title format used by: Title = $"Photo Review — {folder}"
         Title = $"Photo Review — {folder}{(AppLog.Enabled ? " · LOG" : "")}";
     }
 

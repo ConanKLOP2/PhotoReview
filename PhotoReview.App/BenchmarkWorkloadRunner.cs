@@ -52,7 +52,6 @@ public static class BenchmarkWorkloadRunner
             return (image.PixelWidth > 0 && image.PixelHeight > 0, executor.Metrics);
         }
 
-        // Sequential/Random/Correctness: Workers drives concurrent decodes.
         var count = Math.Min(Math.Max(1, profile.Workers), files.Length);
         var selected = Enumerable.Range(0, count).Select(o => SelectFile(files, workload, iteration + o, random)).ToArray();
         var results = new bool[selected.Length];

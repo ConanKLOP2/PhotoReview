@@ -5,7 +5,7 @@ namespace PhotoReview.Tests.Unit;
 
 /// <summary>
 /// PreviewImageService owns decode + the bounded RAM cache and needs no WPF Window, so the
-/// decode/cache/metrics contract is driven for real (migrated from Program.cs).
+/// decode/cache/metrics contract is driven for real.
 /// </summary>
 public sealed class PreviewImageServiceTests : IAsyncLifetime
 {
@@ -133,7 +133,6 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
 /// <summary>
 /// PreloadScheduler takes its memory-load limit by constructor injection, so the memory
 /// pressure guard is driven for real: a 0.0 limit can never have headroom
-/// (migrated from Program.cs).
 /// </summary>
 public sealed class PreloadSchedulerTests : IAsyncLifetime
 {

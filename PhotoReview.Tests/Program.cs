@@ -20,11 +20,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
         try
         {
-            // Shares the exact per-iteration workload logic the WPF benchmark window uses
-            // (correctness guard for explorer-reindex/cache-recovery, real file-action
-            // mapping, real preload warm-up for Preload/WarmNext) instead of this CLI path
-            // running its own decode-only stand-in that could report Pass without
-            // exercising what a profile names.
+            // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior.
             var report = await new BenchmarkEngine().RunAsync(folder, profile,
                 (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, token),
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
@@ -36,10 +32,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         }
         catch (Exception ex)
         {
-            // Mirrors the WPF benchmark window's per-profile try/catch: a profile that
-            // refuses to run (the explorer-reindex/cache-recovery correctness guard above)
-            // or otherwise throws must not abort the rest of a --benchmark-all/--benchmark-actions
-            // batch -- report it and move on to the next profile instead.
+            // Report this profile's failure and continue the batch, as the WPF window does.
             anyFailed = true;
             Console.Error.WriteLine($"FAIL profile={profile.Id} error={ex.Message}");
         }
@@ -185,7 +178,7 @@ try
     var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
     // The decode/cache path lives in PreviewImageService and preload scheduling in
-    // PreloadScheduler (WP3.2).  Both are constructible without a WPF Window, so their
+    // PreloadScheduler. Both are constructible without a WPF Window, so their
     // contracts are asserted behaviorally below; only the few branches that cannot be
     // driven from a console harness still read these focused service files.
     var previewServiceText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreviewImageService.cs"));
@@ -203,7 +196,6 @@ try
           "Interleaved actions advance viewer before filesystem operation and exactly once (source presence, not behavior)", failures);
     Check(mainWindow.Contains("Interlocked.Exchange(ref _fileActionInProgress, 1)"),
           "Interleaved actions reject duplicate concurrent file actions (source presence; FileActionConcurrencyTests covers the behavior)", failures);
-    // AppSettings is a plain public class, so its option contract is asserted by calling it.
     var defaultSettings = new AppSettings();
     Check(defaultSettings.LoadingMode == "Preview", "LoadingMode defaults to Preview", failures);
     Check(AppSettings.IsValidLoadingMode("Fast") && AppSettings.IsValidLoadingMode("Preview") && AppSettings.IsValidLoadingMode("Original")
@@ -432,7 +424,7 @@ try
     Check(mainWindowXaml.Contains("Loaded=\"Window_Loaded\"") && mainWindowXaml.Contains("Closing=\"Window_Closing\""), "Main window restores and saves native placement instead of always using the startup default (source presence, not behavior)", failures);
     Check(!mainWindowXaml.Contains("WindowState=\"Maximized\""), "Main window does not force maximized state in XAML (source absence, not behavior)", failures);
     Check(!mainWindowXaml.Contains("<Grid.RowDefinitions><RowDefinition Height=\"Auto\"/><RowDefinition Height=\"*\"/><RowDefinition Height=\"Auto\"/></Grid.RowDefinitions>") && mainWindowXaml.Contains("Panel.ZIndex=\"100\" Background=\"#B0181818\""), "Image uses the full client area while toolbar remains a compact overlay (source presence, not behavior)", failures);
-    Check(mainWindow.Contains("Title = $\"Photo Review — {folder}\"") && mainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""), "Current folder is shown in the native window title bar (source presence, not behavior)", failures);
+    Check(mainWindow.Contains("Title = $\"Photo Review — {folder}") && mainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""), "Current folder is shown in the native window title bar (source presence, not behavior)", failures);
     Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PhotoReview.App.csproj")).Contains("BuildStamp") && settingsWindow.Contains("AssemblyInformationalVersionAttribute"), "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)", failures);
     Check(!mainWindow.Contains("Window_SourceInitialized") && mainWindow.Contains("WindowPlacementService.Restore(this)") && mainWindow.Contains("WindowPlacementService.Save(this)") && placementService.Contains("GetWindowPlacement") && placementService.Contains("SetWindowPlacement"), "Native window placement restores after Loaded and persists monitor, bounds, and maximized state (source presence: needs a real Window handle)", failures);
     Check(placementService.Contains("Screen.AllScreens") && placementService.Contains("WorkingArea"), "Saved placement is rejected when its monitor is no longer connected (source presence: needs real multi-monitor hardware)", failures);

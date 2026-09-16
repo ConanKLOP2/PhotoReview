@@ -4,8 +4,7 @@ using PhotoReview.App;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>
-/// Migrated from PhotoReview.Tests/CacheExplorerRegressionTests.cs — behavior contracts
-/// for cache/preload/Explorer regressions from ERROR-HISTORY.
+/// Behavior contracts for cache/preload/Explorer regressions from ERROR-HISTORY.
 /// </summary>
 public sealed class CacheExplorerRegressionTests : IDisposable
 {

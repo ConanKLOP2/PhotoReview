@@ -4,12 +4,8 @@ using PhotoReview.App;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>
-/// BenchmarkWorkloadRunner drives every workload for both the WPF benchmark window and the
-/// CLI runner, but until now nothing called it directly: BenchmarkScenarioTests simulates the
-/// action scenario by hand and BenchmarkProfileTests only checks profile metadata. These drive
-/// the real file-action mapping/expected source state and the deterministic workload
-/// selection this class is responsible for, plus a regression guard for the preload-hit
-/// bookkeeping in BenchmarkImageExecutor.DecodeAsync.
+/// Covers workload selection, file-action mapping and preload-hit bookkeeping used by the
+/// WPF benchmark window and CLI runner.
 /// </summary>
 public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 {

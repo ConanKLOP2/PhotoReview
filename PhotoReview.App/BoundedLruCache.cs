@@ -1,6 +1,6 @@
 namespace PhotoReview.App;
 
-/// <summary>Thread-safe byte-bounded LRU cache. The least recently used entries are evicted first.</summary>
+/// <summary>Thread-safe, byte-bounded LRU cache.</summary>
 public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
 {
     private sealed record Entry(TKey Key, TValue Value, long Size);

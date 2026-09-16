@@ -2,10 +2,6 @@ using PhotoReview.App;
 
 namespace PhotoReview.Tests.Unit;
 
-/// <summary>
-/// AppSettings is a plain public class, so its option contract is asserted by calling it
-/// (migrated from Program.cs, WP3.1 behavioral conversions included).
-/// </summary>
 public sealed class AppSettingsTests
 {
     [Fact(DisplayName = "LoadingMode defaults to Preview")]
