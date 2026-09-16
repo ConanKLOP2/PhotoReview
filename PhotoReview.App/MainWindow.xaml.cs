@@ -307,10 +307,10 @@ public partial class MainWindow : Window
                 MainImage.Source = null;
                 CompareLeftImage.Tag = pair.Value.Left;
                 CompareRightImage.Tag = pair.Value.Right;
-                CompareLeftImage.Source = await GetPreviewAsync(pair.Value.Left);
+                var comparePreviews = await Task.WhenAll(GetPreviewAsync(pair.Value.Left), GetPreviewAsync(pair.Value.Right));
                 if (token != _generation) return;
-                CompareRightImage.Source = await GetPreviewAsync(pair.Value.Right);
-                if (token != _generation) return;
+                CompareLeftImage.Source = comparePreviews[0];
+                CompareRightImage.Source = comparePreviews[1];
                 _compareSelectedPath = path;
                 UpdateCompareSelection();
                 var leftSize = "";
