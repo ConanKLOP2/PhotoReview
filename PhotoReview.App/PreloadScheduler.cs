@@ -118,7 +118,9 @@ public sealed class PreloadScheduler : IDisposable
                 while (running.Count < workers && order!.MoveNext())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (!HasPreloadHeadroom())
+                    // GlobalMemoryStatusEx is a syscall; only re-check on the same
+                    // cadence as the progress log below, not on every candidate.
+                    if (examinedSinceYield == 0 && !HasPreloadHeadroom())
                     {
                         if (AppLog.Enabled)
                         {
