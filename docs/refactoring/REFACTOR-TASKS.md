@@ -91,9 +91,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T02 | CI GitHub Actions | T00 | ∥A | | DONE |
 | T03 | `global.json`, `.editorconfig`, analyzer | T00 | ∥A | | DONE |
 | T04 | Central Package Management | T00 | ∥A | | DONE |
-| T05 | AGENTS: quy trình PR | T00 | ∥A | ⛔Q4 | TODO |
+| T05 | AGENTS: quy trình PR | T00 | ∥A | ⛔Q4 | DONE |
 | T10 | Ma trận parity test | T00 | | | DONE |
-| T11 | Chuyển check CLI còn thiếu sang xUnit | T10 | ∥B | | TODO |
+| T11 | Chuyển check CLI còn thiếu sang xUnit | T10 | ∥B | | DONE |
 | T12 | Xóa file test trùng trong CLI | T10 | ∥B | | TODO |
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | TODO |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | TODO |
@@ -246,7 +246,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `AGENTS.md`.
 - **Làm:** thay mục "push origin master" bằng quy trình: feature branch → PR vào `master` → CI xanh → merge. Vẫn bắt buộc test và publish trước khi bàn giao. Thêm dòng "Đợt refactor: xem `docs/refactoring/`".
 - **Xong khi:** người dùng duyệt diff.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T05-agents-pr` `2def97f` · R1 (Opus): APPROVE · người dùng duyệt diff 2026-09-16 · đã merge.
 
 ---
 
@@ -265,11 +265,12 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - Bài học: task ghép tên hoặc tra cứu lớn phải có script kiểm tên trong bước Kiểm thử.
 
 ### T11 — Chuyển check còn thiếu ∥B
+- **TT:** DONE
 - **Files:** `{UT}/MigratedCliChecksTests.cs` (mới), cột trạng thái trong `test-parity.md`.
 - **Ghi chú (sau T10):** không có MISSING, nên T11 chỉ cần xác nhận lại bằng script ghép DisplayName rồi đánh DONE, không viết test mới.
 - **Làm:** viết xUnit cho mọi dòng `MISSING`, giữ nguyên ngữ nghĩa, dùng `TempRoot`. Test đụng global state thì thêm `[Collection("GlobalState")]`.
 - **Xong khi:** không còn `MISSING`, `dotnet test` đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Coordinator · script ghép DisplayName (`scratchpad/parity.ps1`) xác nhận 146/146 check CLI có xUnit tương ứng → không cần viết test mới. `test-parity.md` không còn MISSING.
 
 ### T12 — Xóa file trùng trong CLI ∥B
 - **Files:** 5 file trùng trong `PhotoReview.Tests/`, và phần gọi chúng trong `PhotoReview.Tests/Program.cs`.
