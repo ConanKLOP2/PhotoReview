@@ -9,8 +9,20 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
+$appProject = Join-Path $root 'PhotoReview.App\PhotoReview.App.csproj'
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     $ReleaseDirectory = Join-Path $root 'outputs\release\PhotoReview-framework-dependent'
+}
+
+function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
+    # Wiping first stops verify-release.ps1 from confirming a stale artifact left
+    # over from an earlier publish (different code, coincidentally matching
+    # FileVersion) as if it were this run's build.
+    if (Test-Path -LiteralPath $Directory) { Remove-Item -LiteralPath $Directory -Recurse -Force }
+    $publishArgs = @($appProject, '-c', $Configuration, '-o', $Directory, '--nologo')
+    if ($SelfContained) { $publishArgs += @('--self-contained', 'true', '-r', 'win-x64') }
+    else { $publishArgs += @('--self-contained', 'false') }
+    dotnet publish @publishArgs
 }
 
 function Invoke-Gate([string]$Name, [scriptblock]$Action) {
@@ -32,12 +44,18 @@ Invoke-Gate 'Run file-operation smoke test' {
 Invoke-Gate 'Run fault-injection safety test' {
     & (Join-Path $PSScriptRoot 'fault-injection-test.ps1')
 }
+Invoke-Gate 'Publish framework-dependent release' {
+    Publish-ReleaseDirectory -Directory $ReleaseDirectory -SelfContained $false
+}
 Invoke-Gate 'Verify framework-dependent release' {
     & (Join-Path $PSScriptRoot 'verify-release.ps1') -ReleaseDirectory $ReleaseDirectory
 }
 
 if ($RequireSelfContained) {
     $selfContained = Join-Path $root 'outputs\release\PhotoReview-self-contained'
+    Invoke-Gate 'Publish self-contained release' {
+        Publish-ReleaseDirectory -Directory $selfContained -SelfContained $true
+    }
     Invoke-Gate 'Verify self-contained release' {
         & (Join-Path $PSScriptRoot 'verify-release.ps1') -ReleaseDirectory $selfContained -SelfContained
     }

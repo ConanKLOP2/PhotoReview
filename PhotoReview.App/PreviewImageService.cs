@@ -35,6 +35,7 @@ public sealed class PreviewImageService
     private readonly Channel<(BitmapImage Bitmap, string CachePath, long Epoch)> _persistQueue =
         Channel.CreateBounded<(BitmapImage, string, long)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
+    private readonly Task[] _persistWorkers;
 
     public PreviewImageService(
         ReviewMetrics metrics,
@@ -53,9 +54,24 @@ public sealed class PreviewImageService
         _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(
             capacityBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
         // Two workers: enough to keep the disk-cache warm without letting persistence
-        // saturate CPU/disk against live decodes. Runs for the process lifetime; there is
-        // nothing to join on shutdown since each write is already atomic (temp file + move).
-        for (var i = 0; i < PersistWorkerCount; i++) _ = RunPersistWorkerAsync();
+        // saturate CPU/disk against live decodes. The production singleton in MainWindow
+        // runs these for the process lifetime and never shuts them down (each write is
+        // already atomic, so there's nothing to lose on process exit); a short-lived
+        // instance (e.g. one benchmark run) should call ShutdownPersistWorkersAsync
+        // instead of leaking these tasks and everything their closures hold alive.
+        _persistWorkers = new Task[PersistWorkerCount];
+        for (var i = 0; i < PersistWorkerCount; i++) _persistWorkers[i] = RunPersistWorkerAsync();
+    }
+
+    /// <summary>
+    /// Stops accepting new persist requests and waits for in-flight writes to finish.
+    /// Only for short-lived instances (benchmark runs); the production singleton never
+    /// calls this — see the constructor's comment on why that's intentional.
+    /// </summary>
+    public Task ShutdownPersistWorkersAsync()
+    {
+        _persistQueue.Writer.TryComplete();
+        return Task.WhenAll(_persistWorkers);
     }
 
     private async Task RunPersistWorkerAsync()

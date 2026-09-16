@@ -45,6 +45,7 @@ public partial class BenchmarkWindow : Window
         if (profiles.Length == 0) { StatusText.Text = "Chọn ít nhất một cấu hình để chạy."; return; }
         var files = Directory.EnumerateFiles(FolderText.Text, "*.*", System.IO.SearchOption.TopDirectoryOnly).Where(ImageFileTypes.IsSupported).ToArray();
         if (files.Length == 0) { StatusText.Text = "Không tìm thấy ảnh."; return; }
+        var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
 
         RunButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false;
         _rows.Clear();
@@ -63,7 +64,7 @@ public partial class BenchmarkWindow : Window
                     RunProgress.Value = p.Total == 0 ? 0 : (double)p.Completed / p.Total;
                     StatusText.Text = $"[{currentIndex}/{profiles.Length}] {p.ProfileId}: {p.Completed}/{p.Total} — {p.Message}";
                 });
-                var executor = new BenchmarkImageExecutor();
+                var executor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
                 var random = new Random(profile.Id.GetHashCode());
                 // DetailedLogging distinguishes the logging-on/logging-off profiles: without
                 // toggling AppLog around the run, both profiles measured identical (whatever
@@ -94,7 +95,7 @@ public partial class BenchmarkWindow : Window
                             try
                             {
                                 await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], ct), ct);
-                                var (actionImage, _) = await executor.DecodeAsync(temp, profile, ct);
+                                var actionImage = await executor.DecodeAsync(temp, ct);
                                 // Each action profile now performs the operation its name promises
                                 // instead of every Move/Delete/Copy/Interleaved profile running the
                                 // same move+delete regardless of Id.
@@ -127,13 +128,25 @@ public partial class BenchmarkWindow : Window
                         if (workload == BenchmarkWorkload.FirstFrame)
                         {
                             var path = SelectFile(files, workload, iteration, random);
-                            executor.EvictForColdDecode(path, profile);
-                            var (image, _) = await executor.DecodeAsync(path, profile, ct);
+                            executor.EvictForColdDecode(path);
+                            var image = await executor.DecodeAsync(path, ct);
+                            return (image.PixelWidth > 0 && image.PixelHeight > 0, (ReviewMetricsSnapshot?)null);
+                        }
+                        if (workload is BenchmarkWorkload.Preload or BenchmarkWorkload.WarmNext)
+                        {
+                            // One navigation step per iteration, not N parallel decodes: this
+                            // measures how fast landing on the next/previous image feels, with
+                            // the real PreloadScheduler given a chance to have already warmed it
+                            // from the previous iteration's WarmPreloadAround call below — the
+                            // actual thing these two workloads exist to measure.
+                            var center = SelectIndex(files.Length, workload, iteration, random);
+                            var image = await executor.DecodeAsync(files[center], ct);
+                            executor.WarmPreloadAround(center);
                             return (image.PixelWidth > 0 && image.PixelHeight > 0, (ReviewMetricsSnapshot?)null);
                         }
                         // Workers now actually drives concurrent decodes for the remaining
-                        // workloads (Sequential/Random/WarmNext/Preload/Correctness), instead of
-                        // being parsed into the profile and never read by the runner.
+                        // workloads (Sequential/Random/Correctness), instead of being parsed
+                        // into the profile and never read by the runner.
                         var count = Math.Min(Math.Max(1, profile.Workers), files.Length);
                         var selected = Enumerable.Range(0, count).Select(o => SelectFile(files, workload, iteration + o, random)).ToArray();
                         var results = new bool[selected.Length];
@@ -141,7 +154,7 @@ public partial class BenchmarkWindow : Window
                             new ParallelOptions { MaxDegreeOfParallelism = count, CancellationToken = ct },
                             async (idx, ct2) =>
                             {
-                                var (image, _) = await executor.DecodeAsync(selected[idx], profile, ct2);
+                                var image = await executor.DecodeAsync(selected[idx], ct2);
                                 results[idx] = image.PixelWidth > 0 && image.PixelHeight > 0;
                             });
                         return (results.All(r => r), (ReviewMetricsSnapshot?)null);
@@ -158,7 +171,7 @@ public partial class BenchmarkWindow : Window
                     RecomputeBest();
                     StatusText.Text = $"{profile.Name}: {ex.Message}";
                 }
-                finally { AppLog.Enabled = previousLogEnabled; }
+                finally { AppLog.Enabled = previousLogEnabled; await executor.DisposeAsync(); }
             }
             if (sessionReports.Count > 0)
             {
@@ -214,13 +227,16 @@ public partial class BenchmarkWindow : Window
         Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
     }
 
-    private static string SelectFile(string[] files, BenchmarkWorkload workload, int iteration, Random random) => workload switch
+    private static string SelectFile(string[] files, BenchmarkWorkload workload, int iteration, Random random) =>
+        files[SelectIndex(files.Length, workload, iteration, random)];
+
+    private static int SelectIndex(int fileCount, BenchmarkWorkload workload, int iteration, Random random) => workload switch
     {
-        BenchmarkWorkload.FirstFrame => files[0],
-        BenchmarkWorkload.Random => files[random.Next(files.Length)],
-        BenchmarkWorkload.WarmNext => files[iteration % 2 == 0 ? iteration / 2 % files.Length : files.Length - 1 - iteration / 2 % files.Length],
-        BenchmarkWorkload.Preload => files[iteration * 2 % files.Length],
-        _ => files[iteration % files.Length],
+        BenchmarkWorkload.FirstFrame => 0,
+        BenchmarkWorkload.Random => random.Next(fileCount),
+        BenchmarkWorkload.WarmNext => iteration % 2 == 0 ? iteration / 2 % fileCount : fileCount - 1 - iteration / 2 % fileCount,
+        BenchmarkWorkload.Preload => iteration * 2 % fileCount,
+        _ => iteration % fileCount,
     };
 
     private sealed class WindowHandle(Window window) : Forms.IWin32Window

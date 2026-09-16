@@ -572,6 +572,14 @@ public partial class MainWindow : Window
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         try
         {
+            // Hashing every candidate can take a while on a large or slow folder, and
+            // nothing here blocks the user from opening a different folder in the
+            // meantime — only single-item Move/Delete/Recycle actions check
+            // _fileActionInProgress, folder navigation doesn't. Snapshot the folder
+            // generation up front so a switch mid-hash cancels the whole batch instead
+            // of hashing a now-irrelevant folder and showing a stale duplicate-review
+            // dialog for a folder the user has already left.
+            var preHashGeneration = _folderGeneration;
             var remove = new List<string>();
             // Batch work may race with an in-flight viewer decode or another action.
             // Snapshot only files that still have readable metadata; a file can
@@ -590,6 +598,11 @@ public partial class MainWindow : Window
                 try
                 {
                     var hash = await GetHashAsync(path);
+                    if (preHashGeneration != _folderGeneration)
+                    {
+                        StatusText.Text = "Đã hủy: folder đã đổi trong lúc kiểm tra trùng lặp.";
+                        return;
+                    }
                     if (!groups.TryGetValue(hash, out var group)) groups[hash] = group = [];
                     group.Add(path);
                 }
@@ -604,12 +617,14 @@ public partial class MainWindow : Window
             var failures = new List<string>();
             var succeeded = 0;
             StopImageReadsForAction();
-            // StopImageReadsForAction() just bumped _folderGeneration; capture it and
-            // the folder being processed so the completion below can detect the user
-            // switching folders mid-batch instead of reloading/reporting against
-            // whatever folder happens to be current when the loop ends.
+            // StopImageReadsForAction() just bumped _folderGeneration again (a normal
+            // part of this action's own lifecycle, not a user folder switch); capture
+            // the new value so the completion below detects a real switch happening
+            // during the deletion loop itself, separately from the preHashGeneration
+            // check above. remove[] paths all come from the folder that was actually
+            // hashed, so deriving the reload target from them (below) instead of
+            // re-reading _session avoids reloading whatever folder is now current.
             var folderGeneration = _folderGeneration;
-            var originalFolder = _session?.Folder;
             foreach (var path in remove)
             {
                 if (!File.Exists(path)) { failures.Add($"Không còn tồn tại: {path}"); continue; }
@@ -637,7 +652,7 @@ public partial class MainWindow : Window
             }
             StatusText.Text = $"Batch hoàn tất: {succeeded} thành công, {failures.Count} lỗi.";
             if (failures.Count > 0) System.Windows.MessageBox.Show(this, string.Join(Environment.NewLine, failures), "Báo cáo lỗi batch", MessageBoxButton.OK, MessageBoxImage.Warning);
-            if (succeeded > 0) await LoadFolderAsync(originalFolder ?? Path.GetDirectoryName(remove[0])!);
+            if (succeeded > 0) await LoadFolderAsync(Path.GetDirectoryName(remove[0])!);
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }

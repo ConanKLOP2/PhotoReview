@@ -10,23 +10,24 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
     var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly).Where(p => supported.Contains(Path.GetExtension(p))).Take(64).ToArray();
     if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
+    var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
     var reports = new List<BenchmarkReport>();
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
-        var imageExecutor = new BenchmarkImageExecutor();
+        await using var imageExecutor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
         var report = await new BenchmarkEngine().RunAsync(folder, profile, async (_, workload, iteration, token) =>
         {
             if (workload == BenchmarkWorkload.FileAction)
             {
                 var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
-                try { await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], token), token); await imageExecutor.DecodeAsync(temp, profile, token); using var read = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); var moved = temp + ".moved"; File.Move(temp, moved); File.Delete(moved); return (true, (ReviewMetricsSnapshot?)null); }
+                try { await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], token), token); await imageExecutor.DecodeAsync(temp, token); using var read = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); var moved = temp + ".moved"; File.Move(temp, moved); File.Delete(moved); return (true, (ReviewMetricsSnapshot?)null); }
                 finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
             }
             var selected = Enumerable.Range(0, Math.Min(Math.Max(1, profile.Workers), files.Length)).Select(i => files[(iteration + i) % files.Length]).ToArray();
             await Parallel.ForEachAsync(selected, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, profile.Workers), CancellationToken = token }, async (path, ct) =>
             {
-                await imageExecutor.DecodeAsync(path, profile, ct);
+                await imageExecutor.DecodeAsync(path, ct);
             });
             return (true, (ReviewMetricsSnapshot?)null);
         }, new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
