@@ -47,6 +47,7 @@ public partial class MainWindow : Window
     public MainWindow(string? initialPath = null)
     {
         InitializeComponent();
+        DpiChanged += MainWindow_DpiChanged;
         _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => _files.ToArray(), () => _totalSourceBytes,
             FullFolderRamThresholdBytes, PreloadMemoryLoadLimit);
@@ -419,10 +420,16 @@ public partial class MainWindow : Window
 
     private Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path) => _previewService.GetOriginalDimensionsAsync(path);
 
+    private double? _cachedDpiScale;
+
+    // DPI only changes when the window moves to a monitor with a different scale
+    // factor; caching it avoids walking the visual tree on every navigation.
+    private void MainWindow_DpiChanged(object sender, System.Windows.DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
+
     private int GetTargetDecodeWidth()
     {
         var viewport = ImageScroll.ActualWidth > 1 ? ImageScroll.ActualWidth : 2200;
-        var dpi = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
+        var dpi = _cachedDpiScale ??= PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;
         return AdaptivePreviewPolicy.CalculateTargetDecodeWidth(viewport, dpi, 1.15);
     }
 
