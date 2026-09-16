@@ -1,12 +1,15 @@
 <Project>
 
   <!-- Centralized settings shared by all projects in the solution.
-       Only properties with identical values across every .csproj are placed
-       here; per-project settings (OutputType, UseWPF, UseWindowsForms,
-       RuntimeIdentifiers, Platforms, etc.) remain in their own project files. -->
+       Includes global compiler, code style, and analyzer settings.
+       Per-project settings (OutputType, UseWPF, UseWindowsForms,
+       RuntimeIdentifiers, Platforms, etc.) remain in their own .csproj files. -->
   <PropertyGroup>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
 
 </Project>
