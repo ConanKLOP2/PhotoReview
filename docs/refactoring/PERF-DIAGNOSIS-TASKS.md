@@ -26,7 +26,7 @@
 | D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | TODO |
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | TODO |
 | D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | DONE |
-| D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | TODO |
+| D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | DONE |
 | D07 | Chạy ma trận kịch bản | D05, D06, D10, D11 | | Không | TODO |
 | D08 | ETW / PresentMon deep-dive | D07 | ∥3 | Không | TODO |
 | D09 | GC và bộ nhớ | D07 | ∥3 | Không | TODO |
@@ -170,7 +170,7 @@
   5. Xuất `summary.md` (bảng) và `summary.json`.
 - **Kiểm thử:** unit test trên CSV mẫu kiểm tra phân vị, tỷ trọng và từng quy tắc (mỗi quy tắc có ít nhất một ca đúng và một ca sai).
 - **Xong khi:** test đạt, chạy được trên output của D06.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17 · Sonnet 5 (bị gián đoạn vì giới hạn sử dụng, đã tiếp tục) · `diag/D11-perf-analyze` `a333722` · 6 file `PerfAnalyze*.cs`, `rules.json`, CSV mẫu, 32 test (231/231 × 5) · test project tham chiếu `PhotoReview.Tests` bằng ProjectReference · review (Opus): CHANGES, vì định dạng output D06 và D11 không khớp (`folderAlias`, `env`, điều kiện nằm trong tên thư mục, GC dạng ms, thư mục warmup) và `t_post` bị tính vào tỷ trọng key→present; Coordinator sửa ở `8c54af4` · **chạy thử cả chuỗi** `run-matrix` (S3, F1, Preview, warm + cold-app) → `--perf-analyze`: 201 nav/lượt, hit 99,5%, final P50 5,2 ms / P95 7,1–8,4 ms / max ~340 ms; nhóm 10% chậm nhất bị `t_render` chiếm ~92% (dấu hiệu sớm cho R-UI, cần D07/D08 xác nhận; có thể do cửa sổ không ở foreground).
 
 ### D07 — Chạy ma trận
 - **Files:** `docs/refactoring/diagnosis/runs/<date>/**/summary.*` (chỉ bản tóm tắt), `docs/refactoring/diagnosis/contention.md` (điền kết quả).
