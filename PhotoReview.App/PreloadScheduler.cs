@@ -21,8 +21,14 @@ public sealed class PreloadScheduler : IDisposable
     private readonly double _memoryLoadLimit;
     private readonly Func<double, bool> _hasHeadroom;
 
+    private readonly int _workerCount;
     private CancellationTokenSource _preloadCts = new();
-    private readonly SemaphoreSlim _preloadSlots = new(AppConstants.PreloadWorkerCount, AppConstants.PreloadWorkerCount);
+    // D10: PHOTOREVIEW_DIAG_PRELOAD_WORKERS overrides how many decodes may run at once.
+    // SemaphoreSlim requires maxCount > 0, so when _workerCount is 0 (no preload at all)
+    // this is sized 1 but is never touched: PreloadAroundAsync below returns immediately
+    // for _workerCount == 0, so RunPreloadSchedulerAsync/PreloadOneAsync never run and
+    // never call WaitAsync/Release/CurrentCount on it.
+    private readonly SemaphoreSlim _preloadSlots;
     private Task? _preloadSchedulerTask;
     private CancellationTokenSource? _preloadSchedulerCts;
     private int _preloadCenter;
@@ -42,7 +48,8 @@ public sealed class PreloadScheduler : IDisposable
         Func<long> totalSourceBytes,
         long fullFolderRamThresholdBytes,
         double memoryLoadLimit,
-        Func<double, bool>? hasHeadroom = null)
+        Func<double, bool>? hasHeadroom = null,
+        int? workerCountOverride = null)
     {
         _previewService = previewService;
         _metrics = metrics;
@@ -53,6 +60,12 @@ public sealed class PreloadScheduler : IDisposable
         // Defaults to the real OS memory check; tests inject a fixed answer so the
         // scheduler's own logic doesn't depend on how much RAM the test machine has free.
         _hasHeadroom = hasHeadroom ?? PhysicalMemory.HasHeadroom;
+        // D10: precedence is the explicit test parameter, then the diagnostic environment
+        // variable, then the normal default -- read once here so every use below (and in
+        // RunPreloadSchedulerAsync/PreloadOneAsync) agrees even if the environment variable
+        // changes mid-process (e.g. another test in the same AppDomain).
+        _workerCount = workerCountOverride ?? DiagOptions.PreloadWorkers ?? AppConstants.PreloadWorkerCount;
+        _preloadSlots = new SemaphoreSlim(Math.Max(1, _workerCount), Math.Max(1, _workerCount));
     }
 
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
@@ -81,6 +94,10 @@ public sealed class PreloadScheduler : IDisposable
         // Disposed schedulers must stay dead: without this check, a call here
         // would resurrect a new CancellationTokenSource and background loop.
         if (Volatile.Read(ref _disposed)) return Task.CompletedTask;
+        // D10: PHOTOREVIEW_DIAG_PRELOAD_WORKERS=0 means no preload at all. Returning here
+        // (before touching _preloadCts/_preloadCenter/_preloadPriorityVersion) keeps this a
+        // true no-op: no scheduler task is created and _preloadSlots is never waited on.
+        if (_workerCount == 0) return Task.CompletedTask;
         // Navigation changes priority, but an already running decode is useful
         // and must remain available to ShowImageAsync through the in-flight map.
         CancellationTokenSource cts;
@@ -104,7 +121,7 @@ public sealed class PreloadScheduler : IDisposable
 
     private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
     {
-        const int workers = AppConstants.PreloadWorkerCount; // must match _preloadSlots capacity above
+        var workers = _workerCount;
         var running = new Dictionary<Task, string>();
         var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenVersion = -1L;
@@ -196,7 +213,7 @@ public sealed class PreloadScheduler : IDisposable
             if (perf)
             {
                 perfQueueWaitMs = queueWait.Elapsed.TotalMilliseconds;
-                perfSlot = Math.Max(0, AppConstants.PreloadWorkerCount - _preloadSlots.CurrentCount - 1);
+                perfSlot = Math.Max(0, _workerCount - _preloadSlots.CurrentCount - 1);
                 perfStart = Stopwatch.GetTimestamp();
             }
             try
