@@ -14,5 +14,8 @@ csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_style_var_elsewhere = true:suggestion
 dotnet_style_prefer_collection_expression = true:suggestion
 
-[*.{xaml,csproj,props,slnx,json,yml}]
+[*.xaml]
+indent_size = 4
+
+[*.{csproj,props,slnx,json,yml}]
 indent_size = 2
