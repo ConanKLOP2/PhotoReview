@@ -1,5 +1,10 @@
 # Quy tắc ưu tiên bắt buộc cho ứng dụng PhotoReview
 
+## Duy trì trạng thái công việc cho AI tiếp theo
+
+- Duy trì `task_on_progress.md` ở thư mục gốc. Đọc khi bắt đầu; cập nhật sau thay đổi đáng kể và trước khi bàn giao.
+- Ghi ngắn gọn: mục tiêu, file đã xem/sửa, thay đổi, vướng mắc, việc còn lại, lưu ý tiếp tục và kết quả kiểm tra. Nêu ngày cập nhật; không biến điều chưa xác minh thành sự thật.
+
 ## Quy trình bắt buộc trước khi thay đổi
 
 - Trước mọi thay đổi mã nguồn, cấu hình, giao diện hoặc cấu trúc dữ liệu, phải lập một plan chi tiết để người dùng xác nhận.
