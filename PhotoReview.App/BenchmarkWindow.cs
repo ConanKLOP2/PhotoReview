@@ -43,18 +43,32 @@ public sealed class BenchmarkWindow : Window
         try
         {
             var engine = new BenchmarkEngine();
+            var files = Directory.EnumerateFiles(_folder.Text, "*.*", SearchOption.TopDirectoryOnly).Where(IsImage).ToArray();
+            if (files.Length == 0) { _status.Text = "Không tìm thấy ảnh."; return; }
             foreach (BenchmarkProfile profile in _profiles.SelectedItems.Cast<BenchmarkProfile>().ToArray())
             {
             var progress = new Progress<BenchmarkProgress>(p => _status.Text = $"{p.ProfileId}: {p.Completed}/{p.Total} — {p.Message}");
-            var report = await engine.RunAsync(_folder.Text, profile, async (_, _, _, ct) =>
+            var executor = new BenchmarkImageExecutor();
+            var random = new Random(profile.Id.GetHashCode());
+            var report = await engine.RunAsync(_folder.Text, profile, async (_, workload, iteration, ct) =>
             {
-                var file = Directory.EnumerateFiles(_folder.Text, "*.*", SearchOption.TopDirectoryOnly)
-                    .FirstOrDefault(p => IsImage(p));
-                if (file is null) return (false, (ReviewMetricsSnapshot?)null);
-                await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, useAsync: true);
-                var buffer = new byte[64 * 1024];
-                while (await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct) > 0) { }
-                return (true, (ReviewMetricsSnapshot?)null);
+                if (workload == BenchmarkWorkload.FileAction)
+                {
+                    var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
+                    try
+                    {
+                        await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], ct), ct);
+                        var (actionImage, _) = await executor.DecodeAsync(temp, profile, ct);
+                        var moved = temp + ".moved";
+                        File.Move(temp, moved);
+                        File.Delete(moved);
+                        return (actionImage.PixelWidth > 0, (ReviewMetricsSnapshot?)null);
+                    }
+                    finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
+                }
+                var path = SelectFile(files, workload, iteration, random);
+                var (image, _) = await executor.DecodeAsync(path, profile, ct);
+                return (image.PixelWidth > 0 && image.PixelHeight > 0, (ReviewMetricsSnapshot?)null);
             }, progress);
             var reportPath = Path.Combine(Path.GetTempPath(), $"photoreview-benchmark-{report.RunId}.json");
             await File.WriteAllTextAsync(reportPath, report.ToJson());
@@ -68,4 +82,13 @@ public sealed class BenchmarkWindow : Window
     }
 
     private static bool IsImage(string path) => path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase);
+
+    private static string SelectFile(string[] files, BenchmarkWorkload workload, int iteration, Random random) => workload switch
+    {
+        BenchmarkWorkload.FirstFrame => files[0],
+        BenchmarkWorkload.Random => files[random.Next(files.Length)],
+        BenchmarkWorkload.WarmNext => files[iteration % 2 == 0 ? iteration / 2 % files.Length : files.Length - 1 - iteration / 2 % files.Length],
+        BenchmarkWorkload.Preload => files[iteration * 2 % files.Length],
+        _ => files[iteration % files.Length],
+    };
 }
