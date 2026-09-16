@@ -30,6 +30,7 @@ public sealed class PreloadScheduler : IDisposable
     // against that, so every access goes through _preloadedKeysGate.
     private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
     private readonly object _preloadedKeysGate = new();
+    private bool _disposed;
 
     public PreloadScheduler(
         PreviewImageService previewService,
@@ -48,7 +49,11 @@ public sealed class PreloadScheduler : IDisposable
     }
 
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
-    public void Cancel() => _preloadCts.Cancel();
+    public void Cancel()
+    {
+        if (Volatile.Read(ref _disposed)) return;
+        _preloadCts.Cancel();
+    }
 
     /// <summary>Drops the warmed-key set (folder reload / cache clear).</summary>
     public void ClearPreloadedKeys() { lock (_preloadedKeysGate) _preloadedKeys.Clear(); }
@@ -65,6 +70,9 @@ public sealed class PreloadScheduler : IDisposable
 
     public Task PreloadAroundAsync(int center)
     {
+        // Disposed schedulers must stay dead: without this check, a call here
+        // would resurrect a new CancellationTokenSource and background loop.
+        if (Volatile.Read(ref _disposed)) return Task.CompletedTask;
         // Navigation changes priority, but an already running decode is useful
         // and must remain available to ShowImageAsync through the in-flight map.
         if (_preloadCts.IsCancellationRequested)
@@ -174,7 +182,9 @@ public sealed class PreloadScheduler : IDisposable
 
     public void Dispose()
     {
+        Volatile.Write(ref _disposed, true);
         _preloadCts.Cancel();
         _preloadCts.Dispose();
+        _preloadSlots.Dispose();
     }
 }
