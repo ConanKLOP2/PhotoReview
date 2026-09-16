@@ -7,9 +7,9 @@ namespace PhotoReview.App;
 
 public sealed class FileHashService
 {
-    private sealed record HashEntry(long Length, DateTime LastWriteUtc, string Hash);
+    private sealed record HashEntry(string Path, long Length, DateTime LastWriteUtc, string Hash);
     private readonly BoundedLruCache<string, HashEntry> _cache = new(
-        16L * 1024 * 1024, _ => 128, StringComparer.OrdinalIgnoreCase);
+        16L * 1024 * 1024, entry => (entry.Path.Length * 2L) + 64, StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Lazy<Task<string>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private int _generation;
 
@@ -38,7 +38,7 @@ public sealed class FileHashService
         if (current.Length != length || current.LastWriteTimeUtc != lastWriteUtc)
             throw new IOException($"File changed while hashing: {path}");
         if (generation == Volatile.Read(ref _generation))
-            _cache.Set(path, new HashEntry(length, lastWriteUtc, hash));
+            _cache.Set(path, new HashEntry(path, length, lastWriteUtc, hash));
         return hash;
     }
 
