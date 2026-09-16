@@ -21,9 +21,9 @@ public static class RecoveryRetryService
             return new(false, "Đích đã tồn tại; không ghi đè.", null);
 
         var prepared = new JournalEntry(failed.Id, failed.Type, "Prepared", failed.Source, failed.Destination, sourceInfo.Length, sourceInfo.LastWriteTimeUtc, DateTime.UtcNow);
-        journal.Append(prepared);
         try
         {
+            journal.Append(prepared);
             Directory.CreateDirectory(Path.GetDirectoryName(failed.Destination)!);
             if (failed.Type == "Copy") File.Copy(failed.Source, failed.Destination);
             else File.Move(failed.Source, failed.Destination);
