@@ -12,14 +12,15 @@
   1. Không tải hoặc cài công cụ khi chưa hỏi người dùng. Không đổi cài đặt hệ thống hay bảo mật. Các bước cần admin (RAMMap, reboot) do **người dùng** làm.
   2. Khi không có biến môi trường chẩn đoán, **hành vi app không được đổi**. Mọi test hiện có phải đạt.
   3. Không commit ảnh thật, đường dẫn cá nhân, hay file dữ liệu thô > 5 MB (chỉ commit bản tóm tắt).
+  4. **Không bao giờ** gửi input ở mức hệ điều hành (`SendInput`, `SendKeys`, `keybd_event`, `mouse_event`, `AttachThreadInput`, `SetForegroundWindow`) và không đọc/ghi clipboard. Máy này là desktop dùng chung với ứng dụng Claude và các phiên khác: ngày 2026-09-16, phím mô phỏng của D01 đã rơi vào cửa sổ Claude Code. Chỉ điều khiển app trong chính process của agent (routed event, D06), hoặc nhờ người dùng tự thao tác.
 
 ## Bảng tổng quan
 
 | ID | Tên | Phụ thuộc | ∥ | Sửa code | TT |
 |---|---|---|---|---|---|
 | D00 | Chuẩn bị môi trường và fixture | T00 | | Không | DONE |
-| D01 | Phân tích nhanh từ AppLog | D00 | ∥1 | Script | TODO |
-| D02 | Đếm truy cập file (Process Monitor) | D00 | ∥1 | Không | TODO |
+| D01 | Phân tích nhanh từ AppLog (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Script | BLOCKED |
+| D02 | Đếm truy cập file (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Không | BLOCKED |
 | D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | TODO |
 | D04 | Gắn event vào các điểm đo | D03 | | Có | TODO |
 | D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | TODO |
@@ -58,7 +59,7 @@
   4. Viết `log-baseline.md`, ghi rõ hạn chế: chưa có mốc render, log làm tăng độ trễ, timestamp chỉ chính xác tới ms.
 - **Xong khi:** có bảng số liệu và danh sách giả thuyết H* được tăng hoặc giảm độ tin cậy.
 - **Kiểm thử:** script chạy được trên file log mẫu (commit một đoạn log ≤ 200 dòng đã ẩn đường dẫn vào `tools/diag/samples/`).
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Sonnet 5 (nâng từ L1 vì phải điều khiển app) · `diag/D01-D02` `3bf7f01` · đã có `parse-applog.ps1`, `procmon-summary.ps1`, log mẫu, tài liệu · **BLOCKED**: `SendInput` rơi vào cửa sổ Claude Code trên desktop dùng chung (đã gõ A/B/C + Ctrl+A/Ctrl+C, không có Enter; clipboard bị ghi đè rồi xóa) · config người dùng đã khôi phục (SHA-256 khớp) · Procmon chưa chạy · Coordinator: không merge `drive-app.ps1`, thêm quy tắc 4 · chạy lại bằng `--perf-session` (D06) + Procmon, với `PHOTOREVIEW_DATA_ROOT` tạm và **không** sửa config thật nếu D06 set mode qua reflection · dữ liệu duy nhất (N=1, F1 Preview cold): cache-state 9 ms, thumbnail 253 ms, preview 905 ms, T0→T2 1.417 ms.
 
 ### D02 — Đếm truy cập file ∥1
 - **Files:** `docs/refactoring/diagnosis/file-access.md` (mới), `tools/diag/procmon-filter.pmf` (tùy chọn).
@@ -68,7 +69,7 @@
   3. Export CSV. Đếm cho mỗi ảnh nguồn: số `CreateFile`, tổng byte `ReadFile`, số lần stat. Đếm truy cập file trong `cache\*.png`, `thumbnails\*.png`, `Sessions\*.json`, `operations.jsonl`.
   4. Kết luận cho H1, H2, H3 (tần suất ghi session), H9 (có đọc PNG cache không).
 - **Xong khi:** có bảng "số lần mở và byte đọc mỗi ảnh" theo mode và trạng thái cache.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Sonnet 5 (nâng từ L1 vì phải điều khiển app) · `diag/D01-D02` `3bf7f01` · đã có `parse-applog.ps1`, `procmon-summary.ps1`, log mẫu, tài liệu · **BLOCKED**: `SendInput` rơi vào cửa sổ Claude Code trên desktop dùng chung (đã gõ A/B/C + Ctrl+A/Ctrl+C, không có Enter; clipboard bị ghi đè rồi xóa) · config người dùng đã khôi phục (SHA-256 khớp) · Procmon chưa chạy · Coordinator: không merge `drive-app.ps1`, thêm quy tắc 4 · chạy lại bằng `--perf-session` (D06) + Procmon, với `PHOTOREVIEW_DATA_ROOT` tạm và **không** sửa config thật nếu D06 set mode qua reflection · dữ liệu duy nhất (N=1, F1 Preview cold): cache-state 9 ms, thumbnail 253 ms, preview 905 ms, T0→T2 1.417 ms.
 
 ### D03 — EventSource và listener ∥1
 - **Files:** `PhotoReview.App/Diagnostics/PhotoReviewPerf.cs` (mới), `PhotoReview.App/Diagnostics/PerfCsvListener.cs` (mới), `PhotoReview.App/App.xaml.cs` (khởi tạo listener khi có biến môi trường), `PhotoReview.Tests.Unit/PerfTraceTests.cs` (mới).
@@ -146,7 +147,7 @@
      - Đặt `PHOTOREVIEW_PERF_TRACE=<outDir>` **trước** khi tạo `Application`.
      - `PHOTOREVIEW_DATA_ROOT` là thư mục tạm, để không đụng session hay journal thật.
      - Mode được set qua reflection vào `_settings.LoadingMode` sau khi tạo window. **Không** ghi `config.json` thật; ghi rõ trong nhật ký nếu phải dùng cách khác.
-  2. Gửi phím bằng routed event thật: `new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, key) { RoutedEvent = Keyboard.KeyDownEvent }` rồi `window.RaiseEvent(...)`. Cách này đi qua `Window_KeyDown` nhưng **không** đi qua hàng đợi input của OS, nên `t_input` chỉ phản ánh độ trễ dispatcher. Nếu cần đo input thật, có thêm tùy chọn `--sendinput` dùng `SendInput` Win32 (cửa sổ phải đang foreground).
+  2. Gửi phím bằng routed event thật: `new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, key) { RoutedEvent = Keyboard.KeyDownEvent }` rồi `window.RaiseEvent(...)`. Cách này đi qua `Window_KeyDown` nhưng **không** đi qua hàng đợi input của OS, nên `t_input` chỉ phản ánh độ trễ dispatcher. **Cấm** dùng `SendInput`, `SendKeys`, `keybd_event`, `AttachThreadInput` hay `SetForegroundWindow`, vì chúng đi vào desktop dùng chung (xem quy tắc 4). Độ trễ input thật chỉ được đo khi người dùng tự bấm phím.
   3. Schema kịch bản JSON: `{ "name", "steps": [ {"open": "folder|file:<index>"}, {"key": "Right", "repeat": 100, "intervalMs": 1500}, {"waitMs": 3000}, {"waitIdle": true}, {"zoom": [1,2,4]}, {"pan": {"dx": 400, "dy": 0, "steps": 30}}, {"action": "Enter"} ] }`. Tạo file cho S1–S9 (plan mục 5). S8 chạy trên **bản sao** fixture trong thư mục tạm, vì Move làm đổi file.
   4. Sau mỗi kịch bản ghi `metrics.json` (`ReviewMetrics.Snapshot`), `process.json` (working set peak, private bytes, GC count gen0/1/2, `GC.GetTotalPauseDuration`, CPU time).
   5. `run-matrix.ps1`: tham số danh sách kịch bản × mode × điều kiện (`cold-app`, `cold-diskcache`, `warm`), số lần lặp, fixture root. Xóa disk cache khi cần. **Không** tự làm trống standby list; thay vào đó dừng lại và hỏi người dùng khi điều kiện `cold-os` được yêu cầu.
