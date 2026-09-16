@@ -25,7 +25,7 @@
 | D04 | Gắn event vào các điểm đo | D03 | | Có | DONE |
 | D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | TODO |
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | TODO |
-| D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | TODO |
+| D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | DONE |
 | D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | TODO |
 | D07 | Chạy ma trận kịch bản | D05, D06, D10, D11 | | Không | TODO |
 | D08 | ETW / PresentMon deep-dive | D07 | ∥3 | Không | TODO |
@@ -158,7 +158,7 @@
   4. Sau mỗi kịch bản ghi `metrics.json` (`ReviewMetrics.Snapshot`), `process.json` (working set peak, private bytes, GC count gen0/1/2, `GC.GetTotalPauseDuration`, CPU time).
   5. `run-matrix.ps1`: tham số danh sách kịch bản × mode × điều kiện (`cold-app`, `cold-diskcache`, `warm`), số lần lặp, fixture root. Xóa disk cache khi cần. **Không** tự làm trống standby list; thay vào đó dừng lại và hỏi người dùng khi điều kiện `cold-os` được yêu cầu.
 - **Xong khi:** chạy S2 (10 phím) ra CSV có đủ event và `metrics.json`.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16/17 · Opus 5 · `diag/D06-perf-session` `88da3af` · phím gửi bằng `PreviewKeyDown`/`KeyDown` routed event trong process (không gửi input OS, không Activate) · `WpfTestHost`: icon set qua reflection `_resourceAssembly`, chặn đọc/ghi window-placement thật, dispatcher hooks lấy qua reflection · mode set trong bộ nhớ, không ghi config · thay `_settings.Actions` trong bộ nhớ (config thật có Enter = Move vào F4), cấm các phím nguy hiểm, kiểm đích trước mỗi action · S2/S6/S7/S8 chạy thử đạt; key→present sơ bộ 3,9–15,2 ms (warm) · folder nguồn không đổi · `--ui-next-probe` đã sửa, PASS (p95 dao động ~1 s giữa các lượt, chưa rõ nguyên nhân) · **R3: Coordinator (Opus) tự review** vì agent Opus bị giới hạn chi tiêu: APPROVE, kèm sửa: bỏ tên thư mục nguồn khỏi tài liệu và script · VERIFY đạt 199/199.
 
 ### D11 — `--perf-analyze` ∥2
 - **Files:** `PhotoReview.Tests/PerfAnalyze.cs` (mới), `PhotoReview.Tests/Program.cs` (dispatch), `PhotoReview.Tests.Unit/PerfAnalyzeTests.cs` (mới, dùng CSV mẫu tự tạo), `tools/diag/samples/perf-sample.csv` (mới, nhỏ).
