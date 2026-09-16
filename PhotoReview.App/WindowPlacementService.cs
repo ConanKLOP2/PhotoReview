@@ -47,14 +47,15 @@ internal static class WindowPlacementService
             var handle = new WindowInteropHelper(window).Handle;
             if (handle == IntPtr.Zero) return;
             var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
-            if (!GetWindowPlacement(handle, placement)) return;
+            if (!GetWindowPlacement(handle, placement)) { AppLog.Error("Could not read window placement"); return; }
 
             // Never reopen minimized. Closing from the taskbar should restore normally.
             if (placement.ShowCommand == ShowMinimized) placement.ShowCommand = ShowNormal;
             Directory.CreateDirectory(Path.GetDirectoryName(PlacementPath)!);
             var temp = PlacementPath + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(placement, JsonOptions));
-            File.Move(temp, PlacementPath, true);
+            try { File.Move(temp, PlacementPath, true); }
+            catch { try { File.Delete(temp); } catch { } throw; }
         }
         catch (Exception ex)
         {
