@@ -749,6 +749,10 @@ public partial class MainWindow : Window
         var source = sourcePath;
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         StopImageReadsForAction();
+        // StopImageReadsForAction() just bumped _folderGeneration; capture it so every
+        // catalog/session/status mutation below (after the Task.Run await yields the UI
+        // thread) can check the user hasn't opened a different folder in the meantime.
+        var folderGeneration = _folderGeneration;
         var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: true);
         AppLog.Info($"FileAction classify-start category={category} source={sourcePath} next={nextPath ?? "<none>"}");
         try
@@ -779,20 +783,30 @@ public partial class MainWindow : Window
                 _moveHistory.Push((source, destination));
                 _lastUndoAction = new UndoAction("Move", source, destination, info.Length, info.LastWriteTimeUtc);
             }
-            if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
-            if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction completion ignored after folder switch: source={source}");
+            else
+            {
+                if (_session is not null) { _session.CurrentPath = _files.Count == 0 ? null : _files[Math.Min(_index, _files.Count - 1)]; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+                if (_files.Count == 0) StatusText.Text = "Đã xử lý hết ảnh trong folder.";
+            }
         }
         catch (Exception ex)
         {
-            // The catalog is advanced optimistically before the synchronous
-            // filesystem call. Restore the source when the operation fails so
-            // a failed Delete/Move does not silently lose the image from view.
-            if (File.Exists(source) && !_files.Contains(source, StringComparer.OrdinalIgnoreCase))
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction failure ignored after folder switch: source={source}, error={ex.Message}");
+            else
             {
-                var restoreIndex = Math.Clamp(sourceIndex < 0 ? _files.Count : sourceIndex, 0, _files.Count);
-                _files.Insert(restoreIndex, source);
+                // The catalog is advanced optimistically before the synchronous
+                // filesystem call. Restore the source when the operation fails so
+                // a failed Delete/Move does not silently lose the image from view.
+                if (File.Exists(source) && !_files.Contains(source, StringComparer.OrdinalIgnoreCase))
+                {
+                    var restoreIndex = Math.Clamp(sourceIndex < 0 ? _files.Count : sourceIndex, 0, _files.Count);
+                    _files.Insert(restoreIndex, source);
+                }
+                StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}";
             }
-            StatusText.Text = $"Không xử lý được {Path.GetFileName(source)}: {ex.Message}";
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
@@ -840,6 +854,10 @@ public partial class MainWindow : Window
         if (_index < 0 || _index >= _files.Count) return;
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         StopImageReadsForAction();
+        // StopImageReadsForAction() just bumped _folderGeneration; capture it so every
+        // catalog/status mutation below (after the Task.Run await yields the UI thread)
+        // can check the user hasn't opened a different folder in the meantime.
+        var folderGeneration = _folderGeneration;
         var sourcePath = _compareSelectedPath ?? _files[_index];
         var source = sourcePath;
         var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
@@ -873,17 +891,24 @@ public partial class MainWindow : Window
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
                 throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
             _journal.Append(new JournalEntry(operationId, operation, "Committed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
-            if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction completion ignored after folder switch: operation={operation} source={source}");
+            else if (_files.Count == 0) StatusText.Text = $"Đã thực hiện: {action.Name}";
         }
         catch (Exception ex)
         {
             if (prepared) _journal.Append(new JournalEntry(operationId, operation, "Failed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
-            if (operation == "Move" && !_files.Contains(source, StringComparer.OrdinalIgnoreCase) && File.Exists(source))
+            if (folderGeneration != _folderGeneration)
+                AppLog.Info($"FileAction failure ignored after folder switch: operation={operation} source={source}, error={ex.Message}");
+            else
             {
-                var restoreIndex = Math.Min(sourceIndex, _files.Count);
-                _files.Insert(restoreIndex, source);
+                if (operation == "Move" && !_files.Contains(source, StringComparer.OrdinalIgnoreCase) && File.Exists(source))
+                {
+                    var restoreIndex = Math.Min(sourceIndex, _files.Count);
+                    _files.Insert(restoreIndex, source);
+                }
+                StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
             }
-            StatusText.Text = $"Không thực hiện được {action.Name}: {ex.Message}";
             AppLog.Error($"FileAction failed operation={operation} source={source} destination={destinationPath}", ex);
         }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
@@ -926,6 +951,9 @@ public partial class MainWindow : Window
         {
             if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
             var move = _moveHistory.Pop();
+            // Captured before the Task.Run await yields the UI thread, so a folder switch
+            // mid-undo is detected instead of adding move.Source to a different folder's catalog.
+            var folderGeneration = _folderGeneration;
             try
             {
                 if (!File.Exists(move.Destination) || File.Exists(move.Source)) throw new IOException("Nguồn hoặc đích đã thay đổi.");
@@ -935,9 +963,14 @@ public partial class MainWindow : Window
                     throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
                 await Task.Run(() => File.Move(move.Destination, move.Source));
                 _lastUndoAction = null;
-                if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
-                _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
-                await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+                if (folderGeneration != _folderGeneration)
+                    AppLog.Info($"Undo completion ignored after folder switch: source={move.Source}");
+                else
+                {
+                    if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
+                    _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
+                    await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+                }
             }
             catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
         }
