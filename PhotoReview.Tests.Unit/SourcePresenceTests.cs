@@ -351,8 +351,8 @@ public sealed class SourcePresenceTests
 
     [Fact(DisplayName = "Disk cache cleanup tolerates filesystem access failures (source presence, not behavior)")]
     public void DiskCacheCleanupToleratesFilesystemAccessFailures() =>
-        Assert.True(ProjectSources.ThumbnailCache.Contains("catch (UnauthorizedAccessException) { }")
-            && ProjectSources.ThumbnailCache.Contains("catch (IOException) { }"));
+        Assert.True(ProjectSources.ThumbnailCache.Contains("catch (UnauthorizedAccessException ex)")
+            && ProjectSources.ThumbnailCache.Contains("catch (IOException ex)"));
 
     [Fact(DisplayName = "Disk cache can be cleared from UI without changing source images (source presence, not behavior)")]
     public void DiskCacheCanBeClearedFromUi() =>
