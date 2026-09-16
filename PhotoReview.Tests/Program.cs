@@ -70,6 +70,12 @@ if (args.Length == 2 && args[0] == "--ui-next-probe")
     return;
 }
 
+if (args.Length >= 1 && args[0] == "--perf-session")
+{
+    Environment.ExitCode = await PerfSession.RunAsync(args);
+    return;
+}
+
 if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
 {
     await LocalImageBenchmark.RunAsync(args[1], args.Length == 3 ? int.Parse(args[2]) : 8);

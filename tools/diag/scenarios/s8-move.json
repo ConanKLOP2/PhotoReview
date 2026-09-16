@@ -1,0 +1,11 @@
+{
+  "name": "S8-move",
+  "note": "Plan S8: 50 consecutive Move actions (Enter). Always runs on a temporary copy (<outDir>\\copy\\images, first 60 images). The real actions from config.json are replaced in memory by a single Move into <outDir>\\copy\\moved.",
+  "copy": { "kind": "files", "count": 60 },
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "action": "Enter", "repeat": 50, "intervalMs": 800 },
+    { "waitIdle": true, "timeoutMs": 30000 }
+  ]
+}
