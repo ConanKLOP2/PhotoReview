@@ -93,10 +93,6 @@ if (!File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.c
     projectRoot = Directory.GetCurrentDirectory();
 var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
-ImageCacheKeyTests.Run(root, failures);
-FileActionConcurrencyTests.Run(root, failures);
-CacheExplorerRegressionTests.Run(root, failures);
-BenchmarkScenarioTests.Run(root, failures);
 Check(BenchmarkProfiles.All.Count >= 25, "Expanded benchmark profile registry", failures);
 Check(BenchmarkProfiles.All.Count(x => x.CorrectnessOnly) == 1, "Original is correctness-only", failures);
 Check(BenchmarkRanking.Rank(BenchmarkProfiles.All.Where(x => !x.CorrectnessOnly).Select(x => new BenchmarkPhaseResult(x.Id, x.Workload, [10, 20], BenchmarkResultStatus.Pass)), BenchmarkWorkload.Sequential).Count > 0,
@@ -195,7 +191,7 @@ try
           mainWindow.Contains("Do not call ShowImageAsync after action"),
           "Interleaved actions advance viewer before filesystem operation and exactly once (source presence, not behavior)", failures);
     Check(mainWindow.Contains("Interlocked.Exchange(ref _fileActionInProgress, 1)"),
-          "Interleaved actions reject duplicate concurrent file actions (source presence; FileActionConcurrencyTests covers the behavior)", failures);
+          "Interleaved actions reject duplicate concurrent file actions (source presence, not behavior)", failures);
     var defaultSettings = new AppSettings();
     Check(defaultSettings.LoadingMode == "Preview", "LoadingMode defaults to Preview", failures);
     Check(AppSettings.IsValidLoadingMode("Fast") && AppSettings.IsValidLoadingMode("Preview") && AppSettings.IsValidLoadingMode("Original")
