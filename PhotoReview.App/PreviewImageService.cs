@@ -15,7 +15,7 @@ namespace PhotoReview.App;
 public sealed class PreviewImageService
 {
     private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache;
-    private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Task<BitmapImage>> _previewLoads = new();
+    private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Lazy<Task<BitmapImage>>> _previewLoads = new();
     private readonly ConcurrentDictionary<ImageCacheKey, (int Width, int Height)> _originalDimensions = new();
     private readonly object _cacheLifecycleGate = new();
     private long _cacheEpoch;
@@ -70,55 +70,63 @@ public sealed class PreviewImageService
         if (_cache.TryGet(key, out var cached)) { _metrics.RecordCacheHit(); return cached; }
         var cacheEpoch = Volatile.Read(ref _cacheEpoch);
         var loadKey = (key, cacheEpoch);
-        if (_previewLoads.TryGetValue(loadKey, out var pending))
+        // GetOrAdd + Lazy makes "is anyone already loading this key" atomic: a plain
+        // TryGetValue-then-set-indexer left a window where two concurrent misses (a
+        // preload worker and the viewer, say) could each start their own decode, and
+        // whichever's Task.Run finished first could remove the OTHER's still-running
+        // entry from the dictionary via a bare TryRemove(key), letting a third caller
+        // start yet another redundant decode.
+        var isNewLoad = false;
+        var lazy = _previewLoads.GetOrAdd(loadKey, _ =>
         {
-            _metrics.RecordInflightJoin();
-            return await pending;
-        }
-        _metrics.RecordCacheMiss();
-        var load = Task.Run(() =>
+            isNewLoad = true;
+            return new Lazy<Task<BitmapImage>>(() => DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+        });
+        if (isNewLoad) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
+        try { return await lazy.Value; }
+        finally { _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<BitmapImage>>>(loadKey, lazy)); }
+    }
+
+    private Task<BitmapImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) => Task.Run(() =>
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var sourceRead = false;
+        var bitmap = new BitmapImage();
+        var cachePath = GetDiskCachePath(key);
+        if (File.Exists(cachePath))
         {
-            var stopwatch = Stopwatch.StartNew();
-            var sourceRead = false;
-            var bitmap = new BitmapImage();
-            var cachePath = GetDiskCachePath(key);
-            if (File.Exists(cachePath))
+            try
             {
-                try
-                {
-                    using var cacheStream = File.OpenRead(cachePath);
-                    bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
-                    _metrics.RecordDiskCacheHit();
-                }
-                catch (Exception) when (File.Exists(cachePath))
-                {
-                    try { File.Delete(cachePath); } catch { }
-                    sourceRead = true;
-                    bitmap = DecodeWithFallback(path, targetWidth);
-                }
+                using var cacheStream = File.OpenRead(cachePath);
+                bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
+                _metrics.RecordDiskCacheHit();
             }
-            else
+            catch (Exception) when (File.Exists(cachePath))
             {
+                try { File.Delete(cachePath); } catch { }
                 sourceRead = true;
                 bitmap = DecodeWithFallback(path, targetWidth);
             }
-            // A path can be replaced while decode is in flight. Never publish
-            // the old pixels under the new source's identity.
-            if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
-            lock (_cacheLifecycleGate)
-                if (cacheEpoch == _cacheEpoch) _cache.Set(key, bitmap);
-            // Only cache downscaled previews to disk: PNG-encoding a full-resolution
-            // Original-mode decode is slower than just re-decoding the source JPEG,
-            // so it would cost more than it saves.
-            if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath, _diskCacheCapacityBytes);
-            stopwatch.Stop();
-            if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
-            return bitmap;
-        });
-        _previewLoads[loadKey] = load;
-        try { return await load; }
-        finally { _previewLoads.TryRemove(loadKey, out _); }
-    }
+        }
+        else
+        {
+            sourceRead = true;
+            bitmap = DecodeWithFallback(path, targetWidth);
+        }
+        // A path can be replaced while decode is in flight. Never publish
+        // the old pixels under the new source's identity.
+        if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
+        lock (_cacheLifecycleGate)
+            if (cacheEpoch == _cacheEpoch) _cache.Set(key, bitmap);
+        // Only cache downscaled previews to disk: PNG-encoding a full-resolution
+        // Original-mode decode is slower than just re-decoding the source JPEG,
+        // so it would cost more than it saves.
+        if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath, _diskCacheCapacityBytes);
+        stopwatch.Stop();
+        if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
+        return bitmap;
+    });
 
     public bool TryGetCachedPreview(string path, out BitmapImage bitmap)
     {

@@ -39,6 +39,14 @@ public sealed class PreviewImageServiceTests : IDisposable
             && _service.CacheCount == 1 && _service.CacheBytes > 0);
     }
 
+    [Fact(DisplayName = "Concurrent requests for the same key decode the source exactly once")]
+    public async Task ConcurrentRequestsForSameKeyDecodeOnce()
+    {
+        var results = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => _service.GetPreviewAsync(_previewPath)));
+        var snapshot = _metrics.Snapshot();
+        Assert.True(snapshot.SourceReads == 1 && results.All(image => ReferenceEquals(image, results[0])));
+    }
+
     [Fact(DisplayName = "Source byte metrics exclude cache deliveries and the cache returns the same decoded bitmap")]
     public async Task SourceByteMetricsExcludeCacheDeliveries()
     {
