@@ -1,22 +1,26 @@
-# PhotoReview — Plan tái cấu trúc
+# PhotoReview — Plan tái cấu trúc (B + C3)
 
-- **Ngày lập:** 2026-09-16
-- **Baseline:** `master` @ `86282cd`
-- **Trạng thái plan:** `CHỜ XÁC NHẬN`. Theo `AGENTS.md`, chưa được sửa source, cấu hình hay cấu trúc dữ liệu trước khi người dùng duyệt plan này.
-- **Danh sách task:** [`REFACTOR-TASKS.md`](REFACTOR-TASKS.md)
+- **Ngày lập:** 2026-09-16 · **Baseline:** `master` @ `86282cd`
+- **Quyết định hướng:** **B + C3** (người dùng chốt 2026-09-16).
+  - **B:** giữ WPF, tách thành nhiều project theo lớp và chuyển sang MVVM.
+  - **C3:** giữ WPF, thay bộ giải mã ảnh (decoder) sau interface `IImageDecoder`.
+- **Trạng thái:** đã chốt hướng. Task nào gắn **⛔Qn** thì phải chờ người dùng trả lời câu hỏi Qn (mục 11) mới được làm.
+- **Danh sách task:** [`REFACTOR-TASKS.md`](REFACTOR-TASKS.md). Mỗi task đủ nhỏ để một agent hoặc một model làm trong một phiên.
+- **Các hướng không chọn:** A (chỉ chia thư mục), C1 (WinUI 3), C2 (Avalonia), C4 (viết lại native). Lý do ở mục 3. C1 có thể mở lại qua ADR (T71).
 
 ---
 
 ## 1. Mục tiêu
 
-1. Tách `MainWindow.xaml.cs` (1086 dòng) thành các thành phần nhỏ, có ranh giới rõ và test được mà không cần mở cửa sổ WPF.
-2. Chia project thành các lớp: Core / Imaging / Platform / UI / Benchmark. Dependency chỉ đi một chiều.
-3. Thay 69 test kiểu source-presence (grep chuỗi trong source) bằng test hành vi. Gộp hai bộ test đang trùng nhau.
-4. Giữ các bất biến an toàn và hiệu năng trong `outputs/APP-MECHANISMS-VI.md`: cache key theo fingerprint, generation guard, Recycle Bin, journal, `FileShare.Delete`, advance-before-action.
-5. Tạo nền cho các tối ưu theo 4 nguyên tắc của `AGENTS.md`: đọc đĩa ít nhất, dùng nhiều RAM, review nhanh, giữ chất lượng ảnh cao. Ví dụ: tầng RAM chứa byte nguồn và chính sách RAM ước lượng theo kích thước đã decode.
-6. Có CI và quality gate để các lần refactor sau không làm hỏng hành vi.
+1. Tách `MainWindow.xaml.cs` (1086 dòng) thành ViewModel và coordinator test được. Sau khi xong, file này ≤ 250 dòng.
+2. Chia project theo lớp: Core / Imaging / Platform.Windows / App / Benchmarking. Dependency chỉ đi một chiều và có test kiến trúc kiểm tra.
+3. Thay 69 test source-presence bằng test hành vi. Gộp hai bộ test thành một bộ xUnit.
+4. **(C3)** Đưa decoder ra sau `IImageDecoder` và thêm backend nhanh hơn: WIC gọi trực tiếp có decode thu nhỏ, và/hoặc libjpeg-turbo. Backend mới phải có cổng chất lượng: màu/ICC, EXIF orientation, so pixel. Backend cũ (WPF `BitmapImage`) luôn giữ làm fallback.
+5. Cải thiện chất lượng hiển thị: xử lý EXIF orientation, đặt `BitmapScalingMode` chất lượng cao cho ảnh chính.
+6. Tối ưu theo 4 nguyên tắc của `AGENTS.md`: đọc đĩa ít nhất, dùng nhiều RAM, review nhanh, chất lượng ảnh tốt nhất.
+7. Giữ nguyên các bất biến an toàn (mục 4.6). Có CI.
 
-**Không phải mục tiêu của đợt này:** thêm tính năng người dùng mới, đổi UX, hỗ trợ đa nền tảng.
+**Không phải mục tiêu:** tính năng người dùng mới, đổi UX (ngoài orientation và chất lượng scale), đa nền tảng, đổi UI framework.
 
 ---
 
@@ -26,12 +30,12 @@
 
 | Hạng mục | Giá trị |
 |---|---|
-| Tổng code và tài liệu có track | ~8.900 dòng, 93 file |
-| Project | `PhotoReview.App` (WinExe, WPF và WinForms), `PhotoReview.Tests` (console runner tự viết, 147 `Check(...)`), `PhotoReview.Tests.Unit` (xUnit, 188 Fact/Theory) |
-| File lớn nhất | `MainWindow.xaml.cs` 1086 dòng, `PhotoReview.Tests/Program.cs` 627 dòng, `ServiceBehaviorTests.cs` 419 dòng, `SourcePresenceTests.cs` 404 dòng |
-| Namespace | Mọi thứ nằm trong `PhotoReview.App`, không có thư mục con |
-| CI | Chưa có (`.github/` không tồn tại) |
-| Quản lý build | Chỉ có `Directory.Build.props` (Nullable, ImplicitUsings). Chưa có `global.json`, `.editorconfig`, `Directory.Packages.props`, analyzer |
+| Code và tài liệu có track | ~8.900 dòng / 93 file. Riêng `PhotoReview.App` ~4.850 dòng |
+| Project | `PhotoReview.App` (WinExe, WPF và WinForms), `PhotoReview.Tests` (console, 147 `Check(...)`), `PhotoReview.Tests.Unit` (xUnit, 188 test) |
+| File lớn nhất | `MainWindow.xaml.cs` 1086, `PhotoReview.Tests/Program.cs` 627, `ServiceBehaviorTests.cs` 419, `SourcePresenceTests.cs` 404 |
+| Namespace | Toàn bộ nằm trong `PhotoReview.App`, không có thư mục con |
+| Build | Chỉ có `Directory.Build.props`. Chưa có CI, `global.json`, `.editorconfig`, CPM, analyzer |
+| Decode | `BitmapImage` + `DecodePixelWidth` (WIC qua WPF), `BitmapCacheOption.OnLoad`, `Freeze()`. Chưa xử lý EXIF orientation. Chưa đặt `BitmapScalingMode` (WPF mặc định dùng scale tuyến tính) |
 
 ### 2.2 Bản đồ thành phần
 
@@ -39,250 +43,285 @@
 App.xaml.cs ──► MainWindow (UI + điều phối + nghiệp vụ + I/O)
                  ├─ LoadFolderAsync        : scan, sort, Explorer snapshot, generation guard
                  ├─ ShowImageAsync         : cache key, thumbnail, decode, compare, hash, status, session save
-                 ├─ Window_KeyDown         : ánh xạ phím → lệnh (chuỗi if tuần tự)
+                 ├─ Window_KeyDown         : ánh xạ phím → lệnh (chuỗi if)
                  ├─ ClassifyCurrentAsync   : Recycle (+ nhánh Move "Folder2" không còn được gọi)
                  ├─ ExecuteActionAsync     : Move/Copy + journal + undo
                  ├─ RemoveDuplicatesAsync  : hash batch + Recycle
                  ├─ Undo*                  : move stack + Recycle Bin restore
                  └─ zoom/fit/fullscreen, sibling folder, compare selection
-Services (static hoặc instance, cùng namespace):
-  PreviewImageService, PreloadScheduler, ThumbnailCache, DiskCacheStore(static),
-  BoundedLruCache, ImageCacheKey, FileHashService, ExplorerOrderService(+COM),
-  OperationJournal, RecoveryRetryService, RecycleBinRestoreService, SessionStore,
-  AppSettings(+validation, migrate, I/O), AppLog(static), ReviewMetrics, PhysicalMemory,
-  ImageSortService, SiblingFolderService, ComparePairService, DragDropInputService,
-  InstanceLock, WindowPlacementService, AdaptivePreviewPolicy, PreloadOrderService
+Services (cùng namespace): PreviewImageService, PreloadScheduler, ThumbnailCache,
+  DiskCacheStore(static), BoundedLruCache, ImageCacheKey, FileHashService,
+  ExplorerOrderService(+COM), OperationJournal, RecoveryRetryService,
+  RecycleBinRestoreService, SessionStore, AppSettings, AppLog(static), ReviewMetrics,
+  PhysicalMemory, ImageSortService(P/Invoke StrCmpLogicalW), SiblingFolderService,
+  ComparePairService, DragDropInputService, InstanceLock, WindowPlacementService,
+  AdaptivePreviewPolicy, PreloadOrderService
 Benchmark* (Engine, Executor, Models, Profiles, WorkloadRunner, Window) nằm trong app production.
 ```
 
-### 2.3 Vấn đề chính (xếp theo mức ảnh hưởng)
+### 2.3 Vấn đề (P1–P14)
 
 | # | Vấn đề | Bằng chứng | Hệ quả |
 |---|---|---|---|
-| P1 | **God class `MainWindow`** | 20+ field trạng thái (`_files`, `_index`, 3 bộ đếm generation, `_moveHistory`, `_lastUndoAction`, `_session`, `_fileActionInProgress`…). UI, nghiệp vụ và I/O trộn trong cùng method | Không test được hành vi. Race giữa các generation chỉ được bảo vệ bằng comment |
-| P2 | **Test khóa vào chuỗi source** | 69 test trong `SourcePresenceTests` và nhiều `mainWindow.Contains(...)` trong `Program.cs` | Đổi tên hoặc tách method là test đỏ dù hành vi không đổi. Đây là rào cản lớn nhất khi refactor |
-| P3 | **Hai bộ test trùng nhau** | 5 file giống gần hết giữa `PhotoReview.Tests` và `PhotoReview.Tests.Unit`; CLI runner vừa là test vừa là benchmark CLI vừa là probe | Duy trì hai lần. Không rõ đâu là nguồn chuẩn |
-| P4 | **Stringly-typed** | `LoadingMode`, `ImageSortMode`, `InitialViewMode`, `ReviewAction.Operation`, `JournalEntry.Type/State` đều là `string`, so sánh bằng `OrdinalIgnoreCase` ở nhiều nơi. `IsValidImageSortMode` lặp `"Name"` | Dễ gõ sai, logic normalize bị rải rác |
-| P5 | **Đường dẫn dữ liệu không nhất quán** | `PHOTOREVIEW_DATA_ROOT` được tự tính ở 3 nơi (Journal, Session, AppLog với root khác nhau). `AppSettings`, cache preview và thumbnail luôn dùng `LocalAppData`, bỏ qua biến này | Test có thể đụng config thật. Khó cô lập dữ liệu |
-| P6 | **Static và global state** | `AppLog`, `DiskCacheStore`, `AppSettings.Load()` là static. `PreloadScheduler` gọi `Dispatcher.Yield` | Test phải tắt chạy song song (`DisableTestParallelization`). Không inject được |
-| P7 | **I/O đồng bộ trên UI thread theo từng ảnh** | `_sessionStore.Save` gọi sau mỗi lần present. `SetZoom` gọi `new FileInfo().Length`. `_journal.ReadCommittedMoves()` đọc toàn bộ journal khi khởi động | Trái nguyên tắc 1 và 3 của AGENTS. Journal lớn dần theo thời gian vì không compaction |
-| P8 | **Đọc nguồn nhiều lần** | Preview mode: thumbnail decode, rồi adaptive decode, rồi đọc header dimension, rồi hash (nếu compare). Mỗi bước mở file riêng | Trái nguyên tắc 1 |
-| P9 | **Chính sách RAM lệch đơn vị** | `FullFolderRamThresholdBytes = ImageCacheCapacityBytes` (16 GB **decoded**) được so với `_totalSourceBytes` (byte **nén**) | 16 GB JPEG decode ra lớn hơn nhiều, nên quyết định "preload toàn folder" có thể sai |
-| P10 | **Benchmark nằm trong binary production** | 6 file `Benchmark*` và `BenchmarkWindow` | Binary to hơn. Code đo lường lẫn với code sản phẩm |
-| P11 | **Phụ thuộc WinForms chỉ để chọn folder** | `UseWindowsForms=true` dùng cho `FolderBrowserDialog`. Vì vậy phải viết `System.Windows.MessageBox`, `System.Windows.DragEventArgs`… | Namespace bị nhập nhằng. .NET 8+ đã có `Microsoft.Win32.OpenFolderDialog` |
-| P12 | **Code chết và thiếu nhất quán** | Nhánh `else` trong `ClassifyCurrentAsync` (Folder2) không còn đường gọi. `ShortcutMappings.MoveToFolder2` là alias legacy. `UndoLastMoveAsync` so `Destination` phân biệt hoa thường. `ExecuteActionAsync` có thể `Insert(-1)` khi `sourceIndex < 0` | Rủi ro bug tiềm ẩn |
-| P13 | **Quy trình trong AGENTS mâu thuẫn với thực tế** | AGENTS yêu cầu `git push origin master`, nhưng lịch sử dùng feature branch và PR (#1, #2) | Agent có thể push thẳng master |
+| P1 | God class `MainWindow` | 20+ field trạng thái, 3 bộ đếm generation, UI + nghiệp vụ + I/O trộn lẫn | Không test được hành vi. Race chỉ được bảo vệ bằng comment |
+| P2 | Test khóa vào chuỗi source | 69 test trong `SourcePresenceTests` và nhiều `mainWindow.Contains(...)` trong `Program.cs` | Refactor là test đỏ dù hành vi không đổi |
+| P3 | Hai bộ test trùng nhau | 5 file giống nhau giữa `PhotoReview.Tests` và `Tests.Unit`. CLI vừa là test vừa là benchmark vừa là probe | Duy trì hai lần |
+| P4 | Stringly-typed | `LoadingMode`, `ImageSortMode`, `InitialViewMode`, `ReviewAction.Operation`, `JournalEntry.Type/State` | Dễ gõ sai. Logic normalize rải rác |
+| P5 | Đường dẫn dữ liệu không nhất quán | `PHOTOREVIEW_DATA_ROOT` được tự tính ở 3 nơi với root khác nhau. Config và cache bỏ qua biến này | Test có thể đụng dữ liệu thật |
+| P6 | Static và global state | `AppLog`, `DiskCacheStore`, `AppSettings.Load()`. `PreloadScheduler` gọi `Dispatcher.Yield` | Test phải chạy tuần tự. Không inject được |
+| P7 | I/O đồng bộ trên UI thread | Session được ghi sau mỗi lần present. `SetZoom` gọi `FileInfo`. Journal được đọc toàn bộ khi khởi động và không bao giờ compaction | Trái nguyên tắc 1 và 3 |
+| P8 | Đọc nguồn nhiều lần | Preview mode: thumbnail, adaptive, header, hash. Mỗi bước mở file riêng | Trái nguyên tắc 1 |
+| P9 | Chính sách RAM lệch đơn vị | Ngưỡng 16 GB (tính theo ảnh **đã decode**) được so với tổng byte **nén** trên đĩa | Quyết định full-folder preload có thể sai |
+| P10 | Benchmark nằm trong binary production | 6 file `Benchmark*` | Binary lớn hơn, code lẫn lộn |
+| P11 | WinForms chỉ dùng cho `FolderBrowserDialog` | `UseWindowsForms=true` | Namespace nhập nhằng (phải viết `System.Windows.MessageBox`…) |
+| P12 | Code chết và bug nhỏ | Nhánh Folder2 không còn đường gọi. Undo so `Destination` phân biệt hoa thường. Có thể `Insert(-1)` trong `ExecuteActionAsync` | Rủi ro tiềm ẩn |
+| P13 | AGENTS mâu thuẫn với thực tế | Yêu cầu "push origin master", nhưng lịch sử dùng PR | Agent có thể push thẳng master |
+| P14 | **Chất lượng hiển thị** | Không áp EXIF orientation: ảnh chụp dọc có thể hiển thị nằm ngang. Chưa đặt `BitmapScalingMode` | Trái nguyên tắc 4 |
 
 ### 2.4 Điểm mạnh cần giữ
 
-- Các bất biến cache/lifecycle đã được suy nghĩ kỹ: epoch, in-flight dedup bằng `Lazy` và `GetOrAdd`, kiểm tra fingerprint sau decode, persist queue có giới hạn, prune được gộp.
-- Journal theo mô hình Prepared/Committed/Failed, reconcile khi khởi động, Recycle Bin thay cho xóa thật.
-- Explorer COM chạy trên một STA pump, có timeout và fallback.
-- Nhiều logic thuần đã được tách thành service nhỏ: sort, sibling, compare pair, drag-drop, preload order.
+Epoch và in-flight dedup (`Lazy` + `GetOrAdd`), kiểm tra fingerprint sau decode, persist queue có giới hạn, prune được gộp theo thư mục. Journal Prepared/Committed/Failed và reconcile khi khởi động. Recycle Bin thay cho xóa thật. Explorer COM chạy trên STA pump có timeout và fallback. Nhiều service thuần đã được tách sẵn.
 
 ---
 
-## 3. Các hướng tái cấu trúc
+## 3. So sánh hướng và lý do chọn B + C3
 
-### Hướng A — Refactor tại chỗ (1 project, chia thư mục và namespace)
+### 3.1 Bảng so sánh
 
-- Giữ nguyên `PhotoReview.App`. Chia thư mục `Core/`, `Imaging/`, `Platform/`, `Ui/`, `Benchmark/`. Tách `MainWindow` thành controller dạng partial hoặc lớp thường.
-- **Ưu:** rủi ro thấp, ít thay đổi build và publish.
-- **Nhược:** không có gì chặn dependency sai chiều. Core vẫn phụ thuộc WPF, nên test vẫn cần `net10.0-windows`. Benchmark vẫn nằm trong app.
-- **Công sức:** khoảng 3–5 ngày agent.
+| Tiêu chí | B (phân lớp + MVVM) | C1 WinUI 3 + Win2D | C2 Avalonia + Skia | **C3 thay decoder** | C4 native C++ |
+|---|---|---|---|---|---|
+| Tái sử dụng code | ~90% | Core/Platform giữ được, Views + Imaging viết lại | Như C1 | ~95% | ~0% |
+| Công sức (agent-day) | 8–12 | 15–25 | 15–25 | 5–9 | 40+ |
+| Rủi ro hồi quy | Trung bình (có test giữ hành vi) | Cao | Cao | Thấp–TB (màu, EXIF, định dạng) | Rất cao |
+| Tốc độ decode | Như cũ | Vẫn là WIC, không tự nhanh hơn | libjpeg-turbo | **Cải thiện trực tiếp** (decode thu nhỏ theo hệ số DCT, bỏ lớp `BitmapImage`) | Tối đa |
+| Tốc độ render | Như cũ | Tiềm năng tốt hơn (D3D11) | Tốt | Như cũ | Tối đa |
+| Chất lượng | Chỉnh được `BitmapScalingMode` | HighQualityCubic | Tốt | Kiểm soát được ICC và orientation | Toàn quyền |
+| Triển khai | Như cũ | Cần Windows App Runtime hoặc self-contained, bản phát hành lớn hơn | Ổn | Thêm DLL native (nếu chọn turbojpeg) | Nhỏ |
+| Đa nền tảng | Không cần | Không | Có, nhưng vô nghĩa (Explorer, Recycle Bin chỉ có trên Windows) | Không cần | Không |
 
-### Hướng B — Kiến trúc phân lớp nhiều project và MVVM (**Khuyến nghị**)
+### 3.2 Lý do
+
+- Nút thắt có khả năng lớn nhất của review là **đọc đĩa và decode**. C1 vẫn decode bằng WIC nên không giải quyết nút này. C3 và R-4 giải quyết trực tiếp.
+- B là nền bắt buộc để C3 (và C1 nếu có sau này) thay thế được mà không đụng UI.
+- Chỉ mở lại C1 khi benchmark (T66) cho thấy `UiAssign`/render chiếm phần lớn thời gian key→present. Việc này được ghi trong ADR T71.
+
+### 3.3 Ràng buộc thiết kế để B không chặn các hướng sau (K-1…K-3)
+
+| ID | Ràng buộc | Kiểm tra bằng |
+|---|---|---|
+| K-1 | Tầng Imaging (cache, preload, decoder) làm việc với `DecodedImage` (buffer BGRA32 + kích thước + metadata) hoặc một handle trừu tượng. Kiểu WPF `BitmapSource` chỉ xuất hiện trong **adapter** `WpfImageAdapter` ở biên | Test kiến trúc: namespace `PhotoReview.Imaging.Core` không tham chiếu `System.Windows.Media` |
+| K-2 | ViewModel không tham chiếu `System.Windows.*`. Dùng `IUiScheduler`, `IDialogService` và ánh xạ phím ở biên | Test kiến trúc trên namespace `PhotoReview.App.ViewModels` |
+| K-3 | Decoder được chọn qua `IImageDecoderFactory` theo setting `DecoderBackend`, có **fallback chain** (backend mới lỗi → backend WPF) | Unit test factory + test lỗi giả lập |
+
+> **Lưu ý về K-1:** chuyển toàn bộ cache sang buffer thô làm mỗi ảnh phải copy thêm một lần sang `BitmapSource`. Phương án thực tế: cache lưu `IDecodedImage` có property `PlatformImage` (WPF `BitmapSource` đã `Freeze`) được tạo **một lần** khi decode. Ước lượng kích thước vẫn là w×h×4. Test kiến trúc chỉ cấm type WPF xuất hiện trong **chữ ký public** của cache và preload.
+
+---
+
+## 4. Kiến trúc đích
+
+### 4.1 Layout
 
 ```text
 src/
-  PhotoReview.Core               net10.0            (không WPF, không Win32)
-  PhotoReview.Imaging            net10.0-windows    (WPF Media/Imaging, không Window)
-  PhotoReview.Platform.Windows   net10.0-windows    (COM Explorer, Recycle Bin, memory, mutex, placement)
-  PhotoReview.App                net10.0-windows    (WinExe: Views, ViewModels, composition root)
-  PhotoReview.Benchmarking       net10.0-windows    (engine, profiles, workloads, executor)
+  PhotoReview.Core               net10.0
+  PhotoReview.Imaging            net10.0-windows   (UseWPF, không Window)
+  PhotoReview.Imaging.TurboJpeg  net10.0-windows   (tùy chọn C3, P/Invoke turbojpeg.dll)
+  PhotoReview.Platform.Windows   net10.0-windows
+  PhotoReview.Benchmarking       net10.0-windows
+  PhotoReview.App                net10.0-windows   (WinExe)
 tools/
-  PhotoReview.Benchmark.Cli      net10.0-windows    (Exe: --benchmark*, --preload-bench, probes)
+  PhotoReview.Benchmark.Cli      net10.0-windows   (Exe)
+  *.ps1
 tests/
-  PhotoReview.Core.Tests         net10.0            (xUnit, chạy song song)
-  PhotoReview.Imaging.Tests      net10.0-windows
-  PhotoReview.App.Tests          net10.0-windows    (ViewModel + controller với fake)
-  PhotoReview.Integration.Tests  net10.0-windows    (filesystem thật, Explorer, Recycle Bin; Trait=Integration)
+  PhotoReview.Core.Tests         net10.0
+  PhotoReview.Imaging.Tests      net10.0-windows   (gồm cổng chất lượng decoder)
+  PhotoReview.App.Tests          net10.0-windows   (ViewModel, coordinator)
+  PhotoReview.Integration.Tests  net10.0-windows   (Trait Integration/Manual)
+  PhotoReview.Architecture.Tests net10.0-windows
+  Fixtures/                      (ảnh tổng hợp nhỏ + generator; ảnh thật lấy qua biến PHOTOREVIEW_FIXTURE_DIR)
 ```
-
-Chiều phụ thuộc (bắt buộc, có test kiến trúc kiểm tra):
 
 ```text
 App ──► Imaging ──► Core
- │  └─► Platform.Windows ──► Core
- └─► Benchmarking (tùy chọn, xem R-5) ──► Imaging, Core
-Benchmark.Cli ──► Benchmarking
+ │  ├─► Imaging.TurboJpeg ──► Imaging
+ │  ├─► Platform.Windows ──► Core
+ │  └─► Benchmarking ──► Imaging, Core
+Benchmark.Cli ──► Benchmarking (+ Imaging.TurboJpeg)
 ```
 
-- **Ưu:** ranh giới được compiler đảm bảo. Core test được nhanh trên `net10.0`. App production có thể bỏ Benchmark. ViewModel test được. Mở đường cho Hướng C sau này.
-- **Nhược:** đổi đường dẫn project nên phải cập nhật `AGENTS.md`, `README.md`, `tools/*.ps1` và đường dẫn publish mặc định. Công sức lớn hơn.
-- **Công sức:** khoảng 8–12 ngày agent, chia 7 wave, nhiều task chạy song song được.
-
-### Hướng C — Viết lại toàn bộ (đánh giá, chưa khuyến nghị làm ngay)
-
-| Phương án | Lợi | Hại | Đánh giá |
-|---|---|---|---|
-| **C1. WinUI 3 + Win2D** (GPU decode/render) | Pipeline GPU, decode WIC nhanh, UI hiện đại | Mất WPF interop, packaging phức tạp hơn, viết lại toàn bộ UI, đường COM Explorer giữ nguyên | Chỉ nên cân nhắc nếu benchmark cho thấy WPF render/assign là nút thắt |
-| **C2. Avalonia + SkiaSharp** | Đa nền tảng, Skia decode nhanh | Tính năng lõi là Explorer order và Recycle Bin, vốn chỉ có trên Windows, nên đa nền tảng không có giá trị | Không khuyến nghị |
-| **C3. Giữ WPF, thay decode backend** (libjpeg-turbo, NetVips, hoặc WIC trực tiếp + `WriteableBitmap`) | Tăng tốc decode (nút thắt thực tế của review), không phải viết lại UI | Thêm native dependency, cần benchmark chứng minh | **Đáng làm dưới dạng spike** sau khi xong Hướng B, vì decode backend đã có interface |
-| **C4. Native C++ (Win32/D2D)** | Hiệu năng tối đa | Chi phí rất lớn, mất toàn bộ code và test hiện có | Không khuyến nghị |
-
-**Kết luận:** làm **Hướng B**, đặt interface `IImageDecoder` ở tầng Imaging để có thể chạy spike **C3** (R-7) mà không phải viết lại. Hướng C1 chỉ được mở lại qua ADR nếu số liệu benchmark chứng minh cần.
-
----
-
-## 4. Kiến trúc đích (Hướng B)
-
-### 4.1 PhotoReview.Core (không phụ thuộc UI)
+### 4.2 PhotoReview.Core
 
 ```text
-Core/
-  Abstractions/  IFileSystem, IClock, IAppPaths, IMemoryProbe, IRecycleBin,
-                 IExplorerOrderProvider, ILog, IUiScheduler (Yield), IDialogService
-  Settings/      AppSettings (POCO + enum), SettingsStore (I/O, migrate, validate),
-                 ShortcutMappings, ReviewAction, KeyName (string đã validate, không dùng WPF Key)
-  Model/         LoadingMode, ImageSortMode, InitialViewMode, FileOperationType,
-                 JournalState (enum + JsonStringEnumConverter giữ tương thích file cũ)
-  Catalog/       ReviewCatalog (files, index, Next/Prev/First/Remove/Insert/Reorder),
-                 GenerationClock (Navigation / Folder / Interaction), ImageSortService,
-                 SiblingFolderService, ComparePairService, DragDropInputService
-  FileActions/   FileActionService (Move/Copy/Recycle + journal + verify),
-                 UndoService (move stack + recycle restore), DuplicateFinder (size → hash),
-                 OperationJournal (+ compaction), RecoveryRetryService
-  Session/       SessionStore (+ debounce writer)
-  Diagnostics/   ReviewMetrics, AppLog (instance, ILog), BenchmarkStatistics
-  Caching/       BoundedLruCache
+Abstractions/  IFileSystem, IClock, IAppPaths, IMemoryProbe, IRecycleBin, IExplorerOrderProvider,
+               ILog, IUiScheduler, IDialogService, IKeyNameValidator, INaturalComparer
+Model/         LoadingMode, ImageSortMode, InitialViewMode, FileOperationType, JournalState,
+               DecoderBackend, LenientEnumConverter<T>
+Settings/      AppSettings (POCO), ShortcutMappings, ReviewAction, SettingsValidator, SettingsStore,
+               PerformanceOptions
+Catalog/       ReviewCatalog, CatalogEntry, GenerationClock, ImageSortService (managed + INaturalComparer),
+               SiblingFolderService, ComparePairService, DragDropInputService, ImageFileTypes,
+               ExplorerSnapshotValidator
+FileActions/   FileActionService, UndoService, DuplicateFinder, OperationJournal, RecoveryRetryService
+Session/       SessionStore, SessionWriter (debounce)
+Diagnostics/   ReviewMetrics, FileLog (ILog), BenchmarkStatistics
+Caching/       BoundedLruCache
+AppPaths.cs
 ```
 
-> Về `KeyName`: Core không được tham chiếu `System.Windows.Input.Key`. Validate phím dùng một interface `IKeyNameValidator` do App cung cấp, hoặc danh sách tên phím tĩnh trong Core. App ánh xạ sang `Key` ở biên.
-
-### 4.2 PhotoReview.Imaging
+### 4.3 PhotoReview.Imaging (B + C3)
 
 ```text
-Imaging/
-  ImageCacheKey, AdaptivePreviewPolicy, PreloadOrderService
-  Decoding/   IImageDecoder (WPF WIC mặc định), DecodeResult (bitmap, downscaled, bytesRead)
-  Caching/    PreviewImageService, ThumbnailCache, DiskCacheStore (instance, 1 instance/directory),
-              SourceBytesCache (mới, R-4: tầng RAM chứa byte nguồn đã đọc)
-  Preload/    PreloadScheduler (dùng IUiScheduler thay cho Dispatcher.Yield), RamBudgetPolicy (R-4)
-  Hashing/    FileHashService (dùng lại SourceBytesCache nếu có)
+Decoding/
+  IImageDecoder            Decode(DecodeRequest) → IDecodedImage ; ReadInfo(source) → ImageInfo
+  DecodeRequest            Source (path hoặc ReadOnlyMemory<byte>), TargetWidth (0 = gốc), ApplyOrientation=true
+  IDecodedImage            PixelWidth, PixelHeight, Downscaled, Orientation, EstimatedBytes, PlatformImage (object)
+  ImageInfo                Width, Height (sau khi áp orientation), Orientation, HasIccProfile, Format
+  IImageDecoderFactory     Create(DecoderBackend) + fallback chain
+  WpfBitmapImageDecoder    (backend hiện tại, chuyển nguyên từ PreviewImageService.DecodeSource)
+  WicDirectDecoder         (C3-a: COM IWICImagingFactory, IWICBitmapSourceTransform để decode thu nhỏ,
+                            IWICColorTransform để chuyển ICC → sRGB, đọc orientation từ metadata)
+  ExifOrientation          đọc tag 274 + áp rotate/flip (dùng chung cho mọi backend)
+  WpfImageAdapter          buffer → BitmapSource.Create(...).Freeze()
+Caching/    PreviewImageService, ThumbnailCache, DiskCacheStore (instance), SourceBytesCache (R-4)
+Preload/    PreloadScheduler, PreloadOptions, RamBudgetPolicy
+Hashing/    FileHashService
+ImageCacheKey, AdaptivePreviewPolicy, PreloadOrderService
 ```
 
-### 4.3 PhotoReview.Platform.Windows
+`PhotoReview.Imaging.TurboJpeg` (C3-b): `TurboJpegDecoder : IImageDecoder`, chỉ xử lý JPEG, các định dạng khác chuyển cho backend kế tiếp. Dùng `tj3Init`, `tj3DecompressHeader`, `tj3SetScalingFactor` (1/8…1), `tj3Decompress8` ra BGRA. ICC thì đọc qua WIC hoặc chuyển bằng `IWICColorTransform`. Nếu ảnh có ICC mà không chuyển được, **chuyển ảnh đó cho WIC**. DLL `turbojpeg.dll` (x64) được đóng gói kèm app. Giấy phép: IJG / BSD-3-Clause / zlib (ghi vào `THIRD-PARTY-NOTICES.md`).
 
-`ExplorerOrderService` + `ExplorerComInterop` + `ExplorerSnapshotValidator`, `RecycleBin` (xóa và khôi phục, triển khai `IRecycleBin`), `PhysicalMemory` (`IMemoryProbe`), `InstanceLock`, `WindowPlacementService`, `AppPaths` (một nơi duy nhất đọc `PHOTOREVIEW_DATA_ROOT`).
+### 4.4 C3: backend, chọn lựa và cổng chất lượng
 
-### 4.4 PhotoReview.App (MVVM)
+| Backend | Phụ thuộc | Định dạng | Decode thu nhỏ | ICC | Ghi chú |
+|---|---|---|---|---|---|
+| `Wpf` (mặc định hiện tại) | Không | Mọi codec WIC | `DecodePixelWidth` | WPF tự xử lý khi không bật `IgnoreColorProfile` | Tham chiếu chất lượng |
+| `WicDirect` (C3-a) | Không (COM có sẵn trong Windows) | Mọi codec WIC | `IWICBitmapSourceTransform` (JPEG hỗ trợ scale theo DCT) rồi đến `IWICBitmapScaler` (Fant/HighQualityCubic) | `IWICColorContext` + `IWICColorTransform` | **Ưu tiên thử trước** vì không thêm dependency |
+| `TurboJpeg` (C3-b) | `turbojpeg.dll` | JPEG | `tj3SetScalingFactor` + scale bổ sung | Qua WIC transform hoặc fallback | Thường nhanh nhất cho JPEG. Cần đo |
+| (Tham khảo) SkiaSharp / NetVips | Native lớn | Nhiều | Có | Có | **Không** triển khai trừ khi T86 cho thấy hai backend trên không đạt |
 
-```text
-App/
-  App.xaml(.cs)           composition root (Microsoft.Extensions.DependencyInjection)
-  Views/                  MainWindow, SettingsWindow, ActionProfilesWindow, RecoveryWindow,
-                          DiagnosticsWindow, BatchReviewWindow, (BenchmarkWindow nếu giữ)
-  ViewModels/             MainViewModel (điều phối, không có I/O trực tiếp),
-                          ViewerState (zoom/fit/fullscreen), CompareViewModel, StatusFormatter
-  Coordinators/           FolderLoadCoordinator (scan → provisional → Explorer reorder),
-                          ImagePresenter (ShowImage pipeline + generation guard)
-  Input/                  ShortcutRouter (bảng Key → Command, thay chuỗi if)
-  Services/               DialogService, FolderPicker (OpenFolderDialog)
-```
+> Các nhận định về khả năng scale và ICC của từng backend phải được **xác minh trong T82/T85**. Nếu thực tế khác, cập nhật bảng này.
 
-- Dùng `CommunityToolkit.Mvvm` (`ObservableObject`, `RelayCommand`, `AsyncRelayCommand`). Chỉ giữ code-behind cho thao tác thuần view như ScrollViewer, DPI, placement.
-- Bỏ `UseWindowsForms` sau khi thay `FolderBrowserDialog` bằng `OpenFolderDialog`.
+**Cổng chất lượng** (T80/T86). Backend mới chỉ được bật mặc định khi đạt **tất cả** điều kiện sau trên fixture:
 
-### 4.5 Bất biến bắt buộc giữ (mỗi task phải có test bảo vệ)
+1. **Kích thước:** đúng kích thước mục tiêu (±1 px), đúng hướng sau orientation.
+2. **Sai khác pixel so với `Wpf`** (cùng target width, cùng orientation đã áp):
+   - Full-res: PSNR ≥ 45 dB.
+   - Downscale: PSNR ≥ 35 dB, ΔE trung bình ≤ 2 trên sRGB.
+   - Ngưỡng này là tạm thời. T86 hiệu chỉnh và ghi lý do.
+3. **ICC:** ảnh Adobe RGB / Display P3 cho kết quả tương đương `Wpf` (theo điều kiện 2). Nếu backend không hỗ trợ ICC thì phải fallback, không hiển thị sai màu.
+4. **EXIF orientation 1–8:** cả 8 giá trị cho kết quả đúng.
+5. **Ảnh lỗi hoặc cắt cụt:** ném exception thuộc nhóm đã biết (`IOException`, `NotSupportedException`, `FileFormatException`, `InvalidDataException`) để fallback hoạt động. Không crash native.
+6. **An toàn file:** giữ `FileShare.ReadWrite | FileShare.Delete`, `SequentialScan`, và đóng handle ngay sau khi đọc (INV-8).
+7. **Hiệu năng:** decode P50 và P95 nhanh hơn `Wpf` ít nhất 20% trên fixture ảnh thật (JPEG 12–50 MP) ở target width điển hình (viewport × DPI × 1.15). RAM peak không tăng quá 10%.
 
-| ID | Bất biến | Test hiện có / cần thêm |
+**Thay đổi cache key:** thêm `DecoderBackend` và `OrientationApplied` vào `ImageCacheKey` và vào tên file disk cache. Không được để pixel của backend này lẫn sang backend khác (INV-1).
+
+### 4.5 PhotoReview.Platform.Windows và PhotoReview.App
+
+- **Platform:** `ExplorerOrderService` + COM interop, `WindowsRecycleBin : IRecycleBin`, `PhysicalMemory : IMemoryProbe`, `InstanceLock`, `WindowsNaturalComparer` (StrCmpLogicalW).
+- **App:** composition root dùng `Microsoft.Extensions.DependencyInjection`. MVVM dùng `CommunityToolkit.Mvvm`. Cấu trúc thư mục:
+  - `Views/`
+  - `ViewModels/`: `MainViewModel`, `ViewerState`, `CompareViewModel`, `StatusFormatter`
+  - `Coordinators/`: `FolderLoadCoordinator`, `ImagePresenter`
+  - `Input/ShortcutRouter`
+  - `Services/`: `DialogService`, `FolderPicker` (`OpenFolderDialog`), `DispatcherUiScheduler`, `WpfKeyNameValidator`, `WindowPlacementService`
+- `MainWindow.xaml`: đặt `RenderOptions.BitmapScalingMode="HighQuality"` cho ảnh chính và ảnh compare (T88). Có thể đổi trong settings nếu zoom bị chậm.
+
+### 4.6 Bất biến bắt buộc giữ
+
+| ID | Bất biến | Test |
 |---|---|---|
-| INV-1 | Cache key gồm path chuẩn hóa, length, mtime, mode, width. Không present pixel cũ khi source đổi | `ImageCacheKeyTests`, `PreviewImageServiceTests` |
+| INV-1 | Cache key = path chuẩn hóa + length + mtime + mode + width (**+ backend + orientation** sau C3). Không present pixel cũ khi source đổi | `ImageCacheKeyTests`, `PreviewImageServiceTests` |
 | INV-2 | Clear/evict tăng epoch. In-flight hoặc persist cũ không làm entry sống lại | `PreviewImageServiceTests`, `DiskCacheStoreTests` |
-| INV-3 | Advance đúng một lần **trước** thao tác filesystem, không `ShowImage` sau khi action xong | Hiện chỉ có source-presence, **cần test hành vi** trên `MainViewModel` + fake FS |
-| INV-4 | Chỉ một file action chạy tại một thời điểm | Hiện chỉ có source-presence, **cần test hành vi** |
-| INV-5 | Hoàn tất action sau khi đã đổi folder: không đăng ký undo, không sửa catalog | Hiện chỉ có comment, **cần test hành vi** |
-| INV-6 | Delete đi vào Recycle Bin. Journal ghi Prepared → Committed/Failed | `OperationJournalTests`, smoke script |
-| INV-7 | Explorer snapshot bị bỏ qua nếu catalog đã có tương tác hoặc tập file đổi | **Cần test hành vi** trên `FolderLoadCoordinator` với fake provider |
-| INV-8 | File handle đọc dùng `FileShare.ReadWrite \| FileShare.Delete` và `SequentialScan` | `FileActionConcurrencyTests` + test cho `IImageDecoder` |
-| INV-9 | Mở file trực tiếp thì chờ Explorer snapshot trước frame đầu. Mở folder thì present fallback trước | **Cần test hành vi** |
-| INV-10 | Logging mặc định tắt. Khi tắt không tạo file hay thư mục | `AppLogTests` |
-| INV-11 | Config hỏng thì backup rồi reset. Config bị khóa thì dùng default trong RAM, không ghi đè | `AppSettingsTests` |
+| INV-3 | Advance đúng một lần, trước thao tác filesystem. Không `ShowImage` sau khi action xong | T14 → T46 |
+| INV-4 | Chỉ một file action chạy tại một thời điểm | T14 → T42 |
+| INV-5 | Action hoàn tất sau khi đã đổi folder: không đăng ký undo, không sửa catalog | T14 → T46 |
+| INV-6 | Delete đi vào Recycle Bin. Journal ghi Prepared → Committed/Failed. Reconcile khi khởi động | `OperationJournalTests`, smoke |
+| INV-7 | Bỏ qua Explorer snapshot nếu catalog đã có tương tác hoặc tập file đã đổi | T14 → T44 |
+| INV-8 | Handle đọc dùng `ReadWrite \| Delete` + `SequentialScan`, đóng sau khi đọc (mọi backend) | `FileActionConcurrencyTests`, T80 |
+| INV-9 | Mở file thì chờ snapshot trước frame đầu. Mở folder thì present fallback trước | T14 → T44 |
+| INV-10 | Logging mặc định tắt. Khi tắt không tạo file | `AppLogTests` |
+| INV-11 | Config hỏng thì backup rồi reset. Config bị khóa thì dùng default trong RAM | `AppSettingsTests` |
+| INV-12 | **(C3)** Backend lỗi thì fallback sang `Wpf`, người dùng vẫn xem được ảnh. Pixel của backend khác không lẫn vào cache | T84, T87 |
 
 ---
 
-## 5. Lộ trình (wave)
+## 5. Lộ trình
 
-| Wave | Nội dung | Task | Chạy song song |
+| Wave | Nội dung | Task |
+|---|---|---|
+| W0 | Baseline, CI, công cụ build, quy trình git | T00–T05 |
+| W1 | Gộp test, khóa hành vi INV trên code hiện tại | T10–T14 |
+| W2 | Tách Core | T20–T26 |
+| W3 | Tách Imaging và Platform, `IImageDecoder`, bỏ static | T30–T35 |
+| **WC3** | **Nhánh C3, chạy song song với W4 sau khi xong T31c** | T80–T88 |
+| W4 | Chia nhỏ `MainWindow` (MVVM) | T40–T47 |
+| W5 | Tách Benchmark, bỏ WinForms, dọn code | T50–T53 |
+| W6 | Hiệu năng R-1…R-4, tích hợp decoder đã chọn | T60–T66 |
+| W7 | ADR, tài liệu, GUI acceptance, release | T71–T74 |
+
+```text
+W0 → W1 → W2 → W3 ─┬─► W4 → W5 → W6 → W7
+                   └─► WC3 (T80…T86) ──► T87 (cần T40) ──► W6 (T66 đo cùng)
+```
+
+---
+
+## 6. Đề xuất hiệu năng
+
+| ID | Đề xuất | Nguyên tắc AGENTS | Đo bằng |
 |---|---|---|---|
-| W0 | Baseline và lưới an toàn: tag, benchmark baseline, CI, `global.json`, `.editorconfig`, CPM, sửa AGENTS | T00–T05 | T01–T04 song song |
-| W1 | Gộp test, test hành vi cho INV-3/4/5/7/9 trên code **hiện tại** | T10–T14 | T11, T12, T13 song song |
-| W2 | Tách Core: enum, AppPaths, abstraction, di chuyển logic thuần | T20–T26 | T21, T22, T23 song song sau T20 |
-| W3 | Tách Imaging và Platform, bỏ static | T30–T35 | T31, T32, T33 song song |
-| W4 | Chia nhỏ `MainWindow` thành MVVM | T40–T47 | T41, T42, T43 song song sau T40 |
-| W5 | Tách Benchmark, gỡ WinForms, dọn code chết | T50–T53 | T50, T51, T52 song song |
-| W6 | Tối ưu hiệu năng theo AGENTS (R-1…R-6) | T60–T66 | T61–T64 song song |
-| W7 | Spike viết lại hoặc đổi decoder (ADR), tài liệu, release | T70–T74 | T70, T71 song song |
+| R-1 | Lưu session có debounce, ghi trên worker | 1, 3 | Số lần ghi / 100 lần Next |
+| R-2 | Journal: đọc ngược từ cuối khi khởi động, hoặc compaction | 1, 3 | Thời gian khởi động với journal 100k dòng |
+| R-3 | Bỏ `FileInfo` trên UI thread, dùng metadata trong catalog | 3 | `StatCount` mỗi lần Next |
+| R-4 | `SourceBytesCache` (byte nén, đọc một lần, dùng chung cho thumbnail/decode/dimension/hash) + `RamBudgetPolicy` theo w×h×4. Nếu tổng nguồn < 16 GB thì nạp toàn folder | 1, 2 | `SourceOpenCount` ≤ 1 mỗi ảnh, RAM peak |
+| R-5 | Tách benchmark khỏi đường khởi động của app | 3 | Kích thước publish, thời gian khởi động |
+| R-6 | `CatalogEntry` có sẵn length/mtime/dimension | 1, 3 | Số lần stat |
+| R-7 | **C3**: decoder `WicDirect` / `TurboJpeg` | 3, 4 | Cổng mục 4.4 |
 
-Chi tiết từng task (file, bước, tiêu chí hoàn thành, kiểm thử, agent, đầu ra) nằm ở [`REFACTOR-TASKS.md`](REFACTOR-TASKS.md).
-
----
-
-## 6. Đề xuất cải tiến hiệu năng (R-x, thuộc W6)
-
-| ID | Đề xuất | Lý do (AGENTS) | Cách đo |
-|---|---|---|---|
-| R-1 | Lưu session có debounce (ví dụ 500 ms, ghi trên worker) thay vì ghi đồng bộ mỗi lần present | Nguyên tắc 1, 3 | Số lần ghi `Sessions/*.json` trên 100 lần Next; P95 key→present |
-| R-2 | Journal compaction và index các move đã commit (hoặc file snapshot riêng) để khởi động không phải đọc toàn bộ lịch sử | Nguyên tắc 1, 3 | Thời gian khởi động với journal 100k dòng |
-| R-3 | Bỏ `FileInfo` trên UI thread (`SetZoom`, status). Dùng metadata đã có trong catalog entry | Nguyên tắc 3 | Số lần stat mỗi lần navigation |
-| R-4 | **Tầng RAM hai cấp:** `SourceBytesCache` (byte nén, dùng lại cho thumbnail, adaptive, dimension, hash) + `RamBudgetPolicy` ước lượng **decoded** = w×h×4 từ header. Nếu tổng nguồn < 16 GB thì nạp toàn folder vào tầng byte | Nguyên tắc 1, 2 (đúng yêu cầu "folder < 16 GB thì load toàn bộ lên RAM") | Số lần đọc nguồn và byte đọc mỗi ảnh (mục tiêu ≤ 1), RAM peak, cold/warm P95 |
-| R-5 | Tách benchmark khỏi binary production (hoặc bật qua build flag) | Giảm kích thước và JIT khi khởi động | Kích thước publish, thời gian khởi động |
-| R-6 | Cache catalog entry (path, length, mtime, dimension) thay cho `List<string>` | Nguyên tắc 1, 3 | Số stat, thời gian scan |
-| R-7 | Spike `IImageDecoder` thay thế (libjpeg-turbo / NetVips / WIC trực tiếp) | Nguyên tắc 3, 4 | Decode ms theo profile, so pixel với WIC |
-
-Mọi R-x chỉ được coi là "nhanh hơn" khi có benchmark theo quy trình ở mục "Giới hạn diễn giải và benchmark" trong `APP-MECHANISMS-VI.md`, so với baseline T01.
+R-4 và C3 bổ trợ nhau: `DecodeRequest` nhận `ReadOnlyMemory<byte>` từ `SourceBytesCache`, nên decoder không phải mở file. Mọi kết luận "nhanh hơn" phải dựa trên benchmark so với baseline T01.
 
 ---
 
-## 7. Mô hình làm việc multi-agent
+## 7. Multi-agent và bàn giao cho model khác
 
 ### 7.1 Vai trò
 
-| Agent | Trách nhiệm |
+| Vai trò | Việc |
 |---|---|
-| **Coordinator** | Giữ `REFACTOR-TASKS.md` và `task_on_progress.md`, giao task theo wave, kiểm tra dependency, không tự viết code |
-| **Worker** | Làm một task trong **git worktree riêng**, branch `refactor/<task-id>-<slug>`. Chỉ sửa các file task đó liệt kê |
-| **Reviewer** | Review diff của worker: bất biến INV, tiêu chí hoàn thành, không lan sang phạm vi task khác |
-| **Integrator** | Merge branch theo thứ tự dependency vào branch tích hợp `refactor/integration`, chạy `tools/verify-all.ps1`, xử lý conflict |
+| Coordinator | Giữ `REFACTOR-TASKS.md` và `task_on_progress.md`, giao task, kiểm tra phụ thuộc và cổng ⛔ |
+| Worker | Làm **một** task trong worktree riêng, branch `refactor/<ID>-<slug>`, chỉ sửa file có trong danh sách của task |
+| Reviewer | Kiểm diff theo INV/K và tiêu chí hoàn thành, không để task lan phạm vi |
+| Integrator | Merge vào `refactor/integration` theo thứ tự ID, chạy VERIFY, mở PR vào `master` cuối mỗi wave |
 
-### 7.2 Quy tắc
+### 7.2 Quy tắc cho model thực thi
 
-1. Mỗi worker trả về: (a) branch đã commit, (b) **handoff note** ghi vào mục "Nhật ký" của task trong `REFACTOR-TASKS.md` gồm file đã sửa, lệnh test đã chạy và kết quả, việc còn lại, (c) cập nhật trạng thái `TODO → IN PROGRESS → DONE/BLOCKED`.
-2. Các task song song trong cùng wave **không được sửa chung file**. Nếu buộc phải sửa chung, task đánh dấu `Song song: Không` hoặc ghi rõ file nào do ai sở hữu.
-3. Integrator merge theo thứ tự ID tăng dần trong wave. Khi conflict, ưu tiên phiên bản của task có ID nhỏ hơn rồi rebase task sau.
-4. Kết thúc mỗi wave: chạy `tools/verify-all.ps1`, lệnh CLI/xUnit, publish vào thư mục mặc định, và mở PR `refactor/integration → master`.
-5. Nếu phạm vi thay đổi so với plan: đặt task sang `BLOCKED`, ghi lý do, **chờ người dùng xác nhận lại** (theo AGENTS).
+1. Mỗi phiên làm **một task**. Đọc hết mục task trước khi sửa.
+2. Không sửa file ngoài danh sách **Files**. Cần sửa thêm thì đặt `BLOCKED` và ghi lý do.
+3. Không đổi hành vi ngoài phần mô tả. Không "tiện tay" refactor chỗ khác.
+4. Không xóa comment giải thích race, contract, fixture hay giới hạn WPF/Windows.
+5. Chuỗi tiếng Việt hiển thị cho người dùng phải giữ nguyên văn.
+6. Hoàn thành = build, test và VERIFY đạt + nhật ký theo mẫu + trạng thái `DONE` + commit trên branch task.
+7. Không push `master`. Không `--force`. Không tắt test để cho đạt.
 
-### 7.3 Quy ước commit và branch
+### 7.3 Commit
 
-- Branch: `refactor/T21-core-enums`. Commit: `refactor(core): introduce LoadingMode enum (T21)`.
-- Không push thẳng `master`. Chỉ vào `master` qua PR (xem T05 về việc sửa AGENTS).
+`refactor(<layer>): <mô tả> (T21a)` + dòng attribution theo quy định của repo.
 
 ---
 
 ## 8. Kiểm thử
 
-| Cấp | Nội dung | Lệnh |
-|---|---|---|
-| Unit | Core, Imaging, ViewModel (fake FS/clock/explorer) | `dotnet test PhotoReview.slnx -c Release --filter "Category!=Integration&Category!=Manual"` |
-| Integration | Filesystem thật, journal, Recycle Bin, Explorer probe | `dotnet test ... --filter Category=Integration` |
-| Kiến trúc | Chiều dependency giữa assembly (NetArchTest hoặc test reflection tự viết) | nằm trong unit |
-| Script | `tools/smoke-test.ps1`, `tools/fault-injection-test.ps1`, `tools/verify-release.ps1` | `tools/verify-all.ps1` |
-| Benchmark | Profile `recommended-auto`, `--benchmark-all` trên fixture cố định | `dotnet run --project tools/PhotoReview.Benchmark.Cli -c Release -- --benchmark-all <folder> <out>` |
-| GUI acceptance (thủ công) | Checklist ở T73: mở file/folder, Next/Prev, Move/Copy/Delete/Undo, Compare, Recovery, Settings | thủ công, ghi kết quả vào task |
+| Cấp | Lệnh (sau T24 và T53) |
+|---|---|
+| Unit | `dotnet test PhotoReview.slnx -c Release --filter "Category!=Integration&Category!=Manual&Category!=Quality"` |
+| Integration | `dotnet test PhotoReview.slnx -c Release --filter Category=Integration` |
+| Chất lượng decoder | `dotnet test tests/PhotoReview.Imaging.Tests -c Release --filter Category=Quality` (fixture tổng hợp chạy trong CI; ảnh thật qua `PHOTOREVIEW_FIXTURE_DIR`, không chạy trong CI) |
+| Script | `tools/verify-all.ps1` |
+| Benchmark | `dotnet run --project tools/PhotoReview.Benchmark.Cli -c Release -- --benchmark-all <folder> <out>` và `--decoder-bench <folder> <out>` (T81) |
+| GUI | Checklist T73 |
 
-**Parity gate (W1 → W5):** trước khi xóa `PhotoReview.Tests`, mỗi dòng trong 147 `Check(...)` phải được ánh xạ sang một xUnit test (hoặc ghi lý do bỏ) trong `docs/refactoring/test-parity.md`.
+**Parity gate:** trước T53, mọi `Check(...)` phải được ánh xạ sang xUnit trong `docs/refactoring/test-parity.md`.
 
 ---
 
@@ -290,37 +329,42 @@ Mọi R-x chỉ được coi là "nhanh hơn" khi có benchmark theo quy trình 
 
 | Rủi ro | Mức | Giảm thiểu | Rollback |
 |---|---|---|---|
-| Hồi quy race/generation khi tách `MainWindow` | Cao | Viết test hành vi INV-3/4/5/7/9 **trước** (W1) trên code hiện tại, rồi mới tách | Revert merge commit của wave. Tag `pre-refactor-baseline` |
-| Đổi đường dẫn project làm hỏng script, publish, file association | Trung bình | T24 cập nhật đồng loạt `tools/*.ps1`, README, AGENTS. `verify-release.ps1` là gate | Giữ đường dẫn publish cũ qua property `PublishDir` cho tới khi người dùng xác nhận |
-| Đổi kiểu `string → enum` làm hỏng `config.json` / `operations.jsonl` cũ | Trung bình | `JsonStringEnumConverter` + converter chấp nhận mọi giá trị legacy. Test đọc fixture config và journal cũ | Converter fallback về default; backup file cũ |
-| Tầng RAM mới (R-4) gây áp lực bộ nhớ | Trung bình | Kiểm tra headroom, giới hạn cứng, feature flag trong settings | Tắt flag |
-| Hiệu năng giảm do thêm indirection hoặc DI | Thấp | Benchmark so với baseline T01 cuối mỗi wave (≤ 5% P95) | Revert task gây giảm |
-| Worker song song conflict | Trung bình | Phân chia sở hữu file, merge theo thứ tự | Rebase task sau |
-| Mất tính năng khi xóa `PhotoReview.Tests` | Trung bình | Parity gate (mục 8) | Khôi phục project từ tag |
-
-**Rollback tổng:** mọi thay đổi đi qua `refactor/integration` và PR. `master` luôn giữ bản chạy được. Tag `pre-refactor-baseline` trỏ vào `86282cd`.
+| Hồi quy race khi tách `MainWindow` | Cao | Test INV viết trước (W1) | Revert merge của wave. Tag `pre-refactor-baseline` |
+| Đổi layout làm hỏng script/publish | TB | T24 gói trong 1 commit, grep toàn repo | Revert T24 |
+| Enum làm hỏng config/journal cũ | TB | `LenientEnumConverter` + fixture legacy | Converter fallback về default |
+| **Decoder mới sai màu hoặc sai hướng** | TB | Cổng chất lượng 4.4, fallback chain, mặc định vẫn là `Wpf` cho tới khi T86 đạt | Setting `DecoderBackend=Wpf` |
+| **turbojpeg native crash hoặc lỗi ABI** | TB | Dùng bản chính thức pin version, kiểm magic JPEG trước khi gọi, test ảnh hỏng | Không đóng gói DLL, dùng `WicDirect`/`Wpf` |
+| **Rò rỉ COM (WicDirect)** | TB | Release trong `finally`, test lặp 10k lần theo dõi handle và bộ nhớ | Setting quay về `Wpf` |
+| Cache key đổi làm vô hiệu disk cache cũ | Thấp | Chấp nhận. Prune quota sẽ dọn file cũ | — |
+| `HighQuality` scaling làm zoom chậm | Thấp | Setting `ScalingQuality` | Đổi về `Linear` |
+| R-4 gây áp lực RAM | TB | Kiểm headroom, flag | Tắt flag |
+| Worker song song conflict | TB | Quy định sở hữu file | Rebase |
 
 ---
 
 ## 10. Tiêu chí hoàn thành toàn đợt
 
-- [ ] `MainWindow.xaml.cs` ≤ 250 dòng, chỉ còn logic view. `MainViewModel` + coordinator có test hành vi cho INV-3/4/5/7/9.
-- [ ] Không còn test source-presence, hoặc ≤ 5 test cho wiring XAML và ghi rõ lý do.
-- [ ] Chỉ còn một hệ test xUnit. `PhotoReview.Tests` đã được thay bằng `PhotoReview.Benchmark.Cli`. Parity doc hoàn chỉnh.
-- [ ] Test kiến trúc xác nhận chiều dependency. `PhotoReview.Core` build được trên `net10.0` thuần.
-- [ ] Không còn `UseWindowsForms`. Không còn đọc `PHOTOREVIEW_DATA_ROOT` ngoài `AppPaths`.
-- [ ] CI GitHub Actions xanh: build, unit test, publish, verify-release.
-- [ ] Benchmark `--benchmark-all` không chậm hơn baseline quá 5% P95. R-4 có số liệu số lần đọc nguồn mỗi ảnh.
-- [ ] `README.md`, `AGENTS.md`, `APP-MECHANISMS-VI.md`, `task_on_progress.md` đã cập nhật.
-- [ ] Publish thành công vào đường dẫn mặc định đã thống nhất. PR được merge vào `master`.
+- [ ] `MainWindow.xaml.cs` ≤ 250 dòng. Test INV-3/4/5/7/9 chạy trên ViewModel/coordinator.
+- [ ] Còn ≤ 5 test wiring XAML (parse XML). Chỉ còn một hệ xUnit. `test-parity.md` hoàn chỉnh.
+- [ ] Test kiến trúc (dependency, K-1, K-2) đạt. Core build trên `net10.0`.
+- [ ] Không còn `UseWindowsForms`. `PHOTOREVIEW_DATA_ROOT` chỉ được đọc trong `AppPaths`.
+- [ ] `IImageDecoder` với `Wpf` + ít nhất một backend C3 đạt cổng 4.4. Fallback đã được test. ADR `0001` có số liệu.
+- [ ] EXIF orientation đúng cho cả 8 giá trị. `BitmapScalingMode` chất lượng cao đã được bật.
+- [ ] CI xanh. Benchmark P95 không tệ hơn baseline quá 5% ở profile nào. Decode nhanh hơn ít nhất 20% nếu backend C3 được bật mặc định.
+- [ ] Tài liệu đã cập nhật. PR được merge. Publish thành công.
 
 ---
 
-## 11. Câu hỏi cần người dùng quyết định trước khi bắt đầu
+## 11. Câu hỏi còn mở và mặc định đề xuất
 
-1. **Chọn hướng:** B (khuyến nghị) / A / C?
-2. **Benchmark trong app:** giữ `BenchmarkWindow` trong app (tham chiếu `PhotoReview.Benchmarking`) hay chỉ giữ CLI?
-3. **Đường dẫn publish:** chấp nhận `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (sau khi chuyển vào `src/`) hay giữ nguyên thư mục gốc `PhotoReview.App/`?
-4. **Quy trình git:** đổi AGENTS từ "push master" sang "PR vào master" (T05)?
-5. **R-4 (tầng byte RAM):** bật mặc định hay qua setting?
-6. **Thư viện ngoài:** đồng ý thêm `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`, `NetArchTest.Rules` (chỉ trong test)?
+Task gắn ⛔Qn phải chờ người dùng trả lời Qn. Nếu người dùng chấp nhận **mặc định đề xuất**, Coordinator ghi lại xác nhận vào nhật ký T00.
+
+| # | Câu hỏi | Mặc định đề xuất | Task bị chặn |
+|---|---|---|---|
+| Q2 | Giữ `BenchmarkWindow` trong app? | Giữ, tham chiếu `PhotoReview.Benchmarking` | T50b |
+| Q3 | Chuyển project vào `src/`? Đường dẫn publish mới là `src/PhotoReview.App/bin/Release/net10.0-windows/publish` | Chuyển | T24 |
+| Q4 | Đổi AGENTS sang quy trình PR? | Đổi | T05 |
+| Q5 | Bật R-4 mặc định? | Bật sau khi T66 đạt, trước đó để flag tắt | T65 |
+| Q6 | Thêm `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`, `NetArchTest.Rules` (chỉ trong test)? | Đồng ý | T35, T40 |
+| Q7 | **(C3)** Cho phép đóng gói `turbojpeg.dll` (libjpeg-turbo, BSD/IJG/zlib)? | Đồng ý nếu T86 cho thấy nhanh hơn `WicDirect` ít nhất 15% | T85, T87 |
+| Q8 | **(C3)** Bật backend mới làm mặc định khi đạt cổng? | Có, giữ setting để quay về `Wpf` | T87 |
