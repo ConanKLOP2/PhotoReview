@@ -2,12 +2,27 @@ using System.IO;
 using Xunit;
 
 // Several migrated assertions mutate process-global state (the PHOTOREVIEW_DATA_ROOT
-// environment variable and AppLog's static writer thread). Also, PreviewImageService
-// background workers persist to a shared directory that can race during cleanup.
-// Parallelization remains disabled to preserve sequential execution semantics.
-// TODO T13b: Fix flaky test "Eviction forces a fresh source read on the next request"
-// to use unique cache directories per test instance so parallelization can be enabled.
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+// environment variable and AppLog's static writer thread); those are grouped into the
+// "GlobalState" collection below (DisableParallelization = true) instead of relying on
+// assembly-wide serialization.
+//
+// T13b: assembly-wide parallelization is enabled. It used to be disabled because two
+// PreviewImageServiceTests tests raced PreviewImageService's fire-and-forget background
+// persist/prune workers against their own assertions:
+//   - "Eviction forces a fresh source read on the next request" shared the downscaled-mode
+//     _service; if the first GetPreviewAsync's background disk-cache write finished before
+//     EvictCachedPath's RAM-only eviction and the second GetPreviewAsync call, the "fresh"
+//     request was served from disk instead of doing a real source read. Fixed by giving that
+//     test its own original-loading-mode service, which never persists to disk (see
+//     PreviewImageServiceDiskCacheTests.OriginalModeDoesNotWriteToDiskCache), removing the race.
+//   - "The disk cache directory is pruned instead of growing unbounded" polled
+//     DirectoryBytes(diskDir) against a fixed per-iteration timeout that could trip before a
+//     prune pass finished under heavy parallel load. Fixed by shutting down each iteration's
+//     short-lived service (ShutdownPersistWorkersAsync) and awaiting
+//     DiskCacheStore.WaitForPruneAsync before moving on, instead of a fixed poll deadline.
+// Every test's own cache/data directory is already a fresh TempRoot per test instance, so no
+// two tests share a directory. No assembly-level CollectionBehavior override is needed:
+// xUnit's default (parallelization enabled) is safe now.
 
 namespace PhotoReview.Tests.Unit;
 
