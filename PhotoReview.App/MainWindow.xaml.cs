@@ -912,40 +912,48 @@ public partial class MainWindow : Window
 
     private async Task UndoLastMoveAsync()
     {
-        if (Volatile.Read(ref _fileActionInProgress) != 0) return;
-        if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
-        var move = _moveHistory.Pop();
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         try
         {
-            if (!File.Exists(move.Destination) || File.Exists(move.Source)) throw new IOException("Nguồn hoặc đích đã thay đổi.");
-            var destinationInfo = new FileInfo(move.Destination);
-            var committed = _journal.ReadCommittedMoves().LastOrDefault(x => x.Destination == move.Destination);
-            if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
-                throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
-            File.Move(move.Destination, move.Source);
-            _lastUndoAction = null;
-            if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
-            _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
-            await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+            if (_moveHistory.Count == 0) { StatusText.Text = "Không có Move nào để hoàn tác."; return; }
+            var move = _moveHistory.Pop();
+            try
+            {
+                if (!File.Exists(move.Destination) || File.Exists(move.Source)) throw new IOException("Nguồn hoặc đích đã thay đổi.");
+                var destinationInfo = new FileInfo(move.Destination);
+                var committed = _journal.ReadCommittedMoves().LastOrDefault(x => x.Destination == move.Destination);
+                if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
+                    throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
+                await Task.Run(() => File.Move(move.Destination, move.Source));
+                _lastUndoAction = null;
+                if (!_files.Contains(move.Source, StringComparer.OrdinalIgnoreCase)) _files.Add(move.Source);
+                _files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(ImageSortService.NaturalKey(Path.GetFileName(a)), ImageSortService.NaturalKey(Path.GetFileName(b))));
+                await ShowImageAsync(_files.FindIndex(p => string.Equals(p, move.Source, StringComparison.OrdinalIgnoreCase)));
+            }
+            catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
         }
-        catch (Exception ex) { StatusText.Text = $"Không thể Undo: {ex.Message}"; _moveHistory.Push(move); }
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private async Task UndoLastActionAsync()
     {
-        if (Volatile.Read(ref _fileActionInProgress) != 0) return;
         if (_lastUndoAction is null) { StatusText.Text = "Không có Move/Delete vừa thực hiện để hoàn tác."; return; }
         var action = _lastUndoAction;
         if (action.Operation == "Move") { await UndoLastMoveAsync(); return; }
-        var restored = await Task.Run(() => RecycleBinRestoreService.TryRestore(action.Source, action.Size, action.LastWriteUtc));
-        if (!restored)
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+        try
         {
-            StatusText.Text = $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}";
-            return;
+            var restored = await Task.Run(() => RecycleBinRestoreService.TryRestore(action.Source, action.Size, action.LastWriteUtc));
+            if (!restored)
+            {
+                StatusText.Text = $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}";
+                return;
+            }
+            _lastUndoAction = null;
+            if (_session is not null) { _session.CurrentPath = action.Source; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+            await LoadFolderAsync(Path.GetDirectoryName(action.Source)!);
         }
-        _lastUndoAction = null;
-        if (_session is not null) { _session.CurrentPath = action.Source; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
-        await LoadFolderAsync(Path.GetDirectoryName(action.Source)!);
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
     private sealed record UndoAction(string Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc);
