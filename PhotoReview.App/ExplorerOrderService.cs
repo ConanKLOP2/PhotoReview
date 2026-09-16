@@ -44,7 +44,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         {
             foreach (var action in _queue.GetConsumingEnumerable())
             {
-                action();
+                try { action(); }
+                catch (Exception ex) { AppLog.Error("Explorer STA pump action escaped unexpectedly", ex); }
             }
         }
 
@@ -71,8 +72,10 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         public void Dispose()
         {
             _queue.CompleteAdding();
-            _thread.Join(TimeSpan.FromSeconds(5));
-            _queue.Dispose();
+            if (_thread.Join(TimeSpan.FromSeconds(5)))
+                _queue.Dispose();
+            else
+                AppLog.Error("Explorer STA pump thread did not exit within 5s; leaking queue instead of risking ObjectDisposedException on a stuck COM call");
         }
     }
 
