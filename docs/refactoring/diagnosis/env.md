@@ -13,7 +13,7 @@
 | CPU Cores | 6 cores / 12 logical processors |
 | **RAM** | 31.85 GB |
 | **Ổ chứa repo (C:)** | Kingston SNV2S500G 465.8 GB NVMe SSD |
-| **Windows** | 10.0.26200 (build 26200) · 64-bit |
+| **Windows** | Windows 11 Home Single Language · 10.0.26200 (build 26200) · 64-bit |
 | **GPU 1** | Intel UHD Graphics 630 · Driver 26.20.100.7323 |
 | **GPU 2** | NVIDIA GeForce RTX 2080 with Max-Q Design · Driver 32.0.15.9579 |
 | **Màn hình 1** | 1920×1080 · DPI 96 (primary) |
