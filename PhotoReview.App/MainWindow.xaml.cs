@@ -688,6 +688,7 @@ public partial class MainWindow : Window
         _folderLoadCts.Dispose();
         _thumbnailCache.Dispose();
         _hashService.Clear();
+        _explorerOrder.Dispose();
     }
 
     private void UpdateFitSize()
