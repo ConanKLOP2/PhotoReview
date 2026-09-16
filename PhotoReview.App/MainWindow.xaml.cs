@@ -583,7 +583,7 @@ public partial class MainWindow : Window
             _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
             try
             {
-                FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                await Task.Run(() => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 succeeded++;
             }
@@ -749,7 +749,7 @@ public partial class MainWindow : Window
             {
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                await Task.Run(() => FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
                 AppLog.Info($"FileAction recycle-complete source={source}");
                 _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 _lastUndoAction = new UndoAction("RecycleBin", source, null, info.Length, info.LastWriteTimeUtc);
@@ -763,7 +763,7 @@ public partial class MainWindow : Window
                 if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                File.Move(source, destination);
+                await Task.Run(() => File.Move(source, destination));
                 var movedInfo = new FileInfo(destination);
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
@@ -857,8 +857,8 @@ public partial class MainWindow : Window
             sourceLastWriteUtc = sourceInfo.LastWriteTimeUtc;
             _journal.Append(new JournalEntry(operationId, operation, "Prepared", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
             prepared = true;
-            if (operation == "Copy") File.Copy(source, destinationPath);
-            else File.Move(source, destinationPath);
+            if (operation == "Copy") await Task.Run(() => File.Copy(source, destinationPath));
+            else await Task.Run(() => File.Move(source, destinationPath));
             AppLog.Info($"FileAction filesystem-complete operation={operation} source={source} destination={destinationPath}");
             var destinationInfo = new FileInfo(destinationPath);
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
