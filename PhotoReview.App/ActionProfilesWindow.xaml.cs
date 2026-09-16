@@ -9,6 +9,7 @@ namespace PhotoReview.App;
 public partial class ActionProfilesWindow : Window
 {
     public List<ReviewAction> Actions { get; }
+    private ReviewAction? _loaded;
 
     public ActionProfilesWindow(IEnumerable<ReviewAction> actions)
     {
@@ -20,16 +21,18 @@ public partial class ActionProfilesWindow : Window
 
     private void ActionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ActionList.SelectedItem is not ReviewAction action) return;
-        NameText.Text = action.Name; ShortcutText.Text = action.Shortcut; DestinationText.Text = action.Destination; ConfirmCheck.IsChecked = action.Confirm;
-        OperationCombo.SelectedIndex = action.Operation.ToUpperInvariant() switch { "COPY" => 1, "RECYCLE" => 2, "DELETE" => 3, _ => 0 };
+        if (_loaded is not null && Actions.Contains(_loaded)) SaveCurrent();
+        _loaded = ActionList.SelectedItem as ReviewAction;
+        if (_loaded is null) return;
+        NameText.Text = _loaded.Name; ShortcutText.Text = _loaded.Shortcut; DestinationText.Text = _loaded.Destination; ConfirmCheck.IsChecked = _loaded.Confirm;
+        OperationCombo.SelectedIndex = _loaded.Operation.ToUpperInvariant() switch { "COPY" => 1, "RECYCLE" => 2, "DELETE" => 3, _ => 0 };
     }
 
     private void SaveCurrent()
     {
-        if (ActionList.SelectedItem is not ReviewAction action) return;
-        action.Name = NameText.Text.Trim(); action.Shortcut = ShortcutText.Text.Trim(); action.Destination = DestinationText.Text.Trim(); action.Confirm = ConfirmCheck.IsChecked == true;
-        action.Operation = (OperationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Move";
+        if (_loaded is null || !Actions.Contains(_loaded)) return;
+        _loaded.Name = NameText.Text.Trim(); _loaded.Shortcut = ShortcutText.Text.Trim(); _loaded.Destination = DestinationText.Text.Trim(); _loaded.Confirm = ConfirmCheck.IsChecked == true;
+        _loaded.Operation = (OperationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Move";
         ActionList.Items.Refresh();
     }
 
