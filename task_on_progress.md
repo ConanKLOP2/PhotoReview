@@ -1,11 +1,10 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-16 | **Branch:** `feature/wave3-architecture-testing`
-- **Mục tiêu:** bỏ comment dư; giữ giải thích hành vi và test.
-- **Đã rà:** hai lượt, mỗi lượt 3 reviewer độc lập cho App, CLI tests, xUnit tests.
-- **Đã đổi:** bỏ comment lặp code/tên model, boilerplate ThemeInfo, fallback lặp và lịch sử migration/WP; rút gọn giải thích benchmark. Sửa assertion title để kiểm tra code thật.
-- **File:** App bootstrap/cache/models/benchmark/title; CLI runner; unit test summaries/assertions.
-- **Kiểm tra:** CLI Release và publish đạt. xUnit từng đạt 190/190; hai lần full suite sau đó có cùng lỗi quota prune nền (189/190), test riêng đạt 1/1. Chỉ thay comment/assertion source-presence, không đổi logic cache.
-- **Commit/push:** `eca670e Trim redundant code comments`, đã push lên `origin/feature/wave3-architecture-testing`.
-- **Còn lại:** không có.
-- **Cho AI tiếp theo:** giữ comment về contract, race, fixture, giới hạn WPF/Windows và source-presence rationale.
+- **Cập nhật:** 2026-09-16 | **Branch:** `docs/refactor-plan` (tách từ `master` @ `86282cd`)
+- **Mục tiêu:** phân tích cấu trúc project, đề xuất hướng tái cấu trúc, lập plan và task chi tiết cho multi-agent.
+- **Đã rà:** toàn bộ `PhotoReview.App` (MainWindow, services, cache, Explorer, journal, settings, benchmark), hai project test, `tools/*.ps1`, `AGENTS.md`, `README.md`, `outputs/APP-MECHANISMS-VI.md`.
+- **Đã thêm:** `docs/refactoring/REFACTOR-PLAN.md` (hiện trạng, 13 vấn đề P1–P13, 3 hướng A/B/C, kiến trúc đích, bất biến INV-1…11, đề xuất hiệu năng R-1…7, mô hình multi-agent, rủi ro/rollback) và `docs/refactoring/REFACTOR-TASKS.md` (T00–T74 theo 8 wave, có trạng thái, phụ thuộc, cờ song song, phạm vi file, tiêu chí hoàn thành).
+- **Không đổi:** source, cấu hình, cấu trúc dữ liệu.
+- **Vướng mắc/chờ người dùng:** xác nhận plan và 6 câu hỏi ở mục 11 của plan (hướng, benchmark trong app, đường dẫn publish, quy trình git, R-4, thư viện ngoài). `AGENTS.md` yêu cầu push `master`, nhưng lịch sử dùng PR (T05).
+- **Còn lại:** toàn bộ task T00–T74 ở trạng thái `TODO`. Không được bắt đầu trước khi plan được duyệt.
+- **Cho AI tiếp theo:** đọc `REFACTOR-PLAN.md` mục 4.5 và 7 trước khi nhận task. Giữ comment về contract, race, fixture, giới hạn WPF/Windows. Lỗi flaky quota prune nền (189/190) đã giao cho T13.
