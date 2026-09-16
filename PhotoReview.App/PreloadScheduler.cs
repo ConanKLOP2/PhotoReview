@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using PhotoReview.App.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -59,6 +60,7 @@ public sealed class PreloadScheduler : IDisposable
     {
         if (Volatile.Read(ref _disposed)) return;
         lock (_preloadCtsGate) _preloadCts.Cancel();
+        if (PhotoReviewPerf.Log.IsEnabled()) PhotoReviewPerf.Log.PreloadCancel("cancel");
     }
 
     /// <summary>Drops the warmed-key set (folder reload / cache clear).</summary>
@@ -132,6 +134,13 @@ public sealed class PreloadScheduler : IDisposable
                             var memory = PhysicalMemory.GetSnapshot();
                             AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_previewService.CacheCount} cacheBytes={_previewService.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
                         }
+                        // GlobalMemoryStatusEx is a syscall: only taken while tracing (-1 = unavailable).
+                        if (PhotoReviewPerf.Log.IsEnabled())
+                        {
+                            var perfMemory = PhysicalMemory.GetSnapshot();
+                            PhotoReviewPerf.Log.PreloadPaused(perfMemory is { } m ? (int)m.LoadPercent : -1,
+                                perfMemory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
+                        }
                         return;
                     }
                     var path = files[order.Current];
@@ -170,25 +179,57 @@ public sealed class PreloadScheduler : IDisposable
 
     private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
     {
+        // D04 perf: preload work is not tied to a navigation. Setting the AsyncLocal here only
+        // affects this method's own flow (and the decode it starts), never the scheduler loop.
+        // slot = how many preload slots were busy right after this item acquired one (0-based,
+        // racy snapshot of SemaphoreSlim.CurrentCount); it is a concurrency level, not a stable
+        // worker id, because SemaphoreSlim slots have no identity. -1 = never acquired a slot.
+        // kind "decoded" also covers joining a decode that someone else had already started.
+        var perf = PhotoReviewPerf.Log.IsEnabled();
+        if (perf) PhotoReviewPerf.NavContext = -1;
+        long perfStart = 0; double perfQueueWaitMs = -1; var perfSlot = -1; var perfKind = "failed";
         try
         {
             var queueWait = Stopwatch.StartNew();
             await _preloadSlots.WaitAsync(cancellationToken);
             _metrics.RecordQueueWait(queueWait.ElapsedMilliseconds);
+            if (perf)
+            {
+                perfQueueWaitMs = queueWait.Elapsed.TotalMilliseconds;
+                perfSlot = Math.Max(0, AppConstants.PreloadWorkerCount - _preloadSlots.CurrentCount - 1);
+                perfStart = Stopwatch.GetTimestamp();
+            }
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (perf) perfKind = "skipped";
                 if (!HasPreloadHeadroom()) return;
+                if (perf) perfKind = "failed";
                 var key = _previewService.GetCurrentCacheKey(path);
+                // Extra RAM lookup only while tracing; GetPreviewAsync performs the same TryGet
+                // (and LRU touch) immediately afterwards, so cache state is unaffected.
+                var perfWasCached = perf && _previewService.TryGetCachedPreview(key, out _);
                 await _previewService.GetPreviewAsync(path, key);
+                if (perf) perfKind = perfWasCached ? "cached" : "decoded";
                 if (_previewService.TryGetCachedPreview(key, out _)) lock (_preloadedKeysGate) _preloadedKeys.Add(key);
             }
             finally { _preloadSlots.Release(); }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { if (perf) perfKind = "canceled"; }
         catch (IOException) { }
         catch (NotSupportedException) { }
         catch (Exception ex) { AppLog.Error($"Preload failed: {path}", ex); }
+        finally
+        {
+            if (perf) TracePreloadItem(perfSlot, path, perfQueueWaitMs, perfKind, perfStart);
+        }
+    }
+
+    // Tracing only. Never throws: PreloadOneAsync must keep completing without an exception.
+    private static void TracePreloadItem(int slot, string path, double queueWaitMs, string kind, long start)
+    {
+        try { PhotoReviewPerf.Log.PreloadItem(slot, PhotoReviewPerf.PathId(path), queueWaitMs, kind, start == 0 ? 0 : PhotoReviewPerf.Ms(start)); }
+        catch { }
     }
 
     public void Dispose()

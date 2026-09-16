@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
+using PhotoReview.App.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -43,6 +45,8 @@ public sealed class ThumbnailCache : IDisposable
     public Task<BitmapSource> GetAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        // D04 perf: ThumbEnd(source=ram) covers the key build (one stat) + RAM lookup.
+        long perfT0 = PhotoReviewPerf.Log.IsEnabled() ? Stopwatch.GetTimestamp() : 0;
         CancellationToken disposeToken;
         lock (_lifecycleGate)
         {
@@ -55,7 +59,11 @@ public sealed class ThumbnailCache : IDisposable
         var fullPath = Path.GetFullPath(sourcePath);
         var key = BuildKey(fullPath);
 
-        if (_ramCache.TryGet(key, out var cached)) return Task.FromResult(cached);
+        if (_ramCache.TryGet(key, out var cached))
+        {
+            if (perfT0 != 0) PhotoReviewPerf.Log.ThumbEnd(PhotoReviewPerf.NavContext, PhotoReviewPerf.PathId(fullPath), "ram", PhotoReviewPerf.Ms(perfT0));
+            return Task.FromResult(cached);
+        }
 
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<BitmapSource>>(
             () => LoadOrCreateAsync(fullPath, key, disposeToken),
@@ -96,10 +104,21 @@ public sealed class ThumbnailCache : IDisposable
     private async Task<BitmapSource> LoadOrCreateAsync(string sourcePath, string key, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // D04 perf: runs under the nav of whoever started this shared (Lazy) load; the AsyncLocal is
+        // read before the first await, although it would flow across ConfigureAwait(false) too.
+        var perf = PhotoReviewPerf.Log.IsEnabled();
+        long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
+        var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
+        var perfPathId = perf ? PhotoReviewPerf.PathId(sourcePath) : "";
         var cachePath = Path.Combine(_diskDirectory, key + ".png");
         if (File.Exists(cachePath))
         {
-            try { return await DecodeAsync(cachePath, cancellationToken).ConfigureAwait(false); }
+            try
+            {
+                var fromDisk = await DecodeAsync(cachePath, cancellationToken).ConfigureAwait(false);
+                if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, "disk", PhotoReviewPerf.Ms(perfT0));
+                return fromDisk;
+            }
             // WPF raises FileFormatException (not just IOException/NotSupportedException) for
             // invalid image bytes, so a corrupt cached PNG must be caught here too or it would
             // escape instead of being deleted and regenerated from the source below.
@@ -115,6 +134,8 @@ public sealed class ThumbnailCache : IDisposable
 
         var generationBeforeDecode = Volatile.Read(ref _cacheGeneration);
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+        // Includes a failed disk-cache attempt, if any; excludes persisting the new thumbnail.
+        if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, "decode", PhotoReviewPerf.Ms(perfT0));
         if (!_persistNewThumbnails) return image;
         // ClearDisk() bumps _cacheGeneration and wipes the directory; without this check an
         // in-flight decode that started before the clear can still recreate a PNG right after

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Channels;
 using System.Windows.Media.Imaging;
+using PhotoReview.App.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -150,12 +151,31 @@ public sealed class PreviewImageService
             LazyThreadSafetyMode.ExecutionAndPublication);
         var lazy = _previewLoads.GetOrAdd(loadKey, candidate);
         if (ReferenceEquals(lazy, candidate)) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
+        // D04 perf: a joiner records JoinStart/JoinEnd under its own nav; the shared decode
+        // itself is traced once, under the nav of whoever created the Lazy (see DecodeAndCacheAsync).
+        long perfJoin = 0; long perfNav = 0; var perfPathId = "";
+        if (PhotoReviewPerf.Log.IsEnabled() && !ReferenceEquals(lazy, candidate))
+        {
+            perfNav = PhotoReviewPerf.NavContext; perfPathId = PhotoReviewPerf.PathId(path);
+            PhotoReviewPerf.Log.JoinStart(perfNav, perfPathId);
+            perfJoin = Stopwatch.GetTimestamp();
+        }
         try { return await lazy.Value; }
-        finally { _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<BitmapImage>>>(loadKey, lazy)); }
+        finally
+        {
+            _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<BitmapImage>>>(loadKey, lazy));
+            if (perfJoin != 0) PhotoReviewPerf.Log.JoinEnd(perfNav, perfPathId, PhotoReviewPerf.Ms(perfJoin));
+        }
     }
 
+    // D04 perf: Task.Run captures the ExecutionContext, so PhotoReviewPerf.NavContext read inside
+    // the lambda is the nav of the caller that created the Lazy (viewer token or -1 for preload).
     private Task<BitmapImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) => Task.Run(() =>
     {
+        var perf = PhotoReviewPerf.Log.IsEnabled();
+        var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
+        var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
+        long perfT0 = 0;
         var stopwatch = Stopwatch.StartNew();
         var sourceRead = false;
         // DecodeWithFallback silently returns a full-resolution decode when the requested
@@ -168,9 +188,11 @@ public sealed class PreviewImageService
         {
             try
             {
+                if (perf) perfT0 = Stopwatch.GetTimestamp();
                 using var cacheStream = File.OpenRead(cachePath);
                 bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
                 _metrics.RecordDiskCacheHit();
+                if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), PerfStreamLength(cacheStream));
             }
             // A background prune can delete cachePath between the Exists check above and
             // here; re-checking filesystem state in the catch filter (as this used to do)
@@ -181,17 +203,24 @@ public sealed class PreviewImageService
             {
                 try { File.Delete(cachePath); } catch { }
                 sourceRead = true;
+                if (perf) perfT0 = Stopwatch.GetTimestamp();
                 (bitmap, downscaled) = DecodeWithFallback(path, targetWidth);
+                if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetWidth, downscaled, targetWidth > 0 && !downscaled);
             }
         }
         else
         {
             sourceRead = true;
+            if (perf) perfT0 = Stopwatch.GetTimestamp();
             (bitmap, downscaled) = DecodeWithFallback(path, targetWidth);
+            if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetWidth, downscaled, targetWidth > 0 && !downscaled);
         }
         // A path can be replaced while decode is in flight. Never publish
         // the old pixels under the new source's identity.
+        // D04 perf: Verify is only emitted when the check passes (the throw path is not traced).
+        if (perf) perfT0 = Stopwatch.GetTimestamp();
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
+        if (perf) PhotoReviewPerf.Log.Verify(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0));
         lock (_cacheLifecycleGate)
             if (cacheEpoch == _cacheEpoch) _cache.Set(key, bitmap);
         // Only cache previews that actually decoded at the downscaled target width: a
@@ -204,6 +233,14 @@ public sealed class PreviewImageService
         if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
         return bitmap;
     });
+
+    // D04 perf (tracing only): must never throw into the disk-cache catch above, which would turn a
+    // successful cache read into a delete + source decode.
+    private static long PerfStreamLength(Stream stream)
+    {
+        try { return stream.Length; }
+        catch { return -1; }
+    }
 
     public bool TryGetCachedPreview(string path, out BitmapImage bitmap)
     {

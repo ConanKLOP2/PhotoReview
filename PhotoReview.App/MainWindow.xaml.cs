@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Windows.Interop;
 using System.ComponentModel;
+using PhotoReview.App.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -118,6 +119,11 @@ public partial class MainWindow : Window
         _folderLoadCts = new CancellationTokenSource();
         var loadToken = _folderLoadCts.Token;
         var loadGeneration = Interlocked.Increment(ref _folderGeneration);
+        // D04 perf: Folder(gen, phase, msSinceStart). T2 (first image presented) is not a Folder
+        // phase: D11 takes it from the first Presented event after this "start" row.
+        var perf = PhotoReviewPerf.Log.IsEnabled();
+        long perfFolderStart = perf ? Stopwatch.GetTimestamp() : 0;
+        if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "start", 0);
         AppLog.Info($"LoadFolder start: {folder}");
         try
         {
@@ -127,6 +133,7 @@ public partial class MainWindow : Window
             StatusText.Text = "Đang quét folder ảnh…";
             var files = await Task.Run(() => Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.TopDirectoryOnly)
                 .Where(ImageFileTypes.IsSupported).ToList(), loadToken);
+            if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "scanned", PhotoReviewPerf.Ms(perfFolderStart));
             var sortMode = _settings.ImageSortMode;
             var scannedFiles = files.ToArray();
             // Collect source sizes while the first Explorer query runs, so the
@@ -146,6 +153,7 @@ public partial class MainWindow : Window
             var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(folder, TimeSpan.FromSeconds(2), loadToken, explorerProgress, 16);
             ExplorerViewSnapshot? explorerSnapshot = null;
             files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken);
+            if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "sorted", PhotoReviewPerf.Ms(perfFolderStart));
             if (initialPath is not null)
             {
                 var requested = Path.GetFullPath(initialPath);
@@ -171,6 +179,7 @@ public partial class MainWindow : Window
             _hashService.Clear(); _previewService.ClearOriginalDimensions();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
+            if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "catalogReady", PhotoReviewPerf.Ms(perfFolderStart));
             var interactionGeneration = Volatile.Read(ref _catalogInteractionGeneration);
             var resumePath = initialPath ?? _session.CurrentPath;
             if (initialPath is not null)
@@ -179,6 +188,7 @@ public partial class MainWindow : Window
                 // before presenting the first frame. This prevents a provisional
                 // fallback index from flashing before native order is known.
                 explorerSnapshot = await explorerTask;
+                if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "explorerSnapshot", PhotoReviewPerf.Ms(perfFolderStart));
                 if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             }
             _totalSourceBytes = await totalBytesTask;
@@ -209,10 +219,13 @@ public partial class MainWindow : Window
             // happened since presenting" rather than always mismatching.
             var presentationGeneration = _generation;
             explorerSnapshot ??= await explorerTask;
+            // Direct file open already awaited (and traced) the snapshot above.
+            if (perf && initialPath is null) PhotoReviewPerf.Log.Folder(loadGeneration, "explorerSnapshot", PhotoReviewPerf.Ms(perfFolderStart));
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             if (interactionGeneration != Volatile.Read(ref _catalogInteractionGeneration))
             {
                 AppLog.Info($"Explorer native order ignored after catalog interaction: loadInteraction={interactionGeneration} currentInteraction={_catalogInteractionGeneration}");
+                if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "explorerIgnored", PhotoReviewPerf.Ms(perfFolderStart));
                 _totalSourceBytes = await totalBytesTask;
                 return;
             }
@@ -223,6 +236,7 @@ public partial class MainWindow : Window
                 if (currentSet.Count != scannedFiles.Length || !currentSet.SetEquals(scannedFiles))
                 {
                     AppLog.Info("Explorer native order ignored because the catalog changed while the snapshot was loading");
+                    if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "explorerIgnored", PhotoReviewPerf.Ms(perfFolderStart));
                     _totalSourceBytes = await totalBytesTask;
                     return;
                 }
@@ -243,14 +257,20 @@ public partial class MainWindow : Window
                     _ = PreloadAroundAsync(_index, _generation);
                 }
                 AppLog.Info($"Explorer native order applied: {explorerOrder.Count} files, currentIndex={_index}, currentPath={currentPath}");
+                if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "explorerApplied", PhotoReviewPerf.Ms(perfFolderStart));
             }
-            else AppLog.Info($"Explorer view fallback: status={explorerSnapshot.Status}, reason={fallbackReason}");
+            else
+            {
+                AppLog.Info($"Explorer view fallback: status={explorerSnapshot.Status}, reason={fallbackReason}");
+                if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "explorerFallback", PhotoReviewPerf.Ms(perfFolderStart));
+            }
             _totalSourceBytes = await totalBytesTask;
         }
         catch (OperationCanceledException) when (loadToken.IsCancellationRequested) { }
         catch (Exception ex) when (loadGeneration == _folderGeneration)
         {
             AppLog.Error($"LoadFolder failed: {folder}", ex);
+            if (perf) PhotoReviewPerf.Log.Folder(loadGeneration, "failed", PhotoReviewPerf.Ms(perfFolderStart));
             MainImage.Source = null;
             FolderText.Text = folder;
             UpdateFolderTitle(folder);
@@ -273,22 +293,35 @@ public partial class MainWindow : Window
     private async Task ShowImageAsync(int index)
     {
         if (index < 0 || index >= _files.Count) return;
+        var perf = PhotoReviewPerf.Log.IsEnabled();
         var presentStopwatch = Stopwatch.StartNew();
         _index = index; var path = _files[index]; var token = Interlocked.Increment(ref _generation);
+        // D04 perf: NavContext is an AsyncLocal. Setting it here flows forward into every
+        // await continuation and Task.Run started from this logical flow (thumbnail load,
+        // PreviewImageService decode, preload kick) and is restored for the caller when this
+        // async method yields, so it never leaks into the KeyDown handler or other navigations.
+        var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
+        if (perf) { PhotoReviewPerf.NavContext = token; PhotoReviewPerf.Log.ShowStart(token, index, _settings.LoadingMode); }
         _compareSelectedPath = null;
         if (AppLog.Enabled) AppLog.Info($"ShowImage start index={index} count={_files.Count} token={token} path={path}");
         // The catalog can become stale while Explorer order is being applied or an
         // external move/delete completes. Do this check before touching FileInfo.Length
         // so a vanished item is removed and the viewer advances once without logging
         // a misleading ShowImage failure.
+        long perfStat = perf ? Stopwatch.GetTimestamp() : 0;
         if (!TryGetCurrentFileInfo(path, out var initialInfo))
         {
+            if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
         var initialSize = initialInfo.Length;
         var currentKey = GetCurrentCacheKey(initialInfo);
+        if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
         var ramReady = TryGetCachedPreview(currentKey, out var readyBitmap);
+        // HasInflightPreview builds a cache key (one extra stat of the source) — that cost
+        // exists only while tracing.
+        if (perf) PhotoReviewPerf.Log.Lookup(token, perfPathId, ramReady ? "ramHit" : HasInflightPreview(path) ? "inflight" : "miss");
         if (ramReady)
         {
             if (_preloadScheduler.TryConsumePreloadedKey(currentKey)) _metrics.RecordPreloadHit();
@@ -302,9 +335,15 @@ public partial class MainWindow : Window
             if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
                 && !ramReady && !HasInflightPreview(path))
             {
+                // ThumbEnd "unknown" = call-site total; ThumbnailCache emits its own ThumbEnd with
+                // source ram|disk|decode for the same nav (D11: prefer that row for the source).
+                long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
+                if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
                 var thumbnail = await _thumbnailCache.GetAsync(path);
+                if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
                 if (token != _generation) return;
                 MainImage.Source = thumbnail;
+                if (perf) TracePresentedOnNextRender(token, "thumbnail", Stopwatch.GetTimestamp());
                 if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
                 ApplyInitialViewMode();
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải bản rõ";
@@ -312,12 +351,27 @@ public partial class MainWindow : Window
             var image = ramReady ? readyBitmap : await GetPreviewAsync(path, currentKey);
             if (ramReady) _metrics.RecordCacheHit();
             if (token != _generation) return;
+            long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
             var uiAssign = Stopwatch.StartNew();
             MainImage.Source = image;
+            long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
             _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
+            if (perf) PhotoReviewPerf.Log.Assign(token, (perfAssigned - perfAssign) * 1000.0 / Stopwatch.Frequency, image.PixelWidth, image.PixelHeight);
             if (AppLog.Enabled) AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={_settings.LoadingMode}");
+            long perfKick = perf ? Stopwatch.GetTimestamp() : 0;
+            if (perf) PhotoReviewPerf.Log.PostStart(token, "preloadKick");
             _ = PreloadAroundAsync(index, token);
+            if (perf) PhotoReviewPerf.Log.PostEnd(token, "preloadKick", PhotoReviewPerf.Ms(perfKick));
+            long perfCompare = perf ? Stopwatch.GetTimestamp() : 0;
             var pair = FindComparePair(path);
+            // The main image is only "final" when no compare pair replaces it below. Registering
+            // here instead of right after the assignment is equivalent: no frame can render
+            // before this synchronous code yields.
+            if (perf)
+            {
+                if (pair is null) TracePresentedOnNextRender(token, "final", perfAssigned);
+                else PhotoReviewPerf.Log.PostStart(token, "compare");
+            }
             ComparePanel.Visibility = pair is null ? Visibility.Collapsed : Visibility.Visible;
             if (pair is not null)
             {
@@ -328,6 +382,7 @@ public partial class MainWindow : Window
                 if (token != _generation) return;
                 CompareLeftImage.Source = comparePreviews[0];
                 CompareRightImage.Source = comparePreviews[1];
+                if (perf) TracePresentedOnNextRender(token, "compare", Stopwatch.GetTimestamp());
                 _compareSelectedPath = path;
                 UpdateCompareSelection();
                 var leftSize = "";
@@ -342,25 +397,42 @@ public partial class MainWindow : Window
                 var hashText = " | hash tắt";
                 if (_settings.CompareHashEnabled)
                 {
+                    long perfHash = perf ? Stopwatch.GetTimestamp() : 0;
+                    if (perf) PhotoReviewPerf.Log.PostStart(token, "hash");
                     var hashes = await Task.WhenAll(GetHashAsync(pair.Value.Left), GetHashAsync(pair.Value.Right));
+                    if (perf) PhotoReviewPerf.Log.PostEnd(token, "hash", PhotoReviewPerf.Ms(perfHash));
                     if (token != _generation) return;
                     hashText = $" | hash {(hashes[0] == hashes[1] ? "TRÙNG" : "KHÁC")}";
                 }
                 StatusText.Text = $"{index + 1}/{_files.Count} | Compare | {Path.GetFileName(pair.Value.Left)}{leftSize} ↔ {Path.GetFileName(pair.Value.Right)}{rightSize}{hashText} | click để chọn";
+                if (perf) PhotoReviewPerf.Log.PostEnd(token, "compare", PhotoReviewPerf.Ms(perfCompare));
             }
             if (pair is null)
             {
                 ApplyInitialViewMode();
+                // Original mode reads dimensions from the decoded bitmap (no I/O): not traced.
+                long perfDims = perf && !IsOriginalLoadingMode() ? Stopwatch.GetTimestamp() : 0;
+                if (perfDims != 0) PhotoReviewPerf.Log.PostStart(token, "dims");
                 var original = IsOriginalLoadingMode()
                     ? (Width: image.PixelWidth, Height: image.PixelHeight)
                     : await GetOriginalDimensionsAsync(path);
+                if (perfDims != 0) PhotoReviewPerf.Log.PostEnd(token, "dims", PhotoReviewPerf.Ms(perfDims));
                 if (token != _generation) return;
                 var currentInfo = new FileInfo(path);
                 if (!currentInfo.Exists) return;
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(currentInfo.Length)} · {original.Width}×{original.Height} · {Path.GetFileName(path)}";
             }
             if (token != _generation) return;
-            if (_session is not null) { _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow; _sessionStore.Save(_session); }
+            if (_session is not null)
+            {
+                _session.CurrentPath = path; _session.UpdatedUtc = DateTime.UtcNow;
+                // D04 perf: session save is traced here only (not inside SessionStore.Save), so
+                // saves made outside a navigation (Skip, file actions) are not attributed to a nav.
+                long perfSession = perf ? Stopwatch.GetTimestamp() : 0;
+                if (perf) PhotoReviewPerf.Log.PostStart(token, "session");
+                _sessionStore.Save(_session);
+                if (perf) PhotoReviewPerf.Log.PostEnd(token, "session", PhotoReviewPerf.Ms(perfSession));
+            }
             presentStopwatch.Stop();
             _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
         }
@@ -374,6 +446,24 @@ public partial class MainWindow : Window
         // but still log — otherwise this exception is unobserved once the discarded
         // fire-and-forget task (`_ = ShowImageAsync(...)`) is garbage collected.
         catch (Exception ex) { AppLog.Error($"ShowImage failed (stale token={token}, current={_generation}) index={index} path={path}", ex); }
+    }
+
+    /// <summary>
+    /// D04 perf (only called while tracing): one-shot CompositionTarget.Rendering hook that records
+    /// Rendered(msSinceAssign) + Presented(kind) on the next WPF render tick. The handler removes
+    /// itself on its first call whether or not <paramref name="nav"/> is still current, and captures
+    /// only value types/strings (never the window or the bitmap).
+    /// </summary>
+    private static void TracePresentedOnNextRender(long nav, string kind, long assignedTimestamp)
+    {
+        EventHandler? handler = null;
+        handler = (_, _) =>
+        {
+            System.Windows.Media.CompositionTarget.Rendering -= handler;
+            PhotoReviewPerf.Log.Rendered(nav, PhotoReviewPerf.Ms(assignedTimestamp));
+            PhotoReviewPerf.Log.Presented(nav, kind);
+        };
+        System.Windows.Media.CompositionTarget.Rendering += handler;
     }
 
     private void FitImage_Click(object sender, RoutedEventArgs e) => ResetFitView();
@@ -458,6 +548,13 @@ public partial class MainWindow : Window
     private async void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
+        // D04 perf: e.Timestamp comes from GetMessageTime, which shares GetTickCount's origin with
+        // Environment.TickCount (verified in D04); unchecked handles the 49.7-day wrap. Resolution
+        // is the system tick (~15.6 ms). nav = the token the next ShowImageAsync would get; it is a
+        // hint only (non-navigation keys never produce it) — D11 pairs KeyInput with the next
+        // ShowStart on the UI thread by time.
+        if (PhotoReviewPerf.Log.IsEnabled())
+            PhotoReviewPerf.Log.KeyInput(Volatile.Read(ref _generation) + 1, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
         if (Matches(pressedKey, _settings.Shortcuts.Fullscreen))
         {
             e.Handled = true; ToggleFullscreen(); return;
