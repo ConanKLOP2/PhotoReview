@@ -1,0 +1,17 @@
+2026-09-16 21:38:28.421 [INFO] [T2] Startup args=<F1>
+2026-09-16 21:38:29.247 [INFO] [T2] LoadFolder start: <F1>
+2026-09-16 21:38:29.735 [INFO] [T5] Explorer query-start: folder=<F1>
+2026-09-16 21:38:29.747 [INFO] [T2] LoadFolder scan complete: 58 files, initialSort=Name
+2026-09-16 21:38:29.759 [INFO] [T2] ShowImage start index=0 count=58 token=1 path=<F1>\001.jpg
+2026-09-16 21:38:29.768 [INFO] [T2] ShowImage cache-state token=1 path=<F1>\001.jpg ramReady=False cacheBytes=0
+2026-09-16 21:38:30.012 [INFO] [T2] ShowImage thumbnail-presented token=1 path=<F1>\001.jpg
+2026-09-16 21:38:30.017 [INFO] [T5] Explorer query-complete: status=NoMatchingWindow, windows=1, elapsedMs=282
+2026-09-16 21:38:30.664 [INFO] [T2] ShowImage preview-presented token=1 path=<F1>\001.jpg mode=Preview
+2026-09-16 21:38:30.685 [INFO] [T2] Preload progress: queued=8 active=8 cacheCount=1 cacheBytes=11130264 availableBytes=17993162752
+2026-09-16 21:38:31.648 [INFO] [T2] Explorer view fallback: status=NoMatchingWindow, reason=No matching Explorer window among 1 window(s)
+2026-09-16 21:38:31.749 [INFO] [T2] Preload progress: queued=16 active=8 cacheCount=9 cacheBytes=109989672 availableBytes=17897234432
+2026-09-16 21:38:32.499 [INFO] [T2] Preload progress: queued=24 active=8 cacheCount=17 cacheBytes=234629016 availableBytes=17562337280
+2026-09-16 21:38:32.632 [INFO] [T2] Preload progress: queued=32 active=8 cacheCount=25 cacheBytes=335716656 availableBytes=17458216960
+2026-09-16 21:38:32.763 [INFO] [T2] Preload progress: queued=40 active=8 cacheCount=34 cacheBytes=475158216 availableBytes=17318125568
+2026-09-16 21:38:32.895 [INFO] [T2] Preload progress: queued=48 active=8 cacheCount=41 cacheBytes=583333704 availableBytes=17086402560
+2026-09-16 21:38:33.048 [INFO] [T2] Preload progress: queued=56 active=8 cacheCount=50 cacheBytes=727683912 availableBytes=17011609600
