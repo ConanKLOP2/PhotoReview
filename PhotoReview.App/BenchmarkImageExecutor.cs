@@ -22,8 +22,6 @@ public sealed class BenchmarkImageExecutor
         return (image, false);
     }
 
-    public void Clear() => _cache.Clear();
-
     // The raw decode is shared with the viewer through PreviewImageService.DecodeSource,
     // so there is exactly one BitmapImage decode implementation in the app.
     //
