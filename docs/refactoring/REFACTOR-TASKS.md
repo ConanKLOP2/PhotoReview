@@ -92,7 +92,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T03 | `global.json`, `.editorconfig`, analyzer | T00 | ∥A | | DONE |
 | T04 | Central Package Management | T00 | ∥A | | DONE |
 | T05 | AGENTS: quy trình PR | T00 | ∥A | ⛔Q4 | TODO |
-| T10 | Ma trận parity test | T00 | | | TODO |
+| T10 | Ma trận parity test | T00 | | | DONE |
 | T11 | Chuyển check CLI còn thiếu sang xUnit | T10 | ∥B | | TODO |
 | T12 | Xóa file test trùng trong CLI | T10 | ∥B | | TODO |
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | TODO |
@@ -223,7 +223,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Trigger: PR vào `master` và `refactor/integration`; push vào `master`.
 - **Không làm:** sửa test cho qua CI. Test nào lỗi do môi trường runner thì ghi tên vào nhật ký để T13a gắn Trait.
 - **Xong khi:** workflow chạy xanh (hoặc chỉ đỏ ở các test đã liệt kê).
-- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T02-ci` `f43c5e1` · Files: `.github/workflows/ci.yml` · 6 lệnh CI chạy local đạt (xUnit 190/190) · R1 (Opus): APPROVE · merge `ff05b6c`.
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T02-ci` `f43c5e1` · Files: `.github/workflows/ci.yml` · 6 lệnh CI chạy local đạt (xUnit 190/190) · R1 (Opus): APPROVE · merge `ff05b6c`. GitHub Actions trên `refactor/integration`: build thành công, 21 warning (người dùng xác nhận).
 
 ### T03 — `global.json`, `.editorconfig`, analyzer ∥A
 - **Files:** `global.json`, `.editorconfig`, `Directory.Build.props`.
@@ -234,13 +234,13 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Ghi số warning trước và sau vào nhật ký.
 - **Không làm:** sửa warning.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T03-build-config` `efc4a49` · Files: `global.json`, `.editorconfig`, `Directory.Build.props` · warning 0 → 140 (CA analyzer, chưa sửa) · build/CLI/xUnit 190/190 đạt · R1 (Opus): CHANGES, vì XAML thực tế thụt 4 spaces; Coordinator đã sửa ở `44a70a3` · merge `7b1cb84`.
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T03-build-config` `efc4a49` · Files: `global.json`, `.editorconfig`, `Directory.Build.props` · warning 0 → 140 (CA analyzer, chưa sửa) · build/CLI/xUnit 190/190 đạt · R1 (Opus): CHANGES, vì XAML thực tế thụt 4 spaces; Coordinator đã sửa ở `44a70a3` · merge `7b1cb84`. GitHub Actions trên `refactor/integration`: build thành công, 21 warning (người dùng xác nhận).
 
 ### T04 — Central Package Management ∥A
 - **Files:** `Directory.Packages.props` (mới), `PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj`.
 - **Làm:** thêm `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>` và `PackageVersion` cho `Microsoft.NET.Test.Sdk` 17.14.1, `xunit` 2.9.3, `xunit.runner.visualstudio` 3.1.4. Xóa `Version=` trong csproj.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T04-cpm` `6a9c7e0` · Files: `Directory.Packages.props`, csproj test · restore/build/xUnit 190/190/CLI đạt · R1 (Opus): APPROVE · merge `3dd2932`.
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 · `refactor/T04-cpm` `6a9c7e0` · Files: `Directory.Packages.props`, csproj test · restore/build/xUnit 190/190/CLI đạt · R1 (Opus): APPROVE · merge `3dd2932`. GitHub Actions trên `refactor/integration`: build thành công, 21 warning (người dùng xác nhận).
 
 ### T05 — AGENTS: quy trình PR ∥A ⛔Q4
 - **Files:** `AGENTS.md`.
@@ -259,10 +259,14 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. Bảng 2: `diff` 5 file trùng (`BenchmarkScenarioTests`, `CacheExplorerRegressionTests`, `FileActionConcurrencyTests`, `ImageCacheKeyTests`, `PerformanceTestHarness`) và ghi khác biệt.
   3. Bảng 3: 69 test trong `SourcePresenceTests`, phân loại `REPLACE-BY:<task>` (T14x, T41–T46), `KEEP-XAML`, hoặc `DROP`.
 - **Xong khi:** mọi dòng đều đã có phân loại.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Haiku 4.5 (`a0bde7c`) → R1 (Opus): **CHANGES**, vì 67/147 tên method bị bịa → Coordinator dựng CSV bằng script (khớp chính xác DisplayName) → nâng lên Sonnet 5 (`refactor/T10-parity-fix` `e161c5c`) → Coordinator kiểm tên 146/146 + 69/69: APPROVE.
+  - Kết quả: Bảng 1 146/146 COVERED, không có MISSING. Bảng 3: REPLACE-BY 58, DROP 4, KEEP-XAML 6 (đề xuất gộp 3 test `AutomationProperties` thành 1 ở T47), KEEP-SCRIPT 1 (`FileAssociationCommandIsRegistered`).
+  - T12: xóa được 4 file (bỏ lời gọi `Program.cs` dòng 96–99); `PerformanceTestHarness.cs` giữ tới T50b.
+  - Bài học: task ghép tên hoặc tra cứu lớn phải có script kiểm tên trong bước Kiểm thử.
 
 ### T11 — Chuyển check còn thiếu ∥B
 - **Files:** `{UT}/MigratedCliChecksTests.cs` (mới), cột trạng thái trong `test-parity.md`.
+- **Ghi chú (sau T10):** không có MISSING, nên T11 chỉ cần xác nhận lại bằng script ghép DisplayName rồi đánh DONE, không viết test mới.
 - **Làm:** viết xUnit cho mọi dòng `MISSING`, giữ nguyên ngữ nghĩa, dùng `TempRoot`. Test đụng global state thì thêm `[Collection("GlobalState")]`.
 - **Xong khi:** không còn `MISSING`, `dotnet test` đạt.
 - **Nhật ký:** —
