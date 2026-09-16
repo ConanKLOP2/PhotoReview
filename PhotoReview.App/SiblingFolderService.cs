@@ -9,9 +9,17 @@ public static class SiblingFolderService
         var fullCurrent = Path.GetFullPath(currentFolder);
         var parent = Directory.GetParent(fullCurrent);
         if (parent is null) return [];
-        return Directory.EnumerateDirectories(parent.FullName)
-            .OrderBy(path => ImageSortService.NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        try
+        {
+            return Directory.EnumerateDirectories(parent.FullName)
+                .OrderBy(path => ImageSortService.NaturalKey(Path.GetFileName(path)), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            AppLog.Error($"Failed to enumerate sibling folders of {parent.FullName}", ex);
+            return [];
+        }
     }
 
     public static string? GetTarget(string currentFolder, int direction)
