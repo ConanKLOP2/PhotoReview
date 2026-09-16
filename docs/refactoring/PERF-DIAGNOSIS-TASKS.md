@@ -2,6 +2,10 @@
 
 - **Plan:** [`PERF-DIAGNOSIS-PLAN.md`](PERF-DIAGNOSIS-PLAN.md) · **Cập nhật:** 2026-09-16
 - **Quy trình chung:** giống [`REFACTOR-TASKS.md`](REFACTOR-TASKS.md) mục 0 (một task mỗi phiên, chỉ sửa file trong **Files**, có VERIFY, ghi nhật ký theo mẫu).
+- **Model và review:** theo bảng "Phân model và quy trình review" trong `REFACTOR-TASKS.md` mục 0:
+  - D00, D01, D02, D07: Haiku 4.5, review R1.
+  - D03, D05, D08, D09, D10, D11: Sonnet 5, review R2.
+  - D04, D06, D12, D13: Opus 5, review R3.
 - **Branch:** `diag/<ID>-<slug>`, tách từ `refactor/integration` (sau T00).
 - **Đường dẫn:** các task này chạy **trước** T24, nên dùng layout cũ (`PhotoReview.App/`, `PhotoReview.Tests/`, `PhotoReview.Tests.Unit/`).
 - **Quy tắc riêng:**

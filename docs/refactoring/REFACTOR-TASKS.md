@@ -18,6 +18,32 @@
 6. Chạy **Kiểm thử** và VERIFY. Test phải đạt thật, không được skip hay xóa assertion để cho qua.
 7. Ghi **Nhật ký** theo mẫu, đổi trạng thái sang `DONE`, commit `refactor(<layer>): <mô tả> (<ID>)`.
 
+### Phân model và quy trình review
+
+Áp dụng cho cả file này và [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md).
+
+| Mức | Model thực hiện | Task | Review |
+|---|---|---|---|
+| **L1** | Haiku 4.5 | T00, T02, T03, T04, T05, T10, T12, T13a, T20, T22a, T22c, T23a, T23b, T26b, T30, T33a, T45a, T50a, T51, T53a, T72, T88 · D00, D01, D02, D07 | **R1:** Coordinator đọc diff + kiểm tra VERIFY. Nếu diff đụng file ngoài danh sách thì trả lại |
+| **L2** | Sonnet 5 | T11, T13b, T21a, T21b, T21c, T22b, T25a, T25b, T26a, T26c, T31a, T31b, T32, T33b, T34, T35, T40, T41a, T42a, T42b, T42c, T43a, T43b, T45b, T46d, T47, T50b, T52, T53b, T60, T61, T62, T63, T64, T73, T74, T80, T81, T83, T87 · D03, D05, D08, D09, D10, D11 | **R2:** một agent Sonnet 5 **mới** (không có context của worker) review theo checklist. Task nào đụng INV-1…INV-12 thì review bằng Opus 5 |
+| **L3** | Opus 5 | T14a–T14d, T24, T31c, T41b, T44, T45c, T46a, T46b, T46c, T65, T82, T84, T85, T86, T71 · D04, D06, D12, D13 | **R3:** một agent Opus 5 **mới** review theo checklist. Test liên quan phải chạy 10 lần đều đạt. Coordinator kiểm thủ công nếu có đổi UI |
+
+**Mức effort gợi ý:** L1 Low, L2 Medium, L3 High. Task L1 có chữ "race", "generation", "epoch", "COM" hoặc "P/Invoke" thì nâng lên Medium.
+
+**Checklist review (R2/R3)** — reviewer trả lời từng mục bằng PASS, FAIL hoặc N/A kèm dẫn chứng `file:line`:
+1. Diff chỉ gồm file trong mục **Files** của task.
+2. Mọi bước **Làm** đã được thực hiện; không có gì thuộc mục **Không làm**.
+3. Bất biến INV và ràng buộc K liên quan vẫn đúng. Nêu rõ INV nào và kiểm tra bằng cách nào.
+4. Không đổi hành vi ngoài phạm vi. Chuỗi tiếng Việt hiển thị giữ nguyên văn. Comment về race/contract không bị xóa.
+5. Test mới kiểm tra hành vi thật: không assert rỗng, không `Skip` mà không có lý do.
+6. Reviewer tự chạy lại lệnh **Kiểm thử** và ghi kết quả.
+7. Kết luận: `APPROVE` hoặc `CHANGES` kèm danh sách sửa cụ thể. Nếu `CHANGES`, worker cũ (hoặc một worker mới cùng mức) sửa, rồi review lại. Tối đa 2 vòng; quá 2 vòng thì nâng task lên mức cao hơn.
+
+**Quy ước để tiết kiệm token:**
+- Worker **không** sửa `REFACTOR-TASKS.md`, `PERF-DIAGNOSIS-TASKS.md` hay `task_on_progress.md` (tránh conflict). Worker trả nhật ký trong câu trả lời; Coordinator ghi vào file.
+- Worker không push. Coordinator merge vào `refactor/integration` theo thứ tự ID, chạy VERIFY đầy đủ **một lần sau mỗi đợt merge**, rồi push.
+- Worker chỉ đọc mục task của mình, mục 0 của file này và các mục plan được task tham chiếu. Không đọc toàn bộ plan.
+
 ### Alias đường dẫn
 
 T24 chuyển layout, nên đường dẫn thật phụ thuộc T24 đã xong chưa:
