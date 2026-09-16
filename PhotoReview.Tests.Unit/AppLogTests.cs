@@ -5,6 +5,7 @@ using PhotoReview.App;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>Logging opt-in/opt-out and concurrency contracts.</summary>
+[Collection("GlobalState")]
 public sealed class AppLogTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
@@ -113,6 +114,7 @@ public sealed class AppLogTests : IDisposable
 }
 
 /// <summary>Session persistence contract.</summary>
+[Collection("GlobalState")]
 public sealed class SessionStoreTests : IDisposable
 {
     private readonly DataRootFixture _data = new();

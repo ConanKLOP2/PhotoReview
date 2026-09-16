@@ -9,6 +9,7 @@ namespace PhotoReview.Tests.Unit;
 /// that needs a live WPF Window (STA + Application context), a real HWND, the user's real
 /// LocalAppData, or the Windows registry, so it cannot be driven headlessly.
 /// </summary>
+[Trait("Category", "Manual")]
 public sealed class SourcePresenceTests
 {
     private static string MainWindow => ProjectSources.MainWindow;

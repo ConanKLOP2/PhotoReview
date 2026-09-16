@@ -1,12 +1,21 @@
 using System.IO;
+using Xunit;
 
 // Several migrated assertions mutate process-global state (the PHOTOREVIEW_DATA_ROOT
-// environment variable and AppLog's static writer thread). The original console
-// suite ran strictly sequentially, so parallelization is disabled here to preserve
-// the exact semantics of the assertions being migrated.
+// environment variable and AppLog's static writer thread). Also, PreviewImageService
+// background workers persist to a shared directory that can race during cleanup.
+// Parallelization remains disabled to preserve sequential execution semantics.
+// TODO T13b: Fix flaky test "Eviction forces a fresh source read on the next request"
+// to use unique cache directories per test instance so parallelization can be enabled.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace PhotoReview.Tests.Unit;
+
+/// <summary>Collection definition for tests that mutate global state (PHOTOREVIEW_DATA_ROOT, AppLog).</summary>
+[CollectionDefinition("GlobalState", DisableParallelization = true)]
+public sealed class GlobalStateCollection
+{
+}
 
 /// <summary>A disposable temporary directory, mirroring the console suite's per-run root.</summary>
 public sealed class TempRoot : IDisposable
