@@ -18,6 +18,7 @@ public sealed class PreloadScheduler : IDisposable
     private readonly Func<long> _totalSourceBytes;
     private readonly long _fullFolderRamThresholdBytes;
     private readonly double _memoryLoadLimit;
+    private readonly Func<double, bool> _hasHeadroom;
 
     private CancellationTokenSource _preloadCts = new();
     private readonly SemaphoreSlim _preloadSlots = new(AppConstants.PreloadWorkerCount, AppConstants.PreloadWorkerCount);
@@ -39,7 +40,8 @@ public sealed class PreloadScheduler : IDisposable
         Func<string[]> snapshotFiles,
         Func<long> totalSourceBytes,
         long fullFolderRamThresholdBytes,
-        double memoryLoadLimit)
+        double memoryLoadLimit,
+        Func<double, bool>? hasHeadroom = null)
     {
         _previewService = previewService;
         _metrics = metrics;
@@ -47,6 +49,9 @@ public sealed class PreloadScheduler : IDisposable
         _totalSourceBytes = totalSourceBytes;
         _fullFolderRamThresholdBytes = fullFolderRamThresholdBytes;
         _memoryLoadLimit = memoryLoadLimit;
+        // Defaults to the real OS memory check; tests inject a fixed answer so the
+        // scheduler's own logic doesn't depend on how much RAM the test machine has free.
+        _hasHeadroom = hasHeadroom ?? PhysicalMemory.HasHeadroom;
     }
 
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
@@ -161,10 +166,7 @@ public sealed class PreloadScheduler : IDisposable
         finally { order?.Dispose(); }
     }
 
-    private bool HasPreloadHeadroom()
-    {
-        return PhysicalMemory.HasHeadroom(_memoryLoadLimit);
-    }
+    private bool HasPreloadHeadroom() => _hasHeadroom(_memoryLoadLimit);
 
     private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
     {

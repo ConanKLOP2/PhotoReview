@@ -365,7 +365,7 @@ try
     var guardedMetrics = new ReviewMetrics();
     var guardedPreviewService = new PreviewImageService(guardedMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
         diskCacheDirectory: Path.Combine(root, "disk-cache-guarded"));
-    using (var blockedScheduler = new PreloadScheduler(guardedPreviewService, guardedMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 0.0))
+    using (var blockedScheduler = new PreloadScheduler(guardedPreviewService, guardedMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 0.0, hasHeadroom: _ => false))
     {
         await blockedScheduler.PreloadAroundAsync(0);
         Check(guardedPreviewService.CacheCount == 0 && guardedMetrics.Snapshot().SourceReads == 0,
@@ -374,7 +374,7 @@ try
     var warmMetrics = new ReviewMetrics();
     var warmPreviewService = new PreviewImageService(warmMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
         diskCacheDirectory: Path.Combine(root, "disk-cache-warm"));
-    using (var warmScheduler = new PreloadScheduler(warmPreviewService, warmMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0))
+    using (var warmScheduler = new PreloadScheduler(warmPreviewService, warmMetrics, () => preloadFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0, hasHeadroom: _ => true))
     {
         await warmScheduler.PreloadAroundAsync(0);
         Check(warmPreviewService.CacheCount > 0 && warmMetrics.Snapshot().SourceReads > 0,
@@ -403,7 +403,7 @@ try
     var singleMetrics = new ReviewMetrics();
     var singlePreviewService = new PreviewImageService(singleMetrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
         diskCacheDirectory: Path.Combine(root, "disk-cache-single"));
-    using (var singleScheduler = new PreloadScheduler(singlePreviewService, singleMetrics, () => singleFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0))
+    using (var singleScheduler = new PreloadScheduler(singlePreviewService, singleMetrics, () => singleFiles, () => 0L, long.MaxValue, memoryLoadLimit: 1.0, hasHeadroom: _ => true))
     {
         await singleScheduler.PreloadAroundAsync(0);
         var warmedKey = singlePreviewService.GetCurrentCacheKey(singleFiles[1]);

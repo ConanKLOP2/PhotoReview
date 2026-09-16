@@ -128,21 +128,25 @@ public sealed class PreloadSchedulerTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
+    // hasHeadroom defaults to "always available": these tests exercise the scheduler's
+    // own priority/queueing logic and must not depend on how much RAM the test
+    // machine actually has free (PhysicalMemory.HasHeadroom also floors on a fixed
+    // 2 GiB reserve, which a constrained CI/dev box may never satisfy).
     private (ReviewMetrics Metrics, PreviewImageService Service, PreloadScheduler Scheduler) NewWarmScheduler(
-        double memoryLoadLimit = 1.0)
+        Func<double, bool>? hasHeadroom = null)
     {
         var metrics = new ReviewMetrics();
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("disk-cache-" + Guid.NewGuid().ToString("N")));
         var scheduler = new PreloadScheduler(service, metrics, () => _preloadFiles, () => 0L, long.MaxValue,
-            memoryLoadLimit: memoryLoadLimit);
+            memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true));
         return (metrics, service, scheduler);
     }
 
     [Fact(DisplayName = "Background preload memory guard decodes nothing when there is no memory headroom")]
     public async Task MemoryGuardDecodesNothingWithoutHeadroom()
     {
-        var (metrics, service, scheduler) = NewWarmScheduler(memoryLoadLimit: 0.0);
+        var (metrics, service, scheduler) = NewWarmScheduler(hasHeadroom: _ => false);
         using (scheduler)
         {
             await scheduler.PreloadAroundAsync(0);
@@ -210,7 +214,7 @@ public sealed class PreloadSchedulerTests : IDisposable
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: _root.Dir("disk-cache-single"));
         using var scheduler = new PreloadScheduler(service, metrics, () => _singleFiles, () => 0L, long.MaxValue,
-            memoryLoadLimit: 1.0);
+            memoryLoadLimit: 1.0, hasHeadroom: _ => true);
         await scheduler.PreloadAroundAsync(0);
         var warmedKey = service.GetCurrentCacheKey(_singleFiles[1]);
         Assert.True(scheduler.TryConsumePreloadedKey(warmedKey) && !scheduler.TryConsumePreloadedKey(warmedKey));
