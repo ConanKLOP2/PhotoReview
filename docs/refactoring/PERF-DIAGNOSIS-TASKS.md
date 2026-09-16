@@ -23,7 +23,7 @@
 | D02 | Đếm truy cập file (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Không | BLOCKED |
 | D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | DONE |
 | D04 | Gắn event vào các điểm đo | D03 | | Có | DONE |
-| D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | TODO |
+| D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | DONE |
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | TODO |
 | D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | DONE |
 | D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | DONE |
@@ -129,7 +129,13 @@
      - Xuất CSV và Markdown: đường cong decode theo width (H8), `pngDecode` so với `read + decode` (H9), tỷ lệ read/decode.
   4. Chạy trên F1, F2, F3; nếu có thì thêm ổ chậm (S10).
 - **Xong khi:** `io-decode-split.md` có bảng và kết luận H8, H9, và tỷ lệ I/O/decode. Khi không có biến môi trường, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17 · Sonnet 5 (bị gián đoạn vì giới hạn, đã tiếp tục) · `diag/D05-io-decode` `0e78292` · `DiagOptions` + PREREAD + `--io-decode-split` · warm P50 (ms), theo thứ tự read / decode@0 / @1920 / @2560 / @3840 / pngDecode:
+  - F1 (24 MP nén mạnh): 0,2 / 7,6 / 29,3 / 48,7 / 89,9 / 102
+  - F1b (27 MP): 4,4 / 242 / 227 / 283 / 340 / 107
+  - F2 (48 MP): 2,8 / 1359 / 1354 / 1328 / 1462 / 111
+  - F3 (PNG): 0,4 / 16,5 / 37,6 / – / – / 70
+  - **Kết luận sơ bộ:** decode chiếm 98–100%. I/O không đáng kể **khi file đã nằm trong cache của OS** (cần đo lại khi cache OS lạnh). H8 đúng một phần: với 48 MP, hạ width không giảm thời gian. H9 tùy ảnh: PNG disk cache lỗ với ảnh rẻ, lãi 2,7–12× với ảnh đắt.
+  - Review (Opus): APPROVE; Coordinator sửa `--perf-analyze` để trừ `t_read` khỏi `Decode` khi PREREAD; giải quyết conflict `Program.cs` với D11 · 245/245 test.
 
 ### D10 — Preload worker / tắt disk cache ∥2
 - **Files:** `PhotoReview.App/PreloadScheduler.cs` (số worker lấy từ `DiagOptions.PreloadWorkers ?? AppConstants.PreloadWorkerCount` cho **cả** `SemaphoreSlim` **lẫn** hằng `workers` trong vòng lặp), `PhotoReview.App/PreviewImageService.cs` (bỏ qua đọc và persist disk cache khi `DisableDiskCache`), `PhotoReview.Tests.Unit/PerfTraceTests.cs` (test override), `docs/refactoring/diagnosis/contention.md` (mới; kết quả điền ở D07).
