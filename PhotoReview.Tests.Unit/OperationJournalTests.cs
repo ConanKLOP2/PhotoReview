@@ -7,6 +7,7 @@ namespace PhotoReview.Tests.Unit;
 /// Journal durability and Move-commit contracts. The constructor
 /// reproduces the original suite's committed-Move setup for every test.
 /// </summary>
+[Collection("GlobalState")]
 public sealed class OperationJournalTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
@@ -76,6 +77,7 @@ public sealed class OperationJournalTests : IDisposable
 }
 
 /// <summary>Pending-operation reconciliation contracts.</summary>
+[Collection("GlobalState")]
 public sealed class JournalReconciliationTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
@@ -139,6 +141,7 @@ public sealed class JournalReconciliationTests : IDisposable
 }
 
 /// <summary>Recovery retry contracts.</summary>
+[Collection("GlobalState")]
 public sealed class RecoveryRetryServiceTests : IDisposable
 {
     private readonly DataRootFixture _data = new();

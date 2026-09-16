@@ -50,6 +50,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     }
 
     [Fact(DisplayName = "The interleaved action profile cycles move, delete, copy across iterations and matches each op's expected source state")]
+    [Trait("Category", "Integration")]
     public async Task InterleavedActionProfileCyclesThroughAllThreeOperations()
     {
         var profile = BenchmarkProfiles.Find("action-interleaved")!;
@@ -76,6 +77,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     }
 
     [Fact(DisplayName = "Random workload selects the identical file sequence across separate runs seeded from the same profile id")]
+    [Trait("Category", "Integration")]
     public async Task RandomWorkloadSelectionIsDeterministicAcrossRuns()
     {
         var profile = BenchmarkProfiles.Find("random-navigation")! with { Workers = 1 };
