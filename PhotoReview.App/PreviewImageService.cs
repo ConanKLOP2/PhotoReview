@@ -158,6 +158,10 @@ public sealed class PreviewImageService
     {
         var stopwatch = Stopwatch.StartNew();
         var sourceRead = false;
+        // DecodeWithFallback silently returns a full-resolution decode when the requested
+        // downscaled decode fails; this must be tracked so the fallback bitmap is never
+        // persisted under the downscaled preview's cache key below.
+        var downscaled = false;
         var bitmap = new BitmapImage();
         var cachePath = GetDiskCachePath(key);
         if (File.Exists(cachePath))
@@ -173,27 +177,29 @@ public sealed class PreviewImageService
             // lets that race turn a plain cache miss into an escaping FileNotFoundException
             // instead of the source fallback below. Catch the actual expected read/decode
             // failure types instead of re-querying state that can change mid-catch.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
             {
                 try { File.Delete(cachePath); } catch { }
                 sourceRead = true;
-                bitmap = DecodeWithFallback(path, targetWidth);
+                (bitmap, downscaled) = DecodeWithFallback(path, targetWidth);
             }
         }
         else
         {
             sourceRead = true;
-            bitmap = DecodeWithFallback(path, targetWidth);
+            (bitmap, downscaled) = DecodeWithFallback(path, targetWidth);
         }
         // A path can be replaced while decode is in flight. Never publish
         // the old pixels under the new source's identity.
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
         lock (_cacheLifecycleGate)
             if (cacheEpoch == _cacheEpoch) _cache.Set(key, bitmap);
-        // Only cache downscaled previews to disk: PNG-encoding a full-resolution
-        // Original-mode decode is slower than just re-decoding the source JPEG,
-        // so it would cost more than it saves.
-        if (sourceRead && targetWidth > 0) PersistToDiskCache(bitmap, cachePath, cacheEpoch);
+        // Only cache previews that actually decoded at the downscaled target width: a
+        // fallback to full-resolution (see DecodeWithFallback) must never be PNG-encoded
+        // under the downscaled cache key, and Original-mode's full-resolution decode is
+        // slower to persist than just re-decoding the source JPEG, so it would cost more
+        // than it saves.
+        if (sourceRead && downscaled) PersistToDiskCache(bitmap, cachePath, cacheEpoch);
         stopwatch.Stop();
         if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
         return bitmap;
@@ -296,10 +302,13 @@ public sealed class PreviewImageService
         bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
     }
 
-    public static BitmapImage DecodeWithFallback(string path, int targetWidth)
+    /// <summary>Decodes at <paramref name="targetWidth"/>, falling back to a full-resolution
+    /// decode if that fails; the second value reports whether the target width was actually
+    /// honored, so a caller never mistakes the full-resolution fallback for a downscaled decode.</summary>
+    public static (BitmapImage Bitmap, bool Downscaled) DecodeWithFallback(string path, int targetWidth)
     {
-        try { return DecodeSource(path, targetWidth); }
-        catch when (targetWidth > 0) { return DecodeSource(path, 0); }
+        try { return (DecodeSource(path, targetWidth), targetWidth > 0); }
+        catch when (targetWidth > 0) { return (DecodeSource(path, 0), false); }
     }
 
     private string GetDiskCachePath(ImageCacheKey key)

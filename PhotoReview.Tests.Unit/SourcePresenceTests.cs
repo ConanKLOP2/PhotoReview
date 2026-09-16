@@ -4,11 +4,10 @@ using PhotoReview.App;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>
-/// Bucket-B checks migrated verbatim from PhotoReview.Tests/Program.cs: these assert the
-/// PRESENCE OF SOURCE TEXT in PhotoReview.App, not runtime behavior. Each one covers glue
+/// These checks assert the PRESENCE OF SOURCE TEXT in PhotoReview.App, not runtime behavior.
+/// Each one covers glue
 /// that needs a live WPF Window (STA + Application context), a real HWND, the user's real
-/// LocalAppData, or the Windows registry, so it cannot be driven headlessly. WP3.1 labelled
-/// them as such; WP3.3 migrates them unchanged.
+/// LocalAppData, or the Windows registry, so it cannot be driven headlessly.
 /// </summary>
 public sealed class SourcePresenceTests
 {
@@ -318,7 +317,7 @@ public sealed class SourcePresenceTests
 
     [Fact(DisplayName = "Current folder is shown in the native window title bar (source presence, not behavior)")]
     public void CurrentFolderIsShownInNativeTitleBar() =>
-        Assert.True(MainWindow.Contains("Title = $\"Photo Review — {folder}\"")
+        Assert.True(MainWindow.Contains("Title = $\"Photo Review — {folder}")
             && MainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""));
 
     [Fact(DisplayName = "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)")]

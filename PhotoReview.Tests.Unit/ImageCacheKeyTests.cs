@@ -3,7 +3,6 @@ using PhotoReview.App;
 
 namespace PhotoReview.Tests.Unit;
 
-/// <summary>Migrated from PhotoReview.Tests/ImageCacheKeyTests.cs.</summary>
 public sealed class ImageCacheKeyTests : IDisposable
 {
     private readonly TempRoot _root = new("cache-key");

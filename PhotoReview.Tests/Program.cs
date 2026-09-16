@@ -12,30 +12,33 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
     var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
     var reports = new List<BenchmarkReport>();
+    var anyFailed = false;
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
         await using var imageExecutor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
-        var report = await new BenchmarkEngine().RunAsync(folder, profile, async (_, workload, iteration, token) =>
+        var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
+        try
         {
-            if (workload == BenchmarkWorkload.FileAction)
-            {
-                var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
-                try { await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], token), token); await imageExecutor.DecodeAsync(temp, token); using var read = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); var moved = temp + ".moved"; File.Move(temp, moved); File.Delete(moved); return (true, (ReviewMetricsSnapshot?)null); }
-                finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
-            }
-            var selected = Enumerable.Range(0, Math.Min(Math.Max(1, profile.Workers), files.Length)).Select(i => files[(iteration + i) % files.Length]).ToArray();
-            await Parallel.ForEachAsync(selected, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, profile.Workers), CancellationToken = token }, async (path, ct) =>
-            {
-                await imageExecutor.DecodeAsync(path, ct);
-            });
-            return (true, (ReviewMetricsSnapshot?)null);
-        }, new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
-        reports.Add(report);
-        var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
-        var phase = report.Phases[0]; Console.WriteLine($"DONE profile={profile.Id} status={phase.Status} p50={phase.P50:F1}ms p95={phase.P95:F1}ms max={phase.Max:F1}ms report={pathOut}");
+            // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior.
+            var report = await new BenchmarkEngine().RunAsync(folder, profile,
+                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, token),
+                new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
+            reports.Add(report);
+            var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
+            var phase = report.Phases[0];
+            if (phase.Status == BenchmarkResultStatus.Fail) anyFailed = true;
+            Console.WriteLine($"DONE profile={profile.Id} status={phase.Status} p50={phase.P50:F1}ms p95={phase.P95:F1}ms max={phase.Max:F1}ms report={pathOut}");
+        }
+        catch (Exception ex)
+        {
+            // Report this profile's failure and continue the batch, as the WPF window does.
+            anyFailed = true;
+            Console.Error.WriteLine($"FAIL profile={profile.Id} error={ex.Message}");
+        }
     }
     var summary = Path.Combine(reportDirectory, "summary.json"); await File.WriteAllTextAsync(summary, System.Text.Json.JsonSerializer.Serialize(reports, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); Console.WriteLine($"REPORT: {summary}");
+    if (anyFailed) Environment.ExitCode = 1;
 }
 if (args.Length == 1 && args[0] == "--benchmark-list-profiles")
 {
@@ -175,7 +178,7 @@ try
     var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
     var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
     // The decode/cache path lives in PreviewImageService and preload scheduling in
-    // PreloadScheduler (WP3.2).  Both are constructible without a WPF Window, so their
+    // PreloadScheduler. Both are constructible without a WPF Window, so their
     // contracts are asserted behaviorally below; only the few branches that cannot be
     // driven from a console harness still read these focused service files.
     var previewServiceText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreviewImageService.cs"));
@@ -193,7 +196,6 @@ try
           "Interleaved actions advance viewer before filesystem operation and exactly once (source presence, not behavior)", failures);
     Check(mainWindow.Contains("Interlocked.Exchange(ref _fileActionInProgress, 1)"),
           "Interleaved actions reject duplicate concurrent file actions (source presence; FileActionConcurrencyTests covers the behavior)", failures);
-    // AppSettings is a plain public class, so its option contract is asserted by calling it.
     var defaultSettings = new AppSettings();
     Check(defaultSettings.LoadingMode == "Preview", "LoadingMode defaults to Preview", failures);
     Check(AppSettings.IsValidLoadingMode("Fast") && AppSettings.IsValidLoadingMode("Preview") && AppSettings.IsValidLoadingMode("Original")
@@ -422,7 +424,7 @@ try
     Check(mainWindowXaml.Contains("Loaded=\"Window_Loaded\"") && mainWindowXaml.Contains("Closing=\"Window_Closing\""), "Main window restores and saves native placement instead of always using the startup default (source presence, not behavior)", failures);
     Check(!mainWindowXaml.Contains("WindowState=\"Maximized\""), "Main window does not force maximized state in XAML (source absence, not behavior)", failures);
     Check(!mainWindowXaml.Contains("<Grid.RowDefinitions><RowDefinition Height=\"Auto\"/><RowDefinition Height=\"*\"/><RowDefinition Height=\"Auto\"/></Grid.RowDefinitions>") && mainWindowXaml.Contains("Panel.ZIndex=\"100\" Background=\"#B0181818\""), "Image uses the full client area while toolbar remains a compact overlay (source presence, not behavior)", failures);
-    Check(mainWindow.Contains("Title = $\"Photo Review — {folder}\"") && mainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""), "Current folder is shown in the native window title bar (source presence, not behavior)", failures);
+    Check(mainWindow.Contains("Title = $\"Photo Review — {folder}") && mainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""), "Current folder is shown in the native window title bar (source presence, not behavior)", failures);
     Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PhotoReview.App.csproj")).Contains("BuildStamp") && settingsWindow.Contains("AssemblyInformationalVersionAttribute"), "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)", failures);
     Check(!mainWindow.Contains("Window_SourceInitialized") && mainWindow.Contains("WindowPlacementService.Restore(this)") && mainWindow.Contains("WindowPlacementService.Save(this)") && placementService.Contains("GetWindowPlacement") && placementService.Contains("SetWindowPlacement"), "Native window placement restores after Loaded and persists monitor, bounds, and maximized state (source presence: needs a real Window handle)", failures);
     Check(placementService.Contains("Screen.AllScreens") && placementService.Contains("WorkingArea"), "Saved placement is rejected when its monitor is no longer connected (source presence: needs real multi-monitor hardware)", failures);

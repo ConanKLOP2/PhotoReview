@@ -11,7 +11,12 @@ $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'PhotoReview.App\PhotoReview.App.csproj'
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
-    $ReleaseDirectory = Join-Path $root 'outputs\release\PhotoReview-framework-dependent'
+    # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
+    # (PhotoReview.App/bin/Release/net10.0-windows/publish for -Configuration Release),
+    # so running this gate with no override actually populates the documented location.
+    [xml]$appProjectXml = Get-Content -LiteralPath $appProject
+    $targetFramework = $appProjectXml.SelectSingleNode('//TargetFramework').InnerText
+    $ReleaseDirectory = Join-Path $root "PhotoReview.App\bin\$Configuration\$targetFramework\publish"
 }
 
 function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {

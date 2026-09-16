@@ -3,7 +3,7 @@ using PhotoReview.App;
 
 namespace PhotoReview.Tests.Unit;
 
-/// <summary>Bounded LRU cache contracts (migrated from Program.cs).</summary>
+/// <summary>Bounded LRU cache contracts.</summary>
 public sealed class BoundedLruCacheTests
 {
     private static BoundedLruCache<string, string> Seeded()
@@ -95,7 +95,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
     public void SequenceDeleteAtEndSelectsPriorSurvivingSlot() => Assert.True(_finalDeleteCheckpoint);
 }
 
-/// <summary>Cross-scope shortcut conflict validation (migrated from Program.cs).</summary>
+/// <summary>Cross-scope shortcut conflict validation.</summary>
 public sealed class ShortcutTests
 {
     [Fact(DisplayName = "Shortcut validator reports cross-scope conflicts")]
@@ -108,7 +108,7 @@ public sealed class ShortcutTests
     }
 }
 
-/// <summary>Sibling folder navigation (migrated from Program.cs).</summary>
+/// <summary>Sibling folder navigation.</summary>
 public sealed class SiblingFolderServiceTests : IDisposable
 {
     private readonly TempRoot _root = new("siblings");
@@ -129,7 +129,7 @@ public sealed class SiblingFolderServiceTests : IDisposable
     }
 }
 
-/// <summary>Drag-and-drop input parsing (migrated from Program.cs).</summary>
+/// <summary>Drag-and-drop input parsing.</summary>
 public sealed class DragDropInputServiceTests : IDisposable
 {
     private readonly TempRoot _root = new("dragdrop");
@@ -164,7 +164,7 @@ public sealed class DragDropInputServiceTests : IDisposable
         Assert.False(DragDropInputService.Parse([_root.Combine("notes.txt")]).IsValid);
 }
 
-/// <summary>Compare pair detection (migrated from Program.cs).</summary>
+/// <summary>Compare pair detection.</summary>
 public sealed class ComparePairServiceTests : IDisposable
 {
     private readonly TempRoot _root = new("compare");
@@ -206,7 +206,7 @@ public sealed class ComparePairServiceTests : IDisposable
         Assert.Null(ComparePairService.Find([_original], _original));
 }
 
-/// <summary>Image sorting (migrated from Program.cs).</summary>
+/// <summary>Image sorting.</summary>
 public sealed class ImageSortServiceTests : IDisposable
 {
     private readonly TempRoot _root = new("sort");
@@ -265,7 +265,7 @@ public sealed class ImageSortServiceTests : IDisposable
     }
 }
 
-/// <summary>Explorer snapshot validation and provider fakeability (migrated from Program.cs).</summary>
+/// <summary>Explorer snapshot validation and provider fakeability.</summary>
 public sealed class ExplorerSnapshotValidatorTests : IDisposable
 {
     private readonly TempRoot _root = new("explorer-order");
@@ -327,7 +327,7 @@ public sealed class ExplorerSnapshotValidatorTests : IDisposable
     }
 }
 
-/// <summary>File hash caching and deduplication (migrated from Program.cs).</summary>
+/// <summary>File hash caching and deduplication.</summary>
 public sealed class FileHashServiceTests : IDisposable
 {
     private readonly TempRoot _root = new("hash");
@@ -362,7 +362,7 @@ public sealed class FileHashServiceTests : IDisposable
     }
 }
 
-/// <summary>Review metrics counters (migrated from Program.cs).</summary>
+/// <summary>Review metrics counters.</summary>
 public sealed class ReviewMetricsTests
 {
     [Fact(DisplayName = "Review metrics snapshot preserves counters")]
@@ -398,7 +398,7 @@ public sealed class ReviewMetricsTests
     }
 }
 
-/// <summary>Preload ordering priorities (migrated from Program.cs).</summary>
+/// <summary>Preload ordering priorities.</summary>
 public sealed class PreloadOrderServiceTests
 {
     [Fact(DisplayName = "Full-folder preload prioritizes the next 32, then prior 8, and queues every other image once")]

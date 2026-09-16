@@ -3,7 +3,7 @@ using PhotoReview.App;
 
 namespace PhotoReview.Tests.Unit;
 
-/// <summary>Benchmark profile registry and ranking contracts (migrated from Program.cs).</summary>
+/// <summary>Benchmark profile registry and ranking contracts.</summary>
 public sealed class BenchmarkProfileTests
 {
     [Fact(DisplayName = "Expanded benchmark profile registry")]
@@ -21,7 +21,7 @@ public sealed class BenchmarkProfileTests
             BenchmarkWorkload.Sequential).Count > 0);
 }
 
-/// <summary>Relative performance harness probe (migrated from Program.cs).</summary>
+/// <summary>Relative performance harness probe.</summary>
 public sealed class PerformanceHarnessTests : IDisposable
 {
     private readonly TempRoot _root = new("performance");

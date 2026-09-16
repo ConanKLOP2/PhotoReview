@@ -3,8 +3,8 @@ using System.IO;
 namespace PhotoReview.Tests.Unit;
 
 /// <summary>
-/// Migrated from PhotoReview.Tests/BenchmarkScenarioTests.cs. The scenario is one ordered
-/// interleaving, so it runs once per test class instance (xUnit constructs a fresh instance
+/// The scenario is one ordered interleaving, so it runs once per test class instance
+/// (xUnit constructs a fresh instance
 /// per test) and each Fact asserts one of the original checkpoints.
 /// </summary>
 public sealed class BenchmarkScenarioTests : IDisposable
