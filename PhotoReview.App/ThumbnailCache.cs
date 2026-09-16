@@ -100,14 +100,14 @@ public sealed class ThumbnailCache : IDisposable
         if (File.Exists(cachePath))
         {
             try { return await DecodeAsync(cachePath, cancellationToken).ConfigureAwait(false); }
-            catch (IOException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); TryDelete(cachePath); }
-            catch (NotSupportedException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); TryDelete(cachePath); }
-            catch (InvalidDataException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); TryDelete(cachePath); }
+            catch (IOException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed"); }
+            catch (NotSupportedException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed"); }
+            catch (InvalidDataException ex) { AppLog.Error($"Disk thumbnail read failed: {cachePath}", ex); DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed"); }
         }
 
         var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
         if (!_persistNewThumbnails) return image;
-        try { await WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); _ = Task.Run(() => PruneDiskCache()); }
+        try { await DiskCacheStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false); _ = Task.Run(() => PruneDiskCache()); }
         catch (IOException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* The RAM result remains usable when disk cache is unavailable. */ }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Disk thumbnail write failed: {cachePath}", ex); /* Same fallback for read-only locations. */ }
         return image;
@@ -116,30 +116,14 @@ public sealed class ThumbnailCache : IDisposable
     public void ClearDisk()
     {
         lock (_lifecycleGate) _cacheGeneration++;
-        if (!Directory.Exists(_diskDirectory)) return;
-        try
-        {
-            foreach (var path in Directory.EnumerateFiles(_diskDirectory, "*.png")) TryDelete(path);
-        }
+        try { DiskCacheStore.ClearDirectory(_diskDirectory, "*.png", "Thumbnail delete failed"); }
         catch (IOException ex) { AppLog.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
     }
 
     private void PruneDiskCache()
     {
-        if (!Directory.Exists(_diskDirectory)) return;
-        try
-        {
-            var files = Directory.EnumerateFiles(_diskDirectory, "*.png")
-                .Select(path => new FileInfo(path)).Where(info => info.Exists)
-                .OrderBy(info => info.LastAccessTimeUtc).ThenBy(info => info.CreationTimeUtc).ToList();
-            var total = files.Sum(info => info.Length);
-            foreach (var info in files)
-            {
-                if (total <= _maxDiskBytes) break;
-                if (TryDelete(info.FullName)) total -= info.Length;
-            }
-        }
+        try { DiskCacheStore.PruneDirectory(_diskDirectory, "*.png", _maxDiskBytes, "Thumbnail delete failed"); }
         catch (IOException ex) { AppLog.Error($"Thumbnail disk cache prune failed: {_diskDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Thumbnail disk cache prune failed: {_diskDirectory}", ex); }
     }
@@ -163,26 +147,6 @@ public sealed class ThumbnailCache : IDisposable
         }, cancellationToken);
     }
 
-    private static async Task WriteAtomicallyAsync(BitmapSource image, string cachePath, CancellationToken cancellationToken)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-        var temporaryPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(image));
-            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan | FileOptions.WriteThrough))
-            {
-                encoder.Save(stream);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(temporaryPath, cachePath, overwrite: true);
-        }
-        finally { TryDelete(temporaryPath); }
-    }
-
     private static string BuildKey(string path)
     {
         var info = new FileInfo(path);
@@ -191,18 +155,6 @@ public sealed class ThumbnailCache : IDisposable
     }
 
     private static long EstimateBytes(BitmapSource image) => (long)image.PixelWidth * image.PixelHeight * 4;
-
-    private static bool TryDelete(string path)
-    {
-        try
-        {
-            if (!File.Exists(path)) return false;
-            File.Delete(path);
-            return !File.Exists(path);
-        }
-        catch (IOException ex) { AppLog.Error($"Thumbnail delete failed: {path}", ex); return false; }
-        catch (UnauthorizedAccessException ex) { AppLog.Error($"Thumbnail delete failed: {path}", ex); return false; }
-    }
 
     public void Dispose()
     {
