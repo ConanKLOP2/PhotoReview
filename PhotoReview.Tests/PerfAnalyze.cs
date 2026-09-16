@@ -32,7 +32,10 @@ public static class PerfAnalyze
     {
         if (!Directory.Exists(runDir)) throw new DirectoryNotFoundException(runDir);
 
+        // run-matrix.ps1 (D06) writes a throwaway "warmup" run per warm cell; it must not be measured.
         var csvFiles = Directory.EnumerateFiles(runDir, "perf-*.csv", SearchOption.AllDirectories)
+            .Where(p => !Path.GetRelativePath(runDir, p).Split(Path.DirectorySeparatorChar)
+                .Any(part => string.Equals(part, "warmup", StringComparison.OrdinalIgnoreCase)))
             .OrderBy(p => p, StringComparer.Ordinal).ToList();
         if (csvFiles.Count == 0)
             throw new InvalidOperationException($"Không tìm thấy file perf-*.csv nào trong {runDir}");

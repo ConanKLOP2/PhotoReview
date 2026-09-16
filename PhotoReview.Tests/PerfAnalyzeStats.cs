@@ -30,14 +30,33 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
                 using var doc = JsonDocument.Parse(File.ReadAllText(sessionPath));
                 var root = doc.RootElement;
                 scenario = GetString(root, "scenario") ?? GetString(root, "alias") ?? scenario;
+                // D06 writes folderAlias; keep fixtures apart so F1 and F2 runs are never pooled.
+                if (GetString(root, "folderAlias") is { Length: > 0 } folderAlias) scenario = $"{scenario}@{folderAlias}";
                 mode = GetString(root, "mode") ?? mode;
                 cond = GetString(root, "cond") ?? GetString(root, "condition") ?? cond;
                 if (root.TryGetProperty("preloadWorkers", out var w) && w.TryGetInt32(out var wi)) workers = wi;
-                else if (root.TryGetProperty("diag", out var diagEl) && diagEl.ValueKind == JsonValueKind.Object
-                    && diagEl.TryGetProperty("PHOTOREVIEW_DIAG_PRELOAD_WORKERS", out var dw) && dw.TryGetInt32(out var dwi))
-                    workers = dwi;
+                else
+                {
+                    // D11 draft used "diag"; D06 writes "env" (SortedDictionary<string,string>).
+                    foreach (var envName in new[] { "diag", "env" })
+                    {
+                        if (!root.TryGetProperty(envName, out var diagEl) || diagEl.ValueKind != JsonValueKind.Object
+                            || !diagEl.TryGetProperty("PHOTOREVIEW_DIAG_PRELOAD_WORKERS", out var dw)) continue;
+                        if (dw.ValueKind == JsonValueKind.Number && dw.TryGetInt32(out var dwi)) { workers = dwi; break; }
+                        if (dw.ValueKind == JsonValueKind.String && int.TryParse(dw.GetString(), out var dws)) { workers = dws; break; }
+                    }
+                }
             }
             catch (JsonException) { /* tolerate a hand-edited or partial session.json */ }
+        }
+
+        // run-matrix.ps1 lays runs out as <scenario>\<alias>-<mode>-<condition>\run-NN\; session.json
+        // carries no condition, so recover it from the cell directory name.
+        if (cond == "unknown")
+        {
+            var cell = Path.GetFileName(Path.GetDirectoryName(dir) ?? "") ?? "";
+            foreach (var known in new[] { "cold-diskcache", "cold-app", "cold-os", "warm" })
+                if (cell.EndsWith("-" + known, StringComparison.OrdinalIgnoreCase)) { cond = known; break; }
         }
 
         if (workers is null && file.DiagFlags.TryGetValue("PHOTOREVIEW_DIAG_PRELOAD_WORKERS", out var wv)
@@ -51,6 +70,10 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
                 using var doc = JsonDocument.Parse(File.ReadAllText(processPath));
                 var root = doc.RootElement;
                 if (root.TryGetProperty("gcTimePercent", out var g) && g.TryGetDouble(out var gd)) gcPct = gd;
+                // D06 writes gcPauseDeltaMs + elapsedMs per iteration rather than a percentage.
+                else if (root.TryGetProperty("gcPauseDeltaMs", out var gp) && gp.TryGetDouble(out var gpd)
+                    && root.TryGetProperty("elapsedMs", out var el) && el.TryGetDouble(out var eld) && eld > 0)
+                    gcPct = gpd / eld * 100.0;
                 if (root.TryGetProperty("frameTimeP95Ms", out var f) && f.TryGetDouble(out var fd)) frameP95 = fd;
             }
             catch (JsonException) { /* tolerate a hand-edited or partial process.json */ }
@@ -113,7 +136,9 @@ public static class PerfStats
         yield return ("t_verify", n => n.TVerifyMs);
         yield return ("t_assign", n => n.TAssignMs);
         yield return ("t_render", n => n.TRenderMs);
-        yield return ("t_post", n => n.PostMs.Count > 0 ? n.TPostTotalMs : null);
+        // t_post (preload kick, compare, hash, dims, session) runs after the frame is presented
+        // (plan mục 3), so it is not a share of key→present. Post-work cost stays available on
+        // NavRecord.PostMs for a separate report section (not yet in summary.md).
     }
 }
 
