@@ -169,7 +169,6 @@ public partial class MainWindow : Window
             _hashService.Clear(); _previewService.ClearOriginalDimensions();
             _session = _sessionStore.Load(folder);
             FolderText.Text = $"{folder}  ({_files.Count} ảnh)";
-            var presentationGeneration = _generation;
             var interactionGeneration = Volatile.Read(ref _catalogInteractionGeneration);
             var resumePath = initialPath ?? _session.CurrentPath;
             if (initialPath is not null)
@@ -188,6 +187,10 @@ public partial class MainWindow : Window
                 await ShowImageAsync(resumeIndex >= 0 ? resumeIndex : 0);
             }
             else { MainImage.Source = null; StatusText.Text = "Không tìm thấy ảnh hỗ trợ trong folder này."; }
+            // Captured after the provisional frame is presented (ShowImageAsync bumps
+            // _generation as its very first step), so this reflects "no navigation has
+            // happened since presenting" rather than always mismatching.
+            var presentationGeneration = _generation;
             explorerSnapshot ??= await explorerTask;
             if (loadToken.IsCancellationRequested || loadGeneration != _folderGeneration) return;
             if (interactionGeneration != Volatile.Read(ref _catalogInteractionGeneration))
