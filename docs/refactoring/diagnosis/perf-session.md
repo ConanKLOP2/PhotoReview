@@ -133,7 +133,7 @@ if (!args.Handled) { args.RoutedEvent = Keyboard.KeyDownEvent; window.RaiseEvent
 - **Dữ liệu app** (session, journal, log) nằm trong `<outDir>\data` (`PHOTOREVIEW_DATA_ROOT`, đặt trước khi tạo listener/cửa sổ).
 - **Disk cache preview** (`%LOCALAPPDATA%\PhotoReview\cache`) vẫn là cache thật; đây chính là đối tượng cần đo. Thumbnail mới không được ghi đĩa (`persistNewThumbnails: false`).
 - **Action chỉ chạy trên bản sao**:
-  - Config thật có thể trỏ action tới **đường dẫn tuyệt đối**. Trên máy này, `Enter` → Move tới `C:\Xiuren\[[WALLPAPER]`, tức chính fixture F4. Vì vậy driver **thay toàn bộ** `_settings.Actions`: rỗng nếu kịch bản không có `action`, còn nếu có thì chỉ một Move tới `<outDir>\copy\moved`.
+  - Config thật có thể trỏ action tới **đường dẫn tuyệt đối**. Trên máy này, `Enter` → Move tới một thư mục ảnh thật (chính là fixture F4). Vì vậy driver **thay toàn bộ** `_settings.Actions`: rỗng nếu kịch bản không có `action`, còn nếu có thì chỉ một Move tới `<outDir>\copy\moved`.
   - Trước **mỗi** lần gửi phím action, driver kiểm tra lại: ảnh hiện tại, `_compareSelectedPath` và toàn bộ catalog phải nằm trong `<outDir>\copy\images`, đích action phải là đường dẫn tuyệt đối nằm trong `<outDir>\copy`. Nếu sai, driver dừng lần lặp.
 - **Phím bị cấm trong bước `key`** (kiểm tra trước khi mở folder): `Escape`, phím `SendToRecycleBin`, `Undo`, `NextFolder`, `PreviousFolder`, `Fullscreen`, `MoveToFolder2`, và phím của mọi action trong config thật.
 - **Đường dẫn**: driver từ chối `outDir` chứa hoặc nằm trong folder nguồn, hoặc trùng `%LOCALAPPDATA%\PhotoReview`. Driver chỉ tạo và xóa `data`/`copy` có file đánh dấu `.perf-session-temp`; nếu các thư mục này đã tồn tại mà không có dấu thì driver từ chối chạy.

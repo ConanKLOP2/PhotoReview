@@ -70,7 +70,7 @@ if ($Conditions -contains 'cold-os' -and -not $ColdOsConfirmed) {
     exit 3
 }
 
-# fixtures.local.json may contain unescaped backslashes (C:\Xiuren\...); retry with them escaped.
+# fixtures.local.json may contain unescaped backslashes (e.g. C:\photos\...); retry with them escaped.
 function Read-Fixtures([string]$path) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Fixture file not found: $path" }
     $raw = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
