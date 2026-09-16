@@ -117,7 +117,7 @@ public static class DiskCacheStore
     public static async Task<bool> WaitForPruneAsync(string directory, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
-        while (_pruneScheduled.ContainsKey(directory) && DateTime.UtcNow < deadline)
+        while ((_pruneScheduled.ContainsKey(directory) || _prunePending.ContainsKey(directory)) && DateTime.UtcNow < deadline)
             await Task.Delay(20).ConfigureAwait(false);
         return !_pruneScheduled.ContainsKey(directory);
     }
