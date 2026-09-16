@@ -22,7 +22,7 @@
 | D01 | Phân tích nhanh từ AppLog (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Script | BLOCKED |
 | D02 | Đếm truy cập file (script xong; chạy lại dữ liệu sau D06) | D00, D06 | | Không | BLOCKED |
 | D03 | EventSource `PhotoReview-Perf` + listener CSV | D00 | ∥1 | Có | DONE |
-| D04 | Gắn event vào các điểm đo | D03 | | Có | TODO |
+| D04 | Gắn event vào các điểm đo | D03 | | Có | DONE |
 | D05 | Tách đọc/decode + `--io-decode-split` | D04 | ∥2 | Có | TODO |
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | TODO |
 | D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | TODO |
@@ -112,7 +112,7 @@
 - **Không làm:** thay đổi logic. Không thêm `await` mới vào đường nóng.
 - **Kiểm thử:** VERIFY. So sánh `--ui-next-probe` khi có và không có biến môi trường (chênh lệch P50 ≤ 5%; ghi số).
 - **Xong khi:** chạy app với biến môi trường, CSV có đủ event cho S2 thủ công.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-16 · Opus 5 · `diag/D04-instrument` `565dd67` · điểm đo: KeyInput, Folder (9 phase), ShowStart/Stat/Lookup/Thumb*/Assign/Rendered/Presented/Post*(preloadKick, compare, hash, dims, session), Join*/DiskCacheRead/Decode/Verify, ThumbEnd(ram/disk/decode), PreloadItem/Paused/Cancel, DispatcherLongOp, DiagMode · input timestamp: `GetMessageTime` cùng gốc với TickCount (độ phân giải ~15,6 ms) · overhead ~24 µs/lần Next (~0,5%; probe chỉ báo ms nguyên) · xUnit 199/199 × 10 · phát hiện `--ui-next-probe` hỏng từ trước (chuyển cho D06) · **R3: reviewer Opus bị dừng vì giới hạn chi tiêu (HTTP 429)**, Coordinator (Opus) tự review toàn bộ diff: APPROVE · VERIFY đạt.
 
 ### D05 — Tách đọc/decode ∥2
 - **Files:** `PhotoReview.App/Diagnostics/DiagOptions.cs` (mới, đọc biến môi trường một lần), `PhotoReview.App/PreviewImageService.cs` (**chỉ** nhánh `DecodeSource` khi `DiagOptions.PreRead`), `PhotoReview.Tests/IoDecodeSplit.cs` (mới), `PhotoReview.Tests/Program.cs` (thêm dispatch), `docs/refactoring/diagnosis/io-decode-split.md` (mới).
