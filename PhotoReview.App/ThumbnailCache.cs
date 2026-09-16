@@ -43,9 +43,14 @@ public sealed class ThumbnailCache : IDisposable
     public Task<BitmapSource> GetAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        CancellationToken disposeToken;
         lock (_lifecycleGate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            // Captured in the same critical section as the disposed-check: reading
+            // _disposeCts.Token later, unlocked, could race a concurrent Dispose()
+            // and throw ObjectDisposedException even though the check above passed.
+            disposeToken = _disposeCts.Token;
         }
         var fullPath = Path.GetFullPath(sourcePath);
         var key = BuildKey(fullPath);
@@ -53,7 +58,7 @@ public sealed class ThumbnailCache : IDisposable
         if (_ramCache.TryGet(key, out var cached)) return Task.FromResult(cached);
 
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<BitmapSource>>(
-            () => LoadOrCreateAsync(fullPath, key, _disposeCts.Token),
+            () => LoadOrCreateAsync(fullPath, key, disposeToken),
             LazyThreadSafetyMode.ExecutionAndPublication));
 
         return AwaitAndCacheAsync(key, lazy, cancellationToken);
