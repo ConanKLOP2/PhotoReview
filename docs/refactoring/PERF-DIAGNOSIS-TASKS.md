@@ -87,6 +87,7 @@
 
 ### D04 — Gắn event vào các điểm đo
 - **Files:** `PhotoReview.App/MainWindow.xaml.cs`, `PreviewImageService.cs`, `ThumbnailCache.cs`, `PreloadScheduler.cs`, `FileHashService.cs`, `SessionStore.cs`, `ExplorerOrderService.cs` (chỉ mốc tổng), `App.xaml.cs` (`Dispatcher.Hooks`), `PhotoReview.Tests.Unit/PerfTraceTests.cs` (bổ sung).
+- **Ghi chú (2026-09-16):** Coordinator chỉ dẫn không sửa `ExplorerOrderService.cs` (mốc Explorer lấy ở `LoadFolderAsync`), `SessionStore.cs` (đo ở call site) và `FileHashService.cs` (đo ở call site).
 - **Làm** (mọi đoạn đo được bọc trong `if (PhotoReviewPerf.Log.IsEnabled())`; không đổi thứ tự lệnh hay kết quả):
   1. `Window_KeyDown`, dòng đầu: `KeyInput(key, Environment.TickCount - e.Timestamp)`. **Xác minh** `e.Timestamp` và `Environment.TickCount` cùng gốc; nếu không, dùng `GetMessageTime` hoặc bỏ số liệu này và ghi nhật ký.
   2. `ShowImageAsync`:
@@ -140,7 +141,12 @@
 - **Nhật ký:** —
 
 ### D06 — Driver kịch bản `--perf-session` ∥2
-- **Files:** `PhotoReview.Tests/PerfSession.cs` (mới), `PhotoReview.Tests/Program.cs` (dispatch), `tools/diag/scenarios/*.json` (mới), `tools/diag/run-matrix.ps1` (mới).
+- **Files:** `PhotoReview.Tests/PerfSession.cs` (mới), `PhotoReview.Tests/LocalUiNextProbe.cs` (sửa lỗi có sẵn), `PhotoReview.Tests/Program.cs` (dispatch), `tools/diag/scenarios/*.json` (mới), `tools/diag/run-matrix.ps1` (mới).
+- **Bổ sung (từ D04):** `--ui-next-probe` hiện hỏng từ trước D04:
+  1. Pack URI không tìm thấy `assets/photoreview.ico` khi `Application` được tạo trong exe test.
+  2. `GetMethod("TryGetCachedPreview")` bị mơ hồ vì có 2 overload.
+  3. Probe không đi qua `App`, nên `PHOTOREVIEW_PERF_TRACE` không bật listener.
+  D06 phải: dùng chung khung STA đã sửa cả 3 lỗi (chỉ định overload bằng kiểu tham số; xử lý icon, ví dụ tạo `Application` với `ResourceAssembly` = assembly của App, hoặc bỏ qua icon trong test host; tự gọi `PerfCsvListener.TryStartFromEnvironment()`); và sửa luôn `LocalUiNextProbe.cs` (thêm file này vào Files).
 - **Làm:**
   1. `--perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original]`:
      - Dùng khung STA giống `LocalUiNextProbe`, nhưng cửa sổ ở trạng thái **Normal**, 1920×1080, đặt ở (0,0) màn hình chính, `ShowActivated=true`.
