@@ -1,28 +1,29 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-16 | **Branch tích hợp:** `refactor/integration` (push lên origin; CI xanh ở đợt 1)
-- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`) và chẩn đoán hiệu năng (`PERF-DIAGNOSIS-PLAN.md`). Task được giao theo bảng model/review ở mục 0 của `REFACTOR-TASKS.md`.
-- **Quyết định người dùng:**
-  - Chấp nhận mặc định Q2–Q8.
-  - Duyệt T05 (quy trình PR).
-  - Fixture: ảnh trong một thư mục cục bộ; mapping ở `work/diag/fixtures.local.json` (gitignored).
-  - Cho phép cài dotnet-counters, dotnet-trace, Process Monitor, và tạm bật logging (phải sao lưu/khôi phục config).
+- **Cập nhật:** 2026-09-17 | **Branch tích hợp:** `refactor/integration` (đã push; VERIFY đạt, xUnit 250/250)
+- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`); hiện đang ở đợt chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`).
 - **Đã xong:**
-  - Đợt 1: T00, T02, T03, T04, T05, T10.
-  - Đợt 2: T11, T12, T13a, T13b, D00. `.gitignore` bổ sung worktree agent và file trace thô.
-  - VERIFY đầy đủ đạt; xUnit 190/190 chạy song song (khoảng 2 s).
-- **BLOCKED:** D01, D02.
-  - Script phân tích đã có (`tools/diag/parse-applog.ps1`, `procmon-summary.ps1`).
-  - Việc đo thật dừng vì `SendInput` của agent rơi vào cửa sổ Claude Code trên desktop dùng chung: đã gõ A/B/C + Ctrl+A/Ctrl+C, không có Enter; clipboard bị ghi đè rồi xóa. Config người dùng đã khôi phục.
-  - `drive-app.ps1` không được merge. Đã thêm quy tắc 4 trong `PERF-DIAGNOSIS-TASKS.md`: cấm input ở mức OS và clipboard.
-  - Chạy lại sau D06 (driver trong process).
-- **Bài học review:**
-  - Haiku bịa tên method (T10), sửa ngoài phạm vi (T12), gắn Trait loại test khỏi CI (T13a). Coordinator phải kiểm diff kỹ và dùng script kiểm tên.
-  - Task có điều khiển GUI không được giao cho agent tự gửi input.
-- **Việc tiếp theo (chờ người dùng chọn):**
-  - D03 (Sonnet), rồi D04 (Opus), rồi D05/D06/D10/D11.
-  - Song song là T14a–T14d; T14a phụ thuộc D05, D06, D10.
+  - Refactor: T00, T02–T05, T10–T13b.
+  - Chẩn đoán: D00, D03, D04, D05, D06, D10, D11.
+  - Công cụ đo đã sẵn sàng:
+    - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
+    - Các biến DIAG: `PREREAD`, `PRELOAD_WORKERS`, `DISABLE_DISKCACHE`.
+    - `--io-decode-split`.
+    - `--perf-session` (driver trong process, không gửi input OS).
+    - `tools/diag/run-matrix.ps1`.
+    - `--perf-analyze` + `tools/diag/rules.json`.
+- **Số liệu sơ bộ:**
+  - Decode chiếm 98–100% thời gian so với đọc file (khi file đã nằm trong cache của OS).
+  - Ảnh 48 MP decode khoảng 1,3 s dù hạ width.
+  - S3 warm trên F1: P50 5,2 ms; trong 10% lần chậm nhất, `t_render` chiếm khoảng 92%.
+- **BLOCKED:** D01 và D02 (đo thật). Chạy lại bằng `--perf-session` + Procmon trong D07.
+- **Lỗi đã phát hiện:** `PreloadScheduler` gọi `Dispatcher.Yield()` khi không có Dispatcher, nên preload dừng sau lô đầu (benchmark CLI và BenchmarkWindow). Đã chuyển cho T32; D12 không dùng số liệu preload benchmark cũ.
+- **Sự cố an toàn (2026-09-16):** `SendInput` của D01 rơi vào cửa sổ Claude Code. Quy tắc 4 cấm input ở mức OS và cấm đụng clipboard.
+- **Giới hạn sử dụng:** agent Opus/Sonnet từng bị dừng vì HTTP 429; khi đó Coordinator tự review R3 cho D04 và D06.
+- **Việc tiếp theo (chờ người dùng quyết định):**
+  - D07: ma trận đo đầy đủ (kéo dài vài giờ, cửa sổ app mở liên tục, xóa cache preview của app để đo cold, cần reboot cho cold-os, cần bấm UAC cho Procmon).
+  - Sau đó D08/D09, rồi D12/D13.
 - **Cho AI tiếp theo:**
-  - Worker không sửa file task hay file tiến độ, không dùng `git add -A`.
-  - Worktree agent ở `.claude/worktrees/` (đã ignore).
-  - T31a có mục bổ sung test eviction cho chế độ downscaled (từ review T13b).
+  - Fixture ở `work/diag/fixtures.local.json` (gitignored); không commit tên thư mục ảnh.
+  - Worker không sửa file task, không `git add -A`.
+  - Output của `run-matrix` nằm ở `work/diag/runs*`.
