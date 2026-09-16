@@ -1,0 +1,8 @@
+{
+  "name": "S1b-open-file",
+  "note": "Plan S1 (file variant): open the first image (name order) directly, as a double-click in Explorer would.",
+  "steps": [
+    { "open": "file", "index": 0 },
+    { "waitIdle": true, "timeoutMs": 120000 }
+  ]
+}

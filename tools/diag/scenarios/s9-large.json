@@ -1,0 +1,10 @@
+{
+  "name": "S9-large",
+  "note": "Plan S9: large folder (F4). Open, let preload run, then 200 x Next at 500 ms to observe RAM, memory pause and miss rate over time. The >16 GB variant needs a generated fixture (fixtures.local.json F5).",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 180000 },
+    { "key": "Right", "repeat": 200, "intervalMs": 500 },
+    { "waitIdle": true, "timeoutMs": 120000 }
+  ]
+}

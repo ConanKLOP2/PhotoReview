@@ -1,0 +1,8 @@
+{
+  "name": "S1-open-folder",
+  "note": "Plan S1 (folder variant): open the folder, wait until preload/metrics settle. Key metrics: Folder T0..T3 + first Presented.",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 120000 }
+  ]
+}
