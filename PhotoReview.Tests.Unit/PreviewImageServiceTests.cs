@@ -95,10 +95,25 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     [Fact(DisplayName = "Eviction forces a fresh source read on the next request")]
     public async Task EvictionForcesFreshSourceReadOnNextRequest()
     {
-        await _service.GetPreviewAsync(_previewPath);
-        _service.EvictCachedPath(_previewPath);
-        await _service.GetPreviewAsync(_previewPath);
-        Assert.True(_metrics.Snapshot().SourceReads == 2 && _service.CacheCount == 1);
+        // EvictCachedPath only drops the RAM-cached bitmap (see
+        // "Evicting a path drops its decoded bitmap from the preview cache" above); it never
+        // touches the disk cache. The shared _service is in downscaled mode, so its first
+        // GetPreviewAsync below fires a background persist to disk (PR-029); if that
+        // fire-and-forget write wins its race against the second GetPreviewAsync call, the
+        // "fresh" request is served from the disk cache instead of the source, and
+        // SourceReads stays at 1 -- flaky under parallel test execution. Original-loading-mode
+        // services never persist to disk at all (see
+        // "Original (full-resolution) mode never writes to the disk cache" in
+        // PreviewImageServiceDiskCacheTests), so a dedicated original-mode service here
+        // removes that race entirely and keeps the assertion exact.
+        var diskCache = _root.Dir("disk-cache-eviction");
+        var metrics = new ReviewMetrics();
+        var service = Track(new PreviewImageService(metrics, () => true, () => 512, diskCacheDirectory: diskCache), diskCache);
+
+        await service.GetPreviewAsync(_previewPath);
+        service.EvictCachedPath(_previewPath);
+        await service.GetPreviewAsync(_previewPath);
+        Assert.True(metrics.Snapshot().SourceReads == 2 && service.CacheCount == 1);
     }
 
     [Fact(DisplayName = "Clearing the preview cache drops every decoded bitmap")]
@@ -395,15 +410,20 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         // on every write instead of letting all five accumulate.
         foreach (var width in new[] { 100, 200, 300, 400, 500 })
         {
-            var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => width,
-                diskCacheDirectory: diskDir, diskCacheCapacityBytes: quotaBytes), diskDir);
+            // Each iteration's service is short-lived: shut its persist worker down so the
+            // write itself is guaranteed complete (ShutdownPersistWorkersAsync only returns
+            // after the worker has processed the write and called SchedulePrune for it -- see
+            // RunPersistWorkerAsync), then wait out the prune that write scheduled, before
+            // moving on to the next iteration's write. A fixed poll timeout here instead would
+            // race the next iteration's write under heavy parallel test load, where a slow
+            // prune pass can still be mid-flight when the timeout trips, transiently leaving
+            // the directory over quota when the loop moves on.
+            var service = new PreviewImageService(new ReviewMetrics(), () => false, () => width,
+                diskCacheDirectory: diskDir, diskCacheCapacityBytes: quotaBytes);
             await service.GetPreviewAsync(_previewPath);
-            // Serialize write+prune per iteration: fire-and-forget work must settle before
-            // the next iteration's own write/prune pass runs, or the count below races it.
-            // Wait on the actual byte quota rather than an arbitrary file count so this
-            // loop (and the final assertion) actually verifies the configured quota.
-            var deadline = DateTime.UtcNow.AddMilliseconds(2000);
-            while (DateTime.UtcNow < deadline && DirectoryBytes(diskDir) > quotaBytes) await Task.Delay(25);
+            await service.ShutdownPersistWorkersAsync();
+            Assert.True(await DiskCacheStore.WaitForPruneAsync(diskDir, TimeSpan.FromSeconds(10)),
+                $"Prune for width={width} did not complete within the wait timeout.");
         }
 
         var remainingBytes = DirectoryBytes(diskDir);
