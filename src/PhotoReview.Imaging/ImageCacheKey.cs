@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Imaging;
 
 /// <summary>Identity of a decoded bitmap, including its source version and decode quality.</summary>
 // Constructor is private so Create(...) is the only way to build a valid instance;

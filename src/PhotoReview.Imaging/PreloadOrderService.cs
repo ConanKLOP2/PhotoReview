@@ -1,4 +1,4 @@
-namespace PhotoReview.App;
+namespace PhotoReview.Imaging;
 
 public static class PreloadOrderService
 {
