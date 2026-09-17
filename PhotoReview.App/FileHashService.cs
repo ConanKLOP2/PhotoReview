@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Collections.Concurrent;
 using System.Threading;
+using PhotoReview.Core.Caching;
 
 namespace PhotoReview.App;
 

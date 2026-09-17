@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.App;
+using PhotoReview.Core.Caching;
 
 internal static class LocalImageBenchmark
 {
