@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -15,7 +16,7 @@ public partial class RecoveryWindow : Window
         _entries = entries;
         _retry = retry;
         EntriesList.ItemsSource = entries.Select(entry => $"{entry.State} · {entry.Type} · {Path.GetFileName(entry.Source)} · {entry.Source}{(entry.Error is null ? string.Empty : $" · {entry.Error}")}").ToList();
-        EntriesList.SelectionChanged += (_, _) => RetryButton.IsEnabled = _retry is not null && EntriesList.SelectedIndex >= 0 && _entries[EntriesList.SelectedIndex].Type is "Move" or "Copy";
+        EntriesList.SelectionChanged += (_, _) => RetryButton.IsEnabled = _retry is not null && EntriesList.SelectedIndex >= 0 && _entries[EntriesList.SelectedIndex].Type is FileOperationType.Move or FileOperationType.Copy;
         SummaryText.Text = entries.Count == 0 ? "Không có operation pending/failed cần xem." : $"Có {entries.Count} operation pending/failed. Chọn Move/Copy để retry thủ công có kiểm tra an toàn.";
     }
 

@@ -1,4 +1,5 @@
 using System.IO;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -8,7 +9,7 @@ public static class RecoveryRetryService
 {
     public static RecoveryRetryResult RetryMoveOrCopy(JournalEntry failed, OperationJournal journal)
     {
-        if (failed.Type is not ("Move" or "Copy"))
+        if (failed.Type is not (FileOperationType.Move or FileOperationType.Copy))
             return new(false, "Chỉ cho phép retry Move/Copy; Recycle Bin không được retry tự động.", null);
         if (string.IsNullOrWhiteSpace(failed.Destination))
             return new(false, "Operation không có đích.", null);
@@ -20,22 +21,22 @@ public static class RecoveryRetryService
         if (File.Exists(failed.Destination))
             return new(false, "Đích đã tồn tại; không ghi đè.", null);
 
-        var prepared = new JournalEntry(failed.Id, failed.Type, "Prepared", failed.Source, failed.Destination, sourceInfo.Length, sourceInfo.LastWriteTimeUtc, DateTime.UtcNow);
+        var prepared = new JournalEntry(failed.Id, failed.Type, JournalState.Prepared, failed.Source, failed.Destination, sourceInfo.Length, sourceInfo.LastWriteTimeUtc, DateTime.UtcNow);
         try
         {
             journal.Append(prepared);
             Directory.CreateDirectory(Path.GetDirectoryName(failed.Destination)!);
-            if (failed.Type == "Copy") File.Copy(failed.Source, failed.Destination);
+            if (failed.Type == FileOperationType.Copy) File.Copy(failed.Source, failed.Destination);
             else File.Move(failed.Source, failed.Destination);
             var destinationInfo = new FileInfo(failed.Destination);
             if (destinationInfo.Length != prepared.Size) throw new IOException("Kiểm tra đích sau retry thất bại.");
-            var committed = prepared with { State = "Committed", TimestampUtc = DateTime.UtcNow };
+            var committed = prepared with { State = JournalState.Committed, TimestampUtc = DateTime.UtcNow };
             journal.Append(committed);
             return new(true, "Retry thành công.", committed);
         }
         catch (Exception ex)
         {
-            var error = prepared with { State = "Failed", TimestampUtc = DateTime.UtcNow, Error = ex.Message };
+            var error = prepared with { State = JournalState.Failed, TimestampUtc = DateTime.UtcNow, Error = ex.Message };
             journal.Append(error);
             return new(false, ex.Message, error);
         }

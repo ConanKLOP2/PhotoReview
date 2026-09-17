@@ -752,17 +752,17 @@ public partial class MainWindow : Window
                 try { info = new FileInfo(path); if (!info.Exists) { failures.Add($"Không còn tồn tại: {path}"); continue; } }
                 catch (Exception ex) { failures.Add($"{Path.GetFileName(path)}: {ex.Message}"); continue; }
                 var operationId = Guid.NewGuid().ToString("N");
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Prepared, path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 try
                 {
                     await Task.Run(() => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
-                    _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                    _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Committed, path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                     succeeded++;
                 }
                 catch (Exception ex)
                 {
                     failures.Add($"{Path.GetFileName(path)}: {ex.Message}");
-                    _journal.Append(new JournalEntry(operationId, "Recycle", "Failed", path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
+                    _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Failed, path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow, ex.Message));
                 }
             }
             if (folderGeneration != _folderGeneration)
@@ -942,10 +942,10 @@ public partial class MainWindow : Window
             if (category == 3)
             {
                 var operationId = Guid.NewGuid().ToString("N");
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Prepared", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Prepared, source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 await Task.Run(() => FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
                 AppLog.Info($"FileAction recycle-complete source={source}");
-                _journal.Append(new JournalEntry(operationId, "Recycle", "Committed", source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Committed, source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 undoOperation = "RecycleBin";
                 undoDestination = null;
             }
@@ -957,11 +957,11 @@ public partial class MainWindow : Window
                 var destination = Path.Combine(destinationFolder, Path.GetFileName(source));
                 if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
                 var operationId = Guid.NewGuid().ToString("N");
-                _journal.Append(new JournalEntry(operationId, "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, FileOperationType.Move, JournalState.Prepared, source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 await MoveFileAsync(source, destination);
                 var movedInfo = new FileInfo(destination);
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
-                _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
+                _journal.Append(new JournalEntry(operationId, FileOperationType.Move, JournalState.Committed, source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 undoOperation = "Move";
                 undoDestination = destination;
             }
@@ -1072,7 +1072,7 @@ public partial class MainWindow : Window
             var sourceInfo = new FileInfo(source);
             sourceSize = sourceInfo.Length;
             sourceLastWriteUtc = sourceInfo.LastWriteTimeUtc;
-            _journal.Append(new JournalEntry(operationId, operation, "Prepared", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
+            _journal.Append(new JournalEntry(operationId, action.Operation, JournalState.Prepared, source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
             prepared = true;
             if (operation == "Copy") await Task.Run(() => File.Copy(source, destinationPath));
             else await MoveFileAsync(source, destinationPath);
@@ -1080,7 +1080,7 @@ public partial class MainWindow : Window
             var destinationInfo = new FileInfo(destinationPath);
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
                 throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
-            _journal.Append(new JournalEntry(operationId, operation, "Committed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
+            _journal.Append(new JournalEntry(operationId, action.Operation, JournalState.Committed, source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
             // See ClassifyCurrentAsync: undo state must only be registered once the
             // folder-switch guard confirms this completion still belongs to the
             // current folder, otherwise Ctrl+Z could move a file back into a folder
@@ -1099,7 +1099,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            if (prepared) _journal.Append(new JournalEntry(operationId, operation, "Failed", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
+            if (prepared) _journal.Append(new JournalEntry(operationId, action.Operation, JournalState.Failed, source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow, ex.Message));
             if (folderGeneration != _folderGeneration)
                 AppLog.Info($"FileAction failure ignored after folder switch: operation={operation} source={source}, error={ex.Message}");
             else

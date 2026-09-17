@@ -391,8 +391,8 @@ public sealed class SourcePresenceTests
 
     [Fact(DisplayName = "Batch operations journal success and failures (source presence; OperationJournal is asserted behaviorally below)")]
     public void BatchOperationsJournalSuccessAndFailures() =>
-        Assert.True(MainWindow.Contains("\"Recycle\", \"Prepared\"") && MainWindow.Contains("\"Recycle\", \"Committed\"")
-            && MainWindow.Contains("\"Recycle\", \"Failed\""));
+        Assert.True(MainWindow.Contains("FileOperationType.Recycle, JournalState.Prepared") && MainWindow.Contains("FileOperationType.Recycle, JournalState.Committed")
+            && MainWindow.Contains("FileOperationType.Recycle, JournalState.Failed"));
 
     [Fact(DisplayName = "File association command is registered (source presence: registering needs the real Windows registry)")]
     public void FileAssociationCommandIsRegistered()
