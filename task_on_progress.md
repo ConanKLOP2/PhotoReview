@@ -1,8 +1,9 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` (đã push lên `origin`; VERIFY đạt, xUnit 250/250, CI xanh ở lần kiểm gần nhất)
-- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`). Hiện đang ở đợt chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`).
-- **Trạng thái:** tạm dừng để người dùng chuyển sang máy khác. Không có agent nào đang chạy; mọi branch task đã merge vào `refactor/integration`.
+- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` (đã push lên `origin`; VERIFY đạt, xUnit 251/251)
+- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`). Nhánh chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`) đang **chờ máy 1** (D07+); đã chuyển sang làm tiếp nhánh refactor trên máy 2.
+- **Máy 2 (VTI):** không dùng để đo hiệu năng được (không có fixture ảnh thật, RAM 15.58 GB). Đã ghi thông số vào `docs/refactoring/diagnosis/env.md` mục "Máy 2". `verify-all.ps1` chạy tốt trên máy này nên vẫn dùng để làm tiếp refactor track.
+- **Trạng thái:** không có agent nào đang chạy; mọi branch task đã merge vào `refactor/integration`.
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +38,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b (nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a (nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,14 +59,14 @@
 
 ## Việc tiếp theo
 
-1. **D07 (ma trận đo): CHỜ NGƯỜI DÙNG quyết định** trước khi chạy:
+1. **Refactor (làm được trên máy 2):** T14b, T14c, T14d (∥C, phụ thuộc T14a — đã xong). Mỗi task phải dùng `DataRootFixture` của `StaTestHost.cs` và (T14d) implement `IProgressiveExplorerOrderProvider` — xem ghi chú trong `REFACTOR-TASKS.md`.
+2. **D07 (ma trận đo, chỉ chạy trên máy 1): CHỜ NGƯỜI DÙNG quyết định** trước khi chạy:
    - Phạm vi: rút gọn khoảng 1 giờ, đầy đủ vài giờ, hoặc hoãn.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.
    - Process Monitor (cần bấm UAC) cho phần đo lại D02.
    - Có reboot để đo cold-OS không.
-2. **D01/D02 (BLOCKED):** đo lại trong D07 bằng `--perf-session` (và Procmon cho D02). Không dùng `SendInput`.
-3. **Sau đó:** D08 (WPR/PresentMon; WPA và PresentMon chưa cài), D09 (dotnet-counters), rồi D12 (báo cáo và quyết định), D13 (cập nhật plan).
-4. **Sau WD:** tiếp tục refactor từ T14a (phụ thuộc D05/D06/D10, đã xong).
+3. **D01/D02 (BLOCKED, chỉ máy 1):** đo lại trong D07 bằng `--perf-session` (và Procmon cho D02). Không dùng `SendInput`.
+4. **Sau đó (máy 1):** D08 (WPR/PresentMon; WPA và PresentMon chưa cài), D09 (dotnet-counters), rồi D12 (báo cáo và quyết định), D13 (cập nhật plan).
 
 ## Lưu ý quan trọng
 

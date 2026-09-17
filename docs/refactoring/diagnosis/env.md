@@ -56,3 +56,33 @@ Theo PERF-DIAGNOSIS-PLAN.md mục 5, cần các fixture sau:
 - **F7:** Ảnh chụp dọc có EXIF orientation
 
 Người dùng sẽ cung cấp đường dẫn root cho từng fixture. Mapping thực tế lưu tại `work/diag/fixtures.local.json` (gitignored, không commit). Nguồn: một thư mục ảnh cục bộ, 60 thư mục con, 1.842 ảnh (1.820 JPEG, 22 PNG), 12,9 GB. Đã chọn: F1 (58 ảnh, 24 MP, nén mạnh), F1b (54 ảnh, 27 MP), F2 (98 ảnh, 48 MP), F3 (22 PNG), F4 (519 ảnh, 4,6 GB). Không có: F5 (> 16 GB), F6 (cặp compare thật) và F7 (EXIF xoay); các nhóm này sinh tạm trong `%TEMP%` khi cần.
+
+---
+
+## Máy 2
+
+**Ngày ghi:** 2026-09-17
+
+**Không dùng máy này cho D07+ (ma trận đo hiệu năng):** không có fixture ảnh thật, RAM thấp hơn nhiều so với máy 1. Chỉ ghi lại thông số máy để tránh nhầm lẫn khi so sánh số liệu; **số liệu D05/D11/D07+ vẫn chỉ đo trên máy 1** (i7-9750H, 32 GB, NVMe), không trộn giữa hai máy.
+
+| Thành phần | Giá trị |
+|---|---|
+| **Hostname** | VTI |
+| **CPU** | 12th Gen Intel(R) Core(TM) i7-1260P |
+| CPU Cores | 12 cores / 16 logical processors |
+| **RAM** | 15.58 GB |
+| **Ổ chứa repo (D:)** | KINGSTON SNV2S500G (SSD, 500 GB vật lý) · phân vùng D: 97.7 GB |
+| **Windows** | Windows 11 Pro · 10.0.26200 (build 26200) · 64-bit |
+| **GPU** | Intel(R) UHD Graphics · Driver 31.0.101.4575 |
+| **Màn hình 1** | 1920×1080 (secondary) |
+| **Màn hình 2** | 3840×2160 (primary) |
+| **Power plan** | Balanced (GUID: 381b4222-f694-41f0-9685-ff5bb260df2e) |
+| **Defender** | Enabled · Real-time protection: On |
+| **.NET SDK** | 10.0.401 · Commit e34a38d2ae |
+| **.NET Runtime** | 10.0.12 · Commit 95017c711e |
+
+**Công cụ chẩn đoán:** chưa cài dotnet-counters/dotnet-trace/Process Monitor trên máy này (không cần, vì không dùng cho D07+).
+
+**Fixture:** không có (`work/diag/fixtures.local.json` chưa tồn tại trên máy này).
+
+**Trạng thái VERIFY:** `.\tools\verify-all.ps1` PASS (xUnit 250/250 trước T14a, 251/251 sau khi merge T14a).
