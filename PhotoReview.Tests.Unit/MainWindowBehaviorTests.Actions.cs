@@ -73,7 +73,7 @@ public sealed class MainWindowBehaviorActionTests
                     OnPresented = path =>
                     {
                         presented.Add(path);
-                        movePendingAtPresent.Add(Volatile.Read(ref movePending) == 1);
+                        movePendingAtPresent.Add(Volatile.Read(ref moveCompleted) == 0);
                     },
                     MoveOverride = async (source, target) =>
                     {
