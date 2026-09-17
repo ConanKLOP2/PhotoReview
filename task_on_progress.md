@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 324/324 (Core: 66/66, App/Unit: 258/258)
-- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`). Nhóm song song ∥C (T14a–T14d) đã hoàn tất. Wave 2 (T20, T21a) đã hoàn thành. Sẵn sàng cho các task còn lại trong nhóm ∥D (T22a, T22b, T22c, T23a, T23b). Nhánh chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`) đang **chờ máy 1** (D07+); đã chuyển sang làm tiếp nhánh refactor trên máy 2.
-- **Máy 2 (VTI):** không dùng để đo hiệu năng được (không có fixture ảnh thật, RAM 15.58 GB). Đã ghi thông số vào `docs/refactoring/diagnosis/env.md` mục "Máy 2". `verify-all.ps1` chạy tốt trên máy này (324/324 test) nên vẫn dùng để làm tiếp refactor track.
+- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 321/321 (Core: 66/66, Tests.Unit: 255/255)
+- **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 2 (T20, T21a) đã hoàn thành. Sẵn sàng cho D07 (chạy ma trận đo) và các task tiếp theo của nhóm song song ∥D (T22a, T22b, T22c, T23a, T23b).
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -58,9 +58,9 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (làm được trên máy 2):** nhóm song song ∥D (**T22a**, **T22b**, **T22c**, **T23a**, **T23b**) — T21a đã DONE. Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
-2. **D07 (ma trận đo, chỉ chạy trên máy 1): CHỜ NGƯỜI DÙNG quyết định** trước khi chạy:
-   - Phạm vi: rút gọn khoảng 1 giờ, đầy đủ vài giờ, hoặc hoãn.
+1. **Refactor (Wave 2 — nhóm song song ∥D):** **T22a** (`AppPaths`), **T22b** (`IFileSystem`), **T22c** (các interface còn lại), **T23a** (service thuần), **T23b** (metrics/stats) — T21a đã DONE. Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
+2. **D07 (ma trận đo trên máy 1):** Đã sẵn sàng trên máy chính (đầy đủ fixture F1..F4 và công cụ đo). Chờ người dùng quyết định:
+   - Phạm vi: rút gọn (khoảng 1 giờ), đầy đủ (vài giờ), hoặc tiếp tục refactor trước rồi đo sau.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.
    - Process Monitor (cần bấm UAC) cho phần đo lại D02.
    - Có reboot để đo cold-OS không.
