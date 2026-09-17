@@ -13,6 +13,7 @@ using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 
@@ -21,7 +22,8 @@ public partial class MainWindow : Window
     private readonly List<string> _files = [];
     private int _index = -1;
     private long _generation;
-    private AppSettings _settings = AppSettings.Load();
+    private readonly SettingsStore _settingsStore;
+    private AppSettings _settings;
     private readonly OperationJournal _journal = new();
     private readonly SessionStore _sessionStore = new();
     private readonly ThumbnailCache _thumbnailCache = new(persistNewThumbnails: false);
@@ -52,7 +54,9 @@ public partial class MainWindow : Window
     private bool _placementRestored;
     private int _fileActionInProgress;
 
-    public MainWindow(string? initialPath = null) : this((MainWindowTestHooks?)null, initialPath) { }
+    public MainWindow(string? initialPath = null) : this((MainWindowTestHooks?)null, initialPath, null) { }
+
+    public MainWindow(string? initialPath, SettingsStore? settingsStore) : this((MainWindowTestHooks?)null, initialPath, settingsStore) { }
 
     /// <summary>
     /// T14a test seam. Chains through <see cref="ApplyTestEnvironment"/>: the argument is
@@ -60,12 +64,23 @@ public partial class MainWindow : Window
     /// which PHOTOREVIEW_DATA_ROOT can still be redirected before <see cref="OperationJournal"/>
     /// captures it in its own field initializer.
     /// </summary>
-    internal MainWindow(string? initialPath, MainWindowTestHooks hooks) : this(ApplyTestEnvironment(hooks), initialPath) { }
+    internal MainWindow(string? initialPath, MainWindowTestHooks hooks, SettingsStore? settingsStore = null) : this(ApplyTestEnvironment(hooks), initialPath, settingsStore) { }
 
     // Parameter order is reversed against the internal overload on purpose: it keeps the two
     // signatures distinct (nullability alone does not) so the seam can chain into this body.
-    private MainWindow(MainWindowTestHooks? hooks, string? initialPath)
+    private MainWindow(MainWindowTestHooks? hooks, string? initialPath, SettingsStore? settingsStore)
     {
+        _settingsStore = settingsStore ?? new SettingsStore(
+            PhotoReview.Core.AppPaths.FromEnvironment(),
+            new PhotoReview.Core.IO.PhysicalFileSystem(),
+            new AppLogAdapter(),
+            App.LogStartupErrorForced);
+        _settings = _settingsStore.Current;
+        _settingsStore.Changed += (_, updated) =>
+        {
+            _settings = updated;
+            UpdateFolderTitle();
+        };
         _hooks = hooks;
         _explorerOrder = hooks?.Explorer ?? new ExplorerOrderProviderAdapter();
         InitializeComponent();
@@ -117,11 +132,11 @@ public partial class MainWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         AppLog.Info("Settings button clicked");
-        var dialog = new SettingsWindow(_settings) { Owner = this };
+        var dialog = new SettingsWindow(_settingsStore) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
             var previousMode = _settings.LoadingMode;
-            _settings = AppSettings.Load();
+            _settings = _settingsStore.Current;
             UpdateFolderTitle();
             if (previousMode != _settings.LoadingMode)
             {

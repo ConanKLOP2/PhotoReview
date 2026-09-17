@@ -238,6 +238,12 @@ public sealed class InMemoryFileSystem : IFileSystem
     public string ReadAllText(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        if (OpenReadHook?.Invoke(path) is { } ex)
+        {
+            throw ex;
+        }
+
         lock (_lock)
         {
             var normalized = NormalizePath(path);

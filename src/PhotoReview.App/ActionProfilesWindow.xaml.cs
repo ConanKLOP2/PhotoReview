@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Text.Json;
 using Forms = System.Windows.Forms;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 

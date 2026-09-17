@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.IO;
 using System.Collections;
 using System.Diagnostics;
@@ -6,17 +6,28 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Threading;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.IO;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 
 public partial class App : System.Windows.Application
 {
+    private static readonly IAppPaths AppPaths = PhotoReview.Core.AppPaths.FromEnvironment();
+    private static readonly IFileSystem FileSystem = new PhysicalFileSystem();
+    private static readonly ILog Log = new AppLogAdapter();
+    private static readonly SettingsStore Store = new(AppPaths, FileSystem, Log, LogStartupErrorForced);
+
     private InstanceLock? _instanceLock;
     private PerfCsvListener? _perfListener;
     private PerfDispatcherHooks? _perfHooks;
     private void App_Startup(object sender, StartupEventArgs e)
     {
-        AppLog.Enabled = AppSettings.Load().LoggingEnabled;
+        SettingsValidation.InitializeHooks();
+        Store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
+        var appSettings = Store.Load();
+        AppLog.Enabled = appSettings.LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
         // D05: PHOTOREVIEW_DIAG_* variables change app behavior for measurement purposes, so their
         // presence must be visible in the log even when logging is otherwise disabled -- same reasoning
@@ -46,9 +57,18 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
-        var window = new MainWindow(initial ?? initialFolder);
+        var window = new MainWindow(initial ?? initialFolder, Store);
         MainWindow = window;
         window.Show();
+    }
+
+    internal static void LogStartupErrorForced(string message, Exception ex)
+    {
+        var wasEnabled = AppLog.Enabled;
+        AppLog.Enabled = true;
+        AppLog.Error(message, ex);
+        AppLog.Flush();
+        AppLog.Enabled = wasEnabled;
     }
 
     /// <summary>
