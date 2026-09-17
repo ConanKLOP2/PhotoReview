@@ -100,9 +100,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | DONE |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | DONE |
 | T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | DONE |
-| T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | TODO |
-| T14c | Test INV-5 | T14a | ∥C | | TODO |
-| T14d | Test INV-7, INV-9 | T14a | ∥C | | TODO |
+| T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | IN PROGRESS |
+| T14c | Test INV-5 | T14a | ∥C | | IN PROGRESS |
+| T14d | Test INV-7, INV-9 | T14a | ∥C | | IN PROGRESS |
 | T20 | Tạo Core + Core.Tests | T14b–d | | | TODO |
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | TODO |
 | T22a | `AppPaths` | T20 | ∥D | | TODO |
