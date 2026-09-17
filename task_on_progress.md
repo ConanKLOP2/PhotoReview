@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 258/258
-- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`). Nhóm song song ∥C (T14a–T14d) đã hoàn tất. Sẵn sàng cho W2 (T20: tạo `PhotoReview.Core`). Nhánh chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`) đang **chờ máy 1** (D07+); đã chuyển sang làm tiếp nhánh refactor trên máy 2.
-- **Máy 2 (VTI):** không dùng để đo hiệu năng được (không có fixture ảnh thật, RAM 15.58 GB). Đã ghi thông số vào `docs/refactoring/diagnosis/env.md` mục "Máy 2". `verify-all.ps1` chạy tốt trên máy này (258/258 test) nên vẫn dùng để làm tiếp refactor track.
+- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 324/324 (Core: 66/66, App/Unit: 258/258)
+- **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`). Nhóm song song ∥C (T14a–T14d) đã hoàn tất. Wave 2 (T20, T21a) đã hoàn thành. Sẵn sàng cho các task còn lại trong nhóm ∥D (T22a, T22b, T22c, T23a, T23b). Nhánh chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`) đang **chờ máy 1** (D07+); đã chuyển sang làm tiếp nhánh refactor trên máy 2.
+- **Máy 2 (VTI):** không dùng để đo hiệu năng được (không có fixture ảnh thật, RAM 15.58 GB). Đã ghi thông số vào `docs/refactoring/diagnosis/env.md` mục "Máy 2". `verify-all.ps1` chạy tốt trên máy này (324/324 test) nên vẫn dùng để làm tiếp refactor track.
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20 (Wave 2 mở màn với `PhotoReview.Core` & `PhotoReview.Core.Tests`; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a (7 enum chuẩn và LenientEnumConverter trong Core; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,7 +58,7 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (làm được trên máy 2):** nhóm song song ∥D (**T21a**, **T22a**, **T22b**, **T22c**, **T23a**, **T23b**) — các task trong nhóm ∥D đều phụ thuộc T20 (đã DONE). Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
+1. **Refactor (làm được trên máy 2):** nhóm song song ∥D (**T22a**, **T22b**, **T22c**, **T23a**, **T23b**) — T21a đã DONE. Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
 2. **D07 (ma trận đo, chỉ chạy trên máy 1): CHỜ NGƯỜI DÙNG quyết định** trước khi chạy:
    - Phạm vi: rút gọn khoảng 1 giờ, đầy đủ vài giờ, hoặc hoãn.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.

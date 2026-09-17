@@ -104,7 +104,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T14c | Test INV-5 | T14a | ∥C | | DONE |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | DONE |
 | T20 | Tạo Core + Core.Tests | T14b–d | | | DONE |
-| T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | TODO |
+| T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | DONE |
 | T22a | `AppPaths` | T20 | ∥D | | TODO |
 | T22b | `IFileSystem` + triển khai | T20 | ∥D | | TODO |
 | T22c | Các interface còn lại | T20 | ∥D | | TODO |
@@ -409,7 +409,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Test cho mọi alias, giá trị rỗng, null và giá trị rác.
 - **Không làm:** sửa `AppSettings` (thuộc T21b).
 - **Xong khi:** Core.Tests đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Hoàn thành tạo 7 enum, `JsonAliasAttribute`, `LenientEnumConverter<T>`, `LenientEnumConverterFactory`. Viết 66 unit test kiểm tra toàn bộ tên chuẩn, alias, case-insensitivity, null, rác, định dạng ghi tương thích ngược và round-trip. Đạt 66/66 test trong Core.Tests và toàn bộ verify-all gates.
+    - **Review R1:** APPROVE. Diff sạch, chỉ tạo file mới trong `{Core}/Model/*.cs` và `{CoreT}/Model/*Tests.cs`, không sửa `AppSettings` hay caller nào (giữ đúng cho T21b).
+    - **Review R2:** APPROVE. Đầy đủ 7 enum, hỗ trợ mọi alias theo đặc tả, fallback an toàn khi gặp rác/null không gây crash, ghi chuỗi tương thích ngược cho InitialViewMode.
 
 ### T22a — `AppPaths` ∥D
 - **Files:** `{Core}/Abstractions/IAppPaths.cs`, `{Core}/AppPaths.cs`, `{CoreT}/AppPathsTests.cs`.
