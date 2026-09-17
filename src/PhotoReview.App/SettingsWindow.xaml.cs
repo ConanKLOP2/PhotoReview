@@ -6,11 +6,19 @@ using System.Diagnostics;
 using System.IO;
 using PhotoReview.Core.Model;
 
+using PhotoReview.Core.Settings;
+
 namespace PhotoReview.App;
 
 public partial class SettingsWindow : Window
 {
+    private readonly SettingsStore? _store;
     public AppSettings Settings { get; }
+
+    public SettingsWindow(SettingsStore store) : this(store.Current)
+    {
+        _store = store;
+    }
 
     public SettingsWindow(AppSettings current)
     {
@@ -117,9 +125,14 @@ public partial class SettingsWindow : Window
                 throw new JsonException("Các action không được trùng phím tắt.");
         }
         catch { System.Windows.MessageBox.Show(this, "Action profiles JSON không hợp lệ.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        var shortcutError = AppSettings.ValidateShortcuts(Settings);
+        var shortcutError = SettingsValidation.ValidateShortcuts(Settings);
         if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        AppSettings.Save(Settings); AppLog.Info("Settings saved"); DialogResult = true;
+        if (_store is not null)
+            _store.Save(Settings);
+        else
+            AppSettings.Save(Settings);
+        AppLog.Info("Settings saved");
+        DialogResult = true;
     }
 
     private static void ShortcutText_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)

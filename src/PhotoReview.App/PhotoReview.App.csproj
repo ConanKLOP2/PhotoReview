@@ -23,4 +23,8 @@
     <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="PhotoReview.Core.Settings" />
+  </ItemGroup>
+
 </Project>
