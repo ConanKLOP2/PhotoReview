@@ -18,6 +18,7 @@
     <Using Include="PhotoReview.Core.FileActions" />
     <Using Include="PhotoReview.Core.Session" />
     <Using Include="PhotoReview.Imaging" />
+    <Using Include="PhotoReview.Imaging.Preload" />
   </ItemGroup>
 
 </Project>

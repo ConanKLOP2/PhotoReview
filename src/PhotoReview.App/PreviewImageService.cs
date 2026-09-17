@@ -7,6 +7,8 @@ using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Diagnostics;
 
+using PhotoReview.Imaging.Preload;
+
 namespace PhotoReview.App;
 
 /// <summary>
@@ -16,7 +18,7 @@ namespace PhotoReview.App;
 /// The current loading mode and target decode width are supplied by the caller
 /// (they are UI/settings state) instead of being read from MainWindow.
 /// </summary>
-public sealed class PreviewImageService
+public sealed class PreviewImageService : IPreloadTarget
 {
     private readonly BoundedLruCache<ImageCacheKey, BitmapImage> _cache;
     private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Lazy<Task<BitmapImage>>> _previewLoads = new();
@@ -404,5 +406,13 @@ public sealed class PreviewImageService
         // Best-effort: a full queue means persistence is falling behind decode, so this
         // preview is dropped rather than growing the backlog or blocking the caller.
         _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch));
+    }
+
+    bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);
+    bool IPreloadTarget.TryGetCachedPreview(ImageCacheKey key) => TryGetCachedPreview(key, out _);
+    Task IPreloadTarget.PreloadAsync(string path, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return GetPreviewAsync(path);
     }
 }

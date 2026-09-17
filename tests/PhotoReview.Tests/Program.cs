@@ -223,7 +223,7 @@ try
     // contracts are asserted behaviorally below; only the few branches that cannot be
     // driven from a console harness still read these focused service files.
     var previewServiceText = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "PreviewImageService.cs"));
-    var preloadSchedulerText = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "PreloadScheduler.cs"));
+    var preloadSchedulerText = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.Imaging", "Preload", "PreloadScheduler.cs"));
     RunInterleavedFileActionSequence(root, failures);
     // ---- Source-presence checks: MainWindow file-action glue ----
     // The advance-before-action ordering lives in MainWindow's async event handlers and

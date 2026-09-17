@@ -1,26 +1,26 @@
 using System.Diagnostics;
 using System.IO;
-using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Imaging.Preload;
 
 /// <summary>
 /// Owns background preload: the cancellation lifetime, the worker slots, the priority
 /// version/center used to rebuild the preload order, and the set of keys this scheduler
-/// warmed (so the viewer can record a preload hit).  Extracted from MainWindow; it takes
-/// its catalog snapshot, folder size and configuration from the caller instead of
-/// reaching into MainWindow fields.
+/// warmed (so the viewer can record a preload hit).
 /// </summary>
 public sealed class PreloadScheduler : IDisposable
 {
-    private readonly PreviewImageService _previewService;
+    private readonly IPreloadTarget _target;
     private readonly ReviewMetrics _metrics;
     private readonly Func<string[]> _snapshotFiles;
     private readonly Func<long> _totalSourceBytes;
-    private readonly long _fullFolderRamThresholdBytes;
-    private readonly double _memoryLoadLimit;
-    private readonly Func<double, bool> _hasHeadroom;
+    private readonly PreloadOptions _options;
+    private readonly IMemoryProbe _memoryProbe;
+    private readonly IUiScheduler _ui;
+    private readonly ILog _log;
 
     private readonly int _workerCount;
     private CancellationTokenSource _preloadCts = new();
@@ -43,30 +43,63 @@ public sealed class PreloadScheduler : IDisposable
     private bool _disposed;
 
     public PreloadScheduler(
-        PreviewImageService previewService,
+        IPreloadTarget target,
+        ReviewMetrics metrics,
+        Func<string[]> snapshotFiles,
+        Func<long> totalSourceBytes,
+        PreloadOptions? options = null,
+        IMemoryProbe? memoryProbe = null,
+        IUiScheduler? uiScheduler = null,
+        ILog? log = null)
+    {
+        _target = target ?? throw new ArgumentNullException(nameof(target));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+        _snapshotFiles = snapshotFiles ?? throw new ArgumentNullException(nameof(snapshotFiles));
+        _totalSourceBytes = totalSourceBytes ?? throw new ArgumentNullException(nameof(totalSourceBytes));
+        _options = options ?? new PreloadOptions();
+        _memoryProbe = memoryProbe ?? FakeOrSystemMemoryProbe.Instance;
+        _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
+        _log = log ?? NullLog.Instance;
+
+        // D10: precedence is the explicit option/parameter, then the diagnostic environment variable
+        var diagOverride = Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS");
+        if (int.TryParse(diagOverride, out var parsedWorkers) && parsedWorkers >= 0 && parsedWorkers <= 16)
+        {
+            _workerCount = parsedWorkers;
+        }
+        else
+        {
+            _workerCount = _options.WorkerCount;
+        }
+
+        _preloadSlots = new SemaphoreSlim(Math.Max(1, _workerCount), Math.Max(1, _workerCount));
+    }
+
+    public PreloadScheduler(
+        IPreloadTarget target,
         ReviewMetrics metrics,
         Func<string[]> snapshotFiles,
         Func<long> totalSourceBytes,
         long fullFolderRamThresholdBytes,
         double memoryLoadLimit,
         Func<double, bool>? hasHeadroom = null,
-        int? workerCountOverride = null)
+        int? workerCountOverride = null,
+        IUiScheduler? uiScheduler = null)
+        : this(target, metrics, snapshotFiles, totalSourceBytes,
+            new PreloadOptions(
+                WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
+                MemoryLoadLimit: memoryLoadLimit,
+                FullFolderThresholdBytes: fullFolderRamThresholdBytes),
+            hasHeadroom is not null ? new DelegateMemoryProbe(hasHeadroom) : null,
+            uiScheduler,
+            null)
     {
-        _previewService = previewService;
-        _metrics = metrics;
-        _snapshotFiles = snapshotFiles;
-        _totalSourceBytes = totalSourceBytes;
-        _fullFolderRamThresholdBytes = fullFolderRamThresholdBytes;
-        _memoryLoadLimit = memoryLoadLimit;
-        // Defaults to the real OS memory check; tests inject a fixed answer so the
-        // scheduler's own logic doesn't depend on how much RAM the test machine has free.
-        _hasHeadroom = hasHeadroom ?? PhysicalMemory.HasHeadroom;
-        // D10: precedence is the explicit test parameter, then the diagnostic environment
-        // variable, then the normal default -- read once here so every use below (and in
-        // RunPreloadSchedulerAsync/PreloadOneAsync) agrees even if the environment variable
-        // changes mid-process (e.g. another test in the same AppDomain).
-        _workerCount = workerCountOverride ?? DiagOptions.PreloadWorkers ?? AppConstants.PreloadWorkerCount;
-        _preloadSlots = new SemaphoreSlim(Math.Max(1, _workerCount), Math.Max(1, _workerCount));
+    }
+
+    private static int? DiagOptionsWorkers()
+    {
+        var diagOverride = Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS");
+        return int.TryParse(diagOverride, out var parsed) && parsed >= 0 && parsed <= 16 ? parsed : null;
     }
 
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
@@ -137,7 +170,7 @@ public sealed class PreloadScheduler : IDisposable
                 {
                     order?.Dispose();
                     order = PreloadOrderService.Build(Volatile.Read(ref _preloadCenter), files.Length,
-                        _totalSourceBytes() < _fullFolderRamThresholdBytes).GetEnumerator();
+                        _totalSourceBytes() < _options.FullFolderThresholdBytes).GetEnumerator();
                     seenVersion = currentVersion;
                 }
                 while (running.Count < workers && order!.MoveNext())
@@ -147,22 +180,18 @@ public sealed class PreloadScheduler : IDisposable
                     // cadence as the progress log below, not on every candidate.
                     if (examinedSinceYield == 0 && !HasPreloadHeadroom())
                     {
-                        if (AppLog.Enabled)
-                        {
-                            var memory = PhysicalMemory.GetSnapshot();
-                            AppLog.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_previewService.CacheCount} cacheBytes={_previewService.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
-                        }
+                        var memory = _memoryProbe.GetSnapshot();
+                        _log.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
                         // GlobalMemoryStatusEx is a syscall: only taken while tracing (-1 = unavailable).
                         if (PhotoReviewPerf.Log.IsEnabled())
                         {
-                            var perfMemory = PhysicalMemory.GetSnapshot();
-                            PhotoReviewPerf.Log.PreloadPaused(perfMemory is { } m ? (int)m.LoadPercent : -1,
-                                perfMemory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
+                            PhotoReviewPerf.Log.PreloadPaused(memory is { } m ? (int)m.LoadPercent : -1,
+                                memory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
                         }
                         return;
                     }
                     var path = files[order.Current];
-                    if (queued.Contains(path) || _previewService.TryGetCachedPreview(path, out _)) continue;
+                    if (queued.Contains(path) || _target.TryGetCachedPreview(path)) continue;
                     queued.Add(path);
                     running.Add(PreloadOneAsync(path, cancellationToken), path);
                     // Yield only after actual queue work; give input/rendering a
@@ -170,12 +199,9 @@ public sealed class PreloadScheduler : IDisposable
                     if (++examinedSinceYield >= workers)
                     {
                         examinedSinceYield = 0;
-                        if (AppLog.Enabled)
-                        {
-                            var memory = PhysicalMemory.GetSnapshot();
-                            AppLog.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_previewService.CacheCount} cacheBytes={_previewService.CacheBytes} availableBytes={memory?.AvailableBytes}");
-                        }
-                        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                        var memory = _memoryProbe.GetSnapshot();
+                        _log.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes}");
+                        await _ui.YieldAsync(cancellationToken).ConfigureAwait(false);
                     }
                 }
                 if (running.Count == 0) return;
@@ -189,75 +215,100 @@ public sealed class PreloadScheduler : IDisposable
         // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
         // unobserved once the discarded fire-and-forget task
         // (`_ = PreloadAroundAsync(...)`) is garbage collected.
-        catch (Exception ex) { AppLog.Error("Preload scheduler failed", ex); }
+        catch (Exception ex) { _log.Error("Preload scheduler failed", ex); }
         finally { order?.Dispose(); }
     }
 
-    private bool HasPreloadHeadroom() => _hasHeadroom(_memoryLoadLimit);
+    private bool HasPreloadHeadroom() => _memoryProbe.HasHeadroom(_options.MemoryLoadLimit, _options.ReserveBytes);
 
     private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
     {
         // D04 perf: preload work is not tied to a navigation. Setting the AsyncLocal here only
-        // affects this method's own flow (and the decode it starts), never the scheduler loop.
-        // slot = how many preload slots were busy right after this item acquired one (0-based,
-        // racy snapshot of SemaphoreSlim.CurrentCount); it is a concurrency level, not a stable
-        // worker id, because SemaphoreSlim slots have no identity. -1 = never acquired a slot.
-        // kind "decoded" also covers joining a decode that someone else had already started.
+        // affects calls made downstream from this method (DecodeAndCacheAsync), not the caller
+        // of PreloadAroundAsync or the scheduler loop above.
         var perf = PhotoReviewPerf.Log.IsEnabled();
         if (perf) PhotoReviewPerf.NavContext = -1;
-        long perfStart = 0; double perfQueueWaitMs = -1; var perfSlot = -1; var perfKind = "failed";
+        long perfEnqueue = perf ? Stopwatch.GetTimestamp() : 0;
+        var slot = -1;
+        await _preloadSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var queueWait = Stopwatch.StartNew();
-            await _preloadSlots.WaitAsync(cancellationToken);
-            _metrics.RecordQueueWait(queueWait.ElapsedMilliseconds);
-            if (perf)
+            slot = _workerCount - 1 - _preloadSlots.CurrentCount;
+            var stopwatch = Stopwatch.StartNew();
+            var queueWaitMs = perf ? PhotoReviewPerf.Ms(perfEnqueue) : 0;
+            var pathId = perf ? PhotoReviewPerf.PathId(path) : "";
+            // If another task already decoded it while this one waited in the semaphore queue, skip.
+            if (_target.TryGetCachedPreview(path))
             {
-                perfQueueWaitMs = queueWait.Elapsed.TotalMilliseconds;
-                perfSlot = Math.Max(0, _workerCount - _preloadSlots.CurrentCount - 1);
-                perfStart = Stopwatch.GetTimestamp();
+                stopwatch.Stop();
+                if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "skipped", stopwatch.Elapsed.TotalMilliseconds);
+                return;
             }
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (perf) perfKind = "skipped";
-                if (!HasPreloadHeadroom()) return;
-                if (perf) perfKind = "failed";
-                var key = _previewService.GetCurrentCacheKey(path);
-                // Extra RAM lookup only while tracing; GetPreviewAsync performs the same TryGet
-                // (and LRU touch) immediately afterwards, so cache state is unaffected.
-                var perfWasCached = perf && _previewService.TryGetCachedPreview(key, out _);
-                await _previewService.GetPreviewAsync(path, key);
-                if (perf) perfKind = perfWasCached ? "cached" : "decoded";
-                if (_previewService.TryGetCachedPreview(key, out _)) lock (_preloadedKeysGate) _preloadedKeys.Add(key);
+                var beforeReads = _metrics.Snapshot().SourceReads;
+                await _target.PreloadAsync(path, cancellationToken).ConfigureAwait(false);
+                stopwatch.Stop();
+                var key = _target.GetCurrentCacheKey(path);
+                var isHit = _target.TryGetCachedPreview(key);
+                if (isHit) lock (_preloadedKeysGate) _preloadedKeys.Add(key);
+                if (perf)
+                {
+                    var sourceRead = _metrics.Snapshot().SourceReads > beforeReads;
+                    var kind = sourceRead ? "decoded" : isHit ? "hit" : "miss";
+                    PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, kind, stopwatch.Elapsed.TotalMilliseconds);
+                }
             }
-            finally { _preloadSlots.Release(); }
+            catch (IOException ex)
+            {
+                _log.Error($"Preload failed: {path}", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _log.Error($"Preload failed: {path}", ex);
+            }
         }
-        catch (OperationCanceledException) { if (perf) perfKind = "canceled"; }
-        catch (IOException) { }
-        catch (NotSupportedException) { }
-        catch (Exception ex) { AppLog.Error($"Preload failed: {path}", ex); }
         finally
         {
-            if (perf) TracePreloadItem(perfSlot, path, perfQueueWaitMs, perfKind, perfStart);
+            _preloadSlots.Release();
         }
-    }
-
-    // Tracing only. Never throws: PreloadOneAsync must keep completing without an exception.
-    private static void TracePreloadItem(int slot, string path, double queueWaitMs, string kind, long start)
-    {
-        try { PhotoReviewPerf.Log.PreloadItem(slot, PhotoReviewPerf.PathId(path), queueWaitMs, kind, start == 0 ? 0 : PhotoReviewPerf.Ms(start)); }
-        catch { }
     }
 
     public void Dispose()
     {
+        if (Volatile.Read(ref _disposed)) return;
         Volatile.Write(ref _disposed, true);
-        lock (_preloadCtsGate)
-        {
-            _preloadCts.Cancel();
-            _preloadCts.Dispose();
-        }
+        Cancel();
+        lock (_preloadCtsGate) _preloadCts.Dispose();
         _preloadSlots.Dispose();
     }
+
+    private sealed class FakeOrSystemMemoryProbe : IMemoryProbe
+    {
+        public static readonly FakeOrSystemMemoryProbe Instance = new();
+        public bool HasHeadroom(double maximumLoad, long reserveBytes) => true;
+        public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
+        public bool IsMemoryPressureHigh() => false;
+        public long GetAvailableMemoryBytes() => 16L * 1024 * 1024 * 1024;
+    }
+}
+
+public sealed class DelegateMemoryProbe : IMemoryProbe
+{
+    private readonly Func<double, bool> _hasHeadroom;
+    public DelegateMemoryProbe(Func<double, bool> hasHeadroom) => _hasHeadroom = hasHeadroom;
+    public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom(maximumLoad);
+    public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
+    public bool IsMemoryPressureHigh() => false;
+    public long GetAvailableMemoryBytes() => 16L * 1024 * 1024 * 1024;
+}
+
+public sealed class FakeMemoryProbe : IMemoryProbe
+{
+    private readonly bool _hasHeadroom;
+    public FakeMemoryProbe(bool hasHeadroom = true) => _hasHeadroom = hasHeadroom;
+    public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom;
+    public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
+    public bool IsMemoryPressureHigh() => !_hasHeadroom;
+    public long GetAvailableMemoryBytes() => _hasHeadroom ? 16L * 1024 * 1024 * 1024 : 0;
 }

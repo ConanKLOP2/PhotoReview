@@ -10,4 +10,7 @@ public interface IUiScheduler
 
     /// <summary>Thực thi một hành động trên luồng UI và đợi hoàn thành.</summary>
     Task InvokeAsync(Action action);
+
+    /// <summary>Nhường quyền điều khiển bất đồng bộ cho UI xử lý.</summary>
+    ValueTask YieldAsync(CancellationToken cancellationToken = default);
 }

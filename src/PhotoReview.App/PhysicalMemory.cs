@@ -1,10 +1,12 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
+using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.App;
 
-internal static class PhysicalMemory
+internal sealed class PhysicalMemory : IMemoryProbe
 {
-    internal readonly record struct MemorySnapshot(uint LoadPercent, ulong AvailableBytes);
+    public static readonly PhysicalMemory Instance = new();
+
     // WPF codecs also allocate native memory, which GC snapshots can miss or report late.
     [StructLayout(LayoutKind.Sequential)]
     private struct Status
@@ -24,21 +26,27 @@ internal static class PhysicalMemory
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref Status status);
 
-    /// <param name="maximumLoad">A 0-1 fraction of physical memory load, not a percentage.</param>
-    internal static bool HasHeadroom(double maximumLoad)
+    public bool HasHeadroom(double maximumLoad, long reserveBytes)
     {
         var snapshot = GetSnapshot();
         if (snapshot is null) return false;
-        // Keep a 2 GiB emergency reserve while allowing the 32 GiB review
-        // workstation to use substantially more RAM for decoded previews.
-        return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= (ulong)AppConstants.MemoryReserveBytes;
+        // Keep an emergency reserve while allowing the review workstation
+        // to use substantially more RAM for decoded previews.
+        return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= (ulong)reserveBytes;
     }
 
-    internal static MemorySnapshot? GetSnapshot()
+    public MemorySnapshot? GetSnapshot()
     {
         var status = new Status { Length = (uint)Marshal.SizeOf<Status>() };
         if (GlobalMemoryStatusEx(ref status)) return new(status.Load, status.AvailablePhysical);
         AppLog.Error($"GlobalMemoryStatusEx failed: Win32Error={Marshal.GetLastWin32Error()}");
         return null;
     }
+
+    public bool IsMemoryPressureHigh() => !HasHeadroom(0.85, AppConstants.MemoryReserveBytes);
+
+    public long GetAvailableMemoryBytes() => (long)(GetSnapshot()?.AvailableBytes ?? 0);
+
+    /// <param name="maximumLoad">A 0-1 fraction of physical memory load, not a percentage.</param>
+    internal static bool HasHeadroom(double maximumLoad) => Instance.HasHeadroom(maximumLoad, AppConstants.MemoryReserveBytes);
 }
