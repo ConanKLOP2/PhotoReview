@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Core.Catalog;
 
 public static class ImageFileTypes
 {

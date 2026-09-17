@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.App;
 
