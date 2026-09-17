@@ -106,7 +106,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T20 | Tạo Core + Core.Tests | T14b–d | | | DONE |
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | DONE |
 | T22a | `AppPaths` | T20 | ∥D | | DONE |
-| T22b | `IFileSystem` + triển khai | T20 | ∥D | | TODO |
+| T22b | `IFileSystem` + triển khai | T20 | ∥D | | DONE |
 | T22c | Các interface còn lại | T20 | ∥D | | TODO |
 | T23a | Chuyển service thuần (sort, sibling, compare, drag-drop, file types) | T20 | ∥D | | TODO |
 | T23b | Chuyển `ReviewMetrics`, `BenchmarkStatistics`, `ExplorerSnapshotValidator` | T20 | ∥D | | TODO |
@@ -437,7 +437,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
      - `ReadAllText`, `ReadLines`, `EnumerateFiles(dir, pattern)`, `EnumerateDirectories(dir)`, `CreateDirectory`
   2. Bản in-memory phân biệt hoa thường giống Windows (OrdinalIgnoreCase). Có hook để test chèn lỗi.
 - **Xong khi:** test hợp đồng chạy trên **cả hai** triển khai (dùng Theory).
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Hoàn thành FileStat record, IFileSystem interface, PhysicalFileSystem và InMemoryFileSystem (hỗ trợ OrdinalIgnoreCase và hook chèn lỗi cho mọi thao tác). Viết bộ kiểm thử hợp đồng dùng Theory chạy cùng 1 bộ test trên cả 2 triển khai (24 test instances) và 5 test kiểm tra error hooks. 104/104 Core.Tests pass, verify-all PASS (359 tests).
+    - **Review R1:** APPROVE. Đúng danh sách Files, không sửa bất kỳ file nào trong PhotoReview.App.
+    - **Review R2:** APPROVE. Bộ test hợp đồng chạy trên cả Physical và InMemory đảm bảo tính tương đương ngữ nghĩa, error hooks hoạt động đúng kỳ vọng.
 
 ### T22c — Interface còn lại ∥D
 - **Files:** `{Core}/Abstractions/{IClock,ILog,IUiScheduler,IMemoryProbe,IRecycleBin,IExplorerOrderProvider,IDialogService,IKeyNameValidator,INaturalComparer}.cs`, `{Core}/Abstractions/SystemClock.cs`, `{Core}/Diagnostics/NullLog.cs`.
