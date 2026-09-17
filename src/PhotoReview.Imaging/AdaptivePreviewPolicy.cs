@@ -1,4 +1,4 @@
-namespace PhotoReview.App;
+namespace PhotoReview.Imaging;
 
 /// <summary>Calculates a bounded decode width from viewport and display DPI.</summary>
 public static class AdaptivePreviewPolicy

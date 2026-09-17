@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +30,7 @@
     <Using Include="PhotoReview.App.Services" />
     <Using Include="PhotoReview.Core.FileActions" />
     <Using Include="PhotoReview.Core.Session" />
+    <Using Include="PhotoReview.Imaging" />
   </ItemGroup>
 
 </Project>
