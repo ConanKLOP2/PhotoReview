@@ -5,12 +5,12 @@ using System.IO;
 using System.Runtime.InteropServices;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Platform.Windows.Explorer;
 
 public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 {
-
     /// <summary>
     /// A single, long-lived STA thread that serializes all Explorer COM calls onto one OS thread.
     /// Explorer's IFolderView2/related COM objects are apartment-bound and must be accessed from the
@@ -21,9 +21,11 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         private readonly BlockingCollection<Action> _queue = new();
         private readonly Thread _thread;
+        private readonly ILog _log;
 
-        public StaThreadPump()
+        public StaThreadPump(ILog log)
         {
+            _log = log;
             _thread = new Thread(RunLoop) { IsBackground = true, Name = "PhotoReview Explorer view" };
             _thread.SetApartmentState(ApartmentState.STA);
             _thread.Start();
@@ -34,7 +36,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             foreach (var action in _queue.GetConsumingEnumerable())
             {
                 try { action(); }
-                catch (Exception ex) { AppLog.Error("Explorer STA pump action escaped unexpectedly", ex); }
+                catch (Exception ex) { _log.Error("Explorer STA pump action escaped unexpectedly", ex); }
             }
         }
 
@@ -64,11 +66,18 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             if (_thread.Join(TimeSpan.FromSeconds(5)))
                 _queue.Dispose();
             else
-                AppLog.Error("Explorer STA pump thread did not exit within 5s; leaking queue instead of risking ObjectDisposedException on a stuck COM call");
+                _log.Error("Explorer STA pump thread did not exit within 5s; leaking queue instead of risking ObjectDisposedException on a stuck COM call");
         }
     }
 
-    private readonly StaThreadPump _pump = new();
+    private readonly ILog _log;
+    private readonly StaThreadPump _pump;
+
+    public ExplorerOrderService(ILog? log = null)
+    {
+        _log = log ?? NullLog.Instance;
+        _pump = new StaThreadPump(_log);
+    }
 
     public void Dispose() => _pump.Dispose();
 
@@ -95,7 +104,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         {
             try { return QueryShell(canonicalFolder, linkedToken, progress, batchSize); }
             catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
-            catch (Exception ex) { AppLog.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
+            catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
         });
         try
         {
@@ -108,11 +117,11 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
     }
 
-    private static ExplorerViewSnapshot QueryShell(string folder, CancellationToken cancellationToken,
+    private ExplorerViewSnapshot QueryShell(string folder, CancellationToken cancellationToken,
         IProgress<ExplorerQueryProgress>? progress, int batchSize)
     {
         var queryTimer = Stopwatch.StartNew();
-        AppLog.Info($"Explorer query-start: folder={folder}");
+        _log.Info($"Explorer query-start: folder={folder}");
         var shellType = Type.GetTypeFromProgID("Shell.Application");
         if (shellType is null) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, "Shell.Application unavailable");
         // The caller's timeout only cancels the Task it is awaiting; this action already
@@ -140,17 +149,17 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                     catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
                 }
                 catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
-                catch (Exception ex) { AppLog.Error($"Explorer window inspection failed after {windowsInspected} window(s)", ex); }
+                catch (Exception ex) { _log.Error($"Explorer window inspection failed after {windowsInspected} window(s)", ex); }
                 finally { Release(window); }
             }
             var unavailable = Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, $"No matching Explorer window among {windowsInspected} window(s)");
-            AppLog.Info($"Explorer query-complete: status={unavailable.Status}, windows={windowsInspected}, elapsedMs={queryTimer.ElapsedMilliseconds}");
+            _log.Info($"Explorer query-complete: status={unavailable.Status}, windows={windowsInspected}, elapsedMs={queryTimer.ElapsedMilliseconds}");
             return unavailable;
         }
         finally { Release(windows); Release(shell); }
     }
 
-    private static ExplorerViewSnapshot TryReadNativeView(object window, string folder, CancellationToken cancellationToken,
+    private ExplorerViewSnapshot TryReadNativeView(object window, string folder, CancellationToken cancellationToken,
         IProgress<ExplorerQueryProgress>? progress, int batchSize)
     {
         var timer = Stopwatch.StartNew();
@@ -174,7 +183,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             var countResult = ExplorerNativeVtable.ItemCount(folderViewPtr, ExplorerComInterop.SvgioAllView, out var count);
             if (countResult < 0 || count <= 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.ItemCount failed/empty: 0x{countResult:X8}, count={count}");
             var itemCountElapsed = timer.ElapsedMilliseconds;
-            AppLog.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
+            _log.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
             var paths = new List<string>(count);
             var comCalls = 1;
             var getItem = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
@@ -214,7 +223,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             var grouped = ExplorerNativeVtable.GetGroupBy(folderViewPtr, out var groupKey, out _) >= 0 && (groupKey.fmtid != Guid.Empty || groupKey.pid != 0);
             var first = paths.Count > 0 ? paths[0] : string.Empty;
             var last = paths.Count > 0 ? paths[^1] : string.Empty;
-            AppLog.Info($"Explorer native-read-complete: count={paths.Count}, getItemCalls={getItemCalls}, displayNameCalls={displayNameCalls}, elapsedMs={timer.ElapsedMilliseconds}, firstPath={first}, lastPath={last}, sortColumns={sorts.Count}, grouped={grouped}");
+            _log.Info($"Explorer native-read-complete: count={paths.Count}, getItemCalls={getItemCalls}, displayNameCalls={displayNameCalls}, elapsedMs={timer.ElapsedMilliseconds}, firstPath={first}, lastPath={last}, sortColumns={sorts.Length}, grouped={grouped}");
             return new ExplorerViewSnapshot(folder, paths, sorts, grouped ? ExplorerGroupState.Active : ExplorerGroupState.None,
                 ExplorerOrderStatus.Available, null, DateTime.UtcNow);
         }
@@ -228,7 +237,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
     }
 
-    private static IReadOnlyList<ExplorerSortColumn> ReadSortColumns(IntPtr view)
+    private static ExplorerSortColumn[] ReadSortColumns(IntPtr view)
     {
         if (ExplorerNativeVtable.GetSortColumnCount(view, out var count) < 0 || count <= 0 || count > 32) return [];
         var native = new SORTCOLUMN[count];
