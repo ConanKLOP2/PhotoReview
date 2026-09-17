@@ -9,14 +9,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
-$appProject = Join-Path $root 'PhotoReview.App\PhotoReview.App.csproj'
+$appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
-    # (PhotoReview.App/bin/Release/net10.0-windows/publish for -Configuration Release),
+    # (src/PhotoReview.App/bin/Release/net10.0-windows/publish for -Configuration Release),
     # so running this gate with no override actually populates the documented location.
     [xml]$appProjectXml = Get-Content -LiteralPath $appProject
     $targetFramework = $appProjectXml.SelectSingleNode('//TargetFramework').InnerText
-    $ReleaseDirectory = Join-Path $root "PhotoReview.App\bin\$Configuration\$targetFramework\publish"
+    $ReleaseDirectory = Join-Path $root "src\PhotoReview.App\bin\$Configuration\$targetFramework\publish"
 }
 
 function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
@@ -38,10 +38,10 @@ function Invoke-Gate([string]$Name, [scriptblock]$Action) {
 
 Invoke-Gate 'Build solution' { dotnet build $solution -c $Configuration --nologo }
 Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
-    dotnet run --project (Join-Path $root 'PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
+    dotnet run --project (Join-Path $root 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
 }
 Invoke-Gate 'Run xUnit test suite' {
-    dotnet test (Join-Path $root 'PhotoReview.Tests.Unit\PhotoReview.Tests.Unit.csproj') -c $Configuration --no-build --nologo
+    dotnet test (Join-Path $root 'tests\PhotoReview.Tests.Unit\PhotoReview.Tests.Unit.csproj') -c $Configuration --no-build --nologo
 }
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')

@@ -27,13 +27,13 @@
 - “Public” trong quy trình này nghĩa là push branch lên remote GitHub `origin` và mở Pull Request vào `master`.
 - Luôn publish bản kiểm tra vào đúng thư mục mặc định:
 
-  `PhotoReview.App/bin/Release/net10.0-windows/publish`
+  `src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 
 - Lệnh chuẩn:
 
-  `dotnet run --project PhotoReview.Tests -c Release`
+  `dotnet run --project tests/PhotoReview.Tests -c Release`
 
-  `dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish`
+  `dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 
 - Không coi công việc là hoàn tất nếu chưa publish thành công vào thư mục trên. Quy trình này áp dụng trên mọi máy làm việc với project.
 - Quy trình bắt buộc sau test/publish thành công:
@@ -41,7 +41,7 @@
   2. Push branch hiện tại lên remote: `git push origin <branch-name>`.
   3. Mở Pull Request vào `master` trên GitHub.
   4. Chỉ merge khi CI (`.github/workflows/ci.yml`) chạy xanh và người dùng duyệt.
-- Đường dẫn project (`PhotoReview.App/`) và thư mục publish mặc định có thể đổi sau task T24 (chuyển vào `src/`); khi đó dùng lệnh trong `README.md`.
+- Lệnh và đường dẫn mặc định luôn đồng bộ với `README.md`.
 - Không coi công việc là hoàn tất nếu chưa kiểm tra push branch thành công (trừ khi remote từ chối hoặc thiếu quyền, khi đó phải báo rõ lỗi).
 
 ## Đợt tái cấu trúc đang chạy

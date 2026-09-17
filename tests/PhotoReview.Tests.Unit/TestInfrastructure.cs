@@ -97,15 +97,18 @@ public static class ProjectSources
 
     private static string ResolveProjectRoot()
     {
-        var candidate = System.IO.Path.GetFullPath(
-            System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        if (File.Exists(System.IO.Path.Combine(candidate, "PhotoReview.App", "MainWindow.xaml.cs")))
-            return candidate;
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(System.IO.Path.Combine(dir.FullName, "PhotoReview.slnx")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
         return Directory.GetCurrentDirectory();
     }
 
     public static string AppPath(string fileName) =>
-        System.IO.Path.Combine(ProjectRoot, "PhotoReview.App", fileName);
+        System.IO.Path.Combine(ProjectRoot, "src", "PhotoReview.App", fileName);
 
     private static readonly Dictionary<string, string> Cache = new(StringComparer.OrdinalIgnoreCase);
 

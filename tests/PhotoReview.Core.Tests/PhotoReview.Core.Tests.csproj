@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -21,12 +21,12 @@ Xem [cơ chế load ảnh, bất biến an toàn và hướng dẫn benchmark](o
 
 ```powershell
 dotnet build PhotoReview.slnx -c Release
-dotnet run --project PhotoReview.Tests -c Release
-dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish
-.\tools\verify-release.ps1 -ReleaseDirectory 'PhotoReview.App/bin/Release/net10.0-windows/publish'
+dotnet run --project tests/PhotoReview.Tests -c Release
+dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
+.\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
-Artifact framework-dependent nằm tại `PhotoReview.App/bin/Release/net10.0-windows/publish`. Verification cho self-contained hoặc smoke/fault-injection dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
+Artifact framework-dependent nằm tại `src/PhotoReview.App/bin/Release/net10.0-windows/publish`. Verification cho self-contained hoặc smoke/fault-injection dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
 
 ## File association (tùy chọn)
 
