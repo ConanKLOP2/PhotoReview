@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Platform.Windows.Explorer;
 
 internal static class ExplorerComInterop
 {

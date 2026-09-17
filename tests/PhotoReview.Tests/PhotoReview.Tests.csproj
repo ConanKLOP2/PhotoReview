@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\src\PhotoReview.App\PhotoReview.App.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +20,7 @@
     <Using Include="PhotoReview.Core.Session" />
     <Using Include="PhotoReview.Imaging" />
     <Using Include="PhotoReview.Imaging.Preload" />
+    <Using Include="PhotoReview.Platform.Windows.Explorer" />
   </ItemGroup>
 
 </Project>
