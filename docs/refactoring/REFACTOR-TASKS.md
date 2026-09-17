@@ -113,7 +113,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T21b | `AppSettings` dùng enum + sửa caller | T21a, T23a | | | DONE |
 | T21c | `JournalEntry` dùng enum | T21a | | | DONE |
 | T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | DONE |
-| T25a | `SettingsStore` | T24 | | | TODO |
+| T25a | `SettingsStore` | T24 | | | DONE |
 | T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | TODO |
 | T26a | `OperationJournal` qua abstraction | T24 | ∥E | | TODO |
 | T26b | `SessionStore` qua abstraction | T24 | ∥E | | TODO |
@@ -509,7 +509,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   5. Validation (`ValidateShortcuts`) tạm giữ ở App trong `SettingsValidation.cs` vì còn dùng WPF `Key` (T25b sẽ chuyển).
 - **Kiểm thử:** INV-11, test chạy trên `InMemoryFileSystem` và không đụng `%LOCALAPPDATA%` thật.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Tách `AppSettings` thành POCO thuần túy cùng `ShortcutMappings`, `ReviewAction` và service `SettingsStore(IAppPaths, IFileSystem, ILog, onStartupError)` trong `PhotoReview.Core.Settings`. Bỏ side-effect khỏi store, chuyển sang event `Changed` để `App.xaml.cs` cập nhật `AppLog.Enabled`. Chuyển `LogStartupErrorForced` thành callback truyền từ App vào store. Tạo `SettingsValidation.cs` tạm giữ logic validation phím tắt WPF. Truyền instance `SettingsStore` từ `App.xaml.cs` vào `MainWindow` và `SettingsWindow`. Giữ token preservation trong `PhotoReview.App/AppSettings.cs`. Viết bộ unit tests toàn diện trong `PhotoReview.Core.Tests/Settings/SettingsStoreTests.cs` kiểm tra Invariant INV-11 (corrupt config backup `.corrupt-<ts>` + reset default; locked/inaccessible config dùng in-memory defaults không ghi đè disk) chạy trên `InMemoryFileSystem`. Toàn bộ 421 xUnit tests pass 100%, `verify-all.ps1` đạt PASS.
+    - **Review R1:** APPROVE. Đúng phạm vi file T25a, `AppSettings` POCO sạch, `SettingsStore` độc lập I/O trừu tượng qua `IFileSystem`/`IAppPaths`.
+    - **Review R2:** APPROVE. Test Invariant INV-11 chạy độc lập trên `InMemoryFileSystem` không chạm `%LOCALAPPDATA%`, release verification đạt PASS.
 
 ### T25b — Validator
 - **Files:** `{Core}/Settings/SettingsValidator.cs`, `{App}/Services/WpfKeyNameValidator.cs`, `{App}/SettingsValidation.cs` (xóa), caller, test.
