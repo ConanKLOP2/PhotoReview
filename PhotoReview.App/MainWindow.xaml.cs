@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Windows.Interop;
 using System.ComponentModel;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.App;
 

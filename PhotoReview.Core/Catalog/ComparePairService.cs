@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.RegularExpressions;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Core.Catalog;
 
 public static class ComparePairService
 {
