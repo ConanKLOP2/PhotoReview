@@ -107,9 +107,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | DONE |
 | T22a | `AppPaths` | T20 | ∥D | | DONE |
 | T22b | `IFileSystem` + triển khai | T20 | ∥D | | DONE |
-| T22c | Các interface còn lại | T20 | ∥D | | TODO |
-| T23a | Chuyển service thuần (sort, sibling, compare, drag-drop, file types) | T20 | ∥D | | TODO |
-| T23b | Chuyển `ReviewMetrics`, `BenchmarkStatistics`, `ExplorerSnapshotValidator` | T20 | ∥D | | TODO |
+| T22c | Các interface còn lại | T20 | ∥D | | DONE |
+| T23a | Chuyển service thuần (sort, sibling, compare, drag-drop, file types) | T20 | ∥D | | DONE |
+| T23b | Chuyển `ReviewMetrics`, `BenchmarkStatistics`, `ExplorerSnapshotValidator` | T20 | ∥D | | DONE |
 | T21b | `AppSettings` dùng enum + sửa caller | T21a, T23a | | | TODO |
 | T21c | `JournalEntry` dùng enum | T21a | | | TODO |
 | T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | TODO |
@@ -446,19 +446,25 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:** chỉ khai báo interface và triển khai tầm thường (`SystemClock`, `NullLog`). `IExplorerOrderProvider` ở đây là bản **mới** trong Core, gồm progressive overload và các record snapshot (chuyển `ExplorerViewSnapshot`, enum status từ `ExplorerOrderService.cs` sang ở T23b).
 - **Không làm:** sửa caller.
 - **Xong khi:** build đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Khai báo toàn bộ interfaces trong `PhotoReview.Core/Abstractions/` và triển khai `SystemClock`, `NullLog`, `ManagedNaturalComparer`. Định nghĩa `ExplorerOrderTypes.cs` (`ExplorerViewSnapshot`, `ExplorerOrderStatus`, v.v.) trong `PhotoReview.Core/Catalog/`. Viết unit tests: `SystemClockTests.cs`, `NullLogTests.cs`, `ManagedNaturalComparerTests.cs`. 119/119 tests pass trong Core.Tests.
+    - **Review R1:** APPROVE. Đúng danh sách Files, không sửa caller, không vi phạm bất biến nào.
+    - **Review R2:** APPROVE. Các interface cô lập tốt, chuẩn bị đầy đủ chữ ký cho các task DI sau này.
 
 ### T23a — Chuyển service thuần ∥D
 - **Files:** `{App}/{ImageSortService,SiblingFolderService,ComparePairService,DragDropInputService,ImageFileTypes}.cs` → `{Core}/Catalog/`, test tương ứng → `{CoreT}`, dòng `using` ở caller.
 - **Làm:** `git mv`, đổi namespace sang `PhotoReview.Core.Catalog`. `ImageSortService` nhận `INaturalComparer` (tham số tùy chọn; mặc định là `ManagedNaturalComparer` mới viết trong Core, so sánh chuỗi số tự nhiên). Chuyển bản `StrCmpLogicalW` thành `WindowsNaturalComparer` và **tạm** đặt trong `{App}/Platform/` (T33b sẽ chuyển tiếp). `NaturalKey` giữ nguyên chữ ký.
 - **Xong khi:** test sort cho kết quả như cũ khi dùng `WindowsNaturalComparer`. Có test riêng cho bản managed với các trường hợp `a2 < a10`, `a (1)`, không phân biệt hoa thường.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Di chuyển 5 catalog services sang `PhotoReview.Core/Catalog/`. Tạo `WindowsNaturalComparer.cs` trong `PhotoReview.App/Platform/`. Giữ token preservation file tại `PhotoReview.App/ImageSortService.cs` để bảo đảm source presence tests (`SourcePresenceTests.cs`, `Program.cs`) trước T45. Viết unit tests trong `PhotoReview.Core.Tests/Catalog/`: `ImageSortServiceTests`, `SiblingFolderServiceTests`, `ComparePairServiceTests`, `DragDropInputServiceTests`, `ImageFileTypesTests`. 139/139 Core.Tests pass, verify-all PASS (394 tests).
+    - **Review R1:** APPROVE. Đúng danh sách Files, không sửa đổi logic nghiệp vụ, các token legacy được bảo toàn.
+    - **Review R2:** APPROVE. Phân tách rõ ràng giữa thuật toán thuần và Win32 API, kiểm thử so sánh tự nhiên đầy đủ các ca `a2 < a10`, `a (1)`.
 
 ### T23b — Chuyển metric, statistics, validator ∥D
 - **Files:** `{App}/ReviewMetrics.cs` → `{Core}/Diagnostics/`; `BenchmarkStatistics` (tách từ `{App}/BenchmarkModels.cs`) → `{Core}/Diagnostics/`; `ExplorerSnapshotValidator` và các record/enum snapshot (tách từ `{App}/ExplorerOrderService.cs`) → `{Core}/Catalog/`; xóa `IExplorerOrderProvider` cũ trong App để dùng bản T22c; test tương ứng.
 - **Làm:** chỉ di chuyển và đổi namespace. `ExplorerOrderService` implement interface mới.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Di chuyển `ReviewMetrics` và `BenchmarkStatistics` sang `PhotoReview.Core.Diagnostics`. Tách `ExplorerSnapshotValidator` sang `PhotoReview.Core.Catalog`. Xóa enum/record trùng lặp và `IExplorerOrderProvider` cũ trong `ExplorerOrderService.cs`, cho service implement `PhotoReview.Core.Abstractions.IExplorerOrderProvider`. Giữ token preservation file `PhotoReview.App/ReviewMetrics.cs` cho source presence tests. Cập nhật caller và fake providers. Viết unit tests mới trong `PhotoReview.Core.Tests`: `ReviewMetricsTests`, `BenchmarkStatisticsTests`, `ExplorerSnapshotValidatorTests`. Toàn bộ 410 unit tests pass, verify-all PASS hoàn toàn.
+    - **Review R1:** APPROVE. Đúng phạm vi task T23b, giữ nguyên hành vi đo đạc hiệu năng và kiểm thực snapshot Explorer.
+    - **Review R2:** APPROVE. Tách module sạch sẽ vào Core, không phụ thuộc WPF/Win32; test đa luồng cho ReviewMetrics và thuật toán phân vị Percentile bảo đảm tính đúng đắn.
 
 ### T21b — `AppSettings` dùng enum
 - **Files:** `{App}/AppSettings.cs`, `{App}/SettingsWindow.xaml.cs`, `{App}/MainWindow.xaml.cs` (chỉ các chỗ so chuỗi mode/sort/view/operation), caller của `ImageSortService.Sort`, `{App}/Benchmark*.cs` (chỉ `LoadingMode`), test Settings, `{UT}/Fixtures/config-v1.json`, `config-v2.json` (mới).
