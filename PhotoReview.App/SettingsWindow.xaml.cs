@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Reflection;
 using System.Diagnostics;
 using System.IO;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -22,8 +23,8 @@ public partial class SettingsWindow : Window
         {
             Folder2Name = current.Folder2Name,
             InitialViewMode = current.InitialViewMode,
-            LoadingMode = AppSettings.NormalizeLoadingMode(current.LoadingMode),
-            ImageSortMode = AppSettings.NormalizeImageSortMode(current.ImageSortMode),
+            LoadingMode = current.LoadingMode,
+            ImageSortMode = current.ImageSortMode,
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
@@ -72,9 +73,9 @@ public partial class SettingsWindow : Window
         CompareText.Text = Settings.Shortcuts.Compare; NextFolderText.Text = Settings.Shortcuts.NextFolder; PreviousFolderText.Text = Settings.Shortcuts.PreviousFolder;
         FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit; SkipText.Text = Settings.Shortcuts.Skip; UndoText.Text = Settings.Shortcuts.Undo; FullscreenText.Text = Settings.Shortcuts.Fullscreen;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, new JsonSerializerOptions { WriteIndented = true });
-        ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { "100%" => 1, "200%" => 2, "400%" => 3, _ => 0 };
-        LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { "Preview" => 1, "Original" => 2, _ => 0 };
-        SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { "SizeAscending" => 1, "SizeDescending" => 2, _ => 0 };
+        ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
+        LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
+        SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
@@ -83,7 +84,7 @@ public partial class SettingsWindow : Window
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
         Settings.LoggingEnabled = false;
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = "Fit"; Settings.LoadingMode = "Preview"; Settings.ImageSortMode = "Name"; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -95,10 +96,9 @@ public partial class SettingsWindow : Window
             System.Windows.MessageBox.Show(this, "Folder không được trống; các phím phải hợp lệ và không được trùng nhau.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return;
         }
         Settings.Folder2Name = Folder2Text.Text.Trim();
-        Settings.InitialViewMode = (ViewModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Content?.ToString() ?? "Fit";
-        Settings.ImageSortMode = AppSettings.NormalizeImageSortMode(((System.Windows.Controls.ComboBoxItem)SortModeCombo.SelectedItem)?.Tag?.ToString());
-        var loadingItem = LoadingModeCombo.SelectedItem as System.Windows.Controls.ComboBoxItem;
-        Settings.LoadingMode = loadingItem?.Tag?.ToString() ?? loadingItem?.Content?.ToString() ?? "Fast";
+        Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
+        Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
+        Settings.LoadingMode = LoadingModeCombo.SelectedIndex switch { 1 => LoadingMode.Preview, 2 => LoadingMode.Original, _ => LoadingMode.Fast };
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
@@ -111,7 +111,7 @@ public partial class SettingsWindow : Window
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
             if (Settings.Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) ||
                 !Enum.TryParse<Key>(action.Shortcut, true, out _) ||
-                !new[] { "Move", "Copy", "Recycle", "Delete" }.Contains(action.Operation, StringComparer.OrdinalIgnoreCase)))
+                !Enum.IsDefined(action.Operation)))
                 throw new JsonException("Action thiếu tên/phím tắt hoặc có Operation không hợp lệ.");
             if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
                 throw new JsonException("Các action không được trùng phím tắt.");

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -7,7 +8,7 @@ public enum BenchmarkWorkload { FirstFrame, Sequential, Random, WarmNext, Preloa
 public enum BenchmarkResultStatus { Pass, Warn, Fail, InsufficientData }
 
 public sealed record BenchmarkProfile(
-    string Id, string Name, string Description, string LoadingMode,
+    string Id, string Name, string Description, LoadingMode LoadingMode,
     int Workers, int NextWindow, int PreviousWindow, bool FullFolder,
     long MemoryReserveBytes, bool DiskCache, bool DetailedLogging,
     BenchmarkWorkload Workload, int WarmupCount = 1, int Iterations = 30,
@@ -31,7 +32,7 @@ public static class BenchmarkProfileValidation
     public static void Validate(BenchmarkProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        if (string.IsNullOrWhiteSpace(profile.Id) || string.IsNullOrWhiteSpace(profile.LoadingMode))
+        if (string.IsNullOrWhiteSpace(profile.Id) || !Enum.IsDefined(profile.LoadingMode))
             throw new ArgumentException("Profile id and loading mode are required");
         if (profile.Workers < 1 || profile.NextWindow < 0 || profile.PreviousWindow < 0 || profile.Iterations < 1)
             throw new ArgumentException($"Invalid benchmark settings for profile '{profile.Id}'");

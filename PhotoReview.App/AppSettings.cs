@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.IO;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -8,28 +9,27 @@ public sealed class AppSettings
     public const int CurrentConfigVersion = 2;
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
     public string Folder2Name { get; set; } = "Loai-2";
-    public string InitialViewMode { get; set; } = "Fit";
-    public string LoadingMode { get; set; } = "Preview";
+    public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
+    public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
     public bool LoggingEnabled { get; set; } = false;
-    public string ImageSortMode { get; set; } = "Name";
+    public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Name;
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
     public static string ConfigPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
 
-    public static AppSettings Load()
+    public static AppSettings Load(string? path = null)
     {
+        var filePath = path ?? ConfigPath;
         try
         {
-            if (File.Exists(ConfigPath))
+            if (File.Exists(filePath))
             {
-                var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(ConfigPath)) ?? new();
+                var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(filePath)) ?? new();
                 Migrate(loaded);
                 loaded.Shortcuts ??= ShortcutMappings.Default();
                 loaded.Actions ??= ReviewAction.Defaults();
-                loaded.LoadingMode = NormalizeLoadingMode(loaded.LoadingMode);
-                loaded.ImageSortMode = NormalizeImageSortMode(loaded.ImageSortMode);
                 if (ValidateShortcuts(loaded) is { } validationError)
                 {
                     AppLog.Error($"Config validation failed, resetting shortcuts/actions to defaults: {validationError}");
@@ -45,7 +45,7 @@ public sealed class AppSettings
             // The file deserialized to garbage or failed to parse: it really is corrupt, so
             // back it up and reset to defaults.
             LogStartupErrorForced("Corrupt config.json detected, resetting to defaults", ex);
-            try { File.Copy(ConfigPath, ConfigPath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), overwrite: false); } catch { }
+            try { File.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"), overwrite: false); } catch { }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -58,7 +58,10 @@ public sealed class AppSettings
             return new AppSettings();
         }
         var settings = new AppSettings();
-        Save(settings);
+        if (path is null)
+        {
+            Save(settings);
+        }
         return settings;
     }
 
@@ -92,42 +95,11 @@ public sealed class AppSettings
         if (settings.ConfigVersion < 2)
         {
             settings.Actions ??= ReviewAction.Defaults();
-            settings.ImageSortMode = NormalizeImageSortMode(settings.ImageSortMode);
             settings.ConfigVersion = CurrentConfigVersion;
         }
         settings.Actions ??= ReviewAction.Defaults();
         settings.Shortcuts ??= ShortcutMappings.Default();
     }
-
-    public static string NormalizeLoadingMode(string? value) =>
-        value?.ToUpperInvariant() switch
-        {
-            "ORIGINAL" => "Original",
-            "PREVIEW" => "Preview",
-            _ => "Fast"
-        };
-
-    public static bool IsValidLoadingMode(string? value) =>
-        string.Equals(value, "Fast", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "Preview", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "Original", StringComparison.OrdinalIgnoreCase);
-
-    public static string NormalizeImageSortMode(string? value) =>
-        value?.ToUpperInvariant() switch
-        {
-            "NAME" => "Name",
-            "SIZE" or "SIZEDESCENDING" => "SizeDescending",
-            "SIZEASCENDING" => "SizeAscending",
-            "PORTRAITFIRST" => "Name",
-            _ => "Name"
-        };
-
-    public static bool IsValidImageSortMode(string? value) =>
-        string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "Size", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "SizeAscending", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "SizeDescending", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "Name", StringComparison.OrdinalIgnoreCase);
 
     public static string? ValidateShortcuts(AppSettings settings)
     {
@@ -175,15 +147,15 @@ public sealed class ReviewAction
 {
     public string Name { get; set; } = "Loại 2";
     public string Shortcut { get; set; } = "Enter";
-    public string Operation { get; set; } = "Move";
+    public FileOperationType Operation { get; set; } = FileOperationType.Move;
     public string Destination { get; set; } = "Loai-2";
     public bool Confirm { get; set; }
 
     public static List<ReviewAction> Defaults() =>
     [
-        new() { Name = "Loại 2", Shortcut = "Enter", Operation = "Move", Destination = "Loai-2" },
-        new() { Name = "Loại 3", Shortcut = "F3", Operation = "Move", Destination = "Loai-3" },
-        new() { Name = "Loại 4", Shortcut = "F4", Operation = "Move", Destination = "Loai-4" },
-        new() { Name = "Backup", Shortcut = "F5", Operation = "Copy", Destination = "Backup" }
+        new() { Name = "Loại 2", Shortcut = "Enter", Operation = FileOperationType.Move, Destination = "Loai-2" },
+        new() { Name = "Loại 3", Shortcut = "F3", Operation = FileOperationType.Move, Destination = "Loai-3" },
+        new() { Name = "Loại 4", Shortcut = "F4", Operation = FileOperationType.Move, Destination = "Loai-4" },
+        new() { Name = "Backup", Shortcut = "F5", Operation = FileOperationType.Copy, Destination = "Backup" }
     ];
 }

@@ -1,0 +1,18 @@
+﻿{
+  "ConfigVersion": 2,
+  "Folder2Name": "Loai-2",
+  "InitialViewMode": "200%",
+  "LoadingMode": "Original",
+  "ImageSortMode": "SizeAscending",
+  "CompareHashEnabled": false,
+  "CompareSizeEnabled": true,
+  "Actions": [
+    {
+      "Name": "Loại 2",
+      "Shortcut": "Enter",
+      "Operation": "Delete",
+      "Destination": "Loai-2",
+      "Confirm": false
+    }
+  ]
+}

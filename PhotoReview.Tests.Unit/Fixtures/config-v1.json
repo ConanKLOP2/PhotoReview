@@ -1,0 +1,17 @@
+﻿{
+  "Folder2Name": "Loai-2",
+  "InitialViewMode": "Fit",
+  "LoadingMode": "preview",
+  "ImageSortMode": "Size",
+  "CompareHashEnabled": true,
+  "CompareSizeEnabled": true,
+  "Actions": [
+    {
+      "Name": "Loại 2",
+      "Shortcut": "Enter",
+      "Operation": "Move",
+      "Destination": "Loai-2",
+      "Confirm": false
+    }
+  ]
+}
