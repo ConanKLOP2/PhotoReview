@@ -3,24 +3,13 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.App;
 
-public enum ExplorerOrderStatus { Available, NoMatchingWindow, NativeViewUnavailable, InvalidSnapshot, TimedOut, Canceled, Failed }
-public enum ExplorerSortDirection { Unknown, Ascending, Descending }
-public enum ExplorerGroupState { None, Active, Unknown }
-public sealed record ExplorerSortColumn(Guid PropertySet, uint PropertyId, ExplorerSortDirection Direction);
-public sealed record ExplorerViewSnapshot(string Folder, IReadOnlyList<string> OrderedPaths, IReadOnlyList<ExplorerSortColumn> SortColumns,
-    ExplorerGroupState GroupState, ExplorerOrderStatus Status, string? Reason, DateTime CapturedUtc);
-
-public interface IExplorerOrderProvider
-{
-    Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken);
-}
-
 public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 {
-    public sealed record ExplorerQueryProgress(int ItemsRead, int ItemCount, int ComCalls);
 
     /// <summary>
     /// A single, long-lived STA thread that serializes all Explorer COM calls onto one OS thread.
@@ -258,28 +247,4 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     private static ExplorerViewSnapshot Unavailable(string folder, ExplorerOrderStatus status, string reason)
         => new(folder, [], [], ExplorerGroupState.Unknown, status, reason, DateTime.UtcNow);
     private static void Release(object? value) { if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
-}
-
-public static class ExplorerSnapshotValidator
-{
-    public static bool TryValidate(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)
-    {
-        ordered = []; reason = null;
-        if (snapshot.Status != ExplorerOrderStatus.Available) { reason = snapshot.Reason ?? snapshot.Status.ToString(); return false; }
-        var folder = CanonicalizeFolder(snapshot.Folder);
-        var expected = new HashSet<string>(scannedFiles.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
-        var result = new List<string>(expected.Count); var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var candidate in snapshot.OrderedPaths)
-        {
-            if (string.IsNullOrWhiteSpace(candidate)) { reason = "Native view returned an empty path"; return false; }
-            var path = Path.GetFullPath(candidate);
-            if (!SamePath(Path.GetDirectoryName(path) ?? string.Empty, folder)) { reason = "Native view returned an item outside the folder"; return false; }
-            if (!seen.Add(path)) { reason = "Native view returned a duplicate item"; return false; }
-            if (expected.Contains(path)) result.Add(path);
-        }
-        if (result.Count != expected.Count || !expected.SetEquals(result)) { reason = "Native view did not contain the complete image snapshot"; return false; }
-        ordered = result; return true;
-    }
-    public static string CanonicalizeFolder(string folder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
-    public static bool SamePath(string first, string second) => string.Equals(CanonicalizeFolder(first), CanonicalizeFolder(second), StringComparison.OrdinalIgnoreCase);
 }

@@ -11,6 +11,7 @@ using System.Windows.Interop;
 using System.ComponentModel;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App;
 
@@ -159,7 +160,7 @@ public partial class MainWindow : Window
             // very first preload pass can decide whether to queue the folder.
             var totalBytesTask = Task.Run(() => scannedFiles.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } }), loadToken);
             var lastExplorerProgressLog = 0;
-            var explorerProgress = new Progress<ExplorerOrderService.ExplorerQueryProgress>(p =>
+            var explorerProgress = new Progress<ExplorerQueryProgress>(p =>
             {
                 // Do not enqueue one log record per COM item; that turns the
                 // diagnostic path into another source of Explorer latency.
@@ -1237,7 +1238,7 @@ public partial class MainWindow : Window
 internal interface IProgressiveExplorerOrderProvider : IDisposable
 {
     Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerOrderService.ExplorerQueryProgress>? progress = null, int batchSize = 16);
+        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16);
 }
 
 /// <summary>Production provider: owns and forwards to the real <see cref="ExplorerOrderService"/>.</summary>
@@ -1246,7 +1247,7 @@ internal sealed class ExplorerOrderProviderAdapter : IProgressiveExplorerOrderPr
     private readonly ExplorerOrderService _service = new();
 
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerOrderService.ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
         => _service.TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken, progress, batchSize);
 
     public void Dispose() => _service.Dispose();

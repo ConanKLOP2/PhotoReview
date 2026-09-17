@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App;
 

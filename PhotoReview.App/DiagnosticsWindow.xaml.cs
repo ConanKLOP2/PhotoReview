@@ -1,4 +1,6 @@
 using System.Windows;
+using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App;
 

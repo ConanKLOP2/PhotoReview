@@ -1,10 +1,8 @@
 using System.IO;
 using PhotoReview.App;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
-using ExplorerViewSnapshot = PhotoReview.App.ExplorerViewSnapshot;
-using IExplorerOrderProvider = PhotoReview.App.IExplorerOrderProvider;
-using ExplorerGroupState = PhotoReview.App.ExplorerGroupState;
-using ExplorerOrderStatus = PhotoReview.App.ExplorerOrderStatus;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Tests.Unit;
 
@@ -297,6 +295,12 @@ public sealed class ExplorerSnapshotValidatorTests : IDisposable
     {
         public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout,
             CancellationToken cancellationToken) => Task.FromResult(snapshot);
+
+        public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
+            CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+            => Task.FromResult(snapshot);
+
+        public void Dispose() { }
     }
 }
 

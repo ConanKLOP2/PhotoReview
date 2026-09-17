@@ -1,4 +1,5 @@
 using PhotoReview.App;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Tests.Unit.Fakes;
 
@@ -49,7 +50,7 @@ internal sealed class FakeExplorerOrderProvider : IProgressiveExplorerOrderProvi
     public void Release() => _gate.TrySetResult();
 
     public async Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerOrderService.ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
     {
         Interlocked.Increment(ref _callCount);
         RequestedFolder = folder;
@@ -57,7 +58,7 @@ internal sealed class FakeExplorerOrderProvider : IProgressiveExplorerOrderProvi
             Task.Delay(_delay, cancellationToken),
             _gate.Task.WaitAsync(cancellationToken)).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        progress?.Report(new ExplorerOrderService.ExplorerQueryProgress(_orderedPaths.Length, _orderedPaths.Length, 1));
+        progress?.Report(new ExplorerQueryProgress(_orderedPaths.Length, _orderedPaths.Length, 1));
         // Written before the returned task completes, so a continuation that observes the result
         // always observes this flag as true.
         _hasReturned = true;

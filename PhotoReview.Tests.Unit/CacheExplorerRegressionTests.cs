@@ -1,6 +1,7 @@
 using System.IO;
 using PhotoReview.App;
 using PhotoReview.Core.Caching;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Tests.Unit;
 

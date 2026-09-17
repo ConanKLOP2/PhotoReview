@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.VisualBasic.FileIO;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App;
 
