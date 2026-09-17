@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d (nhóm song song ∥C đã hoàn tất 100%; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20 (Wave 2 mở màn với `PhotoReview.Core` & `PhotoReview.Core.Tests`; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,7 +58,7 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (làm được trên máy 2):** **T20** (tạo `PhotoReview.Core` và `PhotoReview.Core.Tests`, phụ thuộc nhóm T14b–d đã DONE). Sau đó đến nhóm ∥D (T21a, T22a–c, T23a–b).
+1. **Refactor (làm được trên máy 2):** nhóm song song ∥D (**T21a**, **T22a**, **T22b**, **T22c**, **T23a**, **T23b**) — các task trong nhóm ∥D đều phụ thuộc T20 (đã DONE). Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
 2. **D07 (ma trận đo, chỉ chạy trên máy 1): CHỜ NGƯỜI DÙNG quyết định** trước khi chạy:
    - Phạm vi: rút gọn khoảng 1 giờ, đầy đủ vài giờ, hoặc hoãn.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.

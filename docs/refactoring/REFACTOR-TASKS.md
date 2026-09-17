@@ -103,7 +103,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | DONE |
 | T14c | Test INV-5 | T14a | ∥C | | DONE |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | DONE |
-| T20 | Tạo Core + Core.Tests | T14b–d | | | TODO |
+| T20 | Tạo Core + Core.Tests | T14b–d | | | DONE |
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | TODO |
 | T22a | `AppPaths` | T20 | ∥D | | TODO |
 | T22b | `IFileSystem` + triển khai | T20 | ∥D | | TODO |
@@ -382,7 +382,12 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `PhotoReview.Core/PhotoReview.Core.csproj` (net10.0), `PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj`, `PhotoReview.slnx`, `PhotoReview.App/PhotoReview.App.csproj`, `PhotoReview.App/BoundedLruCache.cs` → `PhotoReview.Core/Caching/BoundedLruCache.cs`, các test LRU.
 - **Làm:** tạo project, thêm vào slnx, App tham chiếu Core. `git mv` `BoundedLruCache` sang namespace `PhotoReview.Core.Caching`. Thêm `using` ở caller. Chuyển test LRU sang Core.Tests.
 - **Xong khi:** Core build trên `net10.0`, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-17 · Gemini (Coordinator) · branch `refactor/T20-core-project` · commit `5d963e3` (merge `refactor/integration`).
+    - **Files:** `PhotoReview.Core/PhotoReview.Core.csproj` (net10.0), `PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj`, `PhotoReview.slnx`, `PhotoReview.App/PhotoReview.App.csproj`, `PhotoReview.Core/Caching/BoundedLruCache.cs` (git mv từ `PhotoReview.App`), `PhotoReview.Core.Tests/Caching/BoundedLruCacheTests.cs`, và các caller.
+    - **Thay đổi:** Khởi tạo project `PhotoReview.Core` target `net10.0` thuần (không phụ thuộc WPF/Windows desktop) và `PhotoReview.Core.Tests` target `net10.0`. Chuyển `BoundedLruCache` sang namespace `PhotoReview.Core.Caching`, thêm `ProjectReference` từ `PhotoReview.App` sang `PhotoReview.Core`, cập nhật `using` ở các caller. Chuyển class `BoundedLruCacheTests` từ `PhotoReview.Tests.Unit/ServiceBehaviorTests.cs` sang `PhotoReview.Core.Tests/Caching/BoundedLruCacheTests.cs`.
+    - **Kiểm thử:** `dotnet test PhotoReview.Core.Tests` đạt 3/3 test; `dotnet test PhotoReview.Tests.Unit` đạt 255/255 test; VERIFY `.\tools\verify-all.ps1` đạt toàn bộ gates, `PASS: all PhotoReview verification gates`.
+    - **Review R1:** APPROVE. Diff sạch, đúng danh sách Files, Core biên dịch hoàn toàn độc lập trên net10.0.
 
 ### T21a — Enum + converter ∥D
 - **Files:** `{Core}/Model/*.cs` (mới), `{CoreT}/Model/*Tests.cs` (mới).
