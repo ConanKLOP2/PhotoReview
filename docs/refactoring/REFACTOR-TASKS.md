@@ -111,7 +111,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T23a | Chuyển service thuần (sort, sibling, compare, drag-drop, file types) | T20 | ∥D | | DONE |
 | T23b | Chuyển `ReviewMetrics`, `BenchmarkStatistics`, `ExplorerSnapshotValidator` | T20 | ∥D | | DONE |
 | T21b | `AppSettings` dùng enum + sửa caller | T21a, T23a | | | DONE |
-| T21c | `JournalEntry` dùng enum | T21a | | | TODO |
+| T21c | `JournalEntry` dùng enum | T21a | | | DONE |
 | T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | TODO |
 | T25a | `SettingsStore` | T24 | | | TODO |
 | T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | TODO |
@@ -483,7 +483,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/OperationJournal.cs`, `{App}/RecoveryRetryService.cs`, `{App}/RecoveryWindow.xaml.cs`, `{App}/MainWindow.xaml.cs` (chỉ `new JournalEntry(...)`), test journal, `{UT}/Fixtures/operations-legacy.jsonl` (mới).
 - **Làm:** `JournalEntry.Type` là `FileOperationType`, `State` là `JournalState`, dùng converter. JSONL ghi ra **đúng chuỗi cũ** (`"Move"`, `"Copy"`, `"Recycle"`, `"Prepared"`…). Fixture cũ đọc được đầy đủ.
 - **Xong khi:** `OperationJournalTests` đạt, fixture đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Chuyển `JournalEntry.Type` sang `FileOperationType` và `JournalState` sang enum trong `PhotoReview.Core.Model`. Cập nhật `OperationJournal`, `RecoveryRetryService`, `RecoveryWindow` và các điểm ghi nhật ký trong `MainWindow`. Thêm fixture `PhotoReview.Tests.Unit/Fixtures/operations-legacy.jsonl` và unit test kiểm tra tính tương thích ngược khi đọc file log cũ (bao gồm alias `"Delete"` và chữ thường/chữ hoa). Đồng bộ các test case trong `OperationJournalTests`, `SourcePresenceTests` và `Program.cs`. Toàn bộ 414 xUnit tests pass, `verify-all.ps1` đạt PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T21c, không làm thay đổi hành vi ghi/đọc journal hay phá vỡ format JSONL.
+    - **Review R2:** APPROVE. Có fixture legacy chứng minh tính tương thích ngược khi khôi phục nhật ký cũ; các source presence tests và release publish đều hoàn tất thành công.
 
 ### T24 — Chuyển layout ⛔Q3
 - **Files:** toàn bộ thư mục project, `PhotoReview.slnx`, `tools/*.ps1`, `README.md`, `AGENTS.md` (lệnh và đường dẫn publish), `.github/workflows/ci.yml`, `docs/refactoring/*.md` (alias), `{UT}` (class `ProjectSources`, đường dẫn đọc source).
