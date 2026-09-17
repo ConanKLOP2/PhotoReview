@@ -135,7 +135,10 @@ public static class ProjectSources
     public static string RecoveryWindow => Read("RecoveryWindow.xaml.cs");
     public static string WindowPlacementService => Read("WindowPlacementService.cs");
     public static string ThumbnailCache => Read("ThumbnailCache.cs");
-    public static string OperationJournalSource => Read("OperationJournal.cs");
+    public static string OperationJournalSource =>
+        File.Exists(AppPath("OperationJournal.cs"))
+            ? Read("OperationJournal.cs")
+            : File.ReadAllText(System.IO.Path.Combine(ProjectRoot, "src", "PhotoReview.Core", "FileActions", "OperationJournal.cs"));
     public static string PreviewImageServiceSource => Read("PreviewImageService.cs");
     public static string DiagnosticsWindowXaml => Read("DiagnosticsWindow.xaml");
     public static string AppCsproj => Read("PhotoReview.App.csproj");

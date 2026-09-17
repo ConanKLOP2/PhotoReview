@@ -50,6 +50,7 @@ public sealed class OperationJournalTests : IDisposable
     public void JournalHasNoPendingCommittedMove() => Assert.Empty(_journal.ReadPendingOperations());
 
     [Fact(DisplayName = "Journal entries are durably written as JSONL")]
+    [Trait("Category", "Integration")]
     public void JournalEntriesAreDurablyWrittenAsJsonl()
     {
         var journalFile = JournalFile;
@@ -66,6 +67,7 @@ public sealed class OperationJournalTests : IDisposable
     }
 
     [Fact(DisplayName = "Journal concurrent append/read remains line-consistent")]
+    [Trait("Category", "Integration")]
     public void JournalConcurrentAppendReadRemainsLineConsistent()
     {
         Parallel.For(0, 8, i => _journal.Append(new JournalEntry($"parallel-{i}", FileOperationType.Move, JournalState.Committed,

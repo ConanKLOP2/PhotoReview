@@ -26,6 +26,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="PhotoReview.Core.Settings" />
+    <Using Include="PhotoReview.Core.FileActions" />
   </ItemGroup>
 
   <ItemGroup>
