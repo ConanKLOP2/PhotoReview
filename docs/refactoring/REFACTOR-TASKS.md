@@ -598,7 +598,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Test dùng `ImmediateUiScheduler` (`Task.Yield`) và `FakeMemoryProbe`.
 - **Lỗi phải sửa kèm (phát hiện ở D10):** `Dispatcher.Yield()` ném exception khi thread hiện tại không có Dispatcher (benchmark CLI, continuation trên thread pool); exception bị `catch (Exception)` nuốt nên preload dừng sau lô đầu. Sau khi đổi sang `IUiScheduler`, thêm test: preload > `WorkerCount` ảnh không có Dispatcher vẫn nạp đủ; kiểm lại `BenchmarkImageExecutor.WarmPreloadAround`.
 - **Xong khi:** test preload chạy không cần Dispatcher.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Chuyển `PreloadScheduler` sang `PhotoReview.Imaging.Preload`, loại bỏ hoàn toàn phụ thuộc vào WPF `Dispatcher` bằng cách sử dụng `IUiScheduler.YieldAsync()`. Triển khai `DispatcherUiScheduler` trong `PhotoReview.App.Services` và `ImmediateUiScheduler` trong `PhotoReview.Core.Abstractions`. Cập nhật `IMemoryProbe` (`HasHeadroom`, `GetSnapshot`) và cho `PhysicalMemory` triển khai interface này. Tạo `PreloadOptions` và `IPreloadTarget`. Sửa dứt điểm lỗi D10 (preload bị ngắt khi không có Dispatcher thread trong test/benchmark) và bổ sung test `PreloadWithoutDispatcherContinuesBeyondFirstBatchAndLoadsAllFiles`. Toàn bộ 464 tests PASS, `verify-all.ps1` đạt PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi T32, tách Dispatcher và IMemoryProbe sạch sẽ, không còn WPF Dispatcher leak trong `PreloadScheduler`.
+    - **Review R2:** APPROVE. Đã giải quyết triệt để lỗi D10, tất cả verification gates PASS.
 
 ### T33a — Explorer sang Platform ∥F
 - **Files:** `{App}/ExplorerOrderService.cs`, `{App}/ExplorerComInterop.cs` → `{Platform}/Explorer/`, caller, test Explorer → `{IntT}` (Trait Integration/Manual).

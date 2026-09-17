@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, **T31b** (Wave 1, Wave 2, T30, T31a và T31b đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, T31b, **T32** (Wave 1, Wave 2, T30, T31a, T31b, T32 đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -59,7 +59,6 @@
 ## Việc tiếp theo
 
 1. **Refactor (Wave 3 tiếp tục — Nhóm song song ∥F):**
-   - **T32:** Preload bỏ Dispatcher.
    - **T33a:** Explorer sang Platform.
    - **T33b:** RecycleBin, Memory, Lock, Comparer sang Platform.
    - **T31c:** `IDecodedImage` (K-1).
