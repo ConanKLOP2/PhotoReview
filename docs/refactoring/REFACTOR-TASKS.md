@@ -553,7 +553,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `src/PhotoReview.Imaging/*.csproj` (UseWPF), `src/PhotoReview.Platform.Windows/*.csproj`, `tests/PhotoReview.Imaging.Tests/*.csproj`, `tests/PhotoReview.Integration.Tests/*.csproj`, slnx, reference; `ImageCacheKey.cs`, `AdaptivePreviewPolicy.cs`, `PreloadOrderService.cs` → `{Imaging}`, test tương ứng → `{ImgT}`.
 - **Làm:** tạo project, di chuyển 3 file mẫu và đổi namespace sang `PhotoReview.Imaging`.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Khởi tạo thành công 4 projects mới theo đúng kiến trúc Wave 3: `PhotoReview.Imaging` (UseWPF), `PhotoReview.Platform.Windows` (UseWPF, UseWindowsForms), `PhotoReview.Imaging.Tests` (xUnit), `PhotoReview.Integration.Tests` (xUnit). Cập nhật `PhotoReview.slnx` quản lý toàn bộ 9 projects. Di chuyển 3 file mẫu (`ImageCacheKey.cs`, `AdaptivePreviewPolicy.cs`, `PreloadOrderService.cs`) sang `PhotoReview.Imaging` với namespace chuẩn `PhotoReview.Imaging`. Di chuyển bộ test `ImageCacheKeyTests.cs` sang `PhotoReview.Imaging.Tests` và bổ sung `AdaptivePreviewPolicyTests.cs`, `PreloadOrderServiceTests.cs`. Cập nhật reference và global usings trong `PhotoReview.App.csproj`, `PhotoReview.Tests.Unit.csproj`, `PhotoReview.Tests.csproj`. Cập nhật `tools/verify-all.ps1` và `.github/workflows/ci.yml` chạy tự động toàn bộ 4 test suites. Toàn bộ 457 xUnit tests PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T30, 4 project mới sạch, cấu hình csproj và slnx chuẩn.
+    - **Review R2:** APPROVE. 3 file mẫu và tests chạy độc lập trong `PhotoReview.Imaging`, toàn bộ verification gates PASS.
 
 ### T31a — `DiskCacheStore` instance ∥F
 - **Files:** `{App}/DiskCacheStore.cs` → `{Imaging}/Caching/DiskCacheStore.cs`, `ThumbnailCache.cs` và `PreviewImageService.cs` (chỉ cách dùng store), test.

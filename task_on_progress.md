@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 452/452 (Core: 194/194, Tests.Unit: 258/258)
+- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 457/457 (Core: 194, Imaging: 10, Integration: 1, Tests.Unit: 252)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT TRỌN VẸN WAVE 1 VÀ WAVE 2**. Chuẩn bị bước vào **Wave 3 (Imaging và Platform)**.
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2 VÀ TASK T30**. Đang thực hiện Wave 3 (Nhóm song song ∥F).
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, **T26c** (Toàn bộ Wave 1 và Wave 2 đã hoàn tất 100%; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, **T30** (Wave 1, Wave 2 và mở đầu Wave 3 đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,11 +58,13 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (Bắt đầu Wave 3 — Imaging và Platform):**
-   - **T30:** Tạo 4 project (`PhotoReview.Imaging`, `PhotoReview.Platform.Windows`, `PhotoReview.Imaging.Tests`, `PhotoReview.Integration.Tests`), cập nhật `PhotoReview.slnx` và chuyển 3 file mẫu (`ImageCacheKey`, `AdaptivePreviewPolicy`, `PreloadOrderService`).
-   - **T31a:** `DiskCacheStore` instance ∥F.
-   - **T31b:** `IImageDecoder` + backend Wpf ∥F.
-   - **T32:** Preload bỏ Dispatcher ∥F.
+1. **Refactor (Wave 3 tiếp tục — Nhóm song song ∥F):**
+   - **T31a:** `DiskCacheStore` instance.
+   - **T31b:** `IImageDecoder` + backend Wpf.
+   - **T32:** Preload bỏ Dispatcher.
+   - **T33a:** Explorer sang Platform.
+   - **T33b:** RecycleBin, Memory, Lock, Comparer sang Platform.
+   - **T31c:** `IDecodedImage` (K-1).
    - **T33a:** Explorer sang Platform ∥F.
    - **T33b:** RecycleBin, Memory, Lock, Comparer sang Platform ∥F.
    - **T31c:** `IDecodedImage` (K-1).
