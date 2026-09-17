@@ -517,7 +517,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{Core}/Settings/SettingsValidator.cs`, `{App}/Services/WpfKeyNameValidator.cs`, `{App}/SettingsValidation.cs` (xóa), caller, test.
 - **Làm:** `SettingsValidator(IKeyNameValidator)` giữ đúng logic và thông báo tiếng Việt, bỏ qua `MoveToFolder2`. `WpfKeyNameValidator` dùng `Enum.TryParse<Key>`. Core.Tests dùng fake validator có danh sách phím.
 - **Xong khi:** test xung đột phím đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Tách `SettingsValidator` sang `PhotoReview.Core.Settings` với abstraction `IKeyNameValidator` (`PhotoReview.Core.Abstractions`). Triển khai `WpfKeyNameValidator` trong `PhotoReview.App.Services` dựa trên `System.Windows.Input.Key`. Xóa bỏ `PhotoReview.App/SettingsValidation.cs`. Cập nhật `App.xaml.cs` khởi tạo hook qua `WpfKeyNameValidator.WireUp()`. Cung cấp fallback validator trong `AppSettings.ValidateShortcuts`. Tạo bộ unit tests `SettingsValidatorTests` trong `PhotoReview.Core.Tests` kiểm tra: default hợp lệ, key không hợp lệ, action không hợp lệ, phát hiện xung đột trùng lặp phím giữa shortcut và action. Toàn bộ 430 xUnit tests PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T25b, `IKeyNameValidator` sạch, không còn phụ thuộc WPF trong `SettingsValidator`.
+    - **Review R2:** APPROVE. Tất cả test xung đột phím, fallback validator và smoke/release checks PASS 100%.
 
 ### T26a — Journal qua abstraction ∥E
 - **Files:** `{App}/OperationJournal.cs` → `{Core}/FileActions/OperationJournal.cs`, caller, test.

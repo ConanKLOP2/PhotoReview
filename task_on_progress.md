@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 421/421 (Core: 163/163, Tests.Unit: 258/258)
+- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 430/430 (Core: 172/172, Tests.Unit: 258/258)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 3: Đã hoàn tất **T25a** (Tách `AppSettings` POCO và `SettingsStore`). Sẵn sàng cho **T25b** (`SettingsValidator` + `IKeyNameValidator`).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 2: Đã hoàn tất **T25a** và **T25b**. Đang thực hiện **T26a** (`OperationJournal` qua abstraction) và **T26b** (`SessionStore` qua abstraction).
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, **T25a** (Hoàn tất Wave 1, Wave 2 và bước đầu Wave 3; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, **T25b** (Hoàn tất Wave 1, Wave 2 và bước đầu Wave 3; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,9 +58,10 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (Wave 3 tiếp tục):**
-   - **T25b:** `SettingsValidator` + `IKeyNameValidator` (chuyển logic validation phím tắt sang Core với abstraction phím bấm).
-   - **T26a, T26b, T26c:** `OperationJournal`, `SessionStore`, `RecoveryRetryService` qua abstraction.
+1. **Refactor (Wave 2 tiếp tục):**
+   - **T26a:** `OperationJournal` qua abstraction.
+   - **T26b:** `SessionStore` qua abstraction.
+   - **T26c:** `RecoveryRetryService` instance.
 2. **D07 (ma trận đo trên máy 1):** Đã sẵn sàng trên máy chính (đầy đủ fixture F1..F4 và công cụ đo). Chờ người dùng quyết định:
    - Phạm vi: rút gọn (khoảng 1 giờ), đầy đủ (vài giờ), hoặc tiếp tục refactor trước rồi đo sau.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.
