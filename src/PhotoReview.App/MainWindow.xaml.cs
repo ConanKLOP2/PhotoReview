@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
     private readonly OperationJournal _journal = new();
+    private readonly RecoveryRetryService _recoveryRetryService;
     private readonly SessionStore _sessionStore = new();
     private readonly ThumbnailCache _thumbnailCache = new(persistNewThumbnails: false);
     private SessionState? _session;
@@ -83,6 +84,7 @@ public partial class MainWindow : Window
         };
         _hooks = hooks;
         _explorerOrder = hooks?.Explorer ?? new ExplorerOrderProviderAdapter();
+        _recoveryRetryService = new RecoveryRetryService(_journal, new PhotoReview.Core.IO.PhysicalFileSystem(), new PhotoReview.Core.Abstractions.SystemClock());
         InitializeComponent();
         DpiChanged += MainWindow_DpiChanged;
         _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes);
@@ -653,7 +655,7 @@ public partial class MainWindow : Window
     private void Recovery_Click(object sender, RoutedEventArgs e)
     {
         var entries = _journal.ReadPendingOperations().Concat(_journal.ReadFailedOperations()).ToList();
-        var dialog = new RecoveryWindow(entries, entry => RecoveryRetryService.RetryMoveOrCopy(entry, _journal)) { Owner = this };
+        var dialog = new RecoveryWindow(entries, _recoveryRetryService.RetryMoveOrCopy) { Owner = this };
         dialog.ShowDialog();
     }
 
