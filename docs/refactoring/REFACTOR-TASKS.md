@@ -117,9 +117,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | TODO |
 | T26a | `OperationJournal` qua abstraction | T24 | ∥E | | TODO |
 | T26b | `SessionStore` qua abstraction | T24 | ∥E | | TODO |
-| T26c | `RecoveryRetryService` thành instance | T26a | | | TODO |
-| T30 | Tạo Imaging, Platform, Imaging.Tests, Integration.Tests | T25b, T26b, T26c | | | TODO |
-| T31a | `DiskCacheStore` thành instance | T30 | ∥F | | TODO |
+| T26c | `RecoveryRetryService` thành instance | T26a | | | DONE |
+| T30 | Tạo Imaging, Platform, Imaging.Tests, Integration.Tests | T25b, T26b, T26c | | | DONE |
+| T31a | `DiskCacheStore` thành instance | T30 | ∥F | | DONE |
 | T31b | `IImageDecoder` + `WpfBitmapImageDecoder` | T30 | ∥F | | TODO |
 | T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | TODO |
 | T33a | Chuyển Explorer sang Platform | T30 | ∥F | | TODO |
@@ -562,7 +562,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:** `new DiskCacheStore(directory, pattern, maxBytes, ILog)`. Coalesce prune trở thành field instance. Giữ `WriteAtomicallyAsync`, `SchedulePrune`, `WaitForPruneAsync`, `ClearDirectory`, `TryDelete`. Hàm tĩnh thuần có thể giữ static.
 - **Bổ sung (từ review T13b):** thêm test "eviction ở chế độ downscaled buộc đọc lại nguồn hoặc disk cache", dùng thư mục cache riêng, chờ `ShutdownPersistWorkersAsync`, rồi xóa file disk cache trước request thứ 2, để bao phủ lại đường downscaled mà T13b đã chuyển sang chế độ Original.
 - **Xong khi:** `DiskCacheStoreTests` đạt, chỉ sửa phần tạo đối tượng.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Chuyển `DiskCacheStore` thành instance class tại `src/PhotoReview.Imaging/Caching/DiskCacheStore.cs`. Coalesce prune (`_pruneScheduled`, `_prunePending`) chuyển thành các trường instance per-store. Cập nhật `ThumbnailCache` và `PreviewImageService` khởi tạo `DiskCacheStore` instance và expose `DiskStore` / `WaitForPruneAsync`. Bổ sung test "eviction ở chế độ downscaled buộc đọc lại nguồn hoặc disk cache" (`EvictionInDownscaledModeForcesFreshSourceReadWhenDiskCacheCleared`) vào `PreviewImageServiceTests`. Thêm các bài test cho phương thức instance trong `DiskCacheStoreTests`. Toàn bộ 460 xUnit tests PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T31a, coalesce prune trên instance chính xác, không race condition.
+    - **Review R2:** APPROVE. Đã bao phủ test downscaled eviction từ review T13b, toàn bộ verification gates PASS.
 
 ### T31b — `IImageDecoder` + backend Wpf ∥F
 - **Files:** `{Imaging}/Decoding/{IImageDecoder,DecodeRequest,ImageInfo,WpfBitmapImageDecoder}.cs` (mới), `{App}/PreviewImageService.cs` (dùng decoder), test.
