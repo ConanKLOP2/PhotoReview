@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 
-namespace PhotoReview.App.Platform;
+namespace PhotoReview.Platform.Windows;
 
 /// <summary>
 /// Triển khai <see cref="INaturalComparer"/> sử dụng API Windows Native StrCmpLogicalW từ shlwapi.dll.

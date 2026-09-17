@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.IO;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Platform.Windows;
 
 public sealed class InstanceLock : IDisposable
 {

@@ -4,16 +4,16 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Text.Json;
 using Forms = System.Windows.Forms;
-using Microsoft.VisualBasic.FileIO;
-using System.Security.Cryptography;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows.Interop;
-using System.ComponentModel;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
+using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.App;
 
@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     // Explorer snapshot source. The default value is still a real ExplorerOrderService
     // (see the constructor). T22c/T23b replace this with a Core-layer interface.
     private readonly IProgressiveExplorerOrderProvider _explorerOrder;
+    private readonly IRecycleBin _recycleBin;
     private readonly MainWindowTestHooks? _hooks;
     private CancellationTokenSource _folderLoadCts = new();
     private long _folderGeneration;
@@ -84,6 +85,7 @@ public partial class MainWindow : Window
         };
         _hooks = hooks;
         _explorerOrder = hooks?.Explorer ?? new ExplorerOrderProviderAdapter();
+        _recycleBin = hooks?.RecycleBin ?? WindowsRecycleBin.Instance;
         _recoveryRetryService = new RecoveryRetryService(_journal, new PhotoReview.Core.IO.PhysicalFileSystem(), new PhotoReview.Core.Abstractions.SystemClock());
         InitializeComponent();
         DpiChanged += MainWindow_DpiChanged;
@@ -772,7 +774,7 @@ public partial class MainWindow : Window
                 _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Prepared, path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 try
                 {
-                    await Task.Run(() => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
+                    await Task.Run(() => _recycleBin.SendToRecycleBin(path));
                     _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Committed, path, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                     succeeded++;
                 }
@@ -960,7 +962,7 @@ public partial class MainWindow : Window
             {
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Prepared, source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                await Task.Run(() => FileSystem.DeleteFile(source, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
+                await Task.Run(() => _recycleBin.SendToRecycleBin(source));
                 AppLog.Info($"FileAction recycle-complete source={source}");
                 _journal.Append(new JournalEntry(operationId, FileOperationType.Recycle, JournalState.Committed, source, null, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
                 undoOperation = "RecycleBin";
@@ -1204,7 +1206,7 @@ public partial class MainWindow : Window
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
         try
         {
-            var restored = await Task.Run(() => RecycleBinRestoreService.TryRestore(action.Source, action.Size, action.LastWriteUtc));
+            var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc));
             if (!restored)
             {
                 StatusText.Text = $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}";
@@ -1275,6 +1277,9 @@ internal sealed class MainWindowTestHooks
 {
     /// <summary>Substitute Explorer snapshot source (INV-7, INV-9).</summary>
     public IProgressiveExplorerOrderProvider? Explorer { get; init; }
+
+    /// <summary>Substitute Recycle Bin handler.</summary>
+    public IRecycleBin? RecycleBin { get; init; }
 
     /// <summary>Raised with the path that just became the displayed image.</summary>
     public Action<string>? OnPresented { get; init; }

@@ -261,8 +261,8 @@ public sealed class SourcePresenceTests
 
     [Fact(DisplayName = "Delete Undo restores through Recycle Bin Shell (source presence: restoring needs the real Recycle Bin)")]
     public void DeleteUndoRestoresThroughRecycleBinShell() =>
-        Assert.True(File.Exists(ProjectSources.AppPath("RecycleBinRestoreService.cs"))
-            && MainWindow.Contains("RecycleBinRestoreService.TryRestore"));
+        Assert.True(File.Exists(Path.Combine(ProjectSources.ProjectRoot, "src", "PhotoReview.Platform.Windows", "WindowsRecycleBin.cs"))
+            && (MainWindow.Contains("_recycleBin.TryRestore") || MainWindow.Contains("WindowsRecycleBin")));
 
     [Fact(DisplayName = "Primary controls expose accessible names (source presence, not behavior)")]
     public void PrimaryControlsExposeAccessibleNames() =>
