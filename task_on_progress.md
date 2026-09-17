@@ -1,6 +1,6 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-17 (phiên bị dừng sớm để tránh hết token — xem mục "DỪNG GIỮA CHỪNG" ngay dưới đây trước khi làm gì khác) | **Branch làm việc:** `refactor/integration` (đã push lên `origin` — sẽ ghi commit chính xác ở cuối mục dừng, sau khi commit xong phần ghi chú này) · VERIFY đạt, xUnit 256/256
+- **Cập nhật:** 2026-09-17 (phiên bị dừng sớm để tránh hết token — xem mục "DỪNG GIỮA CHỪNG" ngay dưới đây trước khi làm gì khác) | **Branch làm việc:** `refactor/integration` @ `a4bbfa9` (đã push lên `origin`) · VERIFY đạt, xUnit 256/256
 - **Mục tiêu:** tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`). Nhánh chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`) đang **chờ máy 1** (D07+); đã chuyển sang làm tiếp nhánh refactor trên máy 2.
 - **Máy 2 (VTI):** không dùng để đo hiệu năng được (không có fixture ảnh thật, RAM 15.58 GB). Đã ghi thông số vào `docs/refactoring/diagnosis/env.md` mục "Máy 2". `verify-all.ps1` chạy tốt trên máy này nên vẫn dùng để làm tiếp refactor track.
 
