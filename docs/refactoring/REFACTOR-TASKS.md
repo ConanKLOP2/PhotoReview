@@ -101,7 +101,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | DONE |
 | T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | DONE |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | DONE |
-| T14c | Test INV-5 | T14a | ∥C | | IN PROGRESS |
+| T14c | Test INV-5 | T14a | ∥C | | DONE |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | DONE |
 | T20 | Tạo Core + Core.Tests | T14b–d | | | TODO |
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | TODO |
@@ -344,7 +344,14 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Ghi chú từ T14a:** dùng `DataRootFixture` (xem ghi chú T14b).
 - **Làm:** `MoveOverride` chờ. Trong lúc chờ, mở folder B. Sau đó cho Move hoàn tất. Assert: catalog của B không đổi, và Ctrl+Z không đụng file (không có undo entry).
 - **Xong khi:** đạt 10/10 lần.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-17 · Gemini (Coordinator) · branch `refactor/T14c-inv5` · commit `87e2626` (merge `refactor/integration`).
+    - **Files:** `PhotoReview.Tests.Unit/MainWindowBehaviorTests.FolderSwitch.cs` (mới, 330 dòng). Class `MainWindowBehaviorFolderSwitchTests`.
+    - **Cơ chế:** Kích hoạt Move cho `a1.png` qua PreviewKeyDownEvent; `MoveOverride` dừng chờ trên `TaskCompletionSource` (gate). Trong lúc Move đang chờ, gọi `LoadFolderAsync` để chuyển sang Folder B (`b1.png`, `b2.png`). Khi Folder B đã nạp và present `b1.png`, mở gate cho Move hoàn tất trên đĩa.
+    - **INV-5:** Guard `folderGeneration != _folderGeneration` trong `ExecuteActionAsync` phát hiện folder đã đổi, ghi log bỏ qua, không ghi vào `_moveHistory`, không gán `_lastUndoAction`, catalog của Folder B giữ nguyên 2 file `b1.png`, `b2.png`. Khi gọi `TriggerUndoAsync`, không có file nào bị di chuyển hay ảnh hưởng.
+    - **Test đối chứng (control):** Move trong cùng folder không đổi folder ghi nhận `_moveHistory.Count == 1` và `_lastUndoAction != null`; gọi `TriggerUndoAsync` hoàn tác thành công chuyển file về và khôi phục catalog -> chứng minh assertion INV-5 không pass rỗng.
+    - **Kiểm thử:** Suite 2 test chạy 10/10 lần liên tiếp đạt; VERIFY sau merge: xUnit 258/258, `PASS: all PhotoReview verification gates`.
+    - **Review R3:** APPROVE. Checklist 7 tiêu chí đạt đầy đủ.
 
 ### T14d — INV-7, INV-9 ∥C
 - **Files:** `{UT}/MainWindowBehaviorTests.Explorer.cs` (mới), `{UT}/Fakes/FakeExplorerOrderProvider.cs` (mới).
