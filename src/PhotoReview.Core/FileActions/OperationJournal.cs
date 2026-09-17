@@ -1,34 +1,76 @@
-using System.Text.Json;
 using System.IO;
 using System.Text;
+using System.Text.Json;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Core.FileActions;
 
-public sealed record JournalEntry(string Id, FileOperationType Type, JournalState State, string Source, string? Destination, long Size, DateTime LastWriteUtc, DateTime TimestampUtc, string? Error = null);
+public sealed record JournalEntry(
+    string Id,
+    FileOperationType Type,
+    JournalState State,
+    string Source,
+    string? Destination,
+    long Size,
+    DateTime LastWriteUtc,
+    DateTime TimestampUtc,
+    string? Error = null);
 
 public sealed class OperationJournal
 {
-    private readonly string _path = Path.Combine(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "Data"), "operations.jsonl");
+    private readonly string _path;
+    private readonly IFileSystem _fileSystem;
+    private readonly IClock _clock;
     private readonly object _gate = new();
+
+    public OperationJournal()
+        : this(PhotoReview.Core.AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock())
+    {
+    }
+
+    public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _path = paths.JournalFile;
+    }
 
     public void Append(JournalEntry entry)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         lock (_gate)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            var dir = Path.GetDirectoryName(_path);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                _fileSystem.CreateDirectory(dir);
+            }
             var line = JsonSerializer.Serialize(entry) + Environment.NewLine;
-            using var stream = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.Read, 4096, FileOptions.WriteThrough);
+            using var stream = _fileSystem.OpenAppendDurable(_path);
             var bytes = Encoding.UTF8.GetBytes(line);
             stream.Write(bytes, 0, bytes.Length);
-            stream.Flush(flushToDisk: true);
+            if (stream is FileStream fs)
+            {
+                fs.Flush(flushToDisk: true);
+            }
+            else
+            {
+                stream.Flush();
+            }
         }
     }
 
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
         var entries = new List<JournalEntry>();
-        ReadEntries(entry => { if (entry.Type == FileOperationType.Move && entry.State == JournalState.Committed) entries.Add(entry); });
+        ReadEntries(entry =>
+        {
+            if (entry.Type == FileOperationType.Move && entry.State == JournalState.Committed)
+                entries.Add(entry);
+        });
         return entries;
     }
 
@@ -54,8 +96,8 @@ public sealed class OperationJournal
     {
         lock (_gate)
         {
-            if (!File.Exists(_path)) return;
-            using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.SequentialScan);
+            if (!_fileSystem.FileExists(_path)) return;
+            using var stream = _fileSystem.OpenReadShared(_path, 64 * 1024);
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             while (reader.ReadLine() is { } line)
             {
@@ -76,16 +118,17 @@ public sealed class OperationJournal
         {
             if (pending.Type == FileOperationType.Recycle)
             {
-                var state = File.Exists(pending.Source) ? JournalState.Failed : JournalState.Committed;
+                var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
                 var error = state == JournalState.Failed ? "Nguồn vẫn tồn tại sau khi khôi phục phiên." : null;
-                var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
-                Append(entry); reconciled.Add(entry);
+                var entry = pending with { State = state, TimestampUtc = _clock.UtcNow, Error = error };
+                Append(entry);
+                reconciled.Add(entry);
             }
             else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
             {
-                var sourceExists = File.Exists(pending.Source);
-                var destinationExists = pending.Destination is not null && File.Exists(pending.Destination);
-                var destinationMatches = destinationExists && new FileInfo(pending.Destination!).Length == pending.Size;
+                var sourceExists = _fileSystem.FileExists(pending.Source);
+                var destinationStat = pending.Destination is not null ? _fileSystem.GetFileStat(pending.Destination) : null;
+                var destinationMatches = destinationStat is not null && destinationStat.Length == pending.Size;
                 // Move must have removed the source to count as done; Copy is expected
                 // to leave the source in place, so requiring its absence would reconcile
                 // every genuinely-successful pending Copy as Failed.
@@ -93,8 +136,9 @@ public sealed class OperationJournal
                     ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
                     : (destinationMatches ? JournalState.Committed : JournalState.Failed);
                 var error = state == JournalState.Failed ? "Không thể xác nhận operation pending; không tự động replay." : null;
-                var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
-                Append(entry); reconciled.Add(entry);
+                var entry = pending with { State = state, TimestampUtc = _clock.UtcNow, Error = error };
+                Append(entry);
+                reconciled.Add(entry);
             }
         }
         return reconciled;

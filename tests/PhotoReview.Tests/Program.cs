@@ -646,7 +646,10 @@ static void FlushAppLog()
 static bool operationJournalTextContainsFailed()
 {
     var projectRoot = ResolveProjectRoot();
-    return File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "OperationJournal.cs")).Contains("ReadFailedOperations", StringComparison.Ordinal);
+    var appPath = Path.Combine(projectRoot, "src", "PhotoReview.App", "OperationJournal.cs");
+    var corePath = Path.Combine(projectRoot, "src", "PhotoReview.Core", "FileActions", "OperationJournal.cs");
+    var path = File.Exists(appPath) ? appPath : corePath;
+    return File.ReadAllText(path).Contains("ReadFailedOperations", StringComparison.Ordinal);
 }
 
 sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplorerOrderProvider
