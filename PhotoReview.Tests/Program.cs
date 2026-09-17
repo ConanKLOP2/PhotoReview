@@ -1,8 +1,13 @@
 using PhotoReview.App;
 using PhotoReview.Core.Caching;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Tests;
 using System.IO;
 using System.Windows.Media;
+using ExplorerViewSnapshot = PhotoReview.App.ExplorerViewSnapshot;
+using IExplorerOrderProvider = PhotoReview.App.IExplorerOrderProvider;
+using ExplorerOrderStatus = PhotoReview.App.ExplorerOrderStatus;
+using ExplorerGroupState = PhotoReview.App.ExplorerGroupState;
 static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
 {
     if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);

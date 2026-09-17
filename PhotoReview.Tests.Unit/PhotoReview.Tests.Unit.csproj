@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PhotoReview.App\PhotoReview.App.csproj" />
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
     <!-- D11: PerfAnalyze (perf-analyze CLI) lives in PhotoReview.Tests (the CLI test runner)
          rather than duplicating it here. PhotoReview.Tests is an Exe project, but referencing it
          works the same as any other ProjectReference: this project gets its public types

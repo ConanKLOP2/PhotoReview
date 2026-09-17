@@ -1,5 +1,10 @@
 using System.IO;
 using PhotoReview.App;
+using PhotoReview.Core.Catalog;
+using ExplorerViewSnapshot = PhotoReview.App.ExplorerViewSnapshot;
+using IExplorerOrderProvider = PhotoReview.App.IExplorerOrderProvider;
+using ExplorerGroupState = PhotoReview.App.ExplorerGroupState;
+using ExplorerOrderStatus = PhotoReview.App.ExplorerOrderStatus;
 
 namespace PhotoReview.Tests.Unit;
 
