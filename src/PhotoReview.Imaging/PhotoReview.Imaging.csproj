@@ -15,6 +15,7 @@
     <Using Include="PhotoReview.Core.Model" />
     <Using Include="PhotoReview.Core.Abstractions" />
     <Using Include="PhotoReview.Imaging.Caching" />
+    <Using Include="PhotoReview.Imaging.Decoding" />
   </ItemGroup>
 
 </Project>
