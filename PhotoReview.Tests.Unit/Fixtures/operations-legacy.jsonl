@@ -1,0 +1,4 @@
+﻿{"Id":"op-1","Type":"Move","State":"Prepared","Source":"C:\\img1.jpg","Destination":"C:\\dest\\img1.jpg","Size":100,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:00Z"}
+{"Id":"op-1","Type":"Move","State":"Committed","Source":"C:\\img1.jpg","Destination":"C:\\dest\\img1.jpg","Size":100,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:01Z"}
+{"Id":"op-2","Type":"Delete","State":"Prepared","Source":"C:\\img2.jpg","Destination":null,"Size":200,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:02Z"}
+{"Id":"op-3","Type":"copy","State":"failed","Source":"C:\\img3.jpg","Destination":"C:\\dest\\img3.jpg","Size":300,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:03Z","Error":"Disk full"}

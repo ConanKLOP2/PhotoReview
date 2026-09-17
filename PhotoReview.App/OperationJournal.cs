@@ -1,10 +1,11 @@
 using System.Text.Json;
 using System.IO;
 using System.Text;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
-public sealed record JournalEntry(string Id, string Type, string State, string Source, string? Destination, long Size, DateTime LastWriteUtc, DateTime TimestampUtc, string? Error = null);
+public sealed record JournalEntry(string Id, FileOperationType Type, JournalState State, string Source, string? Destination, long Size, DateTime LastWriteUtc, DateTime TimestampUtc, string? Error = null);
 
 public sealed class OperationJournal
 {
@@ -27,15 +28,15 @@ public sealed class OperationJournal
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
         var entries = new List<JournalEntry>();
-        ReadEntries(entry => { if (entry.Type == "Move" && entry.State == "Committed") entries.Add(entry); });
+        ReadEntries(entry => { if (entry.Type == FileOperationType.Move && entry.State == JournalState.Committed) entries.Add(entry); });
         return entries;
     }
 
     public IReadOnlyList<JournalEntry> ReadPendingOperations() =>
-        ComputeLatestEntries().Values.Where(entry => entry.State == "Prepared").ToList();
+        ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Prepared).ToList();
 
     public IReadOnlyList<JournalEntry> ReadFailedOperations() =>
-        ComputeLatestEntries().Values.Where(entry => entry.State == "Failed").ToList();
+        ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Failed).ToList();
 
     // Retries append a new Prepared/Committed/Failed entry under the SAME Id as the
     // attempt they're retrying (RecoveryRetryService.RetryMoveOrCopy), so an Id's
@@ -73,14 +74,14 @@ public sealed class OperationJournal
         var reconciled = new List<JournalEntry>();
         foreach (var pending in ReadPendingOperations())
         {
-            if (pending.Type == "Recycle")
+            if (pending.Type == FileOperationType.Recycle)
             {
-                var state = File.Exists(pending.Source) ? "Failed" : "Committed";
-                var error = state == "Failed" ? "Nguồn vẫn tồn tại sau khi khôi phục phiên." : null;
+                var state = File.Exists(pending.Source) ? JournalState.Failed : JournalState.Committed;
+                var error = state == JournalState.Failed ? "Nguồn vẫn tồn tại sau khi khôi phục phiên." : null;
                 var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
                 Append(entry); reconciled.Add(entry);
             }
-            else if (pending.Type is "Move" or "Copy")
+            else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
             {
                 var sourceExists = File.Exists(pending.Source);
                 var destinationExists = pending.Destination is not null && File.Exists(pending.Destination);
@@ -88,10 +89,10 @@ public sealed class OperationJournal
                 // Move must have removed the source to count as done; Copy is expected
                 // to leave the source in place, so requiring its absence would reconcile
                 // every genuinely-successful pending Copy as Failed.
-                var state = pending.Type == "Move"
-                    ? (!sourceExists && destinationMatches ? "Committed" : "Failed")
-                    : (destinationMatches ? "Committed" : "Failed");
-                var error = state == "Failed" ? "Không thể xác nhận operation pending; không tự động replay." : null;
+                var state = pending.Type == FileOperationType.Move
+                    ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
+                    : (destinationMatches ? JournalState.Committed : JournalState.Failed);
+                var error = state == JournalState.Failed ? "Không thể xác nhận operation pending; không tự động replay." : null;
                 var entry = pending with { State = state, TimestampUtc = DateTime.UtcNow, Error = error };
                 Append(entry); reconciled.Add(entry);
             }
