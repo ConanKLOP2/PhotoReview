@@ -122,10 +122,20 @@ if (args.Length == 2 && args[0] == "--explorer-probe")
     return;
 }
 
+static string ResolveProjectRoot()
+{
+    var dir = new DirectoryInfo(AppContext.BaseDirectory);
+    while (dir is not null)
+    {
+        if (File.Exists(Path.Combine(dir.FullName, "PhotoReview.slnx")))
+            return dir.FullName;
+        dir = dir.Parent;
+    }
+    return Directory.GetCurrentDirectory();
+}
+
 var failures = new List<string>();
-var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-if (!File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs")))
-    projectRoot = Directory.GetCurrentDirectory();
+var projectRoot = ResolveProjectRoot();
 var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 Check(BenchmarkProfiles.All.Count >= 25, "Expanded benchmark profile registry", failures);
@@ -202,18 +212,18 @@ try
     Check(!cache.TryGet("b", out _), "LRU evicts least recently used entry", failures);
     Check(cache.CurrentSize <= 4, "LRU enforces byte capacity", failures);
 
-    var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml.cs"));
-    var dragDropXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
-    var appSettings = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "AppSettings.cs"));
-    var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml.cs"));
-    var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "SettingsWindow.xaml"));
-    var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs"));
+    var mainWindow = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "MainWindow.xaml.cs"));
+    var dragDropXaml = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "MainWindow.xaml"));
+    var appSettings = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "AppSettings.cs"));
+    var settingsWindow = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "SettingsWindow.xaml.cs"));
+    var settingsWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "SettingsWindow.xaml"));
+    var imageSortService = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "ImageSortService.cs"));
     // The decode/cache path lives in PreviewImageService and preload scheduling in
     // PreloadScheduler. Both are constructible without a WPF Window, so their
     // contracts are asserted behaviorally below; only the few branches that cannot be
     // driven from a console harness still read these focused service files.
-    var previewServiceText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreviewImageService.cs"));
-    var preloadSchedulerText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PreloadScheduler.cs"));
+    var previewServiceText = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "PreviewImageService.cs"));
+    var preloadSchedulerText = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "PreloadScheduler.cs"));
     RunInterleavedFileActionSequence(root, failures);
     // ---- Source-presence checks: MainWindow file-action glue ----
     // The advance-before-action ordering lives in MainWindow's async event handlers and
@@ -292,12 +302,12 @@ try
     var retryResult = RecoveryRetryService.RetryMoveOrCopy(retryEntry, journal);
     Check(retryResult.Succeeded && File.Exists(retryDestination) && !File.Exists(retrySource), "Recovery retry validates fingerprint and journals success", failures);
     Check(File.Exists(retryDestination) && RecoveryRetryService.RetryMoveOrCopy(retryEntry with { Source = retryDestination }, journal).Succeeded == false, "Recovery retry rejects invalid source state", failures);
-    Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml")).Contains("Retry Move/Copy") && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml.cs")).Contains("Retry_Click"), "Recovery retry is exposed with confirmation in UI (source presence, not behavior)", failures);
-    Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "RecoveryWindow.xaml")).Contains("AutomationProperties.Name=\"Thử lại Move hoặc Copy đã lỗi\""), "Recovery retry button is accessible (source presence, not behavior)", failures);
+    Check(File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "RecoveryWindow.xaml")).Contains("Retry Move/Copy") && File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "RecoveryWindow.xaml.cs")).Contains("Retry_Click"), "Recovery retry is exposed with confirmation in UI (source presence, not behavior)", failures);
+    Check(File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "RecoveryWindow.xaml")).Contains("AutomationProperties.Name=\"Thử lại Move hoặc Copy đã lỗi\""), "Recovery retry button is accessible (source presence, not behavior)", failures);
     Check(imageSortService.Contains("StrCmpLogicalW") && imageSortService.Contains("ExplorerComparer"), "Name sort uses Windows Explorer logical ordering (source presence; natural ordering is asserted behaviorally below)", failures);
     Check(appSettings.Contains("Size") && imageSortService.Contains("OrderByDescending(GetFileSize)") && settingsWindow.Contains("Size"), "Size sort is configurable (source presence; size ordering is asserted behaviorally below)", failures);
     Check(imageSortService.Contains("SizeAscending") && settingsWindow.Contains("SizeAscending"), "Size sort direction is configurable (source presence; both directions are asserted behaviorally below)", failures);
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service (source presence, not behavior)", failures);
+    Check(File.Exists(Path.Combine(projectRoot, "src", "PhotoReview.App", "ImageSortService.cs")) && mainWindow.Contains("ImageSortService.Sort"), "Image sorting is isolated in a testable service (source presence, not behavior)", failures);
     var compareOriginal = Path.Combine(root, "CocCocSetup.jpg");
     var compareNumbered = Path.Combine(root, "CocCocSetup (1).jpg");
     var comparePair = ComparePairService.Find(new[] { compareOriginal, compareNumbered }, compareNumbered);
@@ -353,8 +363,8 @@ try
     // PHOTOREVIEW_DATA_ROOT), so the durable-save path stays a source-presence check.
     Check(appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save (source presence, not behavior)", failures);
     Check(mainWindow.Contains("AppConstants.ImageCacheCapacityBytes") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold (source presence: AppConstants is internal to the app assembly)", failures);
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "FileHashService.cs")) && mainWindow.Contains("_hashService.Clear()"), "Hash service is isolated with bounded cache lifecycle (source presence; FileHashService is asserted behaviorally below)", failures);
-    var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "MainWindow.xaml"));
+    Check(File.Exists(Path.Combine(projectRoot, "src", "PhotoReview.App", "FileHashService.cs")) && mainWindow.Contains("_hashService.Clear()"), "Hash service is isolated with bounded cache lifecycle (source presence; FileHashService is asserted behaviorally below)", failures);
+    var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "MainWindow.xaml"));
     Check(!mainWindow.Contains("Image_LeftClick") && !mainWindow.Contains("Image_RightClick") && !mainWindowXaml.Contains("Image_LeftClick") && !mainWindowXaml.Contains("Image_RightClick"), "Image click does not navigate; compare owns click selection (source absence, not behavior)", failures);
     Check(mainWindow.Contains("_compareSelectedPath ?? _files[_index]") && mainWindow.Contains("_files.Remove(source)"), "Compare selection drives file actions (source presence, not behavior)", failures);
     var hashFixture = Path.Combine(root, "hash-fixture.bin");
@@ -373,7 +383,7 @@ try
     Check(concurrentHashes.All(hash => hash == changedHash), "File hash service deduplicates concurrent reads", failures);
     Check(mainWindow.Contains("_compareSelectedPath = null;") && mainWindow.Contains("var token = Interlocked.Increment(ref _generation);"), "Compare selection resets on navigation (source presence, not behavior)", failures);
     Check(mainWindowXaml.Contains("UndoLastAction_Click") && mainWindow.Contains("e.Key == Key.Escape") && mainWindow.Contains("Close();"), "Context-menu Undo and Escape exit are wired (source presence, not behavior)", failures);
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "RecycleBinRestoreService.cs")) && mainWindow.Contains("RecycleBinRestoreService.TryRestore"), "Delete Undo restores through Recycle Bin Shell (source presence: restoring needs the real Recycle Bin)", failures);
+    Check(File.Exists(Path.Combine(projectRoot, "src", "PhotoReview.App", "RecycleBinRestoreService.cs")) && mainWindow.Contains("RecycleBinRestoreService.TryRestore"), "Delete Undo restores through Recycle Bin Shell (source presence: restoring needs the real Recycle Bin)", failures);
     Check(mainWindowXaml.Contains("AutomationProperties.Name=\"Mở thư mục ảnh\"") && mainWindowXaml.Contains("AutomationProperties.Name=\"Mở cài đặt\""), "Primary controls expose accessible names (source presence, not behavior)", failures);
     Check(settingsWindow.Contains("OpenLogLocation_Click") && settingsWindowXaml.Contains("AutomationProperties.Name=\"Mở vị trí file log\""), "Settings exposes an accessible Open log location control (source presence, not behavior)", failures);
     Check(settingsWindow.Contains("Path.GetDirectoryName(AppLog.FilePath)") && settingsWindow.Contains("explorer.exe") && settingsWindow.Contains("AppLog.FilePath"), "Open log location follows the configured AppLog path (source presence, not behavior)", failures);
@@ -445,18 +455,18 @@ try
     // WindowPlacementService operates on a real HWND via GetWindowPlacement/SetWindowPlacement
     // and reads the attached monitor set, so it cannot be exercised headlessly; the rest are
     // XAML layout and AutomationProperties attributes on Window subclasses.
-    var placementService = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "WindowPlacementService.cs"));
+    var placementService = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "WindowPlacementService.cs"));
     Check(mainWindowXaml.Contains("Loaded=\"Window_Loaded\"") && mainWindowXaml.Contains("Closing=\"Window_Closing\""), "Main window restores and saves native placement instead of always using the startup default (source presence, not behavior)", failures);
     Check(!mainWindowXaml.Contains("WindowState=\"Maximized\""), "Main window does not force maximized state in XAML (source absence, not behavior)", failures);
     Check(!mainWindowXaml.Contains("<Grid.RowDefinitions><RowDefinition Height=\"Auto\"/><RowDefinition Height=\"*\"/><RowDefinition Height=\"Auto\"/></Grid.RowDefinitions>") && mainWindowXaml.Contains("Panel.ZIndex=\"100\" Background=\"#B0181818\""), "Image uses the full client area while toolbar remains a compact overlay (source presence, not behavior)", failures);
     Check(mainWindow.Contains("Title = $\"Photo Review — {folder}") && mainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""), "Current folder is shown in the native window title bar (source presence, not behavior)", failures);
-    Check(File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "PhotoReview.App.csproj")).Contains("BuildStamp") && settingsWindow.Contains("AssemblyInformationalVersionAttribute"), "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)", failures);
+    Check(File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "PhotoReview.App.csproj")).Contains("BuildStamp") && settingsWindow.Contains("AssemblyInformationalVersionAttribute"), "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)", failures);
     Check(!mainWindow.Contains("Window_SourceInitialized") && mainWindow.Contains("WindowPlacementService.Restore(this)") && mainWindow.Contains("WindowPlacementService.Save(this)") && placementService.Contains("GetWindowPlacement") && placementService.Contains("SetWindowPlacement"), "Native window placement restores after Loaded and persists monitor, bounds, and maximized state (source presence: needs a real Window handle)", failures);
     Check(placementService.Contains("Screen.AllScreens") && placementService.Contains("WorkingArea"), "Saved placement is rejected when its monitor is no longer connected (source presence: needs real multi-monitor hardware)", failures);
     // ---- Source-presence checks: disk thumbnail cache quota ----
     // ThumbnailCache prunes the shared on-disk cache under the user's real LocalAppData, so
     // driving the quota path here would mutate the developer's own cache directory.
-    var thumbnailCacheText = File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "ThumbnailCache.cs"));
+    var thumbnailCacheText = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "ThumbnailCache.cs"));
     Check(thumbnailCacheText.Contains("DefaultMaxDiskBytes") && thumbnailCacheText.Contains("PruneDiskCache") && thumbnailCacheText.Contains("ClearDisk"), "Disk thumbnail cache has quota and clear operation (source presence, not behavior)", failures);
     Check(thumbnailCacheText.Contains("catch (UnauthorizedAccessException ex)") && thumbnailCacheText.Contains("catch (IOException ex)"), "Disk cache cleanup tolerates filesystem access failures (source presence, not behavior)", failures);
     Check(mainWindowXaml.Contains("ClearCache_Click") && mainWindow.Contains("_thumbnailCache.ClearDisk()"), "Disk cache can be cleared from UI without changing source images (source presence, not behavior)", failures);
@@ -503,8 +513,8 @@ try
     Check(previewServiceText.Contains("RecordDiskCacheHit") && previewServiceText.Contains("if (sourceRead)"),
         "Disk-cache deliveries are excluded from source byte metrics (source presence: priming the real disk cache is out of scope)", failures);
     // RecordPresented times a WPF render pass, which needs a live viewer; only its wiring is checked.
-    Check(File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordPresented")
-        && File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"),
+    Check(File.Exists(Path.Combine(projectRoot, "src", "PhotoReview.App", "ReviewMetrics.cs")) && mainWindow.Contains("RecordPresented")
+        && File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "DiagnosticsWindow.xaml")).Contains("Source file reads"),
         "Viewer present latency is recorded and surfaced in diagnostics (source presence, not behavior)", failures);
     var metrics = new ReviewMetrics();
     metrics.RecordCacheHit(); metrics.RecordCacheMiss(); metrics.RecordSourceRead(128, 7); metrics.RecordPresented(11);
@@ -541,7 +551,7 @@ try
     Check(shiftedOrder[0] == 45 && shiftedOrder[1] == 46 && shiftedOrder.Contains(43)
         && shiftedOrder.Length == 40 && shiftedOrder.Distinct().Count() == shiftedOrder.Length,
         "Navigating changes preload priority to the new Next without duplicate jobs", failures);
-    Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view (source presence, not behavior)", failures);
+    Check(mainWindow.Contains("DiagnosticsWindow") && File.Exists(Path.Combine(projectRoot, "src", "PhotoReview.App", "DiagnosticsWindow.xaml")), "Performance metrics have an in-app diagnostics view (source presence, not behavior)", failures);
     Check(mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("review.ShowDialog()"), "Batch duplicate operation has dry-run review dialog (source presence; ShowDialog needs a real WPF Window)", failures);
     Check(mainWindow.Contains("RecoveryWindow") && mainWindow.Contains("ReadPendingOperations"), "Recovery UI exposes pending operations without replay (source presence; journal reconciliation is asserted behaviorally below)", failures);
     Check(mainWindow.Contains("ReadFailedOperations") && operationJournalTextContainsFailed(), "Recovery UI includes failed journal operations (source presence, not behavior)", failures);
@@ -635,8 +645,8 @@ static void FlushAppLog()
 
 static bool operationJournalTextContainsFailed()
 {
-    var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-    return File.ReadAllText(Path.Combine(projectRoot, "PhotoReview.App", "OperationJournal.cs")).Contains("ReadFailedOperations", StringComparison.Ordinal);
+    var projectRoot = ResolveProjectRoot();
+    return File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "OperationJournal.cs")).Contains("ReadFailedOperations", StringComparison.Ordinal);
 }
 
 sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplorerOrderProvider

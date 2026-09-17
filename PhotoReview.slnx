@@ -1,7 +1,7 @@
 <Solution>
-  <Project Path="PhotoReview.App/PhotoReview.App.csproj" />
-  <Project Path="PhotoReview.Core/PhotoReview.Core.csproj" />
-  <Project Path="PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />
-  <Project Path="PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj" />
-  <Project Path="PhotoReview.Tests/PhotoReview.Tests.csproj" />
+  <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
+  <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
+  <Project Path="tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />
+  <Project Path="tests/PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj" />
+  <Project Path="tests/PhotoReview.Tests/PhotoReview.Tests.csproj" />
 </Solution>

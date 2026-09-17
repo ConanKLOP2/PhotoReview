@@ -43,7 +43,7 @@ foreach ($c in $Conditions) { if ($c -notin 'cold-app', 'cold-diskcache', 'warm'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scenarioDir = Join-Path $PSScriptRoot 'scenarios'
-$testsProject = Join-Path $repoRoot 'PhotoReview.Tests\PhotoReview.Tests.csproj'
+$testsProject = Join-Path $repoRoot 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj'
 
 # work\ is git-ignored and lives in the main checkout; agent worktrees fall back to it.
 function Resolve-WorkDir {
