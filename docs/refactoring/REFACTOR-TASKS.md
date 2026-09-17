@@ -100,7 +100,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | DONE |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | DONE |
 | T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | DONE |
-| T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | IN PROGRESS |
+| T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | DONE |
 | T14c | Test INV-5 | T14a | ∥C | | IN PROGRESS |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | IN PROGRESS |
 | T20 | Tạo Core + Core.Tests | T14b–d | | | TODO |
@@ -329,7 +329,15 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - INV-4: `MoveOverride` chờ một `TaskCompletionSource`. Gửi 2 action liên tiếp. Assert: `MoveOverride` chỉ được gọi 1 lần.
   - Kích hoạt action bằng cách gọi method key handler qua reflection hoặc hook, hoặc raise `KeyDown`.
 - **Xong khi:** đạt 10/10 lần.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-17 · Opus 5 · branch `refactor/T14b-inv34` · commit `7c6ae26` (merge `refactor/integration`).
+    - **Files:** `PhotoReview.Tests.Unit/MainWindowBehaviorTests.Actions.cs` (mới, 334 dòng). Class `MainWindowBehaviorActionTests` (không `partial class MainWindowBehaviorTests`) để tránh xung đột modifier khi merge song song với T14c/T14d — chấp nhận, có thể gộp lại sau nếu cần.
+    - **Cách kích hoạt:** raise `Keyboard.PreviewKeyDownEvent` qua `UIElement.RaiseEvent` (không SendInput/SendKeys), `_settings.Shortcuts`/`Actions` được ghi đè **trong RAM** qua reflection để tránh động vào key mapping thật của máy.
+    - **INV-3:** `MoveOverride` chờ TCS; assert catalog đã bỏ source trước khi `MoveOverride` được gọi, ảnh kế tiếp present trong lúc move còn treo, và `OnPresented` tổng đúng 2 lần sau khi xong (không present lại).
+    - **INV-4:** bấm phím action 2 lần liên tiếp khi move đầu còn treo trên TCS; assert `MoveOverride` chỉ gọi 1 lần, guard `_fileActionInProgress` giữ đúng, lần bấm thứ 3 sau khi mở gate chạy bình thường.
+    - **Kiểm thử:** cả 2 test đạt 10/10 lần `dotnet test --filter` riêng biệt. VERIFY sau merge: xUnit 253/253, `PASS: all PhotoReview verification gates`.
+    - **Review R3 (Opus 5 mới):** APPROVE, không có CHANGES bắt buộc. Xác nhận cả 2 invariant được chứng minh thật (không vacuous), truy vết guard `Interlocked.Exchange` (`MainWindow.xaml.cs:1043`) và đường advance-trước-filesystem khớp đúng.
+    - **Lưu ý còn tồn tại (không chặn merge):** `AppSettings.Load()` trong ctor `MainWindow` đọc `config.json` thật của máy (không qua `PHOTOREVIEW_DATA_ROOT`) và **tạo file mặc định nếu chưa có** — kế thừa từ seam T14a, áp dụng cho cả T14c/T14d. Không hermetic hoàn toàn; cần seam settings riêng nếu muốn sửa (ngoài phạm vi T14a-d).
 
 ### T14c — INV-5 ∥C
 - **Files:** `{UT}/MainWindowBehaviorTests.FolderSwitch.cs` (mới).
