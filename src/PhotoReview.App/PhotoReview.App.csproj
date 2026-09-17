@@ -27,6 +27,7 @@
     <Using Include="PhotoReview.Core.Settings" />
     <Using Include="PhotoReview.App.Services" />
     <Using Include="PhotoReview.Core.FileActions" />
+    <Using Include="PhotoReview.Core.Session" />
   </ItemGroup>
 
 </Project>
