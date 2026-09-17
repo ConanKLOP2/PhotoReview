@@ -185,7 +185,7 @@ public sealed class PerfTraceTests : IDisposable
     private static async Task RetireAsync(PreviewImageService service, string diskCache)
     {
         await service.ShutdownPersistWorkersAsync();
-        await DiskCacheStore.WaitForPruneAsync(diskCache, TimeSpan.FromSeconds(5));
+        await service.WaitForPruneAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact(DisplayName = "No listener attached means PhotoReview-Perf is disabled")]

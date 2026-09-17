@@ -84,6 +84,34 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(!File.Exists(a) && !File.Exists(b));
     }
 
+    [Fact(DisplayName = "DiskCacheStore instance SchedulePrune and WaitForPruneAsync complete successfully")]
+    public async Task InstanceSchedulePruneAndWaitForPruneAsync()
+    {
+        var dir = _root.Dir("instance-prune");
+        var oldest = WriteFile(dir, "oldest.png", 100, accessedAgo: TimeSpan.FromMinutes(30));
+        var newest = WriteFile(dir, "newest.png", 100, accessedAgo: TimeSpan.FromMinutes(10));
+
+        var store = new DiskCacheStore(dir, "*.png", maxBytes: 150);
+        store.SchedulePrune();
+        var finished = await store.WaitForPruneAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(finished);
+        Assert.True(!File.Exists(oldest) && File.Exists(newest));
+    }
+
+    [Fact(DisplayName = "DiskCacheStore instance ClearDirectory empties its directory")]
+    public void InstanceClearDirectoryRemovesFiles()
+    {
+        var dir = _root.Dir("instance-clear");
+        var a = WriteFile(dir, "a.png", 10, accessedAgo: TimeSpan.Zero);
+        var b = WriteFile(dir, "b.png", 10, accessedAgo: TimeSpan.Zero);
+
+        var store = new DiskCacheStore(dir, "*.png", maxBytes: 1_000);
+        store.ClearDirectory();
+
+        Assert.True(!File.Exists(a) && !File.Exists(b));
+    }
+
     private string WriteFile(string dir, string name, int bytes, TimeSpan accessedAgo)
     {
         var path = Path.Combine(dir, name);

@@ -92,7 +92,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         // call, but that call is itself fire-and-forget -- wait for the prune pass(es) it
         // started to actually finish, or the delete below can race a worker still
         // enumerating/deleting files in this same directory.
-        var pruneSettled = await DiskCacheStore.WaitForPruneAsync(_diskCacheDirectory, TimeSpan.FromSeconds(5));
+        var pruneSettled = await _previewService.WaitForPruneAsync(TimeSpan.FromSeconds(5));
         if (!pruneSettled)
         {
             // A timeout is not success: a prune worker may still be touching this

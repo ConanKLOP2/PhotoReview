@@ -23,12 +23,16 @@ public sealed class ThumbnailCache : IDisposable
     private readonly long _maxRamBytes;
     private readonly long _maxDiskBytes;
     private readonly bool _persistNewThumbnails;
+    private readonly DiskCacheStore _diskStore;
     private readonly BoundedLruCache<string, BitmapSource> _ramCache;
     private readonly ConcurrentDictionary<string, Lazy<Task<BitmapSource>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly object _lifecycleGate = new();
     private long _cacheGeneration;
     private bool _disposed;
+
+    public DiskCacheStore DiskStore => _diskStore;
+    public string DiskDirectory => _diskDirectory;
 
     public ThumbnailCache(string? diskDirectory = null, long maxRamBytes = 256L * 1024 * 1024, long maxDiskBytes = DefaultMaxDiskBytes, bool persistNewThumbnails = true)
     {
@@ -40,6 +44,7 @@ public sealed class ThumbnailCache : IDisposable
         _maxRamBytes = maxRamBytes;
         _maxDiskBytes = maxDiskBytes;
         _persistNewThumbnails = persistNewThumbnails;
+        _diskStore = new DiskCacheStore(_diskDirectory, "*.png", _maxDiskBytes);
         _ramCache = new BoundedLruCache<string, BitmapSource>(_maxRamBytes, EstimateBytes, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -144,12 +149,12 @@ public sealed class ThumbnailCache : IDisposable
         if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode) return image;
         try
         {
-            await DiskCacheStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false);
+            await _diskStore.WriteAtomicallyAsync(image, cachePath, cancellationToken).ConfigureAwait(false);
             if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode)
             {
                 // Went stale mid-write (ClearDisk ran concurrently): don't leave a
                 // freshly-written file for a cache generation that was just cleared.
-                DiskCacheStore.TryDelete(cachePath, logContext: null);
+                DiskCacheStore.TryDelete(cachePath);
             }
             else PruneDiskCache();
         }
@@ -161,14 +166,16 @@ public sealed class ThumbnailCache : IDisposable
     public void ClearDisk()
     {
         lock (_lifecycleGate) _cacheGeneration++;
-        try { DiskCacheStore.ClearDirectory(_diskDirectory, "*.png", "Thumbnail delete failed"); }
+        try { _diskStore.ClearDirectory(); }
         catch (IOException ex) { AppLog.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Thumbnail disk cache clear failed: {_diskDirectory}", ex); }
     }
 
+    public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);
+
     // Coalesced per directory in DiskCacheStore: concurrent thumbnail writes (folder scan
     // pre-generating many at once) must not each spawn their own full directory scan.
-    private void PruneDiskCache() => DiskCacheStore.SchedulePrune(_diskDirectory, "*.png", _maxDiskBytes, "Thumbnail delete failed");
+    private void PruneDiskCache() => _diskStore.SchedulePrune();
 
     private static Task<BitmapSource> DecodeAsync(string path, CancellationToken cancellationToken)
     {
