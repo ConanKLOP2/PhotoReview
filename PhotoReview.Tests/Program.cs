@@ -1,4 +1,5 @@
 using PhotoReview.App;
+using PhotoReview.Core.Caching;
 using PhotoReview.Tests;
 using System.IO;
 using System.Windows.Media;

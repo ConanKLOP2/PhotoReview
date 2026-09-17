@@ -1,4 +1,4 @@
-namespace PhotoReview.App;
+namespace PhotoReview.Core.Caching;
 
 /// <summary>Thread-safe, byte-bounded LRU cache.</summary>
 public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Caching;
 
 namespace PhotoReview.App;
 

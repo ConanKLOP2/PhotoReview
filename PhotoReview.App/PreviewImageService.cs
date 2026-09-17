@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Channels;
 using System.Windows.Media.Imaging;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Caching;
 
 namespace PhotoReview.App;
 
