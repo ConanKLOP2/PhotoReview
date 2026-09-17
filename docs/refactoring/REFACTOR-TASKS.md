@@ -604,9 +604,10 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 
 ### T33a — Explorer sang Platform ∥F
 - **Files:** `{App}/ExplorerOrderService.cs`, `{App}/ExplorerComInterop.cs` → `{Platform}/Explorer/`, caller, test Explorer → `{IntT}` (Trait Integration/Manual).
-- **Làm:** di chuyển và đổi namespace. `ExplorerOrderService` nhận `ILog?` (tạm dùng `AppLog` nếu null).
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Di chuyển `ExplorerOrderService.cs` và `ExplorerComInterop.cs` sang `PhotoReview.Platform.Windows/Explorer/` với namespace `PhotoReview.Platform.Windows.Explorer`. `ExplorerOrderService` nhận `ILog?` qua constructor (mặc định `NullLog.Instance` nếu null) và truyền vào `StaThreadPump`. Cập nhật `ReadSortColumns` trả về array giảm boxing/overhead (CA1859). Thêm bộ test `ExplorerOrderServiceTests` trong `PhotoReview.Integration.Tests` gắn trait `[Trait("Category", "Integration")]` kiểm thử hành vi truy vấn gracefully, token cancellation, và log capturing. Toàn bộ 467 tests PASS, `verify-all.ps1` đạt PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi T33a, di chuyển COM interop và service sang Platform sạch sẽ, nhận `ILog` chuẩn.
+    - **Review R2:** APPROVE. Integration tests chạy an toàn, release verification PASS.
 
 ### T33b — RecycleBin, Memory, Lock, Comparer sang Platform ∥F
 - **Files:** `{App}/RecycleBinRestoreService.cs`, `PhysicalMemory.cs`, `InstanceLock.cs`, `{App}/Platform/WindowsNaturalComparer.cs` → `{Platform}/`; `{Platform}/WindowsRecycleBin.cs` (mới); caller trong `MainWindow` (dòng `FileSystem.DeleteFile` và `RecycleBinRestoreService.TryRestore`); smoke script nếu có đường dẫn.
