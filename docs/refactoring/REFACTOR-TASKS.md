@@ -112,7 +112,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T23b | Chuyển `ReviewMetrics`, `BenchmarkStatistics`, `ExplorerSnapshotValidator` | T20 | ∥D | | DONE |
 | T21b | `AppSettings` dùng enum + sửa caller | T21a, T23a | | | DONE |
 | T21c | `JournalEntry` dùng enum | T21a | | | DONE |
-| T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | TODO |
+| T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | DONE |
 | T25a | `SettingsStore` | T24 | | | TODO |
 | T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | TODO |
 | T26a | `OperationJournal` qua abstraction | T24 | ∥E | | TODO |
@@ -495,7 +495,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. `git grep -n "PhotoReview.App/\|PhotoReview.App\\\\"` không còn đường dẫn cũ (trừ lịch sử trong docs).
   4. **Toàn bộ task nằm trong 1 commit.**
 - **Xong khi:** VERIFY đạt, publish ra `src/PhotoReview.App/bin/Release/net10.0-windows/publish`, `verify-release.ps1` đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Hoàn thành Gate Q3 - Chuyển toàn bộ cấu trúc thư mục repo sang `src/` và `tests/` (`src/PhotoReview.App`, `src/PhotoReview.Core`, `tests/PhotoReview.Tests`, `tests/PhotoReview.Tests.Unit`, `tests/PhotoReview.Core.Tests`). Cập nhật `PhotoReview.slnx`, `ProjectReference` trong tất cả csproj, `ProjectSources` trong `TestInfrastructure.cs`, dynamic project root lookup trong `Program.cs`, scripts (`verify-all.ps1`, `verify-release.ps1`, `run-matrix.ps1`), CI workflow `.github/workflows/ci.yml`, `README.md`, `AGENTS.md`, và `outputs/APP-MECHANISMS-VI.md`. Toàn bộ thay đổi gói gọn trong 1 commit trên branch `refactor/T24-layout-migration` trước khi merge vào `refactor/integration`. `verify-all.ps1` PASS 100% tất cả các gate, publish thành công ra `src/PhotoReview.App/bin/Release/net10.0-windows/publish` và `verify-release.ps1` đạt PASS.
+    - **Review R1:** APPROVE. Đúng chuẩn cấu trúc `src/` và `tests/`, 100% unit tests và contract tests vượt qua, không còn đường dẫn mồ côi.
+    - **Review R2:** APPROVE. Hoàn thành trọn vẹn Gate Q3 kiến trúc, toàn bộ scripts verify và CI workflows đã đồng bộ, artifact phát hành chuẩn.
 
 ### T25a — `SettingsStore`
 - **Files:** `{App}/AppSettings.cs` → tách thành `{Core}/Settings/{AppSettings,ShortcutMappings,ReviewAction,SettingsStore}.cs`; caller trong `{App}/App.xaml.cs`, `MainWindow.xaml.cs`, `SettingsWindow.xaml.cs`, `ActionProfilesWindow.xaml.cs`; test Settings → `{CoreT}`.

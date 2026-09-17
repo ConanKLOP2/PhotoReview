@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 414/414 (Core: 155/155, Tests.Unit: 259/259)
+- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 414/414 (Core: 155/155, Tests.Unit: 259/259)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 2: Hoàn tất 100% các task tính năng (∥D, T21b, T21c). Sẵn sàng thực hiện task cuối cùng của Wave 2: **T24** (chuyển layout `src/`/`tests/` - Cổng ⛔Q3).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 2 đã hoàn tất 100% bao gồm cả **T24** (chuyển layout `src/`/`tests/` - Cổng ⛔Q3). Sẵn sàng bắt đầu **Wave 3: Tách AppSettings và Store**.
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -32,12 +32,12 @@
 7. **Kiểm tra nhanh công cụ đo:**
    ```powershell
    .\tools\diag\run-matrix.ps1 -Scenarios s3-next-burst -Modes Preview -Conditions warm -Repeat 1 -FixtureAlias F1 -OutRoot work/diag/runs-smoke
-   dotnet run --project PhotoReview.Tests -c Release -- --perf-analyze <thư mục batch vừa tạo>
+   dotnet run --project tests/PhotoReview.Tests -c Release -- --perf-analyze <thư mục batch vừa tạo>
    ```
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c (Hoàn tất 100% nhóm song song ∥D, T21b và T21c; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, **T24** (Hoàn tất 100% Wave 1 và Wave 2; Gate ⛔Q3 chuyển layout sang `src/` và `tests/` đã đạt; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,8 +58,10 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (Wave 2 tiếp tục):**
-   - **T24:** Chuyển layout thư mục dự án sang `src/` và `tests/` (Cổng ⛔Q3 — hoàn tất Wave 2, mở khóa Wave 3).
+1. **Refactor (Bắt đầu Wave 3):**
+   - **T25a:** `SettingsStore` tách khỏi `AppSettings` (POCO), nạp/lưu cấu hình độc lập qua `IFileSystem`, `IAppPaths`, `ILog`.
+   - **T25b:** `SettingsValidator` + `IKeyNameValidator`.
+   - **T26a, T26b, T26c:** `OperationJournal`, `SessionStore`, `RecoveryRetryService` qua abstraction.
 2. **D07 (ma trận đo trên máy 1):** Đã sẵn sàng trên máy chính (đầy đủ fixture F1..F4 và công cụ đo). Chờ người dùng quyết định:
    - Phạm vi: rút gọn (khoảng 1 giờ), đầy đủ (vài giờ), hoặc tiếp tục refactor trước rồi đo sau.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.
