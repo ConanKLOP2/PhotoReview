@@ -21,6 +21,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="PhotoReview.Imaging" />
+    <Using Include="PhotoReview.Imaging.Caching" />
+    <Using Include="PhotoReview.Imaging.Decoding" />
   </ItemGroup>
 
 </Project>

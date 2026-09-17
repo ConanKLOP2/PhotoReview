@@ -32,6 +32,7 @@
     <Using Include="PhotoReview.Core.Session" />
     <Using Include="PhotoReview.Imaging" />
     <Using Include="PhotoReview.Imaging.Caching" />
+    <Using Include="PhotoReview.Imaging.Decoding" />
   </ItemGroup>
 
 </Project>
