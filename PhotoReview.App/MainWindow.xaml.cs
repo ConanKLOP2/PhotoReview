@@ -35,7 +35,11 @@ public partial class MainWindow : Window
     private readonly ReviewMetrics _metrics = new();
     private readonly PreviewImageService _previewService;
     private readonly PreloadScheduler _preloadScheduler;
-    private readonly ExplorerOrderService _explorerOrder = new();
+    // T14a seam: static type is the internal interface so a test can substitute the
+    // Explorer snapshot source. The default value is still a real ExplorerOrderService
+    // (see the constructor). T22c/T23b replace this with a Core-layer interface.
+    private readonly IProgressiveExplorerOrderProvider _explorerOrder;
+    private readonly MainWindowTestHooks? _hooks;
     private CancellationTokenSource _folderLoadCts = new();
     private long _folderGeneration;
     // Incremented by user navigation and file actions.  An Explorer snapshot
@@ -46,8 +50,22 @@ public partial class MainWindow : Window
     private bool _placementRestored;
     private int _fileActionInProgress;
 
-    public MainWindow(string? initialPath = null)
+    public MainWindow(string? initialPath = null) : this((MainWindowTestHooks?)null, initialPath) { }
+
+    /// <summary>
+    /// T14a test seam. Chains through <see cref="ApplyTestEnvironment"/>: the argument is
+    /// evaluated before this instance's field initializers run, which is the only point at
+    /// which PHOTOREVIEW_DATA_ROOT can still be redirected before <see cref="OperationJournal"/>
+    /// captures it in its own field initializer.
+    /// </summary>
+    internal MainWindow(string? initialPath, MainWindowTestHooks hooks) : this(ApplyTestEnvironment(hooks), initialPath) { }
+
+    // Parameter order is reversed against the internal overload on purpose: it keeps the two
+    // signatures distinct (nullability alone does not) so the seam can chain into this body.
+    private MainWindow(MainWindowTestHooks? hooks, string? initialPath)
     {
+        _hooks = hooks;
+        _explorerOrder = hooks?.Explorer ?? new ExplorerOrderProviderAdapter();
         InitializeComponent();
         DpiChanged += MainWindow_DpiChanged;
         _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes);
@@ -358,6 +376,10 @@ public partial class MainWindow : Window
             _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
             if (perf) PhotoReviewPerf.Log.Assign(token, (perfAssigned - perfAssign) * 1000.0 / Stopwatch.Frequency, image.PixelWidth, image.PixelHeight);
             if (AppLog.Enabled) AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={_settings.LoadingMode}");
+            // T14a seam: the single choke point where a navigation/open actually presents its
+            // final image. Intermediate thumbnail assignments above are a loading state, not a
+            // presentation, so they must not raise this.
+            _hooks?.OnPresented?.Invoke(path);
             long perfKick = perf ? Stopwatch.GetTimestamp() : 0;
             if (perf) PhotoReviewPerf.Log.PostStart(token, "preloadKick");
             _ = PreloadAroundAsync(index, token);
@@ -934,7 +956,7 @@ public partial class MainWindow : Window
                 if (File.Exists(destination)) throw new IOException($"Đích đã tồn tại: {destination}");
                 var operationId = Guid.NewGuid().ToString("N");
                 _journal.Append(new JournalEntry(operationId, "Move", "Prepared", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
-                await Task.Run(() => File.Move(source, destination));
+                await MoveFileAsync(source, destination);
                 var movedInfo = new FileInfo(destination);
                 if (movedInfo.Length != info.Length) throw new IOException("Kiểm tra sau Move thất bại: kích thước thay đổi.");
                 _journal.Append(new JournalEntry(operationId, "Move", "Committed", source, destination, info.Length, info.LastWriteTimeUtc, DateTime.UtcNow));
@@ -1051,7 +1073,7 @@ public partial class MainWindow : Window
             _journal.Append(new JournalEntry(operationId, operation, "Prepared", source, destinationPath, sourceSize, sourceLastWriteUtc, DateTime.UtcNow));
             prepared = true;
             if (operation == "Copy") await Task.Run(() => File.Copy(source, destinationPath));
-            else await Task.Run(() => File.Move(source, destinationPath));
+            else await MoveFileAsync(source, destinationPath);
             AppLog.Info($"FileAction filesystem-complete operation={operation} source={source} destination={destinationPath}");
             var destinationInfo = new FileInfo(destinationPath);
             if (!destinationInfo.Exists || destinationInfo.Length != sourceSize)
@@ -1139,7 +1161,7 @@ public partial class MainWindow : Window
                 var committed = _journal.ReadCommittedMoves().LastOrDefault(x => x.Destination == move.Destination);
                 if (committed is null || destinationInfo.Length != committed.Size || destinationInfo.LastWriteTimeUtc != committed.LastWriteUtc)
                     throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
-                await Task.Run(() => File.Move(move.Destination, move.Source));
+                await MoveFileAsync(move.Destination, move.Source);
                 _lastUndoAction = null;
                 if (folderGeneration != _folderGeneration)
                     AppLog.Info($"Undo completion ignored after folder switch: source={move.Source}");
@@ -1178,6 +1200,68 @@ public partial class MainWindow : Window
 
     private sealed record UndoAction(string Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc);
 
+    /// <summary>
+    /// T14a seam for the user-triggered Move/Undo filesystem step. With no hook this is the
+    /// original <c>Task.Run(() =&gt; File.Move(...))</c>; a test substitutes it to control when
+    /// the move completes (INV-3, INV-4, INV-5).
+    /// </summary>
+    private Task MoveFileAsync(string source, string destination)
+        => _hooks?.MoveOverride is { } moveOverride
+            ? moveOverride(source, destination)
+            : Task.Run(() => File.Move(source, destination));
+
+    /// <summary>
+    /// Redirects PHOTOREVIEW_DATA_ROOT at a temp directory so a hosted MainWindow never reads
+    /// or writes the user's real journal/session data. An already-installed root (a test
+    /// fixture that owns cleanup) wins.
+    /// </summary>
+    private static MainWindowTestHooks ApplyTestEnvironment(MainWindowTestHooks hooks)
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT")))
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-MainWindow-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", root);
+        }
+        return hooks;
+    }
+}
+
+/// <summary>
+/// The one Explorer-order call MainWindow makes during folder load. Same signature as
+/// <see cref="ExplorerOrderService.TryGetSnapshotProgressiveAsync"/>. Extends
+/// <see cref="IDisposable"/> so <c>Window_Closed</c> keeps disposing the provider unchanged.
+/// T22c/T23b replace this with a Core-layer interface.
+/// </summary>
+internal interface IProgressiveExplorerOrderProvider : IDisposable
+{
+    Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
+        CancellationToken cancellationToken, IProgress<ExplorerOrderService.ExplorerQueryProgress>? progress = null, int batchSize = 16);
+}
+
+/// <summary>Production provider: owns and forwards to the real <see cref="ExplorerOrderService"/>.</summary>
+internal sealed class ExplorerOrderProviderAdapter : IProgressiveExplorerOrderProvider
+{
+    private readonly ExplorerOrderService _service = new();
+
+    public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
+        CancellationToken cancellationToken, IProgress<ExplorerOrderService.ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        => _service.TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken, progress, batchSize);
+
+    public void Dispose() => _service.Dispose();
+}
+
+/// <summary>T14a: the hooks an STA-hosted test installs on <see cref="MainWindow"/>.</summary>
+internal sealed class MainWindowTestHooks
+{
+    /// <summary>Substitute Explorer snapshot source (INV-7, INV-9).</summary>
+    public IProgressiveExplorerOrderProvider? Explorer { get; init; }
+
+    /// <summary>Raised with the path that just became the displayed image.</summary>
+    public Action<string>? OnPresented { get; init; }
+
+    /// <summary>Replaces the <c>File.Move</c> step of a Move/Undo action; (source, destination).</summary>
+    public Func<string, string, Task>? MoveOverride { get; init; }
 }
 
 
