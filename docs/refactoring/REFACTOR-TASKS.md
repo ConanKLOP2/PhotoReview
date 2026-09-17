@@ -99,7 +99,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T12 | Xóa file test trùng trong CLI | T10 | ∥B | | DONE |
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | DONE |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | DONE |
-| T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | IN PROGRESS |
+| T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | DONE |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | TODO |
 | T14c | Test INV-5 | T14a | ∥C | | TODO |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | TODO |
@@ -310,9 +310,20 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Xong khi:** smoke test đạt 10/10 lần. Nếu không làm được seam mà không đổi logic thì đặt `BLOCKED` và đề xuất dời INV sang T44–T46.
 - **Nhật ký:**
   - 2026-09-17 · Opus 5 (Coordinator) · trạng thái IN PROGRESS, giao worker Opus 5 trên máy 2 (VTI) — máy này không có fixture ảnh thật nên không dùng cho D07+; chuyển sang làm tiếp nhánh refactor. Branch `refactor/T14a-sta-harness`.
+  - 2026-09-17 · Opus 5 · branch `refactor/T14a-sta-harness` · commit `92cd88f`.
+    - **Files:** `PhotoReview.Tests.Unit/Infrastructure/StaTestHost.cs` (mới), `PhotoReview.App/AssemblyInfo.cs`, `PhotoReview.App/MainWindow.xaml.cs`.
+    - **Thay đổi:** `StaTestHost.RunAsync` chạy body trên một thread STA dùng chung (`Application` + `DispatcherSynchronizationContext` dựng một lần), mỗi body đẩy một `DispatcherFrame` riêng, timeout 30 s (`StaTestHost.cs:17-111`). Seam trong `MainWindow`: ctor `internal MainWindow(string?, MainWindowTestHooks)` (`:61`) chain qua `ApplyTestEnvironment` (`:1218`) nên `PHOTOREVIEW_DATA_ROOT` được đặt **trước** field initializer của `_journal`; `_explorerOrder` đổi sang `IProgressiveExplorerOrderProvider` (`:41`, gán tại `:68`); `OnPresented` gọi tại choke point present duy nhất, ngay sau `MainImage.Source = image` (`:382`, giữa dòng AppLog và `perfKick`, không ảnh hưởng đo D04); `MoveOverride ?? Task.Run(File.Move)` qua `MoveFileAsync` (`:1208`) cho 3 call site move/undo (`:959`, `:1076`, `:1164`). Không đổi thứ tự/logic lệnh có sẵn.
+    - **Lệch plan (đã review, chấp nhận):**
+      1. `ExplorerOrderService` **không** implement `IProgressiveExplorerOrderProvider` trực tiếp — lý do thật là `ExplorerOrderService.cs` **không nằm trong Files list** của task (không phải vì class `sealed` như log ban đầu ghi nhầm — `sealed` không cản trở implement interface). Thay vào đó `ExplorerOrderProviderAdapter` trong `MainWindow.xaml.cs` (`:1239-1248`) bọc service thật, forward `Dispose()` đúng một lần. Hành vi giống hệt; T22c/T23b sẽ thay bằng interface ở Core.
+      2. `MainWindowTestHooks.Explorer` kiểu `IProgressiveExplorerOrderProvider?`, không phải `IExplorerOrderProvider?` như task ghi — interface public đó chỉ có `TryGetSnapshotAsync`, thiếu method progressive nên dùng đúng nghĩa đen sẽ không compile được.
+      3. Harness dùng reflection để trỏ `Application.ResourceAssembly`/`BaseUriHelper.ResourceAssembly` sang assembly App (vì `MainWindow.xaml` có `Icon="pack://application:,,,/Assets/PhotoReview.ico"`, không resolve được trong test host trần, và `MainWindow.xaml` ngoài Files list nên không sửa được). **Rủi ro đã biết:** phụ thuộc internal field của WPF, có thể vỡ khi đổi runtime; nếu vỡ sẽ throw lỗi named rõ ràng chứ không âm thầm. Đề xuất follow-up: chuyển icon ra khỏi XAML (biến pack URI có assembly name) để xoá đoạn reflection này.
+    - **Kiểm thử:** smoke test `StaTestHostSmokeTests` đạt 10/10 lần chạy `dotnet test` riêng biệt (worker và reviewer độc lập đều xác nhận). VERIFY `.\tools\verify-all.ps1` đạt, xUnit 251/251, `PASS: all PhotoReview verification gates` (cả trước và sau merge).
+    - **Review R3:** Opus 5 mới, không có context worker — chạy lại toàn bộ VERIFY + 10 lần smoke test độc lập, kiểm INV-6/7/9 và K-4, xác nhận ctor chaining/field-initializer ordering đúng C#, xác nhận `MoveFileAsync` tương đương hành vi exception/await ở cả 3 call site. **Verdict: APPROVE**, không có CHANGES bắt buộc.
+    - **Việc còn lại cho T14b–T14d:** (a) fake `Explorer` phải implement `IProgressiveExplorerOrderProvider` (internal), không phải `IExplorerOrderProvider` (public); (b) mọi test dùng seam này **phải** dùng `DataRootFixture` của `StaTestHost.cs` — nhánh set `PHOTOREVIEW_DATA_ROOT` mặc định trong `ApplyTestEnvironment` mutate biến môi trường process-global và không tự dọn temp dir, nếu bỏ qua fixture sẽ làm các test `GlobalState` khác không deterministic; (c) cân nhắc chuyển smoke test hiện tại từ `StaTestHost.cs` sang file test riêng khi được phép thêm file mới.
 
 ### T14b — INV-3, INV-4 ∥C
 - **Files:** `{UT}/MainWindowBehaviorTests.Actions.cs` (mới).
+- **Ghi chú từ T14a:** mọi test dùng seam của `MainWindow` phải dùng `StaTestHost`'s `DataRootFixture` (không tự set `PHOTOREVIEW_DATA_ROOT` bằng tay) để tránh rò biến môi trường process-global sang test khác trong collection `GlobalState`.
 - **Làm:**
   - INV-3: `MoveOverride` ghi thời điểm bắt đầu, `OnPresented` ghi thời điểm present. Assert: ảnh kế tiếp được present **trước** khi `MoveOverride` hoàn tất, và chỉ present một lần cho action đó.
   - INV-4: `MoveOverride` chờ một `TaskCompletionSource`. Gửi 2 action liên tiếp. Assert: `MoveOverride` chỉ được gọi 1 lần.
@@ -322,12 +333,14 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 
 ### T14c — INV-5 ∥C
 - **Files:** `{UT}/MainWindowBehaviorTests.FolderSwitch.cs` (mới).
+- **Ghi chú từ T14a:** dùng `DataRootFixture` (xem ghi chú T14b).
 - **Làm:** `MoveOverride` chờ. Trong lúc chờ, mở folder B. Sau đó cho Move hoàn tất. Assert: catalog của B không đổi, và Ctrl+Z không đụng file (không có undo entry).
 - **Xong khi:** đạt 10/10 lần.
 - **Nhật ký:** —
 
 ### T14d — INV-7, INV-9 ∥C
 - **Files:** `{UT}/MainWindowBehaviorTests.Explorer.cs` (mới), `{UT}/Fakes/FakeExplorerOrderProvider.cs` (mới).
+- **Ghi chú từ T14a:** `FakeExplorerOrderProvider` phải implement `IProgressiveExplorerOrderProvider` (interface internal trong `MainWindow.xaml.cs`, có `TryGetSnapshotProgressiveAsync` + `IDisposable`) — không phải `IExplorerOrderProvider` public (chỉ có `TryGetSnapshotAsync`, không đủ chữ ký). Dùng `DataRootFixture` (xem ghi chú T14b).
 - **Làm:**
   - INV-7: fake trả snapshot đảo thứ tự sau 500 ms. Người dùng Next trước khi snapshot về. Assert: thứ tự không đổi.
   - INV-9a: mở **file** thì `OnPresented` chỉ xảy ra sau khi fake trả kết quả.
