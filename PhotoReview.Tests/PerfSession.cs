@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 
 /// <summary>
 /// D06 in-process scenario driver: <c>--perf-session &lt;scenario.json&gt; &lt;folder&gt; &lt;outDir&gt;

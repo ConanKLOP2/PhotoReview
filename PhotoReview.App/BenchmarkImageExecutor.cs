@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Media.Imaging;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App;
 

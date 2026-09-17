@@ -1,13 +1,11 @@
 using PhotoReview.App;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 using PhotoReview.Tests;
 using System.IO;
 using System.Windows.Media;
-using ExplorerViewSnapshot = PhotoReview.App.ExplorerViewSnapshot;
-using IExplorerOrderProvider = PhotoReview.App.IExplorerOrderProvider;
-using ExplorerOrderStatus = PhotoReview.App.ExplorerOrderStatus;
-using ExplorerGroupState = PhotoReview.App.ExplorerGroupState;
 static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
 {
     if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
@@ -650,6 +648,11 @@ sealed class FakeExplorerOrderProvider(ExplorerViewSnapshot snapshot) : IExplore
 {
     public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
         => Task.FromResult(snapshot);
+
+    public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        => Task.FromResult(snapshot);
+
+    public void Dispose() { }
 }
 
 

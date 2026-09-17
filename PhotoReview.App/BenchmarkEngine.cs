@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App;
 

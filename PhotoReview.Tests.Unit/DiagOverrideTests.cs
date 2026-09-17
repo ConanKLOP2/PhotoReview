@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using PhotoReview.App;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Tests.Unit;
 

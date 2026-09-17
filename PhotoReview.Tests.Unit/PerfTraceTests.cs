@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using PhotoReview.App;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Tests.Unit;
 
