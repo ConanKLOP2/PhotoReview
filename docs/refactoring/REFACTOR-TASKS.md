@@ -120,7 +120,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T26c | `RecoveryRetryService` thành instance | T26a | | | DONE |
 | T30 | Tạo Imaging, Platform, Imaging.Tests, Integration.Tests | T25b, T26b, T26c | | | DONE |
 | T31a | `DiskCacheStore` thành instance | T30 | ∥F | | DONE |
-| T31b | `IImageDecoder` + `WpfBitmapImageDecoder` | T30 | ∥F | | TODO |
+| T31b | `IImageDecoder` + `WpfBitmapImageDecoder` | T30 | ∥F | | DONE |
 | T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | TODO |
 | T33a | Chuyển Explorer sang Platform | T30 | ∥F | | TODO |
 | T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | TODO |
@@ -574,7 +574,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Tạm thời trả `(BitmapSource, bool Downscaled)`. T31c sẽ đổi sang `IDecodedImage`.
   4. `PreviewImageService` nhận `IImageDecoder` qua constructor (mặc định `new WpfBitmapImageDecoder()` để caller chưa phải đổi). Giữ `public static DecodeSource` làm wrapper `[Obsolete]` nếu benchmark còn gọi.
 - **Xong khi:** `PreviewImageServiceTests` đạt, INV-8 test đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Tạo các abstraction và implementation giải mã ảnh tại `src/PhotoReview.Imaging/Decoding/`: `DecodeRequest`, `ImageInfo`, `IImageDecoder`, và `WpfBitmapImageDecoder`. Chuyển nguyên văn logic decode (FileStream flags ReadWrite|Delete, SequentialScan, 1MB buffer, OnLoad, Freeze, DelayCreation, memory bytes support). `PreviewImageService` nhận `IImageDecoder` qua constructor (mặc định `new WpfBitmapImageDecoder()`), ủy quyền decode và metadata sang `IImageDecoder`. Thêm `WpfBitmapImageDecoderTests` gồm 4 bài test. Toàn bộ 464 xUnit tests PASS, INV-8 PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Tách decoder sạch sẽ, giữ nguyên toàn bộ FileStream options và caching/freeze flags.
+    - **Review R2:** APPROVE. Các bài test decoder mới và regression tests đều pass, verification gates đạt 100%.
 
 ### T31c — `IDecodedImage` (K-1)
 - **Ghi chú:** chỉ bắt đầu sau T32, T33a, T33b vì cùng sửa caller trong `MainWindow`/`PreloadScheduler`.

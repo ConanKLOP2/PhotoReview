@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 460/460 (Core: 194, Imaging: 10, Integration: 1, Tests.Unit: 255)
+- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 464/464 (Core: 194, Imaging: 14, Integration: 1, Tests.Unit: 255)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, T30 VÀ T31a**. Đang tiếp tục Wave 3 (Nhóm song song ∥F).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, T30, T31a VÀ T31b**. Đang tiếp tục Wave 3 (Nhóm song song ∥F).
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, **T31a** (Wave 1, Wave 2, T30 và T31a đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, **T31b** (Wave 1, Wave 2, T30, T31a và T31b đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -59,7 +59,6 @@
 ## Việc tiếp theo
 
 1. **Refactor (Wave 3 tiếp tục — Nhóm song song ∥F):**
-   - **T31b:** `IImageDecoder` + backend Wpf.
    - **T32:** Preload bỏ Dispatcher.
    - **T33a:** Explorer sang Platform.
    - **T33b:** RecycleBin, Memory, Lock, Comparer sang Platform.
