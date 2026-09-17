@@ -110,7 +110,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T22c | Các interface còn lại | T20 | ∥D | | DONE |
 | T23a | Chuyển service thuần (sort, sibling, compare, drag-drop, file types) | T20 | ∥D | | DONE |
 | T23b | Chuyển `ReviewMetrics`, `BenchmarkStatistics`, `ExplorerSnapshotValidator` | T20 | ∥D | | DONE |
-| T21b | `AppSettings` dùng enum + sửa caller | T21a, T23a | | | TODO |
+| T21b | `AppSettings` dùng enum + sửa caller | T21a, T23a | | | DONE |
 | T21c | `JournalEntry` dùng enum | T21a | | | TODO |
 | T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | TODO |
 | T25a | `SettingsStore` | T24 | | | TODO |
@@ -475,7 +475,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Fixture: config v1 (không có `ConfigVersion`, `ImageSortMode:"Size"`) và v2 (`InitialViewMode:"200%"`). Test load → save → load cho ra giá trị tương đương.
 - **Kiểm thử:** grep `"Original"|"Preview"|"Fit"|"Move"|"Copy"|"Recycle"` trong `{App}/*.cs` chỉ còn trong chuỗi hiển thị hoặc log.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Chuyển toàn bộ thuộc tính `LoadingMode`, `ImageSortMode`, `InitialViewMode` và `ReviewAction.Operation` sang kiểu enum Core (`PhotoReview.Core.Model`). Xóa các hàm chuẩn hóa thủ công `NormalizeLoadingMode`, `IsValidLoadingMode`, `NormalizeImageSortMode`, `IsValidImageSortMode`. Cập nhật callers trong UI (`MainWindow`, `SettingsWindow`, `ActionProfilesWindow`), catalog (`ImageSortService`), benchmark (`BenchmarkModels`, `BenchmarkProfiles`, `BenchmarkImageExecutor`, `BenchmarkWindow`). Thêm fixture `config-v1.json` và `config-v2.json` trong `PhotoReview.Tests.Unit/Fixtures/` và bổ sung unit tests deserialization / lenient fallback. Sửa CLI tests và PerfSession tương ứng. `verify-all.ps1` đạt PASS hoàn toàn (414 xUnit tests).
+    - **Review R1:** APPROVE. Đúng danh sách file của T21b, loại bỏ hoàn toàn stringly-typed configuration, bảo đảm tương thích ngược qua LenientEnumConverter.
+    - **Review R2:** APPROVE. Đầy đủ fixture v1/v2 kiểm tra deserialization, caller không còn so sánh chuỗi literal cho options cốt lõi, build và publish Release sạch sẽ.
 
 ### T21c — Journal dùng enum
 - **Files:** `{App}/OperationJournal.cs`, `{App}/RecoveryRetryService.cs`, `{App}/RecoveryWindow.xaml.cs`, `{App}/MainWindow.xaml.cs` (chỉ `new JournalEntry(...)`), test journal, `{UT}/Fixtures/operations-legacy.jsonl` (mới).
