@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -29,7 +30,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     {
         _profile = profile;
         _diskCacheDirectory = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Cache", Guid.NewGuid().ToString("N"));
-        var isOriginal = string.Equals(profile.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+        var isOriginal = profile.LoadingMode == LoadingMode.Original;
         _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
             AppConstants.ImageCacheCapacityBytes, _diskCacheDirectory);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,

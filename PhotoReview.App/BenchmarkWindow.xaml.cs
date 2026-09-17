@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using Forms = System.Windows.Forms;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -187,7 +188,7 @@ public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseR
     public bool IsBest { get; set; }
 
     public string ProfileName => Profile.Name;
-    public string LoadingMode => Profile.LoadingMode;
+    public LoadingMode LoadingMode => Profile.LoadingMode;
     public BenchmarkWorkload Workload => Phase.Workload;
     public int Count => Phase.Count;
     public BenchmarkResultStatus Status => Phase.Status;

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
 using Forms = System.Windows.Forms;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -25,18 +26,28 @@ public partial class ActionProfilesWindow : Window
         _loaded = ActionList.SelectedItem as ReviewAction;
         if (_loaded is null) return;
         NameText.Text = _loaded.Name; ShortcutText.Text = _loaded.Shortcut; DestinationText.Text = _loaded.Destination; ConfirmCheck.IsChecked = _loaded.Confirm;
-        OperationCombo.SelectedIndex = _loaded.Operation.ToUpperInvariant() switch { "COPY" => 1, "RECYCLE" => 2, "DELETE" => 3, _ => 0 };
+        OperationCombo.SelectedIndex = _loaded.Operation switch
+        {
+            FileOperationType.Copy => 1,
+            FileOperationType.Recycle => 2,
+            _ => 0
+        };
     }
 
     private void SaveCurrent()
     {
         if (_loaded is null || !Actions.Contains(_loaded)) return;
         _loaded.Name = NameText.Text.Trim(); _loaded.Shortcut = ShortcutText.Text.Trim(); _loaded.Destination = DestinationText.Text.Trim(); _loaded.Confirm = ConfirmCheck.IsChecked == true;
-        _loaded.Operation = (OperationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Move";
+        _loaded.Operation = OperationCombo.SelectedIndex switch
+        {
+            1 => FileOperationType.Copy,
+            2 or 3 => FileOperationType.Recycle,
+            _ => FileOperationType.Move
+        };
         ActionList.Items.Refresh();
     }
 
-    private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = "Action mới", Shortcut = "F6", Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
+    private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = "Action mới", Shortcut = "F6", Operation = FileOperationType.Move, Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
     private void Remove_Click(object sender, RoutedEventArgs e) { if (ActionList.SelectedItem is ReviewAction action) { Actions.Remove(action); ActionList.Items.Refresh(); if (Actions.Count > 0) ActionList.SelectedIndex = 0; } }
     private void Import_Click(object sender, RoutedEventArgs e)
     {
@@ -60,7 +71,7 @@ public partial class ActionProfilesWindow : Window
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
-        if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !Enum.TryParse<Key>(action.Shortcut, true, out _) || string.IsNullOrWhiteSpace(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+        if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !Enum.TryParse<Key>(action.Shortcut, true, out _) || !Enum.IsDefined(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
         { System.Windows.MessageBox.Show(this, "Action phải có tên, phím hợp lệ và không được trùng phím.", "Cấu hình không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         DialogResult = true;
     }

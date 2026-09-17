@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Catalog;
 
@@ -8,32 +9,42 @@ public static class ImageSortService
 {
     public static List<string> Sort(
         IEnumerable<string> files,
-        string? mode,
+        ImageSortMode mode,
         INaturalComparer? naturalComparer = null,
         ILog? log = null)
     {
         var comparer = naturalComparer ?? ManagedNaturalComparer.Instance;
 
-        if (string.Equals(mode, "Size", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(mode, "SizeDescending", StringComparison.OrdinalIgnoreCase))
+        return mode switch
         {
-            return files
+            ImageSortMode.SizeDescending => files
                 .OrderByDescending(path => GetFileSize(path, log))
                 .ThenBy(Path.GetFileName, comparer)
-                .ToList();
-        }
-
-        if (string.Equals(mode, "SizeAscending", StringComparison.OrdinalIgnoreCase))
-        {
-            return files
+                .ToList(),
+            ImageSortMode.SizeAscending => files
                 .OrderBy(path => GetFileSize(path, log))
                 .ThenBy(Path.GetFileName, comparer)
-                .ToList();
-        }
+                .ToList(),
+            _ => files
+                .OrderBy(Path.GetFileName, comparer)
+                .ToList()
+        };
+    }
 
-        return files
-            .OrderBy(Path.GetFileName, comparer)
-            .ToList();
+    public static List<string> Sort(
+        IEnumerable<string> files,
+        string? mode,
+        INaturalComparer? naturalComparer = null,
+        ILog? log = null)
+    {
+        var sortMode = mode?.ToUpperInvariant() switch
+        {
+            "SIZE" or "SIZEDESCENDING" => ImageSortMode.SizeDescending,
+            "SIZEASCENDING" => ImageSortMode.SizeAscending,
+            _ => ImageSortMode.Name
+        };
+
+        return Sort(files, sortMode, naturalComparer, log);
     }
 
     private static long GetFileSize(string path, ILog? log)

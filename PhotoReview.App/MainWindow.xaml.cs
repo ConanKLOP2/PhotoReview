@@ -12,6 +12,7 @@ using System.ComponentModel;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
@@ -31,7 +32,6 @@ public partial class MainWindow : Window
     private long _totalSourceBytes;
     private const long FullFolderRamThresholdBytes = AppConstants.ImageCacheCapacityBytes;
     private const double PreloadMemoryLoadLimit = AppConstants.PreloadMemoryLoadLimit;
-    private static readonly HashSet<string> SupportedActionOperations = new(StringComparer.OrdinalIgnoreCase) { "Move", "Copy", "Recycle", "Delete" };
     private string? _compareSelectedPath;
     private readonly FileHashService _hashService = new();
     private readonly ReviewMetrics _metrics = new();
@@ -123,7 +123,7 @@ public partial class MainWindow : Window
             var previousMode = _settings.LoadingMode;
             _settings = AppSettings.Load();
             UpdateFolderTitle();
-            if (!string.Equals(previousMode, _settings.LoadingMode, StringComparison.OrdinalIgnoreCase))
+            if (previousMode != _settings.LoadingMode)
             {
                 _preloadScheduler.Cancel();
                 if (_index >= 0 && _index < _files.Count)
@@ -321,7 +321,7 @@ public partial class MainWindow : Window
         // PreviewImageService decode, preload kick) and is restored for the caller when this
         // async method yields, so it never leaks into the KeyDown handler or other navigations.
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
-        if (perf) { PhotoReviewPerf.NavContext = token; PhotoReviewPerf.Log.ShowStart(token, index, _settings.LoadingMode); }
+        if (perf) { PhotoReviewPerf.NavContext = token; PhotoReviewPerf.Log.ShowStart(token, index, _settings.LoadingMode.ToString()); }
         _compareSelectedPath = null;
         if (AppLog.Enabled) AppLog.Info($"ShowImage start index={index} count={_files.Count} token={token} path={path}");
         // The catalog can become stale while Explorer order is being applied or an
@@ -352,7 +352,7 @@ public partial class MainWindow : Window
         if (AppLog.Enabled) AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_previewService.CacheBytes}");
         try
         {
-            if (string.Equals(_settings.LoadingMode, "Preview", StringComparison.OrdinalIgnoreCase)
+            if (_settings.LoadingMode == LoadingMode.Preview
                 && !ramReady && !HasInflightPreview(path))
             {
                 // ThumbEnd "unknown" = call-site total; ThumbnailCache emits its own ThumbEnd with
@@ -522,7 +522,7 @@ public partial class MainWindow : Window
         await ShowImageAsync(nextIndex);
     }
 
-    private bool IsOriginalLoadingMode() => string.Equals(_settings.LoadingMode, "Original", StringComparison.OrdinalIgnoreCase);
+    private bool IsOriginalLoadingMode() => _settings.LoadingMode == LoadingMode.Original;
 
     private ImageCacheKey GetCurrentCacheKey(string path) => _previewService.GetCurrentCacheKey(path);
 
@@ -884,7 +884,7 @@ public partial class MainWindow : Window
 
     private void UpdateFitSize()
     {
-        if (!string.Equals(_settings.InitialViewMode, "Fit", StringComparison.OrdinalIgnoreCase)) return;
+        if (_settings.InitialViewMode != InitialViewMode.Fit) return;
         var width = ImageScroll.ActualWidth - ImageScroll.BorderThickness.Left - ImageScroll.BorderThickness.Right;
         var height = ImageScroll.ActualHeight - ImageScroll.BorderThickness.Top - ImageScroll.BorderThickness.Bottom;
         if (width > 1 && height > 1)
@@ -907,7 +907,7 @@ public partial class MainWindow : Window
 
     private void ApplyInitialViewMode()
     {
-        if (string.Equals(_settings.InitialViewMode, "Fit", StringComparison.OrdinalIgnoreCase))
+        if (_settings.InitialViewMode == InitialViewMode.Fit)
         {
             _zoom = 1;
             ImageScale.ScaleX = 1; ImageScale.ScaleY = 1;
@@ -916,7 +916,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            SetZoom(_settings.InitialViewMode switch { "200%" => 2, "400%" => 4, _ => 1 });
+            SetZoom(_settings.InitialViewMode switch { InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 4, _ => 1 });
         }
     }
 
@@ -1026,7 +1026,7 @@ public partial class MainWindow : Window
 
     private async Task ExecuteActionAsync(ReviewAction action)
     {
-        if (!SupportedActionOperations.Contains(action.Operation))
+        if (!Enum.IsDefined(action.Operation))
         {
             StatusText.Text = $"Không thực hiện được {action.Name}: Operation không hợp lệ.";
             return;
@@ -1036,7 +1036,7 @@ public partial class MainWindow : Window
             var answer = System.Windows.MessageBox.Show(this, $"Thực hiện action '{action.Name}' trên ảnh hiện tại?", "Xác nhận action", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (answer != System.Windows.MessageBoxResult.Yes) return;
         }
-        if (action.Operation.Equals("Recycle", StringComparison.OrdinalIgnoreCase) || action.Operation.Equals("Delete", StringComparison.OrdinalIgnoreCase))
+        if (action.Operation == FileOperationType.Recycle)
         {
             await ClassifyCurrentAsync(3);
             return;
@@ -1050,7 +1050,7 @@ public partial class MainWindow : Window
         var folderGeneration = _folderGeneration;
         var sourcePath = _compareSelectedPath ?? _files[_index];
         var source = sourcePath;
-        var operation = action.Operation.Equals("Copy", StringComparison.OrdinalIgnoreCase) ? "Copy" : "Move";
+        var operation = action.Operation == FileOperationType.Copy ? "Copy" : "Move";
         var sourceIndex = _files.FindIndex(p => string.Equals(p, sourcePath, StringComparison.OrdinalIgnoreCase));
         var nextPath = await AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == "Move");
         AppLog.Info($"FileAction action-start operation={operation} source={sourcePath} next={nextPath ?? "<none>"}");

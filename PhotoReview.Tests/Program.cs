@@ -3,6 +3,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 using PhotoReview.Tests;
 using System.IO;
 using System.Windows.Media;
@@ -227,18 +228,12 @@ try
     Check(mainWindow.Contains("Interlocked.Exchange(ref _fileActionInProgress, 1)"),
           "Interleaved actions reject duplicate concurrent file actions (source presence; FileActionConcurrencyTests covers the behavior)", failures);
     var defaultSettings = new AppSettings();
-    Check(defaultSettings.LoadingMode == "Preview", "LoadingMode defaults to Preview", failures);
-    Check(AppSettings.IsValidLoadingMode("Fast") && AppSettings.IsValidLoadingMode("Preview") && AppSettings.IsValidLoadingMode("Original")
-        && AppSettings.NormalizeLoadingMode("preview") == "Preview" && AppSettings.NormalizeLoadingMode("ORIGINAL") == "Original",
-        "LoadingMode has Fast, Preview, and Original options and accepts them case-insensitively", failures);
-    Check(!AppSettings.IsValidLoadingMode("Nonsense") && !AppSettings.IsValidLoadingMode(null) && !AppSettings.IsValidLoadingMode(""),
-        "LoadingMode validation rejects unknown, null, and empty values", failures);
-    Check(AppSettings.IsValidLoadingMode(AppSettings.NormalizeLoadingMode("Nonsense")) && AppSettings.IsValidLoadingMode(AppSettings.NormalizeLoadingMode(null)),
-        "LoadingMode normalization always yields a supported mode for corrupt config values", failures);
-    Check(defaultSettings.ImageSortMode == "Name" && AppSettings.IsValidImageSortMode("SizeAscending")
-        && !AppSettings.IsValidImageSortMode("Whatever") && AppSettings.NormalizeImageSortMode("Size") == "SizeDescending"
-        && AppSettings.NormalizeImageSortMode("Whatever") == "Name",
-        "ImageSortMode defaults to Name, validates known modes, and normalizes unknown ones", failures);
+    Check(defaultSettings.LoadingMode == LoadingMode.Preview, "LoadingMode defaults to Preview", failures);
+    Check(Enum.GetValues<LoadingMode>().Length == 3
+        && Enum.IsDefined(LoadingMode.Fast) && Enum.IsDefined(LoadingMode.Preview) && Enum.IsDefined(LoadingMode.Original),
+        "LoadingMode has Fast, Preview, and Original enum options", failures);
+    Check(defaultSettings.ImageSortMode == ImageSortMode.Name && defaultSettings.InitialViewMode == InitialViewMode.Fit,
+        "ImageSortMode defaults to Name and InitialViewMode defaults to Fit", failures);
     Check(mainWindow.Contains("LoadingMode", StringComparison.Ordinal), "MainWindow reads LoadingMode (source presence, not behavior)", failures);
     Check(mainWindow.Contains("Thumbnail", StringComparison.Ordinal) && mainWindow.Contains("Preview", StringComparison.Ordinal), "MainWindow loading modes have thumbnail/preview contract (source presence, not behavior)", failures);
     // ---- Source-presence checks: keyboard and shortcut wiring ----
@@ -347,8 +342,8 @@ try
     Check(mainWindow.Contains("Interlocked.Increment(ref _catalogInteractionGeneration)"), "Navigation and file actions advance catalog interaction generation (source presence, not behavior)", failures);
     Check(mainWindow.Contains("action.Confirm") && mainWindow.Contains("BatchReviewWindow") && mainWindow.Contains("ShowDialog()"), "Actions and batch operations require confirmation (source presence; ShowDialog needs a real WPF Window)", failures);
     var multiActionSettings = new AppSettings();
-    multiActionSettings.Actions.Add(new ReviewAction { Name = "Loại 3", Shortcut = "T", Operation = "Copy", Destination = "Loai-3" });
-    Check(multiActionSettings.Actions.Count >= 2 && multiActionSettings.Actions.All(a => a.Name.Length > 0 && a.Operation.Length > 0 && a.Destination.Length > 0)
+    multiActionSettings.Actions.Add(new ReviewAction { Name = "Loại 3", Shortcut = "T", Operation = FileOperationType.Copy, Destination = "Loai-3" });
+    Check(multiActionSettings.Actions.Count >= 2 && multiActionSettings.Actions.All(a => a.Name.Length > 0 && Enum.IsDefined(a.Operation) && a.Destination.Length > 0)
         && AppSettings.ValidateShortcuts(multiActionSettings) is null,
         "Config supports multiple review actions with distinct shortcuts", failures);
     Check(new AppSettings().ConfigVersion == AppSettings.CurrentConfigVersion

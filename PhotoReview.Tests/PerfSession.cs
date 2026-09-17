@@ -13,6 +13,7 @@ using PhotoReview.App;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 
 /// <summary>
 /// D06 in-process scenario driver: <c>--perf-session &lt;scenario.json&gt; &lt;folder&gt; &lt;outDir&gt;
@@ -220,7 +221,7 @@ internal static class PerfSession
         WpfTestHost.SuppressWindowPlacement(window);
         var settings = (AppSettings)typeof(MainWindow).GetField("_settings", Instance)!.GetValue(window)!;
         var configMode = settings.LoadingMode;
-        if (options.Mode is not null) settings.LoadingMode = options.Mode; // in-memory only; config.json untouched
+        if (options.Mode is not null && Enum.TryParse<LoadingMode>(options.Mode, true, out var m)) settings.LoadingMode = m; // in-memory only; config.json untouched
         var forbiddenKeys = CollectForbiddenKeys(settings);
         foreach (var step in scenario.Steps.Where(s => s.Key is not null))
         {
@@ -236,7 +237,7 @@ internal static class PerfSession
         // memory: no action at all unless the scenario uses one, then a single Move into <outDir>\copy\moved.
         settings.Actions = actionKey is null ? [] :
         [
-            new ReviewAction { Name = "perf-session move", Shortcut = actionKey, Operation = "Move", Destination = actionDestination, Confirm = false },
+            new ReviewAction { Name = "perf-session move", Shortcut = actionKey, Operation = FileOperationType.Move, Destination = actionDestination, Confirm = false },
         ];
 
         var dpi = 1.0;
@@ -646,8 +647,8 @@ internal static class PerfSession
             {
                 case "--mode":
                     var mode = Next();
-                    if (!AppSettings.IsValidLoadingMode(mode)) throw new ArgumentException($"invalid mode '{mode}' (Fast|Preview|Original)");
-                    options.Mode = AppSettings.NormalizeLoadingMode(mode);
+                    if (!Enum.TryParse<LoadingMode>(mode, true, out var parsedMode)) throw new ArgumentException($"invalid mode '{mode}' (Fast|Preview|Original)");
+                    options.Mode = parsedMode.ToString();
                     break;
                 case "--repeat":
                     options.Repeat = int.TryParse(Next(), out var r) && r is >= 1 and <= 1000 ? r : throw new ArgumentException("--repeat must be 1..1000");

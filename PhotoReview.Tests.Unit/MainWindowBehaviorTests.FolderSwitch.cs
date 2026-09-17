@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PhotoReview.App;
+using PhotoReview.Core.Model;
 using PhotoReview.Tests.Unit.Infrastructure;
 using Xunit;
 
@@ -241,7 +242,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
             {
                 Name = "T14c",
                 Shortcut = ActionKey.ToString(),
-                Operation = "Move",
+                Operation = FileOperationType.Move,
                 Destination = destinationFolder,
                 Confirm = false,
             },
