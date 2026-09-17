@@ -99,7 +99,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T12 | Xóa file test trùng trong CLI | T10 | ∥B | | DONE |
 | T13a | Gắn Trait Integration/Manual | T10 | ∥B | | DONE |
 | T13b | Sửa test flaky quota prune | T10 | ∥B | | DONE |
-| T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | TODO |
+| T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | IN PROGRESS |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | TODO |
 | T14c | Test INV-5 | T14a | ∥C | | TODO |
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | TODO |
@@ -308,7 +308,8 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Một smoke test: mở folder tạm có 3 PNG nhỏ, `OnPresented` được gọi với ảnh đầu.
 - **Không làm:** đổi logic hay thứ tự lệnh trong `MainWindow`.
 - **Xong khi:** smoke test đạt 10/10 lần. Nếu không làm được seam mà không đổi logic thì đặt `BLOCKED` và đề xuất dời INV sang T44–T46.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-17 · Opus 5 (Coordinator) · trạng thái IN PROGRESS, giao worker Opus 5 trên máy 2 (VTI) — máy này không có fixture ảnh thật nên không dùng cho D07+; chuyển sang làm tiếp nhánh refactor. Branch `refactor/T14a-sta-harness`.
 
 ### T14b — INV-3, INV-4 ∥C
 - **Files:** `{UT}/MainWindowBehaviorTests.Actions.cs` (mới).
