@@ -525,13 +525,17 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/OperationJournal.cs` → `{Core}/FileActions/OperationJournal.cs`, caller, test.
 - **Làm:** constructor `(IAppPaths, IFileSystem, IClock)`. Giữ lock, WriteThrough/flush và bỏ qua dòng hỏng. `ReconcilePendingOperations` dùng `IFileSystem`.
 - **Xong khi:** INV-6 đạt. Test durability gắn `Integration` và dùng `PhysicalFileSystem`.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Chuyển `OperationJournal` và `JournalEntry` sang `PhotoReview.Core.FileActions` với constructor `(IAppPaths, IFileSystem, IClock)`. Tái sử dụng `OpenAppendDurable` và `OpenReadShared` của `IFileSystem`, sử dụng `_clock.UtcNow` cho thời gian reconcile. Giữ tính bền vững ghi đĩa (Flush to disk) và bỏ qua dòng JSON hỏng. Gắn trait `[Trait("Category", "Integration")]` vào các test durability trong `OperationJournalTests.cs` (Unit). Tạo bộ unit tests `tests/PhotoReview.Core.Tests/FileActions/OperationJournalTests.cs` kiểm tra toàn bộ nhánh logic trên `InMemoryFileSystem` và fake clock. Toàn bộ 437 xUnit tests PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T26a, `OperationJournal` chạy độc lập trên abstractions, bảo toàn Invariant INV-6.
+    - **Review R2:** APPROVE. Test durability và kiểm tra reconcile chạy chuẩn xác, release verification đạt PASS.
 
 ### T26b — Session qua abstraction ∥E
 - **Files:** `{App}/SessionStore.cs` → `{Core}/Session/SessionStore.cs`, caller, test.
 - **Làm:** constructor `(IAppPaths, IFileSystem)`, giữ nguyên cách hash tên file. Sửa lỗi: nếu JSON không có `Folder` thì gán `Folder = folder` sau khi load.
 - **Xong khi:** test save/load và test JSON thiếu Folder đều đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Chuyển `SessionStore` và `SessionState` sang `PhotoReview.Core.Session` với constructor `(IAppPaths, IFileSystem)`. Tái sử dụng `_fileSystem.WriteAllTextAtomic` và `_fileSystem.ReadAllText`, giữ nguyên cơ chế hash SHA-256 canonicalization của đường dẫn folder. Sửa lỗi gán `Folder = folder` khi file JSON thiếu trường Folder. Viết bộ unit tests toàn diện trong `tests/PhotoReview.Core.Tests/Session/SessionStoreTests.cs` kiểm tra round-trip save/load, default fallback khi thiếu file/corrupt JSON, tự gán Folder khi JSON thiếu trường Folder, tự tạo thư mục Sessions, và tính chuẩn hóa case-insensitive của đường dẫn. Toàn bộ 444 xUnit tests PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T26b, `SessionStore` hoạt động độc lập qua abstraction IFileSystem/IAppPaths.
+    - **Review R2:** APPROVE. Test save/load, test JSON thiếu Folder, và toàn bộ gate xác thực PASS.
 
 ### T26c — Recovery instance
 - **Files:** `{App}/RecoveryRetryService.cs` → `{Core}/FileActions/`, `{App}/RecoveryWindow.xaml.cs`, `MainWindow.xaml.cs` (lời gọi), test.
