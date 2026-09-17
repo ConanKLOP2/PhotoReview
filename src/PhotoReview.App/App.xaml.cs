@@ -24,7 +24,7 @@ public partial class App : System.Windows.Application
     private PerfDispatcherHooks? _perfHooks;
     private void App_Startup(object sender, StartupEventArgs e)
     {
-        SettingsValidation.InitializeHooks();
+        PhotoReview.App.Services.WpfKeyNameValidator.WireUp();
         Store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
         var appSettings = Store.Load();
         AppLog.Enabled = appSettings.LoggingEnabled;
