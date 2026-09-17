@@ -32,6 +32,7 @@
     <Using Include="PhotoReview.Imaging" />
     <Using Include="PhotoReview.Imaging.Caching" />
     <Using Include="PhotoReview.Imaging.Decoding" />
+    <Using Include="PhotoReview.Imaging.Preload" />
   </ItemGroup>
 
   <ItemGroup>

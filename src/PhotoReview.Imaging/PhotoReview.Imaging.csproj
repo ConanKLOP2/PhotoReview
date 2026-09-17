@@ -14,8 +14,10 @@
   <ItemGroup>
     <Using Include="PhotoReview.Core.Model" />
     <Using Include="PhotoReview.Core.Abstractions" />
+    <Using Include="PhotoReview.Core.Diagnostics" />
     <Using Include="PhotoReview.Imaging.Caching" />
     <Using Include="PhotoReview.Imaging.Decoding" />
+    <Using Include="PhotoReview.Imaging.Preload" />
   </ItemGroup>
 
 </Project>

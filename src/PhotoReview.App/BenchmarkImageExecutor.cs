@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Media.Imaging;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 
@@ -34,7 +35,8 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
             AppConstants.ImageCacheCapacityBytes, _diskCacheDirectory);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,
-            AppConstants.ImageCacheCapacityBytes, AppConstants.PreloadMemoryLoadLimit, hasHeadroom);
+            AppConstants.ImageCacheCapacityBytes, AppConstants.PreloadMemoryLoadLimit, hasHeadroom,
+            uiScheduler: ImmediateUiScheduler.Instance);
     }
 
     // FirstFrame profiles always decode files[0] regardless of iteration index, to

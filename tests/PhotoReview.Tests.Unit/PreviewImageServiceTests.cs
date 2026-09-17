@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.App;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Tests.Unit;
@@ -217,7 +218,8 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
     // machine actually has free (PhysicalMemory.HasHeadroom also floors on a fixed
     // 2 GiB reserve, which a constrained CI/dev box may never satisfy).
     private (ReviewMetrics Metrics, PreviewImageService Service, PreloadScheduler Scheduler) NewWarmScheduler(
-        Func<double, bool>? hasHeadroom = null)
+        Func<double, bool>? hasHeadroom = null,
+        int? workerCount = null)
     {
         var metrics = new ReviewMetrics();
         var diskDirectory = _root.Dir("disk-cache-" + Guid.NewGuid().ToString("N"));
@@ -225,7 +227,9 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
         var scheduler = new PreloadScheduler(service, metrics, () => _preloadFiles, () => 0L, long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true));
+            memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true),
+            workerCountOverride: workerCount,
+            uiScheduler: ImmediateUiScheduler.Instance);
         return (metrics, service, scheduler);
     }
 
@@ -302,10 +306,40 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
         using var scheduler = new PreloadScheduler(service, metrics, () => _singleFiles, () => 0L, long.MaxValue,
-            memoryLoadLimit: 1.0, hasHeadroom: _ => true);
+            memoryLoadLimit: 1.0, hasHeadroom: _ => true, uiScheduler: ImmediateUiScheduler.Instance);
         await scheduler.PreloadAroundAsync(0);
         var warmedKey = service.GetCurrentCacheKey(_singleFiles[1]);
         Assert.True(scheduler.TryConsumePreloadedKey(warmedKey) && !scheduler.TryConsumePreloadedKey(warmedKey));
+    }
+
+    [Fact(DisplayName = "Preload without Dispatcher continues beyond first batch and loads all files")]
+    public async Task PreloadWithoutDispatcherContinuesBeyondFirstBatchAndLoadsAllFiles()
+    {
+        // Issue detected in D10: when no Dispatcher was present, Dispatcher.Yield() threw
+        // and stopped preload after the first batch of workers. ImmediateUiScheduler fixes this.
+        var batchFiles = Enumerable.Range(0, 6).Select(i =>
+        {
+            var path = Path.Combine(_root.Dir("preload-batch"), $"batch-{i}.png");
+            File.WriteAllBytes(path, PreviewImageServiceTests.PreviewPng);
+            return path;
+        }).ToArray();
+
+        var metrics = new ReviewMetrics();
+        var diskDirectory = _root.Dir("disk-cache-batch");
+        var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: diskDirectory);
+        _services.Add((service, diskDirectory));
+
+        // 2 workers, 6 files -> requires multiple batch yields
+        var options = new PreloadOptions(WorkerCount: 2, MemoryLoadLimit: 1.0);
+        using var scheduler = new PreloadScheduler(service, metrics, () => batchFiles, () => 0L,
+            options: options, memoryProbe: new FakeMemoryProbe(true), uiScheduler: ImmediateUiScheduler.Instance);
+
+        await scheduler.PreloadAroundAsync(0);
+
+        // Files around center 0 should be cached across multiple batches
+        Assert.True(service.CacheCount >= 5,
+            $"Expected at least 5 cached files, but got {service.CacheCount}");
     }
 }
 
