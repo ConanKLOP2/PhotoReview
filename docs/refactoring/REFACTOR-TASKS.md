@@ -541,7 +541,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/RecoveryRetryService.cs` → `{Core}/FileActions/`, `{App}/RecoveryWindow.xaml.cs`, `MainWindow.xaml.cs` (lời gọi), test.
 - **Làm:** thành class instance với constructor `(OperationJournal, IFileSystem, IClock)`, logic và thông báo giữ nguyên.
 - **Xong khi:** test retry đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Chuyển `RecoveryRetryService` và `RecoveryRetryResult` sang `PhotoReview.Core.FileActions` thành class instance với constructor `(OperationJournal, IFileSystem, IClock)`. Tái sử dụng `_fileSystem.FileExists`, `_fileSystem.GetFileStat`, `_fileSystem.CreateDirectory`, `_fileSystem.Copy`, `_fileSystem.Move` và `_clock.UtcNow`. Bảo toàn 100% logic an toàn và thông báo tiếng Việt. Cập nhật `MainWindow.xaml.cs` khởi tạo và truyền instance vào `RecoveryWindow`. Tạo bộ unit tests `tests/PhotoReview.Core.Tests/FileActions/RecoveryRetryServiceTests.cs` kiểm tra toàn diện trên `InMemoryFileSystem` (thành công Move/Copy, từ chối Recycle, từ chối thiếu đích, từ chối nguồn mất/thay đổi fingerprint, từ chối đích đã tồn tại, kiểm tra null). Toàn bộ 452 xUnit tests PASS, `verify-all.ps1` PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T26c, `RecoveryRetryService` hoàn toàn độc lập và kiểm thử được qua abstractions.
+    - **Review R2:** APPROVE. Tất cả test retry thành công/thất bại, smoke test, và release gate đều PASS.
 
 ---
 
