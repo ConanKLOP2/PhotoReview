@@ -102,7 +102,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T14a | STA harness + seam tối thiểu trong MainWindow | T11, T13a, D05, D06, D10 | | | DONE |
 | T14b | Test INV-3, INV-4 trên MainWindow | T14a | ∥C | | DONE |
 | T14c | Test INV-5 | T14a | ∥C | | IN PROGRESS |
-| T14d | Test INV-7, INV-9 | T14a | ∥C | | IN PROGRESS |
+| T14d | Test INV-7, INV-9 | T14a | ∥C | | DONE |
 | T20 | Tạo Core + Core.Tests | T14b–d | | | TODO |
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | TODO |
 | T22a | `AppPaths` | T20 | ∥D | | TODO |
@@ -354,7 +354,18 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - INV-9a: mở **file** thì `OnPresented` chỉ xảy ra sau khi fake trả kết quả.
   - INV-9b: mở **folder** thì present xảy ra trước khi fake trả kết quả, sau đó thứ tự Explorer được áp dụng và ảnh đầu theo thứ tự mới được present.
 - **Xong khi:** đạt 10/10 lần.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-17 · Opus 5 · branch `refactor/T14d-inv79` · commit `2c49b4a` (merge `refactor/integration`).
+    - **Files:** `PhotoReview.Tests.Unit/Fakes/FakeExplorerOrderProvider.cs` (mới, 74 dòng), `PhotoReview.Tests.Unit/MainWindowBehaviorTests.Explorer.cs` (mới, 349 dòng). Fake implement đúng `IProgressiveExplorerOrderProvider` internal.
+    - **Cơ chế fake:** `TryGetSnapshotProgressiveAsync` chờ `Task.WhenAll(Delay 500ms, gate)` — gate do test mở tay bằng `Release()`, nên thứ tự sự kiện là chắc chắn chứ không phải đua với đồng hồ máy.
+    - **INV-7:** mở folder → present `a.png` → Next (present `b.png`) → mở gate (fake trả thứ tự đảo `d,c,b,a`). Assert `FolderText` không có hậu tố `· Explorer` và thứ tự vẫn `a,b,c` tự nhiên — snapshot trễ bị bỏ qua vì đã có tương tác (`_catalogInteractionGeneration`, `MainWindow.xaml.cs:243-249`).
+    - **INV-9a:** mở file → present bị chặn tới khi fake trả kết quả (đường `initialPath is not null` chờ `explorerTask` trước `ShowImageAsync`).
+    - **INV-9b:** mở folder → present ngay (fallback tự nhiên) trước khi fake trả; sau khi fake trả, present lần 2 theo thứ tự Explorer đảo (`mayReplaceInitialFallback` → `ShowImageAsync(0)`), `FolderText` thêm `· Explorer`.
+    - **Kiểm thử:** cả 3 test đạt 10/10 lần `dotnet test --filter FullyQualifiedName~MainWindowExplorerOrderTests`. VERIFY sau merge: xUnit 256/256, `PASS: all PhotoReview verification gates`.
+    - **Review R3 (Opus 5 mới):** APPROVE. Tự chạy negative control độc lập (không phải theo đúng kịch bản worker mô tả, nhưng xác nhận cùng kết luận: assertion INV-7 có ý nghĩa thật, không vacuous). Xác nhận choke point present duy nhất tại `MainWindow.xaml.cs:382`, xác nhận không có đường nào khiến gate mở sớm hơn thời điểm test đã quan sát xong trạng thái cần thiết.
+    - **Lưu ý còn tồn tại (không chặn merge):**
+      - `PressNext` đọc key binding **thật** từ `AppSettings.Load()` của máy (không override như T14b) — reviewer đề xuất nên thống nhất quy ước (override in-memory như T14b) trước khi các task T44/T46 viết thêm nhiều test tương tự, và cân nhắc thêm guard kiểm tra key `Next` không trùng với các action phá hoại (Move/Recycle/Skip) trên máy chạy test.
+      - PNG writer ~70 dòng bị trùng lặp giữa `StaTestHost.cs`, T14b và T14d do giới hạn Files list — nên gộp vào `TestInfrastructure.cs` dùng chung ở một task sau (ví dụ khi làm T20/T24).
 
 ---
 
