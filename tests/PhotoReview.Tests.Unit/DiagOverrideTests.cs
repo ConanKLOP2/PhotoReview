@@ -33,7 +33,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // See PreviewImageServiceTests.DisposeAsync: every service's persist workers (and their
         // fire-and-forget prune passes) must be waited out before the TempRoot is deleted.
         await Task.WhenAll(_services.Select(s => s.Service.ShutdownPersistWorkersAsync()));
-        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
+        await Task.WhenAll(_services.Select(s => s.Service.WaitForPruneAsync(TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 

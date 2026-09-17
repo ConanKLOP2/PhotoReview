@@ -28,11 +28,15 @@ public sealed class PreviewImageService
     private readonly Func<int> _targetDecodeWidth;
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
+    private readonly DiskCacheStore _diskStore;
     // D10: precedence is the explicit test parameter, then the diagnostic environment
     // variable, then "disk cache enabled" (unset behavior). Read once in the constructor so
     // a mid-process environment change never makes DecodeAndCacheAsync and PersistToDiskCache
     // disagree about whether the disk cache is on.
     private readonly bool _disableDiskCache;
+
+    public DiskCacheStore DiskStore => _diskStore;
+    public string DiskDirectory => _diskCacheDirectory;
     // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
     // needs its own bound: without one, a preload burst spawns one Task.Run per decoded
     // preview with no cap, competing with live decodes for CPU/disk and keeping each
@@ -60,6 +64,7 @@ public sealed class PreviewImageService
         _diskCacheDirectory = diskCacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
+        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes);
         _disableDiskCache = disableDiskCacheOverride ?? DiagOptions.DisableDiskCache;
         _cache = new BoundedLruCache<ImageCacheKey, BitmapImage>(
             capacityBytes, bitmap => Math.Max(1, bitmap.PixelWidth * (long)bitmap.PixelHeight * 4));
@@ -94,18 +99,17 @@ public sealed class PreviewImageService
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
-                await DiskCacheStore.WriteAtomicallyAsync(request.Bitmap, request.CachePath).ConfigureAwait(false);
+                await _diskStore.WriteAtomicallyAsync(request.Bitmap, request.CachePath).ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
                     // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
                     // a freshly-written file for a cache generation that was just cleared.
-                    DiskCacheStore.TryDelete(request.CachePath, logContext: null);
+                    DiskCacheStore.TryDelete(request.CachePath);
                     continue;
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
                 // persisting several previews at once must not each scan the whole directory.
-                DiskCacheStore.SchedulePrune(Path.GetDirectoryName(request.CachePath)!,
-                    "*.png", _diskCacheCapacityBytes, "Preview disk cache delete failed");
+                _diskStore.SchedulePrune();
             }
             catch (Exception ex)
             {
@@ -314,10 +318,12 @@ public sealed class PreviewImageService
     public void ClearDisk()
     {
         lock (_cacheLifecycleGate) { _cacheEpoch++; }
-        try { DiskCacheStore.ClearDirectory(_diskCacheDirectory, "*.png", "Preview disk cache delete failed"); }
+        try { _diskStore.ClearDirectory(); }
         catch (IOException ex) { AppLog.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { AppLog.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
     }
+
+    public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);
 
     public void ClearOriginalDimensions() => _originalDimensions.Clear();
 

@@ -51,7 +51,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         // write's SchedulePrune call is itself fire-and-forget, so wait for those to finish
         // too, or _root.Dispose() below can race a prune worker still enumerating/deleting
         // files in one of these directories.
-        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
+        await Task.WhenAll(_services.Select(s => s.Service.WaitForPruneAsync(TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 
@@ -113,6 +113,27 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
 
         await service.GetPreviewAsync(_previewPath);
         service.EvictCachedPath(_previewPath);
+        await service.GetPreviewAsync(_previewPath);
+        Assert.True(metrics.Snapshot().SourceReads == 2 && service.CacheCount == 1);
+    }
+
+    [Fact(DisplayName = "Eviction in downscaled mode forces fresh source read when disk cache is cleared")]
+    public async Task EvictionInDownscaledModeForcesFreshSourceReadWhenDiskCacheCleared()
+    {
+        var diskCache = _root.Dir("disk-cache-eviction-downscaled");
+        var metrics = new ReviewMetrics();
+        var service = Track(new PreviewImageService(metrics, () => false, () => 512, diskCacheDirectory: diskCache), diskCache);
+
+        await service.GetPreviewAsync(_previewPath);
+        // Wait for background persistence to finish writing to disk cache
+        await service.ShutdownPersistWorkersAsync();
+        await service.WaitForPruneAsync(TimeSpan.FromSeconds(5));
+
+        // Delete disk cache files and evict RAM cache entry
+        service.DiskStore.ClearDirectory();
+        service.EvictCachedPath(_previewPath);
+
+        // Second request must re-read from source since both RAM and disk cache are gone
         await service.GetPreviewAsync(_previewPath);
         Assert.True(metrics.Snapshot().SourceReads == 2 && service.CacheCount == 1);
     }
@@ -187,7 +208,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         await Task.WhenAll(_services.Select(s => s.Service.ShutdownPersistWorkersAsync()));
         // See PreviewImageServiceTests.DisposeAsync: wait for each service's own
         // fire-and-forget prune pass(es) too, or _root.Dispose() below can race one.
-        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
+        await Task.WhenAll(_services.Select(s => s.Service.WaitForPruneAsync(TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 
@@ -327,7 +348,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         // write's SchedulePrune call is itself fire-and-forget, so wait for those to finish
         // too, or _root.Dispose() below can race a prune worker still enumerating/deleting
         // files in one of these directories.
-        await Task.WhenAll(_services.Select(s => DiskCacheStore.WaitForPruneAsync(s.DiskDirectory, TimeSpan.FromSeconds(5))));
+        await Task.WhenAll(_services.Select(s => s.Service.WaitForPruneAsync(TimeSpan.FromSeconds(5))));
         _root.Dispose();
     }
 
@@ -423,7 +444,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
                 diskCacheDirectory: diskDir, diskCacheCapacityBytes: quotaBytes);
             await service.GetPreviewAsync(_previewPath);
             await service.ShutdownPersistWorkersAsync();
-            Assert.True(await DiskCacheStore.WaitForPruneAsync(diskDir, TimeSpan.FromSeconds(10)),
+            Assert.True(await service.WaitForPruneAsync(TimeSpan.FromSeconds(10)),
                 $"Prune for width={width} did not complete within the wait timeout.");
         }
 
