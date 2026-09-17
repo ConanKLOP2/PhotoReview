@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 321/321 (Core: 66/66, Tests.Unit: 255/255)
+- **Cập nhật:** 2026-09-17 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 330/330 (Core: 75/75, Tests.Unit: 255/255)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 2 (T20, T21a) đã hoàn thành. Sẵn sàng cho D07 (chạy ma trận đo) và các task tiếp theo của nhóm song song ∥D (T22a, T22b, T22c, T23a, T23b).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). Wave 2 (T20, T21a, T22a) đã hoàn thành. Sẵn sàng cho D07 (chạy ma trận đo) và các task tiếp theo của nhóm song song ∥D (T22b, T22c, T23a, T23b).
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a (7 enum chuẩn và LenientEnumConverter trong Core; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a (IAppPaths và AppPaths trong Core; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,7 +58,7 @@
 
 ## Việc tiếp theo
 
-1. **Refactor (Wave 2 — nhóm song song ∥D):** **T22a** (`AppPaths`), **T22b** (`IFileSystem`), **T22c** (các interface còn lại), **T23a** (service thuần), **T23b** (metrics/stats) — T21a đã DONE. Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
+1. **Refactor (Wave 2 — nhóm song song ∥D):** **T22b** (`IFileSystem`), **T22c** (các interface còn lại), **T23a** (service thuần), **T23b** (metrics/stats) — T21a, T22a đã DONE. Sau nhóm ∥D là T21b, T21c rồi đến T24 (chuyển layout `src/`/`tests/`).
 2. **D07 (ma trận đo trên máy 1):** Đã sẵn sàng trên máy chính (đầy đủ fixture F1..F4 và công cụ đo). Chờ người dùng quyết định:
    - Phạm vi: rút gọn (khoảng 1 giờ), đầy đủ (vài giờ), hoặc tiếp tục refactor trước rồi đo sau.
    - Có cho xóa cache preview/thumbnail của app để đo cold-diskcache không.

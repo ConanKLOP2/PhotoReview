@@ -105,7 +105,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T14d | Test INV-7, INV-9 | T14a | ∥C | | DONE |
 | T20 | Tạo Core + Core.Tests | T14b–d | | | DONE |
 | T21a | Enum + `LenientEnumConverter` trong Core | T20 | ∥D | | DONE |
-| T22a | `AppPaths` | T20 | ∥D | | TODO |
+| T22a | `AppPaths` | T20 | ∥D | | DONE |
 | T22b | `IFileSystem` + triển khai | T20 | ∥D | | TODO |
 | T22c | Các interface còn lại | T20 | ∥D | | TODO |
 | T23a | Chuyển service thuần (sort, sibling, compare, drag-drop, file types) | T20 | ∥D | | TODO |
@@ -422,7 +422,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - `LogFile` = `(override ?? %LOCALAPPDATA%\PhotoReview)\logs\app.log`. Code cũ dùng root khác với Journal; giữ nguyên và ghi comment.
   - `PreviewCacheDir` = `%LOCALAPPDATA%\PhotoReview\cache`, `ThumbnailCacheDir` = `...\thumbnails`, `WindowPlacementFile` = xem `WindowPlacementService.PlacementPath`.
 - **Xong khi:** có test cho cả trường hợp có và không có override.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-17: Hoàn thành tạo interface IAppPaths và class AppPaths quản lý tập trung toàn bộ layout đường dẫn. Factory FromEnvironment() là nơi duy nhất đọc PHOTOREVIEW_DATA_ROOT. Viết 7 unit test trong Core.Tests kiểm tra cả có/không có override, isolateConfig, validate tham số và contract IAppPaths. Đạt 75/75 test trong Core.Tests và toàn bộ verify-all gates (330 tests).
+    - **Review R1:** APPROVE. Đúng danh sách Files, không sửa bất kỳ file nào trong PhotoReview.App, không đụng caller. Core target net10.0 thuần.
+    - **Review R2:** APPROVE. Khớp chính xác layout hiện tại, bao gồm cả điểm khác biệt giữa root của Log và Journal. Hỗ trợ isolateConfig cho test độc lập.
 
 ### T22b — `IFileSystem` ∥D
 - **Files:** `{Core}/Abstractions/IFileSystem.cs`, `{Core}/IO/PhysicalFileSystem.cs`, `{CoreT}/Fakes/InMemoryFileSystem.cs`, `{CoreT}/IO/*Tests.cs`.
