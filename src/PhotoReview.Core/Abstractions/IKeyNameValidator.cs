@@ -1,10 +1,12 @@
 namespace PhotoReview.Core.Abstractions;
 
 /// <summary>
-/// Trừu tượng hóa việc kiểm tra hợp lệ của tên phím tắt hoặc tên định danh.
+/// Trừu tượng hóa việc kiểm tra tính hợp lệ của tên phím bấm.
 /// </summary>
 public interface IKeyNameValidator
 {
-    /// <summary>Kiểm tra xem chuỗi đại diện phím có hợp lệ hay không.</summary>
+    /// <summary>
+    /// Kiểm tra xem tên phím có hợp lệ trên nền tảng UI hay không.
+    /// </summary>
     bool IsValidKeyName(string keyName);
 }

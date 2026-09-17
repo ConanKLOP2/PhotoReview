@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Using Include="PhotoReview.Core.Settings" />
+    <Using Include="PhotoReview.App.Services" />
   </ItemGroup>
 
 </Project>

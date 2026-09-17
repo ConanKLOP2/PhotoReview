@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Settings;
@@ -39,24 +40,13 @@ public class AppSettings
 
     public static void Save(AppSettings settings) => Saver?.Invoke(settings);
 
-    public static string? ValidateShortcuts(AppSettings settings)
+    private static readonly SettingsValidator FallbackValidator = new(new SimpleKeyNameValidator());
+
+    public static string? ValidateShortcuts(AppSettings settings) =>
+        Validator is not null ? Validator(settings) : FallbackValidator.ValidateShortcuts(settings);
+
+    private sealed class SimpleKeyNameValidator : IKeyNameValidator
     {
-        if (Validator is not null) return Validator(settings);
-        ArgumentNullException.ThrowIfNull(settings);
-        var bindings = new List<(string Name, string Value)>();
-        foreach (var property in typeof(ShortcutMappings).GetProperties())
-        {
-            if (property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue;
-            var value = property.GetValue(settings.Shortcuts)?.ToString()?.Trim();
-            if (!string.IsNullOrWhiteSpace(value))
-                bindings.Add((property.Name, value));
-        }
-        foreach (var action in settings.Actions ?? [])
-        {
-            if (!string.IsNullOrWhiteSpace(action.Name) && !string.IsNullOrWhiteSpace(action.Shortcut))
-                bindings.Add(($"Action: {action.Name}", action.Shortcut.Trim()));
-        }
-        var duplicate = bindings.GroupBy(item => item.Value, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
-        return duplicate is null ? null : $"Phím {duplicate.Key} bị dùng trùng bởi: {string.Join(", ", duplicate.Select(item => item.Name))}.";
+        public bool IsValidKeyName(string keyName) => !string.IsNullOrWhiteSpace(keyName);
     }
 }

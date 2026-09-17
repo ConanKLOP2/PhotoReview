@@ -125,7 +125,8 @@ public partial class SettingsWindow : Window
                 throw new JsonException("Các action không được trùng phím tắt.");
         }
         catch { System.Windows.MessageBox.Show(this, "Action profiles JSON không hợp lệ.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        var shortcutError = SettingsValidation.ValidateShortcuts(Settings);
+        var validator = new PhotoReview.App.Services.WpfKeyNameValidator();
+        var shortcutError = new SettingsValidator(validator).ValidateShortcuts(Settings);
         if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (_store is not null)
             _store.Save(Settings);
