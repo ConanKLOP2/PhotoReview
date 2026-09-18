@@ -73,6 +73,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
         services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
         services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
+        services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
 
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));

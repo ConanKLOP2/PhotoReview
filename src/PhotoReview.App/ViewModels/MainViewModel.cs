@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -27,6 +28,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     private readonly CompareViewModel _compare;
     private readonly SettingsStore _settingsStore;
     private readonly SessionStore _sessionStore;
+    private readonly FileActionService? _fileActionService;
+    private readonly UndoService? _undoService;
+    private readonly IDialogService? _dialogService;
+    private readonly IPreloadController? _preloadController;
+    private readonly INaturalComparer _naturalComparer;
     private readonly IFileSystem _fileSystem;
     private readonly Action? _resetCachesAction;
 
@@ -45,6 +51,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         SettingsStore settingsStore,
         SessionStore sessionStore,
         IFileSystem? fileSystem = null,
+        FileActionService? fileActionService = null,
+        UndoService? undoService = null,
+        IDialogService? dialogService = null,
+        IPreloadController? preloadController = null,
+        INaturalComparer? naturalComparer = null,
         Action? resetCachesAction = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -55,6 +66,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _compare = compare ?? throw new ArgumentNullException(nameof(compare));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+        _fileActionService = fileActionService;
+        _undoService = undoService;
+        _dialogService = dialogService;
+        _preloadController = preloadController;
+        _naturalComparer = naturalComparer ?? ManagedNaturalComparer.Instance;
         _fileSystem = fileSystem ?? new PhotoReview.Core.IO.PhysicalFileSystem();
         _resetCachesAction = resetCachesAction;
     }
@@ -221,6 +237,229 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         }
 
         await OpenFolderAsync(targetFolder).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
+    /// </summary>
+    public async Task RunActionAsync(int index)
+    {
+        if (_catalog.Count == 0) return;
+        var actions = _settingsStore.Current.Actions;
+        if (index < 0 || index >= actions.Count) return;
+
+        var action = actions[index];
+        if (!Enum.IsDefined(action.Operation))
+        {
+            StatusText = $"Không thực hiện được {action.Name}: Operation không hợp lệ.";
+            return;
+        }
+
+        if (action.Confirm && _dialogService is not null)
+        {
+            var ok = _dialogService.ShowConfirmation("Xác nhận action", $"Thực hiện action '{action.Name}' trên ảnh hiện tại?");
+            if (!ok) return;
+        }
+
+        if (action.Operation == FileOperationType.Recycle)
+        {
+            await ExecuteFileActionCoreAsync(action.Name, FileOperationType.Recycle, null).ConfigureAwait(false);
+            return;
+        }
+
+        var source = _compare.SelectedPath ?? _catalog.Current?.Path;
+        if (string.IsNullOrEmpty(source)) return;
+
+        if (string.IsNullOrWhiteSpace(action.Destination))
+        {
+            StatusText = $"Không thực hiện được {action.Name}: Action chưa có thư mục đích.";
+            return;
+        }
+
+        await ExecuteFileActionCoreAsync(action.Name, action.Operation, action.Destination).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
+    /// </summary>
+    public async Task RecycleAsync()
+    {
+        await ExecuteFileActionCoreAsync("Recycle", FileOperationType.Recycle, null).ConfigureAwait(false);
+    }
+
+    private async Task ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination)
+    {
+        if (_catalog.Count == 0) return;
+        if (_fileActionService is null) return;
+
+        // INV-4: Gate bận
+        if (_fileActionService.IsBusy) return;
+
+        var source = _compare.SelectedPath ?? _catalog.Current?.Path;
+        if (string.IsNullOrEmpty(source)) return;
+
+        var sourceIndex = _catalog.IndexOf(source);
+        _clock.StopForAction();
+        _preloadController?.Cancel();
+        var folderGen = _clock.CurrentFolder;
+
+        var isRemove = operation is FileOperationType.Move or FileOperationType.Recycle;
+        int nextIndex = -1;
+
+        if (isRemove)
+        {
+            nextIndex = _catalog.Remove(source);
+            _presenter.EvictCachedPath(source);
+            _compare.Clear();
+
+            // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
+            if (nextIndex >= 0)
+            {
+                _ = _presenter.PresentAsync(nextIndex);
+            }
+            else
+            {
+                StatusText = "Đã xử lý hết ảnh trong folder.";
+            }
+        }
+
+        try
+        {
+            var request = new FileActionRequest(source, operation, destination);
+            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
+
+            // Stale Folder Guard: Nếu người dùng đã đổi thư mục trong khi I/O đang chạy, bỏ qua
+            if (!_clock.IsFolderCurrent(folderGen))
+            {
+                return;
+            }
+
+            if (result.Succeeded)
+            {
+                _undoService?.Register(result);
+
+                if (_currentSession is not null)
+                {
+                    _currentSession.CurrentPath = _catalog.Current?.Path;
+                    _currentSession.UpdatedUtc = DateTime.UtcNow;
+                    _sessionStore.Save(_currentSession);
+                }
+
+                if (_catalog.Count == 0)
+                {
+                    StatusText = isRemove ? "Đã xử lý hết ảnh trong folder." : $"Đã thực hiện: {actionName}";
+                }
+                else if (operation == FileOperationType.Copy)
+                {
+                    StatusText = $"Đã copy sang {Path.GetFileName(result.DestinationPath)}";
+                }
+            }
+            else
+            {
+                // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
+                if (isRemove && sourceIndex >= 0)
+                {
+                    _catalog.Restore(source, sourceIndex);
+                }
+
+                StatusText = $"Không thực hiện được {actionName}: {result.Error}";
+            }
+        }
+        finally
+        {
+            NotifyNavigationStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// Hoàn tác thao tác di chuyển gần nhất (Ctrl+Z).
+    /// </summary>
+    public async Task UndoAsync()
+    {
+        if (_undoService is null) return;
+
+        var folderGen = _clock.CurrentFolder;
+        var result = await _undoService.UndoMoveAsync().ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            StatusText = result.ErrorMessage ?? "Không thể Undo.";
+            return;
+        }
+
+        if (!_clock.IsFolderCurrent(folderGen)) return;
+
+        if (!string.IsNullOrEmpty(result.Source))
+        {
+            _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
+            var idx = _catalog.IndexOf(result.Source);
+            if (idx >= 0)
+            {
+                await _presenter.PresentAsync(idx).ConfigureAwait(false);
+            }
+
+            if (_currentSession is not null)
+            {
+                _currentSession.CurrentPath = result.Source;
+                _currentSession.UpdatedUtc = DateTime.UtcNow;
+                _sessionStore.Save(_currentSession);
+            }
+        }
+
+        NotifyNavigationStateChanged();
+    }
+
+    /// <summary>
+    /// Hoàn tác thao tác gần nhất (Move hoặc Recycle).
+    /// </summary>
+    public async Task UndoLastAsync()
+    {
+        if (_undoService is null) return;
+
+        var folderGen = _clock.CurrentFolder;
+        var result = await _undoService.UndoLastAsync().ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            StatusText = result.ErrorMessage ?? "Không có thao tác nào để hoàn tác.";
+            return;
+        }
+
+        if (!_clock.IsFolderCurrent(folderGen)) return;
+
+        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
+        {
+            _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
+            var idx = _catalog.IndexOf(result.Source);
+            if (idx >= 0)
+            {
+                await _presenter.PresentAsync(idx).ConfigureAwait(false);
+            }
+
+            if (_currentSession is not null)
+            {
+                _currentSession.CurrentPath = result.Source;
+                _currentSession.UpdatedUtc = DateTime.UtcNow;
+                _sessionStore.Save(_currentSession);
+            }
+        }
+        else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
+        {
+            if (_currentSession is not null)
+            {
+                _currentSession.CurrentPath = result.Source;
+                _currentSession.UpdatedUtc = DateTime.UtcNow;
+                _sessionStore.Save(_currentSession);
+            }
+
+            var folder = Path.GetDirectoryName(result.Source);
+            if (!string.IsNullOrEmpty(folder))
+            {
+                await OpenFolderAsync(folder, result.Source).ConfigureAwait(false);
+            }
+        }
+
+        NotifyNavigationStateChanged();
     }
 
     public void ToggleFit() => _viewerState.ResetFit();

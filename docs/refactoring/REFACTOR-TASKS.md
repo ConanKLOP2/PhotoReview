@@ -149,7 +149,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T45b | `CompareViewModel` | T41a | | | DONE |
 | T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | DONE |
 | T46a | `MainViewModel`: mở folder + điều hướng | T43a, T43b, T45c | | | DONE |
-| T46b | `MainViewModel`: file action + undo | T46a, T42b | | | TODO |
+| T46b | `MainViewModel`: file action + undo | T46a, T42b | | | DONE |
 | T46c | `MainViewModel`: duplicate, recovery, diagnostics, settings | T46b, T42c | | | TODO |
 | T46d | `MainWindow` binding, rút gọn code-behind | T46c | | | TODO |
 | T47 | Xóa test source-presence | T46d | | | TODO |
@@ -966,7 +966,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. `UndoAsync()` (Ctrl+Z) và `UndoLastAsync()` (nút) theo đúng hành vi cũ, gồm reload folder sau khi restore Recycle.
   4. Chuyển test T14b và T14c sang VM (INV-3, INV-4, INV-5).
 - **Xong khi:** test đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T46b-mainviewmodel-fileaction` · Files: `src/PhotoReview.App/Services/WpfDialogService.cs`, `src/PhotoReview.App/App.xaml.cs`, `src/PhotoReview.App/Coordinators/IPreloadController.cs`, `src/PhotoReview.App/Coordinators/ImagePresenter.cs`, `src/PhotoReview.App/ViewModels/MainViewModel.cs`, `tests/PhotoReview.App.Tests/Coordinators/ImagePresenterTests.cs`, `tests/PhotoReview.App.Tests/ViewModels/MainViewModelNavigationTests.cs`, `tests/PhotoReview.App.Tests/ViewModels/MainViewModelFileActionTests.cs` · Mở rộng `MainViewModel` hỗ trợ thực thi thao tác tệp tin theo Action Profiles (`RunActionAsync`), xóa thùng rác (`RecycleAsync`), hoàn tác Move (`UndoAsync` - Ctrl+Z), và hoàn tác thao tác gần nhất gồm cả Recycle (`UndoLastAsync`) · Tích hợp bảo toàn nghiêm ngặt các bất biến kiến trúc: **INV-3** (trình diễn ảnh tiếp theo `_presenter.PresentAsync` ngay lập tức không await trước khi I/O bắt đầu), **INV-4** (kiểm tra gate bận `_fileActionService.IsBusy` từ chối thao tác đồng thời), **INV-5** (tự động khôi phục ảnh vào danh mục `_catalog.Restore` tại đúng vị trí khi I/O thất bại), và **Stale Folder Guard** (chụp thế hệ thư mục qua `_clock.CurrentFolder`, bỏ qua cập nhật nếu người dùng chuyển thư mục giữa chừng) · Tạo `WpfDialogService` hiện thực `IDialogService` và đăng ký vào DI container · 9 unit test cases mới kiểm tra toàn diện: INV-3, INV-4, INV-5, chọn ảnh so sánh `Compare.SelectedPath`, xác nhận người dùng từ chối qua DialogService, bỏ qua khi đổi thư mục giữa chừng, Recycle và nạp ảnh tiếp theo, hoàn tác Move sắp xếp đúng thứ tự tự nhiên, và hoàn tác Recycle nạp lại thư mục · Toàn bộ 738/738 unit tests PASS (79 App Tests, 6 Architecture Tests K-2), smoke test PASS, fault injection PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T46c (`MainViewModel`: duplicate, recovery, diagnostics, settings).
 
 ### T46c — `MainViewModel`: phần còn lại
 - **Files:** `MainViewModel.cs`, `MainWindow.xaml.cs`, `{App}/Services/DialogService.cs`, test.

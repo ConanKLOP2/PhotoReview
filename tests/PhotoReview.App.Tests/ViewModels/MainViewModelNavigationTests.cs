@@ -310,6 +310,8 @@ public sealed class MainViewModelNavigationTests : IDisposable
     {
         public Task PreloadAroundAsync(int center) => Task.CompletedTask;
         public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
+        public void Cancel() { }
+        public void RemovePreloadedKeysForPath(string normalizedPath) { }
     }
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
