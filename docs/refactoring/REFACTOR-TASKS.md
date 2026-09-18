@@ -133,7 +133,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | DONE |
 | T82 | `WicDirectDecoder` | T84 | ∥H | | DONE |
 | T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | DONE |
-| T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | TODO |
+| T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | DONE |
 | T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | TODO |
 | T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | TODO |
 | T41b | `GenerationClock` | T40 | ∥I | | TODO |
@@ -804,7 +804,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Hiệu chỉnh ngưỡng nếu cần, kèm lý do (ví dụ: khác biệt thuật toán scale).
   4. ADR theo mẫu: Context, Options, Số liệu (bảng P50/P95/RAM theo backend × width), Chất lượng, License và phân phối, **Decision** (backend mặc định), Consequences, điều kiện xem xét lại.
 - **Xong khi:** ADR có quyết định, và người dùng xác nhận nếu chọn đóng gói native (Q7).
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18 · Antigravity · `refactor/T86-quality-gate-adr` · Files: `tests/PhotoReview.Imaging.Tests/Quality/DecoderQualityGateTests.cs`, `docs/refactoring/results/decoder-bench.md`, `docs/adr/0001-image-decoder.md` · 14/14 test cổng chất lượng PASS 100% cho 3 backend (Wpf, WicDirect, TurboJpeg) · Đã chạy `--decoder-bench` 2,088 lần đo trên 58 ảnh JPEG 24 MP (Fixture F1): WicDirect đạt P50 ~8 ms (nhanh gấp 4.45x–12.52x so với Wpf, 3.5x so với TurboJpeg); TurboJpeg P50 ~29 ms · Quyết định ADR 0001: chọn WicDirect làm default backend, Wpf làm fallback (INV-12), TurboJpeg làm tùy chọn secondary · 607/607 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T87.
 
 ### T87 — Tích hợp decoder vào app ⛔Q8
 - **Ghi chú:** chạy sau T52, vì cùng sửa `AppSettings`/`SettingsWindow`.
