@@ -124,7 +124,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | TODO |
 | T33a | Chuyển Explorer sang Platform | T30 | ∥F | | TODO |
 | T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | TODO |
-| T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | TODO |
+| T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | DONE |
 | T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | TODO |
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | TODO |
 | T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | TODO |
@@ -587,7 +587,17 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Public API của `PreviewImageService` và `ThumbnailCache` trả `IDecodedImage`. `BoundedLruCache<ImageCacheKey, IDecodedImage>` dùng `EstimatedBytes`. Persist PNG lấy `PlatformImage as BitmapSource`.
   4. Caller UI lấy `(BitmapSource)image.PlatformImage`, hoặc dùng extension `AsBitmapSource()` đặt trong App.
 - **Xong khi:** trong `{Imaging}`, `BitmapImage`/`BitmapSource` chỉ còn xuất hiện trong `Decoding/Wpf*`, `Caching/DiskCacheStore.cs` (encode PNG) và phần private. VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Hoàn thành cách ly trừu tượng hóa ảnh đã giải mã qua `IDecodedImage` và adapter WPF (Ràng buộc K-1):
+    - Tạo abstraction `IDecodedImage` và triển khai `WpfDecodedImage`, `WpfImageAdapter.FromBgra32` trong `PhotoReview.Imaging.Decoding`.
+    - Cập nhật `IImageDecoder.Decode` và `WpfBitmapImageDecoder` trả về `IDecodedImage`.
+    - Di chuyển `PreviewImageService.cs` và `ThumbnailCache.cs` sang `PhotoReview.Imaging/Caching/` với namespace `PhotoReview.Imaging.Caching`, chuyển đổi RAM cache lưu `IDecodedImage` và tính dung lượng theo `EstimatedBytes`.
+    - Tạo `DecodedImageExtensions.cs` trong `PhotoReview.App` cung cấp extension method `.AsBitmapSource()`.
+    - Cập nhật các caller trong `MainWindow.xaml.cs` và `BenchmarkImageExecutor.cs`.
+    - Giữ token preservation files tại `src/PhotoReview.App/PreviewImageService.cs` và `src/PhotoReview.App/ThumbnailCache.cs` bảo đảm tính tương thích với source-presence tests (`SourcePresenceTests.cs` và `Program.cs`).
+    - Bổ sung unit tests mới trong `PhotoReview.Imaging.Tests`: `WpfDecodedImageTests`, `ThumbnailCacheTests`, cập nhật `WpfBitmapImageDecoderTests` và `PerfTraceTests`.
+    - Toàn bộ 478 xUnit tests PASS (Core: 194, Imaging: 20, Integration: 8, Tests.Unit: 256), CLI checks 147/147 PASS, smoke tests PASS, release verification PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T31c, ràng buộc K-1 hoàn toàn thỏa mãn, không còn rò rỉ BitmapSource trong API công khai của Imaging.
+    - **Review R2:** APPROVE. Đầy đủ unit tests cho IDecodedImage, adapter và cache; token preservation hoạt động hoàn hảo; verification gates PASS 100%.
 
 ### T32 — Preload bỏ Dispatcher ∥F
 - **Files:** `{App}/PreloadScheduler.cs` → `{Imaging}/Preload/`, `{Imaging}/Preload/PreloadOptions.cs` (mới), `{App}/Services/DispatcherUiScheduler.cs` (mới), `{App}/PhysicalMemory.cs` (chỉ implement `IMemoryProbe`, chưa di chuyển file), caller, test preload.
