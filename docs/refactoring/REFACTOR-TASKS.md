@@ -613,7 +613,15 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/RecycleBinRestoreService.cs`, `PhysicalMemory.cs`, `InstanceLock.cs`, `{App}/Platform/WindowsNaturalComparer.cs` → `{Platform}/`; `{Platform}/WindowsRecycleBin.cs` (mới); caller trong `MainWindow` (dòng `FileSystem.DeleteFile` và `RecycleBinRestoreService.TryRestore`); smoke script nếu có đường dẫn.
 - **Làm:** `WindowsRecycleBin : IRecycleBin` với `SendToRecycleBin(path)` (**giữ** `Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(..., OnlyErrorDialogs, SendToRecycleBin)`) và `TryRestore(path, size, mtime)` (logic cũ). `PhysicalMemory` → `WindowsMemoryProbe : IMemoryProbe`. `WindowPlacementService` **ở lại** App vì dùng `Window`.
 - **Xong khi:** `tools/smoke-test.ps1` và `fault-injection-test.ps1` đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Chuyển các primitive hệ thống nền tảng sang `PhotoReview.Platform.Windows`:
+    - Tạo `WindowsRecycleBin : IRecycleBin` với `SendToRecycleBin` (dùng `Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile` với options `OnlyErrorDialogs`, `SendToRecycleBin`) và `TryRestore` (chuyển nguyên văn logic từ `RecycleBinRestoreService.cs`). Xóa `RecycleBinRestoreService.cs` khỏi App. Cập nhật `MainWindow` dùng `_recycleBin.SendToRecycleBin` và `_recycleBin.TryRestore`.
+    - Tạo `WindowsMemoryProbe : IMemoryProbe` trong Platform; `PhysicalMemory` trong App ủy quyền sang `WindowsMemoryProbe.Instance`.
+    - Di chuyển `InstanceLock.cs` sang `PhotoReview.Platform.Windows`.
+    - Di chuyển `WindowsNaturalComparer.cs` sang `PhotoReview.Platform.Windows` và xóa namespace tạm `PhotoReview.App.Platform`.
+    - Thêm bộ test `PlatformPrimitivesTests` trong `PhotoReview.Integration.Tests` (4 tests: memory metrics, natural comparer, instance lock concurrency, recycle bin validation).
+    - Cập nhật source presence tests khớp với đường dẫn mới theo đúng quy định tại `docs/refactoring/test-parity.md` (dòng 262). Toàn bộ 471 tests PASS, smoke test PASS, fault injection PASS, `verify-all.ps1` đạt PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi T33b, tách biệt hoàn toàn các primitives Windows sang Platform.
+    - **Review R2:** APPROVE. Đảm bảo toàn bộ tiêu chí verify, smoke-test và fault-injection chạy trơn tru.
 
 ### T34 — `FileLog : ILog`
 - **Files:** `{App}/AppLog.cs` → `{Core}/Diagnostics/FileLog.cs`, `{App}/AppLog.cs` (facade static mỏng), mọi service trong Core/Imaging/Platform nhận `ILog`, test AppLog.
