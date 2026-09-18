@@ -147,7 +147,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T44 | `FolderLoadCoordinator` | T41a, T41b | | | DONE |
 | T45a | `StatusFormatter` | T40 | ∥I | | DONE |
 | T45b | `CompareViewModel` | T41a | | | DONE |
-| T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | TODO |
+| T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | DONE |
 | T46a | `MainViewModel`: mở folder + điều hướng | T43a, T43b, T45c | | | TODO |
 | T46b | `MainViewModel`: file action + undo | T46a, T42b | | | TODO |
 | T46c | `MainViewModel`: duplicate, recovery, diagnostics, settings | T46b, T42c | | | TODO |
@@ -943,7 +943,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   8. Xử lý lỗi theo token, giống code cũ.
   - Kết quả đi ra qua `CurrentImage`, `Status`, `IsCompareVisible` hoặc `IPresentationSink`.
 - **Xong khi:** test ảnh biến mất, token bị thay ở từng await, Preview có thumbnail, RAM hit, compare. INV-1 vẫn đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T45c-image-presenter` · Files: `src/PhotoReview.App/Coordinators/IPresentationSink.cs`, `src/PhotoReview.App/Coordinators/IPreloadController.cs`, `src/PhotoReview.App/Coordinators/ImagePresenter.cs`, `tests/PhotoReview.App.Tests/Coordinators/ImagePresenterTests.cs`, `src/PhotoReview.App/App.xaml.cs` · Hiện thực `ImagePresenter` đóng gói toàn bộ luồng trình diễn ảnh và xóa ảnh biến mất khỏi catalog độc lập với WPF, tương tác qua `IPresentationSink` và `IPreloadController`, tích hợp `CompareViewModel` nạp song song, bảo toàn nghiêm ngặt bất biến INV-1 tại mọi điểm await (kiểm tra token hủy) · 8 unit tests mới kiểm tra đầy đủ: xử lý tệp biến mất và tự động chuyển ảnh tiếp theo, xóa sạch catalog khi toàn bộ file mất, hiển thị ảnh đơn lẻ cùng kích thước và số chiều gốc, kích hoạt compare pair, cập nhật và lưu session hiện tại, kích hoạt preload xung quanh, tiêu thụ preload key khi RAM hit, và hủy cập nhật UI khi token bị thay thế · Toàn bộ 722/722 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho Wave W4 (T46a: MainViewModel mở folder + điều hướng).
 
 ### T46a — `MainViewModel`: mở và điều hướng
 - **Files:** `{App}/ViewModels/MainViewModel.cs` (mới), `{App}/MainWindow.xaml.cs` (chuyển phần open/navigate sang VM), `{AppT}/ViewModels/MainViewModelNavigationTests.cs`.

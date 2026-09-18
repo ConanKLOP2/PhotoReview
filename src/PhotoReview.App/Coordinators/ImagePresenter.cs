@@ -1,0 +1,331 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
+using PhotoReview.App.ViewModels;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Session;
+using PhotoReview.Core.Settings;
+using PhotoReview.Imaging.Caching;
+
+namespace PhotoReview.App.Coordinators;
+
+/// <summary>
+/// Coordinator điều phối toàn bộ quá trình trình diễn ảnh (ShowImageAsync và RemoveMissingCatalogItemAsync),
+/// nạp thumbnail placeholder, xử lý ảnh biến mất, kích hoạt preload, compare integration, lưu session;
+/// bảo toàn bất biến INV-1 (chống ghi đè khung hình khi chuyển ảnh nhanh).
+/// </summary>
+public sealed class ImagePresenter
+{
+    private readonly ReviewCatalog _catalog;
+    private readonly GenerationClock _clock;
+    private readonly PreviewImageService _previewService;
+    private readonly ThumbnailCache _thumbnailCache;
+    private readonly IPreloadController _preloadController;
+    private readonly CompareViewModel _compareViewModel;
+    private readonly FileHashService _hashService;
+    private readonly ReviewMetrics _metrics;
+    private readonly Func<AppSettings> _getSettings;
+    private readonly SessionStore? _sessionStore;
+    private readonly IPresentationSink _sink;
+    private readonly IFileSystem? _fileSystem;
+    private readonly Func<SessionState?>? _getSession;
+    private readonly Action<string>? _onPresentedHook;
+
+    public ImagePresenter(
+        ReviewCatalog catalog,
+        GenerationClock clock,
+        PreviewImageService previewService,
+        ThumbnailCache thumbnailCache,
+        IPreloadController preloadController,
+        CompareViewModel compareViewModel,
+        FileHashService hashService,
+        ReviewMetrics metrics,
+        Func<AppSettings> getSettings,
+        SessionStore? sessionStore,
+        IPresentationSink sink,
+        IFileSystem? fileSystem = null,
+        Func<SessionState?>? getSession = null,
+        Action<string>? onPresentedHook = null)
+    {
+        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
+        _thumbnailCache = thumbnailCache ?? throw new ArgumentNullException(nameof(thumbnailCache));
+        _preloadController = preloadController ?? throw new ArgumentNullException(nameof(preloadController));
+        _compareViewModel = compareViewModel ?? throw new ArgumentNullException(nameof(compareViewModel));
+        _hashService = hashService ?? throw new ArgumentNullException(nameof(hashService));
+        _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
+        _getSettings = getSettings ?? throw new ArgumentNullException(nameof(getSettings));
+        _sessionStore = sessionStore;
+        _sink = sink ?? throw new ArgumentNullException(nameof(sink));
+        _fileSystem = fileSystem;
+        _getSession = getSession;
+        _onPresentedHook = onPresentedHook;
+    }
+
+    public ReviewCatalog Catalog => _catalog;
+    public GenerationClock Clock => _clock;
+    public CompareViewModel Compare => _compareViewModel;
+    public object? CurrentImage { get; private set; }
+    public string StatusText { get; private set; } = string.Empty;
+    public bool IsCompareVisible => _compareViewModel.IsVisible;
+
+    /// <summary>
+    /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
+    /// </summary>
+    public async Task PresentAsync(int index)
+    {
+        if (index < 0 || index >= _catalog.Count) return;
+
+        var perf = PhotoReviewPerf.Log.IsEnabled();
+        var presentStopwatch = Stopwatch.StartNew();
+
+        // 1. Tăng Navigation generation
+        var token = _clock.NextNavigation();
+        _catalog.SetCurrent(index);
+        var path = _catalog.Paths[index];
+
+        var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
+        if (perf)
+        {
+            PhotoReviewPerf.NavContext = token;
+            PhotoReviewPerf.Log.ShowStart(token, index, _getSettings().LoadingMode.ToString());
+        }
+
+        _compareViewModel.Select(null);
+
+        if (AppLog.Enabled)
+            AppLog.Info($"ShowImage start index={index} count={_catalog.Count} token={token} path={path}");
+
+        // 2. Stat; file mất thì xóa khỏi catalog và chuyển tiếp
+        long perfStat = perf ? Stopwatch.GetTimestamp() : 0;
+        if (!TryGetFileInfo(path, out var initialInfo))
+        {
+            if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
+            await RemoveMissingCatalogItemAsync(path, index, token).ConfigureAwait(false);
+            return;
+        }
+
+        var initialSize = initialInfo.Length;
+        var currentKey = _previewService.GetCurrentCacheKey(initialInfo);
+        if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
+
+        // 3. Tạo key, RAM hit (ghi nhận preload hit)
+        var ramReady = _previewService.TryGetCachedPreview(currentKey, out var readyImage);
+        if (perf)
+        {
+            PhotoReviewPerf.Log.Lookup(token, perfPathId, ramReady ? "ramHit" : _previewService.HasInflightPreview(path) ? "inflight" : "miss");
+        }
+
+        if (ramReady)
+        {
+            if (_preloadController.TryConsumePreloadedKey(currentKey))
+                _metrics.RecordPreloadHit();
+        }
+
+        var settings = _getSettings();
+        var initialStatus = ramReady
+            ? StatusFormatter.Ready(index, _catalog.Count, initialSize, Path.GetFileName(path))
+            : StatusFormatter.Loading(index, _catalog.Count, initialSize);
+
+        UpdateStatus(initialStatus);
+
+        if (AppLog.Enabled)
+            AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_previewService.CacheBytes}");
+
+        try
+        {
+            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: hiển thị thumbnail
+            if (settings.LoadingMode == LoadingMode.Preview && !ramReady && !_previewService.HasInflightPreview(path))
+            {
+                long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
+                if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
+
+                var thumbnail = await _thumbnailCache.GetAsync(path).ConfigureAwait(false);
+
+                if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
+
+                // INV-1: kiểm tra token sau await
+                if (!_clock.IsNavigationCurrent(token)) return;
+
+                UpdateCurrentImage(thumbnail.PlatformImage);
+                if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
+
+                if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
+
+                _sink.ApplyInitialViewMode();
+                UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize));
+            }
+
+            // 5. Decode rồi present (đo UiAssign), kích preload
+            var image = ramReady ? readyImage : await _previewService.GetPreviewAsync(path, currentKey).ConfigureAwait(false);
+            if (ramReady) _metrics.RecordCacheHit();
+
+            // INV-1: kiểm tra token sau await
+            if (!_clock.IsNavigationCurrent(token)) return;
+
+            long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
+            var uiAssign = Stopwatch.StartNew();
+
+            UpdateCurrentImage(image.PlatformImage);
+
+            long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
+            _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
+            if (perf) PhotoReviewPerf.Log.Assign(token, (perfAssigned - perfAssign) * 1000.0 / Stopwatch.Frequency, image.PixelWidth, image.PixelHeight);
+
+            if (AppLog.Enabled) AppLog.Info($"ShowImage preview-presented token={token} path={path} mode={settings.LoadingMode}");
+
+            _sink.OnPresented(path);
+            _onPresentedHook?.Invoke(path);
+
+            long perfKick = perf ? Stopwatch.GetTimestamp() : 0;
+            if (perf) PhotoReviewPerf.Log.PostStart(token, "preloadKick");
+            _ = _preloadController.PreloadAroundAsync(index);
+            if (perf) PhotoReviewPerf.Log.PostEnd(token, "preloadKick", PhotoReviewPerf.Ms(perfKick));
+
+            // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)
+            long perfCompare = perf ? Stopwatch.GetTimestamp() : 0;
+            var pair = ComparePairService.Find(_catalog.Paths, path);
+
+            if (perf)
+            {
+                if (pair is null) _sink.TracePresented(token, "final", perfAssigned);
+                else PhotoReviewPerf.Log.PostStart(token, "compare");
+            }
+
+            if (pair is not null)
+            {
+                UpdateCurrentImage(null);
+                var loaded = await _compareViewModel.LoadAsync(
+                    pair.Value,
+                    token,
+                    t => _clock.IsNavigationCurrent(t),
+                    async p =>
+                    {
+                        var prev = await _previewService.GetPreviewAsync(p).ConfigureAwait(false);
+                        return prev.PlatformImage;
+                    },
+                    p => _hashService.GetAsync(p),
+                    compareSizeEnabled: settings.CompareSizeEnabled,
+                    compareHashEnabled: settings.CompareHashEnabled,
+                    currentIndex: index,
+                    totalFiles: _catalog.Count,
+                    initialSelectedPath: path).ConfigureAwait(false);
+
+                if (!loaded || !_clock.IsNavigationCurrent(token)) return;
+
+                if (perf) _sink.TracePresented(token, "compare", Stopwatch.GetTimestamp());
+                UpdateStatus(_compareViewModel.StatusText);
+                if (perf) PhotoReviewPerf.Log.PostEnd(token, "compare", PhotoReviewPerf.Ms(perfCompare));
+            }
+            else
+            {
+                _compareViewModel.Clear();
+                _sink.ApplyInitialViewMode();
+
+                long perfDims = perf && settings.LoadingMode != LoadingMode.Original ? Stopwatch.GetTimestamp() : 0;
+                if (perfDims != 0) PhotoReviewPerf.Log.PostStart(token, "dims");
+
+                var original = settings.LoadingMode == LoadingMode.Original
+                    ? (Width: image.PixelWidth, Height: image.PixelHeight)
+                    : await _previewService.GetOriginalDimensionsAsync(path).ConfigureAwait(false);
+
+                if (perfDims != 0) PhotoReviewPerf.Log.PostEnd(token, "dims", PhotoReviewPerf.Ms(perfDims));
+
+                if (!_clock.IsNavigationCurrent(token)) return;
+
+                if (!TryGetFileInfo(path, out var currentInfo)) return;
+
+                UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
+            }
+
+            // 7. Cập nhật status, lưu session, ghi metric Presented
+            if (!_clock.IsNavigationCurrent(token)) return;
+
+            var session = _getSession?.Invoke();
+            if (session is not null && _sessionStore is not null)
+            {
+                session.CurrentPath = path;
+                session.UpdatedUtc = DateTime.UtcNow;
+
+                long perfSession = perf ? Stopwatch.GetTimestamp() : 0;
+                if (perf) PhotoReviewPerf.Log.PostStart(token, "session");
+                _sessionStore.Save(session);
+                if (perf) PhotoReviewPerf.Log.PostEnd(token, "session", PhotoReviewPerf.Ms(perfSession));
+            }
+
+            presentStopwatch.Stop();
+            _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
+        }
+        catch (Exception ex) when (_clock.IsNavigationCurrent(token) && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
+        {
+            if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file token={token} path={path}");
+            await RemoveMissingCatalogItemAsync(path, index, token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (_clock.IsNavigationCurrent(token))
+        {
+            AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
+            UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), ex.Message));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"ShowImage failed (stale token={token}, current={_clock.CurrentNavigation}) index={index} path={path}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Xóa tệp không tồn tại khỏi danh mục và tự động chuyển đến ảnh kế tiếp.
+    /// </summary>
+    public async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
+    {
+        if (!_clock.IsNavigationCurrent(token)) return;
+
+        var nextIndex = _catalog.Remove(path);
+        if (_catalog.Count == 0)
+        {
+            UpdateCurrentImage(null);
+            _compareViewModel.Clear();
+            UpdateStatus(StatusFormatter.NoImagesRemaining());
+            return;
+        }
+
+        if (nextIndex >= 0)
+        {
+            await PresentAsync(nextIndex).ConfigureAwait(false);
+        }
+    }
+
+    private void UpdateCurrentImage(object? image)
+    {
+        CurrentImage = image;
+        _sink.SetCurrentImage(image);
+    }
+
+    private void UpdateStatus(string status)
+    {
+        StatusText = status;
+        _sink.SetStatusText(status);
+    }
+
+    private bool TryGetFileInfo(string path, out FileInfo info)
+    {
+        try
+        {
+            if (_fileSystem != null && !_fileSystem.FileExists(path))
+            {
+                info = null!;
+                return false;
+            }
+            info = new FileInfo(path);
+            if (!info.Exists) { info = null!; return false; }
+            return true;
+        }
+        catch (FileNotFoundException) { info = null!; return false; }
+        catch (DirectoryNotFoundException) { info = null!; return false; }
+        catch { info = null!; return false; }
+    }
+}
