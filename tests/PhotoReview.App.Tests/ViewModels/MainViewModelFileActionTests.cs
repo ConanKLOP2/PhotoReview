@@ -429,6 +429,13 @@ public sealed class MainViewModelFileActionTests : IDisposable
         public bool ConfirmationResponse { get; set; } = true;
         public bool ShowConfirmation(string title, string message) => ConfirmationResponse;
         public void ShowMessage(string title, string message) { }
+        public void ShowError(string title, string message) { }
+        public string? PickFolder(string? initialFolder = null) => null;
+        public bool ShowBatchReview(IReadOnlyList<string> paths) => true;
+        public void ShowRecovery() { }
+        public void ShowDiagnostics() { }
+        public bool ShowSettings() => true;
+        public void ShowBenchmark(string? folder = null) { }
     }
 
     private class DelegatingFileSystem(IFileSystem inner) : IFileSystem
@@ -510,5 +517,6 @@ public sealed class MainViewModelFileActionTests : IDisposable
         public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
         public void Cancel() => CancelCount++;
         public void RemovePreloadedKeysForPath(string normalizedPath) { }
+        public void ClearPreloadedKeys() { }
     }
 }

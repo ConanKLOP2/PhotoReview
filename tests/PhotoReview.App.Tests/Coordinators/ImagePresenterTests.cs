@@ -297,5 +297,6 @@ public sealed class ImagePresenterTests : IDisposable
 
         public void Cancel() { }
         public void RemovePreloadedKeysForPath(string normalizedPath) { }
+        public void ClearPreloadedKeys() { }
     }
 }

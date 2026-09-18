@@ -312,6 +312,7 @@ public sealed class MainViewModelNavigationTests : IDisposable
         public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
         public void Cancel() { }
         public void RemovePreloadedKeysForPath(string normalizedPath) { }
+        public void ClearPreloadedKeys() { }
     }
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
