@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding.Wic;
 
 namespace PhotoReview.Imaging.Decoding;
 
@@ -42,7 +43,8 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
     public ImageDecoderFactory(ILog? log = null, ReviewMetrics? metrics = null)
         : this(new (DecoderBackend, Func<IImageDecoder>)[]
         {
-            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder())
+            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
+            (DecoderBackend.WicDirect, () => new WicDirectDecoder())
         }, log, metrics)
     {
     }
