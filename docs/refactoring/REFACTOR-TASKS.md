@@ -142,7 +142,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T42a | `FileActionService` | T40 | ∥I | | DONE |
 | T42b | `UndoService` | T42a | | | DONE |
 | T42c | `DuplicateFinder` | T40 | ∥I | | DONE |
-| T43a | `ShortcutRouter` | T40 | ∥I | | TODO |
+| T43a | `ShortcutRouter` | T40 | ∥I | | DONE |
 | T43b | `ViewerState` | T40 | ∥I | | TODO |
 | T44 | `FolderLoadCoordinator` | T41a, T41b | | | DONE |
 | T45a | `StatusFormatter` | T40 | ∥I | | TODO |
@@ -900,7 +900,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
      - Nhóm lệnh sau `if (_index < 0) return` chỉ chạy khi `hasImage`.
      - Next và Previous là hai `if` riêng (không có `return`): ghi lại hành vi này. Nếu hai phím trùng nhau thì validator đã chặn.
 - **Xong khi:** test toàn bộ phím mặc định và các trường hợp biên (Esc, Alt+F11 qua SystemKey, Ctrl+Z, action trùng).
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T43a-shortcut-router` · Files: `src/PhotoReview.App/Input/{ReviewCommand.cs,ShortcutRouter.cs}`, `tests/PhotoReview.App.Tests/Input/ShortcutRouterTests.cs` · Đóng gói toàn bộ logic định tuyến phím tắt của `MainWindow` vào `ShortcutRouter` và struct `ReviewCommand` độc lập với UI · Bảo toàn 100% thứ tự ưu tiên phím: phím Fullscreen (hỗ trợ cả Alt+F11/SystemKey), Esc (phân biệt fullscreen và close), Undo (yêu cầu Ctrl), chặn các lệnh xử lý ảnh khi chưa có ảnh, kích hoạt Compare theo trạng thái hiển thị, định tuyến custom actions theo index, Skip, Recycle, ToggleFit, Zoom, Next/Previous · 14 unit test cases bao quát toàn bộ phím mặc định và các trường hợp biên · Toàn bộ 682/682 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T43b.
 
 ### T43b — `ViewerState` ∥I
 - **Files:** `{App}/ViewModels/ViewerState.cs`, test.
