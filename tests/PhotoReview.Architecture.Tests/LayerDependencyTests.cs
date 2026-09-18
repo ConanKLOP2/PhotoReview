@@ -65,8 +65,7 @@ public sealed class LayerDependencyTests
             $"Platform has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
 
-    [Fact(DisplayName = "Rule 6: ViewModels do not depend on System.Windows (K-2)",
-          Skip = "K-2: Will be enabled after T46a introduces ViewModels without System.Windows dependency")]
+    [Fact(DisplayName = "Rule 6: ViewModels do not depend on System.Windows (K-2)")]
     [Trait("Category", "Architecture")]
     public void ViewModels_DoNotDependOn_SystemWindows()
     {

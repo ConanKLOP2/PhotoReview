@@ -148,7 +148,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T45a | `StatusFormatter` | T40 | ∥I | | DONE |
 | T45b | `CompareViewModel` | T41a | | | DONE |
 | T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | DONE |
-| T46a | `MainViewModel`: mở folder + điều hướng | T43a, T43b, T45c | | | TODO |
+| T46a | `MainViewModel`: mở folder + điều hướng | T43a, T43b, T45c | | | DONE |
 | T46b | `MainViewModel`: file action + undo | T46a, T42b | | | TODO |
 | T46c | `MainViewModel`: duplicate, recovery, diagnostics, settings | T46b, T42c | | | TODO |
 | T46d | `MainWindow` binding, rút gọn code-behind | T46c | | | TODO |
@@ -949,7 +949,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/ViewModels/MainViewModel.cs` (mới), `{App}/MainWindow.xaml.cs` (chuyển phần open/navigate sang VM), `{AppT}/ViewModels/MainViewModelNavigationTests.cs`.
 - **Làm:** command `OpenFolder`, `OpenPath` (drag-drop, arg), `Next`, `Previous`, `First`, `Skip` (ghi `session.Skipped`), `NextFolder`, `PreviousFolder` (sibling, kiểm tra folder generation), `ToggleFit`, `ZoomIn`, `ZoomOut`, `ToggleFullscreen`. Mọi thao tác điều hướng tăng `Interaction`. `MainWindow` gọi VM thay vì tự làm. Bật rule K-2 trong T35 (bỏ `Skip`).
 - **Xong khi:** test điều hướng đạt, K-2 đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T46a-mainviewmodel-nav` · Files: `src/PhotoReview.App/ViewModels/MainViewModel.cs`, `src/PhotoReview.App/ViewModels/ViewerState.cs`, `src/PhotoReview.App/App.xaml.cs`, `tests/PhotoReview.Architecture.Tests/LayerDependencyTests.cs`, `tests/PhotoReview.App.Tests/ViewModels/MainViewModelNavigationTests.cs` · Hiện thực `MainViewModel` kế thừa `ObservableObject` điều phối toàn diện việc mở thư mục ảnh (`OpenFolderAsync`, `OpenPathAsync`), điều hướng tuần tự (`NextAsync`, `PreviousAsync`, `FirstAsync`), bỏ qua ảnh (`SkipAsync` lưu session.Skipped), điều hướng thư mục anh em (`NavigateSiblingFolderAsync` kiểm tra folder generation), và điều khiển chế độ xem/zoom (`ToggleFit`, `ZoomIn`, `ZoomOut`, `ToggleFullscreen`, `ExitFullscreen`) · Tăng thế hệ `Interaction` trên `GenerationClock` tại mọi thao tác điều hướng người dùng · Tuân thủ tuyệt đối quy tắc K-2 (ViewModel hoàn toàn không phụ thuộc WPF visual/media types), chính thức kích hoạt Rule 6 trong `LayerDependencyTests` (bỏ `Skip`) với kết quả 6/6 architecture tests PASS · 6 unit test cases mới kiểm tra đầy đủ mọi luồng mở thư mục, drag-drop, boundary sibling navigation, skip và zoom · Toàn bộ 729/729 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T46b (`MainViewModel`: file action và undo).
 
 ### T46b — `MainViewModel`: file action và undo
 - **Files:** `MainViewModel.cs`, `MainWindow.xaml.cs` (xóa `ClassifyCurrentAsync`, `ExecuteActionAsync`, `AdvanceBeforeFileActionAsync`, `Undo*`), `{AppT}/ViewModels/MainViewModelFileActionTests.cs`.

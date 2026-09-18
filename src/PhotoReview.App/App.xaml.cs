@@ -103,6 +103,7 @@ public partial class App : System.Windows.Application
                 log: sp.GetService<ILog>()));
 
         // 7. ViewModels & Coordinators
+        services.AddTransient<PhotoReview.App.ViewModels.ViewerState>();
         services.AddTransient<PhotoReview.App.ViewModels.CompareViewModel>();
 
         // 8. Window
