@@ -111,6 +111,12 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
     return;
 }
 
+if (args.Length is >= 3 and <= 6 && args[0] == "--decoder-bench")
+{
+    await DecoderBenchmark.RunAsync(args);
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--explorer-probe")
 {
     var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
