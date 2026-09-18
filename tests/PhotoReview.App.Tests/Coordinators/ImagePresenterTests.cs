@@ -294,5 +294,8 @@ public sealed class ImagePresenterTests : IDisposable
         {
             return WarmedKeys.Remove(key);
         }
+
+        public void Cancel() { }
+        public void RemovePreloadedKeysForPath(string normalizedPath) { }
     }
 }

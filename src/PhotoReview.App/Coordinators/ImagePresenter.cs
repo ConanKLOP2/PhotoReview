@@ -75,6 +75,14 @@ public sealed class ImagePresenter
     public bool IsCompareVisible => _compareViewModel.IsVisible;
 
     /// <summary>
+    /// Gỡ bỏ ảnh khỏi cache RAM/decode khi file bị di chuyển hoặc xóa.
+    /// </summary>
+    public void EvictCachedPath(string path)
+    {
+        _previewService.EvictCachedPath(path, normalized => _preloadController.RemovePreloadedKeysForPath(normalized));
+    }
+
+    /// <summary>
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
     public async Task PresentAsync(int index)

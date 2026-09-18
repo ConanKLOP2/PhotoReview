@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using PhotoReview.Core.Caching;
 using PhotoReview.Imaging.Preload;
@@ -15,6 +15,12 @@ public interface IPreloadController
 
     /// <summary>Kiểm tra và tiêu thụ cache key đã được preload làm ấm (ghi nhận preload hit).</summary>
     bool TryConsumePreloadedKey(ImageCacheKey key);
+
+    /// <summary>Hủy các tác vụ preload đang thực thi dở dang.</summary>
+    void Cancel();
+
+    /// <summary>Gỡ các key preload cho đường dẫn chỉ định.</summary>
+    void RemovePreloadedKeysForPath(string normalizedPath);
 }
 
 /// <summary>
@@ -38,4 +44,8 @@ public sealed class PreloadSchedulerAdapter : IPreloadController
     public Task PreloadAroundAsync(int center) => _getScheduler()?.PreloadAroundAsync(center) ?? Task.CompletedTask;
 
     public bool TryConsumePreloadedKey(ImageCacheKey key) => _getScheduler()?.TryConsumePreloadedKey(key) ?? false;
+
+    public void Cancel() => _getScheduler()?.Cancel();
+
+    public void RemovePreloadedKeysForPath(string normalizedPath) => _getScheduler()?.RemovePreloadedKeysForPath(normalizedPath);
 }
