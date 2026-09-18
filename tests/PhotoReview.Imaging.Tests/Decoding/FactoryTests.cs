@@ -182,6 +182,19 @@ public sealed class FactoryTests : IDisposable
         Assert.Equal(48, preview.PixelHeight);
     }
 
+    [Fact(DisplayName = "ImageDecoderFactory resolves TurboJpeg backend dynamically when available")]
+    public void FactoryResolvesTurboJpegBackend()
+    {
+        var factory = new ImageDecoderFactory();
+        var decoder = factory.Create(DecoderBackend.TurboJpeg);
+
+        Assert.IsType<FallbackImageDecoder>(decoder);
+        var decoded = decoder.Decode(new DecodeRequest(_validImagePath, TargetWidth: 0));
+        Assert.NotNull(decoded);
+        Assert.Equal(64, decoded.PixelWidth);
+        Assert.Equal(48, decoded.PixelHeight);
+    }
+
     private sealed class MockFailingDecoder : IImageDecoder
     {
         private readonly Exception _exceptionToThrow;
