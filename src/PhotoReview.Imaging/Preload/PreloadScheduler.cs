@@ -84,7 +84,8 @@ public sealed class PreloadScheduler : IDisposable
         double memoryLoadLimit,
         Func<double, bool>? hasHeadroom = null,
         int? workerCountOverride = null,
-        IUiScheduler? uiScheduler = null)
+        IUiScheduler? uiScheduler = null,
+        ILog? log = null)
         : this(target, metrics, snapshotFiles, totalSourceBytes,
             new PreloadOptions(
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
@@ -92,7 +93,7 @@ public sealed class PreloadScheduler : IDisposable
                 FullFolderThresholdBytes: fullFolderRamThresholdBytes),
             hasHeadroom is not null ? new DelegateMemoryProbe(hasHeadroom) : null,
             uiScheduler,
-            null)
+            log)
     {
     }
 

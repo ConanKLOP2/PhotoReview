@@ -37,7 +37,7 @@ public sealed class AppPaths : IAppPaths
         SessionsDir = Path.Combine(dataRoot, "Sessions");
 
         // LogFile: (override ?? %LOCALAPPDATA%\PhotoReview)\logs\app.log
-        // Ghi chú: Code cũ AppLog dùng root trực tiếp dưới PhotoReview (hoặc override),
+        // Ghi chú: FileLog dùng root trực tiếp dưới PhotoReview (hoặc override),
         // khác với Journal và Sessions vốn nằm trong thư mục con Data khi không có override.
         var logRoot = hasOverride ? dataRootOverride! : appRoot;
         LogFile = Path.Combine(logRoot, "logs", "app.log");

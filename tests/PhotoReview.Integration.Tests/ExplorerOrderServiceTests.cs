@@ -10,6 +10,7 @@ public sealed class ExplorerOrderServiceTests
 {
     private sealed class MemoryLog : ILog
     {
+        public bool Enabled => true;
         public List<string> Messages { get; } = [];
 
         public void Info(string message) => Messages.Add($"INFO: {message}");

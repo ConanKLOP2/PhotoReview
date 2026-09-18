@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     private readonly OperationJournal _journal = new();
     private readonly RecoveryRetryService _recoveryRetryService;
     private readonly SessionStore _sessionStore = new();
-    private readonly ThumbnailCache _thumbnailCache = new(persistNewThumbnails: false);
+    private readonly ThumbnailCache _thumbnailCache = new(persistNewThumbnails: false, log: FileLog.Default);
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
@@ -75,7 +75,7 @@ public partial class MainWindow : Window
         _settingsStore = settingsStore ?? new SettingsStore(
             PhotoReview.Core.AppPaths.FromEnvironment(),
             new PhotoReview.Core.IO.PhysicalFileSystem(),
-            new AppLogAdapter(),
+            FileLog.Default,
             App.LogStartupErrorForced);
         _settings = _settingsStore.Current;
         _settingsStore.Changed += (_, updated) =>
@@ -89,9 +89,9 @@ public partial class MainWindow : Window
         _recoveryRetryService = new RecoveryRetryService(_journal, new PhotoReview.Core.IO.PhysicalFileSystem(), new PhotoReview.Core.Abstractions.SystemClock());
         InitializeComponent();
         DpiChanged += MainWindow_DpiChanged;
-        _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes);
+        _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes, log: FileLog.Default);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => _files.ToArray(), () => _totalSourceBytes,
-            FullFolderRamThresholdBytes, PreloadMemoryLoadLimit);
+            FullFolderRamThresholdBytes, PreloadMemoryLoadLimit, log: FileLog.Default);
         _journal.ReconcilePendingOperations();
         foreach (var move in _journal.ReadCommittedMoves())
             if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));

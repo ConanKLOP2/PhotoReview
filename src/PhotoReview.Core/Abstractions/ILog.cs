@@ -7,6 +7,8 @@ namespace PhotoReview.Core.Abstractions;
 /// </summary>
 public interface ILog
 {
+    bool Enabled { get; }
+
     void Info(string message);
     void Warn(string message);
 

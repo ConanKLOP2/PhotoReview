@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Threading;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Settings;
 
@@ -16,7 +17,7 @@ public partial class App : System.Windows.Application
 {
     private static readonly IAppPaths AppPaths = PhotoReview.Core.AppPaths.FromEnvironment();
     private static readonly IFileSystem FileSystem = new PhysicalFileSystem();
-    private static readonly ILog Log = new AppLogAdapter();
+    private static readonly ILog Log = FileLog.Default;
     private static readonly SettingsStore Store = new(AppPaths, FileSystem, Log, LogStartupErrorForced);
 
     private InstanceLock? _instanceLock;
