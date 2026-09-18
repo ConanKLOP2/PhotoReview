@@ -125,7 +125,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T33a | Chuyển Explorer sang Platform | T30 | ∥F | | TODO |
 | T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | TODO |
 | T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | DONE |
-| T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | TODO |
+| T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | DONE |
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | TODO |
 | T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | TODO |
 | T81 | `--decoder-bench` | T31c | ∥G | | TODO |
@@ -638,7 +638,19 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:** `FileLog(IAppPaths)` giữ writer thread, rotation 10 MB, `Flush`, `Shutdown`, và thuộc tính `Enabled`. `AppLog` static trỏ tới `FileLog.Default` cho code UI chưa chuyển. Service ở Core/Imaging/Platform nhận `ILog` (mặc định `NullLog` trong test). Giữ `if (log.Enabled)` trước các chuỗi log tốn kém.
 - **Kiểm thử:** `git grep AppLog -- src/PhotoReview.Core src/PhotoReview.Imaging src/PhotoReview.Platform.Windows` không có kết quả. INV-10 đạt.
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Hoàn thành T34:
+    - Bổ sung `bool Enabled { get; }` vào `ILog.cs` và triển khai trong `NullLog.cs` (`Enabled => false`).
+    - Tạo `FileLog.cs` (`FileLog : ILog, IDisposable`) trong `PhotoReview.Core.Diagnostics` với background worker thread, queue 4096 dòng, xoay vòng file 10 MB, flush, shutdown, và singleton facade `FileLog.Default`.
+    - Đảm bảo bất biến INV-10: Khi `Enabled == false`, không tạo file log hay thư mục `logs/`.
+    - Chuyển `PhotoReview.App.AppLog` thành static facade mỏng ủy quyền sang `FileLog.Default`.
+    - `AppPaths.cs` cập nhật comment và đường dẫn log chuẩn.
+    - Cập nhật các service và constructor trong Core, Imaging, Platform nhận `ILog?` (mặc định `NullLog.Instance`), bao gồm `PreviewImageService`, `ThumbnailCache`, `PreloadScheduler`, `ExplorerOrderService`, `SettingsStore`.
+    - Sửa `AppLogAdapter` ủy quyền sang `FileLog.Default`.
+    - Tạo 5 unit tests mới trong `FileLogTests.cs` (kiểm thử INV-10, định dạng log, thread concurrency, xoay vòng file).
+    - Kiểm tra `git grep AppLog -- src/PhotoReview.Core src/PhotoReview.Imaging src/PhotoReview.Platform.Windows` trả về 0 kết quả (sạch rò rỉ).
+    - Toàn bộ 483 xUnit tests PASS (Core: 199, Imaging: 20, Integration: 8, Tests.Unit: 256), CLI checks 147/147 PASS, `verify-all.ps1` đạt PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi file T34, tách biệt logging vào Core.Diagnostics, không rò rỉ AppLog xuống tầng dưới, bảo đảm INV-10.
+    - **Review R2:** APPROVE. Đầy đủ unit tests cho FileLog, zero regressions trên toàn bộ test suite và verification gates.
 
 ### T35 — Test kiến trúc ⛔Q6
 - **Files:** `tests/PhotoReview.Architecture.Tests/**`, `Directory.Packages.props` (`NetArchTest.Rules`), slnx, CI.

@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 478/478 (Core: 194, Imaging: 20, Integration: 8, Tests.Unit: 256)
+- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 483/483 (Core: 199, Imaging: 20, Integration: 8, Tests.Unit: 256)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, T30, T31a, T31b, T32, T33a, T33b, T31c**. Task tiếp theo: T34 (`FileLog`), sau đó T35 (Test kiến trúc).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, T30, T31a, T31b, T32, T33a, T33b, T31c, T34**. Task tiếp theo: T35 (Test kiến trúc ⛔Q6).
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, T31b, T32, T33a, T33b, **T31c** (Wave 1, Wave 2, T30, T31a, T31b, T32, T33a, T33b, T31c đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, T31b, T32, T33a, T33b, T31c, **T34** (Wave 1, Wave 2, T30, T31a, T31b, T32, T33a, T33b, T31c, T34 đã hoàn tất; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -59,7 +59,6 @@
 ## Việc tiếp theo
 
 1. **Refactor (Wave 3 tiếp tục):**
-   - **T34:** `FileLog : ILog`.
    - **T35:** Test kiến trúc ⛔Q6.
 2. **D07 (ma trận đo trên máy 1):** Đã sẵn sàng trên máy chính (đầy đủ fixture F1..F4 và công cụ đo). Chờ người dùng quyết định:
    - Phạm vi: rút gọn (khoảng 1 giờ), đầy đủ (vài giờ), hoặc tiếp tục refactor trước rồi đo sau.
