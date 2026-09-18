@@ -31,6 +31,8 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
     private readonly DiskCacheStore _diskStore;
+    private readonly Func<DecoderBackend> _currentBackend;
+    private readonly IImageDecoderFactory? _decoderFactory;
     private readonly IImageDecoder _decoder;
     private readonly ILog _log;
     // D10: precedence is the explicit test parameter, then the diagnostic environment
@@ -41,7 +43,8 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
-    public IImageDecoder Decoder => _decoder;
+    public IImageDecoder Decoder => GetDecoder();
+    public IImageDecoderFactory? DecoderFactory => _decoderFactory;
 
     // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
     // needs its own bound: without one, a preload burst spawns one Task.Run per decoded
@@ -64,18 +67,22 @@ public sealed class PreviewImageService : IPreloadTarget
         long diskCacheCapacityBytes = 4L * 1024 * 1024 * 1024,
         bool? disableDiskCacheOverride = null,
         IImageDecoder? decoder = null,
-        ILog? log = null)
+        ILog? log = null,
+        Func<DecoderBackend>? currentBackend = null,
+        IImageDecoderFactory? decoderFactory = null)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
         _targetDecodeWidth = targetDecodeWidth ?? throw new ArgumentNullException(nameof(targetDecodeWidth));
+        _currentBackend = currentBackend ?? (() => DecoderBackend.Wpf);
         _diskCacheDirectory = diskCacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _log = log ?? NullLog.Instance;
         _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log);
         _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
-        _decoder = decoder ?? new WpfBitmapImageDecoder();
+        _decoderFactory = decoderFactory;
+        _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
             capacityBytes, image => image.EstimatedBytes);
         // Two workers: enough to keep the disk-cache warm without letting persistence
@@ -139,14 +146,14 @@ public sealed class PreviewImageService : IPreloadTarget
     public ImageCacheKey GetCurrentCacheKey(string path)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : _targetDecodeWidth());
+        return ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
     }
 
     /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
     public ImageCacheKey GetCurrentCacheKey(FileInfo info)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(info, isOriginal, isOriginal ? 0 : _targetDecodeWidth());
+        return ImageCacheKey.Create(info, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
     }
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
@@ -335,6 +342,8 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
+    private IImageDecoder GetDecoder() => _decoderFactory?.Create(_currentBackend()) ?? _decoder;
+
     private IDecodedImage DecodeFromSource(string path, int targetWidth, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
@@ -354,16 +363,16 @@ public sealed class PreviewImageService : IPreloadTarget
         }
 
         long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
-        var decoded = _decoder.Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));
+        var decoded = GetDecoder().Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));
         if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetWidth, decoded.Downscaled, targetWidth > 0 && !decoded.Downscaled);
         return decoded;
     }
 
     public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path)
     {
-        var key = ImageCacheKey.Create(path, true, 0);
+        var key = ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend());
         if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
-        var info = await Task.Run(() => _decoder.ReadInfo(path));
+        var info = await Task.Run(() => GetDecoder().ReadInfo(path));
         dimensions = (info.Width, info.Height);
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
         _originalDimensions[key] = dimensions;
@@ -403,7 +412,7 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private string GetDiskCachePath(ImageCacheKey key)
     {
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}")));
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
         return Path.Combine(_diskCacheDirectory, hash + ".png");
     }
 

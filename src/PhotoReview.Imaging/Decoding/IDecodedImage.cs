@@ -1,3 +1,5 @@
+using PhotoReview.Core.Model;
+
 namespace PhotoReview.Imaging.Decoding;
 
 /// <summary>
@@ -12,4 +14,5 @@ public interface IDecodedImage
     int Orientation { get; }
     long EstimatedBytes { get; }
     object PlatformImage { get; }
+    DecoderBackend ActualBackend => DecoderBackend.Wpf;
 }

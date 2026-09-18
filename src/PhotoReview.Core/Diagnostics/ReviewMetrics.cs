@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
+using PhotoReview.Core.Model;
+
 namespace PhotoReview.Core.Diagnostics;
 
 public sealed class ReviewMetrics
@@ -14,6 +20,7 @@ public sealed class ReviewMetrics
     private long _diskCacheHits;
     private long _queueWaitMilliseconds;
     private long _uiAssignMilliseconds;
+    private readonly ConcurrentDictionary<DecoderBackend, long> _decoderFallbacks = new();
 
     public void RecordPreloadHit() => Interlocked.Increment(ref _preloadHits);
     public void RecordInflightJoin() => Interlocked.Increment(ref _inflightJoins);
@@ -23,6 +30,9 @@ public sealed class ReviewMetrics
 
     public void RecordCacheHit() => Interlocked.Increment(ref _cacheHits);
     public void RecordCacheMiss() => Interlocked.Increment(ref _cacheMisses);
+    public void RecordDecoderFallback(DecoderBackend backend) =>
+        _decoderFallbacks.AddOrUpdate(backend, 1, (_, count) => count + 1);
+
     public void RecordSourceRead(long bytes, long milliseconds)
     {
         Interlocked.Increment(ref _sourceReads);
@@ -45,7 +55,8 @@ public sealed class ReviewMetrics
         InflightJoins = Interlocked.Read(ref _inflightJoins),
         DiskCacheHits = Interlocked.Read(ref _diskCacheHits),
         QueueWaitMilliseconds = Interlocked.Read(ref _queueWaitMilliseconds),
-        UiAssignMilliseconds = Interlocked.Read(ref _uiAssignMilliseconds)
+        UiAssignMilliseconds = Interlocked.Read(ref _uiAssignMilliseconds),
+        DecoderFallbacks = new Dictionary<DecoderBackend, long>(_decoderFallbacks)
     };
 }
 
@@ -56,4 +67,5 @@ public sealed record ReviewMetricsSnapshot(long CacheHits, long CacheMisses, lon
     public long DiskCacheHits { get; init; }
     public long QueueWaitMilliseconds { get; init; }
     public long UiAssignMilliseconds { get; init; }
+    public IReadOnlyDictionary<DecoderBackend, long> DecoderFallbacks { get; init; } = new Dictionary<DecoderBackend, long>();
 }

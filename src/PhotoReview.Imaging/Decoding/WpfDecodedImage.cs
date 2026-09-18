@@ -1,4 +1,6 @@
+using System;
 using System.Windows.Media.Imaging;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.Imaging.Decoding;
 
@@ -14,8 +16,9 @@ public sealed class WpfDecodedImage : IDecodedImage
     public int Orientation { get; }
     public long EstimatedBytes => Math.Max(1, (long)Source.PixelWidth * Source.PixelHeight * 4);
     public object PlatformImage => Source;
+    public DecoderBackend ActualBackend { get; }
 
-    public WpfDecodedImage(BitmapSource source, bool downscaled = false, int orientation = 1)
+    public WpfDecodedImage(BitmapSource source, bool downscaled = false, int orientation = 1, DecoderBackend actualBackend = DecoderBackend.Wpf)
     {
         ArgumentNullException.ThrowIfNull(source);
         if (!source.IsFrozen && source.CanFreeze)
@@ -25,5 +28,6 @@ public sealed class WpfDecodedImage : IDecodedImage
         Source = source;
         Downscaled = downscaled;
         Orientation = orientation;
+        ActualBackend = actualBackend;
     }
 }
