@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
@@ -38,15 +38,32 @@ public sealed class DiskCacheStore
     }
 
     /// <summary>
-    /// Atomically writes a bitmap as a PNG image to <paramref name="cachePath"/> using a temporary file and atomic replace.
+    /// Atomically writes a decoded image as a PNG to <paramref name="cachePath"/> using a temporary file and atomic replace.
     /// </summary>
-    public Task WriteAtomicallyAsync(BitmapSource image, string cachePath, CancellationToken cancellationToken = default)
+    public Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, CancellationToken cancellationToken = default)
         => WriteAtomicallyAsync(image, cachePath, _log, cancellationToken);
 
     /// <summary>
-    /// Static atomic write helper.
+    /// Static atomic write helper for IDecodedImage.
     /// </summary>
-    public static async Task WriteAtomicallyAsync(BitmapSource image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
+    public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        if (image.PlatformImage is not BitmapSource bitmap)
+            throw new ArgumentException("PlatformImage must be a BitmapSource for PNG encoding.", nameof(image));
+        return WriteAtomicallyAsync(bitmap, cachePath, log, cancellationToken);
+    }
+
+    /// <summary>
+    /// Internal atomic write helper for BitmapSource.
+    /// </summary>
+    internal Task WriteAtomicallyAsync(BitmapSource image, string cachePath, CancellationToken cancellationToken = default)
+        => WriteAtomicallyAsync(image, cachePath, _log, cancellationToken);
+
+    /// <summary>
+    /// Internal static atomic write helper for BitmapSource.
+    /// </summary>
+    internal static async Task WriteAtomicallyAsync(BitmapSource image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);

@@ -60,7 +60,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(files is [var only] && only == cachePath && new FileInfo(cachePath).Length > 0);
     }
 
-    private static BitmapSource DecodeFixture()
+    private static IDecodedImage DecodeFixture()
     {
         var bitmap = new BitmapImage();
         using var stream = new MemoryStream(PreviewImageServiceTests.PreviewPng);
@@ -69,7 +69,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         bitmap.StreamSource = stream;
         bitmap.EndInit();
         bitmap.Freeze();
-        return bitmap;
+        return new WpfDecodedImage(bitmap);
     }
 
     [Fact(DisplayName = "ClearDirectory removes every matching file")]

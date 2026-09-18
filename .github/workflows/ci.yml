@@ -39,6 +39,7 @@ jobs:
 
       - name: Run unit tests
         run: |
+          dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
           dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
           dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
           dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults

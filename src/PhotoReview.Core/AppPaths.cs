@@ -48,10 +48,12 @@ public sealed class AppPaths : IAppPaths
         WindowPlacementFile = Path.Combine(appRoot, "window-placement.json");
     }
 
+    public const string DataRootEnvironmentVariable = "PHOTOREVIEW_DATA_ROOT";
+
     /// <summary>
     /// Factory là nơi DUY NHẤT trong toàn bộ ứng dụng đọc biến môi trường PHOTOREVIEW_DATA_ROOT.
     /// </summary>
     public static AppPaths FromEnvironment() => new(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT"));
+        Environment.GetEnvironmentVariable(DataRootEnvironmentVariable));
 }

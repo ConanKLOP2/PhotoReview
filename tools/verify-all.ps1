@@ -41,6 +41,7 @@ Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
     dotnet run --project (Join-Path $root 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
 }
 Invoke-Gate 'Run xUnit test suite' {
+    dotnet test (Join-Path $root 'tests\PhotoReview.Architecture.Tests\PhotoReview.Architecture.Tests.csproj') -c $Configuration --no-build --nologo
     dotnet test (Join-Path $root 'tests\PhotoReview.Core.Tests\PhotoReview.Core.Tests.csproj') -c $Configuration --no-build --nologo
     dotnet test (Join-Path $root 'tests\PhotoReview.Imaging.Tests\PhotoReview.Imaging.Tests.csproj') -c $Configuration --no-build --nologo
     dotnet test (Join-Path $root 'tests\PhotoReview.Integration.Tests\PhotoReview.Integration.Tests.csproj') -c $Configuration --no-build --nologo

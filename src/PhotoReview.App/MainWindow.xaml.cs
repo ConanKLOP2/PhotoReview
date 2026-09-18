@@ -63,7 +63,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// T14a test seam. Chains through <see cref="ApplyTestEnvironment"/>: the argument is
     /// evaluated before this instance's field initializers run, which is the only point at
-    /// which PHOTOREVIEW_DATA_ROOT can still be redirected before <see cref="OperationJournal"/>
+    /// which <see cref="PhotoReview.Core.AppPaths.DataRootEnvironmentVariable"/> can still be redirected before <see cref="OperationJournal"/>
     /// captures it in its own field initializer.
     /// </summary>
     internal MainWindow(string? initialPath, MainWindowTestHooks hooks, SettingsStore? settingsStore = null) : this(ApplyTestEnvironment(hooks), initialPath, settingsStore) { }
@@ -1232,17 +1232,17 @@ public partial class MainWindow : Window
             : Task.Run(() => File.Move(source, destination));
 
     /// <summary>
-    /// Redirects PHOTOREVIEW_DATA_ROOT at a temp directory so a hosted MainWindow never reads
+    /// Redirects <see cref="PhotoReview.Core.AppPaths.DataRootEnvironmentVariable"/> at a temp directory so a hosted MainWindow never reads
     /// or writes the user's real journal/session data. An already-installed root (a test
     /// fixture that owns cleanup) wins.
     /// </summary>
     private static MainWindowTestHooks ApplyTestEnvironment(MainWindowTestHooks hooks)
     {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT")))
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(PhotoReview.Core.AppPaths.DataRootEnvironmentVariable)))
         {
             var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-MainWindow-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
-            Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", root);
+            Environment.SetEnvironmentVariable(PhotoReview.Core.AppPaths.DataRootEnvironmentVariable, root);
         }
         return hooks;
     }

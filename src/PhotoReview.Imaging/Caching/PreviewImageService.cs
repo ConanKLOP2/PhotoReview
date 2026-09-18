@@ -371,7 +371,7 @@ public sealed class PreviewImageService : IPreloadTarget
     }
 
     [Obsolete("Use IImageDecoder instance instead.")]
-    public static BitmapImage DecodeSource(string path, int targetWidth)
+    public static IDecodedImage DecodeSource(string path, int targetWidth)
     {
         if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
@@ -386,17 +386,19 @@ public sealed class PreviewImageService : IPreloadTarget
                 while (offset < bytes.Length && (read = fileStream.Read(bytes, offset, bytes.Length - offset)) > 0) offset += read;
             }
             if (perf) PhotoReviewPerf.Log.SourceRead(PhotoReviewPerf.NavContext, PhotoReviewPerf.PathId(path), PhotoReviewPerf.Ms(readStart), bytes.LongLength);
-            return (BitmapImage)WpfBitmapImageDecoder.DecodeSource(new DecodeRequest(path, targetWidth, Bytes: bytes));
+            var bmp = WpfBitmapImageDecoder.DecodeSource(new DecodeRequest(path, targetWidth, Bytes: bytes));
+            return new WpfDecodedImage(bmp, targetWidth > 0);
         }
 
-        return (BitmapImage)WpfBitmapImageDecoder.DecodeSource(new DecodeRequest(path, targetWidth));
+        var bitmap = WpfBitmapImageDecoder.DecodeSource(new DecodeRequest(path, targetWidth));
+        return new WpfDecodedImage(bitmap, targetWidth > 0);
     }
 
     [Obsolete("Use IImageDecoder instance instead.")]
-    public static (BitmapImage Bitmap, bool Downscaled) DecodeWithFallback(string path, int targetWidth)
+    public static (IDecodedImage Decoded, bool Downscaled) DecodeWithFallback(string path, int targetWidth)
     {
         var decoded = WpfBitmapImageDecoder.DecodeWithFallback(new DecodeRequest(path, targetWidth));
-        return ((BitmapImage)decoded.PlatformImage, decoded.Downscaled);
+        return (decoded, decoded.Downscaled);
     }
 
     private string GetDiskCachePath(ImageCacheKey key)
