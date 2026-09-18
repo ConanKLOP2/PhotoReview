@@ -1,0 +1,234 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace PhotoReview.Core.Catalog;
+
+/// <summary>
+/// Manages an ordered collection of image entries and tracks the current review position.
+/// </summary>
+/// <remarks>
+/// This class is not thread-safe and must only be accessed from the UI thread.
+/// </remarks>
+public sealed class ReviewCatalog
+{
+    private readonly List<CatalogEntry> _entries = [];
+
+    /// <summary>
+    /// Gets the number of items currently in the catalog.
+    /// </summary>
+    public int Count => _entries.Count;
+
+    /// <summary>
+    /// Gets the zero-based index of the current item, or -1 if the catalog is empty.
+    /// </summary>
+    public int CurrentIndex { get; private set; } = -1;
+
+    /// <summary>
+    /// Gets the current entry, or null if the catalog is empty.
+    /// </summary>
+    public CatalogEntry? Current => CurrentIndex >= 0 && CurrentIndex < _entries.Count ? _entries[CurrentIndex] : null;
+
+    /// <summary>
+    /// Gets a read-only list of paths of all items currently in the catalog.
+    /// </summary>
+    public IReadOnlyList<string> Paths => _entries.Select(e => e.Path).ToArray();
+
+    /// <summary>
+    /// Finds the zero-based index of the entry with the specified path, using ordinal case-insensitive comparison.
+    /// Returns -1 if not found.
+    /// </summary>
+    public int IndexOf(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return -1;
+        for (var i = 0; i < _entries.Count; i++)
+        {
+            if (string.Equals(_entries[i].Path, path, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Resets the catalog with the specified paths. Sets <see cref="CurrentIndex"/> to 0 if non-empty, or -1 if empty.
+    /// </summary>
+    public void Reset(IEnumerable<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        _entries.Clear();
+        foreach (var path in paths)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                _entries.Add(new CatalogEntry(path));
+            }
+        }
+        CurrentIndex = _entries.Count > 0 ? 0 : -1;
+    }
+
+    /// <summary>
+    /// Moves the specified item to the front of the catalog (index 0) and sets <see cref="CurrentIndex"/> to 0.
+    /// Returns true if the item was found and moved (or already at front), false otherwise.
+    /// </summary>
+    public bool MoveToFront(string path)
+    {
+        var index = IndexOf(path);
+        if (index < 0) return false;
+
+        if (index > 0)
+        {
+            var entry = _entries[index];
+            _entries.RemoveAt(index);
+            _entries.Insert(0, entry);
+        }
+
+        CurrentIndex = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the current position to the specified index.
+    /// </summary>
+    public bool SetCurrent(int index)
+    {
+        if (_entries.Count == 0 && index == -1)
+        {
+            CurrentIndex = -1;
+            return true;
+        }
+
+        if (index >= 0 && index < _entries.Count)
+        {
+            CurrentIndex = index;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Removes the entry with the specified path.
+    /// Calculates nextIndex using the same formula as AdvanceBeforeFileActionAsync:
+    /// Math.Min(Math.Max(removedIndex, 0), Count - 1), or -1 if the catalog becomes empty.
+    /// Returns the new <see cref="CurrentIndex"/>.
+    /// </summary>
+    public int Remove(string path)
+    {
+        var removedIndex = IndexOf(path);
+        if (removedIndex < 0) return CurrentIndex;
+
+        _entries.RemoveAt(removedIndex);
+        if (_entries.Count == 0)
+        {
+            CurrentIndex = -1;
+            return -1;
+        }
+
+        var nextIndex = Math.Min(Math.Max(removedIndex, 0), _entries.Count - 1);
+        CurrentIndex = nextIndex;
+        return nextIndex;
+    }
+
+    /// <summary>
+    /// Restores an entry at the specified index (clamped to [0, Count]).
+    /// Does not add duplicate paths. Returns true if restored, false if duplicate or invalid.
+    /// </summary>
+    public bool Restore(string path, int index)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        if (IndexOf(path) >= 0) return false; // Avoid duplicates
+
+        var clampedIndex = Math.Clamp(index, 0, _entries.Count);
+        _entries.Insert(clampedIndex, new CatalogEntry(path));
+
+        if (CurrentIndex == -1)
+        {
+            CurrentIndex = clampedIndex;
+        }
+        else if (clampedIndex <= CurrentIndex)
+        {
+            CurrentIndex++;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces the ordering of items in the catalog with <paramref name="newOrder"/>.
+    /// Preserves the currently selected entry by path.
+    /// Returns false if the set of files in <paramref name="newOrder"/> does not match the current catalog.
+    /// </summary>
+    public bool ReplaceOrder(IReadOnlyList<string> newOrder)
+    {
+        ArgumentNullException.ThrowIfNull(newOrder);
+
+        if (newOrder.Count != _entries.Count) return false;
+
+        // Verify exact set match (case-insensitive)
+        var currentSet = new HashSet<string>(_entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
+        foreach (var path in newOrder)
+        {
+            if (!currentSet.Contains(path)) return false;
+        }
+
+        var currentPath = Current?.Path;
+
+        // Build mapping and reorder
+        var entryMap = _entries.ToDictionary(e => e.Path, StringComparer.OrdinalIgnoreCase);
+        _entries.Clear();
+        foreach (var path in newOrder)
+        {
+            _entries.Add(entryMap[path]);
+        }
+
+        if (currentPath is not null)
+        {
+            var newIndex = IndexOf(currentPath);
+            CurrentIndex = newIndex >= 0 ? newIndex : (_entries.Count > 0 ? 0 : -1);
+        }
+        else
+        {
+            CurrentIndex = _entries.Count > 0 ? 0 : -1;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Inserts an entry into the catalog preserving sorted order defined by <paramref name="comparison"/>.
+    /// Used for undo operations. Returns the index where the item was inserted.
+    /// </summary>
+    public int InsertSorted(string path, Comparison<string> comparison)
+    {
+        ArgumentNullException.ThrowIfNull(comparison);
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path cannot be empty.", nameof(path));
+
+        // If duplicate exists, return existing index
+        var existingIndex = IndexOf(path);
+        if (existingIndex >= 0) return existingIndex;
+
+        var targetIndex = 0;
+        while (targetIndex < _entries.Count && comparison(_entries[targetIndex].Path, path) < 0)
+        {
+            targetIndex++;
+        }
+
+        _entries.Insert(targetIndex, new CatalogEntry(path));
+
+        if (CurrentIndex == -1)
+        {
+            CurrentIndex = targetIndex;
+        }
+        else if (targetIndex <= CurrentIndex)
+        {
+            CurrentIndex++;
+        }
+
+        return targetIndex;
+    }
+
+    /// <summary>
+    /// Creates a snapshot array of all paths currently in the catalog.
+    /// </summary>
+    public string[] Snapshot() => _entries.Select(e => e.Path).ToArray();
+}

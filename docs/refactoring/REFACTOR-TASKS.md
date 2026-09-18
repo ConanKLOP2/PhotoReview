@@ -1,5 +1,7 @@
 # PhotoReview — Task tái cấu trúc (B + C3)
 
+> Review sau merge 2026-09-18 (`afb2f77`): [plan sửa lỗi](MERGED-CODE-REVIEW-PLAN.md) và [task MR00–MR06](MERGED-CODE-REVIEW-TASKS.md). Đề xuất chờ duyệt; ưu tiên preload/gate trước D07, hoàn tất contract/quality trước T87. Không thay trạng thái các task cũ bằng kết quả review này.
+
 - **Plan:** [`REFACTOR-PLAN.md`](REFACTOR-PLAN.md) · **Cập nhật:** 2026-09-16
 - **Trạng thái hợp lệ:** `TODO` · `IN PROGRESS` · `BLOCKED` · `DONE`
 - **Ký hiệu:**
@@ -135,7 +137,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | DONE |
 | T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | DONE |
 | T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | DONE |
-| T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | TODO |
+| T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | DONE |
 | T41b | `GenerationClock` | T40 | ∥I | | TODO |
 | T42a | `FileActionService` | T40 | ∥I | | TODO |
 | T42b | `UndoService` | T42a | | | TODO |
@@ -846,7 +848,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
     - `Snapshot() → string[]`
   - Không thread-safe (chỉ dùng trên UI thread); ghi rõ trong XML doc.
 - **Xong khi:** test đủ biên (rỗng, 1 phần tử, xóa cuối, `Restore(-1)`, `ReplaceOrder` khác tập).
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T41a-review-catalog` · Files: `src/PhotoReview.Core/Catalog/{CatalogEntry.cs,ReviewCatalog.cs}`, `tests/PhotoReview.Core.Tests/Catalog/ReviewCatalogTests.cs` · Triển khai `CatalogEntry(string Path)` và `ReviewCatalog` đầy đủ API: `Count`, `CurrentIndex`, `Current`, `Paths`, `IndexOf`, `Reset`, `MoveToFront`, `SetCurrent`, `Remove` (chuẩn hóa công thức nextIndex và -1 khi rỗng), `Restore` (clamp `[0, Count]` và chống trùng lặp), `ReplaceOrder` (bảo toàn current theo path, xác thực tập file), `InsertSorted`, `Snapshot` · Đánh dấu rõ ràng XML Doc chỉ dùng trên UI thread (not thread-safe) · 10 unit test cases biên nghiệp vụ mới (tests Core tăng lên 211/211) · Toàn bộ 628/628 tests PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T41b/T42a.
 
 ### T41b — `GenerationClock` ∥I
 - **Files:** `{Core}/Catalog/GenerationClock.cs`, test.
