@@ -195,24 +195,14 @@ public sealed class ThumbnailCache : IDisposable
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
-                64 * 1024, FileOptions.SequentialScan);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
-            bitmap.StreamSource = stream;
-            bitmap.DecodePixelWidth = MaxThumbnailWidth;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            return (IDecodedImage)new WpfDecodedImage(bitmap, downscaled: true);
+            return WpfBitmapImageDecoder.DecodeWithFallback(new DecodeRequest(path, MaxThumbnailWidth, ApplyOrientation: true));
         }, cancellationToken);
     }
 
     private static string BuildKey(string path)
     {
         var info = new FileInfo(path);
-        var stamp = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{MaxThumbnailWidth}";
+        var stamp = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{MaxThumbnailWidth}|orient=1";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stamp))).ToLowerInvariant();
     }
 
