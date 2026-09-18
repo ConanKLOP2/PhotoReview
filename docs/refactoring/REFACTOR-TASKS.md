@@ -130,7 +130,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | DONE |
 | T81 | `--decoder-bench` | T31c | ∥G | | TODO |
 | T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | DONE |
-| T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | TODO |
+| T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | DONE |
 | T82 | `WicDirectDecoder` | T84 | ∥H | | TODO |
 | T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | TODO |
 | T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | TODO |
@@ -738,7 +738,12 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. `PreviewImageService` nhận `Func<DecoderBackend>` (giống `isOriginalLoadingMode`) để lấy backend hiện hành.
   5. Metric: đếm số lần fallback theo backend.
 - **Xong khi:** test với decoder giả ném lỗi, fallback hoạt động, `FileNotFound` không fallback. INV-12 đạt.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-18 · Sonnet · branch `refactor/T84-decoder-factory-fallback` · commit `0c4379c`
+    - Files: `{Imaging}/Decoding/{IImageDecoderFactory,ImageDecoderFactory,FallbackImageDecoder}.cs`, `IDecodedImage.cs`, `WpfDecodedImage.cs`, `ReviewMetrics.cs`, `ImageCacheKey.cs`, `PreviewImageService.cs`, `{ImgT}/Decoding/FactoryTests.cs`.
+    - Thay đổi: Triển khai `IImageDecoderFactory` và `ImageDecoderFactory` giải quyết backend và bọc non-WPF decoder trong `FallbackImageDecoder`. `FallbackImageDecoder` tuân thủ INV-12: bắt `NotSupportedException`, `FileFormatException`, `InvalidDataException`, `COMException`, `DllNotFoundException` để log và fallback sang Wpf; `FileNotFoundException`/`DirectoryNotFoundException` ném thẳng không fallback. Ghi nhận `ActualBackend` trên `IDecodedImage`. Ghi nhận metrics `ReviewMetrics.RecordDecoderFallback`. `ImageCacheKey` và `PreviewImageService` disk cache hash chứa `Backend`. `PreviewImageService` nhận `Func<DecoderBackend>` và `IImageDecoderFactory`. Quyết định thiết kế cache key: dùng backend được yêu cầu để kết quả lookup nhất quán cho từng file.
+    - Kiểm thử: `FactoryTests.cs` (12 test mới), tổng xUnit `PhotoReview.Imaging.Tests` đạt 83/83 test PASS. Toàn bộ verification gates `tools/verify-all.ps1` đạt PASS (xUnit: 551/551 tests pass, smoke test file ops, fault injection, release publish 535,552 bytes).
+    - Lệch plan / rủi ro / việc còn lại: Không. Sẵn sàng cho T82 (`WicDirectDecoder`), T81 (`--decoder-bench`), hoặc T85 (`TurboJpegDecoder`).
 
 ### T82 — `WicDirectDecoder` ∥H
 - **Files:** `{Imaging}/Decoding/Wic/{WicDirectDecoder,WicInterop}.cs` (mới), đăng ký trong factory (chỉ trong test hoặc CLI; app đăng ký ở T87), `{ImgT}/Decoding/WicDirectTests.cs`, `{CLI}/DecoderBenchmark.cs` (đăng ký backend).
