@@ -145,7 +145,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T43a | `ShortcutRouter` | T40 | ∥I | | DONE |
 | T43b | `ViewerState` | T40 | ∥I | | DONE |
 | T44 | `FolderLoadCoordinator` | T41a, T41b | | | DONE |
-| T45a | `StatusFormatter` | T40 | ∥I | | TODO |
+| T45a | `StatusFormatter` | T40 | ∥I | | DONE |
 | T45b | `CompareViewModel` | T41a | | | TODO |
 | T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | TODO |
 | T46a | `MainViewModel`: mở folder + điều hướng | T43a, T43b, T45c | | | TODO |
@@ -922,7 +922,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/ViewModels/StatusFormatter.cs`, test.
 - **Làm:** gom **nguyên văn** mọi chuỗi status trong `MainWindow` thành method tĩnh (`Loading`, `Ready`, `WithDimensions`, `Compare`, `Zoom`, `BatchDone`, `CannotProcess`…) và `FormatFileSize`. Test so khớp chính xác với chuỗi cũ.
 - **Xong khi:** test đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T45a-status-formatter` · Files: `src/PhotoReview.App/ViewModels/StatusFormatter.cs`, `tests/PhotoReview.App.Tests/ViewModels/StatusFormatterTests.cs` · Gom toàn bộ các định dạng chuỗi thanh trạng thái (StatusText) và định dạng kích thước tệp tin `FormatFileSize` nguyên bản từ `MainWindow` vào lớp tĩnh `StatusFormatter` độc lập với UI · 11 unit test cases đối chiếu chính xác 100% từng chuỗi định dạng và các ngưỡng kích thước tệp tin · Toàn bộ 704/704 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T45b.
 
 ### T45b — `CompareViewModel`
 - **Files:** `{App}/ViewModels/CompareViewModel.cs`, test.
