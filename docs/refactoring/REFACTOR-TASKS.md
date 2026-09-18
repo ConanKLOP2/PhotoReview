@@ -134,7 +134,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T82 | `WicDirectDecoder` | T84 | ∥H | | DONE |
 | T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | DONE |
 | T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | DONE |
-| T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | TODO |
+| T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | DONE |
 | T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | TODO |
 | T41b | `GenerationClock` | T40 | ∥I | | TODO |
 | T42a | `FileActionService` | T40 | ∥I | | TODO |
@@ -830,7 +830,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `Directory.Packages.props` (`CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`), `{App}/PhotoReview.App.csproj`, `{App}/App.xaml`, `{App}/App.xaml.cs`, `{App}/MainWindow.xaml.cs` (constructor nhận dependency), `tests/PhotoReview.App.Tests/**` (tạo project).
 - **Làm:** tạo `ServiceCollection` trong `App_Startup`. Đăng ký singleton: `IAppPaths`, `IFileSystem`, `IClock`, `ILog`, `SettingsStore`, `OperationJournal`, `SessionStore`, `RecoveryRetryService`, `ReviewMetrics`, `PreviewImageService`, `ThumbnailCache`, `PreloadScheduler` (factory), `FileHashService`, `IExplorerOrderProvider`, `IRecycleBin`, `IMemoryProbe`, `IUiScheduler`, `INaturalComparer`, `IKeyNameValidator`, `IImageDecoderFactory`. Giữ nguyên thứ tự khởi động: logging, handler exception, instance lock, window. `MainWindow` resolve từ container. Seam T14a được giữ lại bằng cách đăng ký fake trong test.
 - **Xong khi:** app chạy (kiểm thủ công mở folder, Next), VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18 · Antigravity · `refactor/T40-composition-root` · Files: `Directory.Packages.props`, `src/PhotoReview.App/PhotoReview.App.csproj`, `src/PhotoReview.App/App.xaml.cs`, `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/Services/PreviewStateContext.cs`, `PhotoReview.slnx`, `tools/verify-all.ps1`, `tests/PhotoReview.App.Tests/**` · Cấu hình Central Package Management cho `CommunityToolkit.Mvvm` 8.4.0 và `Microsoft.Extensions.DependencyInjection` 10.0.0 · Triển khai `ConfigureServices` đăng ký đủ 19 dịch vụ trừu tượng, singleton services và factory delegates · Bổ sung DI constructor cho `MainWindow` đồng thời bảo toàn 100% seam kiểm thử T14a (`MainWindowTestHooks`) · Tạo mới project kiểm thử `PhotoReview.App.Tests` (4/4 test PASS) · Toàn bộ 616/616 unit/integration/architecture tests PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T41a/T41b/T42a.
 
 ### T41a — `ReviewCatalog` ∥I
 - **Files:** `{Core}/Catalog/{ReviewCatalog,CatalogEntry}.cs`, `{CoreT}/Catalog/ReviewCatalogTests.cs`.

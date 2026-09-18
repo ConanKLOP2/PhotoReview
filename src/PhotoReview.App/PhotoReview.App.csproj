@@ -26,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="PhotoReview.Core.Settings" />
     <Using Include="PhotoReview.App.Services" />
     <Using Include="PhotoReview.Core.FileActions" />

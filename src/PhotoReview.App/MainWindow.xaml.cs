@@ -24,10 +24,10 @@ public partial class MainWindow : Window
     private long _generation;
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
-    private readonly OperationJournal _journal = new();
+    private readonly OperationJournal _journal;
     private readonly RecoveryRetryService _recoveryRetryService;
-    private readonly SessionStore _sessionStore = new();
-    private readonly ThumbnailCache _thumbnailCache = new(persistNewThumbnails: false, log: FileLog.Default);
+    private readonly SessionStore _sessionStore;
+    private readonly ThumbnailCache _thumbnailCache;
     private SessionState? _session;
     private double _zoom = 1;
     private readonly Stack<(string Source, string Destination)> _moveHistory = [];
@@ -36,8 +36,8 @@ public partial class MainWindow : Window
     private const long FullFolderRamThresholdBytes = AppConstants.ImageCacheCapacityBytes;
     private const double PreloadMemoryLoadLimit = AppConstants.PreloadMemoryLoadLimit;
     private string? _compareSelectedPath;
-    private readonly FileHashService _hashService = new();
-    private readonly ReviewMetrics _metrics = new();
+    private readonly FileHashService _hashService;
+    private readonly ReviewMetrics _metrics;
     private readonly PreviewImageService _previewService;
     private readonly PreloadScheduler _preloadScheduler;
     // T14a seam: static type is the internal interface so a test can substitute the
@@ -61,6 +61,41 @@ public partial class MainWindow : Window
     public MainWindow(string? initialPath, SettingsStore? settingsStore) : this((MainWindowTestHooks?)null, initialPath, settingsStore) { }
 
     /// <summary>
+    /// T40: Injected constructor called by the DI container.
+    /// </summary>
+    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
+    public MainWindow(
+        SettingsStore settingsStore,
+        OperationJournal journal,
+        SessionStore sessionStore,
+        RecoveryRetryService recoveryRetryService,
+        ThumbnailCache thumbnailCache,
+        FileHashService hashService,
+        ReviewMetrics metrics,
+        PreviewImageService previewService,
+        Func<Func<string[]>, Func<long>, PreloadScheduler> preloadSchedulerFactory,
+        IProgressiveExplorerOrderProvider explorerOrder,
+        IRecycleBin recycleBin,
+        PreviewStateContext? stateContext = null)
+        : this(
+            hooks: null,
+            initialPath: null,
+            settingsStore: settingsStore,
+            journal: journal,
+            sessionStore: sessionStore,
+            recoveryRetryService: recoveryRetryService,
+            thumbnailCache: thumbnailCache,
+            hashService: hashService,
+            metrics: metrics,
+            previewService: previewService,
+            preloadSchedulerFactory: preloadSchedulerFactory,
+            explorerOrder: explorerOrder,
+            recycleBin: recycleBin,
+            stateContext: stateContext)
+    {
+    }
+
+    /// <summary>
     /// T14a test seam. Chains through <see cref="ApplyTestEnvironment"/>: the argument is
     /// evaluated before this instance's field initializers run, which is the only point at
     /// which <see cref="PhotoReview.Core.AppPaths.DataRootEnvironmentVariable"/> can still be redirected before <see cref="OperationJournal"/>
@@ -70,7 +105,21 @@ public partial class MainWindow : Window
 
     // Parameter order is reversed against the internal overload on purpose: it keeps the two
     // signatures distinct (nullability alone does not) so the seam can chain into this body.
-    private MainWindow(MainWindowTestHooks? hooks, string? initialPath, SettingsStore? settingsStore)
+    private MainWindow(
+        MainWindowTestHooks? hooks,
+        string? initialPath,
+        SettingsStore? settingsStore,
+        OperationJournal? journal = null,
+        SessionStore? sessionStore = null,
+        RecoveryRetryService? recoveryRetryService = null,
+        ThumbnailCache? thumbnailCache = null,
+        FileHashService? hashService = null,
+        ReviewMetrics? metrics = null,
+        PreviewImageService? previewService = null,
+        Func<Func<string[]>, Func<long>, PreloadScheduler>? preloadSchedulerFactory = null,
+        IProgressiveExplorerOrderProvider? explorerOrder = null,
+        IRecycleBin? recycleBin = null,
+        PreviewStateContext? stateContext = null)
     {
         _settingsStore = settingsStore ?? new SettingsStore(
             PhotoReview.Core.AppPaths.FromEnvironment(),
@@ -83,18 +132,39 @@ public partial class MainWindow : Window
             _settings = updated;
             UpdateFolderTitle();
         };
+        _journal = journal ?? new OperationJournal();
+        _sessionStore = sessionStore ?? new SessionStore();
+        _thumbnailCache = thumbnailCache ?? new ThumbnailCache(persistNewThumbnails: false, log: FileLog.Default);
+        _hashService = hashService ?? new FileHashService();
+        _metrics = metrics ?? new ReviewMetrics();
         _hooks = hooks;
-        _explorerOrder = hooks?.Explorer ?? new ExplorerOrderProviderAdapter();
-        _recycleBin = hooks?.RecycleBin ?? WindowsRecycleBin.Instance;
-        _recoveryRetryService = new RecoveryRetryService(_journal, new PhotoReview.Core.IO.PhysicalFileSystem(), new PhotoReview.Core.Abstractions.SystemClock());
+        _explorerOrder = hooks?.Explorer ?? explorerOrder ?? new ExplorerOrderProviderAdapter();
+        _recycleBin = hooks?.RecycleBin ?? recycleBin ?? WindowsRecycleBin.Instance;
+        _recoveryRetryService = recoveryRetryService ?? new RecoveryRetryService(_journal, new PhotoReview.Core.IO.PhysicalFileSystem(), new PhotoReview.Core.Abstractions.SystemClock());
         InitializeComponent();
         DpiChanged += MainWindow_DpiChanged;
-        _previewService = new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes, log: FileLog.Default);
-        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => _files.ToArray(), () => _totalSourceBytes,
-            FullFolderRamThresholdBytes, PreloadMemoryLoadLimit, log: FileLog.Default);
+
+        if (stateContext is not null)
+        {
+            stateContext.IsOriginalLoadingMode = IsOriginalLoadingMode;
+            stateContext.TargetDecodeWidth = GetTargetDecodeWidth;
+        }
+
+        _previewService = previewService ?? new PreviewImageService(_metrics, IsOriginalLoadingMode, GetTargetDecodeWidth, AppConstants.ImageCacheCapacityBytes, log: FileLog.Default);
+        _preloadScheduler = preloadSchedulerFactory is not null
+            ? preloadSchedulerFactory(() => _files.ToArray(), () => _totalSourceBytes)
+            : new PreloadScheduler(_previewService, _metrics, () => _files.ToArray(), () => _totalSourceBytes,
+                FullFolderRamThresholdBytes, PreloadMemoryLoadLimit, log: FileLog.Default);
+
         _journal.ReconcilePendingOperations();
         foreach (var move in _journal.ReadCommittedMoves())
             if (File.Exists(move.Destination) && !File.Exists(move.Source)) _moveHistory.Push((move.Source, move.Destination!));
+        
+        InitializeWithInitialPath(initialPath);
+    }
+
+    public void InitializeWithInitialPath(string? initialPath)
+    {
         if (!string.IsNullOrWhiteSpace(initialPath))
         {
             if (File.Exists(initialPath)) _ = LoadFolderAsync(Path.GetDirectoryName(initialPath)!, initialPath);
@@ -1254,14 +1324,14 @@ public partial class MainWindow : Window
 /// <see cref="IDisposable"/> so <c>Window_Closed</c> keeps disposing the provider unchanged.
 /// T22c/T23b replace this with a Core-layer interface.
 /// </summary>
-internal interface IProgressiveExplorerOrderProvider : IDisposable
+public interface IProgressiveExplorerOrderProvider : IDisposable
 {
     Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
         CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16);
 }
 
 /// <summary>Production provider: owns and forwards to the real <see cref="ExplorerOrderService"/>.</summary>
-internal sealed class ExplorerOrderProviderAdapter : IProgressiveExplorerOrderProvider
+public sealed class ExplorerOrderProviderAdapter : IProgressiveExplorerOrderProvider
 {
     private readonly ExplorerOrderService _service = new();
 
