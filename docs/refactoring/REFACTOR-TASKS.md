@@ -140,7 +140,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | DONE |
 | T41b | `GenerationClock` | T40 | ∥I | | DONE |
 | T42a | `FileActionService` | T40 | ∥I | | DONE |
-| T42b | `UndoService` | T42a | | | TODO |
+| T42b | `UndoService` | T42a | | | DONE |
 | T42c | `DuplicateFinder` | T40 | ∥I | | DONE |
 | T43a | `ShortcutRouter` | T40 | ∥I | | TODO |
 | T43b | `ViewerState` | T40 | ∥I | | TODO |
@@ -880,7 +880,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - `UndoLastAsync()`: Recycle thì gọi `IRecycleBin.TryRestore`.
   - Dùng chung gate với `FileActionService`.
 - **Xong khi:** test undo thành công, file đã đổi, đường dẫn khác hoa thường, restore Recycle lỗi.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T42b-undo-service` · Files: `src/PhotoReview.Core/FileActions/{UndoResult.cs,UndoService.cs}`, `src/PhotoReview.App/App.xaml.cs`, `tests/PhotoReview.Core.Tests/FileActions/UndoServiceTests.cs`, `tests/PhotoReview.Core.Tests/Fakes/InMemoryFileSystem.cs` · Triển khai `UndoService` điều phối hoàn tác Move và Recycle độc lập với UI, bảo vệ gate bận (INV-4) dùng chung `FileActionService`, nạp lịch sử từ journal (`LoadFromJournal`), sửa triệt để lỗi P12 so khớp đường dẫn hoa thường (`OrdinalIgnoreCase`), kiểm tra toàn vẹn fingerprint (size, LastWriteUtc) trước khi hoàn tác và khôi phục lại ngăn xếp khi xảy ra lỗi · Đăng ký `UndoService` và `FileActionService` vào DI container trong `App.xaml.cs` · 9 unit test cases bao quát mọi kịch bản · Toàn bộ 668/668 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T43a.
 
 ### T42c — `DuplicateFinder` ∥I
 - **Files:** `{Core}/FileActions/DuplicateFinder.cs`, test.
