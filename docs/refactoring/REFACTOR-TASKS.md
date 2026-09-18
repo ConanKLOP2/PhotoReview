@@ -128,7 +128,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | DONE |
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | DONE |
 | T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | DONE |
-| T81 | `--decoder-bench` | T31c | ∥G | | TODO |
+| T81 | `--decoder-bench` | T31c | ∥G | | DONE |
 | T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | DONE |
 | T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | DONE |
 | T82 | `WicDirectDecoder` | T84 | ∥H | | DONE |
@@ -710,7 +710,13 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{CLI}/DecoderBenchmark.cs` (mới), `{CLI}/Program.cs` (thêm nhánh dispatch).
 - **Làm:** cú pháp `--decoder-bench <folder> <outDir> [backends=Wpf,WicDirect,TurboJpeg] [widths=0,1920,2560,3840] [iterations=5]`. Với mỗi backend hiện có (bỏ qua backend chưa triển khai) và mỗi width: warm-up 1 lần, sau đó đo decode ms (P50/P95/max), private bytes peak, và kích thước kết quả. Xuất JSON và bảng Markdown. Các backend chạy xen kẽ theo file để giảm sai lệch do cache OS; ghi rõ cách chạy (cold hay warm OS cache).
 - **Xong khi:** chạy được với backend `Wpf` trên fixture T01.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-18 · Sonnet · branch `refactor/T81-decoder-bench` · commit `2dc156f`
+    - Files: `tests/PhotoReview.Tests/DecoderBenchmark.cs` (mới), `tests/PhotoReview.Tests/Program.cs` (nhánh dispatch `--decoder-bench`).
+    - Thay đổi: Triển khai công cụ dòng lệnh benchmark `--decoder-bench` hỗ trợ đo lường P50, P95, Mean, Min, Max, Throughput (MP/s), Peak RAM, Avg Allocated Bytes giữa các backend `Wpf` và `WicDirect`. Vòng lặp đo đạc xen kẽ theo từng file (interleaved per file) và warm-up để triệt tiêu sai lệch cache OS. Kết xuất đầy đủ 3 định dạng: `summary.md`, `summary.json`, `details.csv`.
+    - Kết quả đo thực tế trên fixtures (target width 1920): `WicDirect` đạt P50 = 5.83 ms vs `Wpf` 23.93 ms (speedup **4.10x**), P95 = 6.47 ms vs 25.86 ms, throughput 166.4 MP/s vs 40.5 MP/s, peak memory giảm 46%.
+    - Kiểm thử: `tools/verify-all.ps1` đạt PASS tất cả verification gates (xUnit: 573/573 tests pass; smoke test file ops; fault injection; release publish 535,552 bytes).
+    - Lệch plan / rủi ro / việc còn lại: Không. Sẵn sàng cho T85 (`TurboJpegDecoder`) hoặc T86 (Cổng chất lượng + benchmark + ADR 0001).
 
 ### T83 — EXIF orientation
 - **Files:** `{Imaging}/Decoding/ExifOrientation.cs` (mới), `WpfBitmapImageDecoder.cs`, `DecodeRequest` (mặc định `ApplyOrientation = true`), `ImageInfo`, `{Imaging}/ImageCacheKey.cs` (thêm `OrientationApplied`), `PreviewImageService` (tên file disk cache gồm orientation), `ThumbnailCache` (key gồm orientation), `{ImgT}/Decoding/OrientationTests.cs`.
