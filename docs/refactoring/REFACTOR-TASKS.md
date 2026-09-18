@@ -139,7 +139,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | DONE |
 | T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | DONE |
 | T41b | `GenerationClock` | T40 | ∥I | | DONE |
-| T42a | `FileActionService` | T40 | ∥I | | TODO |
+| T42a | `FileActionService` | T40 | ∥I | | DONE |
 | T42b | `UndoService` | T42a | | | TODO |
 | T42c | `DuplicateFinder` | T40 | ∥I | | TODO |
 | T43a | `ShortcutRouter` | T40 | ∥I | | TODO |
@@ -869,7 +869,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   5. Thông báo lỗi tiếng Việt giữ nguyên văn như trong `MainWindow`.
 - **Không làm:** đụng catalog hoặc UI.
 - **Xong khi:** test Move/Copy/Recycle cho các trường hợp: thành công, đích tồn tại, cùng folder, size lệch, IO lỗi giữa chừng, action đồng thời bị từ chối. Journal đúng trạng thái trong từng trường hợp.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T42a-file-action-service` · Files: `src/PhotoReview.Core/FileActions/{FileActionRequest.cs,FileActionResult.cs,FileActionService.cs}`, `tests/PhotoReview.Core.Tests/FileActions/FileActionServiceTests.cs` · Triển khai `FileActionService` độc lập với UI/Catalog, bảo vệ chống xung đột đồng thời qua `TryBegin()`/`End()` (INV-4), xử lý Move/Copy/Recycle với kiểm tra đường dẫn an toàn (`IsSamePath`, tạo thư mục, kiểm tra trùng lặp đích), hậu kiểm kích thước tệp, và ghi nhận trạng thái vào `OperationJournal` (`Prepared` ➔ `Committed` / `Failed`) · Thông báo lỗi tiếng Việt khớp nguyên văn `MainWindow` · 10 unit test cases bao quát mọi kịch bản biên và lỗi I/O chèn lỗi · Toàn bộ 646/646 tests PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T42b/T42c.
 
 ### T42b — `UndoService`
 - **Files:** `{Core}/FileActions/UndoService.cs`, test.
