@@ -12,25 +12,27 @@ public readonly record struct ImageCacheKey
     public long LastWriteUtcTicks { get; }
     public bool IsOriginal { get; }
     public int TargetWidth { get; }
+    public bool OrientationApplied { get; }
 
-    private ImageCacheKey(string path, long length, long lastWriteUtcTicks, bool isOriginal, int targetWidth)
+    private ImageCacheKey(string path, long length, long lastWriteUtcTicks, bool isOriginal, int targetWidth, bool orientationApplied = true)
     {
         Path = path;
         Length = length;
         LastWriteUtcTicks = lastWriteUtcTicks;
         IsOriginal = isOriginal;
         TargetWidth = targetWidth;
+        OrientationApplied = orientationApplied;
     }
 
-    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth) =>
-        Create(new FileInfo(path), isOriginal, targetWidth);
+    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth, bool orientationApplied = true) =>
+        Create(new FileInfo(path), isOriginal, targetWidth, orientationApplied);
 
     /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth)
+    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth, bool orientationApplied = true)
     {
         if (!info.Exists) throw new FileNotFoundException("Image source no longer exists", info.FullName);
         var fullPath = System.IO.Path.GetFullPath(info.FullName).ToUpperInvariant();
-        return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, isOriginal ? 0 : targetWidth);
+        return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, isOriginal ? 0 : targetWidth, orientationApplied);
     }
 
     public bool MatchesCurrentSource()

@@ -17,10 +17,11 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-        // PixelWidth/Height only need the image header. DelayCreation prevents decoding pixel data.
+        // PixelWidth/Height and orientation only need the image header. DelayCreation prevents decoding pixel data.
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
         var frame = decoder.Frames[0];
-        return new ImageInfo(frame.PixelWidth, frame.PixelHeight);
+        var orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
+        return new ImageInfo(frame.PixelWidth, frame.PixelHeight, orientation);
     }
 
     public static IDecodedImage DecodeWithFallback(DecodeRequest request)
@@ -48,26 +49,58 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         if (request.Bytes.HasValue)
         {
             using var memoryStream = new MemoryStream(request.Bytes.Value.ToArray(), writable: false);
-            var bitmapFromMemory = new BitmapImage();
-            bitmapFromMemory.BeginInit();
-            bitmapFromMemory.CacheOption = BitmapCacheOption.OnLoad;
-            if (request.TargetWidth > 0) bitmapFromMemory.DecodePixelWidth = request.TargetWidth;
-            bitmapFromMemory.StreamSource = memoryStream;
-            bitmapFromMemory.EndInit();
-            bitmapFromMemory.Freeze();
-            return bitmapFromMemory;
+            return DecodeStream(memoryStream, request);
         }
 
         using var stream = new FileStream(request.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+        return DecodeStream(stream, request);
+    }
+
+    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request)
+    {
+        int orientation = 1;
+        if (request.ApplyOrientation && stream.CanSeek)
+        {
+            try
+            {
+                var headerDecoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+                if (headerDecoder.Frames.Count > 0)
+                {
+                    orientation = ExifOrientation.Read(headerDecoder.Frames[0].Metadata as BitmapMetadata);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException)
+            {
+                orientation = 1;
+            }
+            stream.Position = 0;
+        }
+
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        if (request.TargetWidth > 0) bitmap.DecodePixelWidth = request.TargetWidth;
+
+        if (request.TargetWidth > 0)
+        {
+            // For transposed orientations (5 to 8), decoded height becomes the final visual width after rotation.
+            if (request.ApplyOrientation && orientation is >= 5 and <= 8)
+            {
+                bitmap.DecodePixelHeight = request.TargetWidth;
+            }
+            else
+            {
+                bitmap.DecodePixelWidth = request.TargetWidth;
+            }
+        }
+
         bitmap.StreamSource = stream;
         bitmap.EndInit();
         bitmap.Freeze();
-        return bitmap;
+
+        return (request.ApplyOrientation && orientation > 1)
+            ? ExifOrientation.Apply(bitmap, orientation)
+            : bitmap;
     }
 
     public static BitmapSource DecodeSource(string path, int targetWidth)

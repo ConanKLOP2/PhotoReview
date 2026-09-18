@@ -1,4 +1,4 @@
-﻿namespace PhotoReview.Imaging.Decoding;
+namespace PhotoReview.Imaging.Decoding;
 
 /// <summary>
 /// Request parameters for decoding an image.
@@ -10,5 +10,5 @@
 public readonly record struct DecodeRequest(
     string Path,
     int TargetWidth,
-    bool ApplyOrientation = false,
+    bool ApplyOrientation = true,
     ReadOnlyMemory<byte>? Bytes = null);
