@@ -141,7 +141,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T41b | `GenerationClock` | T40 | ∥I | | DONE |
 | T42a | `FileActionService` | T40 | ∥I | | DONE |
 | T42b | `UndoService` | T42a | | | TODO |
-| T42c | `DuplicateFinder` | T40 | ∥I | | TODO |
+| T42c | `DuplicateFinder` | T40 | ∥I | | DONE |
 | T43a | `ShortcutRouter` | T40 | ∥I | | TODO |
 | T43b | `ViewerState` | T40 | ∥I | | TODO |
 | T44 | `FolderLoadCoordinator` | T41a, T41b | | | TODO |
@@ -886,7 +886,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{Core}/FileActions/DuplicateFinder.cs`, test.
 - **Làm:** `FindAsync(IReadOnlyList<string> files, bool removeNumbered, Func<string, CancellationToken, Task<string>> hash, CancellationToken)`. Nhóm theo size (bỏ file lỗi stat), rồi theo hash (bỏ `IOException`/`UnauthorizedAccessException`), lọc theo regex ` \(\d+\)$` giống code cũ. Hủy qua token (thay cho kiểm tra folder generation).
 - **Xong khi:** test hai chế độ lọc, file biến mất giữa chừng, hủy.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T42c-duplicate-finder` · Files: `src/PhotoReview.Core/FileActions/DuplicateFinder.cs`, `tests/PhotoReview.Core.Tests/FileActions/DuplicateFinderTests.cs` · Triển khai `DuplicateFinder.FindAsync` theo thuật toán 3 bước tối ưu I/O (lọc file trùng size ➔ tính hash bỏ qua lỗi I/O/quyền truy cập ➔ lọc bản sao có số `\s\(\d+\)$` theo `removeNumbered`), hỗ trợ hủy thao tác tức thì qua `CancellationToken` · 7 unit test cases bao quát mọi chế độ lọc, bỏ qua file biến mất giữa chừng và hủy token · Toàn bộ 653/653 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T44.
 
 ### T43a — `ShortcutRouter` ∥I
 - **Files:** `{App}/Input/{ShortcutRouter,ReviewCommand}.cs`, `{AppT}/Input/ShortcutRouterTests.cs`.
