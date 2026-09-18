@@ -144,7 +144,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T42c | `DuplicateFinder` | T40 | ∥I | | DONE |
 | T43a | `ShortcutRouter` | T40 | ∥I | | TODO |
 | T43b | `ViewerState` | T40 | ∥I | | TODO |
-| T44 | `FolderLoadCoordinator` | T41a, T41b | | | TODO |
+| T44 | `FolderLoadCoordinator` | T41a, T41b | | | DONE |
 | T45a | `StatusFormatter` | T40 | ∥I | | TODO |
 | T45b | `CompareViewModel` | T41a | | | TODO |
 | T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | TODO |
@@ -916,7 +916,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Dùng `ReviewCatalog`, `GenerationClock`, `IExplorerOrderProvider`, `IFileSystem`, `SessionStore`, `SettingsStore`.
   4. Chuyển test T14d (INV-7, INV-9) sang coordinator. Thêm test folder rỗng, đổi folder nhanh hai lần, lỗi scan.
 - **Xong khi:** test đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T44-folder-load-coordinator` · Files: `src/PhotoReview.App/Coordinators/{IFolderLoadSink.cs,FolderLoadCoordinator.cs}`, `tests/PhotoReview.App.Tests/Coordinators/FolderLoadCoordinatorTests.cs` · Đóng gói toàn bộ luồng tải thư mục bất đồng bộ phức tạp của `MainWindow` vào `FolderLoadCoordinator` độc lập với UI, phối hợp `ReviewCatalog`, `GenerationClock`, `IExplorerOrderProvider`, `IFileSystem`, `SessionStore`, `SettingsStore` qua giao diện `IFolderLoadSink` · Bảo toàn 100% các quy tắc bất biến INV-7 (bỏ qua Explorer order khi có user interaction) và INV-9 (chờ snapshot khi direct file open, MoveToFront), xử lý hủy thao tác cũ, thư mục rỗng và báo lỗi · 6 unit test cases bao quát mọi kịch bản và regression · Toàn bộ 659/659 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T43/T45.
 
 ### T45a — `StatusFormatter` ∥I
 - **Files:** `{App}/ViewModels/StatusFormatter.cs`, test.
