@@ -1,5 +1,7 @@
 # PhotoReview — Task tái cấu trúc (B + C3)
 
+> Review sau merge 2026-09-18 (`afb2f77`): [plan sửa lỗi](MERGED-CODE-REVIEW-PLAN.md) và [task MR00–MR06](MERGED-CODE-REVIEW-TASKS.md). Đề xuất chờ duyệt; ưu tiên preload/gate trước D07, hoàn tất contract/quality trước T87. Không thay trạng thái các task cũ bằng kết quả review này.
+
 - **Plan:** [`REFACTOR-PLAN.md`](REFACTOR-PLAN.md) · **Cập nhật:** 2026-09-16
 - **Trạng thái hợp lệ:** `TODO` · `IN PROGRESS` · `BLOCKED` · `DONE`
 - **Ký hiệu:**

@@ -1,5 +1,16 @@
 # Tiến độ
 
+## Review mới nhất — 2026-09-18
+
+- Baseline đã review: `refactor/integration` / `afb2f77` (khác `master`). Mục tiêu: review code đã merge, chỉ lập plan/task fix.
+- Đã đọc App/DI/MainWindow, Imaging/preload/cache/decoder, settings/journal, test/CI và bốn tài liệu refactor/diagnosis. Tạo `docs/refactoring/MERGED-CODE-REVIEW-PLAN.md`, `MERGED-CODE-REVIEW-TASKS.md`; thêm link ở `REFACTOR-TASKS.md`.
+- Findings F01–F07: memory probe giả; dispose không cancel; gate che lỗi/CI thiếu App.Tests; thiếu ICC WicDirect + quality gate yếu; Turbo fallback exception sai; Turbo metadata backend sai; cache decode đọc backend khác snapshot key. Chi tiết và mức chứng cứ trong plan.
+- Validation mới: **615 passed, 1 skipped, 0 failed** (Imaging 143); CLI contract PASS; publish Release mặc định + verify-release PASS. Probe local xác nhận F01/F02/F05/F06/F07; log `work/review-20260918/`, test log `work/review-20260918-tests.log`. Chưa full VERIFY/GUI/D07/CI remote.
+- Bàn giao tài liệu: người dùng đã yêu cầu commit/push; branch `codex/merged-code-review-plan` từ `afb2f77` (đã fetch và khớp origin/refactor/integration). Máy khác: `git fetch origin`, `git switch --track origin/codex/merged-code-review-plan`. Log/probe work/ chỉ local; bằng chứng tóm tắt có trong plan.
+- Tiếp tục: người dùng duyệt triển khai plan rồi chọn MR01–MR05; MR06 tích hợp. Chưa sửa production code/config. Không coi các số test/ghi chú lỗi trong phần handoff cũ dưới đây là kết quả mới.
+
+## Handoff trước review (giữ làm bối cảnh)
+
 - **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 616/616 (Core: 199, Imaging: 144, Integration: 8, Architecture: 5 (+1 skip), App.Tests: 4, Tests.Unit: 256)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
 - **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, WAVE 3 (T30–T35), TOÀN BỘ NHÁNH C3 (T80–T86) VÀ BẮT ĐẦU WAVE W4 VỚI T40 (COMPOSITION ROOT DI + MVVM)**.
