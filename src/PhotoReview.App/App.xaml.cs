@@ -51,6 +51,16 @@ public partial class App : System.Windows.Application
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>()));
         services.AddSingleton<FileHashService>();
+        services.AddSingleton<FileActionService>(sp => new FileActionService(
+            sp.GetRequiredService<OperationJournal>(),
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<IRecycleBin>()));
+        services.AddSingleton<UndoService>(sp => new UndoService(
+            sp.GetRequiredService<OperationJournal>(),
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<IRecycleBin>(),
+            sp.GetRequiredService<FileActionService>()));
 
         // 4. Diagnostics & Metrics
         services.AddSingleton<ReviewMetrics>();

@@ -29,6 +29,23 @@ public sealed class InMemoryFileSystem : IFileSystem
     {
     }
 
+    public void AddFile(string path, string text, DateTime? lastWriteUtc = null)
+    {
+        AddFile(path, Encoding.UTF8.GetBytes(text), lastWriteUtc);
+    }
+
+    public void AddFile(string path, byte[] bytes, DateTime? lastWriteUtc = null)
+    {
+        lock (_lock)
+        {
+            var normalized = NormalizePath(path);
+            var dir = NormalizeDirectoryPath(Path.GetDirectoryName(path) ?? string.Empty);
+            if (!string.IsNullOrEmpty(dir)) InternalCreateDirectory(dir);
+            _files[normalized] = bytes;
+            _fileWriteTimes[normalized] = lastWriteUtc ?? DateTime.UtcNow;
+        }
+    }
+
     public bool FileExists(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
