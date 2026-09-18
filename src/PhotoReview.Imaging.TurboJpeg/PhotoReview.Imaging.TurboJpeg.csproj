@@ -19,4 +19,13 @@
     </None>
   </ItemGroup>
 
+  <Target Name="EnsureNativeBinaries" BeforeTargets="BeforeBuild;AssignTargetPaths">
+    <PropertyGroup>
+      <NativeDllPath>$(MSBuildThisFileDirectory)..\..\native\x64\turbojpeg.dll</NativeDllPath>
+      <FetchScriptPath>$(MSBuildThisFileDirectory)..\..\tools\fetch-native.ps1</FetchScriptPath>
+    </PropertyGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchScriptPath)&quot;"
+          Condition="!Exists('$(NativeDllPath)')" />
+  </Target>
+
 </Project>

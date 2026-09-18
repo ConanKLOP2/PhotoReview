@@ -25,8 +25,9 @@ Write-Host "Downloading libjpeg-turbo 3.0.0 package..."
 curl.exe -sL "https://www.nuget.org/api/v2/package/libjpeg-turbo-native-windows/3.0.0" -o $tempPkg
 
 try {
-    tar.exe -xf $tempPkg -C $nativeDir --strip-components 3 lib/net6.0/Turbojpeg.dll
-    Rename-Item (Join-Path $nativeDir "Turbojpeg.dll") "turbojpeg.dll" -Force -ErrorAction SilentlyContinue
+    tar.exe -xf $tempPkg -C $nativeDir lib/net6.0/Turbojpeg.dll
+    Move-Item (Join-Path $nativeDir "lib\net6.0\Turbojpeg.dll") $targetDll -Force
+    Remove-Item (Join-Path $nativeDir "lib") -Recurse -Force -ErrorAction SilentlyContinue
 
     $hash = (Get-FileHash $targetDll -Algorithm SHA256).Hash
     if ($hash -ne $expectedHash) {
