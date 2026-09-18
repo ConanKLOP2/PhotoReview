@@ -1,4 +1,5 @@
 using System.IO;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.Imaging;
 
@@ -13,8 +14,9 @@ public readonly record struct ImageCacheKey
     public bool IsOriginal { get; }
     public int TargetWidth { get; }
     public bool OrientationApplied { get; }
+    public DecoderBackend Backend { get; }
 
-    private ImageCacheKey(string path, long length, long lastWriteUtcTicks, bool isOriginal, int targetWidth, bool orientationApplied = true)
+    private ImageCacheKey(string path, long length, long lastWriteUtcTicks, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf)
     {
         Path = path;
         Length = length;
@@ -22,17 +24,18 @@ public readonly record struct ImageCacheKey
         IsOriginal = isOriginal;
         TargetWidth = targetWidth;
         OrientationApplied = orientationApplied;
+        Backend = backend;
     }
 
-    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth, bool orientationApplied = true) =>
-        Create(new FileInfo(path), isOriginal, targetWidth, orientationApplied);
+    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf) =>
+        Create(new FileInfo(path), isOriginal, targetWidth, orientationApplied, backend);
 
     /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth, bool orientationApplied = true)
+    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf)
     {
         if (!info.Exists) throw new FileNotFoundException("Image source no longer exists", info.FullName);
         var fullPath = System.IO.Path.GetFullPath(info.FullName).ToUpperInvariant();
-        return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, isOriginal ? 0 : targetWidth, orientationApplied);
+        return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, isOriginal ? 0 : targetWidth, orientationApplied, backend);
     }
 
     public bool MatchesCurrentSource()
