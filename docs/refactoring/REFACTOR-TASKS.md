@@ -126,7 +126,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | TODO |
 | T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | DONE |
 | T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | DONE |
-| T35 | Test kiến trúc | T34 | | ⛔Q6 | TODO |
+| T35 | Test kiến trúc | T34 | | ⛔Q6 | DONE |
 | T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | TODO |
 | T81 | `--decoder-bench` | T31c | ∥G | | TODO |
 | T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | TODO |
@@ -662,7 +662,25 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   5. Chỉ `AppPaths` chứa chuỗi `PHOTOREVIEW_DATA_ROOT` (quét source).
   6. (Bật sau T46a) `PhotoReview.App.ViewModels` không phụ thuộc `System.Windows` (K-2). Tạm đánh `Skip` kèm lý do.
 - **Xong khi:** các rule 1–5 đạt trong CI.
-- **Nhật ký:** —
+- **Nhật ký:**
+    - Thêm `NetArchTest.Rules` 1.3.2 vào `Directory.Packages.props`.
+    - Tạo project mới `tests/PhotoReview.Architecture.Tests` với target `net10.0-windows`, tham chiếu Core, Imaging, Platform.Windows, App và tích hợp vào `PhotoReview.slnx`.
+    - Triển khai 6 rules:
+      - Rule 1: `Core_ShouldNotDependOn_UI_Or_OuterLayers` (Core độc lập với System.Windows*, PresentationCore, WindowsBase, Microsoft.VisualBasic, Imaging, Platform, App).
+      - Rule 2: `Imaging_ShouldNotDependOn_App_Or_Platform_Or_WpfUI` (Imaging độc lập với App, Platform, PresentationFramework, System.Windows.Forms).
+      - Rule 3: `ImagingPublicSurface_ShouldNotExpose_WpfMediaTypes` (kiểm tra reflection tất cả public types & members trong Imaging.Caching và Imaging.Preload không rò rỉ System.Windows.Media.*, tuân thủ K-1).
+      - Rule 4: `Platform_ShouldNotDependOn_Imaging_Or_App` (Platform độc lập với Imaging và App).
+      - Rule 5: `Only_AppPaths_ShouldContain_DataRootEnvironmentVariable_Literal` (quét toàn bộ file .cs trong src/ bảo đảm duy nhất AppPaths.cs chứa chuỗi literal `PHOTOREVIEW_DATA_ROOT`).
+      - Rule 6: `ViewModels_ShouldNotDependOn_SystemWindows` (K-2, đánh dấu `Skip = "Deferred to T46a"`).
+    - Để đạt Rule 3 và Rule 5:
+      - `AppPaths.cs`: thêm `public const string DataRootEnvironmentVariable = "PHOTOREVIEW_DATA_ROOT";`.
+      - `MainWindow.xaml.cs`: dùng `AppPaths.DataRootEnvironmentVariable` thay cho literal.
+      - `DiskCacheStore.cs`: chuyển overload `WriteAtomicallyAsync(BitmapSource)` thành `internal`, bổ sung overload `public WriteAtomicallyAsync(IDecodedImage)` bảo vệ K-1.
+      - `PreviewImageService.cs`: chuyển `DecodeSource` và `DecodeWithFallback` trả về `IDecodedImage` thay vì `BitmapImage`.
+    - Tích hợp `PhotoReview.Architecture.Tests` vào `tools/verify-all.ps1` và `.github/workflows/ci.yml`.
+    - Kết quả kiểm thử: 488 xUnit tests PASS, 1 skipped (Core: 199, Imaging: 20, Integration: 8, Architecture: 5 pass + 1 skip, Tests.Unit: 256), CLI 147/147 PASS, `verify-all.ps1` đạt PASS 100%.
+    - **Review R1:** APPROVE. Đúng phạm vi kiến trúc ⛔Q6, thiết lập hàng rào ngăn rò rỉ phụ thuộc cho toàn bộ các layer, hoàn tất Wave 3.
+    - **Review R2:** APPROVE. NetArchTest.Rules cấu hình sạch sẽ trong Directory.Packages.props, CI và verify-all đều đã kích hoạt test suite mới.
 
 ---
 
