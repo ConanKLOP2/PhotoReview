@@ -132,7 +132,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | DONE |
 | T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | DONE |
 | T82 | `WicDirectDecoder` | T84 | ∥H | | DONE |
-| T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | TODO |
+| T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | DONE |
 | T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | TODO |
 | T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | TODO |
 | T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | TODO |
@@ -786,7 +786,15 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   6. ICC: nếu có marker APP2 `ICC_PROFILE` thì ném `NotSupportedException` để fallback, **trừ khi** đã chuyển được bằng `IWICColorTransform`. Chọn và ghi nhật ký.
   7. Handle turbojpeg dùng `SafeHandle`. Không chia sẻ handle giữa các thread (mỗi lần decode tạo mới, hoặc dùng pool theo thread).
 - **Xong khi:** cổng 4.4 mục 1–6 đạt trên fixture, benchmark chạy được.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-18 · Sonnet · branch `refactor/T85-turbojpeg-decoder` · commit `c37a228`
+    - Files: `src/PhotoReview.Imaging.TurboJpeg/**`, `THIRD-PARTY-NOTICES.md`, `native/README.md`, `tools/fetch-native.ps1`, `PhotoReview.slnx`, `src/PhotoReview.Imaging/Decoding/ImageDecoderFactory.cs`, `tests/PhotoReview.Imaging.Tests/**`, `tests/PhotoReview.Tests/**`.
+    - Thay đổi: Tạo project `PhotoReview.Imaging.TurboJpeg` tích hợp thư viện `libjpeg-turbo 3.0.0` qua P/Invoke (`TurboJpegNative.cs`) và quản lý handle unmanaged an toàn bằng `SafeTurboJpegHandle`. Triển khai `TurboJpegDecoder`: kiểm tra SOI magic bytes `FF D8 FF`, đọc APP1 EXIF Orientation, phát hiện marker APP2 `ICC_PROFILE` ném `NotSupportedException` để fallback bảo toàn màu, tận dụng DCT IDCT downscaling factor (`1/8` .. `1/1`), fine scale bằng `TransformedBitmap` và áp dụng orientation chuẩn. Tự động sao chép native DLL x64 ra output folder khi build.
+    - Cập nhật `ImageDecoderFactory`: tự động phát hiện `TurboJpeg` qua dynamic provider discovery.
+    - Cập nhật `--decoder-bench`: kích hoạt và đo lường đầy đủ 3 backend `Wpf,WicDirect,TurboJpeg`.
+    - Thêm `tests/PhotoReview.Imaging.Tests/Decoding/TurboJpegTests.cs` (24 tests mới) và test factory (1 test mới), tổng xUnit `PhotoReview.Imaging.Tests` đạt 130/130 test PASS.
+    - Kiểm thử: `tools/verify-all.ps1` đạt PASS tất cả verification gates (xUnit: 598/598 tests pass; smoke test file ops; fault injection; release publish 535,552 bytes).
+    - Lệch plan / rủi ro / việc còn lại: Không. Sẵn sàng cho T86 (`Cổng chất lượng + benchmark + ADR 0001`).
 
 ### T86 — Cổng chất lượng + ADR 0001
 - **Files:** `{ImgT}/Quality/DecoderQualityGateTests.cs` (Category=Quality), `docs/adr/0001-image-decoder.md` (mới), `docs/refactoring/results/decoder-bench.md` (mới), cập nhật plan mục 4.4 nếu ngưỡng thay đổi.
