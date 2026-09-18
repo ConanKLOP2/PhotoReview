@@ -11,6 +11,7 @@ using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
+using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.App.ViewModels;
 
@@ -35,6 +36,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     private readonly INaturalComparer _naturalComparer;
     private readonly IFileSystem _fileSystem;
     private readonly Action? _resetCachesAction;
+    private readonly FileHashService? _hashService;
+    private readonly PreviewImageService? _previewService;
+    private readonly ThumbnailCache? _thumbnailCache;
 
     private string _folderTitle = "Photo Review";
     private string _folderText = string.Empty;
@@ -56,7 +60,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         IDialogService? dialogService = null,
         IPreloadController? preloadController = null,
         INaturalComparer? naturalComparer = null,
-        Action? resetCachesAction = null)
+        Action? resetCachesAction = null,
+        FileHashService? hashService = null,
+        PreviewImageService? previewService = null,
+        ThumbnailCache? thumbnailCache = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -73,6 +80,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _naturalComparer = naturalComparer ?? ManagedNaturalComparer.Instance;
         _fileSystem = fileSystem ?? new PhotoReview.Core.IO.PhysicalFileSystem();
         _resetCachesAction = resetCachesAction;
+        _hashService = hashService;
+        _previewService = previewService;
+        _thumbnailCache = thumbnailCache;
     }
 
     public string FolderTitle
@@ -467,6 +477,176 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     public void ZoomOut() => _viewerState.ZoomOut();
     public void ToggleFullscreen() => _viewerState.ToggleFullscreen();
     public void ExitFullscreen() => _viewerState.ExitFullscreen();
+
+    /// <summary>
+    /// Mở hộp thoại chọn thư mục và tải thư mục được chọn.
+    /// </summary>
+    public async Task PickAndOpenFolderAsync()
+    {
+        if (_dialogService is null) return;
+        var current = _currentSession?.Folder ?? (_catalog.Current != null ? Path.GetDirectoryName(_catalog.Current.Path) : null);
+        var selected = _dialogService.PickFolder(current);
+        if (!string.IsNullOrWhiteSpace(selected))
+        {
+            await OpenFolderAsync(selected).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Tìm kiếm và xử lý các ảnh trùng lặp theo hash nội dung.
+    /// </summary>
+    public async Task RemoveDuplicatesAsync(bool removeNumbered)
+    {
+        if (_fileActionService is null || _fileActionService.IsBusy) return;
+        if (_catalog.Count == 0) return;
+
+        var preHashGeneration = _clock.CurrentFolder;
+        var candidates = _catalog.Paths.ToArray();
+        if (candidates.Length == 0) return;
+
+        List<string> remove;
+        try
+        {
+            remove = await DuplicateFinder.FindAsync(
+                candidates,
+                removeNumbered,
+                (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
+                System.Threading.CancellationToken.None,
+                _fileSystem).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Lỗi kiểm tra trùng lặp: {ex.Message}";
+            return;
+        }
+
+        // Stale Folder Guard: Nếu folder đã bị đổi trong khi hash, hủy bỏ thao tác
+        if (!_clock.IsFolderCurrent(preHashGeneration))
+        {
+            StatusText = StatusFormatter.DuplicateCheckCanceledFolderChanged();
+            return;
+        }
+
+        if (remove.Count == 0)
+        {
+            StatusText = StatusFormatter.NoDuplicatesFound();
+            return;
+        }
+
+        if (_dialogService is not null)
+        {
+            var confirmed = _dialogService.ShowBatchReview(remove);
+            if (!confirmed)
+            {
+                StatusText = StatusFormatter.BatchCanceled();
+                return;
+            }
+        }
+
+        _clock.StopForAction();
+        _preloadController?.Cancel();
+        var actionFolderGeneration = _clock.CurrentFolder;
+
+        var failures = new List<string>();
+        var succeeded = 0;
+
+        foreach (var path in remove)
+        {
+            var request = new FileActionRequest(path, FileOperationType.Recycle);
+            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
+            if (result.Succeeded)
+            {
+                succeeded++;
+            }
+            else
+            {
+                failures.Add($"{Path.GetFileName(path)}: {result.Error}");
+            }
+        }
+
+        if (!_clock.IsFolderCurrent(actionFolderGeneration))
+        {
+            return;
+        }
+
+        StatusText = StatusFormatter.BatchDone(succeeded, failures.Count);
+        if (failures.Count > 0 && _dialogService is not null)
+        {
+            _dialogService.ShowError("Báo cáo lỗi batch", string.Join(Environment.NewLine, failures));
+        }
+
+        if (succeeded > 0 && remove.Count > 0)
+        {
+            var folder = Path.GetDirectoryName(remove[0]);
+            if (!string.IsNullOrEmpty(folder))
+            {
+                await OpenFolderAsync(folder).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
+    /// </summary>
+    public async Task ClearCacheAsync()
+    {
+        if (_dialogService is not null)
+        {
+            var confirmed = _dialogService.ShowConfirmation("Xác nhận xóa cache", "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.");
+            if (!confirmed) return;
+        }
+
+        _preloadController?.Cancel();
+        _thumbnailCache?.ClearDisk();
+        _thumbnailCache?.ClearMemory();
+        _previewService?.ClearCache();
+        _previewService?.ClearDisk();
+        _preloadController?.ClearPreloadedKeys();
+        StatusText = StatusFormatter.CacheCleared();
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Hiển thị cửa sổ khôi phục thao tác tệp tin.
+    /// </summary>
+    public void ShowRecovery() => _dialogService?.ShowRecovery();
+
+    /// <summary>
+    /// Hiển thị cửa sổ chẩn đoán hiệu năng.
+    /// </summary>
+    public void ShowDiagnostics() => _dialogService?.ShowDiagnostics();
+
+    /// <summary>
+    /// Hiển thị cửa sổ benchmark hiệu năng.
+    /// </summary>
+    public void ShowBenchmark()
+    {
+        var folder = _currentSession?.Folder ?? (_catalog.Current != null ? Path.GetDirectoryName(_catalog.Current.Path) : null);
+        _dialogService?.ShowBenchmark(folder);
+    }
+
+    /// <summary>
+    /// Hiển thị cửa sổ cài đặt cấu hình. Nếu cấu hình chế độ nạp thay đổi, hủy và nạp lại ảnh hiện tại.
+    /// </summary>
+    public void ShowSettings()
+    {
+        if (_dialogService is null) return;
+        var previousMode = _settingsStore.Current.LoadingMode;
+        var changed = _dialogService.ShowSettings();
+        if (changed)
+        {
+            UpdateFolderTitle();
+            var newMode = _settingsStore.Current.LoadingMode;
+            if (previousMode != newMode)
+            {
+                _preloadController?.Cancel();
+                if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
+                {
+                    _ = _presenter.PresentAsync(_catalog.CurrentIndex);
+                }
+            }
+        }
+    }
 
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 

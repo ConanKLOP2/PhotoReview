@@ -21,6 +21,9 @@ public interface IPreloadController
 
     /// <summary>Gỡ các key preload cho đường dẫn chỉ định.</summary>
     void RemovePreloadedKeysForPath(string normalizedPath);
+
+    /// <summary>Xóa toàn bộ các key đã preload.</summary>
+    void ClearPreloadedKeys();
 }
 
 /// <summary>
@@ -48,4 +51,6 @@ public sealed class PreloadSchedulerAdapter : IPreloadController
     public void Cancel() => _getScheduler()?.Cancel();
 
     public void RemovePreloadedKeysForPath(string normalizedPath) => _getScheduler()?.RemovePreloadedKeysForPath(normalizedPath);
+
+    public void ClearPreloadedKeys() => _getScheduler()?.ClearPreloadedKeys();
 }
