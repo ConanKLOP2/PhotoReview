@@ -78,7 +78,7 @@ public static class DecoderBenchmark
     {
         if (args.Length < 3)
         {
-            Console.Error.WriteLine("Usage: --decoder-bench <folder> <outDir> [backends=Wpf,WicDirect] [widths=0,1920,2560,3840] [iterations=5]");
+            Console.Error.WriteLine("Usage: --decoder-bench <folder> <outDir> [backends=Wpf,WicDirect,TurboJpeg] [widths=0,1920,2560,3840] [iterations=5]");
             Environment.ExitCode = 1;
             return;
         }
@@ -93,10 +93,10 @@ public static class DecoderBenchmark
 
         Directory.CreateDirectory(outDir);
 
-        // Parse backends (defaults to Wpf,WicDirect)
+        // Parse backends (defaults to Wpf,WicDirect,TurboJpeg)
         var requestedBackendNames = args.Length >= 4
             ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : new[] { "Wpf", "WicDirect" };
+            : new[] { "Wpf", "WicDirect", "TurboJpeg" };
 
         // Parse widths (defaults to 0, 1920, 2560, 3840)
         var widths = args.Length >= 5
@@ -117,6 +117,7 @@ public static class DecoderBenchmark
                 {
                     DecoderBackend.Wpf => new WpfBitmapImageDecoder(),
                     DecoderBackend.WicDirect => new PhotoReview.Imaging.Decoding.Wic.WicDirectDecoder(),
+                    DecoderBackend.TurboJpeg => new PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder(),
                     _ => null
                 };
 

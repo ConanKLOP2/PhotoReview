@@ -41,12 +41,25 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
     }
 
     public ImageDecoderFactory(ILog? log = null, ReviewMetrics? metrics = null)
-        : this(new (DecoderBackend, Func<IImageDecoder>)[]
+        : this(CreateDefaultProviders(), log, metrics)
+    {
+    }
+
+    private static List<(DecoderBackend, Func<IImageDecoder>)> CreateDefaultProviders()
+    {
+        var list = new List<(DecoderBackend, Func<IImageDecoder>)>
         {
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
             (DecoderBackend.WicDirect, () => new WicDirectDecoder())
-        }, log, metrics)
-    {
+        };
+
+        var turboType = Type.GetType("PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder, PhotoReview.Imaging.TurboJpeg");
+        if (turboType is not null)
+        {
+            list.Add((DecoderBackend.TurboJpeg, () => (IImageDecoder)Activator.CreateInstance(turboType)!));
+        }
+
+        return list;
     }
 
     public IImageDecoder Create(DecoderBackend backend)
