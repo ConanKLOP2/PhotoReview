@@ -131,7 +131,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T81 | `--decoder-bench` | T31c | ∥G | | TODO |
 | T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | DONE |
 | T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | DONE |
-| T82 | `WicDirectDecoder` | T84 | ∥H | | TODO |
+| T82 | `WicDirectDecoder` | T84 | ∥H | | DONE |
 | T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | TODO |
 | T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | TODO |
 | T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | TODO |
@@ -760,7 +760,14 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Release mọi COM object trong `finally`. Không giữ `IWICImagingFactory` theo từng thread nếu không cần: factory WIC là free-threaded, có thể dùng một instance.
   4. Test: toàn bộ cổng 4.4 mục 1–6 trên fixture T80. Thêm test lặp 2.000 lần decode ảnh nhỏ, kiểm `Process.HandleCount` và private bytes không tăng quá 5% sau GC.
 - **Xong khi:** test đạt (hoặc ghi rõ mục nào không đạt), benchmark T81 chạy được.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-18: Triển khai thành công `WicDirectDecoder` qua native COM interop trực tiếp tới Windows Imaging Component (`WindowsCodecs.dll`):
+  - Tạo `src/PhotoReview.Imaging/Decoding/Wic/WicInterop.cs`: định nghĩa chuẩn xác các COM interface (`IWICImagingFactory`, `IWICBitmapDecoder`, `IWICBitmapFrameDecode`, `IWICBitmapSource`, `IWICBitmapSourceTransform`, `IWICBitmapScaler`, `IWICFormatConverter`, `IWICBitmapFlipRotator`, `IWICMetadataQueryReader`, `IWICStream`) cùng struct, enum, và `ManagedIStream : IStream`.
+  - Khởi tạo WIC Imaging Factory qua `WICCreateImagingFactory_Proxy` (SDK version `0x0236`), query chuẩn xác GUID `ec5ec8a9-c395-4314-9c77-54d7a935ff70`.
+  - Tạo `src/PhotoReview.Imaging/Decoding/Wic/WicDirectDecoder.cs`: hỗ trợ decode trực tiếp từ file hoặc memory bytes, kiểm tra kích thước gốc và hướng ảnh EXIF (1..8), áp dụng DCT transform size check, fine-tuning qua `IWICBitmapScaler` (`HighQualityCubic` / `Fant`), chuyển đổi pixel format sang 32bppBGRA (`6fddc324-4e03-4bfe-b185-3d77768dc90f`), xoay/đảo chiều qua `IWICBitmapFlipRotator`, và xuất buffer an toàn qua `GCHandle.Alloc(..., Pinned)`.
+  - Giữ nguyên bảo đảm INV-8: Mở file stream với cờ chia sẻ đầy đủ `ReadWrite | Delete` và đóng ngay sau khi nạp xong.
+  - Đăng ký backend `DecoderBackend.WicDirect` trong `ImageDecoderFactory`.
+  - Tạo `tests/PhotoReview.Imaging.Tests/Decoding/WicDirectTests.cs`: 22 unit tests bao phủ toàn bộ lossless PNG (PSNR = inf, DeltaE = 0), JPEG parity, 8 EXIF orientations, downscaling, memory buffer, INV-8 file handle release, và file hỏng. Toàn bộ 22/22 test PASS.
+  - Verification gates `tools/verify-all.ps1` đạt PASS 100% (573 xUnit tests pass, smoke test file ops, fault injection, release publish 535,552 bytes).
 
 ### T85 — `TurboJpegDecoder` ∥H ⛔Q7
 - **Files:** `src/PhotoReview.Imaging.TurboJpeg/**` (mới), `THIRD-PARTY-NOTICES.md` (mới hoặc cập nhật), slnx, `{ImgT}` (tham chiếu), `{CLI}` (đăng ký backend).
