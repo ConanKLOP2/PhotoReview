@@ -138,7 +138,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T86 | Cổng chất lượng + benchmark + ADR 0001 | T81, T82, (T85) | | | DONE |
 | T40 | Composition root DI + Mvvm | T35 | | ⛔Q6 | DONE |
 | T41a | `ReviewCatalog` + `CatalogEntry` | T40 | ∥I | | DONE |
-| T41b | `GenerationClock` | T40 | ∥I | | TODO |
+| T41b | `GenerationClock` | T40 | ∥I | | DONE |
 | T42a | `FileActionService` | T40 | ∥I | | TODO |
 | T42b | `UndoService` | T42a | | | TODO |
 | T42c | `DuplicateFinder` | T40 | ∥I | | TODO |
@@ -854,7 +854,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{Core}/Catalog/GenerationClock.cs`, test.
 - **Làm:** ba bộ đếm `Navigation`, `Folder`, `Interaction` với `long Next*()`, `long Current*`, `bool Is*Current(long)`, dùng `Interlocked`/`Volatile` như code cũ. `StopForAction()` tăng cả ba (tương đương `StopImageReadsForAction`).
 - **Xong khi:** test đạt, kể cả test đa luồng tăng song song.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T41b-generation-clock` · Files: `src/PhotoReview.Core/Catalog/GenerationClock.cs`, `tests/PhotoReview.Core.Tests/Catalog/GenerationClockTests.cs` · Triển khai `GenerationClock` thread-safe quản lý 3 bộ đếm `Navigation`, `Folder`, `Interaction` với `Next*()`, `Current*`, `Is*Current()` dùng `Interlocked`/`Volatile`, và `StopForAction()` tăng cả 3 thế hệ đồng thời · 8 unit test cases bao phủ constructor, tăng tuần tự, `StopForAction` và kiểm thử tải đa luồng song song (`Parallel.For` 10,000 lần tăng và 5,000 lần `StopForAction`) không thất thoát · Toàn bộ 636/636 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T42a/T44.
 
 ### T42a — `FileActionService` ∥I
 - **Files:** `{Core}/FileActions/{FileActionService,FileActionRequest,FileActionResult}.cs`, test.
