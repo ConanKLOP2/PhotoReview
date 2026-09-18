@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Model;
+using PhotoReview.Core.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.Core.Settings;
 
@@ -82,7 +82,7 @@ public sealed partial class ViewerState : ObservableObject
     /// <summary>
     /// Khôi phục chế độ Fit (vừa vặn khung nhìn).
     /// </summary>
-    public void ResetFit(double viewportWidth, double viewportHeight)
+    public void ResetFit(double viewportWidth = 0, double viewportHeight = 0)
     {
         Zoom = 1.0;
         Stretch = ViewerStretchMode.Uniform;
