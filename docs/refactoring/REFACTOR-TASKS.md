@@ -127,7 +127,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | DONE |
 | T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | DONE |
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | DONE |
-| T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | TODO |
+| T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | DONE |
 | T81 | `--decoder-bench` | T31c | ∥G | | TODO |
 | T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | TODO |
 | T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | TODO |
@@ -699,7 +699,12 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Test tự kiểm: ảnh so với chính nó cho PSNR = ∞ (hoặc ≥ 99), ΔE = 0.
   4. Biến môi trường `PHOTOREVIEW_FIXTURE_DIR` trỏ tới ảnh thật; test dùng ảnh thật gắn `Category=Manual`.
 - **Xong khi:** generator chạy được, test helper đạt, README mô tả fixture.
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-18 · Sonnet · branch `refactor/T80-fixture-generator-quality` · commit `a49ce24`
+    - Files: `tests/Fixtures/README.md`, `{ImgT}/Fixtures/FixtureGenerator.cs`, `{ImgT}/Quality/PixelMetrics.cs`, `{ImgT}/Quality/ImageCompare.cs`, `{ImgT}/Quality/FixtureTests.cs`.
+    - Thay đổi: Procedural fixture generator (gradient checkerboard với 4 góc Yellow, Cyan, Magenta, White; JPEG quality 90, PNG 24/32-bit; JPEG EXIF metadata query `/app1/ifd/{ushort=274}` giá trị 1–8; JPEG nhúng ICC profile từ hệ thống hoặc CC0; file hỏng: 0-byte, truncated header-only, file text đổi đuôi `.jpg`). Pixel metrics (PSNR, CIE76 MeanDeltaE Lab D65, MaxChannelDiff). ImageCompare chuẩn hóa sang buffer BGRA32. Bộ 17 unit test kiểm tra generator, độ đo pixel, fidelity nén JPEG/PNG và xử lý an toàn file hỏng.
+    - Kiểm thử: `dotnet test tests/PhotoReview.Imaging.Tests -c Release` đạt 37/37 test PASS. `.\tools\verify-all.ps1` đạt PASS tất cả verification gates (xUnit: 505/505 test pass; smoke test file ops; fault injection; release publish).
+    - Lệch plan / rủi ro / việc còn lại: Không. Sẵn sàng cho T81 (`--decoder-bench`) và T83 (`ExifOrientation`).
 
 ### T81 — `--decoder-bench` ∥G
 - **Files:** `{CLI}/DecoderBenchmark.cs` (mới), `{CLI}/Program.cs` (thêm nhánh dispatch).

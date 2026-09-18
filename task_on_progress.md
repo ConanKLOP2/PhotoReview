@@ -1,8 +1,8 @@
 # Tiến độ
 
-- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 488/488 (Core: 199, Imaging: 20, Integration: 8, Architecture: 5 (+1 skip), Tests.Unit: 256)
+- **Cập nhật:** 2026-09-18 | **Branch làm việc:** `refactor/integration` · VERIFY đạt, xUnit 505/505 (Core: 199, Imaging: 37, Integration: 8, Architecture: 5 (+1 skip), Tests.Unit: 256)
 - **Môi trường hiện tại:** **Máy 1 (Máy chính)** · Intel Core i7-9750H, 32 GB RAM, NVMe SSD · Đầy đủ fixture ảnh thật (F1–F4) tại `work/diag/fixtures.local.json` và công cụ chẩn đoán (dotnet-counters, dotnet-trace, Process Monitor).
-- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, WAVE 3 (T30–T35)**. Đang chuẩn bị chuyển sang Wave 4 (W4) hoặc Thay decoder (WC3).
+- **Mục tiêu:** Tái cấu trúc B + C3 (`docs/refactoring/REFACTOR-PLAN.md`, `REFACTOR-TASKS.md`) kết hợp chẩn đoán hiệu năng WD (`PERF-DIAGNOSIS-PLAN.md`, `PERF-DIAGNOSIS-TASKS.md`). **ĐÃ HOÀN TẤT WAVE 1, WAVE 2, WAVE 3 (T30–T35) VÀ BẮT ĐẦU NHÁNH WC3 VỚI T80 (Fixture ảnh + helper chất lượng)**.
 
 ## Chuyển sang máy khác (làm theo thứ tự)
 
@@ -37,7 +37,7 @@
 
 ## Đã xong
 
-- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, T31b, T32, T33a, T33b, T31c, T34, **T35** (Wave 1, Wave 2, Wave 3 hoàn tất 100%; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
+- **Refactor:** T00, T02, T03, T04, T05, T10, T11, T12, T13a, T13b, T14a, T14b, T14c, T14d, T20, T21a, T22a, T22b, T22c, T23a, T23b, T21b, T21c, T24, T25a, T25b, T26a, T26b, T26c, T30, T31a, T31b, T32, T33a, T33b, T31c, T34, T35 (Wave 1, Wave 2, Wave 3 hoàn tất 100%), **T80** (Wave C3 bắt đầu: procedural fixture generator, pixel metrics PSNR/DeltaE Lab D65/MaxDiff, image comparison; xUnit: 37/37; nhật ký chi tiết trong `REFACTOR-TASKS.md`).
 - **Chẩn đoán:** D00, D03, D04, D05, D06, D10, D11 (nhật ký trong `PERF-DIAGNOSIS-TASKS.md`).
 - **Công cụ đo có trong repo:**
   - Event `PhotoReview-Perf` + CSV (`PHOTOREVIEW_PERF_TRACE`).
@@ -58,8 +58,10 @@
 
 ## Việc tiếp theo
 
-1. **Lựa chọn task tiếp theo (sau Wave 3):**
-   - **Nhánh WC3 (Thay decoder C3):** Bắt đầu bằng **T80** (`Fixture ảnh + helper chất lượng`).
+1. **Lựa chọn task tiếp theo:**
+   - **Nhánh WC3 (Thay decoder C3):**
+     - **T81** (`--decoder-bench`: CLI benchmark so sánh decode ms P50/P95, memory peak giữa các backend).
+     - Hoặc **T83** (`ExifOrientation`: đọc orientation từ metadata và tự động xoay ảnh đúng hướng cho WpfBitmapImageDecoder).
    - **Nhánh W4 (Application architecture):** Bắt đầu bằng **T40** (`Composition root DI + Mvvm`).
    - Hoặc chạy đo hiệu năng D07.
 2. **D07 (ma trận đo trên máy 1):** Đã sẵn sàng trên máy chính (đầy đủ fixture F1..F4 và công cụ đo). Chờ người dùng quyết định:
