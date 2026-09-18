@@ -143,7 +143,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T42b | `UndoService` | T42a | | | DONE |
 | T42c | `DuplicateFinder` | T40 | ∥I | | DONE |
 | T43a | `ShortcutRouter` | T40 | ∥I | | DONE |
-| T43b | `ViewerState` | T40 | ∥I | | TODO |
+| T43b | `ViewerState` | T40 | ∥I | | DONE |
 | T44 | `FolderLoadCoordinator` | T41a, T41b | | | DONE |
 | T45a | `StatusFormatter` | T40 | ∥I | | TODO |
 | T45b | `CompareViewModel` | T41a | | | TODO |
@@ -906,7 +906,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/ViewModels/ViewerState.cs`, test.
 - **Làm:** `ObservableObject` với `Zoom`, `Stretch` (enum riêng, không dùng WPF, để giữ K-2), `IsFit`, `IsFullscreen`, `MaxImageWidth`, `MaxImageHeight`. Các thao tác: `ZoomIn`/`ZoomOut` (bước 0.25, kẹp 0.25–4), `WheelZoom(delta)`, `ResetFit(viewport)`, `ApplyInitialViewMode(mode, viewport)`, `UpdateViewport(w, h)` (chỉ tác dụng khi mode Fit, giống `UpdateFitSize`). Giá trị phải khớp code cũ.
 - **Xong khi:** test đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T43b-viewer-state` · Files: `src/PhotoReview.App/ViewModels/ViewerState.cs`, `tests/PhotoReview.App.Tests/ViewModels/ViewerStateTests.cs` · Triển khai `ViewerState : ObservableObject` quản lý mức Zoom [0.25..4.0], enum riêng `ViewerStretchMode` (tuân thủ K-2 không phụ thuộc WPF), `IsFit`, `IsFullscreen`, `MaxImageWidth`/`MaxImageHeight` kẹp viewport, `ZoomIn`, `ZoomOut`, `WheelZoom`, `ResetFit`, `ApplyInitialViewMode` và `UpdateViewport` khớp 100% logic cũ · 11 unit test cases bao quát mọi trạng thái co giãn và phóng to · Toàn bộ 693/693 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T45a.
 
 ### T44 — `FolderLoadCoordinator`
 - **Files:** `{App}/Coordinators/FolderLoadCoordinator.cs`, `{AppT}/Coordinators/FolderLoadCoordinatorTests.cs`.
