@@ -146,7 +146,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T43b | `ViewerState` | T40 | ∥I | | DONE |
 | T44 | `FolderLoadCoordinator` | T41a, T41b | | | DONE |
 | T45a | `StatusFormatter` | T40 | ∥I | | DONE |
-| T45b | `CompareViewModel` | T41a | | | TODO |
+| T45b | `CompareViewModel` | T41a | | | DONE |
 | T45c | `ImagePresenter` | T44, T45a, T45b, T84 | | | TODO |
 | T46a | `MainViewModel`: mở folder + điều hướng | T43a, T43b, T45c | | | TODO |
 | T46b | `MainViewModel`: file action + undo | T46a, T42b | | | TODO |
@@ -928,7 +928,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/ViewModels/CompareViewModel.cs`, test.
 - **Làm:** `ObservableObject` với `IsVisible`, `LeftPath`, `RightPath`, `LeftImage`/`RightImage` (kiểu `object`, giữ K-2), `SelectedPath`, `IsLeftSelected`, `IsRightSelected`, `SizeText`, `HashText`. Thao tác: `Select(left|right)`, `Toggle()`, `LoadAsync(pair, token, loadImage, getHash, settings)` (hash chạy song song, kiểm tra token sau mỗi await), `Clear()`.
 - **Xong khi:** test chọn, hash trùng/khác, token bị thay giữa chừng.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Antigravity · `refactor/T45b-compare-viewmodel` · Files: `src/PhotoReview.App/ViewModels/CompareViewModel.cs`, `tests/PhotoReview.App.Tests/ViewModels/CompareViewModelTests.cs` · Hiện thực `CompareViewModel` kế thừa `ObservableObject` điều phối so sánh 2 ảnh song song tuân thủ K-2 (kiểu image là `object?`), hỗ trợ nạp preview và hash song song (`Task.WhenAll`), kiểm tra token generation sau mỗi await (bảo toàn INV-1), format kích thước và status qua `StatusFormatter.Compare` · 10 unit tests mới kiểm tra đầy đủ toggle, select side, clear, concurrent preview loading, concurrent hashing, size format, và token cancellation check · Toàn bộ 714/714 test PASS, `verify-all.ps1` PASS 100%. Sẵn sàng cho T45c.
 
 ### T45c — `ImagePresenter`
 - **Files:** `{App}/Coordinators/ImagePresenter.cs`, test.
