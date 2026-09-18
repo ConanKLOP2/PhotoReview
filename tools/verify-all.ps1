@@ -45,6 +45,7 @@ Invoke-Gate 'Run xUnit test suite' {
     dotnet test (Join-Path $root 'tests\PhotoReview.Core.Tests\PhotoReview.Core.Tests.csproj') -c $Configuration --no-build --nologo
     dotnet test (Join-Path $root 'tests\PhotoReview.Imaging.Tests\PhotoReview.Imaging.Tests.csproj') -c $Configuration --no-build --nologo
     dotnet test (Join-Path $root 'tests\PhotoReview.Integration.Tests\PhotoReview.Integration.Tests.csproj') -c $Configuration --no-build --nologo
+    dotnet test (Join-Path $root 'tests\PhotoReview.App.Tests\PhotoReview.App.Tests.csproj') -c $Configuration --no-build --nologo
     dotnet test (Join-Path $root 'tests\PhotoReview.Tests.Unit\PhotoReview.Tests.Unit.csproj') -c $Configuration --no-build --nologo
 }
 Invoke-Gate 'Run file-operation smoke test' {

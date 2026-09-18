@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
@@ -15,19 +16,109 @@ namespace PhotoReview.App;
 
 public partial class App : System.Windows.Application
 {
-    private static readonly IAppPaths AppPaths = PhotoReview.Core.AppPaths.FromEnvironment();
-    private static readonly IFileSystem FileSystem = new PhysicalFileSystem();
-    private static readonly ILog Log = FileLog.Default;
-    private static readonly SettingsStore Store = new(AppPaths, FileSystem, Log, LogStartupErrorForced);
-
     private InstanceLock? _instanceLock;
     private PerfCsvListener? _perfListener;
     private PerfDispatcherHooks? _perfHooks;
+    private IServiceProvider? _services;
+
+    public static IServiceProvider Services => ((App)Current)._services ?? throw new InvalidOperationException("Services not initialized.");
+
+    public static void ConfigureServices(IServiceCollection services)
+    {
+        // 1. Core Abstractions
+        services.AddSingleton<IAppPaths>(_ => PhotoReview.Core.AppPaths.FromEnvironment());
+        services.AddSingleton<IFileSystem, PhysicalFileSystem>();
+        services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<ILog>(_ => FileLog.Default);
+
+        // 2. Settings & Session
+        services.AddSingleton<SettingsStore>(sp => new SettingsStore(
+            sp.GetRequiredService<IAppPaths>(),
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<ILog>(),
+            LogStartupErrorForced));
+        services.AddSingleton<SessionStore>(sp => new SessionStore(
+            sp.GetRequiredService<IAppPaths>(),
+            sp.GetRequiredService<IFileSystem>()));
+
+        // 3. Journal & File Actions
+        services.AddSingleton<OperationJournal>(sp => new OperationJournal(
+            sp.GetRequiredService<IAppPaths>(),
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<IClock>()));
+        services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
+            sp.GetRequiredService<OperationJournal>(),
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<IClock>()));
+        services.AddSingleton<FileHashService>();
+
+        // 4. Diagnostics & Metrics
+        services.AddSingleton<ReviewMetrics>();
+
+        // 5. Platform Services
+        services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();
+        services.AddSingleton<IProgressiveExplorerOrderProvider, ExplorerOrderProviderAdapter>();
+        services.AddSingleton<IRecycleBin>(_ => WindowsRecycleBin.Instance);
+        services.AddSingleton<IMemoryProbe>(_ => PhysicalMemory.Instance);
+        services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
+        services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
+        services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
+
+        // 6. Imaging & Decoding
+        services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
+        services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(persistNewThumbnails: false, log: sp.GetService<ILog>()));
+
+        services.AddSingleton<PreviewStateContext>();
+        services.AddSingleton<PreviewImageService>(sp =>
+        {
+            var ctx = sp.GetRequiredService<PreviewStateContext>();
+            return new PreviewImageService(
+                sp.GetRequiredService<ReviewMetrics>(),
+                () => ctx.IsOriginalLoadingMode(),
+                () => ctx.TargetDecodeWidth(),
+                capacityBytes: AppConstants.ImageCacheCapacityBytes,
+                decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
+                currentBackend: () => ctx.CurrentBackend(),
+                log: sp.GetService<ILog>());
+        });
+
+        services.AddSingleton<Func<Func<string[]>, Func<long>, PreloadScheduler>>(sp =>
+            (getFiles, getTotalBytes) => new PreloadScheduler(
+                sp.GetRequiredService<PreviewImageService>(),
+                sp.GetRequiredService<ReviewMetrics>(),
+                getFiles,
+                getTotalBytes,
+                fullFolderRamThresholdBytes: AppConstants.ImageCacheCapacityBytes,
+                memoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
+                log: sp.GetService<ILog>()));
+
+        // 7. Window
+        services.AddTransient<MainWindow>(sp => new MainWindow(
+            sp.GetRequiredService<SettingsStore>(),
+            sp.GetRequiredService<OperationJournal>(),
+            sp.GetRequiredService<SessionStore>(),
+            sp.GetRequiredService<RecoveryRetryService>(),
+            sp.GetRequiredService<ThumbnailCache>(),
+            sp.GetRequiredService<FileHashService>(),
+            sp.GetRequiredService<ReviewMetrics>(),
+            sp.GetRequiredService<PreviewImageService>(),
+            sp.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>(),
+            sp.GetRequiredService<IProgressiveExplorerOrderProvider>(),
+            sp.GetRequiredService<IRecycleBin>(),
+            sp.GetService<PreviewStateContext>()));
+    }
+
     private void App_Startup(object sender, StartupEventArgs e)
     {
         PhotoReview.App.Services.WpfKeyNameValidator.WireUp();
-        Store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
-        var appSettings = Store.Load();
+
+        var services = new ServiceCollection();
+        ConfigureServices(services);
+        _services = services.BuildServiceProvider();
+
+        var store = _services.GetRequiredService<SettingsStore>();
+        store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
+        var appSettings = store.Load();
         AppLog.Enabled = appSettings.LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
         // D05: PHOTOREVIEW_DIAG_* variables change app behavior for measurement purposes, so their
@@ -58,7 +149,8 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
-        var window = new MainWindow(initial ?? initialFolder, Store);
+        var window = _services.GetRequiredService<MainWindow>();
+        window.InitializeWithInitialPath(initial ?? initialFolder);
         MainWindow = window;
         window.Show();
     }
