@@ -102,7 +102,10 @@ public partial class App : System.Windows.Application
                 memoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
                 log: sp.GetService<ILog>()));
 
-        // 7. Window
+        // 7. ViewModels & Coordinators
+        services.AddTransient<PhotoReview.App.ViewModels.CompareViewModel>();
+
+        // 8. Window
         services.AddTransient<MainWindow>(sp => new MainWindow(
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<OperationJournal>(),
