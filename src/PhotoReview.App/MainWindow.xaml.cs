@@ -357,7 +357,7 @@ public partial class MainWindow : Window
         var initialSize = initialInfo.Length;
         var currentKey = GetCurrentCacheKey(initialInfo);
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
-        var ramReady = TryGetCachedPreview(currentKey, out var readyBitmap);
+        var ramReady = TryGetCachedPreview(currentKey, out var readyImage);
         // HasInflightPreview builds a cache key (one extra stat of the source) — that cost
         // exists only while tracing.
         if (perf) PhotoReviewPerf.Log.Lookup(token, perfPathId, ramReady ? "ramHit" : HasInflightPreview(path) ? "inflight" : "miss");
@@ -381,18 +381,18 @@ public partial class MainWindow : Window
                 var thumbnail = await _thumbnailCache.GetAsync(path);
                 if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
                 if (token != _generation) return;
-                MainImage.Source = thumbnail;
+                MainImage.Source = thumbnail.AsBitmapSource();
                 if (perf) TracePresentedOnNextRender(token, "thumbnail", Stopwatch.GetTimestamp());
                 if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
                 ApplyInitialViewMode();
                 StatusText.Text = $"{index + 1}/{_files.Count} · {FormatFileSize(initialSize)} · Đang tải bản rõ";
             }
-            var image = ramReady ? readyBitmap : await GetPreviewAsync(path, currentKey);
+            var image = ramReady ? readyImage : await GetPreviewAsync(path, currentKey);
             if (ramReady) _metrics.RecordCacheHit();
             if (token != _generation) return;
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
             var uiAssign = Stopwatch.StartNew();
-            MainImage.Source = image;
+            MainImage.Source = image.AsBitmapSource();
             long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
             _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
             if (perf) PhotoReviewPerf.Log.Assign(token, (perfAssigned - perfAssign) * 1000.0 / Stopwatch.Frequency, image.PixelWidth, image.PixelHeight);
@@ -423,8 +423,8 @@ public partial class MainWindow : Window
                 CompareRightImage.Tag = pair.Value.Right;
                 var comparePreviews = await Task.WhenAll(GetPreviewAsync(pair.Value.Left), GetPreviewAsync(pair.Value.Right));
                 if (token != _generation) return;
-                CompareLeftImage.Source = comparePreviews[0];
-                CompareRightImage.Source = comparePreviews[1];
+                CompareLeftImage.Source = comparePreviews[0].AsBitmapSource();
+                CompareRightImage.Source = comparePreviews[1].AsBitmapSource();
                 if (perf) TracePresentedOnNextRender(token, "compare", Stopwatch.GetTimestamp());
                 _compareSelectedPath = path;
                 UpdateCompareSelection();
@@ -547,13 +547,13 @@ public partial class MainWindow : Window
 
     private ImageCacheKey GetCurrentCacheKey(FileInfo info) => _previewService.GetCurrentCacheKey(info);
 
-    private Task<BitmapImage> GetPreviewAsync(string path) => _previewService.GetPreviewAsync(path);
+    private Task<IDecodedImage> GetPreviewAsync(string path) => _previewService.GetPreviewAsync(path);
 
-    private Task<BitmapImage> GetPreviewAsync(string path, ImageCacheKey key) => _previewService.GetPreviewAsync(path, key);
+    private Task<IDecodedImage> GetPreviewAsync(string path, ImageCacheKey key) => _previewService.GetPreviewAsync(path, key);
 
-    private bool TryGetCachedPreview(string path, out BitmapImage bitmap) => _previewService.TryGetCachedPreview(path, out bitmap);
+    private bool TryGetCachedPreview(string path, out IDecodedImage image) => _previewService.TryGetCachedPreview(path, out image);
 
-    private bool TryGetCachedPreview(ImageCacheKey key, out BitmapImage bitmap) => _previewService.TryGetCachedPreview(key, out bitmap);
+    private bool TryGetCachedPreview(ImageCacheKey key, out IDecodedImage image) => _previewService.TryGetCachedPreview(key, out image);
 
     private bool HasInflightPreview(string path) => _previewService.HasInflightPreview(path);
 

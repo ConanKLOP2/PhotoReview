@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Decoding;
 
@@ -41,35 +41,43 @@ public sealed class WpfBitmapImageDecoderTests : IDisposable
     public void DecodeFullResolutionProducesFrozenBitmap()
     {
         var request = new DecodeRequest(_imagePath, TargetWidth: 0);
-        var (bitmap, downscaled) = _decoder.Decode(request);
+        var decoded = _decoder.Decode(request);
 
-        Assert.NotNull(bitmap);
-        Assert.True(bitmap.IsFrozen);
-        Assert.False(downscaled);
-        Assert.Equal(1, bitmap.PixelWidth);
-        Assert.Equal(1, bitmap.PixelHeight);
+        Assert.NotNull(decoded);
+        Assert.False(decoded.Downscaled);
+        Assert.Equal(1, decoded.PixelWidth);
+        Assert.Equal(1, decoded.PixelHeight);
+        Assert.True(decoded.EstimatedBytes > 0);
+        Assert.IsType<WpfDecodedImage>(decoded);
+        var wpfImage = (WpfDecodedImage)decoded;
+        Assert.True(wpfImage.Source.IsFrozen);
+        Assert.Same(wpfImage.Source, decoded.PlatformImage);
     }
 
     [Fact(DisplayName = "Decode with target width reports downscaled true")]
     public void DecodeWithTargetWidthReportsDownscaled()
     {
         var request = new DecodeRequest(_imagePath, TargetWidth: 100);
-        var (bitmap, downscaled) = _decoder.Decode(request);
+        var decoded = _decoder.Decode(request);
 
-        Assert.NotNull(bitmap);
-        Assert.True(bitmap.IsFrozen);
-        Assert.True(downscaled);
+        Assert.NotNull(decoded);
+        Assert.True(decoded.Downscaled);
+        Assert.IsType<WpfDecodedImage>(decoded);
+        var wpfImage = (WpfDecodedImage)decoded;
+        Assert.True(wpfImage.Source.IsFrozen);
     }
 
     [Fact(DisplayName = "Decode with in-memory bytes decodes from memory stream")]
     public void DecodeWithMemoryBytes()
     {
         var request = new DecodeRequest(_imagePath, TargetWidth: 0, Bytes: new ReadOnlyMemory<byte>(ValidPng1x1));
-        var (bitmap, downscaled) = _decoder.Decode(request);
+        var decoded = _decoder.Decode(request);
 
-        Assert.NotNull(bitmap);
-        Assert.True(bitmap.IsFrozen);
-        Assert.False(downscaled);
-        Assert.Equal(1, bitmap.PixelWidth);
+        Assert.NotNull(decoded);
+        Assert.False(decoded.Downscaled);
+        Assert.Equal(1, decoded.PixelWidth);
+        Assert.IsType<WpfDecodedImage>(decoded);
+        var wpfImage = (WpfDecodedImage)decoded;
+        Assert.True(wpfImage.Source.IsFrozen);
     }
 }

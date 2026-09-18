@@ -53,7 +53,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     // GetPreviewAsync has no cancellation parameter (the production decode loop doesn't
     // either — WPF's synchronous BitmapDecoder can't be interrupted mid-frame), so
     // cancellation here only takes effect between iterations.
-    public Task<BitmapImage> DecodeAsync(string path, CancellationToken token = default)
+    public Task<IDecodedImage> DecodeAsync(string path, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
         // Mirrors MainWindow.ShowImageAsync: a preload hit only counts when the image was

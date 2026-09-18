@@ -273,7 +273,7 @@ public sealed class PerfTraceTests : IDisposable
         using var listener = new CapturingListener();
         try
         {
-            var calls = new List<Task<System.Windows.Media.Imaging.BitmapImage>>();
+            var calls = new List<Task<IDecodedImage>>();
             for (var i = 0; i < 16; i++)
             {
                 PhotoReviewPerf.NavContext = 5_000 + i;

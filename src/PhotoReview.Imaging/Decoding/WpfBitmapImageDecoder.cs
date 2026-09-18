@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.Decoding;
@@ -9,7 +9,7 @@ namespace PhotoReview.Imaging.Decoding;
 /// </summary>
 public sealed class WpfBitmapImageDecoder : IImageDecoder
 {
-    public (BitmapSource Bitmap, bool Downscaled) Decode(DecodeRequest request)
+    public IDecodedImage Decode(DecodeRequest request)
         => DecodeWithFallback(request);
 
     public ImageInfo ReadInfo(string path)
@@ -23,20 +23,22 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         return new ImageInfo(frame.PixelWidth, frame.PixelHeight);
     }
 
-    public static (BitmapSource Bitmap, bool Downscaled) DecodeWithFallback(DecodeRequest request)
+    public static IDecodedImage DecodeWithFallback(DecodeRequest request)
     {
         try
         {
-            return (DecodeSource(request), request.TargetWidth > 0);
+            var bitmap = DecodeSource(request);
+            return new WpfDecodedImage(bitmap, downscaled: request.TargetWidth > 0);
         }
         catch when (request.TargetWidth > 0)
         {
             var fallbackRequest = new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes);
-            return (DecodeSource(fallbackRequest), false);
+            var bitmap = DecodeSource(fallbackRequest);
+            return new WpfDecodedImage(bitmap, downscaled: false);
         }
     }
 
-    public static (BitmapSource Bitmap, bool Downscaled) DecodeWithFallback(string path, int targetWidth)
+    public static IDecodedImage DecodeWithFallback(string path, int targetWidth)
         => DecodeWithFallback(new DecodeRequest(path, targetWidth));
 
     public static BitmapSource DecodeSource(DecodeRequest request)
