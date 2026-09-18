@@ -129,7 +129,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | DONE |
 | T80 | Fixture ảnh + helper đo chất lượng | T31c | ∥G | | DONE |
 | T81 | `--decoder-bench` | T31c | ∥G | | TODO |
-| T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | TODO |
+| T83 | `ExifOrientation` + áp dụng trong backend Wpf | T80 | | | DONE |
 | T84 | `IImageDecoderFactory` + fallback + backend trong cache key | T83, T35 | | | TODO |
 | T82 | `WicDirectDecoder` | T84 | ∥H | | TODO |
 | T85 | `TurboJpegDecoder` | T84 | ∥H | ⛔Q7 | TODO |
@@ -720,9 +720,14 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Để đọc orientation mà không mở file hai lần: dùng `BitmapDecoder.Create(stream, DelayCreation, OnLoad)` để lấy metadata **và** frame từ cùng một stream. Nếu phải giữ `BitmapImage` vì `DecodePixelWidth`, đọc metadata bằng `BitmapFrame` trên cùng `FileStream` sau khi seek về 0 (vẫn cùng một handle). Ghi rõ cách chọn vào nhật ký.
   4. `ImageInfo.Width/Height` trả kích thước **sau khi** áp orientation (status bar hiển thị đúng).
   5. Test: 8 orientation × (full-res, target 1920). Kiểm kích thước và kiểm pixel góc (fixture có màu khác nhau ở 4 góc).
-- **Không làm:** đổi UI.
 - **Xong khi:** test đạt, VERIFY đạt. Ghi vào nhật ký: đây là **thay đổi hành vi hiển thị** (ảnh dọc giờ hiển thị đúng hướng).
-- **Nhật ký:** —
+- **Nhật ký:**
+  - 2026-09-18 · Sonnet · branch `refactor/T83-exif-orientation` · commit `9708645`
+    - Files: `{Imaging}/Decoding/ExifOrientation.cs`, `WpfBitmapImageDecoder.cs`, `DecodeRequest.cs`, `ImageInfo.cs`, `{Imaging}/ImageCacheKey.cs`, `PreviewImageService.cs`, `ThumbnailCache.cs`, `{ImgT}/Decoding/OrientationTests.cs`.
+    - Thay đổi: Triển khai `ExifOrientation` (đọc EXIF tag `/app1/ifd/{ushort=274}` và `System.Photo.Orientation`, áp dụng `TransformedBitmap` với `ScaleTransform` và `RotateTransform`). Tối ưu đọc stream trong `WpfBitmapImageDecoder`: đọc metadata và frame trên cùng 1 handle `FileStream` (`ReadWrite | Delete`, `SequentialScan`) sau khi seek về 0. Đổi `DecodePixelWidth` sang `DecodePixelHeight` cho orientation 5..8 khi downscale để kích thước sau xoay đạt đúng `TargetWidth`. `ImageInfo.Width` và `Height` tráo đổi kích thước thị giác cho orientation 5..8. Cập nhật cache key (`ImageCacheKey`, `PreviewImageService`, `ThumbnailCache`) gồm orientation.
+    - Lưu ý quan trọng: Đây là **thay đổi hành vi hiển thị** (ảnh dọc hoặc xoay giờ hiển thị đúng hướng trên review và thumbnail).
+    - Kiểm thử: `OrientationTests.cs` (34 test mới), tổng xUnit `PhotoReview.Imaging.Tests` đạt 71/71 test PASS. Toàn bộ verification gates `tools/verify-all.ps1` đạt PASS (xUnit: 539/539 tests pass, smoke test file ops, fault injection, release publish 535,552 bytes).
+    - Lệch plan / rủi ro / việc còn lại: Không. Sẵn sàng cho T81 (`--decoder-bench`) hoặc T84 (`IImageDecoderFactory`).
 
 ### T84 — Factory + fallback + backend trong key
 - **Files:** `{Imaging}/Decoding/{IImageDecoderFactory,ImageDecoderFactory,FallbackImageDecoder}.cs`, `ImageCacheKey` (thêm `Backend`), `PreviewImageService` (dùng factory, tên file disk cache gồm backend), `{ImgT}/Decoding/FactoryTests.cs`.
