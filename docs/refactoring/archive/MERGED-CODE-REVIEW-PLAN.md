@@ -5,7 +5,7 @@
 - Trạng thái: **Review DONE; đề xuất sửa lỗi chờ người dùng xác nhận**. Người dùng đã yêu cầu commit/push tài liệu để chia sẻ cho agent/máy khác; chưa cho triển khai source/config.
 - Branch chia sẻ: `codex/merged-code-review-plan`, dựa trên baseline tích hợp ở trên. Máy khác chạy `git fetch origin`, rồi `git switch --track origin/codex/merged-code-review-plan` nếu chưa có branch local. Probe/log trong `work/` không được push; bằng chứng tóm tắt và task đầy đủ nằm trong hai file MR.
 - Task thực thi: [MERGED-CODE-REVIEW-TASKS.md](MERGED-CODE-REVIEW-TASKS.md).
-- Kế hoạch nền: [REFACTOR-PLAN.md](REFACTOR-PLAN.md), [REFACTOR-TASKS.md](REFACTOR-TASKS.md), [PERF-DIAGNOSIS-PLAN.md](PERF-DIAGNOSIS-PLAN.md), [PERF-DIAGNOSIS-TASKS.md](PERF-DIAGNOSIS-TASKS.md).
+- Kế hoạch nền: [REFACTOR-PLAN.md](../REFACTOR-PLAN.md), [REFACTOR-TASKS.md](../REFACTOR-TASKS.md), [PERF-DIAGNOSIS-PLAN.md](../PERF-DIAGNOSIS-PLAN.md), [PERF-DIAGNOSIS-TASKS.md](../PERF-DIAGNOSIS-TASKS.md).
 
 ## 1. Kết luận và phạm vi
 

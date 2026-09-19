@@ -129,7 +129,7 @@
 ## 7. MR06 — DONE — Tích hợp, kiểm chứng và bàn giao
 
 - **Owner:** Coordinator. **Phụ thuộc:** MR01–MR05 DONE sau review.
-- **Files:** hai file MR, `docs/refactoring/REFACTOR-TASKS.md`, `task_on_progress.md`, `docs/refactoring/results/merged-code-review-validation.md` (mới), `README.md` chỉ nếu quy trình thực sự đổi.
+- **Files:** hai file MR, `docs/refactoring/REFACTOR-TASKS.md`, `task_on_progress.md`, `docs/refactoring/archive/merged-code-review-validation.md` (mới), `README.md` chỉ nếu quy trình thực sự đổi.
 - **Làm:**
   1. Hợp nhất các patch đã review theo thứ tự mục 0; kiểm diff không có source ngoài Files; ghi SHA và kết quả từng task.
   2. Chạy tuần tự build Release, test solution (Category!=Manual), CLI và `tools/verify-all.ps1` đã sửa. Publish đúng thư mục AGENTS và verify-release. Đọc exit code thật và tổng số test; tách skip có sẵn khỏi pass.
@@ -140,4 +140,4 @@
 - **Không làm:** tự merge PR, bắt đầu D07 toàn ma trận hoặc xóa cache thật/reboot; cần chỉ định riêng cho các thao tác đó.
 - **Done khi:** gate local đủ, runtime evidence hoặc giới hạn rõ, push/PR xác nhận, CI được đọc thật; mọi F có trạng thái resolved/blocked cụ thể.
 - **Rủi ro/rollback:** nếu có conflict vượt phạm vi, BLOCKED và cập nhật plan; revert commit task theo phụ thuộc, không reset workspace.
-- **Đầu ra:** [validation report](results/merged-code-review-validation.md) + PR #5 + handoff. **Nhật ký:** 2026-09-19 · hợp nhất tuần tự trên `refactor/integration`; VERIFY Release, CLI, smoke, fault injection, publish và verify-release đạt. Chưa có bằng chứng GUI thủ công, benchmark backend/ICC hoặc CI remote trong hồ sơ local.
+- **Đầu ra:** [validation report](merged-code-review-validation.md) + PR #5 + handoff. **Nhật ký:** 2026-09-19 · hợp nhất tuần tự trên `refactor/integration`; VERIFY Release, CLI, smoke, fault injection, publish và verify-release đạt. Chưa có bằng chứng GUI thủ công, benchmark backend/ICC hoặc CI remote trong hồ sơ local.
