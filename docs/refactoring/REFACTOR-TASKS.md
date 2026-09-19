@@ -163,9 +163,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |
 | T60 | Mở rộng metric | T53b | | | DONE |
 | T61 | R-1 Session debounce | T60 | ∥K | | DONE |
-| T62 | R-2 Journal startup | T60 | ∥K | | TODO |
-| T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | TODO |
-| T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | TODO |
+| T62 | R-2 Journal startup | T60 | ∥K | | DONE |
+| T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | DONE |
+| T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
 | T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | TODO |
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | TODO |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
@@ -1045,19 +1045,19 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Xong khi:** 100 lần update chỉ ghi ≤ 2 lần. Test flush khi thoát và khi đổi folder đạt.
 - **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Thêm `Core/Session/SessionWriter`: `Update(state)` sao chép state theo folder và lên lịch một lần ghi sau 500 ms (cửa sổ debounce cố định, không kéo dài khi có update mới nên luôn ≤ 1 lần ghi / 500 ms), ghi trên worker qua `SessionStore.Save` (vẫn atomic), `Flush()`/`FlushAsync()`, `Dispose` flush, timer inject được (`Func<TimeSpan,CancellationToken,Task>`), lỗi IO được log và bỏ qua. Nối dây (tham số tuỳ chọn `SessionWriter?` nên test cũ không đổi): `ImagePresenter` → `Update`; `MainViewModel` (5 chỗ Save → `PersistSession`) ; `Flush` trước mỗi `SessionStore.Load` khi mở folder (`MainViewModel`, `FolderLoadCoordinator`); `MainViewModel.FlushSession()` gọi từ `MainWindow.Window_Closed` và `App.Exit`. Test: 7 ở `SessionWriterTests` (100 update → 1 write, flush shutdown, flush đổi folder, nhiều folder, copy state, dispose) + 1 ở `ImagePresenterTests`; `verify-all.ps1` PASS. **Khác mô tả:** dùng delay inject thay vì `IClock` (IClock không có timer). **Chưa làm:** đo "số lần ghi / 100 lần Next" trên app thật (T66); crash giữa cửa sổ debounce làm mất tối đa 500 ms trạng thái session (chấp nhận theo thiết kế R-1).
 
-### T62 — R-2 Journal startup ∥K
+### T62 — R-2 Journal startup ∥K — DONE
 - **Files:** `{Core}/FileActions/OperationJournal.cs`, `UndoService.LoadFromJournal`, test.
 - **Làm:** chọn (a) đọc ngược từ cuối file lấy K move committed gần nhất (K = 200) cộng các entry chưa kết thúc (quét toàn file chỉ khi file < 1 MB), **hoặc** (b) compaction khi file > 8 MB (ghi file mới atomic, backup `.bak`). Ghi lựa chọn vào `docs/adr/0003-journal-startup.md`.
 - **Xong khi:** journal 100k dòng khởi động < 100 ms (hoặc ngưỡng ghi trong ADR). INV-6 đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · agent T62 · `codex/t62-journal` · `ffe53f4` · tail-read journal từ cửa sổ cuối file khi ≥1 MiB, giữ 200 move committed gần nhất; đường đọc pending/failed/reconcile vẫn full scan để giữ INV-6. ADR `docs/adr/0003-journal-startup.md`; test 100.000 dòng đạt 14/14 và dưới 100 ms.
 
-### T63 — R-3/R-6 Catalog metadata ∥K
+### T63 — R-3/R-6 Catalog metadata ∥K — DONE
 - **Files:** `CatalogEntry` (Length, LastWriteUtc, Width?, Height?), `FolderLoadCoordinator` (scan bằng `DirectoryInfo.EnumerateFiles` lấy luôn stat), `StatusFormatter`/`ViewerState`/`MainViewModel` (bỏ `new FileInfo` trên UI), `ImageCacheKey.Create(CatalogEntry, ...)`, test.
 - **Làm:** `totalSourceBytes` tính từ kết quả scan. Metadata có thể cũ nên vẫn giữ kiểm tra `MatchesCurrentSource` sau decode (INV-1). Nếu phát hiện đổi thì cập nhật entry.
 - **Xong khi:** `StatCount` mỗi lần Next giảm (ghi số), test đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · agent T63 · `codex/t63-catalog-metadata` · `ace446a` · truyền metadata Length/LastWriteUtc/Width/Height qua catalog, scan/stat một lần, cache key tái sử dụng metadata; giữ kiểm tra source sau decode. FolderLoadCoordinatorTests 6/6.
 
-### T64 — R-4a `RamBudgetPolicy` ∥K
+### T64 — R-4a `RamBudgetPolicy` ∥K — DONE
 - **Files:** `{Imaging}/Preload/RamBudgetPolicy.cs`, `PreloadScheduler` (điều kiện full-folder), `PerformanceOptions`, test.
 - **Làm:**
   - `EstimateDecodedBytes(entries, targetWidth)`:
@@ -1066,7 +1066,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - `ShouldPreloadWholeFolder = estimate ≤ DecodedCapacity && memory headroom`.
   - Mục tiêu cho phép dùng ≥ 16 GB khi máy 32 GB, giữ reserve 2 GB.
 - **Xong khi:** test các tổ hợp. Quyết định được ghi log và metric.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · agent T64 · `codex/t64-ram-budget` · `cce611d` · thêm policy ước lượng theo dimension hoặc hệ số JPEG/PNG, xét decoded capacity + memory headroom, log quyết định preload. RamBudgetPolicyTests 5/5.
 
 ### T65 — R-4b `SourceBytesCache` ⛔Q5
 - **Files:** `{Imaging}/Caching/SourceBytesCache.cs`, `DecodeRequest.Bytes` (các backend dùng bytes nếu có), `ThumbnailCache`, `PreviewImageService`, `FileHashService` (hash từ bytes), `PreloadScheduler` (tầng byte), `PerformanceOptions.UseSourceBytesCache`, `SourceBytesCapacityBytes` (16 GB), test.
