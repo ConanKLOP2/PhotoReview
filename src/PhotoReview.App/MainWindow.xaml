@@ -46,9 +46,9 @@
                        MaxWidth="{Binding Viewer.MaxImageWidth}"
                        MaxHeight="{Binding Viewer.MaxImageHeight}"
                        RenderTransformOrigin="0,0">
-                    <Image.RenderTransform>
+                    <Image.LayoutTransform>
                         <ScaleTransform x:Name="ImageScale" ScaleX="{Binding Viewer.Zoom}" ScaleY="{Binding Viewer.Zoom}" />
-                    </Image.RenderTransform>
+                    </Image.LayoutTransform>
                 </Image>
             </ScrollViewer>
         </Border>

@@ -95,6 +95,19 @@ public sealed class ViewerStateTests
         Assert.Equal(1.0, state.Zoom);
     }
 
+    [Fact]
+    public void ResetFit_WithViewportRestoresViewportLimits()
+    {
+        var state = new ViewerState();
+        state.SetZoom(3);
+
+        state.ResetFit(1280, 720);
+
+        Assert.True(state.IsFit);
+        Assert.Equal(1280, state.MaxImageWidth);
+        Assert.Equal(720, state.MaxImageHeight);
+    }
+
     [Theory]
     [InlineData(1.0, 2.0, 100, 80, 0, 0, 2000, 1600, 800, 600, 100, 80)]
     [InlineData(2.0, 1.0, 120, 90, 300, 200, 1000, 800, 800, 600, 90, 55)]

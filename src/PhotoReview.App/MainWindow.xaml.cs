@@ -154,32 +154,29 @@ public partial class MainWindow : Window
 
     private async void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            e.Handled = true;
-            var mouse = e.GetPosition(ImageScroll);
-            var oldZoom = _viewModel.Viewer.Zoom;
-            var oldHorizontal = ImageScroll.HorizontalOffset;
-            var oldVertical = ImageScroll.VerticalOffset;
-            var version = ++_viewportOperationVersion;
-            _viewModel.Viewer.WheelZoom(e.Delta);
-            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
-            if (version != _viewportOperationVersion || !IsLoaded) return;
+        e.Handled = true;
+        var mouse = e.GetPosition(ImageScroll);
+        var oldZoom = _viewModel.Viewer.Zoom;
+        var oldHorizontal = ImageScroll.HorizontalOffset;
+        var oldVertical = ImageScroll.VerticalOffset;
+        var version = ++_viewportOperationVersion;
+        _viewModel.Viewer.WheelZoom(e.Delta);
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+        if (version != _viewportOperationVersion || !IsLoaded) return;
 
-            var offsets = MainWindowHelpers.CalculateZoomViewportOffsets(
-                oldZoom,
-                _viewModel.Viewer.Zoom,
-                mouse.X,
-                mouse.Y,
-                oldHorizontal,
-                oldVertical,
-                ImageScroll.ExtentWidth,
-                ImageScroll.ExtentHeight,
-                ImageScroll.ViewportWidth,
-                ImageScroll.ViewportHeight);
-            ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
-            ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
-        }
+        var offsets = MainWindowHelpers.CalculateZoomViewportOffsets(
+            oldZoom,
+            _viewModel.Viewer.Zoom,
+            mouse.X,
+            mouse.Y,
+            oldHorizontal,
+            oldVertical,
+            ImageScroll.ExtentWidth,
+            ImageScroll.ExtentHeight,
+            ImageScroll.ViewportWidth,
+            ImageScroll.ViewportHeight);
+        ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
+        ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
     }
 
     private void Window_PreviewDragOver(object sender, DragEventArgs e)
@@ -249,7 +246,7 @@ public partial class MainWindow : Window
     private async Task ApplyFitViewAsync()
     {
         ++_viewportOperationVersion;
-        _viewModel.ToggleFit();
+        _viewModel.Viewer.ResetFit(ImageScroll.ViewportWidth, ImageScroll.ViewportHeight);
         await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
         ImageScroll.ScrollToHome();
         ImageScroll.ScrollToHorizontalOffset(0);

@@ -3,7 +3,7 @@
 - **Cập nhật:** 2026-09-20
 - **Branch:** `codex/t89-pointer-anchored-zoom` (chưa push)
 - **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72, T73, T74 và T87 `DONE`; T89 đã triển khai phần sửa mã và kiểm thử, còn GUI acceptance wheel→Fit chờ người dùng xác nhận.
-- **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 166; tổng 740/740; smoke, fault injection, publish và verify-release đều PASS.
+- **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 167; tổng 741/741; smoke, fault injection, publish và verify-release đều PASS.
 - **Publish:** `src/PhotoReview.App/bin/Release/net10.0-windows/publish`.
 
 ## Thay đổi phiên này
@@ -15,6 +15,7 @@
 - T74 đã đối chiếu với Git: PR #8 đã merge vào `master`, tag `v2.0.0` đã có trên `origin`, publish artifact vẫn tồn tại và được verify.
 - Điều tra timing-flaky: `PreloadScheduler` nay drain tất cả worker task còn được scheduler theo dõi khi cancellation/exception trước khi hoàn tất; trước sửa test mục tiêu fail 9/30 lượt, sau sửa pass 30/30.
 - T89: wheel zoom tính lại ScrollViewer offset theo điểm con trỏ sau khi layout cập nhật; Fit từ nút, phím tắt và compatibility hook đều reset cả hai offset; thêm kiểm thử pure anchor math.
+- T89 follow-up: wheel thường (không cần Ctrl) zoom theo kiểu Windows Photos; đổi `RenderTransform` thành `LayoutTransform` để extent phản ánh kích thước zoom; Fit truyền viewport thật vào `ResetFit`.
 
 ## Quyết định còn hiệu lực
 
@@ -26,7 +27,7 @@
 
 ## Việc còn lại
 
-1. **T89 — Zoom wheel/Fit:** đã sửa và pass tự động; cần người dùng kiểm tra wheel zoom tại nhiều vị trí trên ảnh dọc/ngang rồi Fit để chốt GUI acceptance.
+1. **T89 — Zoom wheel/Fit:** đã sửa lần hai theo Windows Photos và pass tự động; cần người dùng kiểm tra GUI wheel thường và Fit trên ảnh dọc/ngang.
 2. **Bổ sung T73:** nếu có fixture phù hợp thì kiểm tra Recovery retry và ảnh hỏng/định dạng lạ; không chặn việc tiếp tục T89.
 3. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
 
