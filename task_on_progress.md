@@ -1,12 +1,12 @@
 # Tiến độ
 
-## Cập nhật mới nhất — 2026-09-19
+## Cập nhật mới nhất — 2026-09-19 (đồng bộ trạng thái)
 
-- `refactor/integration` đã fast-forward lên nhánh fix `codex/merged-review-fixes` (MR01–MR06 DONE, F01–F07 resolved; xem `docs/refactoring/results/merged-code-review-validation.md`). PR vào `master` chưa mở (máy chưa có `gh`).
+- `refactor/integration` hiện ở `aaba591`, sạch và khớp `origin/refactor/integration`; đang đi trước `master` 13 commit. MR01–MR06/F01–F07 đã DONE, PR #5 đã merge vào `master`; validation chi tiết ở `docs/refactoring/results/merged-code-review-validation.md`.
 - T88 (ScalingQuality) DONE, chờ nhận xét thủ công zoom 400% ở hai chế độ.
 - **T47 DONE (an toàn):** xoá 60 test đã có thay thế thật, giữ 10 test chưa có thay thế; chi tiết ở `test-parity.md` mục "T47 outcome". 
 - **T52 DONE một phần:** bỏ Folder2Name, AppConstants → Core `PerformanceOptions`, comment cho `catch { }`. Còn marker T46d và bind PerformanceOptions từ settings. Tiếp theo: T50a/b (chờ Q2), T87 (chờ Q8), T53a/b.
-- T50a, T50b, T51, T53a, T53b, T60, T61 DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms, cần thử thủ công hộp thoại folder/file và placement đa màn hình). Tiếp theo: T62–T64 (R-2..R-4a, có thể song song), T87 (chờ Q8), T65 (chờ Q5). Chờ quyết định: Q5, Q8, phạm vi D07.
+- T50a, T50b, T51, T53a, T53b, T60, T61 DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms). Còn kiểm tra thủ công hộp thoại folder/file và placement đa màn hình. Tiếp theo: T62–T64 (R-2..R-4a, có thể song song), T87 (chờ Q8), T65 (chờ Q5). Chờ quyết định: Q5, Q8, phạm vi D07.
 - Bảng `REFACTOR-TASKS.md` đã đồng bộ T25b/T26a/T26b/T32/T33a/T33b sang DONE theo mô tả Wave 3 ở dưới; nên đối chiếu lại với code.
 
 
@@ -15,9 +15,9 @@
 - Baseline đã review: `refactor/integration` / `afb2f77` (khác `master`). Mục tiêu: review code đã merge, chỉ lập plan/task fix.
 - Đã đọc App/DI/MainWindow, Imaging/preload/cache/decoder, settings/journal, test/CI và bốn tài liệu refactor/diagnosis. Tạo `docs/refactoring/MERGED-CODE-REVIEW-PLAN.md`, `MERGED-CODE-REVIEW-TASKS.md`; thêm link ở `REFACTOR-TASKS.md`.
 - Findings F01–F07: memory probe giả; dispose không cancel; gate che lỗi/CI thiếu App.Tests; thiếu ICC WicDirect + quality gate yếu; Turbo fallback exception sai; Turbo metadata backend sai; cache decode đọc backend khác snapshot key. Chi tiết và mức chứng cứ trong plan.
-- Validation mới: **615 passed, 1 skipped, 0 failed** (Imaging 143); CLI contract PASS; publish Release mặc định + verify-release PASS. Probe local xác nhận F01/F02/F05/F06/F07; log `work/review-20260918/`, test log `work/review-20260918-tests.log`. Chưa full VERIFY/GUI/D07/CI remote.
+- Validation lịch sử của review baseline: **615 passed, 1 skipped, 0 failed** (Imaging 143). Kết quả sau khi sửa MR: VERIFY gần nhất **770 passed, 0 failed, 0 skipped**; CLI contract, smoke, fault injection, publish và verify-release PASS. GUI thủ công, D07 và CI remote chưa có bằng chứng mới trong hồ sơ local.
 - Bàn giao tài liệu: người dùng đã yêu cầu commit/push; branch `codex/merged-code-review-plan` từ `afb2f77` (đã fetch và khớp origin/refactor/integration). Máy khác: `git fetch origin`, `git switch --track origin/codex/merged-code-review-plan`. Log/probe work/ chỉ local; bằng chứng tóm tắt có trong plan.
-- Tiếp tục: người dùng duyệt triển khai plan rồi chọn MR01–MR05; MR06 tích hợp. Chưa sửa production code/config. Không coi các số test/ghi chú lỗi trong phần handoff cũ dưới đây là kết quả mới.
+- Tiếp tục: MR01–MR06 đã tích hợp xong. Các số test và ghi chú trong phần handoff cũ bên dưới là lịch sử, không dùng làm kết quả hiện tại.
 
 ## Handoff trước review (giữ làm bối cảnh)
 
@@ -98,7 +98,7 @@
 
 - **Quy tắc 4 (`PERF-DIAGNOSIS-TASKS.md`):** không bao giờ gửi input ở mức OS (`SendInput`, `SendKeys`, `SetForegroundWindow`, …) và không đụng clipboard. Ngày 2026-09-16, phím mô phỏng của D01 đã rơi vào cửa sổ Claude Code.
 - **Config thật của người dùng** có action Enter = Move vào một thư mục ảnh thật. `--perf-session` thay toàn bộ action trong bộ nhớ và chỉ chạy action trên bản sao tạm. Không ghi `config.json` thật.
-- **Lỗi đã biết, chưa sửa:** `PreloadScheduler` gọi `Dispatcher.Yield()` khi không có Dispatcher, nên preload dừng sau lô đầu (benchmark CLI và BenchmarkWindow). Đã chuyển cho T32; D12 không dùng số liệu preload benchmark cũ.
+- **Lỗi lịch sử đã xử lý:** `PreloadScheduler` từng gọi `Dispatcher.Yield()` trên đường CLI/không có Dispatcher; T32 và MR01 đã chuyển đường yield sang cơ chế không phụ thuộc UI Dispatcher. Không dùng số liệu preload cũ trước các thay đổi này cho D12.
 - **Quy trình:**
   - Task giao theo bảng model/review (mục 0 của `REFACTOR-TASKS.md`).
   - Worker không sửa file task, không `git add -A`, không push.

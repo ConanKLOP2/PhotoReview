@@ -1,8 +1,8 @@
 # Merged-code review — validation (MR06)
 
-- Branch: `codex/merged-review-fixes` (HEAD lúc chạy: `50c2650`).
+- Branch tích hợp: `refactor/integration`; các thay đổi MR đã đi qua `codex/merged-review-fixes` và được merge vào `master` qua PR #5. Commit validation gốc: `50c2650`.
 - Lệnh: `tools/verify-all.ps1` (Release), exit code 0.
-- xUnit: Architecture 6, Core 245, Imaging 166, Integration 8, App 89, Tests.Unit 257 — 0 failed, 0 skipped.
+- xUnit: Architecture 6, Core 245, Imaging 166, Integration 8, App 89, Tests.Unit 256 — 0 failed, 0 skipped trong lượt VERIFY gần nhất trên `refactor/integration`.
 - Smoke: file-operation, fault-injection, publish + verify-release framework-dependent đều đạt.
 
 | Finding | Task | Commit | Trạng thái |
@@ -17,4 +17,4 @@
 - Chưa chạy GUI thủ công (đóng cửa sổ khi đang preload, ảnh ICC thật) và benchmark backend/ICC; cần người dùng hoặc driver in-process.
 - Cache tổng dung lượng nguồn trong `App.xaml.cs` chưa có test riêng (composition root).
 - CI remote chưa đọc; không coi local là CI xanh.
-- T87/D07 chỉ tiếp tục sau khi PR này qua CI và được duyệt.
+- T87/D07 chỉ tiếp tục sau khi có quyết định Q8/phạm vi đo; CI remote chưa được đọc lại trong hồ sơ local.
