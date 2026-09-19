@@ -167,7 +167,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | DONE |
 | T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
 | T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | BLOCKED |
-| T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | TODO |
+| T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | DONE |
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
 | T72 | Cập nhật tài liệu | T66 | ∥L | | TODO |
@@ -1086,7 +1086,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
 - **Thứ tự D13:** đo baseline sau T87; chỉ đưa T65 vào ma trận A/B khi T65 hoàn tất dưới feature flag.
-- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 tại `work/diag/runs/t66-t87-20260919/20260919-223438` và `20260919-224215`; S1/F1/Preview/warm 3/3 pass. S2/F1/Preview/warm warm-up và run đo 1 đều pass (`keys=100/100`, `presented=101`, `errors=0`; run đo peak WS khoảng 694 MB, hits=43, misses=58). S2 mất khoảng 2,5–3 phút/cell theo đúng interval 1,5 giây; dừng sau run đo đầu tiên vì các run D07 trước đó đã có lặp đầy đủ. Chưa đủ S3/S6/S9 sau T87 để đánh dấu DONE.
+- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 hoàn tất tại `docs/refactoring/results/final.md`; S1/S2/S3/S6/S9 đã có cell sau T87, S2 xác nhận 100/100 key và S9 chạy trên F1/F4. Các run D07 repeat=3 dùng để đối chiếu độ ổn định; chưa chạy A/B SourceBytesCache vì T65 chưa triển khai. `final.md` ghi rõ N<20/incomplete và giới hạn so sánh.
 
 ### T67 — Dọn compatibility marker T46d còn lại ∥K
 - **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ImageSortService.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `tests/PhotoReview.App.Tests/ProjectSources.cs`, `test-parity.md`.
