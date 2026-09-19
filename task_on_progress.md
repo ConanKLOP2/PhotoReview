@@ -122,3 +122,6 @@
 - **Bài học review:** Haiku từng bịa tên method (T10), sửa ngoài phạm vi (T12), gắn Trait làm test bị loại khỏi CI (T13a). Coordinator luôn phải đọc diff. Task tra cứu tên phải có script kiểm.
 - **Giới hạn sử dụng:** agent từng bị dừng vì HTTP 429 (giới hạn chi tiêu). Nếu reviewer R3 không chạy được thì Coordinator tự review và ghi vào nhật ký.
 - **Thư mục chỉ có trên máy cũ** (không cần mang theo): `work/diag/io-split`, `work/diag/runs-smoke` (bản tóm tắt đã có trong `docs/`), `work/diag/config.backup.json` (config đã được khôi phục).
+
+- **T71 DONE (2026-09-19):** tạo docs/adr/0002-ui-framework.md. D12/T66 chỉ có t_render của harness, chưa có UiAssign/Present P95; vì vậy R-UI 40% chưa được chứng minh. Quyết định No-go WinUI 3, giữ WPF; chỉ mở lại khi D08/PresentMon cho thấy UI >=40% hoặc có lỗi WPF tái hiện được. Tiếp theo T72.
+

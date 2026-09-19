@@ -169,7 +169,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | DONE |
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | DONE |
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
-| T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
+| T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | DONE |
 | T72 | Cập nhật tài liệu | T66 | ∥L | | TODO |
 | T73 | GUI acceptance | T72 | | | TODO |
 | T74 | Release | T73 | | | TODO |
@@ -1105,7 +1105,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `docs/adr/0002-ui-framework.md`.
 - **Làm:** dùng số liệu D12 (trước refactor) và T66 (sau refactor), trong đó quy tắc R-UI là căn cứ chính (tỷ lệ UiAssign/Present so với Decode). Nếu phần UI chiếm ≥ 40% key→present ở P95 thì đề xuất spike WinUI 3 (ViewModel đã độc lập nhờ K-2). Nếu không thì ghi No-go kèm điều kiện mở lại.
 - **Xong khi:** ADR có quyết định.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 — DONE; ADR ghi No-go WinUI 3, giữ WPF vì chưa có UiAssign/Present P95 để đạt ngưỡng R-UI 40%; điều kiện mở lại yêu cầu D08/PresentMon hoặc lỗi WPF tái hiện được.
 
 ### T72 — Tài liệu ∥L
 - **Files:** `README.md`, `AGENTS.md`, `outputs/APP-MECHANISMS-VI.md` → `docs/APP-MECHANISMS-VI.md` (cập nhật link), `docs/architecture.md` (mới), `task_on_progress.md`.
@@ -1139,3 +1139,4 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Cập nhật `task_on_progress.md`.
 - **Xong khi:** tag đã push, artifact đã được verify.
 - **Nhật ký:** —
+
