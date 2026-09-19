@@ -157,7 +157,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | DONE |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | DONE |
 | T51 | Bỏ WinForms | T50b | | | DONE |
-| T52 | Dọn code chết | T47, T88 | | | DONE |
+| T52 | Dọn code chết | T47, T88 | | | IN PROGRESS |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
 | T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |

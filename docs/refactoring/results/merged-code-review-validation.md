@@ -2,7 +2,7 @@
 
 - Branch tích hợp: `refactor/integration`; các thay đổi MR đã đi qua `codex/merged-review-fixes` và được merge vào `master` qua PR #5. Commit validation gốc: `50c2650`.
 - Lệnh: `tools/verify-all.ps1` (Release), exit code 0.
-- xUnit: Architecture 6, Core 245, Imaging 166, Integration 8, App 89, Tests.Unit 256 — 0 failed, 0 skipped trong lượt VERIFY gần nhất trên `refactor/integration`.
+- VERIFY xUnit hiện tại (sau T53a/T53b): Architecture 7, Core 304, Imaging 196, Integration 59, App 162 — **728 passed, 0 failed, 0 skipped**. `Tests.Unit` đã được chia vào các project theo lớp và không còn là một project gate riêng.
 - Smoke: file-operation, fault-injection, publish + verify-release framework-dependent đều đạt.
 
 | Finding | Task | Commit | Trạng thái |

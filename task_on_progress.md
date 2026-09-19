@@ -5,7 +5,7 @@
 - `refactor/integration` hiện ở `aaba591`, sạch và khớp `origin/refactor/integration`; đang đi trước `master` 13 commit. MR01–MR06/F01–F07 đã DONE, PR #5 đã merge vào `master`; validation chi tiết ở `docs/refactoring/results/merged-code-review-validation.md`.
 - T88 (ScalingQuality) DONE, chờ nhận xét thủ công zoom 400% ở hai chế độ.
 - **T47 DONE (an toàn):** xoá 60 test đã có thay thế thật, giữ 10 test chưa có thay thế; chi tiết ở `test-parity.md` mục "T47 outcome". 
-- **T52 DONE một phần:** bỏ Folder2Name, AppConstants → Core `PerformanceOptions`, comment cho `catch { }`. Còn marker T46d và bind PerformanceOptions từ settings. Tiếp theo: T50a/b (chờ Q2), T87 (chờ Q8), T53a/b.
+- **T52 IN PROGRESS:** đã bỏ Folder2Name, chuyển AppConstants → Core `PerformanceOptions`, và thêm comment cho `catch { }`; còn marker tương thích T46d và bind PerformanceOptions từ settings. T50a/b, T51, T53a/b, T60, T61 đã DONE.
 - T50a, T50b, T51, T53a, T53b, T60, T61 DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms). Còn kiểm tra thủ công hộp thoại folder/file và placement đa màn hình. Tiếp theo: T62–T64 (R-2..R-4a, có thể song song), T87 (chờ Q8), T65 (chờ Q5). Chờ quyết định: Q5, Q8, phạm vi D07.
 - Bảng `REFACTOR-TASKS.md` đã đồng bộ T25b/T26a/T26b/T32/T33a/T33b sang DONE theo mô tả Wave 3 ở dưới; nên đối chiếu lại với code.
 
@@ -15,7 +15,7 @@
 - Baseline đã review: `refactor/integration` / `afb2f77` (khác `master`). Mục tiêu: review code đã merge, chỉ lập plan/task fix.
 - Đã đọc App/DI/MainWindow, Imaging/preload/cache/decoder, settings/journal, test/CI và bốn tài liệu refactor/diagnosis. Tạo `docs/refactoring/MERGED-CODE-REVIEW-PLAN.md`, `MERGED-CODE-REVIEW-TASKS.md`; thêm link ở `REFACTOR-TASKS.md`.
 - Findings F01–F07: memory probe giả; dispose không cancel; gate che lỗi/CI thiếu App.Tests; thiếu ICC WicDirect + quality gate yếu; Turbo fallback exception sai; Turbo metadata backend sai; cache decode đọc backend khác snapshot key. Chi tiết và mức chứng cứ trong plan.
-- Validation lịch sử của review baseline: **615 passed, 1 skipped, 0 failed** (Imaging 143). Kết quả sau khi sửa MR: VERIFY gần nhất **770 passed, 0 failed, 0 skipped**; CLI contract, smoke, fault injection, publish và verify-release PASS. GUI thủ công, D07 và CI remote chưa có bằng chứng mới trong hồ sơ local.
+- Validation lịch sử của review baseline: **615 passed, 1 skipped, 0 failed** (Imaging 143). Sau các task T50–T61, VERIFY gần nhất đạt **728 passed, 0 failed, 0 skipped** trên 5 project test; smoke, fault injection, publish và verify-release PASS. GUI thủ công, D07 và CI remote chưa có bằng chứng mới trong hồ sơ local.
 - Bàn giao tài liệu: người dùng đã yêu cầu commit/push; branch `codex/merged-code-review-plan` từ `afb2f77` (đã fetch và khớp origin/refactor/integration). Máy khác: `git fetch origin`, `git switch --track origin/codex/merged-code-review-plan`. Log/probe work/ chỉ local; bằng chứng tóm tắt có trong plan.
 - Tiếp tục: MR01–MR06 đã tích hợp xong. Các số test và ghi chú trong phần handoff cũ bên dưới là lịch sử, không dùng làm kết quả hiện tại.
 
