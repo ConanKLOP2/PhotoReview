@@ -16,6 +16,7 @@ public class AppSettings
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
     public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
+    public DecoderBackend DecoderBackend { get; set; } = DecoderBackend.Wpf;
     public long ImageCacheCapacityBytes { get; set; } = PerformanceOptions.ImageCacheCapacityBytes;
     public long MemoryReserveBytes { get; set; } = PerformanceOptions.MemoryReserveBytes;
     public int PreloadWorkerCount { get; set; } = PerformanceOptions.PreloadWorkerCount;

@@ -217,7 +217,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Viết `baseline.md`: cấu hình máy (CPU, RAM, ổ đĩa, power plan), median/P95/max từng profile, `DecodeMilliseconds`, `UiAssignMilliseconds`, `PresentMilliseconds`, source reads/bytes, RAM peak (Task Manager hoặc `Get-Process`).
   5. Ghi danh sách ảnh bị hiển thị sai hướng (kiểm bằng mắt, dùng cho T83).
 - **Xong khi:** `baseline.md` có đủ các số liệu trên.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Thêm `AppSettings.DecoderBackend` mặc định `Wpf`, combo Settings cho WPF/WIC Direct/TurboJPEG, wiring `PreviewStateContext` theo settings, đổi backend thì cancel preload + clear RAM/disk preview cache + present lại ảnh hiện tại; legacy config không có field vẫn về WPF. Factory fallback và Diagnostics fallback counter đã có sẵn. App.Tests 162/162; `verify-all.ps1` PASS. Còn kiểm thủ công đổi backend trong lúc xem ảnh trước khi chuyển DONE.
 
 ### T02 — CI ∥A
 - **Files:** `.github/workflows/ci.yml` (mới).

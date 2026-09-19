@@ -25,6 +25,14 @@ public sealed class AppSettingsTests
         Assert.Equal(LoadingMode.Fast, JsonSerializer.Deserialize<AppSettings>("{\"LoadingMode\":\"\"}")!.LoadingMode);
     }
 
+    [Fact(DisplayName = "DecoderBackend defaults to Wpf and legacy config remains Wpf")]
+    public void DecoderBackendDefaultsToWpf()
+    {
+        Assert.Equal(DecoderBackend.Wpf, new AppSettings().DecoderBackend);
+        Assert.Equal(DecoderBackend.Wpf, JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":1}")!.DecoderBackend);
+        Assert.Equal(DecoderBackend.Wpf, JsonSerializer.Deserialize<AppSettings>("{\"DecoderBackend\":\"Unknown\"}")!.DecoderBackend);
+    }
+
     [Fact(DisplayName = "ImageSortMode defaults to Name and deserializes aliases")]
     public void ImageSortModeDefaultsAndDeserializesAliases()
     {

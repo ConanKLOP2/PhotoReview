@@ -33,6 +33,7 @@ public partial class SettingsWindow : Window
             LoadingMode = current.LoadingMode,
             ImageSortMode = current.ImageSortMode,
             ScalingQuality = current.ScalingQuality,
+            DecoderBackend = current.DecoderBackend,
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
@@ -89,6 +90,7 @@ public partial class SettingsWindow : Window
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
         ScalingQualityCombo.SelectedIndex = Settings.ScalingQuality == ScalingQuality.Linear ? 1 : 0;
+        DecoderBackendCombo.SelectedIndex = Settings.DecoderBackend switch { DecoderBackend.WicDirect => 1, DecoderBackend.TurboJpeg => 2, _ => 0 };
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
@@ -102,7 +104,7 @@ public partial class SettingsWindow : Window
         Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
         Settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
         Settings.PreviewDiskCacheCapacityBytes = PerformanceOptions.PreviewDiskCacheCapacityBytes;
-        Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = DecoderBackend.Wpf; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -116,6 +118,7 @@ public partial class SettingsWindow : Window
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
         Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
         Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;
+        Settings.DecoderBackend = DecoderBackendCombo.SelectedIndex switch { 1 => DecoderBackend.WicDirect, 2 => DecoderBackend.TurboJpeg, _ => DecoderBackend.Wpf };
         Settings.LoadingMode = LoadingModeCombo.SelectedIndex switch { 1 => LoadingMode.Preview, 2 => LoadingMode.Original, _ => LoadingMode.Fast };
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;

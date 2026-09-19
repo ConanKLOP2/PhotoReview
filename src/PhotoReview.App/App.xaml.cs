@@ -86,11 +86,13 @@ public partial class App : System.Windows.Application
         services.AddSingleton<PreviewImageService>(sp =>
         {
             var ctx = sp.GetRequiredService<PreviewStateContext>();
+            var settingsStore = sp.GetRequiredService<SettingsStore>();
+            ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
             return new PreviewImageService(
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),
                 () => ctx.TargetDecodeWidth(),
-                capacityBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
+                capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>());

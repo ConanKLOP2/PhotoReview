@@ -668,15 +668,23 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     {
         if (_dialogService is null) return;
         var previousMode = _settingsStore.Current.LoadingMode;
+        var previousBackend = _settingsStore.Current.DecoderBackend;
         var changed = _dialogService.ShowSettings();
         if (changed)
         {
             UpdateFolderTitle();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
             var newMode = _settingsStore.Current.LoadingMode;
-            if (previousMode != newMode)
+            var newBackend = _settingsStore.Current.DecoderBackend;
+            if (previousMode != newMode || previousBackend != newBackend)
             {
                 _preloadController?.Cancel();
+                if (previousBackend != newBackend)
+                {
+                    _previewService?.ClearCache();
+                    _previewService?.ClearDisk();
+                    _preloadController?.ClearPreloadedKeys();
+                }
                 if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
                 {
                     _ = _presenter.PresentAsync(_catalog.CurrentIndex);
