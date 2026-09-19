@@ -16,6 +16,7 @@
 - Điều tra timing-flaky: `PreloadScheduler` nay drain tất cả worker task còn được scheduler theo dõi khi cancellation/exception trước khi hoàn tất; trước sửa test mục tiêu fail 9/30 lượt, sau sửa pass 30/30.
 - T89: wheel zoom tính lại ScrollViewer offset theo điểm con trỏ sau khi layout cập nhật; Fit từ nút, phím tắt và compatibility hook đều reset cả hai offset; thêm kiểm thử pure anchor math.
 - T89 follow-up: wheel thường (không cần Ctrl) zoom theo kiểu Windows Photos; đổi `RenderTransform` thành `LayoutTransform` để extent phản ánh kích thước zoom; Fit truyền viewport thật vào `ResetFit`.
+- Phân tích lỗi Fit cần bấm hai lần: lần đầu đo viewport khi scrollbar zoom còn hiện; scrollbar biến mất làm viewport đổi nhưng `ImageScroll.SizeChanged` không bảo đảm chạy. Production presenter còn áp dụng InitialViewMode với `(0,0)`. Plan chi tiết: `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; chưa sửa behavior theo plan mới.
 
 ## Quyết định còn hiệu lực
 
@@ -27,7 +28,7 @@
 
 ## Việc còn lại
 
-1. **T89 — Zoom wheel/Fit:** đã sửa lần hai theo Windows Photos và pass tự động; cần người dùng kiểm tra GUI wheel thường và Fit trên ảnh dọc/ngang.
+1. **T89 — Zoom wheel/Fit:** thực hiện `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; ưu tiên one-click Fit convergence và sửa production InitialViewMode dùng viewport thật.
 2. **Bổ sung T73:** nếu có fixture phù hợp thì kiểm tra Recovery retry và ảnh hỏng/định dạng lạ; không chặn việc tiếp tục T89.
 3. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
 
