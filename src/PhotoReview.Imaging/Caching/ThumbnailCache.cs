@@ -27,6 +27,7 @@ public sealed class ThumbnailCache : IDisposable
     private readonly long _maxDiskBytes;
     private readonly bool _persistNewThumbnails;
     private readonly ILog _log;
+    private readonly SourceBytesCache? _sourceBytesCache;
     private readonly DiskCacheStore _diskStore;
     private readonly BoundedLruCache<string, IDecodedImage> _ramCache;
     private readonly ConcurrentDictionary<string, Lazy<Task<IDecodedImage>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
@@ -43,7 +44,8 @@ public sealed class ThumbnailCache : IDisposable
         long maxRamBytes = 256L * 1024 * 1024,
         long maxDiskBytes = DefaultMaxDiskBytes,
         bool persistNewThumbnails = true,
-        ILog? log = null)
+        ILog? log = null,
+        SourceBytesCache? sourceBytesCache = null)
     {
         if (maxRamBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxRamBytes));
         if (maxDiskBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxDiskBytes));
@@ -54,6 +56,7 @@ public sealed class ThumbnailCache : IDisposable
         _maxDiskBytes = maxDiskBytes;
         _persistNewThumbnails = persistNewThumbnails;
         _log = log ?? NullLog.Instance;
+        _sourceBytesCache = sourceBytesCache;
         _diskStore = new DiskCacheStore(_diskDirectory, "*.png", _maxDiskBytes, _log);
         _ramCache = new BoundedLruCache<string, IDecodedImage>(_maxRamBytes, EstimateBytes, StringComparer.OrdinalIgnoreCase);
     }
@@ -190,11 +193,17 @@ public sealed class ThumbnailCache : IDisposable
     // pre-generating many at once) must not each spawn their own full directory scan.
     private void PruneDiskCache() => _diskStore.SchedulePrune();
 
-    private static Task<IDecodedImage> DecodeAsync(string path, CancellationToken cancellationToken)
+    private Task<IDecodedImage> DecodeAsync(string path, CancellationToken cancellationToken)
     {
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (_sourceBytesCache is not null && (path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)))
+            {
+                var bytes = _sourceBytesCache.GetOrRead(path);
+                return WpfBitmapImageDecoder.DecodeWithFallback(new DecodeRequest(path, MaxThumbnailWidth, ApplyOrientation: true, Bytes: bytes));
+            }
             return WpfBitmapImageDecoder.DecodeWithFallback(new DecodeRequest(path, MaxThumbnailWidth, ApplyOrientation: true));
         }, cancellationToken);
     }

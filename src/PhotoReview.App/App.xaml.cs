@@ -83,7 +83,12 @@ public partial class App : System.Windows.Application
 
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
-        services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(persistNewThumbnails: false, log: sp.GetService<ILog>()));
+        services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
+            persistNewThumbnails: false,
+            log: sp.GetService<ILog>(),
+            sourceBytesCache: sp.GetRequiredService<SettingsStore>().Current.UseSourceBytesCache
+                ? sp.GetRequiredService<SourceBytesCache>()
+                : null));
         services.AddSingleton<SourceBytesCache>(sp => new SourceBytesCache(
             sp.GetRequiredService<SettingsStore>().Current.SourceBytesCapacityBytes));
 

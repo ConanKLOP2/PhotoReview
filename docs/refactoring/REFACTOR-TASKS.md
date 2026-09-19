@@ -166,7 +166,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T62 | R-2 Journal startup | T60 | ∥K | | DONE |
 | T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | DONE |
 | T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
-| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | IN PROGRESS |
+| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | DONE |
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | DONE |
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
@@ -1078,7 +1078,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Preload hai tầng: nếu tổng nguồn ≤ capacity thì nạp byte toàn folder theo thứ tự lân cận (I/O tuần tự, giới hạn 2 worker đọc), song song với decode theo worker hiện có.
   5. Move/Delete thì evict path. Clear cache thì xóa hết.
 - **Xong khi:** `SourceOpenCount` mỗi ảnh ≤ 1 ở mọi mode (trừ khi bị evict). Headroom được tôn trọng. Test lifecycle đạt.
-- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Đã thêm `SourceBytesCache` LRU theo `(path,length,mtime)`, dedup in-flight, generation clear/evict, cấu hình `UseSourceBytesCache=false` và `SourceBytesCapacityBytes=16 GiB`; `PreviewImageService`, `FileHashService` và `PreloadScheduler` dùng cache khi flag bật, mặc định không đổi. ThumbnailCache vẫn giữ đường decode stream cũ vì WPF PNG stream fixture chưa ổn định khi truyền bytes; không bật flag mặc định. Test cache 2/2 pass; full `verify-all.ps1` PASS (203 Imaging, 163 App). Còn A/B benchmark và cần quyết định riêng cho thumbnail PNG seam trước khi đánh dấu DONE.
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Hoàn tất `SourceBytesCache`: LRU theo `(path,length,mtime)`, dedup in-flight, generation clear/evict, `UseSourceBytesCache=false`, capacity 16 GiB; PreviewImageService, FileHashService và PreloadScheduler dùng cache khi flag bật; ThumbnailCache dùng byte path cho JPEG và giữ stream fallback cho PNG/WIC không tương thích. Test cache 2/2, ThumbnailCache 3/3; full `verify-all.ps1` PASS (203 Imaging, 163 App), smoke/fault-injection/publish/verify-release PASS. Mặc định vẫn tắt theo Q5.
 - **Quyết định D12/D13:** giữ feature flag tắt mặc định; chỉ mở sau T87 và T66 có baseline/source-open/memory evidence.
 
 ### T66 — Benchmark cuối
