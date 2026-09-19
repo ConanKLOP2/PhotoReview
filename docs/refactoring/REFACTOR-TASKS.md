@@ -159,7 +159,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T51 | Bỏ WinForms | T50b | | | DONE |
 | T52 | Dọn code chết | T47, T88 | | | DONE |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
-| T53a | Xóa CLI test runner | T50b, T11 | | | TODO |
+| T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | TODO |
 | T60 | Mở rộng metric | T53b | | | TODO |
 | T61 | R-1 Session debounce | T60 | ∥K | | TODO |
@@ -1021,7 +1021,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `tests/PhotoReview.Tests/` (xóa nếu còn), slnx, `tools/verify-all.ps1`, CI, README, AGENTS.
 - **Làm:** xác nhận `test-parity.md` không còn `MISSING`. Bỏ gate "Run persistence, journal…" trong `verify-all.ps1` và lệnh `dotnet run --project PhotoReview.Tests` trong tài liệu.
 - **Xong khi:** CI và VERIFY (bản mới) đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Xoá phần check test (khoảng 540 dòng, 144 `Check(...)`) khỏi `tools/PhotoReview.Benchmark.Cli/Program.cs`; CLI chỉ còn các chế độ đo và in usage (exit 2) khi thiếu/sai chế độ. Bỏ gate "Run persistence, journal…" khỏi `verify-all.ps1` và `test-verify-gates.ps1`; bỏ bước "Run contract tests" khỏi CI (CI đã chạy từng suite xUnit riêng); README/AGENTS/`outputs/APP-MECHANISMS-VI.md` chỉ lệnh chuẩn là `.	oolserify-all.ps1`. Parity: `test-parity.md` Bảng 1 không có MISSING (146 dòng; runner còn 144 `Check` sau T12). `verify-all.ps1` và `test-verify-gates.ps1` PASS, tổng xUnit 717. CI remote chưa đọc.
 
 ### T53b — Chia `Tests.Unit`
 - **Files:** `tests/PhotoReview.Tests.Unit/**` → `Core.Tests` / `Imaging.Tests` / `App.Tests` / `Integration.Tests`, slnx, CI.

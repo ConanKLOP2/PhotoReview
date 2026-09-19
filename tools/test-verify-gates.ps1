@@ -5,7 +5,6 @@ $ErrorActionPreference = 'Stop'
 $verifyScript = Join-Path $PSScriptRoot 'verify-all.ps1'
 $expectedGates = @(
     'Build solution',
-    'Run persistence, journal, keyboard and association contracts',
     'Run xUnit: PhotoReview.Architecture.Tests',
     'Run xUnit: PhotoReview.Core.Tests',
     'Run xUnit: PhotoReview.Imaging.Tests',

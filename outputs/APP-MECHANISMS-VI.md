@@ -56,7 +56,7 @@ Các rủi ro nên kiểm tra khi tối ưu: directory enumeration/network/antiv
 ## Kiểm tra sau thay đổi
 
 ```powershell
-dotnet run --project tools/PhotoReview.Benchmark.Cli -c Release
+.\tools\verify-all.ps1
 dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
 .\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```

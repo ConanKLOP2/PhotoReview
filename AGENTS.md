@@ -31,7 +31,7 @@
 
 - Lệnh chuẩn:
 
-  `dotnet run --project tools/PhotoReview.Benchmark.Cli -c Release`
+  `.\tools\verify-all.ps1` (build + toàn bộ xUnit + smoke + publish + verify-release)
 
   `dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 
