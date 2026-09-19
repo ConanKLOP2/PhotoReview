@@ -16,6 +16,11 @@ public class AppSettings
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
     public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
+    public long ImageCacheCapacityBytes { get; set; } = PerformanceOptions.ImageCacheCapacityBytes;
+    public long MemoryReserveBytes { get; set; } = PerformanceOptions.MemoryReserveBytes;
+    public int PreloadWorkerCount { get; set; } = PerformanceOptions.PreloadWorkerCount;
+    public double PreloadMemoryLoadLimit { get; set; } = PerformanceOptions.PreloadMemoryLoadLimit;
+    public long PreviewDiskCacheCapacityBytes { get; set; } = PerformanceOptions.PreviewDiskCacheCapacityBytes;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
 

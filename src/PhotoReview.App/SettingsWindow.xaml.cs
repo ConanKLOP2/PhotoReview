@@ -36,6 +36,11 @@ public partial class SettingsWindow : Window
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
+            ImageCacheCapacityBytes = current.ImageCacheCapacityBytes,
+            MemoryReserveBytes = current.MemoryReserveBytes,
+            PreloadWorkerCount = current.PreloadWorkerCount,
+            PreloadMemoryLoadLimit = current.PreloadMemoryLoadLimit,
+            PreviewDiskCacheCapacityBytes = current.PreviewDiskCacheCapacityBytes,
             Actions = current.Actions.Select(action => new ReviewAction
             {
                 Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
@@ -92,6 +97,11 @@ public partial class SettingsWindow : Window
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
         Settings.LoggingEnabled = false;
+        Settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
+        Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
+        Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
+        Settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
+        Settings.PreviewDiskCacheCapacityBytes = PerformanceOptions.PreviewDiskCacheCapacityBytes;
         Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 

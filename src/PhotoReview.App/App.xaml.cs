@@ -90,7 +90,7 @@ public partial class App : System.Windows.Application
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),
                 () => ctx.TargetDecodeWidth(),
-                capacityBytes: PerformanceOptions.ImageCacheCapacityBytes,
+                capacityBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>());
@@ -102,9 +102,10 @@ public partial class App : System.Windows.Application
                 sp.GetRequiredService<ReviewMetrics>(),
                 getFiles,
                 getTotalBytes,
-                fullFolderRamThresholdBytes: PerformanceOptions.ImageCacheCapacityBytes,
-                memoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
+                fullFolderRamThresholdBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
+                memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
+                workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,
                 log: sp.GetService<ILog>()));
 
         // 7. ViewModels & Coordinators
