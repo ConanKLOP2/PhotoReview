@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Security.Cryptography;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -12,6 +13,8 @@ namespace PhotoReview.Imaging.Tests.Fixtures;
 /// </summary>
 public static class FixtureGenerator
 {
+    public const string DisplayP3ProfileSha256 = "CB51DE38E482EE974C0C76B9689E16AAD04BAD16E226FED2F30C842D15FF3A3D";
+
     private static readonly string SystemColorDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "spool", "drivers", "color");
 
@@ -119,23 +122,55 @@ public static class FixtureGenerator
     {
         var bitmap = CreateGradientCheckerboard(width, height);
 
-        var profilePath = iccPath ?? FindDefaultSystemIccProfile();
-        ReadOnlyCollection<ColorContext>? colorContexts = null;
+        var profilePath = iccPath ?? GetBundledDisplayP3ProfilePath();
+        if (!File.Exists(profilePath))
+            throw new FileNotFoundException("The deterministic ICC test profile is missing.", profilePath);
 
-        if (profilePath is not null && File.Exists(profilePath))
-        {
-            try
-            {
-                var colorContext = new ColorContext(new Uri(profilePath));
-                colorContexts = new ReadOnlyCollection<ColorContext>(new[] { colorContext });
-            }
-            catch
-            {
-                // Fall back to no color context if profile cannot be loaded
-            }
-        }
+        var colorContext = new ColorContext(new Uri(profilePath));
+        var colorContexts = new ReadOnlyCollection<ColorContext>(new[] { colorContext });
 
         SaveJpeg(bitmap, targetPath, quality, metadata: null, colorContexts: colorContexts);
+        return targetPath;
+    }
+
+    public static string GetBundledDisplayP3ProfilePath()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "tests", "Fixtures", "ColorProfiles", "DisplayP3-v4.icc");
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate tests/Fixtures/ColorProfiles/DisplayP3-v4.icc from the test output directory.");
+    }
+
+    public static void AssertBundledDisplayP3ProfileIntegrity()
+    {
+        var bytes = File.ReadAllBytes(GetBundledDisplayP3ProfilePath());
+        var actual = Convert.ToHexString(SHA256.HashData(bytes));
+        if (!string.Equals(actual, DisplayP3ProfileSha256, StringComparison.Ordinal))
+            throw new InvalidDataException($"Unexpected Display P3 profile SHA-256: {actual}.");
+    }
+
+    public static string GeneratePngWithIcc(string targetPath, int width, int height)
+    {
+        var bitmap = CreateGradientCheckerboard(width, height);
+        var colorContext = new ColorContext(new Uri(GetBundledDisplayP3ProfilePath()));
+        var frame = BitmapFrame.Create(
+            bitmap,
+            thumbnail: null,
+            metadata: null,
+            colorContexts: new ReadOnlyCollection<ColorContext>(new[] { colorContext }));
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(frame);
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        using var stream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        encoder.Save(stream);
         return targetPath;
     }
 

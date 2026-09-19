@@ -53,6 +53,7 @@ public sealed class WicDirectDecoder : IImageDecoder
                 out decoder);
 
             decoder.GetFrame(0, out frame);
+            ThrowIfEmbeddedColorProfile(frame);
             frame.GetSize(out uint origW, out uint origH);
             int orientation = ReadExifOrientation(frame);
 
@@ -87,6 +88,7 @@ public sealed class WicDirectDecoder : IImageDecoder
                 out decoder);
 
             decoder.GetFrame(0, out frame);
+            ThrowIfEmbeddedColorProfile(frame);
             frame.GetSize(out uint origW, out uint origH);
 
             int orientation = request.ApplyOrientation ? ReadExifOrientation(frame) : 1;
@@ -214,6 +216,18 @@ public sealed class WicDirectDecoder : IImageDecoder
             Marshal.ThrowExceptionForHR(hr);
         }
         return factory!;
+    }
+
+    private static void ThrowIfEmbeddedColorProfile(IWICBitmapFrameDecode frame)
+    {
+        frame.GetColorContexts(0, IntPtr.Zero, out uint colorContextCount);
+        if (colorContextCount > 0)
+        {
+            // WicDirect currently converts straight to BGRA without an IWICColorTransform.
+            // Reject profiled pixels so ImageDecoderFactory can use the color-managed WPF path.
+            throw new NotSupportedException(
+                "WicDirect does not yet transform embedded ICC profiles to sRGB.");
+        }
     }
 
     private static int ReadExifOrientation(IWICBitmapFrameDecode frame)

@@ -81,7 +81,7 @@ Thực hiện benchmark bằng lệnh chuẩn `--decoder-bench` trên tập dữ
 Cả 3 backend đều đã vượt qua 100% bộ kiểm thử cổng chất lượng tự động `DecoderQualityGateTests` (`PhotoReview.Imaging.Tests/Quality/DecoderQualityGateTests.cs`, Category=Quality, 14/14 test pass):
 - **Kích thước & Tỉ lệ (QG-1):** Độ phân giải pixel sau giải mã chính xác (±0 px sai lệch).
 - **EXIF Orientation (QG-2):** Tự động chuẩn hóa đúng cả 8 cờ xoay/lật EXIF.
-- **Độ trung thực màu sắc & ICC (QG-3):** Độ tương đồng màu sắc PSNR ≥ 40 dB so với ảnh chuẩn WPF. Hỗ trợ đầy đủ color context sRGB/AdobeRGB.
+- **Độ trung thực màu sắc & ICC (QG-3):** Ảnh không có ICC được so pixel với WPF. Với ảnh có ICC, WicDirect phát hiện color context và ném `NotSupportedException` để factory fallback sang WPF; chưa có `IWICColorTransform`, nên không tuyên bố WicDirect tự biến đổi sRGB/AdobeRGB/Display P3.
 - **Khả năng chịu lỗi (QG-4):** Tệp hỏng, tệp 0-byte, tệp text giả mạo, hoặc tệp bị cắt cụt đều được xử lý an toàn bằng typed exception (`IOException`, `InvalidDataException`, `NotSupportedException`). **Tuyệt đối không crash tiến trình, không gây `AccessViolationException`**.
 - **An toàn tệp (QG-5 & Bất biến INV-8):** Toàn bộ file handles được giải phóng ngay lập tức sau khi nạp luồng byte; không giữ lock trên đĩa.
 - **Chuẩn hóa PixelFormat (QG-6 & Bất biến INV-9):** Định dạng trả về luôn được chuẩn hóa thành `PixelFormats.Bgr32` hoặc `PixelFormats.Bgra32` với DPI 96×96.
@@ -104,6 +104,7 @@ Cả 3 backend đều đã vượt qua 100% bộ kiểm thử cổng chất lư�
 2. **Chọn kiến trúc Fallback đa tầng có khả năng chịu lỗi cao (`FallbackImageDecoder` - Bất biến INV-12):**
    - Bộ giải mã chính là `WicDirect`.
    - Nếu xảy ra lỗi không lường trước khi giải mã tệp (ví dụ codec đặc thù của bên thứ ba bị lỗi COM), hệ thống sẽ tự động fallback sang `WpfBitmapImageDecoder`. Người dùng luôn xem được ảnh mà không bị gián đoạn.
+   - Ảnh có embedded ICC cũng đi qua fallback này. Đây là giới hạn chất lượng có chủ đích cho đến khi WicDirect có `IWICColorTransform` và cổng so màu tương ứng.
 3. **Giữ `TurboJpeg` làm Module mở rộng tùy chọn (Secondary / Optional Backend):**
    - Giữ nguyên project độc lập `PhotoReview.Imaging.TurboJpeg`.
    - Người dùng có thể tùy chọn chuyển đổi backend trong cửa sổ Cài đặt (Settings) khi tính năng này được kết nối ở Task T87.

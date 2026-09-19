@@ -110,34 +110,31 @@ public sealed class DecoderQualityGateTests : IDisposable
         var iccJpegPath = Path.Combine(_tempDir, "icc_profile.jpg");
         var generated = FixtureGenerator.GenerateJpegWithIcc(iccJpegPath, 128, 96);
 
-        if (!File.Exists(generated))
-        {
-            return; // Skip if environment has no default system ICC profile
-        }
-
         var bytes = File.ReadAllBytes(generated);
-        bool hasIcc = TurboJpegDecoder.HasEmbeddedIccProfile(bytes);
-        if (!hasIcc)
-        {
-            return;
-        }
+        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(bytes),
+            "The deterministic fixture must contain a JPEG APP2 ICC profile.");
 
-        // 1. WPF and WicDirect can decode images with embedded ICC profiles
+        // WPF is the color-managed reference and direct WIC must reject profiled pixels
+        // until an explicit IWICColorTransform is implemented.
         var decodedWpf = _wpfDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
-        var decodedWic = _wicDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
         Assert.NotNull(decodedWpf);
-        Assert.NotNull(decodedWic);
+        Assert.Throws<NotSupportedException>(() =>
+            _wicDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0)));
+        Assert.Throws<NotSupportedException>(() => _wicDecoder.ReadInfo(generated));
 
         // 2. TurboJpeg throws NotSupportedException to reject ICC rather than render incorrect colors
         Assert.Throws<NotSupportedException>(() => _turboDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0)));
 
-        // 3. FallbackImageDecoder transparently resolves TurboJpeg to WPF fallback (INV-12)
-        var fallbackDecoder = _factory.Create(DecoderBackend.TurboJpeg);
-        var decodedFallback = fallbackDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
-        Assert.NotNull(decodedFallback);
-        Assert.Equal(128, decodedFallback.PixelWidth);
-        Assert.Equal(96, decodedFallback.PixelHeight);
-        Assert.Equal(DecoderBackend.Wpf, decodedFallback.ActualBackend);
+        // Both unsafe direct paths transparently resolve to WPF (INV-12).
+        foreach (var backend in new[] { DecoderBackend.WicDirect, DecoderBackend.TurboJpeg })
+        {
+            var fallbackDecoder = _factory.Create(backend);
+            var decodedFallback = fallbackDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
+            Assert.Equal(128, decodedFallback.PixelWidth);
+            Assert.Equal(96, decodedFallback.PixelHeight);
+            Assert.Equal(DecoderBackend.Wpf, decodedFallback.ActualBackend);
+            Assert.Equal(128, fallbackDecoder.ReadInfo(generated).PixelWidth);
+        }
     }
 
     [Theory(DisplayName = "QG-3: All 8 EXIF orientations map correctly across all backends")]

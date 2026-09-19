@@ -36,7 +36,9 @@ Tài liệu này mô tả hệ thống fixture ảnh mẫu và các công cụ �
   - Hỗ trợ các giá trị từ 1 đến 8 theo chuẩn TIFF/EXIF tag `0x0112` (`/app1/ifd/{ushort=274}`).
   - Kiểm tra khả năng xoay đúng hướng của các backend decoder khác nhau.
 - **Profile màu ICC:**
-  - Nhúng profile màu qua `ColorContext` (mặc định lấy từ `%WINDIR%\System32\spool\drivers\color` trên Windows).
+  - Fixture dùng `ColorProfiles/DisplayP3-v4.icc` cố định, SHA-256 `CB51DE38E482EE974C0C76B9689E16AAD04BAD16E226FED2F30C842D15FF3A3D`.
+  - Profile lấy từ `saucecontrol/Compact-ICC-Profiles`, phát hành public domain theo CC0-1.0; bản license đi kèm trong cùng thư mục.
+  - WicDirect hiện từ chối ảnh có color context bằng `NotSupportedException`, để factory fallback sang WPF thay vì trả pixel chưa biến đổi sang sRGB.
 - **File hỏng (Corrupt / Fault Injection):**
   - File rỗng 0 byte.
   - File JPEG bị cắt ngắn còn 50% byte (`truncated`).
