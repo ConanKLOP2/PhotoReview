@@ -116,16 +116,16 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T21c | `JournalEntry` dùng enum | T21a | | | DONE |
 | T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | DONE |
 | T25a | `SettingsStore` | T24 | | | DONE |
-| T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | TODO |
-| T26a | `OperationJournal` qua abstraction | T24 | ∥E | | TODO |
-| T26b | `SessionStore` qua abstraction | T24 | ∥E | | TODO |
+| T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | DONE |
+| T26a | `OperationJournal` qua abstraction | T24 | ∥E | | DONE |
+| T26b | `SessionStore` qua abstraction | T24 | ∥E | | DONE |
 | T26c | `RecoveryRetryService` thành instance | T26a | | | DONE |
 | T30 | Tạo Imaging, Platform, Imaging.Tests, Integration.Tests | T25b, T26b, T26c | | | DONE |
 | T31a | `DiskCacheStore` thành instance | T30 | ∥F | | DONE |
 | T31b | `IImageDecoder` + `WpfBitmapImageDecoder` | T30 | ∥F | | DONE |
-| T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | TODO |
-| T33a | Chuyển Explorer sang Platform | T30 | ∥F | | TODO |
-| T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | TODO |
+| T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | DONE |
+| T33a | Chuyển Explorer sang Platform | T30 | ∥F | | DONE |
+| T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | DONE |
 | T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | DONE |
 | T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | DONE |
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | DONE |
@@ -153,7 +153,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T46c | `MainViewModel`: duplicate, recovery, diagnostics, settings | T46b, T42c | | | DONE |
 | T46d | `MainWindow` binding, rút gọn code-behind | T46c | | | DONE |
 | T47 | Xóa test source-presence | T46d | | | TODO |
-| T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | TODO |
+| T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | DONE |
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | TODO |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | TODO |
 | T51 | Bỏ WinForms | T50b | | | TODO |
@@ -822,7 +822,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/Views/MainWindow.xaml`, `{Core}/Settings/AppSettings.cs` (`ScalingQuality`, mặc định `HighQuality`), `{App}/Views/SettingsWindow.xaml(.cs)`, `{App}/ViewModels/ViewerState.cs` (property), test ViewModel.
 - **Làm:** bind `RenderOptions.BitmapScalingMode` của `MainImage`, `CompareLeftImage`, `CompareRightImage` theo setting. `HighQuality` → `BitmapScalingMode.HighQuality`, `Linear` → `Linear`.
 - **Xong khi:** VERIFY đạt. Kiểm thủ công zoom 400% ở cả hai chế độ và ghi nhận xét về độ mượt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Thêm `AppSettings.ScalingQuality` (mặc định HighQuality), `ViewerState.ScalingQuality`, `ScalingQualityConverter`, bind `RenderOptions.BitmapScalingMode` cho MainImage/CompareLeft/CompareRight, combo trong Settings (đồng bộ lại sau khi lưu). Test: 2 test mới trong `ViewerStateTests`; `verify-all.ps1` PASS (App.Tests 91). **Chưa** kiểm thủ công zoom 400% hai chế độ; cần người dùng nhận xét độ mượt.
 
 ---
 

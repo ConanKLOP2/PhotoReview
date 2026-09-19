@@ -35,6 +35,9 @@ public sealed partial class ViewerState : ObservableObject
     private bool _isFullscreen;
 
     [ObservableProperty]
+    private ScalingQuality _scalingQuality = ScalingQuality.HighQuality;
+
+    [ObservableProperty]
     private double _maxImageWidth = double.PositiveInfinity;
 
     [ObservableProperty]

@@ -16,6 +16,7 @@ public class AppSettings
     public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Name;
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
+    public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
 

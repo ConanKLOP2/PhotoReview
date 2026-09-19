@@ -86,6 +86,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _previewService = previewService;
         _thumbnailCache = thumbnailCache;
         Metrics = metrics ?? new ReviewMetrics();
+        _viewerState.ScalingQuality = Settings.ScalingQuality;
     }
 
     public ReviewMetrics Metrics { get; }
@@ -668,6 +669,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         if (changed)
         {
             UpdateFolderTitle();
+            _viewerState.ScalingQuality = Settings.ScalingQuality;
             var newMode = _settingsStore.Current.LoadingMode;
             if (previousMode != newMode)
             {

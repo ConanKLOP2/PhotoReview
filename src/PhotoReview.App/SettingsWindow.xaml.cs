@@ -33,6 +33,7 @@ public partial class SettingsWindow : Window
             InitialViewMode = current.InitialViewMode,
             LoadingMode = current.LoadingMode,
             ImageSortMode = current.ImageSortMode,
+            ScalingQuality = current.ScalingQuality,
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
@@ -84,6 +85,7 @@ public partial class SettingsWindow : Window
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
+        ScalingQualityCombo.SelectedIndex = Settings.ScalingQuality == ScalingQuality.Linear ? 1 : 0;
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
@@ -92,7 +94,7 @@ public partial class SettingsWindow : Window
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
         Settings.LoggingEnabled = false;
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -106,6 +108,7 @@ public partial class SettingsWindow : Window
         Settings.Folder2Name = Folder2Text.Text.Trim();
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
         Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
+        Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;
         Settings.LoadingMode = LoadingModeCombo.SelectedIndex switch { 1 => LoadingMode.Preview, 2 => LoadingMode.Original, _ => LoadingMode.Fast };
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;

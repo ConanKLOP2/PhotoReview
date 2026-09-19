@@ -16,7 +16,7 @@
         <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8"><StackPanel KeyboardNavigation.TabNavigation="Local">
             <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <TextBlock Text="Folder chuyển tới (loại 2)" Margin="0,7,10,7"/>
             <TextBox x:Name="Folder2Text" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
             <TextBlock Text="Chế độ mở ảnh" Grid.Row="1" Margin="0,7,10,7"/>
@@ -27,6 +27,8 @@
             <ComboBox x:Name="SortModeCombo" Grid.Row="3" Grid.Column="1"><ComboBoxItem Content="Theo tên kiểu Explorer" Tag="Name"/><ComboBoxItem Content="Theo kích thước tăng dần" Tag="SizeAscending"/><ComboBoxItem Content="Theo kích thước giảm dần" Tag="SizeDescending"/></ComboBox>
             <CheckBox x:Name="CompareHashCheck" Grid.Row="4" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" Margin="0,4,0,8" IsChecked="True"/>
             <CheckBox x:Name="CompareSizeCheck" Grid.Row="5" Grid.Column="1" Content="Compare kích thước file" Margin="0,4,0,8" IsChecked="True"/>
+            <TextBlock Text="Chất lượng thu phóng" Grid.Row="6" Margin="0,7,10,7"/>
+            <ComboBox x:Name="ScalingQualityCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Chất lượng thu phóng ảnh"><ComboBoxItem Content="Cao (HighQuality)"/><ComboBoxItem Content="Nhanh (Linear, mượt hơn khi zoom)"/></ComboBox>
             </Grid></GroupBox>
             <GroupBox Header="Chẩn đoán"><StackPanel><CheckBox x:Name="LoggingCheck" Content="Bật ghi log chẩn đoán (mặc định tắt)"/><Button Content="Mở vị trí file log" AutomationProperties.Name="Mở vị trí file log" HorizontalAlignment="Left" Padding="12,7" Click="OpenLogLocation_Click"/></StackPanel></GroupBox>
             <GroupBox Header="Phím tắt · nhấn phím trực tiếp vào ô để cấu hình"><Grid>
