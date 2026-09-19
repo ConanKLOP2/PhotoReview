@@ -152,7 +152,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T46b | `MainViewModel`: file action + undo | T46a, T42b | | | DONE |
 | T46c | `MainViewModel`: duplicate, recovery, diagnostics, settings | T46b, T42c | | | DONE |
 | T46d | `MainWindow` binding, rút gọn code-behind | T46c | | | DONE |
-| T47 | Xóa test source-presence | T46d | | | TODO |
+| T47 | Xóa test source-presence | T46d | | | DONE |
 | T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | DONE |
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | TODO |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | TODO |
@@ -984,7 +984,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{UT}/SourcePresenceTests.cs`, `{UT}/TestInfrastructure.cs` (`ProjectSources`), test trong `ServiceBehaviorTests` dùng `.Contains(` trên source, `{UT}/MainWindowBehaviorTests*.cs`, `test-parity.md`.
 - **Làm:** theo bảng 3 của T10: `REPLACE-BY` thì xóa và ghi tên test thay thế; `KEEP-XAML` thì viết lại bằng `XDocument` (tối đa 5 test); `DROP` thì xóa.
 - **Xong khi:** `git grep -n "\.Contains(" -- tests | grep -i source` không còn kết quả kiểm tra file `.cs`.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Xoá 58 test trong `SourcePresenceTests` + 2 trong `CacheExplorerRegressionTests` sau khi đối chiếu từng test thay thế có thật (bảng ở cuối `test-parity.md`, mục "T47 outcome"); viết lại 3 test XAML bằng `XDocument`. Giữ 10 test source-presence chưa có thay thế (Settings code-behind, HWND, ThumbnailCache chưa dùng DiskCacheStore, T64, script). Tiêu chí "không còn .Contains trên .cs" chưa đạt hoàn toàn. Tests.Unit 257 → 199; `verify-all.ps1` xem dưới.
 
 ---
 

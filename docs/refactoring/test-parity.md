@@ -339,3 +339,27 @@ Cột **Dòng** là số dòng của attribute `[Fact(DisplayName = ...)]` trong
    # Kết quả thực tế: 0 tên không tồn tại (69/69 khớp)
    ```
 4. **Tên test tham chiếu trong cột DROP tồn tại thật** trong `ServiceBehaviorTests.cs` (`NaturalFilenameSortOrdersNumericSuffixes` dòng 235, `NaturalFilenameSortHandlesLongNumericRuns` dòng 244, `SizeSortOrdersFilesByDescendingBytes` dòng 252, `SizeSortOrdersFilesByAscendingBytes` dòng 260, `FileHashServiceCachesAndInvalidates` dòng 338, `FileHashServiceDeduplicatesConcurrentReads` dòng 355) — cả 6/6 FOUND.
+
+---
+
+## T47 outcome (2026-09-19)
+
+`SourcePresenceTests` giảm từ 69 test xuống 13 (3 test XAML + 10 test source-presence giữ lại), và 2 test source-presence trong `CacheExplorerRegressionTests` bị xoá. Tổng `Tests.Unit`: 257 → 199.
+
+**Đã xoá (58 + 2), mỗi nhóm có test hành vi thay thế đang tồn tại:**
+
+| Nhóm | Test bị xoá | Thay bằng |
+|---|---|---|
+| INV-3/4/5 (advance-before-action, gate) | 26, 32, 71, 75, 80, 85 | `MainViewModelFileActionTests::RunActionAsync_*` (INV-3/4/5), `MainWindowBehaviorTests.Actions/FolderSwitch` |
+| INV-7/9 (Explorer order) | 191, 197, 202, 206, 212, 217 | `FolderLoadCoordinatorTests::LoadAsync_WithExplorerOrder_*`, `LoadAsync_DirectFileOpen_*`, `MainWindowBehaviorTests.Explorer`, `MainViewModelNavigationTests` |
+| Phím tắt | 49, 58, 63, 90, 94, 98, 104, 108, 113, 117, 257 (phần Esc) | `ShortcutRouterTests`, `ServiceBehaviorTests::ShortcutValidatorReportsCrossScopeConflicts`, `MainViewModelNavigationTests` |
+| Compare | 133, 137, 142, 147, 242, 252 | `CompareViewModelTests`, `ShortcutRouterTests::Compare_*` |
+| Presenter / dialogs / advanced | 36, 40, 247, 221, 356, 368, 374, 379, 383, 387, 392, 128 (phần XAML chuyển sang test XAML), 182, 318, 228, 262, 362 | `ImagePresenterTests`, `MainViewModelAdvancedTests`, `MainViewModelFileActionTests`, `OperationJournalTests`, `SettingsStoreTests`, `PreviewImageServiceDiskCacheTests` |
+| DROP (4) | 167, 172, 178, 237 | `ServiceBehaviorTests::NaturalFilenameSort*`, `SizeSortOrders*`, `FileHashService*` |
+| `CacheExplorerRegressionTests` (2 source check) | reindex current path, late snapshot | `FolderLoadCoordinatorTests::LoadAsync_WithExplorerOrder_*` |
+
+**Chuyển sang `XDocument` (KEEP-XAML, gộp thành 3 test):** accessible names (MainWindow/Recovery/Settings), lifecycle + drag-drop + compare + overlay của `MainWindow.xaml`, text của Recovery/Diagnostics XAML.
+
+**Giữ lại vì chưa có test hành vi thay thế (10):** `SettingsDefaultsResetCompareOptions`, `OpenLogLocationFollowsConfiguredAppLogPath`, `EachBuildExposesUniqueInformationalBuildStamp` (Settings code-behind, chưa có view model), `RamCachePolicyTargets...` (chờ T64), `WindowShutdownDisposes...`, `NativeWindowPlacementRestoresAndPersists`, `SavedPlacementIsRejectedWhenMonitorIsGone` (cần HWND/đa màn hình thật), `DiskThumbnailCache...` và `DiskCacheCleanupTolerates...` (`ThumbnailCache` chưa dùng `DiskCacheStore`, xoá sẽ mất kiểm tra quota), `FileAssociationCommandIsRegistered` (script).
+
+Vì vậy tiêu chí "không còn `.Contains(` kiểm tra file `.cs`" **chưa đạt hoàn toàn**: còn 9 test đọc `.cs`/`.csproj` như trên. Chúng mất khi T52/T64/T31 có thay thế thật. Các marker tương thích T46d trong `MainWindow`/`AppSettings.cs` vẫn còn vì các test đó cần; gỡ ở T52.

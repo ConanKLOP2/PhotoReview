@@ -4,7 +4,7 @@
 
 - `refactor/integration` đã fast-forward lên nhánh fix `codex/merged-review-fixes` (MR01–MR06 DONE, F01–F07 resolved; xem `docs/refactoring/results/merged-code-review-validation.md`). PR vào `master` chưa mở (máy chưa có `gh`).
 - T88 (ScalingQuality) DONE, chờ nhận xét thủ công zoom 400% ở hai chế độ.
-- **T47 chưa làm.** Bảng 3 của `test-parity.md` ánh xạ 58 test source-presence sang task thay thế, nhưng cần xác minh từng test thay thế thực sự tồn tại (T64 còn TODO; T46d để lại marker tương thích trong MainWindow cho các test này) trước khi xoá.
+- **T47 DONE (an toàn):** xoá 60 test đã có thay thế thật, giữ 10 test chưa có thay thế; chi tiết ở `test-parity.md` mục "T47 outcome". Tiếp theo: T52 (dọn marker T46d, code chết), T50a/b, T87 (chờ Q8).
 - Chờ quyết định: Q2 (BenchmarkWindow), Q5, Q8, phạm vi D07.
 - Bảng `REFACTOR-TASKS.md` đã đồng bộ T25b/T26a/T26b/T32/T33a/T33b sang DONE theo mô tả Wave 3 ở dưới; nên đối chiếu lại với code.
 

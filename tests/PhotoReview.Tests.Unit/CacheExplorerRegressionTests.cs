@@ -109,22 +109,4 @@ public sealed class CacheExplorerRegressionTests : IDisposable
         Assert.False(ExplorerSnapshotValidator.TryValidate(Snapshot() with { OrderedPaths = ["not-a-path"] },
             [_a, _b, _c], out _, out _));
     }
-
-    // The UI must keep the selected path after native reindex; this contract protects
-    // E-001/E-002/E-013 wiring. Source-text presence check, not behavior.
-    [Fact(DisplayName = "Explorer reindex uses current path and records the applied order")]
-    public void ExplorerReindexUsesCurrentPathAndRecordsAppliedOrder()
-    {
-        var source = ProjectSources.MainWindow;
-        Assert.True(source.Contains("currentPath", StringComparison.Ordinal)
-            && source.Contains("Explorer native order applied", StringComparison.Ordinal));
-    }
-
-    [Fact(DisplayName = "Late Explorer snapshots cannot reorder an interacted catalog")]
-    public void LateExplorerSnapshotsCannotReorderInteractedCatalog()
-    {
-        var source = ProjectSources.MainWindow;
-        Assert.True(source.Contains("_catalogInteractionGeneration", StringComparison.Ordinal)
-            && source.Contains("Explorer native order ignored after catalog interaction", StringComparison.Ordinal));
-    }
 }
