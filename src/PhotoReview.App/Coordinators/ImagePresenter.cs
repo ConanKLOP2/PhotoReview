@@ -30,6 +30,7 @@ public sealed class ImagePresenter
     private readonly ReviewMetrics _metrics;
     private readonly Func<AppSettings> _getSettings;
     private readonly SessionStore? _sessionStore;
+    private readonly SessionWriter? _sessionWriter;
     private readonly IPresentationSink _sink;
     private readonly IFileSystem? _fileSystem;
     private readonly Func<SessionState?>? _getSession;
@@ -49,7 +50,8 @@ public sealed class ImagePresenter
         IPresentationSink sink,
         IFileSystem? fileSystem = null,
         Func<SessionState?>? getSession = null,
-        Action<string>? onPresentedHook = null)
+        Action<string>? onPresentedHook = null,
+        SessionWriter? sessionWriter = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -65,6 +67,7 @@ public sealed class ImagePresenter
         _fileSystem = fileSystem;
         _getSession = getSession;
         _onPresentedHook = onPresentedHook;
+        _sessionWriter = sessionWriter;
     }
 
     public ReviewCatalog Catalog => _catalog;
@@ -262,7 +265,8 @@ public sealed class ImagePresenter
 
                 long perfSession = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.PostStart(token, "session");
-                _sessionStore.Save(session);
+                if (_sessionWriter is not null) _sessionWriter.Update(session); // debounced; flushed on folder change and shutdown
+                else _sessionStore.Save(session);
                 if (perf) PhotoReviewPerf.Log.PostEnd(token, "session", PhotoReviewPerf.Ms(perfSession));
             }
 

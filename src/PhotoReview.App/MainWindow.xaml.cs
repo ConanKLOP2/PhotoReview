@@ -146,6 +146,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
+        _viewModel.FlushSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         _explorerOrder?.Dispose();
     }

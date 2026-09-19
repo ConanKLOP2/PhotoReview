@@ -42,6 +42,7 @@ public partial class App : System.Windows.Application
             sp.GetRequiredService<IAppPaths>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<ReviewMetrics>()));
+        services.AddSingleton<SessionWriter>(sp => new SessionWriter(sp.GetRequiredService<SessionStore>(), sp.GetRequiredService<ILog>()));
 
         // 3. Journal & File Actions
         services.AddSingleton<OperationJournal>(sp => new OperationJournal(
@@ -119,6 +120,7 @@ public partial class App : System.Windows.Application
             var compare = sp.GetRequiredService<PhotoReview.App.ViewModels.CompareViewModel>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
             var sessionStore = sp.GetRequiredService<SessionStore>();
+            var sessionWriter = sp.GetRequiredService<SessionWriter>();
             var fs = sp.GetRequiredService<IFileSystem>();
             var actions = sp.GetRequiredService<FileActionService>();
             var undo = sp.GetRequiredService<UndoService>();
@@ -166,15 +168,16 @@ public partial class App : System.Windows.Application
             var presenter = new PhotoReview.App.Coordinators.ImagePresenter(
                 catalog, clock, preview, thumbs, preloadController, compare, hash,
                 sp.GetRequiredService<ReviewMetrics>(),
-                () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session);
+                () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session,
+                sessionWriter: sessionWriter);
 
             var coordinator = new PhotoReview.App.Coordinators.FolderLoadCoordinator(
                 catalog, clock, explorerOrder, fs, sessionStore, settingsStore,
-                new ForwardingFolderSink(() => vm!));
+                new ForwardingFolderSink(() => vm!), sessionWriter);
 
             return vm = new PhotoReview.App.ViewModels.MainViewModel(
                 catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
-                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs);
+                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter);
         });
 
         // 8. Window
@@ -212,7 +215,7 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, a) => { AppLog.Error("Dispatcher exception", a.Exception); a.Handled = true; };
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
-        Exit += (_, _) => { AppLog.Shutdown(); _instanceLock?.Dispose(); _perfHooks?.Detach(); _perfListener?.Dispose(); };
+        Exit += (_, _) => { _services?.GetService<SessionWriter>()?.Flush(); AppLog.Shutdown(); _instanceLock?.Dispose(); _perfHooks?.Detach(); _perfListener?.Dispose(); };
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
         var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;

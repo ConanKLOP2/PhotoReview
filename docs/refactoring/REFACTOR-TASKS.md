@@ -162,7 +162,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |
 | T60 | Mở rộng metric | T53b | | | DONE |
-| T61 | R-1 Session debounce | T60 | ∥K | | TODO |
+| T61 | R-1 Session debounce | T60 | ∥K | | DONE |
 | T62 | R-2 Journal startup | T60 | ∥K | | TODO |
 | T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | TODO |
 | T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | TODO |
@@ -1043,7 +1043,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{Core}/Session/SessionWriter.cs`, `ImagePresenter`/`MainViewModel` (đổi `Save` thành `writer.Update`), `App.xaml.cs` (flush khi thoát), test.
 - **Làm:** debounce 500 ms bằng `IClock` + timer inject được. Ghi trên worker, vẫn atomic. Có `FlushAsync()`. Đổi folder thì flush folder cũ trước.
 - **Xong khi:** 100 lần update chỉ ghi ≤ 2 lần. Test flush khi thoát và khi đổi folder đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Thêm `Core/Session/SessionWriter`: `Update(state)` sao chép state theo folder và lên lịch một lần ghi sau 500 ms (cửa sổ debounce cố định, không kéo dài khi có update mới nên luôn ≤ 1 lần ghi / 500 ms), ghi trên worker qua `SessionStore.Save` (vẫn atomic), `Flush()`/`FlushAsync()`, `Dispose` flush, timer inject được (`Func<TimeSpan,CancellationToken,Task>`), lỗi IO được log và bỏ qua. Nối dây (tham số tuỳ chọn `SessionWriter?` nên test cũ không đổi): `ImagePresenter` → `Update`; `MainViewModel` (5 chỗ Save → `PersistSession`) ; `Flush` trước mỗi `SessionStore.Load` khi mở folder (`MainViewModel`, `FolderLoadCoordinator`); `MainViewModel.FlushSession()` gọi từ `MainWindow.Window_Closed` và `App.Exit`. Test: 7 ở `SessionWriterTests` (100 update → 1 write, flush shutdown, flush đổi folder, nhiều folder, copy state, dispose) + 1 ở `ImagePresenterTests`; `verify-all.ps1` PASS. **Khác mô tả:** dùng delay inject thay vì `IClock` (IClock không có timer). **Chưa làm:** đo "số lần ghi / 100 lần Next" trên app thật (T66); crash giữa cửa sổ debounce làm mất tối đa 500 ms trạng thái session (chấp nhận theo thiết kế R-1).
 
 ### T62 — R-2 Journal startup ∥K
 - **Files:** `{Core}/FileActions/OperationJournal.cs`, `UndoService.LoadFromJournal`, test.

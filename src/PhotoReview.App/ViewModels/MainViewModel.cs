@@ -30,6 +30,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     private readonly CompareViewModel _compare;
     private readonly SettingsStore _settingsStore;
     private readonly SessionStore _sessionStore;
+    private readonly SessionWriter? _sessionWriter;
     private readonly FileActionService? _fileActionService;
     private readonly UndoService? _undoService;
     private readonly IDialogService? _dialogService;
@@ -65,7 +66,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         FileHashService? hashService = null,
         PreviewImageService? previewService = null,
         ThumbnailCache? thumbnailCache = null,
-        ReviewMetrics? metrics = null)
+        ReviewMetrics? metrics = null,
+        SessionWriter? sessionWriter = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -86,6 +88,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _previewService = previewService;
         _thumbnailCache = thumbnailCache;
         Metrics = metrics ?? new ReviewMetrics();
+        _sessionWriter = sessionWriter;
         _viewerState.ScalingQuality = Settings.ScalingQuality;
     }
 
@@ -235,7 +238,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         {
             _currentSession.Skipped.Add(currentPath);
             _currentSession.UpdatedUtc = DateTime.UtcNow;
-            _sessionStore.Save(_currentSession);
+            PersistSession(_currentSession);
         }
 
         var nextIdx = Math.Min(_catalog.CurrentIndex + 1, _catalog.Count - 1);
@@ -383,7 +386,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
                 {
                     _currentSession.CurrentPath = _catalog.Current?.Path;
                     _currentSession.UpdatedUtc = DateTime.UtcNow;
-                    _sessionStore.Save(_currentSession);
+                    PersistSession(_currentSession);
                 }
 
                 if (_catalog.Count == 0)
@@ -444,7 +447,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
             {
                 _currentSession.CurrentPath = result.Source;
                 _currentSession.UpdatedUtc = DateTime.UtcNow;
-                _sessionStore.Save(_currentSession);
+                PersistSession(_currentSession);
             }
         }
 
@@ -483,7 +486,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
             {
                 _currentSession.CurrentPath = result.Source;
                 _currentSession.UpdatedUtc = DateTime.UtcNow;
-                _sessionStore.Save(_currentSession);
+                PersistSession(_currentSession);
             }
         }
         else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
@@ -492,7 +495,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
             {
                 _currentSession.CurrentPath = result.Source;
                 _currentSession.UpdatedUtc = DateTime.UtcNow;
-                _sessionStore.Save(_currentSession);
+                PersistSession(_currentSession);
             }
 
             var folder = Path.GetDirectoryName(result.Source);
@@ -682,6 +685,15 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         }
     }
 
+    private void PersistSession(SessionState session)
+    {
+        if (_sessionWriter is not null) _sessionWriter.Update(session);
+        else _sessionStore.Save(session);
+    }
+
+    /// <summary>Writes any debounced session state now (window close, folder change).</summary>
+    public void FlushSession() => _sessionWriter?.Flush();
+
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 
     private void UpdateFolderTitle(string? folder = null)
@@ -735,6 +747,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
 
     void IFolderLoadSink.OnCatalogReady(string folder, int count)
     {
+        _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
         FolderText = $"{folder}  ({count} ảnh)";
         UpdateFolderTitle(folder);
@@ -751,6 +764,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
 
     void IFolderLoadSink.OnEmpty(string folder)
     {
+        _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
         FolderText = $"{folder}  (0 ảnh)";
         UpdateFolderTitle(folder);

@@ -19,6 +19,7 @@ public sealed class FolderLoadCoordinator : IDisposable
     private readonly IExplorerOrderProvider _explorerOrder;
     private readonly IFileSystem _fileSystem;
     private readonly SessionStore _sessionStore;
+    private readonly SessionWriter? _sessionWriter;
     private readonly SettingsStore _settingsStore;
     private readonly IFolderLoadSink _sink;
 
@@ -32,7 +33,8 @@ public sealed class FolderLoadCoordinator : IDisposable
         IFileSystem fileSystem,
         SessionStore sessionStore,
         SettingsStore settingsStore,
-        IFolderLoadSink sink)
+        IFolderLoadSink sink,
+        SessionWriter? sessionWriter = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -41,6 +43,7 @@ public sealed class FolderLoadCoordinator : IDisposable
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
+        _sessionWriter = sessionWriter;
     }
 
     /// <summary>
@@ -120,6 +123,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             }
 
             _sink.ResetCaches();
+            _sessionWriter?.Flush(); // a pending write for this folder must be visible to Load
             var session = _sessionStore.Load(folder);
             _catalog.Reset(files);
             _sink.OnCatalogReady(folder, _catalog.Count);
