@@ -18,6 +18,7 @@
 - Sau khi reset máy, đã chạy một cold-os cell S3/F1/Preview với `-ColdOsConfirmed`: pass, `idleTimeouts=0`, `errors=0`, 200 Next, presented=143, hits=141, misses=43, peak working set khoảng 671 MB. Summary tại `work/diag/runs/d07-w6-cold-os-s3-20260919/20260919-214205`. Theo quy tắc cold-os chỉ chạy một cell sau mỗi reset; cần reset lại nếu muốn đo cold-os scenario khác.
 - Dọn comment đợt 1 DONE: bỏ comment migration đã lỗi thời ở `WindowsNaturalComparer` và rút gọn mô tả `PerformanceOptions`; giữ nguyên compatibility markers, contract/race/platform comments và source-presence rationale. Commit `eb689e1`; `SettingsStoreTests` 7/7 pass.
 - T52 phần settings đã DONE: thêm các performance defaults vào `AppSettings`, giữ giá trị mặc định tương thích, preserve qua `SettingsWindow`, và wiring `PreviewImageService`/`PreloadScheduler` lấy capacity, memory limit và worker count từ `SettingsStore.Current` (chưa hiển thị UI). Commit `4b68a6f`. Compatibility marker T46d vẫn còn vì 10 source-presence tests đang kiểm tra; phần gỡ marker cần task mở rộng riêng. Full `verify-all.ps1` sau thay đổi: 734 passed, 0 failed, 0 skipped; smoke/fault-injection/publish/verify-release PASS.
+- D12 IN PROGRESS: tạo `docs/refactoring/diagnosis/REPORT.md` từ D07 reduced, worker/flag matrix và cold-os S3. D07 reduced đã đủ bằng chứng cho báo cáo; D08/D09/D02 vẫn là phần chưa đo sâu. D13 chỉ thực hiện sau khi người dùng xác nhận mục tiêu hiệu năng và thứ tự đề xuất trong REPORT.
 
 
 ## Review mới nhất — 2026-09-18

@@ -27,10 +27,10 @@
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | DONE |
 | D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | DONE |
 | D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | DONE |
-| D07 | Chạy ma trận kịch bản (đợt rút gọn đã chốt) | D05, D06, D10, D11 | | Không | TODO |
+| D07 | Chạy ma trận kịch bản (đợt rút gọn đã chốt) | D05, D06, D10, D11 | | Không | DONE |
 | D08 | ETW / PresentMon deep-dive | D07 | ∥3 | Không | TODO |
 | D09 | GC và bộ nhớ | D07 | ∥3 | Không | TODO |
-| D12 | Báo cáo, quyết định, đề xuất thứ tự task | D07, D08, D09, D01, D02 | | Không | TODO |
+| D12 | Báo cáo, quyết định, đề xuất thứ tự task | D07, D08, D09, D01, D02 | | Không | IN PROGRESS |
 | D13 | Cập nhật plan/task refactor theo kết quả | D12 | | Docs | TODO |
 
 **Chạy song song:** ∥1 gồm D01, D02, D03 · ∥2 gồm D05, D10, D06, D11 (sửa các file khác nhau, xem mục Files) · ∥3 gồm D08, D09.
