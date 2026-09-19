@@ -11,12 +11,12 @@
 | Số | ID | Công việc | Findings | Phụ thuộc | Chạy độc lập | Trạng thái |
 |---|---|---|---|---|---|---|
 | 1 | MR00 | Review + baseline + tài liệu | F01–F07 | — | — | DONE |
-| 2 | MR01 | RAM safety và lifetime preload | F01, F02 | MR00 + duyệt plan | Nhóm A | TODO |
-| 3 | MR02 | Gate test/CI không che lỗi | F03 | MR00 + duyệt plan | Nhóm A | TODO |
-| 4 | MR03 | ICC WicDirect + quality gate | F04 | MR00 + duyệt plan | Nhóm A | TODO |
-| 5 | MR04 | TurboJPEG fallback/metadata | F05, F06 | MR00 + duyệt plan | Nhóm A | TODO |
-| 6 | MR05 | Snapshot backend và cache identity | F07 | MR00 + duyệt plan | Nhóm A | TODO |
-| 7 | MR06 | Tích hợp/Release/GUI/PR | F01–F07 | MR01–MR05 | Coordinator | TODO |
+| 2 | MR01 | RAM safety và lifetime preload | F01, F02 | MR00 + duyệt plan | Nhóm A | DONE |
+| 3 | MR02 | Gate test/CI không che lỗi | F03 | MR00 + duyệt plan | Nhóm A | DONE |
+| 4 | MR03 | ICC WicDirect + quality gate | F04 | MR00 + duyệt plan | Nhóm A | DONE |
+| 5 | MR04 | TurboJPEG fallback/metadata | F05, F06 | MR00 + duyệt plan | Nhóm A | DONE |
+| 6 | MR05 | Snapshot backend và cache identity | F07 | MR00 + duyệt plan | Nhóm A | DONE |
+| 7 | MR06 | Tích hợp/Release/GUI/PR | F01–F07 | MR01–MR05 | Coordinator | DONE (chờ CI) |
 
 - Worker dùng branch `codex/mrNN-<slug>` trong worktree riêng. Không sửa file task/handoff, không `git add -A`, không push.
 - Mỗi đầu ra: diff trong Files, regression test, lệnh/kết quả, các INV đã kiểm và giới hạn còn lại. Reviewer độc lập đọc diff và tự chạy test; memory/race/native/cache cần reviewer kiểm sâu, không chấp nhận chỉ source-presence.
