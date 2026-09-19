@@ -53,8 +53,8 @@ public sealed class PreviewImageService : IPreloadTarget
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
     private const int PersistQueueCapacity = 32;
-    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch)> _persistQueue =
-        Channel.CreateBounded<(BitmapSource, string, long)>(
+    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation)> _persistQueue =
+        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly Task[] _persistWorkers;
 
@@ -116,12 +116,14 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
+                WriteCacheMetadataAtomically(request.CachePath, request.Backend, request.Orientation);
                 await _diskStore.WriteAtomicallyAsync(request.Bitmap, request.CachePath).ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
                     // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
                     // a freshly-written file for a cache generation that was just cleared.
                     DiskCacheStore.TryDelete(request.CachePath);
+                    DiskCacheStore.TryDelete(GetCacheMetadataPath(request.CachePath));
                     continue;
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
@@ -218,11 +220,12 @@ public sealed class PreviewImageService : IPreloadTarget
         {
             try
             {
+                int orientation = ReadCacheOrientation(cachePath, key.Backend);
                 if (perf) perfT0 = Stopwatch.GetTimestamp();
                 using var cacheStream = File.OpenRead(cachePath);
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
-                decodedImage = new WpfDecodedImage(bitmap, downscaled: true, actualBackend: key.Backend);
+                decodedImage = new WpfDecodedImage(bitmap, downscaled: true, orientation: orientation, actualBackend: key.Backend);
                 _metrics.RecordDiskCacheHit();
                 if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), PerfStreamLength(cacheStream));
             }
@@ -234,6 +237,7 @@ public sealed class PreviewImageService : IPreloadTarget
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
             {
                 try { File.Delete(cachePath); } catch { }
+                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { }
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
             }
@@ -260,7 +264,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // than it saves.
         if (!_disableDiskCache && sourceRead && decodedImage.ActualBackend == key.Backend &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
-            PersistToDiskCache(bmp, cachePath, cacheEpoch);
+            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
         stopwatch.Stop();
         if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
         return decodedImage;
@@ -334,7 +338,13 @@ public sealed class PreviewImageService : IPreloadTarget
     public void ClearDisk()
     {
         lock (_cacheLifecycleGate) { _cacheEpoch++; }
-        try { _diskStore.ClearDirectory(); }
+        try
+        {
+            _diskStore.ClearDirectory();
+            if (Directory.Exists(_diskCacheDirectory))
+                foreach (var metadataPath in Directory.EnumerateFiles(_diskCacheDirectory, "*.meta"))
+                    DiskCacheStore.TryDelete(metadataPath, _log);
+        }
         catch (IOException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
     }
@@ -413,19 +423,43 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private string GetDiskCachePath(ImageCacheKey key)
     {
-        // v2 guarantees every persisted entry was produced by the backend in the key.
-        // Pre-v2 PNGs carried no backend provenance and intentionally become misses.
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v2|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
+        // v3 requires an atomic metadata companion carrying backend and source orientation.
+        // Older PNGs intentionally become misses because their provenance is incomplete.
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v3|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
         return Path.Combine(_diskCacheDirectory, hash + ".png");
     }
 
+    private static string GetCacheMetadataPath(string cachePath) => cachePath + ".meta";
+
+    private static int ReadCacheOrientation(string cachePath, DecoderBackend expectedBackend)
+    {
+        var parts = File.ReadAllText(GetCacheMetadataPath(cachePath)).Split('|');
+        if (parts.Length != 2 || !Enum.TryParse(parts[0], out DecoderBackend backend) ||
+            backend != expectedBackend || !int.TryParse(parts[1], out int orientation) || orientation is < 1 or > 8)
+            throw new InvalidDataException("Preview cache metadata is missing or invalid.");
+        return orientation;
+    }
+
+    private static void WriteCacheMetadataAtomically(string cachePath, DecoderBackend backend, int orientation)
+    {
+        var metadataPath = GetCacheMetadataPath(cachePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(metadataPath)!);
+        var temporaryPath = metadataPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, $"{backend}|{orientation}");
+            File.Move(temporaryPath, metadataPath, overwrite: true);
+        }
+        finally { DiskCacheStore.TryDelete(temporaryPath); }
+    }
+
     /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
-    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch)
+    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation)
     {
         if (cacheEpoch != Volatile.Read(ref _cacheEpoch)) return;
         // Best-effort: a full queue means persistence is falling behind decode, so this
         // preview is dropped rather than growing the backlog or blocking the caller.
-        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch));
+        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation));
     }
 
     bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);

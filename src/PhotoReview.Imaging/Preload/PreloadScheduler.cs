@@ -208,7 +208,10 @@ public sealed class PreloadScheduler : IDisposable
                         examinedSinceYield = 0;
                         var memory = _memoryProbe.GetSnapshot();
                         _log.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes}");
-                        await _ui.YieldAsync(cancellationToken).ConfigureAwait(false);
+                        // Never yield through a UI Dispatcher here. Dispose is called by the
+                        // window's Closed handler and synchronously drains this task; a queued
+                        // Dispatcher continuation would deadlock against that same UI thread.
+                        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 if (running.Count == 0) return;

@@ -128,9 +128,31 @@ public partial class App : System.Windows.Application
             var explorerOrder = sp.GetRequiredService<IProgressiveExplorerOrderProvider>();
             var schedulerFactory = sp.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>();
 
+            var sourceSizeGate = new object();
+            HashSet<string> sizedPaths = new(StringComparer.OrdinalIgnoreCase);
+            long cachedTotalSourceBytes = 0;
+            long GetTotalSourceBytes()
+            {
+                var snapshot = catalog.Snapshot();
+                lock (sourceSizeGate)
+                {
+                    if (sizedPaths.Count == snapshot.Length && sizedPaths.SetEquals(snapshot))
+                        return cachedTotalSourceBytes;
+
+                    cachedTotalSourceBytes = snapshot.Sum(path =>
+                    {
+                        try { return fs.GetFileStat(path)?.Length ?? 0L; }
+                        catch (IOException) { return 0L; }
+                        catch (UnauthorizedAccessException) { return 0L; }
+                    });
+                    sizedPaths = new HashSet<string>(snapshot, StringComparer.OrdinalIgnoreCase);
+                    return cachedTotalSourceBytes;
+                }
+            }
+
             var preloadScheduler = schedulerFactory(
                 catalog.Snapshot,
-                () => catalog.Paths.Sum(path => fs.GetFileStat(path)?.Length ?? 0L));
+                GetTotalSourceBytes);
             var preloadController = new PhotoReview.App.Coordinators.PreloadControllerAdapter(() => preloadScheduler);
 
             PhotoReview.App.ViewModels.MainViewModel? vm = null;
