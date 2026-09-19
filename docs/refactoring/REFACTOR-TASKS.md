@@ -817,7 +817,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. Khi đổi backend: hủy preload, clear RAM cache (key đã khác nên không lẫn pixel, việc clear chỉ để giải phóng RAM), rồi preload lại quanh ảnh hiện tại. Giống cách xử lý khi đổi `LoadingMode`.
   3. Diagnostics hiển thị backend đang dùng và số lần fallback.
 - **Xong khi:** VERIFY đạt, kiểm thủ công đổi backend khi đang xem.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Thêm `AppSettings.DecoderBackend` mặc định `Wpf`, combo Settings cho WPF/WIC Direct/TurboJPEG, wiring `PreviewStateContext` theo settings, đổi backend thì cancel preload + clear RAM/disk preview cache + present lại ảnh hiện tại; legacy config không có field vẫn về WPF. Factory fallback và Diagnostics fallback counter đã có sẵn. App.Tests 162/162; `verify-all.ps1` PASS. Người dùng đã xác nhận thủ công chuỗi WPF → WIC Direct → TurboJPEG trong lúc xem ảnh; ảnh hiện tại được trình diễn lại đúng sau mỗi lần đổi backend.
 
 ### T88 — Scaling chất lượng cao ∥J
 - **Files:** `{App}/Views/MainWindow.xaml`, `{Core}/Settings/AppSettings.cs` (`ScalingQuality`, mặc định `HighQuality`), `{App}/Views/SettingsWindow.xaml(.cs)`, `{App}/ViewModels/ViewerState.cs` (property), test ViewModel.
@@ -1086,6 +1086,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
 - **Thứ tự D13:** đo baseline sau T87; chỉ đưa T65 vào ma trận A/B khi T65 hoàn tất dưới feature flag.
+- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 bắt đầu tại `work/diag/runs/t66-t87-20260919/20260919-223438`; S1/F1/Preview/warm 3/3 pass. S2 warm-up bị treo không có tiến độ sau thời gian bất thường nên đã dừng tiến trình; chưa đủ ma trận để đánh dấu DONE. Cần chạy lại S2/S3/S6/S9 theo cell nhỏ hơn trước khi chốt `final.md`.
 
 ### T67 — Dọn compatibility marker T46d còn lại ∥K
 - **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ImageSortService.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `tests/PhotoReview.App.Tests/ProjectSources.cs`, `test-parity.md`.
