@@ -168,7 +168,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
 | T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | BLOCKED |
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | TODO |
-| T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | TODO |
+| T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
 | T72 | Cập nhật tài liệu | T66 | ∥L | | TODO |
 | T73 | GUI acceptance | T72 | | | TODO |
@@ -1092,7 +1092,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:** đối chiếu từng marker với test đang dùng; chuyển test có giá trị sang behavior/AST/XAML test hoặc xóa test implementation-detail; sau đó gỡ marker không còn cần thiết. Không xóa marker đang bảo vệ contract thật.
 - **Xong khi:** test thay thế pass, không còn kiểm tra token implementation-detail đã loại bỏ, `verify-all.ps1` pass.
 - **Rủi ro/rollback:** giữ thay đổi trong commit nhỏ; revert commit nếu parity/behavior giảm.
-- **Nhật ký:** 2026-09-19 · D13 · tách khỏi T52 để không trộn settings binding với cleanup source-presence.
+- **Nhật ký:** 2026-09-19 · D13 · tách khỏi T52 để không trộn settings binding với cleanup source-presence. Đã DONE: xoá marker RAM và marker block T46d trong `MainWindow`, xoá shim `ImageSortService.cs`/property `ProjectSources`, cập nhật shutdown source-presence theo contract dispose hiện tại; `SourcePresenceTests` 12/12 PASS.
 - **Xong khi:** có bảng so sánh với baseline. Profile nào có P95 tệ hơn quá 5% thì phải có task sửa hoặc revert trước T71.
 - **Nhật ký:** —
 

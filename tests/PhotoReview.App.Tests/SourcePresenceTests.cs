@@ -115,19 +115,13 @@ public sealed class SourcePresenceTests
         Assert.True(ProjectSources.AppCsproj.Contains("BuildStamp")
             && ProjectSources.SettingsWindow.Contains("AssemblyInformationalVersionAttribute"));
 
-    // Replace with T64 (RamBudgetPolicy) once it exists; PerformanceOptions is internal to the app assembly.
-    [Fact(DisplayName = "RAM cache policy targets 16 GB and full-folder preload threshold (source presence: PerformanceOptions is internal to the app assembly)")]
-    public void RamCachePolicyTargetsSixteenGbAndPreloadThreshold() =>
-        Assert.True(ProjectSources.MainWindow.Contains("PerformanceOptions.ImageCacheCapacityBytes")
-            && ProjectSources.MainWindow.Contains("FullFolderRamThresholdBytes"));
-
     // Window shutdown itself is WPF glue (Closed handler on the Window); the scheduler's own
     // disposal is covered behaviorally by PreloadSchedulerTests.
     [Fact(DisplayName = "Window shutdown disposes preload and thumbnail resources (source presence, not behavior)")]
     public void WindowShutdownDisposesPreloadAndThumbnailResources() =>
         Assert.True(ProjectSources.MainWindowXaml.Contains("Closed=\"Window_Closed\"")
-            && ProjectSources.MainWindow.Contains("_thumbnailCache.Dispose()")
-            && ProjectSources.MainWindow.Contains("_preloadScheduler.Dispose()"));
+            && ProjectSources.MainWindow.Contains("(_viewModel.PreloadController as IDisposable)?.Dispose()")
+            && ProjectSources.MainWindow.Contains("_explorerOrder?.Dispose()"));
 
     // WindowPlacementService operates on a real HWND via GetWindowPlacement/SetWindowPlacement
     // and reads the attached monitor set, so it cannot be exercised headlessly.

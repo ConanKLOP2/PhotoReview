@@ -344,7 +344,7 @@ Cột **Dòng** là số dòng của attribute `[Fact(DisplayName = ...)]` trong
 
 ## T47 outcome (2026-09-19)
 
-`SourcePresenceTests` giảm từ 69 test xuống 13 (3 test XAML + 10 test source-presence giữ lại), và 2 test source-presence trong `CacheExplorerRegressionTests` bị xoá. Tổng `Tests.Unit`: 257 → 199.
+`SourcePresenceTests` giảm từ 69 test xuống 12 (3 test XAML + 9 test source-presence giữ lại), và 2 test source-presence trong `CacheExplorerRegressionTests` bị xoá. Tổng `Tests.Unit`: 257 → 199.
 
 **Đã xoá (58 + 2), mỗi nhóm có test hành vi thay thế đang tồn tại:**
 
@@ -360,9 +360,13 @@ Cột **Dòng** là số dòng của attribute `[Fact(DisplayName = ...)]` trong
 
 **Chuyển sang `XDocument` (KEEP-XAML, gộp thành 3 test):** accessible names (MainWindow/Recovery/Settings), lifecycle + drag-drop + compare + overlay của `MainWindow.xaml`, text của Recovery/Diagnostics XAML.
 
-**Giữ lại vì chưa có test hành vi thay thế (10):** `SettingsDefaultsResetCompareOptions`, `OpenLogLocationFollowsConfiguredAppLogPath`, `EachBuildExposesUniqueInformationalBuildStamp` (Settings code-behind, chưa có view model), `RamCachePolicyTargets...` (chờ T64), `WindowShutdownDisposes...`, `NativeWindowPlacementRestoresAndPersists`, `SavedPlacementIsRejectedWhenMonitorIsGone` (cần HWND/đa màn hình thật), `DiskThumbnailCache...` và `DiskCacheCleanupTolerates...` (`ThumbnailCache` chưa dùng `DiskCacheStore`, xoá sẽ mất kiểm tra quota), `FileAssociationCommandIsRegistered` (script).
+**Giữ lại vì chưa có test hành vi thay thế (9):** `SettingsDefaultsResetCompareOptions`, `OpenLogLocationFollowsConfiguredAppLogPath`, `EachBuildExposesUniqueInformationalBuildStamp` (Settings code-behind, chưa có view model), `WindowShutdownDisposes...`, `NativeWindowPlacementRestoresAndPersists`, `SavedPlacementIsRejectedWhenMonitorIsGone` (cần HWND/đa màn hình thật), `DiskThumbnailCache...` và `DiskCacheCleanupTolerates...` (`ThumbnailCache` chưa dùng `DiskCacheStore`, xoá sẽ mất kiểm tra quota), `FileAssociationCommandIsRegistered` (script).
 
-Vì vậy tiêu chí "không còn `.Contains(` kiểm tra file `.cs`" **chưa đạt hoàn toàn**: còn 9 test đọc `.cs`/`.csproj` như trên. Chúng mất khi T52/T64/T31 có thay thế thật. Các marker tương thích T46d trong `MainWindow`/`AppSettings.cs` vẫn còn vì các test đó cần; gỡ ở T52.
+T67 đã gỡ marker RAM và shim `ImageSortService.cs`; test shutdown được cập nhật theo contract dispose hiện tại (`PreloadController`/Explorer). Các source-presence test còn lại đều bảo vệ code-behind, HWND/monitor, cache implementation chưa có seam, hoặc script đăng ký hệ thống.
+
+### T67 outcome (2026-09-19)
+
+Đã xoá block compatibility marker còn lại trong `MainWindow.xaml.cs`, xoá file shim chết `ImageSortService.cs` và property `ProjectSources.ImageSortService`, đồng thời xoá test RAM đã được T64 thay thế bằng `RamBudgetPolicyTests`. `SourcePresenceTests`: 12/12 PASS; `verify-all.ps1` chạy sau thay đổi.
 
 ### Ghi chú sau T53b (khử trùng lặp)
 

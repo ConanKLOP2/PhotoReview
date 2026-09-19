@@ -45,7 +45,6 @@ public static class ProjectSources
     public static string AppSettingsSource => Read("AppSettings.cs");
     public static string SettingsWindow => Read("SettingsWindow.xaml.cs");
     public static string SettingsWindowXaml => Read("SettingsWindow.xaml");
-    public static string ImageSortService => Read("ImageSortService.cs");
     public static string RecoveryWindowXaml => Read("RecoveryWindow.xaml");
     public static string RecoveryWindow => Read("RecoveryWindow.xaml.cs");
     public static string WindowPlacementService => Read("WindowPlacementService.cs");
