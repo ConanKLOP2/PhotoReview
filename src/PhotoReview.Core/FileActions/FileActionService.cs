@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 
@@ -14,6 +14,7 @@ public sealed class FileActionService
     private readonly IFileSystem _fileSystem;
     private readonly IClock _clock;
     private readonly IRecycleBin _recycleBin;
+    private readonly Func<string, string, Task>? _moveOverride;
 
     private int _inProgress;
 
@@ -21,12 +22,14 @@ public sealed class FileActionService
         OperationJournal journal,
         IFileSystem fileSystem,
         IClock clock,
-        IRecycleBin recycleBin)
+        IRecycleBin recycleBin,
+        Func<string, string, Task>? moveOverride = null)
     {
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _recycleBin = recycleBin ?? throw new ArgumentNullException(nameof(recycleBin));
+        _moveOverride = moveOverride;
     }
 
     /// <summary>
@@ -117,7 +120,14 @@ public sealed class FileActionService
                 }
                 else
                 {
-                    await Task.Run(() => _fileSystem.Move(source, destinationPath), cancellationToken).ConfigureAwait(false);
+                    if (_moveOverride is not null)
+                    {
+                        await _moveOverride(source, destinationPath).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await Task.Run(() => _fileSystem.Move(source, destinationPath), cancellationToken).ConfigureAwait(false);
+                    }
                 }
 
                 var destStat = _fileSystem.GetFileStat(destinationPath);

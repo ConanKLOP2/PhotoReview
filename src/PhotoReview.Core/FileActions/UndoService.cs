@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 
@@ -14,6 +14,7 @@ public sealed class UndoService
     private readonly IFileSystem _fileSystem;
     private readonly IRecycleBin _recycleBin;
     private readonly FileActionService? _fileActionService;
+    private readonly Func<string, string, Task>? _moveOverride;
 
     private readonly Stack<(string Source, string Destination)> _moveHistory = new();
     private UndoActionRecord? _lastUndoAction;
@@ -25,16 +26,24 @@ public sealed class UndoService
         OperationJournal journal,
         IFileSystem fileSystem,
         IRecycleBin recycleBin,
-        FileActionService? fileActionService = null)
+        FileActionService? fileActionService = null,
+        Func<string, string, Task>? moveOverride = null)
     {
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _recycleBin = recycleBin ?? throw new ArgumentNullException(nameof(recycleBin));
         _fileActionService = fileActionService;
+        _moveOverride = moveOverride;
     }
 
     /// <summary>Số lượng thao tác Move hiện có trong lịch sử hoàn tác.</summary>
     public int MoveHistoryCount => _moveHistory.Count;
+
+    /// <summary>Truy cập ngăn xếp lịch sử thao tác Move.</summary>
+    public Stack<(string Source, string Destination)> MoveHistory => _moveHistory;
+
+    /// <summary>Thao tác vừa hoàn thành gần nhất.</summary>
+    public object? LastUndoAction => _lastUndoAction;
 
     /// <summary>Cho biết có thao tác Move nào để hoàn tác hay không.</summary>
     public bool CanUndoMove => _moveHistory.Count > 0;
@@ -148,7 +157,14 @@ public sealed class UndoService
                     throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
                 }
 
-                await Task.Run(() => _fileSystem.Move(move.Destination, move.Source));
+                if (_moveOverride is not null)
+                {
+                    await _moveOverride(move.Destination, move.Source).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Task.Run(() => _fileSystem.Move(move.Destination, move.Source));
+                }
                 _lastUndoAction = null;
                 return new UndoResult(true, FileOperationType.Move, move.Source, move.Destination, null);
             }

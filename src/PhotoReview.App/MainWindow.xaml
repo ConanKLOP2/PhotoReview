@@ -1,13 +1,17 @@
-﻿<Window x:Class="PhotoReview.App.MainWindow"
+<Window x:Class="PhotoReview.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:PhotoReview.App"
+        xmlns:converters="clr-namespace:PhotoReview.App.Converters"
         mc:Ignorable="d"
         Icon="pack://application:,,,/Assets/PhotoReview.ico"
-        Title="Photo Review" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed">
+        Title="{Binding FolderTitle, FallbackValue='Photo Review'}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <converters:ViewerStretchModeConverter x:Key="StretchConverter" />
+        <converters:CompareBorderBrushConverter x:Key="CompareBorderBrush" />
         <Style TargetType="Button">
             <Setter Property="Background" Value="#252525"/>
             <Setter Property="Foreground" Value="#EEEEEE"/>
@@ -34,19 +38,31 @@
         </Grid.ContextMenu>
         <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
-                <Image x:Name="MainImage" Stretch="None" RenderTransformOrigin="0.5,0.5">
-                    <Image.RenderTransform><ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1" /></Image.RenderTransform>
+                <Image x:Name="MainImage"
+                       Source="{Binding CurrentImage}"
+                       Stretch="{Binding Viewer.Stretch, Converter={StaticResource StretchConverter}}"
+                       MaxWidth="{Binding Viewer.MaxImageWidth}"
+                       MaxHeight="{Binding Viewer.MaxImageHeight}"
+                       RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="ImageScale" ScaleX="{Binding Viewer.Zoom}" ScaleY="{Binding Viewer.Zoom}" />
+                    </Image.RenderTransform>
                 </Image>
             </ScrollViewer>
         </Border>
-        <Border x:Name="ComparePanel" Visibility="Collapsed" Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8">
+        <Border x:Name="ComparePanel"
+                Visibility="{Binding Compare.IsVisible, Converter={StaticResource BoolToVis}}"
+                Background="#101010"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Margin="8">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <Border x:Name="CompareLeftBorder" AutomationProperties.Name="Preview ảnh bên trái, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click" PreviewKeyDown="CompareLeft_KeyDown">
-                    <Image x:Name="CompareLeftImage" Stretch="Uniform"/>
+                <Border x:Name="CompareLeftBorder" AutomationProperties.Name="Preview ảnh bên trái, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" BorderBrush="{Binding Compare.IsLeftSelected, Converter={StaticResource CompareBorderBrush}}" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click" PreviewKeyDown="CompareLeft_KeyDown">
+                    <Image x:Name="CompareLeftImage" Source="{Binding Compare.LeftImage}" Stretch="Uniform"/>
                 </Border>
-                <Border x:Name="CompareRightBorder" AutomationProperties.Name="Preview ảnh bên phải, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" Grid.Column="1" BorderBrush="#555555" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click" PreviewKeyDown="CompareRight_KeyDown">
-                    <Image x:Name="CompareRightImage" Stretch="Uniform"/>
+                <Border x:Name="CompareRightBorder" AutomationProperties.Name="Preview ảnh bên phải, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" Grid.Column="1" BorderBrush="{Binding Compare.IsRightSelected, Converter={StaticResource CompareBorderBrush}}" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click" PreviewKeyDown="CompareRight_KeyDown">
+                    <Image x:Name="CompareRightImage" Source="{Binding Compare.RightImage}" Stretch="Uniform"/>
                 </Border>
             </Grid>
         </Border>
@@ -69,13 +85,13 @@
                         </StackPanel>
                         </Border>
                     </Popup>
-                    <TextBlock x:Name="FolderText" Visibility="Collapsed" />
+                    <TextBlock x:Name="FolderText" Visibility="Collapsed" Text="{Binding FolderText}" />
                 </StackPanel>
             </StackPanel>
         </Border>
         <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
-                <TextBlock x:Name="StatusText" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
                 <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown folder   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" Visibility="Collapsed" />
             </StackPanel>
         </Border>

@@ -106,21 +106,52 @@ public partial class App : System.Windows.Application
         // 7. ViewModels & Coordinators
         services.AddTransient<PhotoReview.App.ViewModels.ViewerState>();
         services.AddTransient<PhotoReview.App.ViewModels.CompareViewModel>();
+        services.AddTransient<PhotoReview.Core.Catalog.ReviewCatalog>();
+        services.AddTransient<PhotoReview.Core.Catalog.GenerationClock>();
+        services.AddTransient<PhotoReview.App.ViewModels.MainViewModel>(sp =>
+        {
+            var catalog = sp.GetRequiredService<PhotoReview.Core.Catalog.ReviewCatalog>();
+            var clock = sp.GetRequiredService<PhotoReview.Core.Catalog.GenerationClock>();
+            var viewer = sp.GetRequiredService<PhotoReview.App.ViewModels.ViewerState>();
+            var compare = sp.GetRequiredService<PhotoReview.App.ViewModels.CompareViewModel>();
+            var settingsStore = sp.GetRequiredService<SettingsStore>();
+            var sessionStore = sp.GetRequiredService<SessionStore>();
+            var fs = sp.GetRequiredService<IFileSystem>();
+            var actions = sp.GetRequiredService<FileActionService>();
+            var undo = sp.GetRequiredService<UndoService>();
+            var dialog = sp.GetRequiredService<IDialogService>();
+            var hash = sp.GetRequiredService<FileHashService>();
+            var preview = sp.GetRequiredService<PreviewImageService>();
+            var thumbs = sp.GetRequiredService<ThumbnailCache>();
+            var natural = sp.GetRequiredService<INaturalComparer>();
+            var explorerOrder = sp.GetRequiredService<IProgressiveExplorerOrderProvider>();
+
+            PhotoReview.App.ViewModels.MainViewModel? vm = null;
+            var sink = new PhotoReview.App.Services.WpfPresentationSink(
+                onSetCurrentImage: _ => vm?.NotifyPresentationChanged(),
+                onSetStatusText: _ => vm?.NotifyPresentationChanged(),
+                onApplyInitialViewMode: () => vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, 0, 0));
+
+            var dummyPreload = new DummyPreloadController();
+            var presenter = new PhotoReview.App.Coordinators.ImagePresenter(
+                catalog, clock, preview, thumbs, dummyPreload, compare, hash,
+                sp.GetRequiredService<ReviewMetrics>(),
+                () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session);
+
+            var coordinator = new PhotoReview.App.Coordinators.FolderLoadCoordinator(
+                catalog, clock, explorerOrder, fs, sessionStore, settingsStore,
+                new ForwardingFolderSink(() => vm!));
+
+            return vm = new PhotoReview.App.ViewModels.MainViewModel(
+                catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
+                fs, actions, undo, dialog, dummyPreload, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs);
+        });
 
         // 8. Window
         services.AddTransient<MainWindow>(sp => new MainWindow(
+            sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
-            sp.GetRequiredService<OperationJournal>(),
-            sp.GetRequiredService<SessionStore>(),
-            sp.GetRequiredService<RecoveryRetryService>(),
-            sp.GetRequiredService<ThumbnailCache>(),
-            sp.GetRequiredService<FileHashService>(),
-            sp.GetRequiredService<ReviewMetrics>(),
-            sp.GetRequiredService<PreviewImageService>(),
-            sp.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>(),
-            sp.GetRequiredService<IProgressiveExplorerOrderProvider>(),
-            sp.GetRequiredService<IRecycleBin>(),
-            sp.GetService<PreviewStateContext>()));
+            sp.GetRequiredService<IProgressiveExplorerOrderProvider>()));
     }
 
     private void App_Startup(object sender, StartupEventArgs e)
