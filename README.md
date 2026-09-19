@@ -10,7 +10,7 @@ PhotoReview là ứng dụng Windows WPF để duyệt, so sánh và phân loạ
 - Hỗ trợ Compare, kiểm tra hash/kích thước tùy chọn, batch duplicate có bước xác nhận, zoom/Fit/fullscreen và phím tắt.
 - Ảnh và đường dẫn được xử lý cục bộ; diagnostics nội bộ chỉ bật theo cấu hình.
 
-Xem [cơ chế load ảnh, bất biến an toàn và hướng dẫn benchmark](outputs/APP-MECHANISMS-VI.md) trước khi sửa pipeline hoặc diễn giải kết quả hiệu năng.
+Xem [kiến trúc](docs/architecture.md) và [cơ chế load ảnh, bất biến an toàn, hướng dẫn benchmark](docs/APP-MECHANISMS-VI.md) trước khi sửa pipeline hoặc diễn giải kết quả hiệu năng.
 
 ## Yêu cầu
 
@@ -27,6 +27,21 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 ```
 
 Artifact framework-dependent nằm tại `src/PhotoReview.App/bin/Release/net10.0-windows/publish`. Verification cho self-contained hoặc smoke/fault-injection dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
+
+## Benchmark
+
+```powershell
+dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-list-profiles
+dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all 'C:\duong-dan\folder-anh' 'C:\duong-dan\ket-qua'
+```
+
+Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh. Kết quả runtime cuối của đợt refactor nằm trong [T66](docs/refactoring/results/final.md).
+
+## Cài đặt hiệu năng và hiển thị
+
+- `DecoderBackend`: `Wpf` mặc định; có thể chọn `WicDirect` hoặc `TurboJpeg`. Backend khác WPF tự fallback về WPF với lỗi codec được hỗ trợ.
+- `ScalingQuality`: `HighQuality` mặc định cho chất lượng hiển thị; `Linear` giảm chi phí khi zoom/chuyển khung.
+- `UseSourceBytesCache`: mặc định `false`. Khi bật, ứng dụng giữ byte nguồn trong RAM với quota 16 GiB để giảm đọc đĩa lặp lại; chỉ nên bật sau khi đo trên workload thực.
 
 ## File association (tùy chọn)
 

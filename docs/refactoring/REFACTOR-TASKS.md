@@ -170,7 +170,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | DONE |
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | DONE |
-| T72 | Cập nhật tài liệu | T66 | ∥L | | TODO |
+| T72 | Cập nhật tài liệu | T66 | ∥L | | DONE |
 | T73 | GUI acceptance | T72 | | | TODO |
 | T74 | Release | T73 | | | TODO |
 
@@ -1111,7 +1111,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `README.md`, `AGENTS.md`, `outputs/APP-MECHANISMS-VI.md` → `docs/APP-MECHANISMS-VI.md` (cập nhật link), `docs/architecture.md` (mới), `task_on_progress.md`.
 - **Làm:** sơ đồ các lớp, luồng load/present/action/decoder, bảng INV ánh xạ sang class mới, lệnh build/test/benchmark mới, mô tả setting mới (`DecoderBackend`, `ScalingQuality`, `UseSourceBytesCache`).
 - **Xong khi:** mọi lệnh trong tài liệu chạy được.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 — DONE; chuyển tài liệu cơ chế vào `docs`, thêm kiến trúc/project dependency và bốn luồng runtime, ánh xạ INV-1…INV-12, mô tả ba setting, đồng bộ lệnh build/test/benchmark/publish trong README và AGENTS.
 
 ### T73 — GUI acceptance
 - **Checklist** (ghi PASS/FAIL cho từng mục):

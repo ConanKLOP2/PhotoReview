@@ -124,4 +124,5 @@
 - **Thư mục chỉ có trên máy cũ** (không cần mang theo): `work/diag/io-split`, `work/diag/runs-smoke` (bản tóm tắt đã có trong `docs/`), `work/diag/config.backup.json` (config đã được khôi phục).
 
 - **T71 DONE (2026-09-19):** tạo docs/adr/0002-ui-framework.md. D12/T66 chỉ có t_render của harness, chưa có UiAssign/Present P95; vì vậy R-UI 40% chưa được chứng minh. Quyết định No-go WinUI 3, giữ WPF; chỉ mở lại khi D08/PresentMon cho thấy UI >=40% hoặc có lỗi WPF tái hiện được. Tiếp theo T72.
+- **T72 DONE (2026-09-19):** chuyển `outputs/APP-MECHANISMS-VI.md` sang `docs/`, tạo `docs/architecture.md`, cập nhật README/AGENTS; bổ sung dependency, luồng load/present/action/decoder, ánh xạ INV-1…INV-12, ba setting và lệnh benchmark. Đã kiểm tra link/path/lệnh; tiếp theo T73 GUI acceptance.
 
