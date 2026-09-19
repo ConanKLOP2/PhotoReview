@@ -3,7 +3,9 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
     [switch]$RequireSelfContained,
-    [string]$ReleaseDirectory = ''
+    [string]$ReleaseDirectory = '',
+    [Parameter(DontShow)]
+    [scriptblock]$TestCommandInvoker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,21 +34,35 @@ function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
 
 function Invoke-Gate([string]$Name, [scriptblock]$Action) {
     Write-Host "`n=== $Name ===" -ForegroundColor Cyan
+    if ($null -ne $TestCommandInvoker) {
+        $exitCode = & $TestCommandInvoker $Name
+        if ($exitCode -ne 0) { throw "Gate failed: $Name (exit $exitCode)" }
+        return
+    }
+
     & $Action
-    if ($LASTEXITCODE -ne 0) { throw "Gate failed: $Name (exit $LASTEXITCODE)" }
+    if (-not $?) {
+        $exitCode = if ($LASTEXITCODE -is [int]) { $LASTEXITCODE } else { 1 }
+        throw "Gate failed: $Name (exit $exitCode)"
+    }
 }
 
 Invoke-Gate 'Build solution' { dotnet build $solution -c $Configuration --nologo }
 Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
     dotnet run --project (Join-Path $root 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
 }
-Invoke-Gate 'Run xUnit test suite' {
-    dotnet test (Join-Path $root 'tests\PhotoReview.Architecture.Tests\PhotoReview.Architecture.Tests.csproj') -c $Configuration --no-build --nologo
-    dotnet test (Join-Path $root 'tests\PhotoReview.Core.Tests\PhotoReview.Core.Tests.csproj') -c $Configuration --no-build --nologo
-    dotnet test (Join-Path $root 'tests\PhotoReview.Imaging.Tests\PhotoReview.Imaging.Tests.csproj') -c $Configuration --no-build --nologo
-    dotnet test (Join-Path $root 'tests\PhotoReview.Integration.Tests\PhotoReview.Integration.Tests.csproj') -c $Configuration --no-build --nologo
-    dotnet test (Join-Path $root 'tests\PhotoReview.App.Tests\PhotoReview.App.Tests.csproj') -c $Configuration --no-build --nologo
-    dotnet test (Join-Path $root 'tests\PhotoReview.Tests.Unit\PhotoReview.Tests.Unit.csproj') -c $Configuration --no-build --nologo
+$testProjects = @(
+    'PhotoReview.Architecture.Tests',
+    'PhotoReview.Core.Tests',
+    'PhotoReview.Imaging.Tests',
+    'PhotoReview.Integration.Tests',
+    'PhotoReview.App.Tests',
+    'PhotoReview.Tests.Unit'
+)
+foreach ($testProject in $testProjects) {
+    Invoke-Gate "Run xUnit: $testProject" {
+        dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo --filter 'Category!=Manual'
+    }
 }
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')

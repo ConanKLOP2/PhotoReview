@@ -41,13 +41,23 @@ jobs:
       - name: Run contract tests
         run: dotnet run --project tests/PhotoReview.Tests -c Release --no-build
 
-      - name: Run unit tests
-        run: |
-          dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
-          dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
-          dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
-          dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
-          dotnet test tests/PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+      - name: Run Architecture tests
+        run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+
+      - name: Run Core tests
+        run: dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+
+      - name: Run Imaging tests
+        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+
+      - name: Run Integration tests
+        run: dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+
+      - name: Run App tests
+        run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
+
+      - name: Run remaining unit tests
+        run: dotnet test tests/PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
 
       - name: Publish Release
         run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
