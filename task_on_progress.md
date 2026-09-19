@@ -1,45 +1,29 @@
 # PhotoReview — trạng thái hiện hành
 
-- **Cập nhật:** 2026-09-20
-- **Branch:** `codex/t89-pointer-anchored-zoom` (đang triển khai one-click Fit convergence)
-- **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72, T73, T74 và T87 `DONE`; T89 đã triển khai phần sửa mã và kiểm thử, còn GUI acceptance wheel→Fit chờ người dùng xác nhận.
-- **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 167; tổng 741/741; smoke, fault injection, publish và verify-release đều PASS.
-- **Publish:** `src/PhotoReview.App/bin/Release/net10.0-windows/publish`.
+- **Cập nhật:** 2026-09-20.
+- **Checkout đã xác minh:** `master`, `ba1317e54702e3af8bd32c0bf5d953b3766f1ba0` (merge PR #9); working tree sạch trước review.
+- **Mục tiêu phiên:** review xuyên repo, lập plan optimize/clean; chưa triển khai source/config, commit hoặc push.
+- **Plan chờ duyệt:** `docs/refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`, 13 task OC01–OC13 đều `TODO`; có evidence, scope, dependencies, multi-agent, tests, risks và rollback.
 
-## Thay đổi phiên này
+## Review / validation mới
 
-- Xóa ba project shell cũ ở root, `.claude`, `.vs`, framework-dependent release cũ và bundle `self-contained-desc-fix`; giữ self-contained bundle vì `verify-all.ps1` còn hỗ trợ nó.
-- Xóa compatibility marker trong `src/PhotoReview.App`; SourcePresenceTests dùng implementation thật ở Core/Imaging.
-- Chuyển `PerfAnalyze*` và `PerformanceTestHarness` dùng chung sang `src/PhotoReview.Benchmarking`; Integration Tests không còn tham chiếu executable CLI.
-- Cập nhật diagnosis commands và trạng thái tracker; `work/` chưa xóa vì còn có thể chứa bằng chứng T73.
-- T74 đã đối chiếu với Git: PR #8 đã merge vào `master`, tag `v2.0.0` đã có trên `origin`, publish artifact vẫn tồn tại và được verify.
-- Điều tra timing-flaky: `PreloadScheduler` nay drain tất cả worker task còn được scheduler theo dõi khi cancellation/exception trước khi hoàn tất; trước sửa test mục tiêu fail 9/30 lượt, sau sửa pass 30/30.
-- T89: wheel zoom tính lại ScrollViewer offset theo điểm con trỏ sau khi layout cập nhật; Fit từ nút, phím tắt và compatibility hook đều reset cả hai offset; thêm kiểm thử pure anchor math.
-- T89 follow-up: wheel thường (không cần Ctrl) zoom theo kiểu Windows Photos; đổi `RenderTransform` thành `LayoutTransform` để extent phản ánh kích thước zoom; Fit truyền viewport thật vào `ResetFit`.
-- T89 implementation pass: Fit dùng tối đa 3 lượt `UpdateLayout`/Render, đo lại kích thước client và cập nhật khi `MainImage`/CurrentImage đổi; tránh tình trạng click lần hai mới chuẩn. Targeted ViewerState 17/17 PASS; full `verify-all.ps1` PASS 741/741 sau patch, publish + verify-release PASS.
-- T89 wheel-after-Fit: bỏ anchor dựa trên `newZoom/oldZoom`; map con trỏ qua vùng ảnh Uniform về tọa độ ảnh nguồn, giữ `anchorBefore` ở hệ tọa độ phần tử trước khi đổi hệ, sau layout bù theo vị trí thực trước/sau.
-- T89 pan: thêm kéo chuột trái trên ảnh zoom, threshold chống nhầm click, clamp offset theo extent/viewport, cursor và cleanup capture khi Fit/mất focus/đóng cửa sổ. Targeted 21/21, toàn bộ xUnit 745/745, smoke, fault injection, publish và verify-release PASS.
-- Phân tích lỗi Fit cần bấm hai lần: lần đầu đo viewport khi scrollbar zoom còn hiện; scrollbar biến mất làm viewport đổi nhưng `ImageScroll.SizeChanged` không bảo đảm chạy. Production presenter còn áp dụng InitialViewMode với `(0,0)`. Plan chi tiết: `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; chưa sửa behavior theo plan mới.
+- Đã xem Core/Platform.Windows, Imaging/TurboJpeg, App/coordinators/UI, Benchmarking/CLI/scripts/CI và tests liên quan bằng 3 agent + coordinator.
+- **Release build + xUnit:** `dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"` exit 0; 745 PASS (7 Architecture + 305 Core + 203 Imaging + 59 Integration + 171 App), 0 fail/skip. Có analyzer warnings.
+- **Runtime probes:** DuplicateFinder chọn 2/2 bản cùng hash ở cả group toàn original và toàn numbered; chỉ selection, không recycle/delete. PerfAnalyze gộp 2 run workers 0/8 thành 1 group, R-CONT báo thiếu dữ liệu. Chi tiết/artifact tạm trong plan.
+- **Source findings cần regression:** native buffer sizing unchecked; preload exit/restart chưa bảo đảm drain; batch dialog sau ConfigureAwait(false); WPF catch-all retry; folder remap O(n²)/stat lại; display state; cache invalidation/quota; Undo tail-limit; benchmark semantics.
+- **Chưa xác minh runtime:** race Session/journal failures, native recycle identity, GUI T89. Không biến static concern thành runtime defect.
+- Lượt này chưa chạy mới smoke/fault-injection/full verify-all/publish, vì chỉ review và tài liệu. Full release/publish sẽ chạy khi triển khai theo OC13.
 
-## Quyết định còn hiệu lực
+## Quyết định và việc còn lại
 
-- Giữ WPF làm framework UI; chưa mở spike WinUI 3. Chỉ xem lại khi PresentMon/ETW chứng minh UI chiếm ít nhất 40% P95 key-to-present hoặc có lỗi WPF tái hiện được.
-- `DecoderBackend` mặc định `Wpf`; `WicDirect` và `TurboJpeg` là lựa chọn có fallback về WPF.
-- `ScalingQuality` mặc định `HighQuality`.
-- `UseSourceBytesCache` mặc định `false`; cache byte 16 GiB chỉ bật sau khi đo workload thật.
-- D08/D09 chỉ chạy nếu cần thêm bằng chứng render/GC/ETW; không chặn release hiện tại.
+1. Chờ người dùng duyệt plan OC01–OC13 trước thay đổi source/config. Ưu tiên safety + benchmark correctness trước tối ưu và clean code.
+2. T89 wheel/anchor/pan và transaction Fit đã merge qua PR #9; `docs/refactoring/T89-FIT-LAYOUT-PLAN.md` vẫn **IN PROGRESS**, còn unify initial-mode viewport, STA layout và GUI Fit → wheel → drag trên ảnh dọc/ngang. Không gọi DONE từ pure math tests.
+3. Giữ WPF, DecoderBackend=Wpf, ScalingQuality=HighQuality; SourceBytesCache mặc định off. Chỉ đổi theo số đo/plan được duyệt; không ép RAM gây paging/OOM.
+4. T73 còn coverage Recovery retry/ảnh hỏng nếu có fixture; T74 release trước đã DONE theo hồ sơ cũ, không phải release mới trong lượt review.
+5. Sau implementation: `./tools/verify-all.ps1`, publish `src/PhotoReview.App/bin/Release/net10.0-windows/publish`, feature branch/push origin/PR master theo AGENTS. Không commit thẳng master.
 
-## Việc còn lại
+## Tiếp tục
 
-1. **T89 — Zoom/Fit/Pan:** đã triển khai wheel anchor và pan kéo chuột; full validation PASS, cần GUI acceptance kiểm tra Fit → wheel → drag trên ảnh dọc/ngang.
-2. **Bổ sung T73:** nếu có fixture phù hợp thì kiểm tra Recovery retry và ảnh hỏng/định dạng lạ; không chặn việc tiếp tục T89.
-3. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
-
-## Bàn giao và lưu ý
-
-- Tài liệu kiến trúc: `docs/architecture.md`; cơ chế/cache/benchmark: `docs/APP-MECHANISMS-VI.md`.
-- Baseline hiệu năng cuối: `docs/refactoring/results/final.md`; quyết định UI: `docs/adr/0002-ui-framework.md`.
-- Hồ sơ review đã hoàn tất nằm trong `docs/refactoring/archive/`.
-- Cleanup 2026-09-19 đã bỏ 25 worktree, 72 local branch và 28 remote branch cũ; chi tiết và SHA phục hồi ở `docs/refactoring/archive/branch-cleanup-2026-09-19.md`.
-- Không dùng input mức OS (`SendInput`, `SendKeys`, `SetForegroundWindow`) cho perf harness; config action thật của người dùng không được ghi đè.
-- T73 đã được nghiệm thu thủ công ở mức app dùng được; follow-up T89 xử lý lỗi zoom wheel/Fit. Các nhóm Recovery retry và ảnh hỏng chưa có bằng chứng đầy đủ.
+- Đọc AGENTS, plan mới và plan T89; kiểm tra branch/SHA/dirty tree lại trước làm.
+- Chỉ hai tài liệu được sửa/tạo trong phiên: plan mới và file này; chưa commit. Các hồ sơ lịch sử ở `docs/refactoring/archive/`.
+- Giữ frame khi Move/Delete đang loading; no hidden retry. Không dùng OS SendInput/SendKeys/SetForegroundWindow cho harness; dùng fixture riêng, không đổi config/action người dùng.
