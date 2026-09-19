@@ -3,27 +3,6 @@ using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Tests;
 
-internal sealed class TempRoot : IDisposable
-{
-    public string Path { get; }
-    public TempRoot(string prefix)
-    {
-        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "PhotoReviewTests", prefix + "-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path);
-    }
-    public string File(string name, params byte[] bytes)
-    {
-        var full = System.IO.Path.Combine(Path, name);
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(full)!);
-        System.IO.File.WriteAllBytes(full, bytes);
-        return full;
-    }
-    public void Dispose()
-    {
-        try { if (Directory.Exists(Path)) Directory.Delete(Path, true); } catch { }
-    }
-}
-
 public sealed class ImageCacheKeyTests : IDisposable
 {
     private readonly TempRoot _root = new("cache-key");
