@@ -1,0 +1,12 @@
+{
+  "name": "S4-jump",
+  "note": "Plan S4: 40 x Next, then 20 x Prev, then Home (FirstImage). ShortcutMappings has no End/LastImage shortcut, so End is omitted. Random jumps are not modelled.",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "key": "Right", "repeat": 40, "intervalMs": 1500 },
+    { "key": "Left", "repeat": 20, "intervalMs": 1500 },
+    { "key": "Home" },
+    { "waitMs": 3000 }
+  ]
+}

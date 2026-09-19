@@ -1,0 +1,11 @@
+{
+  "name": "S7-compare",
+  "note": "Plan S7: temporary copy with 20 pairs pairNNN.jpg + pairNNN (1).jpg (identical bytes) built from the first 20 source images; walk all 40 files with compare/hash active.",
+  "copy": { "kind": "compare", "pairs": 20 },
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "key": "Right", "repeat": 39, "intervalMs": 800 },
+    { "waitIdle": true, "timeoutMs": 30000 }
+  ]
+}

@@ -3,20 +3,22 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
     [switch]$RequireSelfContained,
-    [string]$ReleaseDirectory = ''
+    [string]$ReleaseDirectory = '',
+    [Parameter(DontShow)]
+    [scriptblock]$TestCommandInvoker
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
-$appProject = Join-Path $root 'PhotoReview.App\PhotoReview.App.csproj'
+$appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
-    # (PhotoReview.App/bin/Release/net10.0-windows/publish for -Configuration Release),
+    # (src/PhotoReview.App/bin/Release/net10.0-windows/publish for -Configuration Release),
     # so running this gate with no override actually populates the documented location.
     [xml]$appProjectXml = Get-Content -LiteralPath $appProject
     $targetFramework = $appProjectXml.SelectSingleNode('//TargetFramework').InnerText
-    $ReleaseDirectory = Join-Path $root "PhotoReview.App\bin\$Configuration\$targetFramework\publish"
+    $ReleaseDirectory = Join-Path $root "src\PhotoReview.App\bin\$Configuration\$targetFramework\publish"
 }
 
 function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
@@ -32,16 +34,38 @@ function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
 
 function Invoke-Gate([string]$Name, [scriptblock]$Action) {
     Write-Host "`n=== $Name ===" -ForegroundColor Cyan
+    if ($null -ne $TestCommandInvoker) {
+        $exitCode = & $TestCommandInvoker $Name
+        if ($exitCode -ne 0) { throw "Gate failed: $Name (exit $exitCode)" }
+        return
+    }
+
+    $global:LASTEXITCODE = 0
     & $Action
-    if ($LASTEXITCODE -ne 0) { throw "Gate failed: $Name (exit $LASTEXITCODE)" }
+    $actionSucceeded = $?
+    $exitCode = $global:LASTEXITCODE
+    if (-not $actionSucceeded -or $exitCode -ne 0) {
+        if ($exitCode -isnot [int] -or $exitCode -eq 0) { $exitCode = 1 }
+        throw "Gate failed: $Name (exit $exitCode)"
+    }
 }
 
 Invoke-Gate 'Build solution' { dotnet build $solution -c $Configuration --nologo }
 Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
-    dotnet run --project (Join-Path $root 'PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
+    dotnet run --project (Join-Path $root 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
 }
-Invoke-Gate 'Run xUnit test suite' {
-    dotnet test (Join-Path $root 'PhotoReview.Tests.Unit\PhotoReview.Tests.Unit.csproj') -c $Configuration --no-build --nologo
+$testProjects = @(
+    'PhotoReview.Architecture.Tests',
+    'PhotoReview.Core.Tests',
+    'PhotoReview.Imaging.Tests',
+    'PhotoReview.Integration.Tests',
+    'PhotoReview.App.Tests',
+    'PhotoReview.Tests.Unit'
+)
+foreach ($testProject in $testProjects) {
+    Invoke-Gate "Run xUnit: $testProject" {
+        dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo --filter 'Category!=Manual'
+    }
 }
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')

@@ -1,0 +1,12 @@
+{
+  "root": "D:\\Photos",
+  "note": "Mẫu. Sao chép thành work/diag/fixtures.local.json (gitignored) rồi sửa đường dẫn theo máy. Chỉ đọc ảnh; kịch bản Move/Compare chạy trên bản sao tạm.",
+  "F1": { "path": "D:\\Photos\\set-24mp-compressed", "files": 58, "mp": 24.0, "desc": "JPEG 20-24 MP, nén mạnh (~1-2 MB/ảnh)" },
+  "F1b": { "path": "D:\\Photos\\set-27mp-high-quality", "files": 54, "mp": 26.8, "desc": "JPEG 24-30 MP, chất lượng cao (~10+ MB/ảnh)" },
+  "F2": { "path": "D:\\Photos\\set-48mp", "files": 98, "mp": 48.0, "desc": "JPEG 45-50 MP" },
+  "F3": { "path": "D:\\Photos\\set-png", "files": 22, "desc": "PNG/TIFF" },
+  "F4": { "path": "D:\\Photos\\large-folder", "files": 519, "desc": "Folder nhiều ảnh nhất có thể (mục tiêu ~5000)" },
+  "F5": { "path": null, "desc": "Folder > 16 GB nếu có" },
+  "F6": { "path": null, "desc": "Cặp a.jpg / a (1).jpg; perf-session tự sinh bản sao tạm nếu null" },
+  "F7": { "path": null, "desc": "Ảnh có EXIF orientation > 1; dùng fixture tổng hợp T80 nếu null" }
+}

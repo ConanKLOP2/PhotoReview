@@ -16,7 +16,7 @@ if ($missing.Count -gt 0) {
 
 $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
 if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
-$projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'PhotoReview.App\PhotoReview.App.csproj'
+$projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\PhotoReview.App.csproj'
 [xml]$project = Get-Content -LiteralPath $projectFile
 $expectedFileVersion = [string]$project.Project.PropertyGroup.FileVersion
 $actualFileVersion = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo.FileVersion

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.App\PhotoReview.App.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="NetArchTest.Rules" />
+  </ItemGroup>
+
+</Project>

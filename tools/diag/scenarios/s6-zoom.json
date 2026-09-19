@@ -1,0 +1,13 @@
+{
+  "name": "S6-zoom",
+  "note": "Plan S6: Fit -> 100% -> 200% -> 400% -> pan -> Fit. Zoom level 0 = Fit (ToggleFit shortcut); >0 = SetZoom(level). Use a 45-50 MP fixture (F2); add --mode Original for the full-resolution case.",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "zoom": [0, 1, 2, 4], "holdMs": 1000 },
+    { "pan": { "dx": 400, "dy": 0, "steps": 30, "intervalMs": 16 } },
+    { "pan": { "dx": 0, "dy": 300, "steps": 30, "intervalMs": 16 } },
+    { "pan": { "dx": -400, "dy": -300, "steps": 30, "intervalMs": 16 } },
+    { "zoom": [0], "holdMs": 1000 }
+  ]
+}

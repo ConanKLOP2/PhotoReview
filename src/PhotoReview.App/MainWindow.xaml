@@ -1,0 +1,99 @@
+<Window x:Class="PhotoReview.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:PhotoReview.App"
+        xmlns:converters="clr-namespace:PhotoReview.App.Converters"
+        mc:Ignorable="d"
+        Icon="pack://application:,,,/Assets/PhotoReview.ico"
+        Title="{Binding FolderTitle, FallbackValue='Photo Review'}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <converters:ViewerStretchModeConverter x:Key="StretchConverter" />
+        <converters:CompareBorderBrushConverter x:Key="CompareBorderBrush" />
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#252525"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+        <Style TargetType="ToggleButton">
+            <Setter Property="Background" Value="#252525"/>
+            <Setter Property="Foreground" Value="#EEEEEE"/>
+            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+    </Window.Resources>
+    <Grid Background="#101010" ClipToBounds="True">
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Undo thao tác vừa thực hiện" AutomationProperties.Name="Hoàn tác thao tác vừa thực hiện" Click="UndoLastAction_Click" />
+            </ContextMenu>
+        </Grid.ContextMenu>
+        <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
+                <Image x:Name="MainImage"
+                       Source="{Binding CurrentImage}"
+                       Stretch="{Binding Viewer.Stretch, Converter={StaticResource StretchConverter}}"
+                       MaxWidth="{Binding Viewer.MaxImageWidth}"
+                       MaxHeight="{Binding Viewer.MaxImageHeight}"
+                       RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="ImageScale" ScaleX="{Binding Viewer.Zoom}" ScaleY="{Binding Viewer.Zoom}" />
+                    </Image.RenderTransform>
+                </Image>
+            </ScrollViewer>
+        </Border>
+        <Border x:Name="ComparePanel"
+                Visibility="{Binding Compare.IsVisible, Converter={StaticResource BoolToVis}}"
+                Background="#101010"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Margin="8">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Border x:Name="CompareLeftBorder" AutomationProperties.Name="Preview ảnh bên trái, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" BorderBrush="{Binding Compare.IsLeftSelected, Converter={StaticResource CompareBorderBrush}}" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click" PreviewKeyDown="CompareLeft_KeyDown">
+                    <Image x:Name="CompareLeftImage" Source="{Binding Compare.LeftImage}" Stretch="Uniform"/>
+                </Border>
+                <Border x:Name="CompareRightBorder" AutomationProperties.Name="Preview ảnh bên phải, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" Grid.Column="1" BorderBrush="{Binding Compare.IsRightSelected, Converter={StaticResource CompareBorderBrush}}" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click" PreviewKeyDown="CompareRight_KeyDown">
+                    <Image x:Name="CompareRightImage" Source="{Binding Compare.RightImage}" Stretch="Uniform"/>
+                </Border>
+            </Grid>
+        </Border>
+        <Border Panel.ZIndex="100" Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="📂" AutomationProperties.Name="Mở thư mục ảnh" ToolTip="Mở folder ảnh" FontSize="16" Padding="8,2" Click="OpenFolder_Click" />
+                    <Button Content="⚙" AutomationProperties.Name="Mở cài đặt" ToolTip="Settings" Padding="8,4" Margin="5,0,0,0" Click="Settings_Click" />
+                    <Button Content="Fit" AutomationProperties.Name="Đưa ảnh về vừa khung" ToolTip="Đưa ảnh về vừa khung" Padding="8,4" Margin="5,0,0,0" Click="FitImage_Click" />
+                    <ToggleButton x:Name="ToolsButton" Content="⋮" AutomationProperties.Name="Mở công cụ phụ" ToolTip="Công cụ phụ" Margin="5,0,0,0" />
+                    <Popup PlacementTarget="{Binding ElementName=ToolsButton}" Placement="Bottom" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=ToolsButton, Mode=TwoWay}" AllowsTransparency="True">
+                        <Border Background="#202020" BorderBrush="#505050" BorderThickness="1" Padding="8" CornerRadius="4">
+                        <StackPanel>
+                            <Button Content="Recovery" AutomationProperties.Name="Mở phục hồi thao tác" Margin="0,0,0,5" Click="Recovery_Click" />
+                            <Button Content="Diagnostics" AutomationProperties.Name="Mở chẩn đoán hiệu năng" Margin="0,0,0,5" Click="Diagnostics_Click" />
+                            <Button Content="Benchmark" AutomationProperties.Name="Chạy benchmark load ảnh" Margin="0,0,0,5" Click="Benchmark_Click" />
+                            <Button Content="Xóa cache preview" AutomationProperties.Name="Xóa cache preview" Margin="0,0,0,5" Click="ClearCache_Click" />
+                            <Button Content="Bỏ bản (1) trùng hash" AutomationProperties.Name="Xóa hàng loạt bản đánh số trùng hash" Margin="0,0,0,5" Click="RemoveNumberedDuplicates_Click" />
+                            <Button Content="Bỏ original trùng hash" AutomationProperties.Name="Xóa hàng loạt original trùng hash" Click="RemoveOriginalDuplicates_Click" />
+                        </StackPanel>
+                        </Border>
+                    </Popup>
+                    <TextBlock x:Name="FolderText" Visibility="Collapsed" Text="{Binding FolderText}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
+            <StackPanel>
+                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
+                <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown folder   Enter chuyển   Delete thùng rác   Space bỏ qua   F11 fullscreen" Visibility="Collapsed" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

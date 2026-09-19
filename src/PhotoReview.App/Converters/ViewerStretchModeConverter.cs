@@ -1,0 +1,48 @@
+using System;
+using System.Globalization;
+using System.Windows.Data;
+using System.Windows.Media;
+using PhotoReview.App.ViewModels;
+using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
+
+namespace PhotoReview.App.Converters;
+
+/// <summary>
+/// Chuyển đổi ViewerStretchMode sang System.Windows.Media.Stretch trong WPF.
+/// </summary>
+public sealed class ViewerStretchModeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is ViewerStretchMode mode)
+        {
+            return mode == ViewerStretchMode.Uniform
+                ? System.Windows.Media.Stretch.Uniform
+                : System.Windows.Media.Stretch.None;
+        }
+
+        return System.Windows.Media.Stretch.None;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
+/// Chuyển đổi cờ IsLeftSelected / IsRightSelected thành màu viền cho chế độ Compare.
+/// </summary>
+public sealed class CompareBorderBrushConverter : IValueConverter
+{
+    private static readonly Brush SelectedBrush = Brushes.LimeGreen;
+    private static readonly Brush UnselectedBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55));
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is true ? SelectedBrush : UnselectedBrush;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}

@@ -56,9 +56,9 @@ Các rủi ro nên kiểm tra khi tối ưu: directory enumeration/network/antiv
 ## Kiểm tra sau thay đổi
 
 ```powershell
-dotnet run --project PhotoReview.Tests -c Release
-dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish
-.\tools\verify-release.ps1 -ReleaseDirectory 'PhotoReview.App/bin/Release/net10.0-windows/publish'
+dotnet run --project tests/PhotoReview.Tests -c Release
+dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
+.\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
 Các lệnh xác nhận contract và artifact; chúng không thay cho runtime benchmark/GUI acceptance. Quy tắc nghiệp vụ, thao tác an toàn và cache lifecycle trong tài liệu này là phần cần cập nhật đồng bộ khi source thay đổi.

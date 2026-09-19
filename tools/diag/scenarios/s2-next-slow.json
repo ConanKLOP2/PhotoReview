@@ -1,0 +1,10 @@
+{
+  "name": "S2-next-slow",
+  "note": "Plan S2: 100 x Next at human pace (1.5 s). S5 = this scenario run with --mode Fast|Preview|Original.",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "key": "Right", "repeat": 100, "intervalMs": 1500 },
+    { "waitMs": 2000 }
+  ]
+}

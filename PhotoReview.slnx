@@ -1,5 +1,14 @@
 <Solution>
-  <Project Path="PhotoReview.App/PhotoReview.App.csproj" />
-  <Project Path="PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj" />
-  <Project Path="PhotoReview.Tests/PhotoReview.Tests.csproj" />
+  <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
+  <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
+  <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
+  <Project Path="src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj" />
+  <Project Path="src/PhotoReview.Platform.Windows/PhotoReview.Platform.Windows.csproj" />
+  <Project Path="tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj" />
+  <Project Path="tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />
+  <Project Path="tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj" />
+  <Project Path="tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj" />
+  <Project Path="tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj" />
+  <Project Path="tests/PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj" />
+  <Project Path="tests/PhotoReview.Tests/PhotoReview.Tests.csproj" />
 </Solution>

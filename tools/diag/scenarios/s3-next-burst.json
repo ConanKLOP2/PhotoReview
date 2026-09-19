@@ -1,0 +1,10 @@
+{
+  "name": "S3-next-burst",
+  "note": "Plan S3: key held down, ~30 keys/s, 200 presses (routed events; no OS auto-repeat).",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "key": "Right", "repeat": 200, "intervalMs": 33 },
+    { "waitIdle": true, "timeoutMs": 60000 }
+  ]
+}

@@ -24,20 +24,30 @@
 ## Quy trình build, publish và push Git bắt buộc
 
 - Sau mỗi thay đổi hoàn thiện và mỗi commit, luôn chạy test/build Release trước khi bàn giao.
-- “Public” trong quy trình này nghĩa là push commit lên remote GitHub `origin` (không chỉ tạo thư mục publish cục bộ).
+- “Public” trong quy trình này nghĩa là push branch lên remote GitHub `origin` và mở Pull Request vào `master`.
 - Luôn publish bản kiểm tra vào đúng thư mục mặc định:
 
-  `PhotoReview.App/bin/Release/net10.0-windows/publish`
+  `src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 
 - Lệnh chuẩn:
 
-  `dotnet run --project PhotoReview.Tests -c Release`
+  `dotnet run --project tests/PhotoReview.Tests -c Release`
 
-  `dotnet publish PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o PhotoReview.App/bin/Release/net10.0-windows/publish`
+  `dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 
 - Không coi công việc là hoàn tất nếu chưa publish thành công vào thư mục trên. Quy trình này áp dụng trên mọi máy làm việc với project.
-- Sau khi commit hoàn tất và test/publish thành công, push branch hiện tại lên remote:
+- Quy trình bắt buộc sau test/publish thành công:
+  1. Làm việc trên feature branch (không commit thẳng `master`).
+  2. Push branch hiện tại lên remote: `git push origin <branch-name>`.
+  3. Mở Pull Request vào `master` trên GitHub.
+  4. Chỉ merge khi CI (`.github/workflows/ci.yml`) chạy xanh và người dùng duyệt.
+- Lệnh và đường dẫn mặc định luôn đồng bộ với `README.md`.
+- Không coi công việc là hoàn tất nếu chưa kiểm tra push branch thành công (trừ khi remote từ chối hoặc thiếu quyền, khi đó phải báo rõ lỗi).
 
-  `git push origin master`
+## Đợt tái cấu trúc đang chạy
 
-- Không coi công việc là hoàn tất nếu chưa kiểm tra push thành công (trừ khi remote từ chối hoặc thiếu quyền, khi đó phải báo rõ lỗi).
+Agent nhận task phải đọc trước:
+- **Kế hoạch tái cấu trúc:** `docs/refactoring/REFACTOR-PLAN.md`, `docs/refactoring/REFACTOR-TASKS.md`.
+- **Chẩn đoán hiệu năng:** `docs/refactoring/PERF-DIAGNOSIS-PLAN.md`, `docs/refactoring/PERF-DIAGNOSIS-TASKS.md`.
+
+Mỗi phiên: chọn **một** task từ danh sách (xem mục 0 của `REFACTOR-TASKS.md`), sửa **chỉ** file trong danh sách **Files** của task, không push `master`. Coordinator sẽ merge vào `refactor/integration` và kiểm tra toàn bộ.
