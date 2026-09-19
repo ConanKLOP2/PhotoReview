@@ -171,8 +171,8 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | DONE |
 | T72 | Cập nhật tài liệu | T66 | ∥L | | DONE |
-| T73 | GUI acceptance | T72 | | | TODO |
-| T74 | Release | T73 | | | TODO |
+| T73 | GUI acceptance | T72 | | | BLOCKED |
+| T74 | Release | T73 | | | DONE |
 
 **Chẩn đoán hiệu năng:** các task D00–D13 nằm trong [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md). Chúng chạy sau T00 và trước T14a (các task D sửa `MainWindow`/`PreviewImageService`/`PreloadScheduler`). Mọi task di chuyển hoặc tách code phải giữ event `PhotoReview-Perf` và biến môi trường chẩn đoán (ràng buộc **K-4**). T66 dùng lại `--perf-session`/`run-matrix.ps1`/`--perf-analyze` của D06/D11.
 
@@ -1128,7 +1128,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   12. Folder ≥ 5.000 ảnh và folder ảnh ≥ 16 GB: RAM, độ mượt, không treo UI.
   13. Ảnh hỏng hoặc định dạng lạ: vẫn hiển thị qua fallback hoặc báo lỗi đúng, không crash.
 - **Xong khi:** mọi mục PASS, hoặc mục lỗi đã có task sửa.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-20 — BLOCKED: chưa thể chạy 13 nhóm GUI vì phiên Codex không có quyền điều khiển native Windows; bản Release vẫn khởi chạy và phản hồi nhưng không có cửa sổ trong Computer Use inventory. Không đánh dấu PASS dựa trên unit/contract test. Tiếp tục khi desktop control được bật.
 
 ### T74 — Release
 - **Làm:**
@@ -1137,5 +1137,5 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   3. Version `2.0.0` (sửa csproj), publish vào thư mục mặc định mới, `verify-release.ps1` (kiểm cả native DLL nếu có), tag `v2.0.0`, push.
   4. Cập nhật `task_on_progress.md`.
 - **Xong khi:** tag đã push, artifact đã được verify.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-20 — DONE; PR #8 (`codex/release-2.0.0 → master`) đã merge tại `ec790d3`; version `2.0.0` tại `99ce834`, tag `v2.0.0` tồn tại trên `origin`; publish artifact tại `src/PhotoReview.App/bin/Release/net10.0-windows/publish`; `verify-all.ps1` và `verify-release.ps1` đã PASS theo handoff. T73 vẫn chưa có GUI evidence nên được theo dõi độc lập sau release.
 

@@ -229,13 +229,31 @@ public sealed class PreloadScheduler : IDisposable
                 await finished;
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation can arrive while WhenAny/await is between worker
+            // completions. Drain every task still tracked by this scheduler before
+            // reporting completion so Dispose() does not return while a worker is
+            // still unwinding its target cancellation/finally path.
+            await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
+        }
         // Any other exception (unexpected cancellation source, or a genuine
         // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
         // unobserved once the discarded fire-and-forget task
         // (`_ = PreloadAroundAsync(...)`) is garbage collected.
-        catch (Exception ex) { _log.Error("Preload scheduler failed", ex); }
+        catch (Exception ex)
+        {
+            _log.Error("Preload scheduler failed", ex);
+            await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
+        }
         finally { order?.Dispose(); }
+    }
+
+    private static async Task DrainWorkersAsync(IEnumerable<Task> workers)
+    {
+        try { await Task.WhenAll(workers).ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        catch (Exception) { }
     }
 
     private bool HasPreloadHeadroom() => _memoryProbe.HasHeadroom(_options.MemoryLoadLimit, _options.ReserveBytes);
