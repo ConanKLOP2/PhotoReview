@@ -9,7 +9,6 @@ public class AppSettings
 {
     public const int CurrentConfigVersion = 2;
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
-    public string Folder2Name { get; set; } = "Loai-2";
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
     public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
     public bool LoggingEnabled { get; set; } = false;

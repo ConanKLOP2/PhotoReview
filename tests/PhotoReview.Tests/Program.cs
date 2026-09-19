@@ -368,7 +368,7 @@ try
     // AppSettings.Save writes to the user's real LocalAppData config path (it does not honour
     // PHOTOREVIEW_DATA_ROOT), so the durable-save path stays a source-presence check.
     Check(appSettings.Contains("Migrate") && appSettings.Contains("Flush(flushToDisk: true)"), "Config has versioned migration and durable atomic save (source presence, not behavior)", failures);
-    Check(mainWindow.Contains("AppConstants.ImageCacheCapacityBytes") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold (source presence: AppConstants is internal to the app assembly)", failures);
+    Check(mainWindow.Contains("PerformanceOptions.ImageCacheCapacityBytes") && mainWindow.Contains("FullFolderRamThresholdBytes"), "RAM cache policy targets 16 GB and full-folder preload threshold (source presence: PerformanceOptions is internal to the app assembly)", failures);
     Check(File.Exists(Path.Combine(projectRoot, "src", "PhotoReview.App", "FileHashService.cs")) && mainWindow.Contains("_hashService.Clear()"), "Hash service is isolated with bounded cache lifecycle (source presence; FileHashService is asserted behaviorally below)", failures);
     var mainWindowXaml = File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "MainWindow.xaml"));
     Check(!mainWindow.Contains("Image_LeftClick") && !mainWindow.Contains("Image_RightClick") && !mainWindowXaml.Contains("Image_LeftClick") && !mainWindowXaml.Contains("Image_RightClick"), "Image click does not navigate; compare owns click selection (source absence, not behavior)", failures);

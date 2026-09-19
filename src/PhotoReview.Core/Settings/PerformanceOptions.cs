@@ -1,7 +1,10 @@
-namespace PhotoReview.App;
+namespace PhotoReview.Core.Settings;
 
-/// Shared numeric constants that must stay identical across multiple files.
-internal static class AppConstants
+/// <summary>
+/// Shared performance defaults that must stay identical across the app, the benchmark and
+/// <c>PreloadOptions</c>. Not exposed in Settings yet; bind them from settings before surfacing on the UI.
+/// </summary>
+public static class PerformanceOptions
 {
     public const long ImageCacheCapacityBytes = 16L * 1024 * 1024 * 1024;
     public const long MemoryReserveBytes = 2L * 1024 * 1024 * 1024;

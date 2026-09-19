@@ -87,7 +87,7 @@ public partial class App : System.Windows.Application
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),
                 () => ctx.TargetDecodeWidth(),
-                capacityBytes: AppConstants.ImageCacheCapacityBytes,
+                capacityBytes: PerformanceOptions.ImageCacheCapacityBytes,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>());
@@ -99,8 +99,8 @@ public partial class App : System.Windows.Application
                 sp.GetRequiredService<ReviewMetrics>(),
                 getFiles,
                 getTotalBytes,
-                fullFolderRamThresholdBytes: AppConstants.ImageCacheCapacityBytes,
-                memoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
+                fullFolderRamThresholdBytes: PerformanceOptions.ImageCacheCapacityBytes,
+                memoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
                 log: sp.GetService<ILog>()));
 

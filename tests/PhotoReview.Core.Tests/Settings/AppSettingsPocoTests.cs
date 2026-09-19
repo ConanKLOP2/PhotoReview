@@ -11,7 +11,6 @@ public sealed class AppSettingsPocoTests
     {
         var s = new AppSettings();
         Assert.Equal(2, s.ConfigVersion);
-        Assert.Equal("Loai-2", s.Folder2Name);
         Assert.Equal(InitialViewMode.Fit, s.InitialViewMode);
         Assert.Equal(LoadingMode.Preview, s.LoadingMode);
         Assert.False(s.LoggingEnabled);

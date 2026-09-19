@@ -157,7 +157,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | TODO |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | TODO |
 | T51 | Bỏ WinForms | T50b | | | TODO |
-| T52 | Dọn code chết | T47, T88 | | | TODO |
+| T52 | Dọn code chết | T47, T88 | | | DONE |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
 | T53a | Xóa CLI test runner | T50b, T11 | | | TODO |
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | TODO |
@@ -1015,7 +1015,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. `AppConstants` → `PerformanceOptions` (có default, bind từ settings nhưng **chưa** hiện trên UI).
   3. Mỗi `catch { }`: hoặc log qua `ILog`, hoặc thêm comment 1 dòng giải thích.
 - **Xong khi:** fixture config cũ vẫn đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · (1) Xoá `AppSettings.Folder2Name` (không còn ai dùng) và ô trên Settings; config cũ có `Folder2Name` vẫn load (test mới). `ShortcutMappings.MoveToFolder2` giữ nguyên (alias cũ, validator đã bỏ qua). (2) `AppConstants` → `Core/Settings/PerformanceOptions` (public const, đổi tên toàn bộ caller); **chưa** bind từ settings. (3) 9 `catch { }` trong `src/**` đều thêm comment giải thích best-effort. `verify-all.ps1` PASS. **Chưa làm:** gỡ marker tương thích T46d trong `MainWindow.xaml.cs`/`AppSettings.cs` (còn cần cho 10 test source-presence giữ lại ở T47); bind PerformanceOptions từ settings.
 
 ### T53a — Xóa CLI test runner
 - **Files:** `tests/PhotoReview.Tests/` (xóa nếu còn), slnx, `tools/verify-all.ps1`, CI, README, AGENTS.

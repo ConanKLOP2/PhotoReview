@@ -17,8 +17,6 @@
             <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <TextBlock Text="Folder chuyển tới (loại 2)" Margin="0,7,10,7"/>
-            <TextBox x:Name="Folder2Text" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
             <TextBlock Text="Chế độ mở ảnh" Grid.Row="1" Margin="0,7,10,7"/>
             <ComboBox x:Name="ViewModeCombo" Grid.Row="1" Grid.Column="1"><ComboBoxItem Content="Fit"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
             <TextBlock Text="Chế độ tải ảnh" Grid.Row="2" Margin="0,7,10,7"/>

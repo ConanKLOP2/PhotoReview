@@ -10,7 +10,7 @@ namespace PhotoReview.Tests.Unit;
 /// <list type="bullet">
 /// <item>XAML structure checks that parse the markup with <see cref="XDocument"/> instead of grepping it.</item>
 /// <item>Source-presence checks that still have NO behavioral replacement (real HWND, real
-/// LocalAppData, Settings window code-behind, AppConstants being internal, install script).
+/// LocalAppData, Settings window code-behind, PerformanceOptions being internal, install script).
 /// They are kept deliberately rather than deleted; each names what would replace it.</item>
 /// </list>
 /// </summary>
@@ -115,10 +115,10 @@ public sealed class SourcePresenceTests
         Assert.True(ProjectSources.AppCsproj.Contains("BuildStamp")
             && ProjectSources.SettingsWindow.Contains("AssemblyInformationalVersionAttribute"));
 
-    // Replace with T64 (RamBudgetPolicy) once it exists; AppConstants is internal to the app assembly.
-    [Fact(DisplayName = "RAM cache policy targets 16 GB and full-folder preload threshold (source presence: AppConstants is internal to the app assembly)")]
+    // Replace with T64 (RamBudgetPolicy) once it exists; PerformanceOptions is internal to the app assembly.
+    [Fact(DisplayName = "RAM cache policy targets 16 GB and full-folder preload threshold (source presence: PerformanceOptions is internal to the app assembly)")]
     public void RamCachePolicyTargetsSixteenGbAndPreloadThreshold() =>
-        Assert.True(ProjectSources.MainWindow.Contains("AppConstants.ImageCacheCapacityBytes")
+        Assert.True(ProjectSources.MainWindow.Contains("PerformanceOptions.ImageCacheCapacityBytes")
             && ProjectSources.MainWindow.Contains("FullFolderRamThresholdBytes"));
 
     // Window shutdown itself is WPF glue (Closed handler on the Window); the scheduler's own

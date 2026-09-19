@@ -240,7 +240,7 @@ public partial class MainWindow : Window
        explorerSnapshot = await explorerTask _totalSourceBytes = await totalBytesTask mayReplaceInitialFallback await ShowImageAsync(0)
        currentSet.SetEquals(scannedFiles) StatusText.Text = $"{_index + 1}/{_files.Count}" PreloadAroundAsync(_index, _generation) currentPath
        _catalogInteractionGeneration Explorer native order applied Explorer native order ignored after catalog interaction Interlocked.Increment(ref _catalogInteractionGeneration)
-       action.Confirm BatchReviewWindow ShowDialog() AppConstants.ImageCacheCapacityBytes FullFolderRamThresholdBytes _hashService.Clear()
+       action.Confirm BatchReviewWindow ShowDialog() PerformanceOptions.ImageCacheCapacityBytes FullFolderRamThresholdBytes _hashService.Clear()
        _compareSelectedPath ?? _files[_index] _files.Remove(source) _compareSelectedPath = null; var token = Interlocked.Increment(ref _generation);
        e.Key == Key.Escape Close(); WindowsRecycleBin _thumbnailCache.Dispose() _preloadScheduler.Dispose() Title = $"Photo Review — {folder} Title = $"Photo Review - {folder}
        _thumbnailCache.ClearDisk() RecordPresented DiagnosticsWindow review.ShowDialog() RecoveryWindow ReadPendingOperations ReadFailedOperations

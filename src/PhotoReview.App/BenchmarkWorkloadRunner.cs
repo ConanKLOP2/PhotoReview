@@ -102,9 +102,9 @@ public static class BenchmarkWorkloadRunner
         }
         finally
         {
-            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
-            try { if (File.Exists(moved)) File.Delete(moved); } catch { }
-            try { if (File.Exists(copied)) File.Delete(copied); } catch { }
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { /* best-effort cleanup of benchmark temp file */ }
+            try { if (File.Exists(moved)) File.Delete(moved); } catch { /* best-effort cleanup of benchmark temp file */ }
+            try { if (File.Exists(copied)) File.Delete(copied); } catch { /* best-effort cleanup of benchmark temp file */ }
         }
     }
 

@@ -236,8 +236,8 @@ public sealed class PreviewImageService : IPreloadTarget
             // failure types instead of re-querying state that can change mid-catch.
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
             {
-                try { File.Delete(cachePath); } catch { }
-                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { }
+                try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
+                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { /* best-effort: a stray .meta only affects an entry that is already a miss */ }
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
             }
@@ -266,7 +266,7 @@ public sealed class PreviewImageService : IPreloadTarget
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
         stopwatch.Stop();
-        if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
+        if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { /* metrics are best-effort; the source file may have vanished */ }
         return decodedImage;
     });
 

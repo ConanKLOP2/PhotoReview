@@ -55,7 +55,7 @@ internal static class WindowPlacementService
             var temp = PlacementPath + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(placement, JsonOptions));
             try { File.Move(temp, PlacementPath, true); }
-            catch { try { File.Delete(temp); } catch { } throw; }
+            catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
         }
         catch (Exception ex)
         {

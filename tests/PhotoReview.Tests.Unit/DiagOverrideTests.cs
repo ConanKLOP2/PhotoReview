@@ -11,7 +11,7 @@ namespace PhotoReview.Tests.Unit;
 /// (see DiagOptionsTests, D05), and here via the constructor parameters D10 added
 /// (workerCountOverride / disableDiskCacheOverride) so these tests never have to touch process
 /// environment variables (no "GlobalState" collection needed). Precedence for both is: explicit
-/// parameter, then DiagOptions, then the AppConstants/enabled-by-default fallback -- these tests
+/// parameter, then DiagOptions, then the PerformanceOptions/enabled-by-default fallback -- these tests
 /// only exercise the "explicit parameter" leg of that chain; DiagOptionsTests covers the
 /// environment-variable parsing itself.
 /// </summary>
@@ -80,7 +80,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // the production app always has one, but this headless unit test does not, so hitting it
         // would throw (silently, since RunPreloadSchedulerAsync's outer catch swallows it) and
         // abandon the in-flight decode as unobserved background work -- PreloadSchedulerTests
-        // avoids the same trap by always using fewer files than AppConstants.PreloadWorkerCount (8).
+        // avoids the same trap by always using fewer files than PerformanceOptions.PreloadWorkerCount (8).
         var files = MakePreviewFiles(_root, "override-2", 2);
         using var scheduler = new PreloadScheduler(service, metrics, () => files, () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: _ => true, workerCountOverride: 2);
@@ -113,13 +113,12 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         Assert.Equal(0, metrics.Snapshot().SourceReads);
     }
 
-    // AppConstants is internal to PhotoReview.App (no InternalsVisibleTo to this test project),
-    // so the expected default is spelled out here instead of referenced; it must track
-    // AppConstants.PreloadWorkerCount in PhotoReview.App/AppConstants.cs (currently 8).
+    // The expected default is spelled out here so a change to PerformanceOptions.PreloadWorkerCount
+    // (PhotoReview.Core/Settings/PerformanceOptions.cs, currently 8) has to be made deliberately in both places.
     private const int DefaultPreloadWorkerCount = 8;
 
-    [Fact(DisplayName = "With no override, PreloadScheduler uses AppConstants.PreloadWorkerCount")]
-    public void NoOverrideUsesAppConstantsDefault()
+    [Fact(DisplayName = "With no override, PreloadScheduler uses PerformanceOptions.PreloadWorkerCount")]
+    public void NoOverrideUsesPerformanceOptionsDefault()
     {
         var files = MakePreviewFiles(_root, "no-override", 2);
         var diskDirectory = _root.Dir("no-override-cache");

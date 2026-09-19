@@ -1,10 +1,11 @@
+using PhotoReview.Core.Settings;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
 public static class BenchmarkProfiles
 {
-    private const long Reserve = AppConstants.MemoryReserveBytes;
+    private const long Reserve = PerformanceOptions.MemoryReserveBytes;
     public static IReadOnlyList<BenchmarkProfile> All { get; } =
     [
         P("instant-review", "Instant Review", "Ưu tiên ảnh đầu tiên", LoadingMode.Fast, 2, 4, 1, false, BenchmarkWorkload.FirstFrame),

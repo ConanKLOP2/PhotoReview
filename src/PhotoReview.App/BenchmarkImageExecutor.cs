@@ -1,3 +1,4 @@
+using PhotoReview.Core.Settings;
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
@@ -33,11 +34,11 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _diskCacheDirectory = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Cache", Guid.NewGuid().ToString("N"));
         var isOriginal = profile.LoadingMode == LoadingMode.Original;
         _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
-            AppConstants.ImageCacheCapacityBytes, _diskCacheDirectory);
+            PerformanceOptions.ImageCacheCapacityBytes, _diskCacheDirectory);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,
             options: new PreloadOptions(
-                MemoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
-                FullFolderThresholdBytes: AppConstants.ImageCacheCapacityBytes),
+                MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
+                FullFolderThresholdBytes: PerformanceOptions.ImageCacheCapacityBytes),
             memoryProbe: hasHeadroom is null ? PhysicalMemory.Instance : new DelegateMemoryProbe(hasHeadroom),
             uiScheduler: ImmediateUiScheduler.Instance);
     }
@@ -88,7 +89,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         // production doesn't await it either) unwinds via its own OperationCanceledException
         // handling instead of still running when the scheduler/semaphore below are disposed.
         _preloadScheduler.Cancel();
-        if (_lastPreloadTask is not null) { try { await _lastPreloadTask; } catch { } }
+        if (_lastPreloadTask is not null) { try { await _lastPreloadTask; } catch { /* a failed background preload must not fail the benchmark teardown */ } }
         _preloadScheduler.Dispose();
         // Only after every persist write has actually finished is it safe to delete the
         // scratch directory without racing a worker that's still writing into it.
