@@ -22,7 +22,7 @@
 - T87 DONE: thêm `DecoderBackend` setting mặc định WPF và fallback config cũ, combo Settings cho WPF/WIC Direct/TurboJPEG, wiring backend hiện hành vào preview cache key/decoder factory; đổi backend sẽ hủy preload, xoá RAM/disk preview cache và trình diễn lại ảnh hiện tại. App.Tests 162/162; `verify-all.ps1` PASS, publish/verify-release PASS. Người dùng đã xác nhận thủ công WPF → WIC Direct → TurboJPEG khi đang xem ảnh; ảnh hiện tại được trình diễn lại đúng sau mỗi lần đổi backend.
 - T66 đang chạy: baseline sau T87 đã pass S1/F1/Preview/warm 3/3; warm-up S2 bị treo không có tiến độ nên đã dừng và ghi nhận trong `REFACTOR-TASKS.md`. Chưa đánh dấu T66 DONE và chưa mở T65 cho đến khi có baseline đủ các cell S2/S3/S6/S9.
 - T66 DONE: baseline sau T87 hoàn tất cho S1/S2/S3/S6/S9 trên F1 và S9 trên F4; báo cáo ở `docs/refactoring/results/final.md`. S2 100/100 key, S3 200/200, S9 F1/F4 200/200, không lỗi; F4 peak WS khoảng 856 MB. T65 vẫn giữ feature flag tắt mặc định và chưa A/B vì chưa triển khai SourceBytesCache.
-- T65 đang triển khai: đã thêm `SourceBytesCache` LRU/dedup/generation clear/evict, flag `UseSourceBytesCache=false` và capacity 16 GiB; Preview decode đã dùng cache khi bật. Test cache 2/2, full verify PASS (203 Imaging, 163 App). Còn nối ThumbnailCache/FileHashService/PreloadScheduler và chạy A/B; chưa bật mặc định.
+- T65 đang triển khai: đã thêm `SourceBytesCache` LRU/dedup/generation clear/evict, flag `UseSourceBytesCache=false` và capacity 16 GiB; Preview decode và FileHashService dùng cache khi bật. Test cache 2/2, full verify PASS (203 Imaging, 163 App). ThumbnailCache vẫn giữ decode stream cũ do WPF bytes fixture chưa ổn định; PreloadScheduler và A/B còn lại; chưa bật mặc định.
 
 
 ## Review mới nhất — 2026-09-18
