@@ -43,7 +43,7 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
-    public IImageDecoder Decoder => GetDecoder();
+    public IImageDecoder Decoder => GetDecoder(_currentBackend());
     public IImageDecoderFactory? DecoderFactory => _decoderFactory;
 
     // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
@@ -222,7 +222,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 using var cacheStream = File.OpenRead(cachePath);
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
-                decodedImage = new WpfDecodedImage(bitmap, downscaled: true);
+                decodedImage = new WpfDecodedImage(bitmap, downscaled: true, actualBackend: key.Backend);
                 _metrics.RecordDiskCacheHit();
                 if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), PerfStreamLength(cacheStream));
             }
@@ -235,13 +235,13 @@ public sealed class PreviewImageService : IPreloadTarget
             {
                 try { File.Delete(cachePath); } catch { }
                 sourceRead = true;
-                decodedImage = DecodeFromSource(path, targetWidth, perf, perfNav, perfPathId);
+                decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
             }
         }
         else
         {
             sourceRead = true;
-            decodedImage = DecodeFromSource(path, targetWidth, perf, perfNav, perfPathId);
+            decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
         }
 
         // A path can be replaced while decode is in flight. Never publish
@@ -258,7 +258,8 @@ public sealed class PreviewImageService : IPreloadTarget
         // under the downscaled cache key, and Original-mode's full-resolution decode is
         // slower to persist than just re-decoding the source JPEG, so it would cost more
         // than it saves.
-        if (!_disableDiskCache && sourceRead && decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
+        if (!_disableDiskCache && sourceRead && decodedImage.ActualBackend == key.Backend &&
+            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch);
         stopwatch.Stop();
         if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
@@ -342,9 +343,9 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
-    private IImageDecoder GetDecoder() => _decoderFactory?.Create(_currentBackend()) ?? _decoder;
+    private IImageDecoder GetDecoder(DecoderBackend backend) => _decoderFactory?.Create(backend) ?? _decoder;
 
-    private IDecodedImage DecodeFromSource(string path, int targetWidth, bool perf, long perfNav, string perfPathId)
+    private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, int targetWidth, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
         if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
@@ -363,7 +364,7 @@ public sealed class PreviewImageService : IPreloadTarget
         }
 
         long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
-        var decoded = GetDecoder().Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));
+        var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));
         if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetWidth, decoded.Downscaled, targetWidth > 0 && !decoded.Downscaled);
         return decoded;
     }
@@ -372,7 +373,7 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var key = ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend());
         if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
-        var info = await Task.Run(() => GetDecoder().ReadInfo(path));
+        var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path));
         dimensions = (info.Width, info.Height);
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
         _originalDimensions[key] = dimensions;
@@ -412,7 +413,9 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private string GetDiskCachePath(ImageCacheKey key)
     {
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
+        // v2 guarantees every persisted entry was produced by the backend in the key.
+        // Pre-v2 PNGs carried no backend provenance and intentionally become misses.
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v2|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
         return Path.Combine(_diskCacheDirectory, hash + ".png");
     }
 
