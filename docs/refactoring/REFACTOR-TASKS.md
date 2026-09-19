@@ -161,7 +161,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
 | T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |
-| T60 | Mở rộng metric | T53b | | | TODO |
+| T60 | Mở rộng metric | T53b | | | DONE |
 | T61 | R-1 Session debounce | T60 | ∥K | | TODO |
 | T62 | R-2 Journal startup | T60 | ∥K | | TODO |
 | T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | TODO |
@@ -1037,7 +1037,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{Core}/Diagnostics/ReviewMetrics.cs`, `PhysicalFileSystem` (bộ đếm stat/open, bật theo cờ), decoder (đếm open), `{App}/Views/DiagnosticsWindow.*`, `src/PhotoReview.Benchmarking/BenchmarkModels.cs`, test.
 - **Làm:** thêm `SourceOpenCount` (tổng và top 10 path), `StatCount`, `SessionWriteCount`, histogram key→present (bucket 8/16/33/50/100/200/500/+∞ ms), `DecoderFallbackCount`. Đưa vào `BenchmarkReport`.
 - **Xong khi:** report benchmark có các trường mới.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · `ReviewMetrics` thêm `RecordSourceOpen(path)` (`SourceOpenCount` + `TopSourceOpens` top 10, không phân biệt hoa/thường), `RecordStat()` (`StatCount`), `RecordSessionWrite()` (`SessionWriteCount`), histogram present-latency 8 bucket (<=8/16/33/50/100/200/500, >500 ms) trong `RecordPresented`, `DecoderFallbackCount` (tổng theo backend). Nối dây: `PreviewImageService.DecodeFromSource` → source open; `SessionStore` (tham số `ReviewMetrics?`) → session write; `CountingFileSystem` (decorator mới, đếm `FileExists/DirectoryExists/GetFileStat`) đăng ký trong DI của App. `DiagnosticsWindow` hiện 5 dòng mới. Các trường tự đi vào `BenchmarkReport` vì snapshot được serialize (đã kiểm bằng một lần `--benchmark instant-review` thật: cả 6 trường có trong JSON). Test mới: 23 ở Core.Tests (metrics, bucket theory, CountingFileSystem, SessionStore) + 1 ở Imaging.Tests; `verify-all.ps1` PASS. **Khác mô tả task:** đếm stat bằng decorator thay vì sửa `PhysicalFileSystem`, và luôn bật (một Interlocked mỗi lần gọi) thay vì theo cờ; chỉ `PreviewImageService` đếm source open (chưa đếm ThumbnailCache/hash/dimension — T65 cần bổ sung khi có `SourceBytesCache`); trong đường benchmark (`BenchmarkImageExecutor`) `StatCount` luôn 0 vì không dùng `CountingFileSystem`. Chưa có thống kê baseline trước/sau.
 
 ### T61 — R-1 Session debounce ∥K
 - **Files:** `{Core}/Session/SessionWriter.cs`, `ImagePresenter`/`MainViewModel` (đổi `Save` thành `writer.Update`), `App.xaml.cs` (flush khi thoát), test.

@@ -69,6 +69,20 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         Assert.True(snapshot.SourceReads == 1 && results.All(image => ReferenceEquals(image, results[0])));
     }
 
+    [Fact(DisplayName = "A source open is recorded once per decode from source, not per cache hit")]
+    public async Task SourceOpenIsRecordedOncePerSourceDecode()
+    {
+        await _service.GetPreviewAsync(_previewPath);
+        await _service.GetPreviewAsync(_previewPath);
+
+        var snapshot = _metrics.Snapshot();
+
+        Assert.Equal(1, snapshot.SourceOpenCount);
+        var top = Assert.Single(snapshot.TopSourceOpens);
+        Assert.Equal(_previewPath, top.Path);
+        Assert.Equal(1, top.Count);
+    }
+
     [Fact(DisplayName = "Source byte metrics exclude cache deliveries and the cache returns the same decoded bitmap")]
     public async Task SourceByteMetricsExcludeCacheDeliveries()
     {

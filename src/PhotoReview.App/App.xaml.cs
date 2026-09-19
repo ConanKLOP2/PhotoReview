@@ -27,7 +27,8 @@ public partial class App : System.Windows.Application
     {
         // 1. Core Abstractions
         services.AddSingleton<IAppPaths>(_ => PhotoReview.Core.AppPaths.FromEnvironment());
-        services.AddSingleton<IFileSystem, PhysicalFileSystem>();
+        // Metadata queries are counted into ReviewMetrics (StatCount) for the diagnostics/benchmark reports.
+        services.AddSingleton<IFileSystem>(sp => new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()));
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<ILog>(_ => FileLog.Default);
 
@@ -39,7 +40,8 @@ public partial class App : System.Windows.Application
             LogStartupErrorForced));
         services.AddSingleton<SessionStore>(sp => new SessionStore(
             sp.GetRequiredService<IAppPaths>(),
-            sp.GetRequiredService<IFileSystem>()));
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<ReviewMetrics>()));
 
         // 3. Journal & File Actions
         services.AddSingleton<OperationJournal>(sp => new OperationJournal(

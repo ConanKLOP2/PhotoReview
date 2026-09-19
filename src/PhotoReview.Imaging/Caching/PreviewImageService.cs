@@ -357,6 +357,7 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, int targetWidth, bool perf, long perfNav, string perfPathId)
     {
+        _metrics.RecordSourceOpen(path);
         ReadOnlyMemory<byte>? preReadBytes = null;
         if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
