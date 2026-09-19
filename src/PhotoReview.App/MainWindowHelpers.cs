@@ -60,6 +60,18 @@ internal static class MainWindowHelpers
             ClampOffset(currentHorizontalOffset + anchorAfterX - anchorBeforeX, newExtentWidth, viewportWidth),
             ClampOffset(currentVerticalOffset + anchorAfterY - anchorBeforeY, newExtentHeight, viewportHeight));
 
+    internal static ZoomViewportOffsets CalculatePanOffsets(
+        double currentHorizontalOffset,
+        double currentVerticalOffset,
+        double deltaX,
+        double deltaY,
+        double extentWidth,
+        double extentHeight,
+        double viewportWidth,
+        double viewportHeight) => new(
+            ClampOffset(currentHorizontalOffset - deltaX, extentWidth, viewportWidth),
+            ClampOffset(currentVerticalOffset - deltaY, extentHeight, viewportHeight));
+
     internal static ZoomViewportOffsets CalculateZoomViewportOffsets(
         double oldZoom,
         double newZoom,

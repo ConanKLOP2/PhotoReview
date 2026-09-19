@@ -28,6 +28,10 @@ public partial class MainWindow : Window
     private double? _cachedDpiScale;
     private bool _placementRestored;
     private long _viewportOperationVersion;
+    private bool _isPanning;
+    private bool _panMoved;
+    private Point _panStartPoint;
+    private Point _panLastPoint;
 
 #pragma warning disable CS0169, CS0414, IDE0044, IDE0051, IDE0052
     // Reflection compatibility fields for legacy test harnesses
@@ -156,6 +160,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
+        CancelPan();
         _viewModel.FlushSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         _explorerOrder?.Dispose();
@@ -199,6 +204,67 @@ public partial class MainWindow : Window
             ImageScroll.ViewportHeight);
         ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
         ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
+    }
+
+    private void MainImage_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!CanPan()) return;
+
+        _isPanning = true;
+        _panMoved = false;
+        _panStartPoint = e.GetPosition(ImageScroll);
+        _panLastPoint = _panStartPoint;
+        MainImage.Cursor = Cursors.SizeAll;
+        MainImage.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void MainImage_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isPanning || e.LeftButton != MouseButtonState.Pressed) return;
+
+        var point = e.GetPosition(ImageScroll);
+        var deltaX = point.X - _panLastPoint.X;
+        var deltaY = point.Y - _panLastPoint.Y;
+        _panLastPoint = point;
+        if (Math.Abs(point.X - _panStartPoint.X) >= SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(point.Y - _panStartPoint.Y) >= SystemParameters.MinimumVerticalDragDistance)
+        {
+            _panMoved = true;
+        }
+
+        var offsets = MainWindowHelpers.CalculatePanOffsets(
+            ImageScroll.HorizontalOffset,
+            ImageScroll.VerticalOffset,
+            deltaX,
+            deltaY,
+            ImageScroll.ExtentWidth,
+            ImageScroll.ExtentHeight,
+            ImageScroll.ViewportWidth,
+            ImageScroll.ViewportHeight);
+        ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
+        ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
+        if (_panMoved) e.Handled = true;
+    }
+
+    private void MainImage_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var moved = _panMoved;
+        CancelPan();
+        if (moved) e.Handled = true;
+    }
+
+    private void MainImage_LostMouseCapture(object sender, MouseEventArgs e) => CancelPan();
+
+    private bool CanPan() => !_viewModel.Viewer.IsFit &&
+        (ImageScroll.ExtentWidth > ImageScroll.ViewportWidth + 0.5 || ImageScroll.ExtentHeight > ImageScroll.ViewportHeight + 0.5);
+
+    private void CancelPan()
+    {
+        _isPanning = false;
+        _panMoved = false;
+        if (Mouse.Captured == MainImage) Mouse.Capture(null);
+        MainImage.Cursor = Cursors.Arrow;
     }
 
     private void Window_PreviewDragOver(object sender, DragEventArgs e)
@@ -267,6 +333,7 @@ public partial class MainWindow : Window
 
     private async Task ApplyFitViewAsync()
     {
+        CancelPan();
         ++_viewportOperationVersion;
         var version = _viewportOperationVersion;
         var (width, height) = GetViewportSize();

@@ -46,7 +46,11 @@
                        MaxWidth="{Binding Viewer.MaxImageWidth}"
                        MaxHeight="{Binding Viewer.MaxImageHeight}"
                        RenderTransformOrigin="0,0"
-                       SizeChanged="MainImage_SizeChanged">
+                       SizeChanged="MainImage_SizeChanged"
+                       PreviewMouseLeftButtonDown="MainImage_PreviewMouseLeftButtonDown"
+                       PreviewMouseMove="MainImage_PreviewMouseMove"
+                       PreviewMouseLeftButtonUp="MainImage_PreviewMouseLeftButtonUp"
+                       LostMouseCapture="MainImage_LostMouseCapture">
                     <Image.LayoutTransform>
                         <ScaleTransform x:Name="ImageScale" ScaleX="{Binding Viewer.Zoom}" ScaleY="{Binding Viewer.Zoom}" />
                     </Image.LayoutTransform>

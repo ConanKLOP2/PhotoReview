@@ -151,6 +151,21 @@ public sealed class ViewerStateTests
         Assert.Equal(120, result.Vertical, 6);
     }
 
+    [Theory]
+    [InlineData(100, 80, 20, -15, 1000, 800, 400, 300, 80, 95)]
+    [InlineData(0, 0, -1000, 1000, 1000, 800, 400, 300, 600, 0)]
+    public void PanOffsets_MoveOppositeDragAndClampToExtent(
+        double horizontal, double vertical, double deltaX, double deltaY,
+        double extentWidth, double extentHeight, double viewportWidth, double viewportHeight,
+        double expectedHorizontal, double expectedVertical)
+    {
+        var result = MainWindowHelpers.CalculatePanOffsets(horizontal, vertical, deltaX, deltaY,
+            extentWidth, extentHeight, viewportWidth, viewportHeight);
+
+        Assert.Equal(expectedHorizontal, result.Horizontal, 6);
+        Assert.Equal(expectedVertical, result.Vertical, 6);
+    }
+
     [Fact]
     public void ResetFit_RestoresUniformAndCalculatesViewport()
     {

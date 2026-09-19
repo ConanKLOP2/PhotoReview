@@ -175,6 +175,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 - **Xong khi:** test chứng minh triệu chứng hai-click không tái diễn ở level WPF.
 
 - **Tiến độ 2026-09-20:** thêm unit test loại bỏ letterbox và bù anchor theo screen delta; targeted 19/19, App 169/169. Test STA với ScrollViewer thật vẫn còn `TODO` nếu GUI tiếp tục sai.
+- **Tiến độ 2026-09-20:** triển khai pan bằng kéo chuột trái trên ảnh zoom; helper pan đã có test bốn hướng/clamp. App 171/171 và full xUnit 745/745; GUI pan acceptance còn chờ.
 
 ### T89.8 — GUI acceptance
 

@@ -17,7 +17,8 @@
 - T89: wheel zoom tính lại ScrollViewer offset theo điểm con trỏ sau khi layout cập nhật; Fit từ nút, phím tắt và compatibility hook đều reset cả hai offset; thêm kiểm thử pure anchor math.
 - T89 follow-up: wheel thường (không cần Ctrl) zoom theo kiểu Windows Photos; đổi `RenderTransform` thành `LayoutTransform` để extent phản ánh kích thước zoom; Fit truyền viewport thật vào `ResetFit`.
 - T89 implementation pass: Fit dùng tối đa 3 lượt `UpdateLayout`/Render, đo lại kích thước client và cập nhật khi `MainImage`/CurrentImage đổi; tránh tình trạng click lần hai mới chuẩn. Targeted ViewerState 17/17 PASS; full `verify-all.ps1` PASS 741/741 sau patch, publish + verify-release PASS.
-- T89 wheel-after-Fit: bỏ anchor dựa trên `newZoom/oldZoom`; map con trỏ qua vùng ảnh Uniform về tọa độ ảnh nguồn, giữ `anchorBefore` ở hệ tọa độ phần tử trước khi đổi hệ, sau layout bù theo vị trí thực trước/sau. Targeted 19/19, toàn bộ xUnit 743/743, smoke, fault injection và publish PASS; verify-release PASS khi truyền rõ thư mục publish.
+- T89 wheel-after-Fit: bỏ anchor dựa trên `newZoom/oldZoom`; map con trỏ qua vùng ảnh Uniform về tọa độ ảnh nguồn, giữ `anchorBefore` ở hệ tọa độ phần tử trước khi đổi hệ, sau layout bù theo vị trí thực trước/sau.
+- T89 pan: thêm kéo chuột trái trên ảnh zoom, threshold chống nhầm click, clamp offset theo extent/viewport, cursor và cleanup capture khi Fit/mất focus/đóng cửa sổ. Targeted 21/21, toàn bộ xUnit 745/745, smoke, fault injection, publish và verify-release PASS.
 - Phân tích lỗi Fit cần bấm hai lần: lần đầu đo viewport khi scrollbar zoom còn hiện; scrollbar biến mất làm viewport đổi nhưng `ImageScroll.SizeChanged` không bảo đảm chạy. Production presenter còn áp dụng InitialViewMode với `(0,0)`. Plan chi tiết: `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; chưa sửa behavior theo plan mới.
 
 ## Quyết định còn hiệu lực
@@ -30,7 +31,7 @@
 
 ## Việc còn lại
 
-1. **T89 — Zoom wheel/Fit:** đã sửa anchor wheel ngay sau Fit và full validation PASS; cần GUI acceptance kiểm tra Fit → wheel tại nhiều vị trí chuột.
+1. **T89 — Zoom/Fit/Pan:** đã triển khai wheel anchor và pan kéo chuột; full validation PASS, cần GUI acceptance kiểm tra Fit → wheel → drag trên ảnh dọc/ngang.
 2. **Bổ sung T73:** nếu có fixture phù hợp thì kiểm tra Recovery retry và ảnh hỏng/định dạng lạ; không chặn việc tiếp tục T89.
 3. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
 
