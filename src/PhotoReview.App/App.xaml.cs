@@ -53,7 +53,10 @@ public partial class App : System.Windows.Application
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>()));
-        services.AddSingleton<FileHashService>();
+        services.AddSingleton<FileHashService>(sp => new FileHashService(
+            sp.GetRequiredService<SettingsStore>().Current.UseSourceBytesCache
+                ? sp.GetRequiredService<SourceBytesCache>()
+                : null));
         services.AddSingleton<FileActionService>(sp => new FileActionService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),

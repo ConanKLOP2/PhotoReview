@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Collections.Concurrent;
 using System.Threading;
 using PhotoReview.Core.Caching;
+using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.App;
 
@@ -13,6 +14,9 @@ public sealed class FileHashService
         16L * 1024 * 1024, entry => (entry.Path.Length * 2L) + 64, StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Lazy<Task<string>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private int _generation;
+    private readonly SourceBytesCache? _sourceBytesCache;
+
+    public FileHashService(SourceBytesCache? sourceBytesCache = null) => _sourceBytesCache = sourceBytesCache;
 
     public async Task<string> GetAsync(string path, CancellationToken cancellationToken = default)
     {
@@ -33,6 +37,17 @@ public sealed class FileHashService
 
     private async Task<string> ComputeAndCacheAsync(string path, long length, DateTime lastWriteUtc, int generation, CancellationToken cancellationToken)
     {
+        if (_sourceBytesCache is not null)
+        {
+            var bytes = _sourceBytesCache.GetOrRead(path);
+            var hashFromBytes = Convert.ToHexString(SHA256.HashData(bytes));
+            var currentFromBytes = new FileInfo(path);
+            if (currentFromBytes.Length != length || currentFromBytes.LastWriteTimeUtc != lastWriteUtc)
+                throw new IOException($"File changed while hashing: {path}");
+            if (generation == Volatile.Read(ref _generation))
+                _cache.Set(path, new HashEntry(path, length, lastWriteUtc, hashFromBytes));
+            return hashFromBytes;
+        }
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
         var current = new FileInfo(path);
