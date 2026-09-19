@@ -1,8 +1,7 @@
 namespace PhotoReview.Core.Settings;
 
 /// <summary>
-/// Shared performance defaults that must stay identical across the app, the benchmark and
-/// <c>PreloadOptions</c>. Not exposed in Settings yet; bind them from settings before surfacing on the UI.
+/// Shared performance defaults used by the app, benchmark and <c>PreloadOptions</c>.
 /// </summary>
 public static class PerformanceOptions
 {
