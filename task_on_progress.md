@@ -12,6 +12,7 @@
 
 - Validation sau hợp nhất T62–T64: OperationJournalTests 14/14, FolderLoadCoordinatorTests 6/6, RamBudgetPolicyTests 5/5. Full `verify-all.ps1` và publish Release còn phải chạy lại trên branch này trước bàn giao.
 - D07 probe đã xác định thêm lỗi idle: `ReviewMetrics.Snapshot()` tạo collection mới, nên `record.Equals` luôn false dù counter đứng yên; `WaitIdleAsync` reset ổn định liên tục. Commit `2bedf09` so sánh metric theo giá trị. Probe S1/F1/Preview/cold-app chạy pass, `idleTimeouts=0`, `errors=[]`, 58 ảnh, idle sau 1.043 giây. Harness hiện đủ điều kiện để chạy ma trận rút gọn.
+- D07 reduced đã chạy và phân tích: S1 F1 đủ 3 điều kiện × 3 lần (9/9 pass); S2 F1 warm/cold-app/cold-diskcache (3/3 pass, mỗi run 100 Next); S3 F1 (3/3 pass, 200 Next); S6 F1 (3/3 pass); S9 F4 (3/3 pass, 200 Next). `--perf-analyze` tạo summary cho các matrix tại `work/diag/runs/d07-w6-20260919-204356`, `d07-w6-s2-cold-20260919`, `d07-w6-s3s6-20260919`, `d07-w6-s9-20260919`. Kết quả sơ bộ: S1 first P50 khoảng 220–253 ms, final P50 khoảng 419–493 ms; S2 warm final P50 54.8 ms, hit rate 42.6%; S9 F4 final P50 khoảng 386–395 ms, decode chiếm khoảng 52–58%. D07 còn thiếu biến thể worker/disk-cache/PREREAD của D07 đầy đủ; cold-os chưa chạy theo thiết kế.
 
 
 ## Review mới nhất — 2026-09-18
