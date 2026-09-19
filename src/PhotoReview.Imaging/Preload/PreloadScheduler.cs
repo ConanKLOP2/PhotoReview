@@ -21,6 +21,7 @@ public sealed class PreloadScheduler : IDisposable
     private readonly IMemoryProbe _memoryProbe;
     private readonly IUiScheduler _ui;
     private readonly ILog _log;
+    private readonly Func<string, CancellationToken, Task>? _prefetchSourceBytes;
 
     private readonly int _workerCount;
     private CancellationTokenSource _preloadCts = new();
@@ -50,7 +51,8 @@ public sealed class PreloadScheduler : IDisposable
         PreloadOptions? options = null,
         IMemoryProbe? memoryProbe = null,
         IUiScheduler? uiScheduler = null,
-        ILog? log = null)
+        ILog? log = null,
+        Func<string, CancellationToken, Task>? prefetchSourceBytes = null)
     {
         _target = target ?? throw new ArgumentNullException(nameof(target));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
@@ -60,6 +62,7 @@ public sealed class PreloadScheduler : IDisposable
         _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
         _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
         _log = log ?? NullLog.Instance;
+        _prefetchSourceBytes = prefetchSourceBytes;
 
         // D10: precedence is the explicit option/parameter, then the diagnostic environment variable
         var diagOverride = Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS");
@@ -86,7 +89,8 @@ public sealed class PreloadScheduler : IDisposable
         IMemoryProbe? memoryProbe = null,
         int? workerCountOverride = null,
         IUiScheduler? uiScheduler = null,
-        ILog? log = null)
+        ILog? log = null,
+        Func<string, CancellationToken, Task>? prefetchSourceBytes = null)
         : this(target, metrics, snapshotFiles, totalSourceBytes,
             new PreloadOptions(
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
@@ -96,7 +100,8 @@ public sealed class PreloadScheduler : IDisposable
                 ? new DelegateMemoryProbe(hasHeadroom)
                 : throw new ArgumentNullException(nameof(memoryProbe), "A real memory probe or an explicit test override is required.")),
             uiScheduler,
-            log)
+            log,
+            prefetchSourceBytes)
     {
     }
 
@@ -260,6 +265,8 @@ public sealed class PreloadScheduler : IDisposable
             }
             try
             {
+                if (_prefetchSourceBytes is not null)
+                    await _prefetchSourceBytes(path, cancellationToken).ConfigureAwait(false);
                 var beforeReads = _metrics.Snapshot().SourceReads;
                 await _target.PreloadAsync(path, cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();

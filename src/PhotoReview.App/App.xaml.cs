@@ -107,7 +107,10 @@ public partial class App : System.Windows.Application
         });
 
         services.AddSingleton<Func<Func<string[]>, Func<long>, PreloadScheduler>>(sp =>
-            (getFiles, getTotalBytes) => new PreloadScheduler(
+            (getFiles, getTotalBytes) =>
+            {
+                var settingsStore = sp.GetRequiredService<SettingsStore>();
+                return new PreloadScheduler(
                 sp.GetRequiredService<PreviewImageService>(),
                 sp.GetRequiredService<ReviewMetrics>(),
                 getFiles,
@@ -116,7 +119,11 @@ public partial class App : System.Windows.Application
                 memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
                 workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,
-                log: sp.GetService<ILog>()));
+                log: sp.GetService<ILog>(),
+                prefetchSourceBytes: settingsStore.Current.UseSourceBytesCache
+                    ? (path, token) => Task.Run(() => sp.GetRequiredService<SourceBytesCache>().GetOrRead(path), token)
+                    : null);
+            });
 
         // 7. ViewModels & Coordinators
         services.AddTransient<PhotoReview.App.ViewModels.ViewerState>();
