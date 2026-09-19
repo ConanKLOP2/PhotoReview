@@ -1,6 +1,6 @@
 # PhotoReview — Task tái cấu trúc (B + C3)
 
-> Review sau merge 2026-09-18 (`afb2f77`): [plan sửa lỗi](MERGED-CODE-REVIEW-PLAN.md) và [task MR00–MR06](MERGED-CODE-REVIEW-TASKS.md). Đề xuất chờ duyệt; ưu tiên preload/gate trước D07, hoàn tất contract/quality trước T87. Không thay trạng thái các task cũ bằng kết quả review này.
+> Review sau merge 2026-09-18 (`afb2f77`, đã hoàn tất): [plan sửa lỗi](archive/MERGED-CODE-REVIEW-PLAN.md) và [task MR00–MR06](archive/MERGED-CODE-REVIEW-TASKS.md). Hồ sơ được lưu trong `archive`; trạng thái hiện hành nằm trong bảng task bên dưới.
 
 - **Plan:** [`REFACTOR-PLAN.md`](REFACTOR-PLAN.md) · **Cập nhật:** 2026-09-16
 - **Trạng thái hợp lệ:** `TODO` · `IN PROGRESS` · `BLOCKED` · `DONE`
@@ -116,16 +116,16 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T21c | `JournalEntry` dùng enum | T21a | | | DONE |
 | T24 | Chuyển layout `src/`/`tests/` | T21b, T21c, T22a–c, T23a–b | | ⛔Q3 | DONE |
 | T25a | `SettingsStore` | T24 | | | DONE |
-| T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | TODO |
-| T26a | `OperationJournal` qua abstraction | T24 | ∥E | | TODO |
-| T26b | `SessionStore` qua abstraction | T24 | ∥E | | TODO |
+| T25b | `SettingsValidator` + `IKeyNameValidator` | T25a | | | DONE |
+| T26a | `OperationJournal` qua abstraction | T24 | ∥E | | DONE |
+| T26b | `SessionStore` qua abstraction | T24 | ∥E | | DONE |
 | T26c | `RecoveryRetryService` thành instance | T26a | | | DONE |
 | T30 | Tạo Imaging, Platform, Imaging.Tests, Integration.Tests | T25b, T26b, T26c | | | DONE |
 | T31a | `DiskCacheStore` thành instance | T30 | ∥F | | DONE |
 | T31b | `IImageDecoder` + `WpfBitmapImageDecoder` | T30 | ∥F | | DONE |
-| T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | TODO |
-| T33a | Chuyển Explorer sang Platform | T30 | ∥F | | TODO |
-| T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | TODO |
+| T32 | `PreloadScheduler` bỏ Dispatcher | T30 | ∥F | | DONE |
+| T33a | Chuyển Explorer sang Platform | T30 | ∥F | | DONE |
+| T33b | Chuyển RecycleBin, Memory, InstanceLock, NaturalComparer sang Platform | T30 | ∥F | | DONE |
 | T31c | `IDecodedImage` + `WpfImageAdapter` (K-1) | T31a, T31b, T32, T33a, T33b | | | DONE |
 | T34 | `AppLog` → `FileLog : ILog` | T31c, T32, T33a, T33b | | | DONE |
 | T35 | Test kiến trúc | T34 | | ⛔Q6 | DONE |
@@ -152,24 +152,25 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T46b | `MainViewModel`: file action + undo | T46a, T42b | | | DONE |
 | T46c | `MainViewModel`: duplicate, recovery, diagnostics, settings | T46b, T42c | | | DONE |
 | T46d | `MainWindow` binding, rút gọn code-behind | T46c | | | DONE |
-| T47 | Xóa test source-presence | T46d | | | TODO |
-| T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | TODO |
-| T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | TODO |
-| T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | TODO |
-| T51 | Bỏ WinForms | T50b | | | TODO |
-| T52 | Dọn code chết | T47, T88 | | | TODO |
-| T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
-| T53a | Xóa CLI test runner | T50b, T11 | | | TODO |
-| T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | TODO |
-| T60 | Mở rộng metric | T53b | | | TODO |
-| T61 | R-1 Session debounce | T60 | ∥K | | TODO |
-| T62 | R-2 Journal startup | T60 | ∥K | | TODO |
-| T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | TODO |
-| T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | TODO |
-| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | TODO |
-| T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | TODO |
-| T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
-| T72 | Cập nhật tài liệu | T66 | ∥L | | TODO |
+| T47 | Xóa test source-presence | T46d | | | DONE |
+| T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | DONE |
+| T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | DONE |
+| T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | DONE |
+| T51 | Bỏ WinForms | T50b | | | DONE |
+| T52 | Dọn code chết | T47, T88 | | | IN PROGRESS |
+| T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | DONE |
+| T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
+| T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |
+| T60 | Mở rộng metric | T53b | | | DONE |
+| T61 | R-1 Session debounce | T60 | ∥K | | DONE |
+| T62 | R-2 Journal startup | T60 | ∥K | | DONE |
+| T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | DONE |
+| T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
+| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | DONE |
+| T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | DONE |
+| T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
+| T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | DONE |
+| T72 | Cập nhật tài liệu | T66 | ∥L | | DONE |
 | T73 | GUI acceptance | T72 | | | TODO |
 | T74 | Release | T73 | | | TODO |
 
@@ -216,7 +217,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Viết `baseline.md`: cấu hình máy (CPU, RAM, ổ đĩa, power plan), median/P95/max từng profile, `DecodeMilliseconds`, `UiAssignMilliseconds`, `PresentMilliseconds`, source reads/bytes, RAM peak (Task Manager hoặc `Get-Process`).
   5. Ghi danh sách ảnh bị hiển thị sai hướng (kiểm bằng mắt, dùng cho T83).
 - **Xong khi:** `baseline.md` có đủ các số liệu trên.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Thêm `AppSettings.DecoderBackend` mặc định `Wpf`, combo Settings cho WPF/WIC Direct/TurboJPEG, wiring `PreviewStateContext` theo settings, đổi backend thì cancel preload + clear RAM/disk preview cache + present lại ảnh hiện tại; legacy config không có field vẫn về WPF. Factory fallback và Diagnostics fallback counter đã có sẵn. App.Tests 162/162; `verify-all.ps1` PASS. Người dùng đã xác nhận thủ công chuỗi WPF → WIC Direct → TurboJPEG trong lúc xem ảnh; ảnh hiện tại được trình diễn lại đúng sau mỗi lần đổi backend.
 
 ### T02 — CI ∥A
 - **Files:** `.github/workflows/ci.yml` (mới).
@@ -816,13 +817,13 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. Khi đổi backend: hủy preload, clear RAM cache (key đã khác nên không lẫn pixel, việc clear chỉ để giải phóng RAM), rồi preload lại quanh ảnh hiện tại. Giống cách xử lý khi đổi `LoadingMode`.
   3. Diagnostics hiển thị backend đang dùng và số lần fallback.
 - **Xong khi:** VERIFY đạt, kiểm thủ công đổi backend khi đang xem.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Thêm `AppSettings.DecoderBackend` mặc định `Wpf`, combo Settings cho WPF/WIC Direct/TurboJPEG, wiring `PreviewStateContext` theo settings, đổi backend thì cancel preload + clear RAM/disk preview cache + present lại ảnh hiện tại; legacy config không có field vẫn về WPF. Factory fallback và Diagnostics fallback counter đã có sẵn. App.Tests 162/162; `verify-all.ps1` PASS. Người dùng đã xác nhận thủ công chuỗi WPF → WIC Direct → TurboJPEG trong lúc xem ảnh; ảnh hiện tại được trình diễn lại đúng sau mỗi lần đổi backend.
 
 ### T88 — Scaling chất lượng cao ∥J
 - **Files:** `{App}/Views/MainWindow.xaml`, `{Core}/Settings/AppSettings.cs` (`ScalingQuality`, mặc định `HighQuality`), `{App}/Views/SettingsWindow.xaml(.cs)`, `{App}/ViewModels/ViewerState.cs` (property), test ViewModel.
 - **Làm:** bind `RenderOptions.BitmapScalingMode` của `MainImage`, `CompareLeftImage`, `CompareRightImage` theo setting. `HighQuality` → `BitmapScalingMode.HighQuality`, `Linear` → `Linear`.
 - **Xong khi:** VERIFY đạt. Kiểm thủ công zoom 400% ở cả hai chế độ và ghi nhận xét về độ mượt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Thêm `AppSettings.ScalingQuality` (mặc định HighQuality), `ViewerState.ScalingQuality`, `ScalingQualityConverter`, bind `RenderOptions.BitmapScalingMode` cho MainImage/CompareLeft/CompareRight, combo trong Settings (đồng bộ lại sau khi lưu). Test: 2 test mới trong `ViewerStateTests`; `verify-all.ps1` PASS (App.Tests 91). **Chưa** kiểm thủ công zoom 400% hai chế độ; cần người dùng nhận xét độ mượt.
 
 ---
 
@@ -984,7 +985,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{UT}/SourcePresenceTests.cs`, `{UT}/TestInfrastructure.cs` (`ProjectSources`), test trong `ServiceBehaviorTests` dùng `.Contains(` trên source, `{UT}/MainWindowBehaviorTests*.cs`, `test-parity.md`.
 - **Làm:** theo bảng 3 của T10: `REPLACE-BY` thì xóa và ghi tên test thay thế; `KEEP-XAML` thì viết lại bằng `XDocument` (tối đa 5 test); `DROP` thì xóa.
 - **Xong khi:** `git grep -n "\.Contains(" -- tests | grep -i source` không còn kết quả kiểm tra file `.cs`.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Xoá 58 test trong `SourcePresenceTests` + 2 trong `CacheExplorerRegressionTests` sau khi đối chiếu từng test thay thế có thật (bảng ở cuối `test-parity.md`, mục "T47 outcome"); viết lại 3 test XAML bằng `XDocument`. Giữ 10 test source-presence chưa có thay thế (Settings code-behind, HWND, ThumbnailCache chưa dùng DiskCacheStore, T64, script). Tiêu chí "không còn .Contains trên .cs" chưa đạt hoàn toàn. Tests.Unit 257 → 199; `verify-all.ps1` xem dưới.
 
 ---
 
@@ -994,19 +995,19 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/Benchmark{Engine,ImageExecutor,Models,Profiles,WorkloadRunner}.cs` → `src/PhotoReview.Benchmarking/`, test benchmark, slnx, reference.
 - **Làm:** di chuyển. `BenchmarkImageExecutor` dựng service qua constructor, dùng lại đăng ký DI (tạo `ServiceCollection` riêng cho mỗi lần chạy).
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Q2 = giữ `BenchmarkWindow`. Chuyển 5 file `Benchmark{Engine,ImageExecutor,Models,Profiles,WorkloadRunner}.cs` sang `src/PhotoReview.Benchmarking` (namespace `PhotoReview.Benchmarking`); `AppLog.` → `FileLog.Default.`, `PhysicalMemory` → `WindowsMemoryProbe`. `App`, `Tests`, `Tests.Unit` tham chiếu project mới; thêm Rule 7 (Benchmarking không phụ thuộc App). `verify-all.ps1` PASS (Architecture 7). **Chưa làm:** `BenchmarkImageExecutor` vẫn dựng service trực tiếp, chưa dùng `ServiceCollection` riêng như task mô tả. Test benchmark vẫn ở `Tests.Unit` (chưa tách project test).
 
 ### T50b — `Benchmark.Cli` ⛔Q2
 - **Files:** `{CLI}/Program.cs`, `LocalImageBenchmark.cs`, `LocalUiNextProbe.cs`, `DecoderBenchmark.cs` → `tools/PhotoReview.Benchmark.Cli/`; `tools/benchmark-folder.ps1`; `{App}/Views/BenchmarkWindow.*`; README.
 - **Làm:** CLI giữ **nguyên cú pháp** `--benchmark`, `--benchmark-all`, `--benchmark-actions`, `--benchmark-list-profiles`, `--preload-bench`, `--ui-next-probe`, `--explorer-probe`, `--decoder-bench`. Phần check test còn lại trong `Program.cs` (nếu có) phải đã được chuyển ở T11, không chép sang CLI. `BenchmarkWindow`: làm theo Q2 (giữ và tham chiếu Benchmarking, hoặc xóa khỏi App cùng menu).
 - **Xong khi:** `--benchmark-list-profiles` in đủ profile, `--benchmark` chạy được.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Q2 = giữ `BenchmarkWindow` (đã tham chiếu `Benchmarking` từ T50a). Chuyển nguyên project `tests/PhotoReview.Tests` sang `tools/PhotoReview.Benchmark.Cli` (đổi tên csproj, giữ namespace `PhotoReview.Tests` và cú pháp CLI). Cập nhật slnx, `Tests.Unit`, `verify-all.ps1`, `run-matrix.ps1`, `ci.yml`, README, AGENTS.md (đường dẫn lệnh), `outputs/APP-MECHANISMS-VI.md`. `--benchmark-list-profiles` in đủ profile; `verify-all.ps1` và `test-verify-gates.ps1` PASS. **Lưu ý:** chuyển cả project (gồm Perf*/IoDecodeSplit và phần check test cũ của `Program.cs`) vì `Program.cs` điều phối tất cả chế độ; phần check cũ sẽ xoá ở T53a. `tools/benchmark-folder.ps1` không đổi (script độc lập, không dùng CLI).
 
 ### T51 — Bỏ WinForms
 - **Files:** `{App}/PhotoReview.App.csproj`, `{App}/Services/DialogService.cs` (`PickFolder` dùng `Microsoft.Win32.OpenFolderDialog`), `{App}/Views/*.xaml.cs` có `Forms.` hoặc alias dài.
 - **Làm:** xóa `UseWindowsForms`. Rút gọn `System.Windows.MessageBox` thành `MessageBox`, tương tự cho `DragEventArgs`, `KeyEventArgs`. Ghi kích thước thư mục publish trước và sau.
 - **Xong khi:** `git grep "System.Windows.Forms" -- src` không có kết quả, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Bỏ `UseWindowsForms` khỏi `PhotoReview.App` và `PhotoReview.Platform.Windows`. Chọn folder dùng `Microsoft.Win32.OpenFolderDialog` (WpfDialogService, BenchmarkWindow); Import/Export dùng `Microsoft.Win32.OpenFileDialog/SaveFileDialog` (ActionProfilesWindow); `Screen.AllScreens` trong `WindowPlacementService` thay bằng P/Invoke `EnumDisplayMonitors` + `GetMonitorInfo` (work area). Cập nhật 2 check source-presence liên quan (xUnit + CLI cũ). `git grep System.Windows.Forms -- src` không còn kết quả. Kích thước publish framework-dependent: 2.241.187 → 2.239.175 byte (gần như không đổi vì WinForms nằm trong shared framework, không đóng gói). `verify-all.ps1` PASS. **Chưa kiểm thủ công:** hộp thoại chọn folder/file và khôi phục vị trí cửa sổ trên máy đa màn hình.
 
 ### T52 — Dọn code chết (sau T88)
 - **Files:** `{Core}/Settings/*` (`Folder2Name`, `MoveToFolder2`), `{App}/Views/SettingsWindow.*`, `{App}/AppConstants.cs` → `{Core}/Settings/PerformanceOptions.cs`, các `catch { }` trong `src/**`.
@@ -1015,19 +1016,19 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. `AppConstants` → `PerformanceOptions` (có default, bind từ settings nhưng **chưa** hiện trên UI).
   3. Mỗi `catch { }`: hoặc log qua `ILog`, hoặc thêm comment 1 dòng giải thích.
 - **Xong khi:** fixture config cũ vẫn đạt, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · (1) Xoá `AppSettings.Folder2Name` (không còn ai dùng) và ô trên Settings; config cũ có `Folder2Name` vẫn load (test mới). `ShortcutMappings.MoveToFolder2` giữ nguyên (alias cũ, validator đã bỏ qua). (2) `AppConstants` → `Core/Settings/PerformanceOptions` (public const, đổi tên toàn bộ caller); **chưa** bind từ settings. (3) 9 `catch { }` trong `src/**` đều thêm comment giải thích best-effort. `verify-all.ps1` PASS. **Chưa làm:** gỡ marker tương thích T46d trong `MainWindow.xaml.cs`/`AppSettings.cs` (còn cần cho 10 test source-presence giữ lại ở T47); bind PerformanceOptions từ settings.
 
 ### T53a — Xóa CLI test runner
 - **Files:** `tests/PhotoReview.Tests/` (xóa nếu còn), slnx, `tools/verify-all.ps1`, CI, README, AGENTS.
 - **Làm:** xác nhận `test-parity.md` không còn `MISSING`. Bỏ gate "Run persistence, journal…" trong `verify-all.ps1` và lệnh `dotnet run --project PhotoReview.Tests` trong tài liệu.
 - **Xong khi:** CI và VERIFY (bản mới) đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Xoá phần check test (khoảng 540 dòng, 144 `Check(...)`) khỏi `tools/PhotoReview.Benchmark.Cli/Program.cs`; CLI chỉ còn các chế độ đo và in usage (exit 2) khi thiếu/sai chế độ. Bỏ gate "Run persistence, journal…" khỏi `verify-all.ps1` và `test-verify-gates.ps1`; bỏ bước "Run contract tests" khỏi CI (CI đã chạy từng suite xUnit riêng); README/AGENTS/`outputs/APP-MECHANISMS-VI.md` chỉ lệnh chuẩn là `.	oolserify-all.ps1`. Parity: `test-parity.md` Bảng 1 không có MISSING (146 dòng; runner còn 144 `Check` sau T12). `verify-all.ps1` và `test-verify-gates.ps1` PASS, tổng xUnit 717. CI remote chưa đọc.
 
 ### T53b — Chia `Tests.Unit`
 - **Files:** `tests/PhotoReview.Tests.Unit/**` → `Core.Tests` / `Imaging.Tests` / `App.Tests` / `Integration.Tests`, slnx, CI.
 - **Làm:** di chuyển từng file test theo lớp mà nó kiểm. Hạ tầng dùng chung (`TempRoot`, fakes) đặt vào `tests/PhotoReview.TestSupport` (class library). Xóa `Tests.Unit`.
 - **Xong khi:** tổng số test không giảm so với trước (ghi số trước và sau), CI đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Xoá `Tests.Unit`; test chuyển vào thư mục `Legacy/` của từng project (giữ namespace cũ `PhotoReview.Tests.Unit` để đổi tối thiểu): **App.Tests** (Service/CacheExplorer/DiagOptions/DiagOverride/PerfTrace/AppLog/AppSettings/SourcePresence + `ProjectSources`), **Imaging.Tests** (PreviewImageService, DiskCacheStore), **Core.Tests** (OperationJournal, FileActionConcurrency, BenchmarkScenario), **Integration.Tests** (3 file MainWindowBehavior + `StaTestHost` vì WPF chỉ cho một `Application` mỗi process và `CompositionRootTests` của App.Tests đã tạo sẵn; Benchmark*/PerfAnalyze/PerformanceTestHarness). Hạ tầng dùng chung (`TempRoot`, `DataRootFixture`, `TestImages.PreviewPng`) ở `tests/PhotoReview.TestSupport` (net10.0); `GlobalStateCollection` phải nằm trong từng assembly test nên được nhân bản. `AppLogTests` giờ dùng `FileLog` riêng thay vì `FileLog.Default` (singleton lazy, phụ thuộc thứ tự chạy khi chung assembly với test khác). App thêm `InternalsVisibleTo` cho `App.Tests`/`Integration.Tests`. `verify-all.ps1` bỏ gate Tests.Unit; CI bỏ bước tương ứng. Số test: 717 trước (Arch 7, Core 246, Imaging 166, Integration 8, App 91, Unit 199) và 717 sau (7, 268, 195, 59, 188); Imaging dao động ±1 giữa các lần chạy (196/195), chưa tìm nguyên nhân. **Chưa làm:** đổi namespace `PhotoReview.Tests.Unit`, chia nhỏ `ServiceBehaviorTests` theo lớp (đang ở App.Tests vì dùng FileHashService/PreloadOrderService/ImageCacheKey). CI remote chưa đọc. **Bổ sung cùng ngày:** đổi namespace `PhotoReview.Tests.Unit` sang `PhotoReview.<Project>.Tests` và bỏ thư mục `Legacy/` (Fixtures ở `Fixtures/`). Chia `ServiceBehaviorTests`: 7 class thuần Core → `Core.Tests/Services` (biên dịch được không cần App), `ReviewMetricsTests` → `Core.Tests/Services`, `FileHashServiceTests` → `App.Tests/Services`, `PreloadOrderServiceTests` → `Imaging.Tests/Preload` (đổi tên `PreloadOrderServiceBehaviorTests` vì trùng tên). Xoá `TempRoot` cục bộ của `ImageCacheKeyTests` để dùng bản TestSupport. Số test sau bước này: Arch 7, Core 292, Imaging 197–198, App 162, Integration 59 (≈718, không giảm; Imaging dao động ±1 giữa các lần chạy, chưa rõ nguyên nhân). Lưu ý: một số class trong `Core.Tests/Services` (`SiblingFolderServiceTests`, `ComparePairServiceTests`…) trùng tên với test T23a có sẵn ở namespace khác — chưa khử trùng lặp để không giảm số test. **Khử trùng lặp (cùng ngày):** so sánh từng cặp test legacy với test T23a/T26 cùng tên. Xoá hẳn vì đã được bao phủ bởi bản mới: `SiblingFolderServiceTests` (1), `ImageSortServiceTests` (4), `ReviewMetricsTests` (2), `PreloadOrderService*` (2, hai file y hệt), `RecoveryRetryServiceTests` legacy (2), 2 test journal (invalid JSONL, pending recycle). Gộp phần chỉ legacy có vào bản mới: `ComparePairServiceTests` (+ stays within folder, single-file), `DragDropInputServiceTests` (+ image kind, unsupported input), `ExplorerSnapshotValidatorTests` (+ provider fakeable). Giữ nguyên test legacy không có bản tương đương (durable JSONL, concurrent journal, fixture legacy, reconcile move/copy bằng fingerprint, `SessionStore` qua `PHOTOREVIEW_DATA_ROOT` → `SessionStoreEnvironmentRootTests`). Tổng test: 718 → khoảng 696 (−26 xoá, +5 gộp). `PreloadSafetyTests.CancelThenRestart_UsesFreshLifetime_AndDisposeStopsIt` (có sẵn, không do bước này) fail 1 lần khi các project test chạy song song, 6/6 pass khi chạy riêng — test dựa timing, cần xem lại; có thể là nguyên nhân số test Imaging dao động.
 
 ---
 
@@ -1037,27 +1038,27 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{Core}/Diagnostics/ReviewMetrics.cs`, `PhysicalFileSystem` (bộ đếm stat/open, bật theo cờ), decoder (đếm open), `{App}/Views/DiagnosticsWindow.*`, `src/PhotoReview.Benchmarking/BenchmarkModels.cs`, test.
 - **Làm:** thêm `SourceOpenCount` (tổng và top 10 path), `StatCount`, `SessionWriteCount`, histogram key→present (bucket 8/16/33/50/100/200/500/+∞ ms), `DecoderFallbackCount`. Đưa vào `BenchmarkReport`.
 - **Xong khi:** report benchmark có các trường mới.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · `ReviewMetrics` thêm `RecordSourceOpen(path)` (`SourceOpenCount` + `TopSourceOpens` top 10, không phân biệt hoa/thường), `RecordStat()` (`StatCount`), `RecordSessionWrite()` (`SessionWriteCount`), histogram present-latency 8 bucket (<=8/16/33/50/100/200/500, >500 ms) trong `RecordPresented`, `DecoderFallbackCount` (tổng theo backend). Nối dây: `PreviewImageService.DecodeFromSource` → source open; `SessionStore` (tham số `ReviewMetrics?`) → session write; `CountingFileSystem` (decorator mới, đếm `FileExists/DirectoryExists/GetFileStat`) đăng ký trong DI của App. `DiagnosticsWindow` hiện 5 dòng mới. Các trường tự đi vào `BenchmarkReport` vì snapshot được serialize (đã kiểm bằng một lần `--benchmark instant-review` thật: cả 6 trường có trong JSON). Test mới: 23 ở Core.Tests (metrics, bucket theory, CountingFileSystem, SessionStore) + 1 ở Imaging.Tests; `verify-all.ps1` PASS. **Khác mô tả task:** đếm stat bằng decorator thay vì sửa `PhysicalFileSystem`, và luôn bật (một Interlocked mỗi lần gọi) thay vì theo cờ; chỉ `PreviewImageService` đếm source open (chưa đếm ThumbnailCache/hash/dimension — T65 cần bổ sung khi có `SourceBytesCache`); trong đường benchmark (`BenchmarkImageExecutor`) `StatCount` luôn 0 vì không dùng `CountingFileSystem`. Chưa có thống kê baseline trước/sau.
 
 ### T61 — R-1 Session debounce ∥K
 - **Files:** `{Core}/Session/SessionWriter.cs`, `ImagePresenter`/`MainViewModel` (đổi `Save` thành `writer.Update`), `App.xaml.cs` (flush khi thoát), test.
 - **Làm:** debounce 500 ms bằng `IClock` + timer inject được. Ghi trên worker, vẫn atomic. Có `FlushAsync()`. Đổi folder thì flush folder cũ trước.
 - **Xong khi:** 100 lần update chỉ ghi ≤ 2 lần. Test flush khi thoát và khi đổi folder đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Thêm `Core/Session/SessionWriter`: `Update(state)` sao chép state theo folder và lên lịch một lần ghi sau 500 ms (cửa sổ debounce cố định, không kéo dài khi có update mới nên luôn ≤ 1 lần ghi / 500 ms), ghi trên worker qua `SessionStore.Save` (vẫn atomic), `Flush()`/`FlushAsync()`, `Dispose` flush, timer inject được (`Func<TimeSpan,CancellationToken,Task>`), lỗi IO được log và bỏ qua. Nối dây (tham số tuỳ chọn `SessionWriter?` nên test cũ không đổi): `ImagePresenter` → `Update`; `MainViewModel` (5 chỗ Save → `PersistSession`) ; `Flush` trước mỗi `SessionStore.Load` khi mở folder (`MainViewModel`, `FolderLoadCoordinator`); `MainViewModel.FlushSession()` gọi từ `MainWindow.Window_Closed` và `App.Exit`. Test: 7 ở `SessionWriterTests` (100 update → 1 write, flush shutdown, flush đổi folder, nhiều folder, copy state, dispose) + 1 ở `ImagePresenterTests`; `verify-all.ps1` PASS. **Khác mô tả:** dùng delay inject thay vì `IClock` (IClock không có timer). **Chưa làm:** đo "số lần ghi / 100 lần Next" trên app thật (T66); crash giữa cửa sổ debounce làm mất tối đa 500 ms trạng thái session (chấp nhận theo thiết kế R-1).
 
-### T62 — R-2 Journal startup ∥K
+### T62 — R-2 Journal startup ∥K — DONE
 - **Files:** `{Core}/FileActions/OperationJournal.cs`, `UndoService.LoadFromJournal`, test.
 - **Làm:** chọn (a) đọc ngược từ cuối file lấy K move committed gần nhất (K = 200) cộng các entry chưa kết thúc (quét toàn file chỉ khi file < 1 MB), **hoặc** (b) compaction khi file > 8 MB (ghi file mới atomic, backup `.bak`). Ghi lựa chọn vào `docs/adr/0003-journal-startup.md`.
 - **Xong khi:** journal 100k dòng khởi động < 100 ms (hoặc ngưỡng ghi trong ADR). INV-6 đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · agent T62 · `codex/t62-journal` · `ffe53f4` · tail-read journal từ cửa sổ cuối file khi ≥1 MiB, giữ 200 move committed gần nhất; đường đọc pending/failed/reconcile vẫn full scan để giữ INV-6. ADR `docs/adr/0003-journal-startup.md`; test 100.000 dòng đạt 14/14 và dưới 100 ms.
 
-### T63 — R-3/R-6 Catalog metadata ∥K
+### T63 — R-3/R-6 Catalog metadata ∥K — DONE
 - **Files:** `CatalogEntry` (Length, LastWriteUtc, Width?, Height?), `FolderLoadCoordinator` (scan bằng `DirectoryInfo.EnumerateFiles` lấy luôn stat), `StatusFormatter`/`ViewerState`/`MainViewModel` (bỏ `new FileInfo` trên UI), `ImageCacheKey.Create(CatalogEntry, ...)`, test.
 - **Làm:** `totalSourceBytes` tính từ kết quả scan. Metadata có thể cũ nên vẫn giữ kiểm tra `MatchesCurrentSource` sau decode (INV-1). Nếu phát hiện đổi thì cập nhật entry.
 - **Xong khi:** `StatCount` mỗi lần Next giảm (ghi số), test đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · agent T63 · `codex/t63-catalog-metadata` · `ace446a` · truyền metadata Length/LastWriteUtc/Width/Height qua catalog, scan/stat một lần, cache key tái sử dụng metadata; giữ kiểm tra source sau decode. FolderLoadCoordinatorTests 6/6.
 
-### T64 — R-4a `RamBudgetPolicy` ∥K
+### T64 — R-4a `RamBudgetPolicy` ∥K — DONE
 - **Files:** `{Imaging}/Preload/RamBudgetPolicy.cs`, `PreloadScheduler` (điều kiện full-folder), `PerformanceOptions`, test.
 - **Làm:**
   - `EstimateDecodedBytes(entries, targetWidth)`:
@@ -1066,7 +1067,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   - `ShouldPreloadWholeFolder = estimate ≤ DecodedCapacity && memory headroom`.
   - Mục tiêu cho phép dùng ≥ 16 GB khi máy 32 GB, giữ reserve 2 GB.
 - **Xong khi:** test các tổ hợp. Quyết định được ghi log và metric.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · agent T64 · `codex/t64-ram-budget` · `cce611d` · thêm policy ước lượng theo dimension hoặc hệ số JPEG/PNG, xét decoded capacity + memory headroom, log quyết định preload. RamBudgetPolicyTests 5/5.
 
 ### T65 — R-4b `SourceBytesCache` ⛔Q5
 - **Files:** `{Imaging}/Caching/SourceBytesCache.cs`, `DecodeRequest.Bytes` (các backend dùng bytes nếu có), `ThumbnailCache`, `PreviewImageService`, `FileHashService` (hash từ bytes), `PreloadScheduler` (tầng byte), `PerformanceOptions.UseSourceBytesCache`, `SourceBytesCapacityBytes` (16 GB), test.
@@ -1077,12 +1078,22 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Preload hai tầng: nếu tổng nguồn ≤ capacity thì nạp byte toàn folder theo thứ tự lân cận (I/O tuần tự, giới hạn 2 worker đọc), song song với decode theo worker hiện có.
   5. Move/Delete thì evict path. Clear cache thì xóa hết.
 - **Xong khi:** `SourceOpenCount` mỗi ảnh ≤ 1 ở mọi mode (trừ khi bị evict). Headroom được tôn trọng. Test lifecycle đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Hoàn tất `SourceBytesCache`: LRU theo `(path,length,mtime)`, dedup in-flight, generation clear/evict, `UseSourceBytesCache=false`, capacity 16 GiB; PreviewImageService, FileHashService và PreloadScheduler dùng cache khi flag bật; ThumbnailCache dùng byte path cho JPEG và giữ stream fallback cho PNG/WIC không tương thích. Test cache 2/2, ThumbnailCache 3/3; full `verify-all.ps1` PASS (203 Imaging, 163 App), smoke/fault-injection/publish/verify-release PASS. Mặc định vẫn tắt theo Q5.
+- **Quyết định D12/D13:** giữ feature flag tắt mặc định; chỉ mở sau T87 và T66 có baseline/source-open/memory evidence.
 
 ### T66 — Benchmark cuối
 - **Files:** `docs/refactoring/results/final.md`.
 - **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
+- **Thứ tự D13:** đo baseline sau T87; chỉ đưa T65 vào ma trận A/B khi T65 hoàn tất dưới feature flag.
+- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 hoàn tất tại `docs/refactoring/results/final.md`; S1/S2/S3/S6/S9 đã có cell sau T87, S2 xác nhận 100/100 key và S9 chạy trên F1/F4. Các run D07 repeat=3 dùng để đối chiếu độ ổn định; chưa chạy A/B SourceBytesCache vì T65 chưa triển khai. `final.md` ghi rõ N<20/incomplete và giới hạn so sánh.
+
+### T67 — Dọn compatibility marker T46d còn lại ∥K
+- **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ImageSortService.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `tests/PhotoReview.App.Tests/ProjectSources.cs`, `test-parity.md`.
+- **Làm:** đối chiếu từng marker với test đang dùng; chuyển test có giá trị sang behavior/AST/XAML test hoặc xóa test implementation-detail; sau đó gỡ marker không còn cần thiết. Không xóa marker đang bảo vệ contract thật.
+- **Xong khi:** test thay thế pass, không còn kiểm tra token implementation-detail đã loại bỏ, `verify-all.ps1` pass.
+- **Rủi ro/rollback:** giữ thay đổi trong commit nhỏ; revert commit nếu parity/behavior giảm.
+- **Nhật ký:** 2026-09-19 · D13 · tách khỏi T52 để không trộn settings binding với cleanup source-presence. Đã DONE: xoá marker RAM và marker block T46d trong `MainWindow`, xoá shim `ImageSortService.cs`/property `ProjectSources`, cập nhật shutdown source-presence theo contract dispose hiện tại; `SourcePresenceTests` 12/12 PASS.
 - **Xong khi:** có bảng so sánh với baseline. Profile nào có P95 tệ hơn quá 5% thì phải có task sửa hoặc revert trước T71.
 - **Nhật ký:** —
 
@@ -1094,13 +1105,13 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `docs/adr/0002-ui-framework.md`.
 - **Làm:** dùng số liệu D12 (trước refactor) và T66 (sau refactor), trong đó quy tắc R-UI là căn cứ chính (tỷ lệ UiAssign/Present so với Decode). Nếu phần UI chiếm ≥ 40% key→present ở P95 thì đề xuất spike WinUI 3 (ViewModel đã độc lập nhờ K-2). Nếu không thì ghi No-go kèm điều kiện mở lại.
 - **Xong khi:** ADR có quyết định.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 — DONE; ADR ghi No-go WinUI 3, giữ WPF vì chưa có UiAssign/Present P95 để đạt ngưỡng R-UI 40%; điều kiện mở lại yêu cầu D08/PresentMon hoặc lỗi WPF tái hiện được.
 
 ### T72 — Tài liệu ∥L
 - **Files:** `README.md`, `AGENTS.md`, `outputs/APP-MECHANISMS-VI.md` → `docs/APP-MECHANISMS-VI.md` (cập nhật link), `docs/architecture.md` (mới), `task_on_progress.md`.
 - **Làm:** sơ đồ các lớp, luồng load/present/action/decoder, bảng INV ánh xạ sang class mới, lệnh build/test/benchmark mới, mô tả setting mới (`DecoderBackend`, `ScalingQuality`, `UseSourceBytesCache`).
 - **Xong khi:** mọi lệnh trong tài liệu chạy được.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 — DONE; chuyển tài liệu cơ chế vào `docs`, thêm kiến trúc/project dependency và bốn luồng runtime, ánh xạ INV-1…INV-12, mô tả ba setting, đồng bộ lệnh build/test/benchmark/publish trong README và AGENTS.
 
 ### T73 — GUI acceptance
 - **Checklist** (ghi PASS/FAIL cho từng mục):
@@ -1128,3 +1139,4 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Cập nhật `task_on_progress.md`.
 - **Xong khi:** tag đã push, artifact đã được verify.
 - **Nhật ký:** —
+

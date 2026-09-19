@@ -9,13 +9,21 @@ public class AppSettings
 {
     public const int CurrentConfigVersion = 2;
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
-    public string Folder2Name { get; set; } = "Loai-2";
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
     public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
     public bool LoggingEnabled { get; set; } = false;
     public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Name;
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
+    public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
+    public DecoderBackend DecoderBackend { get; set; } = DecoderBackend.Wpf;
+    public long ImageCacheCapacityBytes { get; set; } = PerformanceOptions.ImageCacheCapacityBytes;
+    public long MemoryReserveBytes { get; set; } = PerformanceOptions.MemoryReserveBytes;
+    public int PreloadWorkerCount { get; set; } = PerformanceOptions.PreloadWorkerCount;
+    public double PreloadMemoryLoadLimit { get; set; } = PerformanceOptions.PreloadMemoryLoadLimit;
+    public long PreviewDiskCacheCapacityBytes { get; set; } = PerformanceOptions.PreviewDiskCacheCapacityBytes;
+    public bool UseSourceBytesCache { get; set; } = PerformanceOptions.UseSourceBytesCache;
+    public long SourceBytesCapacityBytes { get; set; } = PerformanceOptions.SourceBytesCapacityBytes;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
 

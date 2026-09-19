@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Imaging;
 
@@ -36,6 +37,15 @@ public readonly record struct ImageCacheKey
         if (!info.Exists) throw new FileNotFoundException("Image source no longer exists", info.FullName);
         var fullPath = System.IO.Path.GetFullPath(info.FullName).ToUpperInvariant();
         return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, isOriginal ? 0 : targetWidth, orientationApplied, backend);
+    }
+
+    public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.Length is null || entry.LastWriteUtc is null)
+            return Create(entry.Path, isOriginal, targetWidth, orientationApplied, backend);
+        var fullPath = System.IO.Path.GetFullPath(entry.Path).ToUpperInvariant();
+        return new ImageCacheKey(fullPath, entry.Length.Value, entry.LastWriteUtc.Value.Ticks, isOriginal, isOriginal ? 0 : targetWidth, orientationApplied, backend);
     }
 
     public bool MatchesCurrentSource()

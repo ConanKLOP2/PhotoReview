@@ -105,6 +105,7 @@ Epoch và in-flight dedup (`Lazy` + `GetOrAdd`), kiểm tra fingerprint sau deco
 - Nút thắt có khả năng lớn nhất của review là **đọc đĩa và decode**. C1 vẫn decode bằng WIC nên không giải quyết nút này. C3 và R-4 giải quyết trực tiếp.
 - B là nền bắt buộc để C3 (và C1 nếu có sau này) thay thế được mà không đụng UI.
 - Chỉ mở lại C1 khi benchmark (T66) cho thấy `UiAssign`/render chiếm phần lớn thời gian key→present. Việc này được ghi trong ADR T71.
+- D12/D13 (2026-09-19): D07 cho thấy decode/thumbnail là nút thắt ở S1/S9, còn S3 có `t_render` cao trong routed-event harness. Giữ hướng WPF hiện tại; chỉ chạy D08/PresentMon nếu cần tách render thật khỏi overhead harness.
 - Nhận định "nút thắt lớn nhất là I/O và decode" ở trên **chưa được đo**. Đợt chẩn đoán D00–D12 kiểm chứng nó theo quy tắc R-IO / R-DEC / R-UI / R-PRE (xem `PERF-DIAGNOSIS-PLAN.md` mục 8). Nếu kết quả khác, D13 sắp xếp lại thứ tự WC3/W6. Hướng B vẫn giữ nguyên.
 
 ### 3.3 Ràng buộc thiết kế để B không chặn các hướng sau (K-1…K-3)
@@ -278,7 +279,7 @@ W0 → WD (D00…D13) → W1 → W2 → W3 ─┬─► W4 → W5 → W6 → W7
 | R-1 | Lưu session có debounce, ghi trên worker | 1, 3 | Số lần ghi / 100 lần Next |
 | R-2 | Journal: đọc ngược từ cuối khi khởi động, hoặc compaction | 1, 3 | Thời gian khởi động với journal 100k dòng |
 | R-3 | Bỏ `FileInfo` trên UI thread, dùng metadata trong catalog | 3 | `StatCount` mỗi lần Next |
-| R-4 | `SourceBytesCache` (byte nén, đọc một lần, dùng chung cho thumbnail/decode/dimension/hash) + `RamBudgetPolicy` theo w×h×4. Nếu tổng nguồn < 16 GB thì nạp toàn folder | 1, 2 | `SourceOpenCount` ≤ 1 mỗi ảnh, RAM peak |
+| R-4 | `SourceBytesCache` (byte nén, đọc một lần, dùng chung cho thumbnail/decode/dimension/hash) + `RamBudgetPolicy` theo w×h×4. Nếu tổng nguồn < 16 GB thì nạp toàn folder | 1, 2 | `SourceOpenCount` ≤ 1 mỗi ảnh, RAM peak; SourceBytesCache tắt mặc định cho tới T66 |
 | R-5 | Tách benchmark khỏi đường khởi động của app | 3 | Kích thước publish, thời gian khởi động |
 | R-6 | `CatalogEntry` có sẵn length/mtime/dimension | 1, 3 | Số lần stat |
 | R-7 | **C3**: decoder `WicDirect` / `TurboJpeg` | 3, 4 | Cổng mục 4.4 |
@@ -368,7 +369,7 @@ Task gắn ⛔Qn phải chờ người dùng trả lời Qn. Nếu người dùn
 | Q2 | Giữ `BenchmarkWindow` trong app? | Giữ, tham chiếu `PhotoReview.Benchmarking` | T50b |
 | Q3 | Chuyển project vào `src/`? Đường dẫn publish mới là `src/PhotoReview.App/bin/Release/net10.0-windows/publish` | Chuyển | T24 |
 | Q4 | Đổi AGENTS sang quy trình PR? | Đổi | T05 |
-| Q5 | Bật R-4 mặc định? | Bật sau khi T66 đạt, trước đó để flag tắt | T65 |
+| Q5 | Bật R-4 mặc định? | **Không bật trước T66**. T65 triển khai dưới feature flag; chỉ bật mặc định nếu T66 chứng minh source-open giảm, RAM peak/headroom và P95 vẫn đạt mục tiêu | T65 |
 | Q6 | Thêm `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`, `NetArchTest.Rules` (chỉ trong test)? | Đồng ý | T35, T40 |
 | Q7 | **(C3)** Cho phép đóng gói `turbojpeg.dll` (libjpeg-turbo, BSD/IJG/zlib)? | Đồng ý nếu T86 cho thấy nhanh hơn `WicDirect` ít nhất 15% | T85, T87 |
-| Q8 | **(C3)** Bật backend mới làm mặc định khi đạt cổng? | Có, giữ setting để quay về `Wpf` | T87 |
+| Q8 | **(C3)** Bật backend mới làm mặc định khi đạt cổng? | T87 tích hợp setting + fallback WPF; giữ `Wpf` mặc định trong lúc đo, chỉ chuyển `WicDirect` thành mặc định sau T66 và GUI acceptance đạt | T87 |

@@ -38,4 +38,23 @@ public class ComparePairServiceTests
         var result = ComparePairService.Find(files, @"C:\Photos\DSC0001.JPG");
         Assert.Null(result);
     }
+
+    [Fact(DisplayName = "Compare pair detection stays within selected folder")]
+    public void FindStaysWithinSelectedFolder()
+    {
+        var files = new List<string>
+        {
+            @"C:\Photos\DSC0001.JPG",
+            @"C:\Photos\DSC0001 (1).JPG",
+            @"C:\Photos\Other\DSC0001.JPG"
+        };
+
+        Assert.Null(ComparePairService.Find(files, @"C:\Photos\Other\DSC0001.JPG"));
+    }
+
+    [Fact(DisplayName = "Compare pair detection rejects an incomplete pair")]
+    public void FindRejectsSingleFileList()
+    {
+        Assert.Null(ComparePairService.Find([@"C:\Photos\DSC0001.JPG"], @"C:\Photos\DSC0001.JPG"));
+    }
 }

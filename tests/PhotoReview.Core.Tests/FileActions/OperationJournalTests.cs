@@ -1,6 +1,9 @@
 using System.Text;
+using System.Diagnostics;
+using System.Text.Json;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -189,5 +192,41 @@ public sealed class OperationJournalTests
         Assert.Throws<ArgumentNullException>(() => new OperationJournal(null!, _fs, _clock));
         Assert.Throws<ArgumentNullException>(() => new OperationJournal(paths, null!, _clock));
         Assert.Throws<ArgumentNullException>(() => new OperationJournal(paths, _fs, null!));
+    }
+
+    [Fact(DisplayName = "Large journal startup reads only recent committed moves within threshold")]
+    public void LargeJournal_ReadCommittedMoves_IsBoundedAndFast()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview-T62-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "operations.jsonl");
+        try
+        {
+            using (var writer = new StreamWriter(path, false, Encoding.UTF8))
+            {
+                for (var i = 0; i < 100_000; i++)
+                {
+                    var entry = new JournalEntry($"old-{i}", FileOperationType.Move, JournalState.Committed,
+                        $@"C:\photos\source-{i}.jpg", $@"C:\photos\dest-{i}.jpg", i,
+                        _clock.UtcNow, _clock.UtcNow);
+                    writer.WriteLine(JsonSerializer.Serialize(entry));
+                }
+            }
+
+            var journal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+            var stopwatch = Stopwatch.StartNew();
+            var entries = journal.ReadCommittedMoves();
+            stopwatch.Stop();
+
+            Assert.Equal(200, entries.Count);
+            Assert.Equal("old-99800", entries[0].Id);
+            Assert.Equal("old-99999", entries[^1].Id);
+            Assert.True(stopwatch.ElapsedMilliseconds < 100,
+                $"Large journal startup took {stopwatch.ElapsedMilliseconds} ms.");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
     }
 }

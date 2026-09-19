@@ -27,7 +27,8 @@ public partial class App : System.Windows.Application
     {
         // 1. Core Abstractions
         services.AddSingleton<IAppPaths>(_ => PhotoReview.Core.AppPaths.FromEnvironment());
-        services.AddSingleton<IFileSystem, PhysicalFileSystem>();
+        // Metadata queries are counted into ReviewMetrics (StatCount) for the diagnostics/benchmark reports.
+        services.AddSingleton<IFileSystem>(sp => new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()));
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<ILog>(_ => FileLog.Default);
 
@@ -39,7 +40,9 @@ public partial class App : System.Windows.Application
             LogStartupErrorForced));
         services.AddSingleton<SessionStore>(sp => new SessionStore(
             sp.GetRequiredService<IAppPaths>(),
-            sp.GetRequiredService<IFileSystem>()));
+            sp.GetRequiredService<IFileSystem>(),
+            sp.GetRequiredService<ReviewMetrics>()));
+        services.AddSingleton<SessionWriter>(sp => new SessionWriter(sp.GetRequiredService<SessionStore>(), sp.GetRequiredService<ILog>()));
 
         // 3. Journal & File Actions
         services.AddSingleton<OperationJournal>(sp => new OperationJournal(
@@ -50,7 +53,10 @@ public partial class App : System.Windows.Application
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>()));
-        services.AddSingleton<FileHashService>();
+        services.AddSingleton<FileHashService>(sp => new FileHashService(
+            sp.GetRequiredService<SettingsStore>().Current.UseSourceBytesCache
+                ? sp.GetRequiredService<SourceBytesCache>()
+                : null));
         services.AddSingleton<FileActionService>(sp => new FileActionService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
@@ -77,32 +83,52 @@ public partial class App : System.Windows.Application
 
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
-        services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(persistNewThumbnails: false, log: sp.GetService<ILog>()));
+        services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
+            persistNewThumbnails: false,
+            log: sp.GetService<ILog>(),
+            sourceBytesCache: sp.GetRequiredService<SettingsStore>().Current.UseSourceBytesCache
+                ? sp.GetRequiredService<SourceBytesCache>()
+                : null));
+        services.AddSingleton<SourceBytesCache>(sp => new SourceBytesCache(
+            sp.GetRequiredService<SettingsStore>().Current.SourceBytesCapacityBytes));
 
         services.AddSingleton<PreviewStateContext>();
         services.AddSingleton<PreviewImageService>(sp =>
         {
             var ctx = sp.GetRequiredService<PreviewStateContext>();
+            var settingsStore = sp.GetRequiredService<SettingsStore>();
+            ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
             return new PreviewImageService(
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),
                 () => ctx.TargetDecodeWidth(),
-                capacityBytes: AppConstants.ImageCacheCapacityBytes,
+                capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
-                log: sp.GetService<ILog>());
+                log: sp.GetService<ILog>(),
+                sourceBytesCache: settingsStore.Current.UseSourceBytesCache
+                    ? sp.GetRequiredService<SourceBytesCache>()
+                    : null);
         });
 
         services.AddSingleton<Func<Func<string[]>, Func<long>, PreloadScheduler>>(sp =>
-            (getFiles, getTotalBytes) => new PreloadScheduler(
+            (getFiles, getTotalBytes) =>
+            {
+                var settingsStore = sp.GetRequiredService<SettingsStore>();
+                return new PreloadScheduler(
                 sp.GetRequiredService<PreviewImageService>(),
                 sp.GetRequiredService<ReviewMetrics>(),
                 getFiles,
                 getTotalBytes,
-                fullFolderRamThresholdBytes: AppConstants.ImageCacheCapacityBytes,
-                memoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
+                fullFolderRamThresholdBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
+                memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
-                log: sp.GetService<ILog>()));
+                workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,
+                log: sp.GetService<ILog>(),
+                prefetchSourceBytes: settingsStore.Current.UseSourceBytesCache
+                    ? (path, token) => Task.Run(() => sp.GetRequiredService<SourceBytesCache>().GetOrRead(path), token)
+                    : null);
+            });
 
         // 7. ViewModels & Coordinators
         services.AddTransient<PhotoReview.App.ViewModels.ViewerState>();
@@ -117,6 +143,7 @@ public partial class App : System.Windows.Application
             var compare = sp.GetRequiredService<PhotoReview.App.ViewModels.CompareViewModel>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
             var sessionStore = sp.GetRequiredService<SessionStore>();
+            var sessionWriter = sp.GetRequiredService<SessionWriter>();
             var fs = sp.GetRequiredService<IFileSystem>();
             var actions = sp.GetRequiredService<FileActionService>();
             var undo = sp.GetRequiredService<UndoService>();
@@ -164,15 +191,16 @@ public partial class App : System.Windows.Application
             var presenter = new PhotoReview.App.Coordinators.ImagePresenter(
                 catalog, clock, preview, thumbs, preloadController, compare, hash,
                 sp.GetRequiredService<ReviewMetrics>(),
-                () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session);
+                () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session,
+                sessionWriter: sessionWriter);
 
             var coordinator = new PhotoReview.App.Coordinators.FolderLoadCoordinator(
                 catalog, clock, explorerOrder, fs, sessionStore, settingsStore,
-                new ForwardingFolderSink(() => vm!));
+                new ForwardingFolderSink(() => vm!), sessionWriter);
 
             return vm = new PhotoReview.App.ViewModels.MainViewModel(
                 catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
-                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs);
+                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter);
         });
 
         // 8. Window
@@ -210,7 +238,7 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, a) => { AppLog.Error("Dispatcher exception", a.Exception); a.Handled = true; };
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
-        Exit += (_, _) => { AppLog.Shutdown(); _instanceLock?.Dispose(); _perfHooks?.Detach(); _perfListener?.Dispose(); };
+        Exit += (_, _) => { _services?.GetService<SessionWriter>()?.Flush(); AppLog.Shutdown(); _instanceLock?.Dispose(); _perfHooks?.Detach(); _perfListener?.Dispose(); };
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
         var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;

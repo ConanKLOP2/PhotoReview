@@ -31,7 +31,7 @@
 
 - Lệnh chuẩn:
 
-  `dotnet run --project tests/PhotoReview.Tests -c Release`
+  `.\tools\verify-all.ps1` (build + toàn bộ xUnit + smoke + publish + verify-release)
 
   `dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 
@@ -49,5 +49,12 @@
 Agent nhận task phải đọc trước:
 - **Kế hoạch tái cấu trúc:** `docs/refactoring/REFACTOR-PLAN.md`, `docs/refactoring/REFACTOR-TASKS.md`.
 - **Chẩn đoán hiệu năng:** `docs/refactoring/PERF-DIAGNOSIS-PLAN.md`, `docs/refactoring/PERF-DIAGNOSIS-TASKS.md`.
+- **Kiến trúc và bất biến:** `docs/architecture.md`, `docs/APP-MECHANISMS-VI.md`.
+
+Benchmark chuẩn chạy qua CLI:
+
+`dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-list-profiles`
+
+`dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all <folder-anh> [thu-muc-ket-qua]`
 
 Mỗi phiên: chọn **một** task từ danh sách (xem mục 0 của `REFACTOR-TASKS.md`), sửa **chỉ** file trong danh sách **Files** của task, không push `master`. Coordinator sẽ merge vào `refactor/integration` và kiểm tra toàn bộ.

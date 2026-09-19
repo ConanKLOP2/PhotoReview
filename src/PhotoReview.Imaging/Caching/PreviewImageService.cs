@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using PhotoReview.Core.Catalog;
 using System.Threading.Channels;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
@@ -40,6 +41,7 @@ public sealed class PreviewImageService : IPreloadTarget
     // a mid-process environment change never makes DecodeAndCacheAsync and PersistToDiskCache
     // disagree about whether the disk cache is on.
     private readonly bool _disableDiskCache;
+    private readonly SourceBytesCache? _sourceBytesCache;
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
@@ -69,7 +71,8 @@ public sealed class PreviewImageService : IPreloadTarget
         IImageDecoder? decoder = null,
         ILog? log = null,
         Func<DecoderBackend>? currentBackend = null,
-        IImageDecoderFactory? decoderFactory = null)
+        IImageDecoderFactory? decoderFactory = null,
+        SourceBytesCache? sourceBytesCache = null)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
@@ -82,6 +85,7 @@ public sealed class PreviewImageService : IPreloadTarget
         _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log);
         _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
+        _sourceBytesCache = sourceBytesCache;
         _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
             capacityBytes, image => image.EstimatedBytes);
@@ -156,6 +160,12 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var isOriginal = IsOriginalLoadingMode();
         return ImageCacheKey.Create(info, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
+    }
+
+    public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
+    {
+        var isOriginal = IsOriginalLoadingMode();
+        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
     }
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
@@ -236,8 +246,8 @@ public sealed class PreviewImageService : IPreloadTarget
             // failure types instead of re-querying state that can change mid-catch.
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
             {
-                try { File.Delete(cachePath); } catch { }
-                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { }
+                try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
+                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { /* best-effort: a stray .meta only affects an entry that is already a miss */ }
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
             }
@@ -266,7 +276,7 @@ public sealed class PreviewImageService : IPreloadTarget
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
         stopwatch.Stop();
-        if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { }
+        if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { /* metrics are best-effort; the source file may have vanished */ }
         return decodedImage;
     });
 
@@ -353,12 +363,18 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
+    public void ClearSourceBytesCache() => _sourceBytesCache?.Clear();
+
     private IImageDecoder GetDecoder(DecoderBackend backend) => _decoderFactory?.Create(backend) ?? _decoder;
 
     private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, int targetWidth, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
-        if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
+        if (_sourceBytesCache is not null)
+        {
+            preReadBytes = _sourceBytesCache.GetOrRead(path);
+        }
+        else if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
             long readStart = perf ? Stopwatch.GetTimestamp() : 0;
             byte[] bytes;
@@ -372,6 +388,8 @@ public sealed class PreviewImageService : IPreloadTarget
             if (perf) PhotoReviewPerf.Log.SourceRead(PhotoReviewPerf.NavContext, PhotoReviewPerf.PathId(path), PhotoReviewPerf.Ms(readStart), bytes.LongLength);
             preReadBytes = bytes;
         }
+
+        _metrics.RecordSourceOpen(path);
 
         long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
         var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));

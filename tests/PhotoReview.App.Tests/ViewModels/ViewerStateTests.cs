@@ -8,6 +8,32 @@ namespace PhotoReview.App.Tests.ViewModels;
 public sealed class ViewerStateTests
 {
     [Fact]
+    public void ScalingQuality_DefaultsToHighQualityAndNotifiesOnChange()
+    {
+        var state = new ViewerState();
+        var changed = new List<string?>();
+        state.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        Assert.Equal(ScalingQuality.HighQuality, state.ScalingQuality);
+        state.ScalingQuality = ScalingQuality.Linear;
+
+        Assert.Contains(nameof(ViewerState.ScalingQuality), changed);
+    }
+
+    [Fact]
+    public void AppSettings_ScalingQualityDefaultsToHighQualityAndRoundTrips()
+    {
+        var settings = new AppSettings();
+        Assert.Equal(ScalingQuality.HighQuality, settings.ScalingQuality);
+
+        settings.ScalingQuality = ScalingQuality.Linear;
+        var json = System.Text.Json.JsonSerializer.Serialize(settings);
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.Equal(ScalingQuality.Linear, loaded.ScalingQuality);
+    }
+
+    [Fact]
     public void DefaultState_IsFitAndUniform()
     {
         var state = new ViewerState();

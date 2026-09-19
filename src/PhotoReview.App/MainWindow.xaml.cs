@@ -146,6 +146,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
+        _viewModel.FlushSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         _explorerOrder?.Dispose();
     }
@@ -230,19 +231,4 @@ public partial class MainWindow : Window
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoLastAsync();
 
-    /* Source-presence compatibility markers (retargeted to T47):
-       AdvanceBeforeFileActionAsync(sourcePath, removeSource: true) AdvanceBeforeFileActionAsync(sourcePath, removeSource: operation == "Move")
-       Do not call ShowImageAsync after action LoadingMode Thumbnail Preview Matches(e.Key, _settings.Shortcuts.Next) Matches(e.Key, _settings.Shortcuts.Previous)
-       ReviewAction ExecuteActionAsync(action) ClassifyCurrentAsync(3) nextPath FileActionResult Shortcuts.Skip Shortcuts.Undo Shortcuts.Fullscreen
-       Shortcuts.NextFolder Shortcuts.PreviousFolder NavigateSiblingFolderAsync Shortcuts.FirstImage ShowImageAsync(0) _settings.Shortcuts.NextFolder
-       _settings.Shortcuts.FirstImage _settings.Shortcuts.ZoomIn _settings.Shortcuts.Compare ComparePanel.Visibility CompareHashEnabled CompareSizeEnabled
-       Task.WhenAll(GetHashAsync(pair.Value.Left), GetHashAsync(pair.Value.Right)) ImageSortService.Sort TryGetSnapshotAsync loadGeneration != _folderGeneration
-       explorerSnapshot = await explorerTask _totalSourceBytes = await totalBytesTask mayReplaceInitialFallback await ShowImageAsync(0)
-       currentSet.SetEquals(scannedFiles) StatusText.Text = $"{_index + 1}/{_files.Count}" PreloadAroundAsync(_index, _generation) currentPath
-       _catalogInteractionGeneration Explorer native order applied Explorer native order ignored after catalog interaction Interlocked.Increment(ref _catalogInteractionGeneration)
-       action.Confirm BatchReviewWindow ShowDialog() AppConstants.ImageCacheCapacityBytes FullFolderRamThresholdBytes _hashService.Clear()
-       _compareSelectedPath ?? _files[_index] _files.Remove(source) _compareSelectedPath = null; var token = Interlocked.Increment(ref _generation);
-       e.Key == Key.Escape Close(); WindowsRecycleBin _thumbnailCache.Dispose() _preloadScheduler.Dispose() Title = $"Photo Review — {folder} Title = $"Photo Review - {folder}
-       _thumbnailCache.ClearDisk() RecordPresented DiagnosticsWindow review.ShowDialog() RecoveryWindow ReadPendingOperations ReadFailedOperations
-       FileOperationType.Recycle, JournalState.Prepared FileOperationType.Recycle, JournalState.Committed FileOperationType.Recycle, JournalState.Failed */
 }

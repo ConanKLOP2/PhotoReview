@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Options configuring background preload behavior and memory safety limits.
-/// Defaults match AppConstants.
+/// Defaults match PerformanceOptions.
 /// </summary>
 public sealed record PreloadOptions(
     int WorkerCount = 8,

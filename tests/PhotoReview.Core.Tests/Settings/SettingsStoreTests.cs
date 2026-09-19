@@ -42,6 +42,25 @@ public sealed class SettingsStoreTests
         Assert.Contains("\"ConfigVersion\": 2", savedJson);
     }
 
+    [Fact(DisplayName = "Load ignores the retired Folder2Name property from an old config")]
+    public void Load_WhenLegacyFolder2NameIsPresent_IgnoresItAndKeepsOtherValues()
+    {
+        var json = """
+        {
+            "ConfigVersion": 2,
+            "Folder2Name": "Old-Target",
+            "LoadingMode": "Fast",
+            "LoggingEnabled": true
+        }
+        """;
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, json);
+
+        var loaded = _store.Load();
+
+        Assert.Equal(LoadingMode.Fast, loaded.LoadingMode);
+        Assert.True(loaded.LoggingEnabled);
+    }
+
     [Fact(DisplayName = "Load parses valid config and raises Changed")]
     public void Load_WhenValidConfigExists_ParsesProperly()
     {
@@ -137,7 +156,6 @@ public sealed class SettingsStoreTests
         var settings = new AppSettings
         {
             LoadingMode = LoadingMode.Original,
-            Folder2Name = "Target-Dir",
             LoggingEnabled = true
         };
 
@@ -146,7 +164,6 @@ public sealed class SettingsStoreTests
         {
             eventRaised = true;
             Assert.Equal(LoadingMode.Original, s.LoadingMode);
-            Assert.Equal("Target-Dir", s.Folder2Name);
         };
 
         _store.Save(settings);
@@ -156,7 +173,8 @@ public sealed class SettingsStoreTests
         Assert.True(_fileSystem.FileExists(_appPaths.ConfigFile));
 
         var diskJson = _fileSystem.ReadAllText(_appPaths.ConfigFile);
-        Assert.Contains("\"Folder2Name\": \"Target-Dir\"", diskJson);
+        Assert.Contains("\"LoggingEnabled\": true", diskJson);
+        Assert.DoesNotContain("Folder2Name", diskJson);
         Assert.Contains("\"LoadingMode\": \"Original\"", diskJson);
     }
 

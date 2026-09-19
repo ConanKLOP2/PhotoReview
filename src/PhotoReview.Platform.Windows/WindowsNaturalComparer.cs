@@ -6,7 +6,6 @@ namespace PhotoReview.Platform.Windows;
 
 /// <summary>
 /// Triển khai <see cref="INaturalComparer"/> sử dụng API Windows Native StrCmpLogicalW từ shlwapi.dll.
-/// Tạm đặt tại PhotoReview.App.Platform (sẽ chuyển tiếp ở task T33b).
 /// </summary>
 public sealed class WindowsNaturalComparer : INaturalComparer
 {

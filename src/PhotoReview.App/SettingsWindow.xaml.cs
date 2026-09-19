@@ -29,13 +29,21 @@ public partial class SettingsWindow : Window
         VersionText.Text = string.IsNullOrWhiteSpace(build) || build == version ? $"Phiên bản {version}" : $"Phiên bản {version} · {build}";
         Settings = new AppSettings
         {
-            Folder2Name = current.Folder2Name,
             InitialViewMode = current.InitialViewMode,
             LoadingMode = current.LoadingMode,
             ImageSortMode = current.ImageSortMode,
+            ScalingQuality = current.ScalingQuality,
+            DecoderBackend = current.DecoderBackend,
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
+            ImageCacheCapacityBytes = current.ImageCacheCapacityBytes,
+            MemoryReserveBytes = current.MemoryReserveBytes,
+            PreloadWorkerCount = current.PreloadWorkerCount,
+            PreloadMemoryLoadLimit = current.PreloadMemoryLoadLimit,
+            PreviewDiskCacheCapacityBytes = current.PreviewDiskCacheCapacityBytes,
+            UseSourceBytesCache = current.UseSourceBytesCache,
+            SourceBytesCapacityBytes = current.SourceBytesCapacityBytes,
             Actions = current.Actions.Select(action => new ReviewAction
             {
                 Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
@@ -75,7 +83,6 @@ public partial class SettingsWindow : Window
 
     private void LoadFields()
     {
-        Folder2Text.Text = Settings.Folder2Name;
         NextText.Text = Settings.Shortcuts.Next; PreviousText.Text = Settings.Shortcuts.Previous;
         RecycleText.Text = Settings.Shortcuts.SendToRecycleBin;
         CompareText.Text = Settings.Shortcuts.Compare; NextFolderText.Text = Settings.Shortcuts.NextFolder; PreviousFolderText.Text = Settings.Shortcuts.PreviousFolder;
@@ -84,6 +91,8 @@ public partial class SettingsWindow : Window
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
+        ScalingQualityCombo.SelectedIndex = Settings.ScalingQuality == ScalingQuality.Linear ? 1 : 0;
+        DecoderBackendCombo.SelectedIndex = Settings.DecoderBackend switch { DecoderBackend.WicDirect => 1, DecoderBackend.TurboJpeg => 2, _ => 0 };
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
@@ -92,20 +101,28 @@ public partial class SettingsWindow : Window
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
         Settings.LoggingEnabled = false;
-        Settings.Folder2Name = "Loai-2"; Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
+        Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
+        Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
+        Settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
+        Settings.PreviewDiskCacheCapacityBytes = PerformanceOptions.PreviewDiskCacheCapacityBytes;
+        Settings.UseSourceBytesCache = PerformanceOptions.UseSourceBytesCache;
+        Settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;
+        Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = DecoderBackend.Wpf; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         AppLog.Info("Settings save requested");
         var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
-        if (string.IsNullOrWhiteSpace(Folder2Text.Text) || values.Any(v => !Enum.TryParse<Key>(v, true, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
+        if (values.Any(v => !Enum.TryParse<Key>(v, true, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
             System.Windows.MessageBox.Show(this, "Folder không được trống; các phím phải hợp lệ và không được trùng nhau.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return;
         }
-        Settings.Folder2Name = Folder2Text.Text.Trim();
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
         Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
+        Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;
+        Settings.DecoderBackend = DecoderBackendCombo.SelectedIndex switch { 1 => DecoderBackend.WicDirect, 2 => DecoderBackend.TurboJpeg, _ => DecoderBackend.Wpf };
         Settings.LoadingMode = LoadingModeCombo.SelectedIndex switch { 1 => LoadingMode.Preview, 2 => LoadingMode.Original, _ => LoadingMode.Fast };
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;

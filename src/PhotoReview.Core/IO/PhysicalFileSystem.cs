@@ -106,7 +106,7 @@ public sealed class PhysicalFileSystem : IFileSystem
         {
             if (File.Exists(tempPath))
             {
-                try { File.Delete(tempPath); } catch { }
+                try { File.Delete(tempPath); } catch { /* best-effort temp cleanup; the original failure is reported */ }
             }
         }
     }

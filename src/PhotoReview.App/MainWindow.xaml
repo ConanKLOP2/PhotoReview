@@ -12,6 +12,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <converters:ViewerStretchModeConverter x:Key="StretchConverter" />
         <converters:CompareBorderBrushConverter x:Key="CompareBorderBrush" />
+        <converters:ScalingQualityConverter x:Key="ScalingConverter" />
         <Style TargetType="Button">
             <Setter Property="Background" Value="#252525"/>
             <Setter Property="Foreground" Value="#EEEEEE"/>
@@ -41,6 +42,7 @@
                 <Image x:Name="MainImage"
                        Source="{Binding CurrentImage}"
                        Stretch="{Binding Viewer.Stretch, Converter={StaticResource StretchConverter}}"
+                       RenderOptions.BitmapScalingMode="{Binding Viewer.ScalingQuality, Converter={StaticResource ScalingConverter}}"
                        MaxWidth="{Binding Viewer.MaxImageWidth}"
                        MaxHeight="{Binding Viewer.MaxImageHeight}"
                        RenderTransformOrigin="0.5,0.5">
@@ -59,10 +61,10 @@
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                 <Border x:Name="CompareLeftBorder" AutomationProperties.Name="Preview ảnh bên trái, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" BorderBrush="{Binding Compare.IsLeftSelected, Converter={StaticResource CompareBorderBrush}}" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareLeft_Click" PreviewKeyDown="CompareLeft_KeyDown">
-                    <Image x:Name="CompareLeftImage" Source="{Binding Compare.LeftImage}" Stretch="Uniform"/>
+                    <Image x:Name="CompareLeftImage" Source="{Binding Compare.LeftImage}" RenderOptions.BitmapScalingMode="{Binding Viewer.ScalingQuality, Converter={StaticResource ScalingConverter}}" Stretch="Uniform"/>
                 </Border>
                 <Border x:Name="CompareRightBorder" AutomationProperties.Name="Preview ảnh bên phải, nhấn để chọn" Focusable="True" KeyboardNavigation.IsTabStop="True" Grid.Column="1" BorderBrush="{Binding Compare.IsRightSelected, Converter={StaticResource CompareBorderBrush}}" BorderThickness="2" Margin="4" MouseLeftButtonDown="CompareRight_Click" PreviewKeyDown="CompareRight_KeyDown">
-                    <Image x:Name="CompareRightImage" Source="{Binding Compare.RightImage}" Stretch="Uniform"/>
+                    <Image x:Name="CompareRightImage" Source="{Binding Compare.RightImage}" RenderOptions.BitmapScalingMode="{Binding Viewer.ScalingQuality, Converter={StaticResource ScalingConverter}}" Stretch="Uniform"/>
                 </Border>
             </Grid>
         </Border>

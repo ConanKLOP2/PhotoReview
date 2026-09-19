@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
-using Forms = System.Windows.Forms;
 
 namespace PhotoReview.App;
 
@@ -55,7 +54,7 @@ internal static class WindowPlacementService
             var temp = PlacementPath + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(placement, JsonOptions));
             try { File.Move(temp, PlacementPath, true); }
-            catch { try { File.Delete(temp); } catch { } throw; }
+            catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
         }
         catch (Exception ex)
         {
@@ -67,11 +66,44 @@ internal static class WindowPlacementService
     {
         if (bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return false;
         var nativeBounds = System.Drawing.Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
-        return Forms.Screen.AllScreens.Any(screen =>
+        return GetMonitorWorkAreas().Any(workArea =>
         {
-            var intersection = System.Drawing.Rectangle.Intersect(nativeBounds, screen.WorkingArea);
+            var intersection = System.Drawing.Rectangle.Intersect(nativeBounds, workArea);
             return intersection.Width >= 80 && intersection.Height >= 80;
         });
+    }
+
+    /// <summary>Work area (excluding the taskbar) of every attached monitor, in physical pixels.</summary>
+    private static List<System.Drawing.Rectangle> GetMonitorWorkAreas()
+    {
+        var areas = new List<System.Drawing.Rectangle>();
+        EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, _, _, _) =>
+        {
+            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+            if (GetMonitorInfo(monitor, ref info))
+                areas.Add(System.Drawing.Rectangle.FromLTRB(info.Work.Left, info.Work.Top, info.Work.Right, info.Work.Bottom));
+            return true;
+        }, IntPtr.Zero);
+        return areas;
+    }
+
+    private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public Rectangle Monitor;
+        public Rectangle Work;
+        public int Flags;
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()

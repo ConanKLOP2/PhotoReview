@@ -3,7 +3,8 @@ using System.Windows;
 
 // T14a: the xUnit suite hosts MainWindow on an STA thread through its internal test seam
 // (MainWindowTestHooks, IProgressiveExplorerOrderProvider).
-[assembly: InternalsVisibleTo("PhotoReview.Tests.Unit")]
+[assembly: InternalsVisibleTo("PhotoReview.App.Tests")]
+[assembly: InternalsVisibleTo("PhotoReview.Integration.Tests")]
 
 [assembly:ThemeInfo(
     ResourceDictionaryLocation.None,

@@ -20,11 +20,15 @@ public sealed class FolderLoadCoordinatorTests
     {
         public Dictionary<string, byte[]> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> Directories { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public int StatCount { get; private set; }
 
         public bool DirectoryExists(string path) => Directories.Contains(Path.GetFullPath(path));
         public bool FileExists(string path) => Files.ContainsKey(Path.GetFullPath(path));
-        public FileStat? GetFileStat(string path) =>
-            Files.TryGetValue(Path.GetFullPath(path), out var b) ? new FileStat(b.Length, DateTime.UtcNow) : null;
+        public FileStat? GetFileStat(string path)
+        {
+            StatCount++;
+            return Files.TryGetValue(Path.GetFullPath(path), out var b) ? new FileStat(b.Length, DateTime.UtcNow) : null;
+        }
 
         public void CreateDirectory(string path) => Directories.Add(Path.GetFullPath(path));
         public void Delete(string path) => Files.Remove(Path.GetFullPath(path));
@@ -159,6 +163,7 @@ public sealed class FolderLoadCoordinatorTests
         Assert.Equal(2, _catalog.Count);
         Assert.Equal(1, _sink.ResetCachesCount);
         Assert.Equal(1, _sink.CatalogReadyCount);
+        Assert.Equal(2, _fs.StatCount);
         Assert.Single(_sink.Presented);
         Assert.Equal(0, _sink.Presented[0].Index);
         Assert.Empty(_sink.Failures);

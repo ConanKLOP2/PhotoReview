@@ -1,3 +1,4 @@
+using PhotoReview.Core.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -20,14 +21,16 @@ public sealed class SessionStore
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
     private readonly string _sessionsDir;
     private readonly IFileSystem _fileSystem;
+    private readonly ReviewMetrics? _metrics;
 
     public SessionStore()
         : this(PhotoReview.Core.AppPaths.FromEnvironment(), new PhysicalFileSystem())
     {
     }
 
-    public SessionStore(IAppPaths paths, IFileSystem fileSystem)
+    public SessionStore(IAppPaths paths, IFileSystem fileSystem, ReviewMetrics? metrics = null)
     {
+        _metrics = metrics;
         ArgumentNullException.ThrowIfNull(paths);
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _sessionsDir = paths.SessionsDir;
@@ -67,6 +70,7 @@ public sealed class SessionStore
         var path = GetPath(state.Folder);
         var json = JsonSerializer.Serialize(state, Options);
         _fileSystem.WriteAllTextAtomic(path, json);
+        _metrics?.RecordSessionWrite();
     }
 
     public string GetPath(string folder)

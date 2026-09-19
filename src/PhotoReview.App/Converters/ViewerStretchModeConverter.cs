@@ -46,3 +46,17 @@ public sealed class CompareBorderBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }
+
+/// <summary>
+/// Chuyển đổi ScalingQuality sang BitmapScalingMode của WPF.
+/// </summary>
+public sealed class ScalingQualityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is PhotoReview.Core.Model.ScalingQuality.Linear
+            ? System.Windows.Media.BitmapScalingMode.Linear
+            : System.Windows.Media.BitmapScalingMode.HighQuality;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}

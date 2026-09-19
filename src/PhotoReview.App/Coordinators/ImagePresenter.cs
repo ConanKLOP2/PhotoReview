@@ -30,6 +30,7 @@ public sealed class ImagePresenter
     private readonly ReviewMetrics _metrics;
     private readonly Func<AppSettings> _getSettings;
     private readonly SessionStore? _sessionStore;
+    private readonly SessionWriter? _sessionWriter;
     private readonly IPresentationSink _sink;
     private readonly IFileSystem? _fileSystem;
     private readonly Func<SessionState?>? _getSession;
@@ -49,7 +50,8 @@ public sealed class ImagePresenter
         IPresentationSink sink,
         IFileSystem? fileSystem = null,
         Func<SessionState?>? getSession = null,
-        Action<string>? onPresentedHook = null)
+        Action<string>? onPresentedHook = null,
+        SessionWriter? sessionWriter = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -65,6 +67,7 @@ public sealed class ImagePresenter
         _fileSystem = fileSystem;
         _getSession = getSession;
         _onPresentedHook = onPresentedHook;
+        _sessionWriter = sessionWriter;
     }
 
     public ReviewCatalog Catalog => _catalog;
@@ -118,8 +121,11 @@ public sealed class ImagePresenter
             return;
         }
 
-        var initialSize = initialInfo.Length;
-        var currentKey = _previewService.GetCurrentCacheKey(initialInfo);
+        var initialEntry = _catalog.Find(path);
+        var initialSize = initialEntry?.Length ?? initialInfo.Length;
+        var currentKey = initialEntry?.Length is not null && initialEntry.LastWriteUtc is not null
+            ? _previewService.GetCurrentCacheKey(initialEntry)
+            : _previewService.GetCurrentCacheKey(initialInfo);
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
@@ -247,6 +253,10 @@ public sealed class ImagePresenter
                 if (!_clock.IsNavigationCurrent(token)) return;
 
                 if (!TryGetFileInfo(path, out var currentInfo)) return;
+                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteTimeUtc))
+                {
+                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteTimeUtc);
+                }
 
                 UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
             }
@@ -262,7 +272,8 @@ public sealed class ImagePresenter
 
                 long perfSession = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.PostStart(token, "session");
-                _sessionStore.Save(session);
+                if (_sessionWriter is not null) _sessionWriter.Update(session); // debounced; flushed on folder change and shutdown
+                else _sessionStore.Save(session);
                 if (perf) PhotoReviewPerf.Log.PostEnd(token, "session", PhotoReviewPerf.Ms(perfSession));
             }
 

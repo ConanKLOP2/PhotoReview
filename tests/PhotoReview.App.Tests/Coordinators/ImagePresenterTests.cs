@@ -102,7 +102,7 @@ public sealed class ImagePresenterTests : IDisposable
         return filePath;
     }
 
-    private ImagePresenter CreatePresenter(SessionState? session = null, Action<string>? onPresented = null)
+    private ImagePresenter CreatePresenter(SessionState? session = null, Action<string>? onPresented = null, SessionWriter? sessionWriter = null)
     {
         return new ImagePresenter(
             _catalog,
@@ -118,7 +118,8 @@ public sealed class ImagePresenterTests : IDisposable
             _sink,
             fileSystem: null,
             getSession: () => session,
-            onPresentedHook: onPresented);
+            onPresentedHook: onPresented,
+            sessionWriter: sessionWriter);
     }
 
     [Fact]
@@ -208,6 +209,24 @@ public sealed class ImagePresenterTests : IDisposable
         var reloaded = _sessionStore.Load(_tempDir);
         Assert.NotNull(reloaded);
         Assert.Equal(f1, reloaded.CurrentPath);
+    }
+
+    [Fact(DisplayName = "With a SessionWriter the session is debounced, not saved per presented image, and Flush persists it")]
+    public async Task PresentAsync_WithSessionWriter_DefersSessionWriteUntilFlush()
+    {
+        var f1 = CreateFakeImageFile("item1.jpg", 1024);
+        var f2 = CreateFakeImageFile("item2.jpg", 1024);
+        _catalog.Reset([f1, f2]);
+        var session = new SessionState { Folder = _tempDir, CurrentPath = "" };
+        using var writer = new SessionWriter(_sessionStore, delay: (_, token) => Task.Delay(Timeout.Infinite, token));
+        var presenter = CreatePresenter(session: session, sessionWriter: writer);
+
+        await presenter.PresentAsync(0);
+        await presenter.PresentAsync(1);
+
+        Assert.Equal("", _sessionStore.Load(_tempDir).CurrentPath ?? "");
+        writer.Flush();
+        Assert.Equal(f2, _sessionStore.Load(_tempDir).CurrentPath);
     }
 
     [Fact]

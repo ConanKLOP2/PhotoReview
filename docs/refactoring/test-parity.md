@@ -339,3 +339,35 @@ Cột **Dòng** là số dòng của attribute `[Fact(DisplayName = ...)]` trong
    # Kết quả thực tế: 0 tên không tồn tại (69/69 khớp)
    ```
 4. **Tên test tham chiếu trong cột DROP tồn tại thật** trong `ServiceBehaviorTests.cs` (`NaturalFilenameSortOrdersNumericSuffixes` dòng 235, `NaturalFilenameSortHandlesLongNumericRuns` dòng 244, `SizeSortOrdersFilesByDescendingBytes` dòng 252, `SizeSortOrdersFilesByAscendingBytes` dòng 260, `FileHashServiceCachesAndInvalidates` dòng 338, `FileHashServiceDeduplicatesConcurrentReads` dòng 355) — cả 6/6 FOUND.
+
+---
+
+## T47 outcome (2026-09-19)
+
+`SourcePresenceTests` giảm từ 69 test xuống 12 (3 test XAML + 9 test source-presence giữ lại), và 2 test source-presence trong `CacheExplorerRegressionTests` bị xoá. Tổng `Tests.Unit`: 257 → 199.
+
+**Đã xoá (58 + 2), mỗi nhóm có test hành vi thay thế đang tồn tại:**
+
+| Nhóm | Test bị xoá | Thay bằng |
+|---|---|---|
+| INV-3/4/5 (advance-before-action, gate) | 26, 32, 71, 75, 80, 85 | `MainViewModelFileActionTests::RunActionAsync_*` (INV-3/4/5), `MainWindowBehaviorTests.Actions/FolderSwitch` |
+| INV-7/9 (Explorer order) | 191, 197, 202, 206, 212, 217 | `FolderLoadCoordinatorTests::LoadAsync_WithExplorerOrder_*`, `LoadAsync_DirectFileOpen_*`, `MainWindowBehaviorTests.Explorer`, `MainViewModelNavigationTests` |
+| Phím tắt | 49, 58, 63, 90, 94, 98, 104, 108, 113, 117, 257 (phần Esc) | `ShortcutRouterTests`, `ServiceBehaviorTests::ShortcutValidatorReportsCrossScopeConflicts`, `MainViewModelNavigationTests` |
+| Compare | 133, 137, 142, 147, 242, 252 | `CompareViewModelTests`, `ShortcutRouterTests::Compare_*` |
+| Presenter / dialogs / advanced | 36, 40, 247, 221, 356, 368, 374, 379, 383, 387, 392, 128 (phần XAML chuyển sang test XAML), 182, 318, 228, 262, 362 | `ImagePresenterTests`, `MainViewModelAdvancedTests`, `MainViewModelFileActionTests`, `OperationJournalTests`, `SettingsStoreTests`, `PreviewImageServiceDiskCacheTests` |
+| DROP (4) | 167, 172, 178, 237 | `ServiceBehaviorTests::NaturalFilenameSort*`, `SizeSortOrders*`, `FileHashService*` |
+| `CacheExplorerRegressionTests` (2 source check) | reindex current path, late snapshot | `FolderLoadCoordinatorTests::LoadAsync_WithExplorerOrder_*` |
+
+**Chuyển sang `XDocument` (KEEP-XAML, gộp thành 3 test):** accessible names (MainWindow/Recovery/Settings), lifecycle + drag-drop + compare + overlay của `MainWindow.xaml`, text của Recovery/Diagnostics XAML.
+
+**Giữ lại vì chưa có test hành vi thay thế (9):** `SettingsDefaultsResetCompareOptions`, `OpenLogLocationFollowsConfiguredAppLogPath`, `EachBuildExposesUniqueInformationalBuildStamp` (Settings code-behind, chưa có view model), `WindowShutdownDisposes...`, `NativeWindowPlacementRestoresAndPersists`, `SavedPlacementIsRejectedWhenMonitorIsGone` (cần HWND/đa màn hình thật), `DiskThumbnailCache...` và `DiskCacheCleanupTolerates...` (`ThumbnailCache` chưa dùng `DiskCacheStore`, xoá sẽ mất kiểm tra quota), `FileAssociationCommandIsRegistered` (script).
+
+T67 đã gỡ marker RAM và shim `ImageSortService.cs`; test shutdown được cập nhật theo contract dispose hiện tại (`PreloadController`/Explorer). Các source-presence test còn lại đều bảo vệ code-behind, HWND/monitor, cache implementation chưa có seam, hoặc script đăng ký hệ thống.
+
+### T67 outcome (2026-09-19)
+
+Đã xoá block compatibility marker còn lại trong `MainWindow.xaml.cs`, xoá file shim chết `ImageSortService.cs` và property `ProjectSources.ImageSortService`, đồng thời xoá test RAM đã được T64 thay thế bằng `RamBudgetPolicyTests`. `SourcePresenceTests`: 12/12 PASS; `verify-all.ps1` chạy sau thay đổi.
+
+### Ghi chú sau T53b (khử trùng lặp)
+
+Bảng 1 ghi test xUnit theo `DisplayName` tại thời điểm T10. Sau T53b một số `DisplayName` legacy đã bị gộp/xoá vì trùng với test mới cùng hợp đồng (ví dụ "Natural filename sort orders numeric suffixes" nay là `ImageSortServiceTests.NaturalFilenameSortOrdersNumericSuffixes` không có `DisplayName`). Runner CLI đã bị xoá ở T53a nên bảng này chỉ còn giá trị lịch sử; không dùng để kiểm tra tự động.

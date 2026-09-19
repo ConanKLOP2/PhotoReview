@@ -51,16 +51,12 @@ function Invoke-Gate([string]$Name, [scriptblock]$Action) {
 }
 
 Invoke-Gate 'Build solution' { dotnet build $solution -c $Configuration --nologo }
-Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
-    dotnet run --project (Join-Path $root 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
-}
 $testProjects = @(
     'PhotoReview.Architecture.Tests',
     'PhotoReview.Core.Tests',
     'PhotoReview.Imaging.Tests',
     'PhotoReview.Integration.Tests',
-    'PhotoReview.App.Tests',
-    'PhotoReview.Tests.Unit'
+    'PhotoReview.App.Tests'
 )
 foreach ($testProject in $testProjects) {
     Invoke-Gate "Run xUnit: $testProject" {

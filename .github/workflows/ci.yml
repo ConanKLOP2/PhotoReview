@@ -38,9 +38,6 @@ jobs:
       - name: Build Release
         run: dotnet build PhotoReview.slnx -c Release --no-restore
 
-      - name: Run contract tests
-        run: dotnet run --project tests/PhotoReview.Tests -c Release --no-build
-
       - name: Run Architecture tests
         run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
 
@@ -55,9 +52,6 @@ jobs:
 
       - name: Run App tests
         run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
-
-      - name: Run remaining unit tests
-        run: dotnet test tests/PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults
 
       - name: Publish Release
         run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
