@@ -1,7 +1,7 @@
 # PhotoReview — trạng thái hiện hành
 
 - **Cập nhật:** 2026-09-20
-- **Branch:** `codex/org-cleanup`
+- **Branch:** `codex/release-2.0.0`
 - **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72 và T87 vẫn `DONE`.
 - **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 163; tổng 737/737. Smoke, fault injection, publish và verify-release đều PASS.
 - **Publish:** `src/PhotoReview.App/bin/Release/net10.0-windows/publish`.
@@ -25,7 +25,8 @@
 
 1. **T73 — GUI acceptance:** chạy đủ 13 nhóm trong `docs/refactoring/REFACTOR-TASKS.md`; ghi PASS/FAIL và tạo task sửa cho lỗi tái hiện được.
 2. **T74 — Release:** PR vào `master`, CI xanh, người dùng duyệt, version/tag/publish theo checklist.
-3. Đối chiếu patch riêng `8513eb0` trước khi xóa nhánh giữ lại `refactor/t47-delete-source-presence`.
+3. **T73 — GUI acceptance:** còn 13 nhóm cần chạy/ghi bằng chứng; chuỗi đổi decoder backend đã xác nhận, các nhóm còn lại chưa đánh dấu PASS.
+4. **T74 — Release:** đang thực hiện version `2.0.0`, publish, verify và tag `v2.0.0`; chỉ hoàn tất sau khi tag push thành công.
 
 ## Bàn giao và lưu ý
 

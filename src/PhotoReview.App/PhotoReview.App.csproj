@@ -7,11 +7,11 @@
     <ApplicationIcon>Assets\PhotoReview.ico</ApplicationIcon>
     <Platforms>AnyCPU;x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
+    <Version>2.0.0</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
     <BuildStamp>$([System.DateTime]::UtcNow.ToString('yyyyMMdd.HHmmss'))</BuildStamp>
-    <InformationalVersion>1.0.1+build.$(BuildStamp)</InformationalVersion>
+    <InformationalVersion>2.0.0+build.$(BuildStamp)</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
