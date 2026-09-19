@@ -35,7 +35,10 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
             AppConstants.ImageCacheCapacityBytes, _diskCacheDirectory);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,
-            AppConstants.ImageCacheCapacityBytes, AppConstants.PreloadMemoryLoadLimit, hasHeadroom,
+            options: new PreloadOptions(
+                MemoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
+                FullFolderThresholdBytes: AppConstants.ImageCacheCapacityBytes),
+            memoryProbe: hasHeadroom is null ? PhysicalMemory.Instance : new DelegateMemoryProbe(hasHeadroom),
             uiScheduler: ImmediateUiScheduler.Instance);
     }
 

@@ -57,7 +57,7 @@ public sealed class PreloadScheduler : IDisposable
         _snapshotFiles = snapshotFiles ?? throw new ArgumentNullException(nameof(snapshotFiles));
         _totalSourceBytes = totalSourceBytes ?? throw new ArgumentNullException(nameof(totalSourceBytes));
         _options = options ?? new PreloadOptions();
-        _memoryProbe = memoryProbe ?? FakeOrSystemMemoryProbe.Instance;
+        _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
         _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
         _log = log ?? NullLog.Instance;
 
@@ -83,6 +83,7 @@ public sealed class PreloadScheduler : IDisposable
         long fullFolderRamThresholdBytes,
         double memoryLoadLimit,
         Func<double, bool>? hasHeadroom = null,
+        IMemoryProbe? memoryProbe = null,
         int? workerCountOverride = null,
         IUiScheduler? uiScheduler = null,
         ILog? log = null)
@@ -91,7 +92,9 @@ public sealed class PreloadScheduler : IDisposable
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
                 MemoryLoadLimit: memoryLoadLimit,
                 FullFolderThresholdBytes: fullFolderRamThresholdBytes),
-            hasHeadroom is not null ? new DelegateMemoryProbe(hasHeadroom) : null,
+            memoryProbe ?? (hasHeadroom is not null
+                ? new DelegateMemoryProbe(hasHeadroom)
+                : throw new ArgumentNullException(nameof(memoryProbe), "A real memory probe or an explicit test override is required.")),
             uiScheduler,
             log)
     {
@@ -106,8 +109,11 @@ public sealed class PreloadScheduler : IDisposable
     /// <summary>Cancels in-flight preload work. The next <see cref="PreloadAroundAsync"/> starts a fresh lifetime.</summary>
     public void Cancel()
     {
-        if (Volatile.Read(ref _disposed)) return;
-        lock (_preloadCtsGate) _preloadCts.Cancel();
+        lock (_preloadCtsGate)
+        {
+            if (_disposed) return;
+            _preloadCts.Cancel();
+        }
         if (PhotoReviewPerf.Log.IsEnabled()) PhotoReviewPerf.Log.PreloadCancel("cancel");
     }
 
@@ -128,7 +134,6 @@ public sealed class PreloadScheduler : IDisposable
     {
         // Disposed schedulers must stay dead: without this check, a call here
         // would resurrect a new CancellationTokenSource and background loop.
-        if (Volatile.Read(ref _disposed)) return Task.CompletedTask;
         // D10: PHOTOREVIEW_DIAG_PRELOAD_WORKERS=0 means no preload at all. Returning here
         // (before touching _preloadCts/_preloadCenter/_preloadPriorityVersion) keeps this a
         // true no-op: no scheduler task is created and _preloadSlots is never waited on.
@@ -138,20 +143,21 @@ public sealed class PreloadScheduler : IDisposable
         CancellationTokenSource cts;
         lock (_preloadCtsGate)
         {
+            if (_disposed) return Task.CompletedTask;
             if (_preloadCts.IsCancellationRequested)
             {
                 _preloadCts.Dispose();
                 _preloadCts = new CancellationTokenSource();
             }
             cts = _preloadCts;
+            Volatile.Write(ref _preloadCenter, center);
+            Interlocked.Increment(ref _preloadPriorityVersion);
+            if (_preloadSchedulerTask is { IsCompleted: false } &&
+                ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
+            _preloadSchedulerCts = cts;
+            _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotFiles(), cts.Token);
+            return _preloadSchedulerTask;
         }
-        Volatile.Write(ref _preloadCenter, center);
-        Interlocked.Increment(ref _preloadPriorityVersion);
-        if (_preloadSchedulerTask is { IsCompleted: false } &&
-            ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
-        _preloadSchedulerCts = cts;
-        _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotFiles(), cts.Token);
-        return _preloadSchedulerTask;
     }
 
     private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
@@ -277,20 +283,27 @@ public sealed class PreloadScheduler : IDisposable
 
     public void Dispose()
     {
-        if (Volatile.Read(ref _disposed)) return;
-        Volatile.Write(ref _disposed, true);
-        Cancel();
+        Task? schedulerTask;
+        lock (_preloadCtsGate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _preloadCts.Cancel();
+            schedulerTask = _preloadSchedulerTask;
+        }
+
+        // The scheduler and workers use ConfigureAwait(false), so draining cannot require the
+        // caller's UI context. Keep synchronization primitives alive until every waiter/holder
+        // has observed cancellation and released its slot.
+        if (schedulerTask is not null)
+        {
+            try { schedulerTask.GetAwaiter().GetResult(); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { _log.Error("Preload scheduler failed during disposal", ex); }
+        }
+
         lock (_preloadCtsGate) _preloadCts.Dispose();
         _preloadSlots.Dispose();
-    }
-
-    private sealed class FakeOrSystemMemoryProbe : IMemoryProbe
-    {
-        public static readonly FakeOrSystemMemoryProbe Instance = new();
-        public bool HasHeadroom(double maximumLoad, long reserveBytes) => true;
-        public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-        public bool IsMemoryPressureHigh() => false;
-        public long GetAvailableMemoryBytes() => 16L * 1024 * 1024 * 1024;
     }
 }
 

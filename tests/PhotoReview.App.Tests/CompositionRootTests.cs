@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
 using PhotoReview.App.Services;
@@ -90,6 +91,9 @@ public class CompositionRootTests
         var scheduler = factory(() => ["image1.jpg"], () => 1024L);
 
         Assert.NotNull(scheduler);
+        var probeField = typeof(PreloadScheduler).GetField("_memoryProbe", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.Same(provider.GetRequiredService<IMemoryProbe>(), probeField!.GetValue(scheduler));
+        scheduler.Dispose();
     }
 
     [Fact]

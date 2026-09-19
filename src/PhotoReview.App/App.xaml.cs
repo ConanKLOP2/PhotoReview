@@ -101,6 +101,7 @@ public partial class App : System.Windows.Application
                 getTotalBytes,
                 fullFolderRamThresholdBytes: AppConstants.ImageCacheCapacityBytes,
                 memoryLoadLimit: AppConstants.PreloadMemoryLoadLimit,
+                memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
                 log: sp.GetService<ILog>()));
 
         // 7. ViewModels & Coordinators
