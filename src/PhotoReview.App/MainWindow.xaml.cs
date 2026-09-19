@@ -27,6 +27,11 @@ public partial class MainWindow : Window
     private AppSettings _settings;
     private double? _cachedDpiScale;
     private bool _placementRestored;
+    private long _viewportOperationVersion;
+    private bool _isPanning;
+    private bool _panMoved;
+    private Point _panStartPoint;
+    private Point _panLastPoint;
 
 #pragma warning disable CS0169, CS0414, IDE0044, IDE0051, IDE0052
     // Reflection compatibility fields for legacy test harnesses
@@ -82,7 +87,12 @@ public partial class MainWindow : Window
         _moveHistory = _viewModel.UndoService.MoveHistory;
         _lastUndoAction = _viewModel.UndoService.LastUndoAction;
         _viewModel.Viewer.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ViewerState.IsFullscreen)) ApplyFullscreenState(_viewModel.Viewer.IsFullscreen); };
-        _viewModel.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _index = _viewModel.CurrentIndex; };
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _index = _viewModel.CurrentIndex;
+            if (e.PropertyName == nameof(MainViewModel.CurrentImage) && _viewModel.Viewer.IsFit)
+                Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
+        };
         _viewModel.Compare.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CompareViewModel.SelectedPath)) _compareSelectedPath = _viewModel.Compare.SelectedPath; };
         _viewModel.CatalogChanged += SyncFiles;
         SyncFiles();
@@ -96,7 +106,7 @@ public partial class MainWindow : Window
         try { await _viewModel.UndoLastAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
-    private void ResetFitView() => _viewModel.Viewer.ResetFit();
+    private void ResetFitView() => _ = ApplyFitViewAsync();
     private void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
     private Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
     private bool TryGetCachedPreview(string path, out object? preview)
@@ -142,22 +152,119 @@ public partial class MainWindow : Window
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
     private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
+    private void MainImage_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_viewModel.Viewer.IsFit) UpdateFitSize();
+    }
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
     {
+        CancelPan();
         _viewModel.FlushSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         _explorerOrder?.Dispose();
     }
 
-    private void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    private async void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (Keyboard.Modifiers == ModifierKeys.Control)
+        e.Handled = true;
+        var mouse = e.GetPosition(ImageScroll);
+        var elementPoint = ImageScroll.TranslatePoint(mouse, MainImage);
+        var anchorBefore = MainImage.TranslatePoint(elementPoint, ImageScroll);
+        var pointInImage = elementPoint;
+        if (_viewModel.Viewer.IsFit && MainImage.Source is { Width: > 0, Height: > 0 } source)
         {
-            _viewModel.Viewer.WheelZoom(e.Delta);
-            e.Handled = true;
+            var sourcePoint = MainWindowHelpers.CalculateUniformImagePoint(
+                MainImage.ActualWidth,
+                MainImage.ActualHeight,
+                source.Width,
+                source.Height,
+                pointInImage.X,
+                pointInImage.Y);
+            pointInImage = new Point(sourcePoint.X, sourcePoint.Y);
         }
+        var version = ++_viewportOperationVersion;
+        _viewModel.Viewer.WheelZoom(e.Delta);
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+        if (version != _viewportOperationVersion || !IsLoaded) return;
+        ImageScroll.UpdateLayout();
+
+        var anchorAfter = MainImage.TranslatePoint(pointInImage, ImageScroll);
+        var offsets = MainWindowHelpers.CalculateOffsetsFromAnchorDelta(
+            ImageScroll.HorizontalOffset,
+            ImageScroll.VerticalOffset,
+            anchorBefore.X,
+            anchorBefore.Y,
+            anchorAfter.X,
+            anchorAfter.Y,
+            ImageScroll.ExtentWidth,
+            ImageScroll.ExtentHeight,
+            ImageScroll.ViewportWidth,
+            ImageScroll.ViewportHeight);
+        ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
+        ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
+    }
+
+    private void MainImage_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!CanPan()) return;
+
+        _isPanning = true;
+        _panMoved = false;
+        _panStartPoint = e.GetPosition(ImageScroll);
+        _panLastPoint = _panStartPoint;
+        MainImage.Cursor = Cursors.SizeAll;
+        MainImage.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void MainImage_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isPanning || e.LeftButton != MouseButtonState.Pressed) return;
+
+        var point = e.GetPosition(ImageScroll);
+        var deltaX = point.X - _panLastPoint.X;
+        var deltaY = point.Y - _panLastPoint.Y;
+        _panLastPoint = point;
+        if (Math.Abs(point.X - _panStartPoint.X) >= SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(point.Y - _panStartPoint.Y) >= SystemParameters.MinimumVerticalDragDistance)
+        {
+            _panMoved = true;
+        }
+
+        var offsets = MainWindowHelpers.CalculatePanOffsets(
+            ImageScroll.HorizontalOffset,
+            ImageScroll.VerticalOffset,
+            deltaX,
+            deltaY,
+            ImageScroll.ExtentWidth,
+            ImageScroll.ExtentHeight,
+            ImageScroll.ViewportWidth,
+            ImageScroll.ViewportHeight);
+        ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
+        ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
+        if (_panMoved) e.Handled = true;
+    }
+
+    private void MainImage_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var moved = _panMoved;
+        CancelPan();
+        if (moved) e.Handled = true;
+    }
+
+    private void MainImage_LostMouseCapture(object sender, MouseEventArgs e) => CancelPan();
+
+    private bool CanPan() => !_viewModel.Viewer.IsFit &&
+        (ImageScroll.ExtentWidth > ImageScroll.ViewportWidth + 0.5 || ImageScroll.ExtentHeight > ImageScroll.ViewportHeight + 0.5);
+
+    private void CancelPan()
+    {
+        _isPanning = false;
+        _panMoved = false;
+        if (Mouse.Captured == MainImage) Mouse.Capture(null);
+        MainImage.Cursor = Cursors.Arrow;
     }
 
     private void Window_PreviewDragOver(object sender, DragEventArgs e)
@@ -207,7 +314,7 @@ public partial class MainWindow : Window
                 finally { Volatile.Write(ref _fileActionInProgress, 0); }
                 break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
-            case ReviewCommandType.ToggleFit: _viewModel.ToggleFit(); break;
+            case ReviewCommandType.ToggleFit: _ = ApplyFitViewAsync(); break;
             case ReviewCommandType.ZoomIn: _viewModel.ZoomIn(); break;
             case ReviewCommandType.ZoomOut: _viewModel.ZoomOut(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
@@ -222,7 +329,30 @@ public partial class MainWindow : Window
 
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.PickAndOpenFolderAsync();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
-    private void FitImage_Click(object sender, RoutedEventArgs e) => _viewModel.ToggleFit();
+    private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
+
+    private async Task ApplyFitViewAsync()
+    {
+        CancelPan();
+        ++_viewportOperationVersion;
+        var version = _viewportOperationVersion;
+        var (width, height) = GetViewportSize();
+        _viewModel.Viewer.ResetFit(width, height);
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            if (version != _viewportOperationVersion || !IsLoaded) return;
+            ImageScroll.UpdateLayout();
+            UpdateFitSize();
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+        }
+
+        if (version != _viewportOperationVersion || !IsLoaded) return;
+        ImageScroll.UpdateLayout();
+        ImageScroll.ScrollToHome();
+        ImageScroll.ScrollToHorizontalOffset(0);
+        ImageScroll.ScrollToVerticalOffset(0);
+    }
     private void Recovery_Click(object sender, RoutedEventArgs e) => _viewModel.ShowRecovery();
     private void Diagnostics_Click(object sender, RoutedEventArgs e) => _viewModel.ShowDiagnostics();
     private void Benchmark_Click(object sender, RoutedEventArgs e) => _viewModel.ShowBenchmark();

@@ -173,7 +173,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T72 | Cập nhật tài liệu | T66 | ∥L | | DONE |
 | T73 | GUI acceptance | T72 | | | DONE |
 | T74 | Release | T73 | | | DONE |
-| T89 | Sửa zoom wheel và Fit sau zoom | T73 | | | TODO |
+| T89 | Sửa zoom wheel và Fit sau zoom | T73 | | | IN PROGRESS |
 
 **Chẩn đoán hiệu năng:** các task D00–D13 nằm trong [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md). Chúng chạy sau T00 và trước T14a (các task D sửa `MainWindow`/`PreviewImageService`/`PreloadScheduler`). Mọi task di chuyển hoặc tách code phải giữ event `PhotoReview-Perf` và biến môi trường chẩn đoán (ràng buộc **K-4**). T66 dùng lại `--perf-session`/`run-matrix.ps1`/`--perf-analyze` của D06/D11.
 
@@ -1145,5 +1145,5 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:** tái hiện lỗi bằng ảnh dọc và ảnh ngang; xác định hợp đồng wheel zoom (mức zoom, tâm zoom, cuộn/scroll offset và trạng thái Fit); sửa để wheel zoom không làm lệch ảnh ngoài ý muốn và nút Fit khôi phục đúng scale/position; giữ nguyên zoom phím và binding hiện có.
 - **Xong khi:** test hành vi ViewerState pass; kiểm tra thủ công wheel zoom → Fit trên ảnh dọc/ngang; `verify-all.ps1` và publish Release pass.
 - **Rủi ro/rollback:** thay đổi input/render lifecycle có thể ảnh hưởng pan, scroll và binding; giữ commit nhỏ để revert độc lập.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-20 — Follow-up GUI xác nhận Fit lần đầu gần đúng, lần hai mới chuẩn. Đã triển khai Fit convergence tối đa 3 lượt, wheel anchor theo tọa độ nguồn và pan kéo chuột trái trên ảnh zoom. Pan có threshold, clamp offset, cursor và cleanup mouse capture khi Fit/mất capture/đóng cửa sổ. Targeted 21/21, full xUnit 745/745, smoke, fault injection, publish + verify-release PASS. Chờ GUI acceptance.
 

@@ -22,6 +22,83 @@ namespace PhotoReview.App;
 
 internal static class MainWindowHelpers
 {
+    internal readonly record struct ZoomViewportOffsets(double Horizontal, double Vertical);
+    internal readonly record struct ZoomImagePoint(double X, double Y);
+
+    internal static ZoomImagePoint CalculateUniformImagePoint(
+        double elementWidth,
+        double elementHeight,
+        double sourceWidth,
+        double sourceHeight,
+        double pointerX,
+        double pointerY)
+    {
+        if (elementWidth <= 0 || elementHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0)
+            return new(0, 0);
+
+        var scale = Math.Min(elementWidth / sourceWidth, elementHeight / sourceHeight);
+        var renderedWidth = sourceWidth * scale;
+        var renderedHeight = sourceHeight * scale;
+        var left = (elementWidth - renderedWidth) / 2;
+        var top = (elementHeight - renderedHeight) / 2;
+        return new(
+            Math.Clamp((pointerX - left) / scale, 0, sourceWidth),
+            Math.Clamp((pointerY - top) / scale, 0, sourceHeight));
+    }
+
+    internal static ZoomViewportOffsets CalculateOffsetsFromAnchorDelta(
+        double currentHorizontalOffset,
+        double currentVerticalOffset,
+        double anchorBeforeX,
+        double anchorBeforeY,
+        double anchorAfterX,
+        double anchorAfterY,
+        double newExtentWidth,
+        double newExtentHeight,
+        double viewportWidth,
+        double viewportHeight) => new(
+            ClampOffset(currentHorizontalOffset + anchorAfterX - anchorBeforeX, newExtentWidth, viewportWidth),
+            ClampOffset(currentVerticalOffset + anchorAfterY - anchorBeforeY, newExtentHeight, viewportHeight));
+
+    internal static ZoomViewportOffsets CalculatePanOffsets(
+        double currentHorizontalOffset,
+        double currentVerticalOffset,
+        double deltaX,
+        double deltaY,
+        double extentWidth,
+        double extentHeight,
+        double viewportWidth,
+        double viewportHeight) => new(
+            ClampOffset(currentHorizontalOffset - deltaX, extentWidth, viewportWidth),
+            ClampOffset(currentVerticalOffset - deltaY, extentHeight, viewportHeight));
+
+    internal static ZoomViewportOffsets CalculateZoomViewportOffsets(
+        double oldZoom,
+        double newZoom,
+        double mouseX,
+        double mouseY,
+        double oldHorizontalOffset,
+        double oldVerticalOffset,
+        double newExtentWidth,
+        double newExtentHeight,
+        double viewportWidth,
+        double viewportHeight)
+    {
+        if (!double.IsFinite(oldZoom) || oldZoom <= 0 || !double.IsFinite(newZoom) || newZoom <= 0)
+            return new(ClampOffset(oldHorizontalOffset, newExtentWidth, viewportWidth), ClampOffset(oldVerticalOffset, newExtentHeight, viewportHeight));
+
+        var ratio = newZoom / oldZoom;
+        var horizontal = (oldHorizontalOffset + Math.Max(0, mouseX)) * ratio - Math.Max(0, mouseX);
+        var vertical = (oldVerticalOffset + Math.Max(0, mouseY)) * ratio - Math.Max(0, mouseY);
+        return new(ClampOffset(horizontal, newExtentWidth, viewportWidth), ClampOffset(vertical, newExtentHeight, viewportHeight));
+    }
+
+    private static double ClampOffset(double value, double extent, double viewport)
+    {
+        var maximum = Math.Max(0, extent - viewport);
+        return Math.Clamp(double.IsFinite(value) ? value : 0, 0, maximum);
+    }
+
     public static MainWindowTestHooks ApplyTestEnvironment(MainWindowTestHooks hooks)
     {
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(PhotoReview.Core.AppPaths.DataRootEnvironmentVariable)))

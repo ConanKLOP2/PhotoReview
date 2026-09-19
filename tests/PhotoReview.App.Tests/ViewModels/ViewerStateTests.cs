@@ -96,6 +96,77 @@ public sealed class ViewerStateTests
     }
 
     [Fact]
+    public void ResetFit_WithViewportRestoresViewportLimits()
+    {
+        var state = new ViewerState();
+        state.SetZoom(3);
+
+        state.ResetFit(1280, 720);
+
+        Assert.True(state.IsFit);
+        Assert.Equal(1280, state.MaxImageWidth);
+        Assert.Equal(720, state.MaxImageHeight);
+    }
+
+    [Theory]
+    [InlineData(1.0, 2.0, 100, 80, 0, 0, 2000, 1600, 800, 600, 100, 80)]
+    [InlineData(2.0, 1.0, 120, 90, 300, 200, 1000, 800, 800, 600, 90, 55)]
+    public void ZoomViewportOffsets_KeepPointUnderMouseAnchored(
+        double oldZoom, double newZoom, double mouseX, double mouseY,
+        double oldHorizontal, double oldVertical, double newExtentWidth, double newExtentHeight,
+        double viewportWidth, double viewportHeight, double expectedHorizontal, double expectedVertical)
+    {
+        var result = MainWindowHelpers.CalculateZoomViewportOffsets(oldZoom, newZoom, mouseX, mouseY,
+            oldHorizontal, oldVertical, newExtentWidth, newExtentHeight, viewportWidth, viewportHeight);
+
+        Assert.Equal(expectedHorizontal, result.Horizontal, 6);
+        Assert.Equal(expectedVertical, result.Vertical, 6);
+    }
+
+    [Fact]
+    public void ZoomViewportOffsets_ClampToExtent()
+    {
+        var result = MainWindowHelpers.CalculateZoomViewportOffsets(1, 4, 1000, 1000, 0, 0, 500, 400, 800, 600);
+
+        Assert.Equal(0, result.Horizontal);
+        Assert.Equal(0, result.Vertical);
+    }
+
+    [Fact]
+    public void UniformImagePoint_RemovesLetterboxAndMapsToSourceCoordinates()
+    {
+        var point = MainWindowHelpers.CalculateUniformImagePoint(1000, 800, 1000, 500, 500, 400);
+
+        Assert.Equal(500, point.X, 6);
+        Assert.Equal(250, point.Y, 6);
+    }
+
+    [Fact]
+    public void AnchorDeltaOffsets_KeepSameImagePointAtPointer()
+    {
+        var result = MainWindowHelpers.CalculateOffsetsFromAnchorDelta(
+            40, 30, 300, 200, 440, 290, 1600, 1200, 800, 600);
+
+        Assert.Equal(180, result.Horizontal, 6);
+        Assert.Equal(120, result.Vertical, 6);
+    }
+
+    [Theory]
+    [InlineData(100, 80, 20, -15, 1000, 800, 400, 300, 80, 95)]
+    [InlineData(0, 0, -1000, 1000, 1000, 800, 400, 300, 600, 0)]
+    public void PanOffsets_MoveOppositeDragAndClampToExtent(
+        double horizontal, double vertical, double deltaX, double deltaY,
+        double extentWidth, double extentHeight, double viewportWidth, double viewportHeight,
+        double expectedHorizontal, double expectedVertical)
+    {
+        var result = MainWindowHelpers.CalculatePanOffsets(horizontal, vertical, deltaX, deltaY,
+            extentWidth, extentHeight, viewportWidth, viewportHeight);
+
+        Assert.Equal(expectedHorizontal, result.Horizontal, 6);
+        Assert.Equal(expectedVertical, result.Vertical, 6);
+    }
+
+    [Fact]
     public void ResetFit_RestoresUniformAndCalculatesViewport()
     {
         var state = new ViewerState();
