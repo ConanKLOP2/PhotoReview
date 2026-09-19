@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private AppSettings _settings;
     private double? _cachedDpiScale;
     private bool _placementRestored;
+    private long _viewportOperationVersion;
 
 #pragma warning disable CS0169, CS0414, IDE0044, IDE0051, IDE0052
     // Reflection compatibility fields for legacy test harnesses
@@ -96,7 +97,7 @@ public partial class MainWindow : Window
         try { await _viewModel.UndoLastAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
-    private void ResetFitView() => _viewModel.Viewer.ResetFit();
+    private void ResetFitView() => _ = ApplyFitViewAsync();
     private void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
     private Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
     private bool TryGetCachedPreview(string path, out object? preview)
@@ -151,12 +152,33 @@ public partial class MainWindow : Window
         _explorerOrder?.Dispose();
     }
 
-    private void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    private async void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
-            _viewModel.Viewer.WheelZoom(e.Delta);
             e.Handled = true;
+            var mouse = e.GetPosition(ImageScroll);
+            var oldZoom = _viewModel.Viewer.Zoom;
+            var oldHorizontal = ImageScroll.HorizontalOffset;
+            var oldVertical = ImageScroll.VerticalOffset;
+            var version = ++_viewportOperationVersion;
+            _viewModel.Viewer.WheelZoom(e.Delta);
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+            if (version != _viewportOperationVersion || !IsLoaded) return;
+
+            var offsets = MainWindowHelpers.CalculateZoomViewportOffsets(
+                oldZoom,
+                _viewModel.Viewer.Zoom,
+                mouse.X,
+                mouse.Y,
+                oldHorizontal,
+                oldVertical,
+                ImageScroll.ExtentWidth,
+                ImageScroll.ExtentHeight,
+                ImageScroll.ViewportWidth,
+                ImageScroll.ViewportHeight);
+            ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
+            ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
         }
     }
 
@@ -207,7 +229,7 @@ public partial class MainWindow : Window
                 finally { Volatile.Write(ref _fileActionInProgress, 0); }
                 break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
-            case ReviewCommandType.ToggleFit: _viewModel.ToggleFit(); break;
+            case ReviewCommandType.ToggleFit: _ = ApplyFitViewAsync(); break;
             case ReviewCommandType.ZoomIn: _viewModel.ZoomIn(); break;
             case ReviewCommandType.ZoomOut: _viewModel.ZoomOut(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
@@ -222,7 +244,17 @@ public partial class MainWindow : Window
 
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.PickAndOpenFolderAsync();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
-    private void FitImage_Click(object sender, RoutedEventArgs e) => _viewModel.ToggleFit();
+    private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
+
+    private async Task ApplyFitViewAsync()
+    {
+        ++_viewportOperationVersion;
+        _viewModel.ToggleFit();
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+        ImageScroll.ScrollToHome();
+        ImageScroll.ScrollToHorizontalOffset(0);
+        ImageScroll.ScrollToVerticalOffset(0);
+    }
     private void Recovery_Click(object sender, RoutedEventArgs e) => _viewModel.ShowRecovery();
     private void Diagnostics_Click(object sender, RoutedEventArgs e) => _viewModel.ShowDiagnostics();
     private void Benchmark_Click(object sender, RoutedEventArgs e) => _viewModel.ShowBenchmark();

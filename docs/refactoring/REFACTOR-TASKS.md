@@ -173,7 +173,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T72 | Cập nhật tài liệu | T66 | ∥L | | DONE |
 | T73 | GUI acceptance | T72 | | | DONE |
 | T74 | Release | T73 | | | DONE |
-| T89 | Sửa zoom wheel và Fit sau zoom | T73 | | | TODO |
+| T89 | Sửa zoom wheel và Fit sau zoom | T73 | | | IN PROGRESS |
 
 **Chẩn đoán hiệu năng:** các task D00–D13 nằm trong [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md). Chúng chạy sau T00 và trước T14a (các task D sửa `MainWindow`/`PreviewImageService`/`PreloadScheduler`). Mọi task di chuyển hoặc tách code phải giữ event `PhotoReview-Perf` và biến môi trường chẩn đoán (ràng buộc **K-4**). T66 dùng lại `--perf-session`/`run-matrix.ps1`/`--perf-analyze` của D06/D11.
 
@@ -1145,5 +1145,5 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:** tái hiện lỗi bằng ảnh dọc và ảnh ngang; xác định hợp đồng wheel zoom (mức zoom, tâm zoom, cuộn/scroll offset và trạng thái Fit); sửa để wheel zoom không làm lệch ảnh ngoài ý muốn và nút Fit khôi phục đúng scale/position; giữ nguyên zoom phím và binding hiện có.
 - **Xong khi:** test hành vi ViewerState pass; kiểm tra thủ công wheel zoom → Fit trên ảnh dọc/ngang; `verify-all.ps1` và publish Release pass.
 - **Rủi ro/rollback:** thay đổi input/render lifecycle có thể ảnh hưởng pan, scroll và binding; giữ commit nhỏ để revert độc lập.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-20 — Đã triển khai trên branch `codex/t89-pointer-anchored-zoom`: wheel Ctrl+wheel giữ điểm dưới con trỏ bằng bù ScrollViewer offset sau layout; đổi origin render về góc trên-trái; Fit reset ngang/dọc và hủy thao tác wheel đang chờ; keyboard Fit dùng cùng luồng. Thêm 3 kiểm thử anchor/clamp; App 166/166 và `verify-all.ps1` 740/740, publish + verify-release PASS. Chưa đánh dấu DONE vì chưa có GUI evidence trong phiên này; chờ kiểm tra thủ công ảnh dọc/ngang.
 
