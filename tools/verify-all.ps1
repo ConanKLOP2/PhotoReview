@@ -52,7 +52,7 @@ function Invoke-Gate([string]$Name, [scriptblock]$Action) {
 
 Invoke-Gate 'Build solution' { dotnet build $solution -c $Configuration --nologo }
 Invoke-Gate 'Run persistence, journal, keyboard and association contracts' {
-    dotnet run --project (Join-Path $root 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj') -c $Configuration --no-build --nologo
+    dotnet run --project (Join-Path $root 'tools\PhotoReview.Benchmark.Cli\PhotoReview.Benchmark.Cli.csproj') -c $Configuration --no-build --nologo
 }
 $testProjects = @(
     'PhotoReview.Architecture.Tests',

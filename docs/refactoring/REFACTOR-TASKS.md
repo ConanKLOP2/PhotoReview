@@ -155,7 +155,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T47 | Xóa test source-presence | T46d | | | DONE |
 | T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | DONE |
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | DONE |
-| T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | TODO |
+| T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | DONE |
 | T51 | Bỏ WinForms | T50b | | | TODO |
 | T52 | Dọn code chết | T47, T88 | | | DONE |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
@@ -1000,7 +1000,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{CLI}/Program.cs`, `LocalImageBenchmark.cs`, `LocalUiNextProbe.cs`, `DecoderBenchmark.cs` → `tools/PhotoReview.Benchmark.Cli/`; `tools/benchmark-folder.ps1`; `{App}/Views/BenchmarkWindow.*`; README.
 - **Làm:** CLI giữ **nguyên cú pháp** `--benchmark`, `--benchmark-all`, `--benchmark-actions`, `--benchmark-list-profiles`, `--preload-bench`, `--ui-next-probe`, `--explorer-probe`, `--decoder-bench`. Phần check test còn lại trong `Program.cs` (nếu có) phải đã được chuyển ở T11, không chép sang CLI. `BenchmarkWindow`: làm theo Q2 (giữ và tham chiếu Benchmarking, hoặc xóa khỏi App cùng menu).
 - **Xong khi:** `--benchmark-list-profiles` in đủ profile, `--benchmark` chạy được.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Q2 = giữ `BenchmarkWindow` (đã tham chiếu `Benchmarking` từ T50a). Chuyển nguyên project `tests/PhotoReview.Tests` sang `tools/PhotoReview.Benchmark.Cli` (đổi tên csproj, giữ namespace `PhotoReview.Tests` và cú pháp CLI). Cập nhật slnx, `Tests.Unit`, `verify-all.ps1`, `run-matrix.ps1`, `ci.yml`, README, AGENTS.md (đường dẫn lệnh), `outputs/APP-MECHANISMS-VI.md`. `--benchmark-list-profiles` in đủ profile; `verify-all.ps1` và `test-verify-gates.ps1` PASS. **Lưu ý:** chuyển cả project (gồm Perf*/IoDecodeSplit và phần check test cũ của `Program.cs`) vì `Program.cs` điều phối tất cả chế độ; phần check cũ sẽ xoá ở T53a. `tools/benchmark-folder.ps1` không đổi (script độc lập, không dùng CLI).
 
 ### T51 — Bỏ WinForms
 - **Files:** `{App}/PhotoReview.App.csproj`, `{App}/Services/DialogService.cs` (`PickFolder` dùng `Microsoft.Win32.OpenFolderDialog`), `{App}/Views/*.xaml.cs` có `Forms.` hoặc alias dài.

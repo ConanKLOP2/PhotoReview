@@ -21,7 +21,7 @@ Xem [cơ chế load ảnh, bất biến an toàn và hướng dẫn benchmark](o
 
 ```powershell
 dotnet build PhotoReview.slnx -c Release
-dotnet run --project tests/PhotoReview.Tests -c Release
+dotnet run --project tools/PhotoReview.Benchmark.Cli -c Release
 dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
 .\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```

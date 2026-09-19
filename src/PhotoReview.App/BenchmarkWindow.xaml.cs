@@ -100,7 +100,7 @@ protected override void OnClosed(EventArgs e)
                     var engine = new BenchmarkEngine();
                     // The per-iteration workload logic (correctness guard, file-action mapping,
                     // preload warm-up) lives in BenchmarkWorkloadRunner and is shared with the
-                    // CLI runner (PhotoReview.Tests/Program.cs) so both front ends exercise the
+                    // CLI runner (PhotoReview.Benchmark.Cli/Program.cs) so both front ends exercise the
                     // same real behavior instead of the CLI running a decode-only stand-in.
                     var report = await engine.RunAsync(FolderText.Text, profile,
                         (_, workload, iteration, ct) => BenchmarkWorkloadRunner.RunIterationAsync(executor, files, profile, workload, iteration, random, ct),

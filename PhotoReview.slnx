@@ -11,5 +11,5 @@
   <Project Path="tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj" />
   <Project Path="tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj" />
   <Project Path="tests/PhotoReview.Tests.Unit/PhotoReview.Tests.Unit.csproj" />
-  <Project Path="tests/PhotoReview.Tests/PhotoReview.Tests.csproj" />
+  <Project Path="tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj" />
 </Solution>

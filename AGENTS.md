@@ -31,7 +31,7 @@
 
 - Lệnh chuẩn:
 
-  `dotnet run --project tests/PhotoReview.Tests -c Release`
+  `dotnet run --project tools/PhotoReview.Benchmark.Cli -c Release`
 
   `dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish`
 

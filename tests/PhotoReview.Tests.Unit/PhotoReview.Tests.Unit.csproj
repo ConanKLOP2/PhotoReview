@@ -18,11 +18,11 @@
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Benchmarking\PhotoReview.Benchmarking.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
-    <!-- D11: PerfAnalyze (perf-analyze CLI) lives in PhotoReview.Tests (the CLI test runner)
-         rather than duplicating it here. PhotoReview.Tests is an Exe project, but referencing it
+    <!-- D11: PerfAnalyze (perf-analyze CLI) lives in PhotoReview.Benchmark.Cli (the CLI runner)
+         rather than duplicating it here. PhotoReview.Benchmark.Cli is an Exe project, but referencing it
          works the same as any other ProjectReference: this project gets its public types
          (PerfAnalyze, PerfAnalyzeNavBuilder, PerfRules, ...) without pulling in its top-level Main. -->
-    <ProjectReference Include="..\PhotoReview.Tests\PhotoReview.Tests.csproj" />
+    <ProjectReference Include="..\..\tools\PhotoReview.Benchmark.Cli\PhotoReview.Benchmark.Cli.csproj" />
   </ItemGroup>
 
   <ItemGroup>

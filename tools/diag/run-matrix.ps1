@@ -3,7 +3,7 @@
   D06: runs the perf-session scenario matrix (scenario x mode x condition x repeat), one fresh process per run.
 
 .DESCRIPTION
-  Every run is `dotnet run --project PhotoReview.Tests -c Release --no-build -- --perf-session ...` in a new
+  Every run is `dotnet run --project PhotoReview.Benchmark.Cli -c Release --no-build -- --perf-session ...` in a new
   process. The driver only uses in-process WPF routed events (no OS-level input, no foreground changes; see
   docs/refactoring/diagnosis/perf-session.md). Conditions:
     cold-app       new process, caches left as they are
@@ -43,7 +43,7 @@ foreach ($c in $Conditions) { if ($c -notin 'cold-app', 'cold-diskcache', 'warm'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scenarioDir = Join-Path $PSScriptRoot 'scenarios'
-$testsProject = Join-Path $repoRoot 'tests\PhotoReview.Tests\PhotoReview.Tests.csproj'
+$testsProject = Join-Path $repoRoot 'tools\PhotoReview.Benchmark.Cli\PhotoReview.Benchmark.Cli.csproj'
 
 # work\ is git-ignored and lives in the main checkout; agent worktrees fall back to it.
 function Resolve-WorkDir {

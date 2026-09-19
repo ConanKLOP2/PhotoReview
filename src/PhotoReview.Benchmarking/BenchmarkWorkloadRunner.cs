@@ -6,7 +6,7 @@ namespace PhotoReview.Benchmarking;
 
 /// <summary>
 /// One workload iteration's real behavior, shared by the WPF benchmark window
-/// (<see cref="BenchmarkWindow"/>) and the CLI runner (PhotoReview.Tests/Program.cs) so both
+/// (<see cref="BenchmarkWindow"/>) and the CLI runner (PhotoReview.Benchmark.Cli/Program.cs) so both
 /// front ends exercise the same correctness guard, file-action mapping and preload warm-up
 /// instead of the CLI silently falling back to a decode-only stand-in that can misreport
 /// results for profiles the UI already refuses to run without a real check.
