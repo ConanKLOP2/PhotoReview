@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PhotoReview.Tests.PerfAnalysis;
+namespace PhotoReview.Benchmarking.PerfAnalysis;
 
 /// <summary>
 /// D11 `--perf-analyze &lt;runDir&gt; [--rules &lt;json&gt;]`: reads every perf-*.csv under runDir

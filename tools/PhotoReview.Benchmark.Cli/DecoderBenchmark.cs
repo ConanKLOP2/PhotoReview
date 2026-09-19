@@ -10,7 +10,7 @@ using System.Text.Json.Serialization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
-namespace PhotoReview.Tests;
+namespace PhotoReview.Benchmark.Cli;
 
 /// <summary>
 /// CLI implementation of task T81: <c>--decoder-bench</c>.

@@ -1,7 +1,7 @@
 # D05 — Tách đọc/decode và `--io-decode-split`
 
 - **Ngày chạy:** 2026-09-16/17 (UTC), máy chẩn đoán duy nhất, đơn luồng, không có tải nền khác được biết trước.
-- **Công cụ:** `PhotoReview.Tests --io-decode-split <folder> <outDir> [widths] [max]` (D05). Mã nguồn: `PhotoReview.Tests/IoDecodeSplit.cs`.
+- **Công cụ:** `tools/PhotoReview.Benchmark.Cli --io-decode-split <folder> <outDir> [widths] [max]` (D05). Mã nguồn: `tools/PhotoReview.Benchmark.Cli/IoDecodeSplit.cs`.
 - **Liên quan:** `PERF-DIAGNOSIS-PLAN.md` mục 4 (H8, H9) và mục 8 (R-IO, R-DEC, R-DISK).
 
 ## 1. Điều kiện đo và giới hạn
@@ -145,4 +145,4 @@ Trên cả 4 bộ, tỷ lệ `read / (read + decodeFromMem)` P50 nằm trong kho
 ## 8. Ghi chú thực thi
 
 - Lệnh đã chạy (đường dẫn thư mục ảnh chỉ ghi trong nhật ký local, không commit): `--io-decode-split <F1|F1b|F2> <outDir> "0,1920,2560,3840" 40` và `--io-decode-split <F3> <outDir> "0,1920" 30` (F3 chỉ có 22 file PNG nên toàn bộ được đo).
-- Không chạy app GUI, không gửi input hệ điều hành, không đụng clipboard trong quá trình đo (D05 chỉ dùng CLI console `PhotoReview.Tests.exe`).
+- Không chạy app GUI, không gửi input hệ điều hành, không đụng clipboard trong quá trình đo (D05 chỉ dùng CLI console `PhotoReview.Benchmark.Cli.exe`).

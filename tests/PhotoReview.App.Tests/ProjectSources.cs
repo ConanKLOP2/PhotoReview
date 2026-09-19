@@ -42,18 +42,21 @@ public static class ProjectSources
 
     public static string MainWindow => Read("MainWindow.xaml.cs");
     public static string MainWindowXaml => Read("MainWindow.xaml");
-    public static string AppSettingsSource => Read("AppSettings.cs");
+    public static string AppSettingsSource =>
+        File.ReadAllText(System.IO.Path.Combine(ProjectRoot, "src", "PhotoReview.Core", "Settings", "AppSettings.cs"));
     public static string SettingsWindow => Read("SettingsWindow.xaml.cs");
     public static string SettingsWindowXaml => Read("SettingsWindow.xaml");
     public static string RecoveryWindowXaml => Read("RecoveryWindow.xaml");
     public static string RecoveryWindow => Read("RecoveryWindow.xaml.cs");
     public static string WindowPlacementService => Read("WindowPlacementService.cs");
-    public static string ThumbnailCache => Read("ThumbnailCache.cs");
+    public static string ThumbnailCache =>
+        File.ReadAllText(System.IO.Path.Combine(ProjectRoot, "src", "PhotoReview.Imaging", "Caching", "ThumbnailCache.cs"));
     public static string OperationJournalSource =>
         File.Exists(AppPath("OperationJournal.cs"))
             ? Read("OperationJournal.cs")
             : File.ReadAllText(System.IO.Path.Combine(ProjectRoot, "src", "PhotoReview.Core", "FileActions", "OperationJournal.cs"));
-    public static string PreviewImageServiceSource => Read("PreviewImageService.cs");
+    public static string PreviewImageServiceSource =>
+        File.ReadAllText(System.IO.Path.Combine(ProjectRoot, "src", "PhotoReview.Imaging", "Caching", "PreviewImageService.cs"));
     public static string DiagnosticsWindowXaml => Read("DiagnosticsWindow.xaml");
     public static string AppCsproj => Read("PhotoReview.App.csproj");
 }

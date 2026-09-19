@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PhotoReview.Tests.PerfAnalysis;
+namespace PhotoReview.Benchmarking.PerfAnalysis;
 
 /// <summary>One navigation (ShowImageAsync token) reassembled from its perf events (D11, plan mục 3).</summary>
 public sealed class NavRecord

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 
-namespace PhotoReview.Tests.PerfAnalysis;
+namespace PhotoReview.Benchmarking.PerfAnalysis;
 
 /// <summary>Writes summary.md (human-readable Markdown tables) and summary.json (full numeric
 /// detail) for one `--perf-analyze` run (D11 spec item 8).</summary>

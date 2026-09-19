@@ -23,15 +23,15 @@
    (8 worker, disk cache bật) giữa các lượt đo.
 2. Chạy kịch bản qua driver D06:
    ```powershell
-   dotnet run --project PhotoReview.Tests -c Release -- --perf-session tools\diag\scenarios\S2.json <F1_ROOT> <outDir> --mode Preview
-   dotnet run --project PhotoReview.Tests -c Release -- --perf-session tools\diag\scenarios\S3.json <F1_ROOT> <outDir> --mode Preview
+   dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --perf-session tools\diag\scenarios\S2.json <F1_ROOT> <outDir> --mode Preview
+   dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --perf-session tools\diag\scenarios\S3.json <F1_ROOT> <outDir> --mode Preview
    ```
    hoặc chạy cả ma trận bằng `tools\diag\run-matrix.ps1` (D06), truyền danh sách kịch bản × điều
    kiện; script không tự đặt các biến `PHOTOREVIEW_DIAG_*` — đặt chúng trong shell trước khi gọi
    script, hoặc lặp lại lời gọi script cho mỗi tổ hợp worker/disk-cache dưới đây.
 3. Phân tích CSV bằng D11:
    ```powershell
-   dotnet run --project PhotoReview.Tests -c Release -- --perf-analyze <outDir> <summaryOutDir>
+   dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --perf-analyze <outDir> <summaryOutDir>
    ```
    `summary.md`/`summary.json` cho `t_decode`, phần trăm thời gian preload bị tạm dừng (`PreloadPaused`),
    và các cột cần cho R-CONT/R-DISK bên dưới.
