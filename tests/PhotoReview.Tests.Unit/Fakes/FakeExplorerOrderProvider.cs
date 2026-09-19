@@ -49,6 +49,9 @@ internal sealed class FakeExplorerOrderProvider : IProgressiveExplorerOrderProvi
     /// <summary>Lets the pending (and any later) snapshot call finish.</summary>
     public void Release() => _gate.TrySetResult();
 
+    public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
+        => TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken);
+
     public async Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
         CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
     {

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
@@ -179,7 +179,8 @@ public sealed class FolderLoadCoordinator : IDisposable
                     var mayReplaceInitialFallback = initialPath is null && _clock.CurrentNavigation == presentationGeneration;
                     if (mayReplaceInitialFallback && _catalog.Count > 0)
                     {
-                        await _sink.PresentAsync(_catalog.CurrentIndex, _clock.CurrentNavigation).ConfigureAwait(false);
+                        _catalog.SetCurrent(0);
+                        await _sink.PresentAsync(0, _clock.CurrentNavigation).ConfigureAwait(false);
                     }
                 }
             }

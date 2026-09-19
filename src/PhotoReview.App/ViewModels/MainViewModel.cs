@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
@@ -63,7 +64,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         Action? resetCachesAction = null,
         FileHashService? hashService = null,
         PreviewImageService? previewService = null,
-        ThumbnailCache? thumbnailCache = null)
+        ThumbnailCache? thumbnailCache = null,
+        ReviewMetrics? metrics = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -83,6 +85,20 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _hashService = hashService;
         _previewService = previewService;
         _thumbnailCache = thumbnailCache;
+        Metrics = metrics ?? new ReviewMetrics();
+    }
+
+    public ReviewMetrics Metrics { get; }
+    public ImagePresenter Presenter => _presenter;
+    public IPreloadController? PreloadController => _preloadController;
+    public PreviewImageService? PreviewService => _previewService;
+    public UndoService UndoService => _undoService;
+
+    private AppSettings? _settingsOverride;
+    public AppSettings Settings
+    {
+        get => _settingsOverride ?? _settingsStore.Current;
+        set => _settingsOverride = value;
     }
 
     public string FolderTitle
@@ -120,6 +136,19 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     public bool HasImages => _catalog.Count > 0;
     public bool CanNavigateNext => _catalog.Count > 0 && _catalog.CurrentIndex < _catalog.Count - 1;
     public bool CanNavigatePrevious => _catalog.Count > 0 && _catalog.CurrentIndex > 0;
+
+    public event Action? CatalogChanged;
+
+    public Task FirstImageAsync() => FirstAsync();
+
+    public void ToggleCompare()
+    {
+        _compare.IsVisible = !_compare.IsVisible;
+        if (_catalog.CurrentIndex >= 0)
+        {
+            _ = _presenter.PresentAsync(_catalog.CurrentIndex);
+        }
+    }
 
     /// <summary>
     /// Mở thư mục ảnh và nạp danh mục ảnh.
@@ -255,7 +284,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     public async Task RunActionAsync(int index)
     {
         if (_catalog.Count == 0) return;
-        var actions = _settingsStore.Current.Actions;
+        var actions = Settings.Actions;
         if (index < 0 || index >= actions.Count) return;
 
         var action = actions[index];
@@ -277,7 +306,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
             return;
         }
 
-        var source = _compare.SelectedPath ?? _catalog.Current?.Path;
+        var source = (_compare.IsVisible ? _compare.SelectedPath : null) ?? _catalog.Current?.Path;
         if (string.IsNullOrEmpty(source)) return;
 
         if (string.IsNullOrWhiteSpace(action.Destination))
@@ -319,6 +348,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         if (isRemove)
         {
             nextIndex = _catalog.Remove(source);
+            CatalogChanged?.Invoke();
             _presenter.EvictCachedPath(source);
             _compare.Clear();
 
@@ -402,6 +432,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         if (!string.IsNullOrEmpty(result.Source))
         {
             _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
+            CatalogChanged?.Invoke();
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
             {
@@ -440,6 +471,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
         {
             _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
+            CatalogChanged?.Invoke();
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
             {
@@ -653,7 +685,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     private void UpdateFolderTitle(string? folder = null)
     {
         folder ??= _currentSession?.Folder ?? "";
-        var settings = _settingsStore.Load();
+        var settings = Settings;
         FolderTitle = string.IsNullOrWhiteSpace(folder)
             ? "Photo Review"
             : $"Photo Review — {folder}{(settings.LoggingEnabled ? " · LOG" : "")}";
@@ -679,6 +711,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         return null;
     }
 
+    public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
+
     private void NotifyNavigationStateChanged()
     {
         OnPropertyChanged(nameof(CanNavigateNext));
@@ -703,6 +737,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         FolderText = $"{folder}  ({count} ảnh)";
         UpdateFolderTitle(folder);
         _statusText = StatusFormatter.IndexOnly(0, count);
+        CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }
 
@@ -719,11 +754,21 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         UpdateFolderTitle(folder);
         StatusText = StatusFormatter.NoSupportedImages();
         _compare.Clear();
+        CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }
 
     void IFolderLoadSink.OnOrderApplied(int count, int currentIndex)
     {
+        if (_currentSession?.Folder is { } f)
+        {
+            FolderText = $"{f}  ({count} ảnh) · Explorer";
+        }
+        else if (!string.IsNullOrEmpty(FolderText) && !FolderText.Contains("· Explorer"))
+        {
+            FolderText = $"{FolderText} · Explorer";
+        }
+        CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }
 
