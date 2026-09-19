@@ -68,7 +68,7 @@ public sealed class WicColorProfileTests : IDisposable
     }
 
     [Fact]
-    public void FactoryFallbackPreservesAlphaForProfiledPng()
+    public void FactoryFallbackPreservesSemiTransparentAlphaForProfiledPng()
     {
         var path = FixtureGenerator.GeneratePngWithIcc(
             Path.Combine(_tempDir, "p3-alpha.png"), 32, 24);
@@ -79,5 +79,8 @@ public sealed class WicColorProfileTests : IDisposable
 
         Assert.Equal(DecoderBackend.Wpf, decoded.ActualBackend);
         Assert.True(bitmap.Format == PixelFormats.Bgra32 || bitmap.Format == PixelFormats.Pbgra32);
+        var firstPixel = new byte[4];
+        bitmap.CopyPixels(new System.Windows.Int32Rect(0, 0, 1, 1), firstPixel, 4, 0);
+        Assert.Equal(64, firstPixel[3]);
     }
 }

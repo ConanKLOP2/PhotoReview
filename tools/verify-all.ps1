@@ -40,9 +40,12 @@ function Invoke-Gate([string]$Name, [scriptblock]$Action) {
         return
     }
 
+    $global:LASTEXITCODE = 0
     & $Action
-    if (-not $?) {
-        $exitCode = if ($LASTEXITCODE -is [int]) { $LASTEXITCODE } else { 1 }
+    $actionSucceeded = $?
+    $exitCode = $global:LASTEXITCODE
+    if (-not $actionSucceeded -or $exitCode -ne 0) {
+        if ($exitCode -isnot [int] -or $exitCode -eq 0) { $exitCode = 1 }
         throw "Gate failed: $Name (exit $exitCode)"
     }
 }

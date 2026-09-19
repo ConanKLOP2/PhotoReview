@@ -159,7 +159,13 @@ public static class FixtureGenerator
 
     public static string GeneratePngWithIcc(string targetPath, int width, int height)
     {
-        var bitmap = CreateGradientCheckerboard(width, height);
+        var opaque = CreateGradientCheckerboard(width, height);
+        int stride = width * 4;
+        var pixels = new byte[stride * height];
+        opaque.CopyPixels(pixels, stride, 0);
+        pixels[3] = 64; // deterministic semi-transparent top-left pixel
+        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
+        bitmap.Freeze();
         var colorContext = new ColorContext(new Uri(GetBundledDisplayP3ProfilePath()));
         var frame = BitmapFrame.Create(
             bitmap,

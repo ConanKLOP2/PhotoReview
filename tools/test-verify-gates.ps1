@@ -18,6 +18,28 @@ $expectedGates = @(
     'Verify framework-dependent release'
 )
 
+# Exercise the real Invoke-Gate action path with a native process. This guards
+# against PowerShell reporting `$? = $true` for a completed scriptblock even
+# though the native command inside it returned a non-zero exit code.
+$verifySource = Get-Content -LiteralPath $verifyScript -Raw
+$buildGate = "Invoke-Gate 'Build solution' { dotnet build `$solution -c `$Configuration --nologo }"
+$nativeFailureGate = "Invoke-Gate 'Build solution' { cmd /c exit 17 }"
+if (-not $verifySource.Contains($buildGate)) { throw 'Could not locate the build gate for native failure injection.' }
+$nativeFailureScript = Join-Path $PSScriptRoot ("verify-all-native-failure-{0}.ps1" -f [Guid]::NewGuid().ToString('N'))
+try {
+    Set-Content -LiteralPath $nativeFailureScript -Value $verifySource.Replace($buildGate, $nativeFailureGate) -Encoding utf8
+    $nativeFailureDetected = $false
+    try { & $nativeFailureScript }
+    catch {
+        $nativeFailureDetected = $_.Exception.Message -like '*Gate failed: Build solution (exit 17)*'
+        if (-not $nativeFailureDetected) { throw }
+    }
+    if (-not $nativeFailureDetected) { throw 'A real native exit code 17 was not detected by Invoke-Gate.' }
+}
+finally {
+    Remove-Item -LiteralPath $nativeFailureScript -Force -ErrorAction SilentlyContinue
+}
+
 function Invoke-FaultCase([string]$FailingGate) {
     $seen = [System.Collections.Generic.List[string]]::new()
     $invoker = {
