@@ -166,8 +166,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T62 | R-2 Journal startup | T60 | ∥K | | DONE |
 | T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | DONE |
 | T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
-| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | TODO |
+| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | BLOCKED |
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | TODO |
+| T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | TODO |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
 | T72 | Cập nhật tài liệu | T66 | ∥L | | TODO |
 | T73 | GUI acceptance | T72 | | | TODO |
@@ -1078,11 +1079,20 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   5. Move/Delete thì evict path. Clear cache thì xóa hết.
 - **Xong khi:** `SourceOpenCount` mỗi ảnh ≤ 1 ở mọi mode (trừ khi bị evict). Headroom được tôn trọng. Test lifecycle đạt.
 - **Nhật ký:** —
+- **Quyết định D12/D13:** giữ feature flag tắt mặc định; chỉ mở sau T87 và T66 có baseline/source-open/memory evidence.
 
 ### T66 — Benchmark cuối
 - **Files:** `docs/refactoring/results/final.md`.
 - **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
+- **Thứ tự D13:** đo baseline sau T87; chỉ đưa T65 vào ma trận A/B khi T65 hoàn tất dưới feature flag.
+
+### T67 — Dọn compatibility marker T46d còn lại ∥K
+- **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ImageSortService.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `tests/PhotoReview.App.Tests/ProjectSources.cs`, `test-parity.md`.
+- **Làm:** đối chiếu từng marker với test đang dùng; chuyển test có giá trị sang behavior/AST/XAML test hoặc xóa test implementation-detail; sau đó gỡ marker không còn cần thiết. Không xóa marker đang bảo vệ contract thật.
+- **Xong khi:** test thay thế pass, không còn kiểm tra token implementation-detail đã loại bỏ, `verify-all.ps1` pass.
+- **Rủi ro/rollback:** giữ thay đổi trong commit nhỏ; revert commit nếu parity/behavior giảm.
+- **Nhật ký:** 2026-09-19 · D13 · tách khỏi T52 để không trộn settings binding với cleanup source-presence.
 - **Xong khi:** có bảng so sánh với baseline. Profile nào có P95 tệ hơn quá 5% thì phải có task sửa hoặc revert trước T71.
 - **Nhật ký:** —
 

@@ -30,8 +30,8 @@
 | D07 | Chạy ma trận kịch bản (đợt rút gọn đã chốt) | D05, D06, D10, D11 | | Không | DONE |
 | D08 | ETW / PresentMon deep-dive | D07 | ∥3 | Không | TODO |
 | D09 | GC và bộ nhớ | D07 | ∥3 | Không | TODO |
-| D12 | Báo cáo, quyết định, đề xuất thứ tự task | D07, D08, D09, D01, D02 | | Không | IN PROGRESS |
-| D13 | Cập nhật plan/task refactor theo kết quả | D12 | | Docs | TODO |
+| D12 | Báo cáo, quyết định, đề xuất thứ tự task | D07, D08, D09, D01, D02 | | Không | DONE |
+| D13 | Cập nhật plan/task refactor theo kết quả | D12 | | Docs | DONE |
 
 **Chạy song song:** ∥1 gồm D01, D02, D03 · ∥2 gồm D05, D10, D06, D11 (sửa các file khác nhau, xem mục Files) · ∥3 gồm D08, D09.
 
@@ -205,7 +205,7 @@
   3. PresentMon trong S3 và S6: frame time P50/P95/max, số frame bị bỏ. So `Rendered` (CSV) với present thật để hiệu chỉnh `t_render`.
   4. Nếu thiếu WPR hay PresentMon và người dùng không đồng ý cài: dùng `dotnet-trace collect --providers PhotoReview-Perf,Microsoft-DotNETCore-SampleProfiler` và ghi rõ các hạn chế.
 - **Xong khi:** `etw-findings.md` có ảnh chụp hoặc bảng đã ẩn path, và kết luận H7, H8, H14.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Coordinator · `codex/w6-performance` · `83e3525` · tạo `docs/refactoring/diagnosis/REPORT.md`; người dùng xác nhận giữ RAM/worker, SourceBytesCache tắt mặc định, T87 setting + fallback với WPF default, T65 sau T87/T66, compatibility marker thành task riêng, D08/D09 chỉ chạy khi cần.
 
 ### D09 — GC và bộ nhớ ∥3
 - **Files:** `docs/refactoring/diagnosis/gc-memory.md` (mới).
@@ -230,10 +230,10 @@
      - Khuyến nghị cho Q5 (R-4 mặc định), Q7/Q8 (C3), và dữ liệu đầu vào cho T71 (C1).
   6. **Mục tiêu hiệu năng** (plan mục 8): **hỏi người dùng xác nhận** hoặc chỉnh.
 - **Xong khi:** người dùng đọc và xác nhận các đề xuất.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Coordinator · `codex/w6-performance` · `83e3525` · tạo `docs/refactoring/diagnosis/REPORT.md`; người dùng xác nhận giữ RAM/worker, SourceBytesCache tắt mặc định, T87 setting + fallback với WPF default, T65 sau T87/T66, compatibility marker thành task riêng, D08/D09 chỉ chạy khi cần.
 
 ### D13 — Cập nhật plan refactor theo kết quả
 - **Files:** `docs/refactoring/REFACTOR-PLAN.md` (mục 3.2, 6, 11), `docs/refactoring/REFACTOR-TASKS.md` (bảng, phụ thuộc, task mới), `task_on_progress.md`.
 - **Làm:** áp dụng các đề xuất **đã được người dùng xác nhận** ở D12. Task mới đặt ID theo nhóm (ví dụ T67, T68…) và theo đúng mẫu. Kiểm tra lại phụ thuộc bằng script awk trong lịch sử commit plan. Nếu dữ liệu cho thấy C3 không đáng làm (decode < 20% P95), đánh dấu T82–T87 là `BLOCKED: chờ quyết định` thay vì xóa.
 - **Xong khi:** plan và task đã cập nhật và được commit.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Coordinator · D13 cập nhật thứ tự và phụ thuộc W6/WC3 theo các quyết định D12; cùng commit tài liệu.
