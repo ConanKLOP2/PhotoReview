@@ -48,6 +48,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
 
         using var decompressor = TurboJpegNative.CreateDecompressor();
+        ConfigureStrictDecoding(decompressor);
 
         unsafe
         {
@@ -57,7 +58,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 if (headerRes != 0)
                 {
                     string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Header parse error";
-                    throw new InvalidOperationException($"TurboJPEG failed to decompress header: {err}");
+                    throw new InvalidDataException($"TurboJPEG failed to decompress header: {err}");
                 }
 
                 int origW = TurboJpegNative.tj3Get(decompressor, (int)TjParam.JpegWidth);
@@ -65,7 +66,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 if (origW <= 0 || origH <= 0)
                 {
-                    throw new InvalidOperationException($"Invalid image dimensions reported by TurboJPEG: {origW}x{origH}");
+                    throw new InvalidDataException($"Invalid image dimensions reported by TurboJPEG: {origW}x{origH}");
                 }
 
                 int targetW = origW;
@@ -116,7 +117,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
                     if (decRes != 0)
                     {
                         string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Decompression error";
-                        throw new InvalidOperationException($"TurboJPEG decompression failed: {err}");
+                        throw new InvalidDataException($"TurboJPEG decompression failed: {err}");
                     }
                 }
 
@@ -138,7 +139,11 @@ public sealed class TurboJpegDecoder : IImageDecoder
                     bitmap = ExifOrientation.Apply(bitmap, orientation);
                 }
 
-                return new WpfDecodedImage(bitmap, downscaled: request.TargetWidth > 0 && (scaledW < origW || targetW < origW));
+                return new WpfDecodedImage(
+                    bitmap,
+                    downscaled: request.TargetWidth > 0 && (scaledW < origW || targetW < origW),
+                    orientation: orientation,
+                    actualBackend: DecoderBackend.TurboJpeg);
             }
         }
     }
@@ -175,6 +180,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         int orientation = ReadExifOrientation(bytes);
 
         using var decompressor = TurboJpegNative.CreateDecompressor();
+        ConfigureStrictDecoding(decompressor);
         unsafe
         {
             fixed (byte* pJpeg = bytes)
@@ -190,7 +196,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
                         if (headerRes != 0)
                         {
                             string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Header parse error";
-                            throw new InvalidOperationException($"TurboJPEG failed to read image info: {err}");
+                            throw new InvalidDataException($"TurboJPEG failed to read image info: {err}");
                         }
                     }
                 }
@@ -247,6 +253,15 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
 
         return TjScalingFactor.One;
+    }
+
+    private static void ConfigureStrictDecoding(Native.SafeTurboJpegHandle decompressor)
+    {
+        if (TurboJpegNative.tj3Set(decompressor, (int)TjParam.StopOnWarning, 1) != 0)
+        {
+            string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Unknown configuration error";
+            throw new InvalidOperationException($"TurboJPEG could not enable strict decoding: {err}");
+        }
     }
 
     public static bool HasEmbeddedIccProfile(ReadOnlySpan<byte> jpeg)

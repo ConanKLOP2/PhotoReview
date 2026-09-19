@@ -28,14 +28,14 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     {
         try
         {
-            var bitmap = DecodeSource(request);
-            return new WpfDecodedImage(bitmap, downscaled: request.TargetWidth > 0);
+            var bitmap = DecodeSource(request, out int orientation);
+            return new WpfDecodedImage(bitmap, downscaled: request.TargetWidth > 0, orientation: orientation);
         }
         catch when (request.TargetWidth > 0)
         {
             var fallbackRequest = new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes);
-            var bitmap = DecodeSource(fallbackRequest);
-            return new WpfDecodedImage(bitmap, downscaled: false);
+            var bitmap = DecodeSource(fallbackRequest, out int orientation);
+            return new WpfDecodedImage(bitmap, downscaled: false, orientation: orientation);
         }
     }
 
@@ -43,23 +43,26 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         => DecodeWithFallback(new DecodeRequest(path, targetWidth));
 
     public static BitmapSource DecodeSource(DecodeRequest request)
+        => DecodeSource(request, out _);
+
+    private static BitmapSource DecodeSource(DecodeRequest request, out int orientation)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         if (request.Bytes.HasValue)
         {
             using var memoryStream = new MemoryStream(request.Bytes.Value.ToArray(), writable: false);
-            return DecodeStream(memoryStream, request);
+            return DecodeStream(memoryStream, request, out orientation);
         }
 
         using var stream = new FileStream(request.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-        return DecodeStream(stream, request);
+        return DecodeStream(stream, request, out orientation);
     }
 
-    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request)
+    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, out int orientation)
     {
-        int orientation = 1;
+        orientation = 1;
         if (request.ApplyOrientation && stream.CanSeek)
         {
             try
