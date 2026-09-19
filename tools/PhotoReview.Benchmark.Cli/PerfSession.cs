@@ -501,7 +501,13 @@ internal static class PerfSession
             var now = ((ReviewMetrics)metricsField.GetValue(window)!).Snapshot();
             if (!now.Equals(last)) { last = now; stableSince = sw.Elapsed; }
             var stable = sw.Elapsed - stableSince;
-            var task = taskField?.GetValue(schedulerField.GetValue(window)) as Task;
+            // MainWindow uses object so tests can supply DummyPreloadController. Do not
+            // reflect PreloadScheduler's private field on that adapter: it is a valid
+            // no-op controller and means there is simply no preload task to await.
+            var scheduler = schedulerField.GetValue(window);
+            var task = scheduler is PreloadScheduler
+                ? taskField?.GetValue(scheduler) as Task
+                : null;
             var preloadDone = task is null || task.IsCompleted;
             var actionIdle = (int)typeof(MainWindow).GetField("_fileActionInProgress", Instance)!.GetValue(window)! == 0;
             if (actionIdle && stable >= TimeSpan.FromSeconds(1) && (preloadDone || stable >= TimeSpan.FromSeconds(5)))
