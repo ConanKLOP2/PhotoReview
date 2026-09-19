@@ -121,8 +121,11 @@ public sealed class ImagePresenter
             return;
         }
 
-        var initialSize = initialInfo.Length;
-        var currentKey = _previewService.GetCurrentCacheKey(initialInfo);
+        var initialEntry = _catalog.Find(path);
+        var initialSize = initialEntry?.Length ?? initialInfo.Length;
+        var currentKey = initialEntry?.Length is not null && initialEntry.LastWriteUtc is not null
+            ? _previewService.GetCurrentCacheKey(initialEntry)
+            : _previewService.GetCurrentCacheKey(initialInfo);
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
@@ -250,6 +253,10 @@ public sealed class ImagePresenter
                 if (!_clock.IsNavigationCurrent(token)) return;
 
                 if (!TryGetFileInfo(path, out var currentInfo)) return;
+                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteTimeUtc))
+                {
+                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteTimeUtc);
+                }
 
                 UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
             }

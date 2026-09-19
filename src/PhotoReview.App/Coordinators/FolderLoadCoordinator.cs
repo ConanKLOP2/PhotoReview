@@ -71,30 +71,21 @@ public sealed class FolderLoadCoordinator : IDisposable
                 throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
             }
 
-            var files = await Task.Run(() =>
+            var entries = await Task.Run(() =>
             {
                 return _fileSystem.EnumerateFiles(folder, "*")
                     .Where(ImageFileTypes.IsSupported)
+                    .Select(path =>
+                    {
+                        var stat = _fileSystem.GetFileStat(path);
+                        return stat is null ? new CatalogEntry(path) : new CatalogEntry(path) { Length = stat.Length, LastWriteUtc = stat.LastWriteUtc };
+                    })
                     .ToList();
             }, loadToken).ConfigureAwait(false);
 
             var sortMode = _settingsStore.Current.ImageSortMode;
-            var scannedFiles = files.ToArray();
-
-            var totalBytesTask = Task.Run(() =>
-            {
-                return scannedFiles.Sum(path =>
-                {
-                    try
-                    {
-                        return _fileSystem.GetFileStat(path)?.Length ?? 0L;
-                    }
-                    catch
-                    {
-                        return 0L;
-                    }
-                });
-            }, loadToken);
+            var scannedFiles = entries.Select(e => e.Path).ToArray();
+            var totalSourceBytes = entries.Sum(e => e.Length ?? 0L);
 
             var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(
                 folder,
@@ -103,17 +94,21 @@ public sealed class FolderLoadCoordinator : IDisposable
                 null,
                 16);
 
-            files = await Task.Run(() => ImageSortService.Sort(files, sortMode), loadToken).ConfigureAwait(false);
+            entries = await Task.Run(() =>
+            {
+                var sorted = ImageSortService.Sort(entries.Select(e => e.Path).ToList(), sortMode);
+                return sorted.Select(path => entries.First(e => string.Equals(e.Path, path, StringComparison.OrdinalIgnoreCase))).ToList();
+            }, loadToken).ConfigureAwait(false);
 
             if (initialPath is not null)
             {
                 var requested = Path.GetFullPath(initialPath);
-                var requestedIndex = files.FindIndex(path => string.Equals(path, requested, StringComparison.OrdinalIgnoreCase));
+                var requestedIndex = entries.FindIndex(e => string.Equals(e.Path, requested, StringComparison.OrdinalIgnoreCase));
                 if (requestedIndex > 0)
                 {
-                    var selected = files[requestedIndex];
-                    files.RemoveAt(requestedIndex);
-                    files.Insert(0, selected);
+                    var selected = entries[requestedIndex];
+                    entries.RemoveAt(requestedIndex);
+                    entries.Insert(0, selected);
                 }
             }
 
@@ -125,7 +120,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             _sink.ResetCaches();
             _sessionWriter?.Flush(); // a pending write for this folder must be visible to Load
             var session = _sessionStore.Load(folder);
-            _catalog.Reset(files);
+            _catalog.Reset(entries);
             _sink.OnCatalogReady(folder, _catalog.Count);
 
             var interactionGeneration = _clock.CurrentInteraction;
@@ -141,7 +136,6 @@ public sealed class FolderLoadCoordinator : IDisposable
                 }
             }
 
-            _ = await totalBytesTask.ConfigureAwait(false);
             if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
             {
                 return;

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using PhotoReview.Core.Catalog;
 using System.Threading.Channels;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
@@ -156,6 +157,12 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var isOriginal = IsOriginalLoadingMode();
         return ImageCacheKey.Create(info, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
+    }
+
+    public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
+    {
+        var isOriginal = IsOriginalLoadingMode();
+        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
     }
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));

@@ -66,6 +66,24 @@ public sealed class ReviewCatalog
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
     }
 
+    public void Reset(IEnumerable<CatalogEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        _entries.Clear();
+        _entries.AddRange(entries.Where(e => e is not null && !string.IsNullOrWhiteSpace(e.Path)));
+        CurrentIndex = _entries.Count > 0 ? 0 : -1;
+    }
+
+    public CatalogEntry? Find(string path) => IndexOf(path) is var index && index >= 0 ? _entries[index] : null;
+
+    public bool UpdateMetadata(string path, long length, DateTime lastWriteUtc, int? width = null, int? height = null)
+    {
+        var index = IndexOf(path);
+        if (index < 0) return false;
+        _entries[index] = _entries[index].WithMetadata(length, lastWriteUtc, width, height);
+        return true;
+    }
+
     /// <summary>
     /// Moves the specified item to the front of the catalog (index 0) and sets <see cref="CurrentIndex"/> to 0.
     /// Returns true if the item was found and moved (or already at front), false otherwise.
