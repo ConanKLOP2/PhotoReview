@@ -57,14 +57,6 @@ public sealed class OperationJournalTests : IDisposable
             && File.ReadAllLines(journalFile).All(line => line.StartsWith("{", StringComparison.Ordinal)));
     }
 
-    [Fact(DisplayName = "Journal readers tolerate an invalid JSONL line")]
-    public void JournalReadersTolerateInvalidJsonlLine()
-    {
-        File.AppendAllText(JournalFile, "{not-valid-json}" + Environment.NewLine);
-        Assert.True(_journal.ReadCommittedMoves().Any(x => x.Id == _operationId)
-            && _journal.ReadPendingOperations().Count == 0);
-    }
-
     [Fact(DisplayName = "Journal concurrent append/read remains line-consistent")]
     [Trait("Category", "Integration")]
     public void JournalConcurrentAppendReadRemainsLineConsistent()
@@ -115,18 +107,6 @@ public sealed class JournalReconciliationTests : IDisposable
 
     public void Dispose() => _data.Dispose();
 
-    [Fact(DisplayName = "Pending recycle is reconciled without replay when source remains")]
-    public void PendingRecycleIsReconciledWithoutReplay()
-    {
-        var journalSource = Path.Combine(_data.Path, "pending-recycle.jpg");
-        File.WriteAllBytes(journalSource, [1, 2, 3]);
-        var pendingId = Guid.NewGuid().ToString("N");
-        _journal.Append(new JournalEntry(pendingId, FileOperationType.Recycle, JournalState.Prepared, journalSource, null, 3,
-            File.GetLastWriteTimeUtc(journalSource), DateTime.UtcNow));
-        var reconciled = _journal.ReconcilePendingOperations();
-        Assert.Contains(reconciled, x => x.Id == pendingId && x.State == JournalState.Failed);
-    }
-
     [Fact(DisplayName = "Pending move is committed only when source is absent and destination fingerprint matches")]
     public void PendingMoveIsCommittedWhenSourceAbsentAndFingerprintMatches()
     {
@@ -167,42 +147,5 @@ public sealed class JournalReconciliationTests : IDisposable
             sourceStillDestination, 3, DateTime.UtcNow, DateTime.UtcNow));
         var sourceExistsReconciled = _journal.ReconcilePendingOperations();
         Assert.Contains(sourceExistsReconciled, x => x.Id == sourceExistsId && x.State == JournalState.Failed);
-    }
-}
-
-/// <summary>Recovery retry contracts.</summary>
-[Collection("GlobalState")]
-public sealed class RecoveryRetryServiceTests : IDisposable
-{
-    private readonly DataRootFixture _data = new();
-    private readonly OperationJournal _journal = new();
-
-    public void Dispose() => _data.Dispose();
-
-    private JournalEntry SeedFailedMove(out string retrySource, out string retryDestination)
-    {
-        retrySource = Path.Combine(_data.Path, "retry.jpg");
-        retryDestination = Path.Combine(_data.Path, "retry-dest", "retry.jpg");
-        File.WriteAllBytes(retrySource, [7, 8, 9]);
-        var retryInfo = new FileInfo(retrySource);
-        return new JournalEntry("old-failed", FileOperationType.Move, JournalState.Failed, retrySource, retryDestination,
-            retryInfo.Length, retryInfo.LastWriteTimeUtc, DateTime.UtcNow, "previous failure");
-    }
-
-    [Fact(DisplayName = "Recovery retry validates fingerprint and journals success")]
-    public void RecoveryRetryValidatesFingerprintAndJournalsSuccess()
-    {
-        var entry = SeedFailedMove(out var retrySource, out var retryDestination);
-        var retryResult = RecoveryRetryService.RetryMoveOrCopy(entry, _journal);
-        Assert.True(retryResult.Succeeded && File.Exists(retryDestination) && !File.Exists(retrySource));
-    }
-
-    [Fact(DisplayName = "Recovery retry rejects invalid source state")]
-    public void RecoveryRetryRejectsInvalidSourceState()
-    {
-        var entry = SeedFailedMove(out _, out var retryDestination);
-        RecoveryRetryService.RetryMoveOrCopy(entry, _journal);
-        Assert.True(File.Exists(retryDestination)
-            && RecoveryRetryService.RetryMoveOrCopy(entry with { Source = retryDestination }, _journal).Succeeded == false);
     }
 }

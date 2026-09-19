@@ -363,3 +363,7 @@ Cột **Dòng** là số dòng của attribute `[Fact(DisplayName = ...)]` trong
 **Giữ lại vì chưa có test hành vi thay thế (10):** `SettingsDefaultsResetCompareOptions`, `OpenLogLocationFollowsConfiguredAppLogPath`, `EachBuildExposesUniqueInformationalBuildStamp` (Settings code-behind, chưa có view model), `RamCachePolicyTargets...` (chờ T64), `WindowShutdownDisposes...`, `NativeWindowPlacementRestoresAndPersists`, `SavedPlacementIsRejectedWhenMonitorIsGone` (cần HWND/đa màn hình thật), `DiskThumbnailCache...` và `DiskCacheCleanupTolerates...` (`ThumbnailCache` chưa dùng `DiskCacheStore`, xoá sẽ mất kiểm tra quota), `FileAssociationCommandIsRegistered` (script).
 
 Vì vậy tiêu chí "không còn `.Contains(` kiểm tra file `.cs`" **chưa đạt hoàn toàn**: còn 9 test đọc `.cs`/`.csproj` như trên. Chúng mất khi T52/T64/T31 có thay thế thật. Các marker tương thích T46d trong `MainWindow`/`AppSettings.cs` vẫn còn vì các test đó cần; gỡ ở T52.
+
+### Ghi chú sau T53b (khử trùng lặp)
+
+Bảng 1 ghi test xUnit theo `DisplayName` tại thời điểm T10. Sau T53b một số `DisplayName` legacy đã bị gộp/xoá vì trùng với test mới cùng hợp đồng (ví dụ "Natural filename sort orders numeric suffixes" nay là `ImageSortServiceTests.NaturalFilenameSortOrdersNumericSuffixes` không có `DisplayName`). Runner CLI đã bị xoá ở T53a nên bảng này chỉ còn giá trị lịch sử; không dùng để kiểm tra tự động.

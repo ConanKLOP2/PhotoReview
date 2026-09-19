@@ -124,28 +124,3 @@ public sealed class AppLogTests : IDisposable
         Assert.Contains("post-rotation-marker", File.ReadAllText(path));
     }
 }
-
-/// <summary>Session persistence contract.</summary>
-[Collection("GlobalState")]
-public sealed class SessionStoreTests : IDisposable
-{
-    private readonly DataRootFixture _data = new();
-
-    public void Dispose() => _data.Dispose();
-
-    [Fact(DisplayName = "Session save/load")]
-    public void SessionSaveAndLoad()
-    {
-        var root = _data.Path;
-        var store = new SessionStore();
-        var state = new SessionState
-        {
-            Folder = root,
-            CurrentPath = Path.Combine(root, "one.jpg"),
-            Skipped = [Path.Combine(root, "skip.jpg")]
-        };
-        store.Save(state);
-        var loaded = store.Load(root);
-        Assert.True(loaded.CurrentPath == state.CurrentPath && loaded.Skipped.Count == 1);
-    }
-}
