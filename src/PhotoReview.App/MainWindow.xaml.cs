@@ -165,7 +165,9 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
         var mouse = e.GetPosition(ImageScroll);
-        var pointInImage = ImageScroll.TranslatePoint(mouse, MainImage);
+        var elementPoint = ImageScroll.TranslatePoint(mouse, MainImage);
+        var anchorBefore = MainImage.TranslatePoint(elementPoint, ImageScroll);
+        var pointInImage = elementPoint;
         if (_viewModel.Viewer.IsFit && MainImage.Source is { Width: > 0, Height: > 0 } source)
         {
             var sourcePoint = MainWindowHelpers.CalculateUniformImagePoint(
@@ -177,7 +179,6 @@ public partial class MainWindow : Window
                 pointInImage.Y);
             pointInImage = new Point(sourcePoint.X, sourcePoint.Y);
         }
-        var anchorBefore = MainImage.TranslatePoint(pointInImage, ImageScroll);
         var version = ++_viewportOperationVersion;
         _viewModel.Viewer.WheelZoom(e.Delta);
         await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);

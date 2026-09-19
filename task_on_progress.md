@@ -17,7 +17,7 @@
 - T89: wheel zoom tính lại ScrollViewer offset theo điểm con trỏ sau khi layout cập nhật; Fit từ nút, phím tắt và compatibility hook đều reset cả hai offset; thêm kiểm thử pure anchor math.
 - T89 follow-up: wheel thường (không cần Ctrl) zoom theo kiểu Windows Photos; đổi `RenderTransform` thành `LayoutTransform` để extent phản ánh kích thước zoom; Fit truyền viewport thật vào `ResetFit`.
 - T89 implementation pass: Fit dùng tối đa 3 lượt `UpdateLayout`/Render, đo lại kích thước client và cập nhật khi `MainImage`/CurrentImage đổi; tránh tình trạng click lần hai mới chuẩn. Targeted ViewerState 17/17 PASS; full `verify-all.ps1` PASS 741/741 sau patch, publish + verify-release PASS.
-- T89 wheel-after-Fit: bỏ anchor dựa trên `newZoom/oldZoom`; map con trỏ qua vùng ảnh Uniform về tọa độ ảnh nguồn, sau layout bù theo vị trí thực trước/sau. Targeted 19/19, toàn bộ xUnit 743/743, smoke, fault injection, publish và verify-release PASS sau khi đóng app giữ file.
+- T89 wheel-after-Fit: bỏ anchor dựa trên `newZoom/oldZoom`; map con trỏ qua vùng ảnh Uniform về tọa độ ảnh nguồn, giữ `anchorBefore` ở hệ tọa độ phần tử trước khi đổi hệ, sau layout bù theo vị trí thực trước/sau. Targeted 19/19, toàn bộ xUnit 743/743, smoke, fault injection và publish PASS; verify-release PASS khi truyền rõ thư mục publish.
 - Phân tích lỗi Fit cần bấm hai lần: lần đầu đo viewport khi scrollbar zoom còn hiện; scrollbar biến mất làm viewport đổi nhưng `ImageScroll.SizeChanged` không bảo đảm chạy. Production presenter còn áp dụng InitialViewMode với `(0,0)`. Plan chi tiết: `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; chưa sửa behavior theo plan mới.
 
 ## Quyết định còn hiệu lực
