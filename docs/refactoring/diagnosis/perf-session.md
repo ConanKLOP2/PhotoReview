@@ -1,8 +1,8 @@
 # `--perf-session`: driver kịch bản trong process (D06)
 
-Driver chạy app PhotoReview **trong chính process test** (`PhotoReview.Tests`), phát lại một kịch bản JSON (mở folder, Next, zoom, pan, Move…) và ghi CSV perf (D03/D04) cùng `metrics.json`, `process.json`, `session.json`. `tools/diag/run-matrix.ps1` chạy cả ma trận kịch bản × mode × điều kiện, mỗi lượt một process mới.
+Driver chạy app PhotoReview **trong chính process benchmark CLI** (`tools/PhotoReview.Benchmark.Cli`), phát lại một kịch bản JSON (mở folder, Next, zoom, pan, Move…) và ghi CSV perf (D03/D04) cùng `metrics.json`, `process.json`, `session.json`. `tools/diag/run-matrix.ps1` chạy cả ma trận kịch bản × mode × điều kiện, mỗi lượt một process mới.
 
-- Code: `PhotoReview.Tests/PerfSession.cs`, `PhotoReview.Tests/WpfTestHost.cs` (khung STA dùng chung với `--ui-next-probe`).
+- Code: `tools/PhotoReview.Benchmark.Cli/PerfSession.cs`, `tools/PhotoReview.Benchmark.Cli/WpfTestHost.cs` (khung STA dùng chung với `--ui-next-probe`).
 - Kịch bản: `tools/diag/scenarios/*.json` (S1–S9 theo `PERF-DIAGNOSIS-PLAN.md` mục 5).
 - Dữ liệu chạy (`work\diag\runs\…`) **không commit**.
 
@@ -10,10 +10,10 @@ Driver chạy app PhotoReview **trong chính process test** (`PhotoReview.Tests`
 
 ```powershell
 # Build một lần
-dotnet build PhotoReview.Tests -c Release
+dotnet build tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release
 
 # Một lượt
-dotnet run --project PhotoReview.Tests -c Release --no-build -- `
+dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release --no-build -- `
   --perf-session tools\diag\scenarios\s2-next-slow.json "<folder>" work\diag\runs\manual\s2 `
   --mode Preview --alias F1 [--repeat 3] [--commit <sha>]
 

@@ -7,7 +7,7 @@
 .PARAMETER Out  Path to write the per-token CSV
 
 .NOTES
-  Log line format (see PhotoReview.App/AppLog.cs):
+  Log line format (see src/PhotoReview.App/AppLog.cs):
     yyyy-MM-dd HH:mm:ss.fff [LEVEL] [TnnN] Message
 
   Percentiles use nearest-rank (ceil(p/100*N)), which is called out explicitly in the

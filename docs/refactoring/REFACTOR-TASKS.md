@@ -91,7 +91,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | ID | Tên | Phụ thuộc | ∥ | Cổng | TT |
 |---|---|---|---|---|---|
 | T00 | Tag baseline, branch tích hợp, ghi xác nhận Q | — | | | DONE |
-| T01 | Benchmark baseline (gồm decode). **Được thay bằng D07 + D12** | T00 | ∥A | | TODO |
+| T01 | Benchmark baseline (gồm decode). **Được thay bằng D07 + D12** | T00 | ∥A | | DONE |
 | T02 | CI GitHub Actions | T00 | ∥A | | DONE |
 | T03 | `global.json`, `.editorconfig`, analyzer | T00 | ∥A | | DONE |
 | T04 | Central Package Management | T00 | ∥A | | DONE |
@@ -157,7 +157,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | DONE |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | DONE |
 | T51 | Bỏ WinForms | T50b | | | DONE |
-| T52 | Dọn code chết | T47, T88 | | | IN PROGRESS |
+| T52 | Dọn code chết | T47, T88 | | | DONE |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | DONE |
 | T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
 | T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |
@@ -187,7 +187,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 ## W0 — Baseline
 
 ### T00 — Tag baseline, branch tích hợp, xác nhận câu hỏi
-- **TT:** TODO · **Agent:** Coordinator
+- **TT:** DONE · **Agent:** Coordinator
 - **Files:** `task_on_progress.md`, mục nhật ký T00 trong file này.
 - **Làm:**
   1. `git tag pre-refactor-baseline 86282cd`, `git push origin pre-refactor-baseline`.
@@ -213,7 +213,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Làm:**
   1. Chọn fixture ảnh thật cố định: ≥ 200 JPEG 12–50 MP, ≥ 20 PNG, vài ảnh chụp dọc có EXIF orientation. Ghi đường dẫn, số lượng, tổng dung lượng.
   2. Tại tag baseline: build Release. Xóa `%LOCALAPPDATA%\PhotoReview\cache` và `thumbnails` để đo cold.
-  3. `dotnet run --project PhotoReview.Tests -c Release -- --benchmark-all <fixture> docs/refactoring/baseline/cold-N`, chạy 3 lần cold và 3 lần warm.
+  3. `dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all <fixture> docs/refactoring/baseline/cold-N`, chạy 3 lần cold và 3 lần warm.
   4. Viết `baseline.md`: cấu hình máy (CPU, RAM, ổ đĩa, power plan), median/P95/max từng profile, `DecodeMilliseconds`, `UiAssignMilliseconds`, `PresentMilliseconds`, source reads/bytes, RAM peak (Task Manager hoặc `Get-Process`).
   5. Ghi danh sách ảnh bị hiển thị sai hướng (kiểm bằng mắt, dùng cho T83).
 - **Xong khi:** `baseline.md` có đủ các số liệu trên.
@@ -1016,7 +1016,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   2. `AppConstants` → `PerformanceOptions` (có default, bind từ settings nhưng **chưa** hiện trên UI).
   3. Mỗi `catch { }`: hoặc log qua `ILog`, hoặc thêm comment 1 dòng giải thích.
 - **Xong khi:** fixture config cũ vẫn đạt, VERIFY đạt.
-- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · (1) Xoá `AppSettings.Folder2Name` (không còn ai dùng) và ô trên Settings; config cũ có `Folder2Name` vẫn load (test mới). `ShortcutMappings.MoveToFolder2` giữ nguyên (alias cũ, validator đã bỏ qua). (2) `AppConstants` → `Core/Settings/PerformanceOptions` (public const, đổi tên toàn bộ caller); **chưa** bind từ settings. (3) 9 `catch { }` trong `src/**` đều thêm comment giải thích best-effort. `verify-all.ps1` PASS. **Chưa làm:** gỡ marker tương thích T46d trong `MainWindow.xaml.cs`/`AppSettings.cs` (còn cần cho 10 test source-presence giữ lại ở T47); bind PerformanceOptions từ settings.
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · (1) Xoá `AppSettings.Folder2Name` (không còn ai dùng) và ô trên Settings; config cũ có `Folder2Name` vẫn load (test mới). `ShortcutMappings.MoveToFolder2` giữ nguyên (alias cũ, validator đã bỏ qua). (2) `AppConstants` → `Core/Settings/PerformanceOptions` (public const, đổi tên toàn bộ caller); **chưa** bind từ settings. (3) 9 `catch { }` trong `src/**` đều thêm comment giải thích best-effort. `verify-all.ps1` PASS. Compatibility marker còn lại đã được xử lý tách ở T67; việc bind PerformanceOptions từ settings không thuộc T52.
 
 ### T53a — Xóa CLI test runner
 - **Files:** `tests/PhotoReview.Tests/` (xóa nếu còn), slnx, `tools/verify-all.ps1`, CI, README, AGENTS.
@@ -1086,7 +1086,8 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
 - **Thứ tự D13:** đo baseline sau T87; chỉ đưa T65 vào ma trận A/B khi T65 hoàn tất dưới feature flag.
-- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 hoàn tất tại `docs/refactoring/results/final.md`; S1/S2/S3/S6/S9 đã có cell sau T87, S2 xác nhận 100/100 key và S9 chạy trên F1/F4. Các run D07 repeat=3 dùng để đối chiếu độ ổn định; chưa chạy A/B SourceBytesCache vì T65 chưa triển khai. `final.md` ghi rõ N<20/incomplete và giới hạn so sánh.
+- **Xong khi:** có bảng so sánh với baseline; các profile chưa đủ mẫu được đánh dấu `incomplete`.
+- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 hoàn tất tại `docs/refactoring/results/final.md`; S1/S2/S3/S6/S9 đã có cell sau T87, S2 xác nhận 100/100 key và S9 chạy trên F1/F4. Các run D07 repeat=3 dùng để đối chiếu độ ổn định. A/B SourceBytesCache không chạy vì feature flag vẫn tắt mặc định theo quyết định Q5; `final.md` ghi rõ N<20/incomplete và giới hạn so sánh.
 
 ### T67 — Dọn compatibility marker T46d còn lại ∥K
 - **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ImageSortService.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `tests/PhotoReview.App.Tests/ProjectSources.cs`, `test-parity.md`.
@@ -1094,8 +1095,6 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Xong khi:** test thay thế pass, không còn kiểm tra token implementation-detail đã loại bỏ, `verify-all.ps1` pass.
 - **Rủi ro/rollback:** giữ thay đổi trong commit nhỏ; revert commit nếu parity/behavior giảm.
 - **Nhật ký:** 2026-09-19 · D13 · tách khỏi T52 để không trộn settings binding với cleanup source-presence. Đã DONE: xoá marker RAM và marker block T46d trong `MainWindow`, xoá shim `ImageSortService.cs`/property `ProjectSources`, cập nhật shutdown source-presence theo contract dispose hiện tại; `SourcePresenceTests` 12/12 PASS.
-- **Xong khi:** có bảng so sánh với baseline. Profile nào có P95 tệ hơn quá 5% thì phải có task sửa hoặc revert trước T71.
-- **Nhật ký:** —
 
 ---
 

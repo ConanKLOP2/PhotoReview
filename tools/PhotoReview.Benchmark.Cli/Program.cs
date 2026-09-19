@@ -1,3 +1,4 @@
+using PhotoReview.Benchmark.Cli;
 using PhotoReview.Benchmarking;
 using PhotoReview.App;
 using PhotoReview.Core.Abstractions;
@@ -5,7 +6,7 @@ using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Tests;
+using PhotoReview.Benchmarking.PerfAnalysis;
 using System.IO;
 using System.Windows.Media;
 static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
@@ -95,7 +96,7 @@ if (args.Length >= 2 && args[0] == "--perf-analyze")
     {
         if (args[i] == "--rules") rulesPath = args[i + 1];
     }
-    var analysis = await PhotoReview.Tests.PerfAnalysis.PerfAnalyze.RunAsync(args[1], rulesPath);
+    var analysis = await PerfAnalyze.RunAsync(args[1], rulesPath);
     Console.WriteLine($"PERF-ANALYZE: {analysis.CsvFileCount} file, {analysis.Groups.Count} nhóm");
     Console.WriteLine($"REPORT: {analysis.SummaryMdPath}");
     Console.WriteLine($"REPORT: {analysis.SummaryJsonPath}");

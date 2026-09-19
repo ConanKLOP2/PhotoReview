@@ -1,10 +1,17 @@
 # PhotoReview — trạng thái hiện hành
 
-- **Cập nhật:** 2026-09-19
-- **Branch:** `codex/w6-performance`
-- **Baseline hiện tại:** T65, T66, T67, T71, T72 và T87 đã `DONE`; commit tài liệu gần nhất `6f8ba8d`.
+- **Cập nhật:** 2026-09-20
+- **Branch:** `codex/org-cleanup`
+- **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72 và T87 vẫn `DONE`.
 - **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 163; tổng 737/737. Smoke, fault injection, publish và verify-release đều PASS.
 - **Publish:** `src/PhotoReview.App/bin/Release/net10.0-windows/publish`.
+
+## Thay đổi phiên này
+
+- Xóa ba project shell cũ ở root, `.claude`, `.vs`, framework-dependent release cũ và bundle `self-contained-desc-fix`; giữ self-contained bundle vì `verify-all.ps1` còn hỗ trợ nó.
+- Xóa compatibility marker trong `src/PhotoReview.App`; SourcePresenceTests dùng implementation thật ở Core/Imaging.
+- Chuyển `PerfAnalyze*` và `PerformanceTestHarness` dùng chung sang `src/PhotoReview.Benchmarking`; Integration Tests không còn tham chiếu executable CLI.
+- Cập nhật diagnosis commands và trạng thái tracker; `work/` chưa xóa vì còn có thể chứa bằng chứng T73/T74.
 
 ## Quyết định còn hiệu lực
 

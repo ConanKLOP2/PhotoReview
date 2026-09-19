@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Windows.Media.Imaging;
 
-namespace PhotoReview.Integration.Tests;
+namespace PhotoReview.Benchmarking;
 
 /// <summary>Deterministic, relative performance probes. These are intentionally warnings rather than
 /// machine-specific hard failures; correctness tests remain hard assertions.</summary>

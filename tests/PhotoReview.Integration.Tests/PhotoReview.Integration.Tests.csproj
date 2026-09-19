@@ -19,9 +19,6 @@
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
-    <!-- PerfAnalyze (perf-analyze CLI) lives in the CLI project; referencing an Exe project gives this
-         project its public types without pulling in its top-level Main. -->
-    <ProjectReference Include="..\..\tools\PhotoReview.Benchmark.Cli\PhotoReview.Benchmark.Cli.csproj" />
     <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
   </ItemGroup>
 
