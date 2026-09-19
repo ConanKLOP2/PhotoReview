@@ -368,7 +368,7 @@ Task gắn ⛔Qn phải chờ người dùng trả lời Qn. Nếu người dùn
 | Q2 | Giữ `BenchmarkWindow` trong app? | Giữ, tham chiếu `PhotoReview.Benchmarking` | T50b |
 | Q3 | Chuyển project vào `src/`? Đường dẫn publish mới là `src/PhotoReview.App/bin/Release/net10.0-windows/publish` | Chuyển | T24 |
 | Q4 | Đổi AGENTS sang quy trình PR? | Đổi | T05 |
-| Q5 | Bật R-4 mặc định? | Bật sau khi T66 đạt, trước đó để flag tắt | T65 |
+| Q5 | Bật R-4 mặc định? | **Không bật trước T66**. T65 triển khai dưới feature flag; chỉ bật mặc định nếu T66 chứng minh source-open giảm, RAM peak/headroom và P95 vẫn đạt mục tiêu | T65 |
 | Q6 | Thêm `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`, `NetArchTest.Rules` (chỉ trong test)? | Đồng ý | T35, T40 |
 | Q7 | **(C3)** Cho phép đóng gói `turbojpeg.dll` (libjpeg-turbo, BSD/IJG/zlib)? | Đồng ý nếu T86 cho thấy nhanh hơn `WicDirect` ít nhất 15% | T85, T87 |
-| Q8 | **(C3)** Bật backend mới làm mặc định khi đạt cổng? | Có, giữ setting để quay về `Wpf` | T87 |
+| Q8 | **(C3)** Bật backend mới làm mặc định khi đạt cổng? | T87 tích hợp setting + fallback WPF; giữ `Wpf` mặc định trong lúc đo, chỉ chuyển `WicDirect` thành mặc định sau T66 và GUI acceptance đạt | T87 |

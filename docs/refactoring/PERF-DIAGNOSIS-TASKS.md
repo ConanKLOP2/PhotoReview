@@ -27,7 +27,7 @@
 | D10 | Ghi đè số preload worker / tắt disk cache | D04 | ∥2 | Có | DONE |
 | D06 | Driver kịch bản `--perf-session` | D04 | ∥2 | Có | DONE |
 | D11 | Phân tích `--perf-analyze` | D04 | ∥2 | Có (CLI) | DONE |
-| D07 | Chạy ma trận kịch bản | D05, D06, D10, D11 | | Không | TODO |
+| D07 | Chạy ma trận kịch bản (đợt rút gọn đã chốt) | D05, D06, D10, D11 | | Không | TODO |
 | D08 | ETW / PresentMon deep-dive | D07 | ∥3 | Không | TODO |
 | D09 | GC và bộ nhớ | D07 | ∥3 | Không | TODO |
 | D12 | Báo cáo, quyết định, đề xuất thứ tự task | D07, D08, D09, D01, D02 | | Không | TODO |
@@ -190,7 +190,8 @@
   7. **Ổ chậm:** S2 trên S10 nếu có.
   8. Chạy `--perf-analyze` cho từng run. Ghi thời gian và điều kiện bất thường (ví dụ Windows Update đang chạy).
 - **Xong khi:** mọi ô có `summary.md`. Các ô không chạy được thì có lý do.
-- **Nhật ký:** —
+- **Phạm vi đã chốt:** đợt đầu chạy S1, S2, S3, S6, S9; điều kiện warm và cold-app + cold-diskcache; mỗi ô 3 lần. S1–S3 dùng F1, S6 dùng F2, S9 dùng F4. Chạy thêm biến thể S3 với preload workers 0/2/4/8/12, S2 với disk cache bật/tắt, và S2/S3 với `PREREAD=1`. Không tự reboot hoặc làm trống standby list; cold-OS để đợt riêng sau khi người dùng thao tác.
+- **Nhật ký:** 2026-09-19 · người dùng chốt phạm vi rút gọn: ưu tiên S1/S2/S3/S6/S9 và các biến thể worker/disk-cache/PREREAD trước full matrix.
 
 ### D08 — ETW / PresentMon ∥3
 - **Files:** `docs/refactoring/diagnosis/etw-findings.md` (mới), `tools/diag/wpr/PhotoReview.wprp` (mới, profile WPR thêm provider `PhotoReview-Perf`).

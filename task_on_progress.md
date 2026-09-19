@@ -6,7 +6,8 @@
 - T88 (ScalingQuality) DONE, chờ nhận xét thủ công zoom 400% ở hai chế độ.
 - **T47 DONE (an toàn):** xoá 60 test đã có thay thế thật, giữ 10 test chưa có thay thế; chi tiết ở `test-parity.md` mục "T47 outcome". 
 - **T52 IN PROGRESS:** đã bỏ Folder2Name, chuyển AppConstants → Core `PerformanceOptions`, và thêm comment cho `catch { }`; còn marker tương thích T46d và bind PerformanceOptions từ settings. T50a/b, T51, T53a/b, T60, T61 đã DONE.
-- T50a, T50b, T51, T53a, T53b, T60, T61 DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms). Còn kiểm tra thủ công hộp thoại folder/file và placement đa màn hình. Tiếp theo: T62–T64 (R-2..R-4a, có thể song song), T87 (chờ Q8), T65 (chờ Q5). Chờ quyết định: Q5, Q8, phạm vi D07.
+- T50a, T50b, T51, T53a, T53b, T60, T61 DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms). Còn kiểm tra thủ công hộp thoại folder/file và placement đa màn hình. Tiếp theo: T62–T64 (R-2..R-4a, có thể song song), sau đó T87 (setting + fallback, Wpf giữ mặc định tới T66/GUI) và T65 (feature flag, chưa bật mặc định tới T66). Q5, Q8 và phạm vi D07 đã được chốt.
+- **Quyết định mới:** Q5 giữ SourceBytesCache tắt mặc định cho tới T66; Q8 tích hợp setting/fallback trước, giữ Wpf mặc định tới khi T66 + GUI acceptance đạt; D07 chạy đợt rút gọn S1/S2/S3/S6/S9 với warm/cold-app+cold-diskcache và biến thể worker/disk-cache/PREREAD.
 - Bảng `REFACTOR-TASKS.md` đã đồng bộ T25b/T26a/T26b/T32/T33a/T33b sang DONE theo mô tả Wave 3 ở dưới; nên đối chiếu lại với code.
 
 
