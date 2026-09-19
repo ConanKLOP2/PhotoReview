@@ -34,7 +34,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     public async Task FileActionProfilePerformsItsOwnOperation(string profileId)
     {
         var profile = BenchmarkProfiles.Find(profileId)!;
-        var files = new[] { _root.File($"{profileId}-source.png", PreviewImageServiceTests.PreviewPng) };
+        var files = new[] { _root.File($"{profileId}-source.png", TestImages.PreviewPng) };
         var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
 
         var (correct, metrics) = await BenchmarkWorkloadRunner.RunIterationAsync(
@@ -55,7 +55,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     public async Task InterleavedActionProfileCyclesThroughAllThreeOperations()
     {
         var profile = BenchmarkProfiles.Find("action-interleaved")!;
-        var files = new[] { _root.File("interleaved-source.png", PreviewImageServiceTests.PreviewPng) };
+        var files = new[] { _root.File("interleaved-source.png", TestImages.PreviewPng) };
         var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
 
@@ -83,7 +83,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     {
         var profile = BenchmarkProfiles.Find("random-navigation")! with { Workers = 1 };
         var files = Enumerable.Range(0, 5)
-            .Select(i => _root.File($"rand-{i}.png", PreviewImageServiceTests.PreviewPng)).ToArray();
+            .Select(i => _root.File($"rand-{i}.png", TestImages.PreviewPng)).ToArray();
         var totalBytes = files.Sum(f => new FileInfo(f).Length);
 
         async Task<long> RunAsync()
@@ -106,7 +106,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
     {
         var profile = BenchmarkProfiles.Find("fast-balanced")!;
         var files = Enumerable.Range(0, 2)
-            .Select(i => _root.File($"warm-{i}.png", PreviewImageServiceTests.PreviewPng)).ToArray();
+            .Select(i => _root.File($"warm-{i}.png", TestImages.PreviewPng)).ToArray();
         // Real preload memory headroom is machine-dependent (production behavior); fix it to
         // "always available" so this assertion exercises the preload-hit bookkeeping itself,
         // not how much free RAM the machine running the test happens to have.

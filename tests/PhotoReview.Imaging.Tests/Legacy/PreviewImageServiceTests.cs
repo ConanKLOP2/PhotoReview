@@ -1,5 +1,4 @@
 using System.IO;
-using PhotoReview.App;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
@@ -11,10 +10,6 @@ namespace PhotoReview.Tests.Unit;
 /// </summary>
 public sealed class PreviewImageServiceTests : IAsyncLifetime
 {
-    // A valid, tiny PNG keeps decode fixtures portable while exercising WPF's real decoder.
-    internal static readonly byte[] PreviewPng = Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
-
     private readonly TempRoot _root = new("preview-service");
     private readonly string _previewPath;
     private readonly ReviewMetrics _metrics = new();
@@ -31,7 +26,7 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
     {
         var folder = _root.Dir("preview-service");
         _previewPath = Path.Combine(folder, "preview-a.png");
-        File.WriteAllBytes(_previewPath, PreviewPng);
+        File.WriteAllBytes(_previewPath, TestImages.PreviewPng);
         var diskCache = _root.Dir("disk-cache");
         _service = Track(new PreviewImageService(_metrics, () => false, () => 512, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskCache), diskCache);
@@ -189,7 +184,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         _preloadFiles = Enumerable.Range(0, 4).Select(i =>
         {
             var path = Path.Combine(preloadFolder, $"preload-{i}.png");
-            File.WriteAllBytes(path, PreviewImageServiceTests.PreviewPng);
+            File.WriteAllBytes(path, TestImages.PreviewPng);
             return path;
         }).ToArray();
 
@@ -197,7 +192,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         _singleFiles = Enumerable.Range(0, 2).Select(i =>
         {
             var path = Path.Combine(singleFolder, $"single-{i}.png");
-            File.WriteAllBytes(path, PreviewImageServiceTests.PreviewPng);
+            File.WriteAllBytes(path, TestImages.PreviewPng);
             return path;
         }).ToArray();
     }
@@ -320,7 +315,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         var batchFiles = Enumerable.Range(0, 6).Select(i =>
         {
             var path = Path.Combine(_root.Dir("preload-batch"), $"batch-{i}.png");
-            File.WriteAllBytes(path, PreviewImageServiceTests.PreviewPng);
+            File.WriteAllBytes(path, TestImages.PreviewPng);
             return path;
         }).ToArray();
 
@@ -364,7 +359,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     {
         var folder = _root.Dir("source");
         _previewPath = Path.Combine(folder, "preview-a.png");
-        File.WriteAllBytes(_previewPath, PreviewImageServiceTests.PreviewPng);
+        File.WriteAllBytes(_previewPath, TestImages.PreviewPng);
     }
 
     private PreviewImageService Track(PreviewImageService service, string diskDirectory)

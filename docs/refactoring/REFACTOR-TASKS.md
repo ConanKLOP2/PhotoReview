@@ -160,7 +160,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T52 | Dọn code chết | T47, T88 | | | DONE |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
 | T53a | Xóa CLI test runner | T50b, T11 | | | DONE |
-| T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | TODO |
+| T53b | Chia `Tests.Unit` vào các project test theo lớp | T53a | | | DONE |
 | T60 | Mở rộng metric | T53b | | | TODO |
 | T61 | R-1 Session debounce | T60 | ∥K | | TODO |
 | T62 | R-2 Journal startup | T60 | ∥K | | TODO |
@@ -1027,7 +1027,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `tests/PhotoReview.Tests.Unit/**` → `Core.Tests` / `Imaging.Tests` / `App.Tests` / `Integration.Tests`, slnx, CI.
 - **Làm:** di chuyển từng file test theo lớp mà nó kiểm. Hạ tầng dùng chung (`TempRoot`, fakes) đặt vào `tests/PhotoReview.TestSupport` (class library). Xóa `Tests.Unit`.
 - **Xong khi:** tổng số test không giảm so với trước (ghi số trước và sau), CI đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Xoá `Tests.Unit`; test chuyển vào thư mục `Legacy/` của từng project (giữ namespace cũ `PhotoReview.Tests.Unit` để đổi tối thiểu): **App.Tests** (Service/CacheExplorer/DiagOptions/DiagOverride/PerfTrace/AppLog/AppSettings/SourcePresence + `ProjectSources`), **Imaging.Tests** (PreviewImageService, DiskCacheStore), **Core.Tests** (OperationJournal, FileActionConcurrency, BenchmarkScenario), **Integration.Tests** (3 file MainWindowBehavior + `StaTestHost` vì WPF chỉ cho một `Application` mỗi process và `CompositionRootTests` của App.Tests đã tạo sẵn; Benchmark*/PerfAnalyze/PerformanceTestHarness). Hạ tầng dùng chung (`TempRoot`, `DataRootFixture`, `TestImages.PreviewPng`) ở `tests/PhotoReview.TestSupport` (net10.0); `GlobalStateCollection` phải nằm trong từng assembly test nên được nhân bản. `AppLogTests` giờ dùng `FileLog` riêng thay vì `FileLog.Default` (singleton lazy, phụ thuộc thứ tự chạy khi chung assembly với test khác). App thêm `InternalsVisibleTo` cho `App.Tests`/`Integration.Tests`. `verify-all.ps1` bỏ gate Tests.Unit; CI bỏ bước tương ứng. Số test: 717 trước (Arch 7, Core 246, Imaging 166, Integration 8, App 91, Unit 199) và 717 sau (7, 268, 195, 59, 188); Imaging dao động ±1 giữa các lần chạy (196/195), chưa tìm nguyên nhân. **Chưa làm:** đổi namespace `PhotoReview.Tests.Unit`, chia nhỏ `ServiceBehaviorTests` theo lớp (đang ở App.Tests vì dùng FileHashService/PreloadOrderService/ImageCacheKey). CI remote chưa đọc.
 
 ---
 

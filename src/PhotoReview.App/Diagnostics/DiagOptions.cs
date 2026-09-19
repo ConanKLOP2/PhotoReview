@@ -55,8 +55,7 @@ public static class DiagOptions
     /// <summary>Test-only: forces the next read to re-parse environment variables. Production code
     /// never calls this; it exists so xUnit tests in the "GlobalState" collection can set an
     /// environment variable and observe it without restarting the process. Public (rather than
-    /// internal) because PhotoReview.Tests.Unit references PhotoReview.App only via a plain
-    /// ProjectReference, with no InternalsVisibleTo.</summary>
+    /// internal) so the test projects can call it without depending on InternalsVisibleTo.</summary>
     public static void ResetForTests() => _snapshot = new Lazy<Snapshot>(ReadFromEnvironment);
 
     private static Snapshot ReadFromEnvironment()

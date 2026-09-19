@@ -43,7 +43,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         return Enumerable.Range(0, count).Select(i =>
         {
             var path = Path.Combine(folder, $"preview-{i}.png");
-            File.WriteAllBytes(path, PreviewImageServiceTests.PreviewPng);
+            File.WriteAllBytes(path, TestImages.PreviewPng);
             return path;
         }).ToArray();
     }
@@ -136,7 +136,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
     {
         var folder = _root.Dir("disable-write-source");
         var previewPath = Path.Combine(folder, "preview.png");
-        File.WriteAllBytes(previewPath, PreviewImageServiceTests.PreviewPng);
+        File.WriteAllBytes(previewPath, TestImages.PreviewPng);
         var diskDirectory = _root.Dir("disable-write-cache");
         var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256,
             diskCacheDirectory: diskDirectory, disableDiskCacheOverride: true), diskDirectory);
@@ -153,7 +153,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
     {
         var folder = _root.Dir("disable-read-source");
         var previewPath = Path.Combine(folder, "preview.png");
-        File.WriteAllBytes(previewPath, PreviewImageServiceTests.PreviewPng);
+        File.WriteAllBytes(previewPath, TestImages.PreviewPng);
         var diskDirectory = _root.Dir("disable-read-cache");
 
         // Populate a real, valid disk-cache entry at the exact path a matching key would use,

@@ -1,7 +1,6 @@
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using PhotoReview.App;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Tests.Unit;

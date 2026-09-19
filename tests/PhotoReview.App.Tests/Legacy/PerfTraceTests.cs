@@ -197,7 +197,7 @@ public sealed class PerfTraceTests : IDisposable
     [Fact(DisplayName = "Source decode emits Decode and Verify under the caller's NavContext")]
     public async Task SourceDecodeEmitsDecodeAndVerifyWithNav()
     {
-        var image = _root.File("nav/decode.png", PreviewImageServiceTests.PreviewPng);
+        var image = _root.File("nav/decode.png", TestImages.PreviewPng);
         var diskCache = _root.Dir("nav-cache");
         var service = CreatePreviewService(diskCache);
         var pathId = PhotoReviewPerf.PathId(image);
@@ -227,7 +227,7 @@ public sealed class PerfTraceTests : IDisposable
     [Fact(DisplayName = "A RAM miss served from the preview disk cache emits DiskCacheRead")]
     public async Task DiskCacheHitEmitsDiskCacheRead()
     {
-        var image = _root.File("disk/disk.png", PreviewImageServiceTests.PreviewPng);
+        var image = _root.File("disk/disk.png", TestImages.PreviewPng);
         var diskCache = _root.Dir("disk-cache");
         var service = CreatePreviewService(diskCache);
         var pathId = PhotoReviewPerf.PathId(image);

@@ -6,7 +6,7 @@
 - T88 (ScalingQuality) DONE, chờ nhận xét thủ công zoom 400% ở hai chế độ.
 - **T47 DONE (an toàn):** xoá 60 test đã có thay thế thật, giữ 10 test chưa có thay thế; chi tiết ở `test-parity.md` mục "T47 outcome". 
 - **T52 DONE một phần:** bỏ Folder2Name, AppConstants → Core `PerformanceOptions`, comment cho `catch { }`. Còn marker T46d và bind PerformanceOptions từ settings. Tiếp theo: T50a/b (chờ Q2), T87 (chờ Q8), T53a/b.
-- T50a, T50b, T51 DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms, cần thử thủ công hộp thoại folder/file và placement đa màn hình). Tiếp theo: T53a/b. Chờ quyết định: Q5, Q8, phạm vi D07.
+- T50a, T50b, T51, T53a, T53b DONE (CLI ở `tools/PhotoReview.Benchmark.Cli`; đã bỏ WinForms, cần thử thủ công hộp thoại folder/file và placement đa màn hình). Tiếp theo: T60–T66 (perf), T87 (chờ Q8), T65 (chờ Q5). Chờ quyết định: Q5, Q8, phạm vi D07.
 - Bảng `REFACTOR-TASKS.md` đã đồng bộ T25b/T26a/T26b/T32/T33a/T33b sang DONE theo mô tả Wave 3 ở dưới; nên đối chiếu lại với code.
 
 

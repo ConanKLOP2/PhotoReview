@@ -20,10 +20,23 @@
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
+    <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="PhotoReview.Core.Settings" />
+    <Using Include="PhotoReview.Core.FileActions" />
+    <Using Include="PhotoReview.Core.Session" />
+    <Using Include="PhotoReview.Imaging" />
+    <Using Include="PhotoReview.Imaging.Caching" />
+    <Using Include="PhotoReview.Imaging.Decoding" />
+    <Using Include="PhotoReview.Imaging.Preload" />
+    <Using Include="PhotoReview.TestSupport" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Legacy\Fixtures\**" Link="Fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

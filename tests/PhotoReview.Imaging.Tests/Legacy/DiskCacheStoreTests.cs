@@ -1,6 +1,5 @@
 using System.IO;
 using System.Windows.Media.Imaging;
-using PhotoReview.App;
 
 namespace PhotoReview.Tests.Unit;
 
@@ -63,7 +62,7 @@ public sealed class DiskCacheStoreTests : IDisposable
     private static IDecodedImage DecodeFixture()
     {
         var bitmap = new BitmapImage();
-        using var stream = new MemoryStream(PreviewImageServiceTests.PreviewPng);
+        using var stream = new MemoryStream(TestImages.PreviewPng);
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
         bitmap.StreamSource = stream;

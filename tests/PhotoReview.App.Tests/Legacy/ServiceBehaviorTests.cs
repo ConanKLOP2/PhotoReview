@@ -1,5 +1,5 @@
-using System.IO;
 using PhotoReview.App;
+using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;

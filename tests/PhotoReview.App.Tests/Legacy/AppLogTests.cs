@@ -1,3 +1,4 @@
+using PhotoReview.Core.Diagnostics;
 using System.IO;
 using System.Reflection;
 using PhotoReview.App;
@@ -10,11 +11,22 @@ public sealed class AppLogTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
 
-    public AppLogTests() => AppLog.Enabled = false;
+    private readonly FileLog _log;
+
+    // FileLog.Default is a process-wide lazy singleton whose path is fixed on first use, which
+    // may happen before this fixture sets PHOTOREVIEW_DATA_ROOT; give these tests their own instance.
+    public AppLogTests()
+    {
+        _log = new FileLog(PhotoReview.Core.AppPaths.FromEnvironment());
+        AppLog.Instance = _log;
+        AppLog.Enabled = false;
+    }
 
     public void Dispose()
     {
         AppLog.Enabled = false;
+        AppLog.Instance = null!;
+        _log.Dispose();
         _data.Dispose();
     }
 

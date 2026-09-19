@@ -56,8 +56,7 @@ $testProjects = @(
     'PhotoReview.Core.Tests',
     'PhotoReview.Imaging.Tests',
     'PhotoReview.Integration.Tests',
-    'PhotoReview.App.Tests',
-    'PhotoReview.Tests.Unit'
+    'PhotoReview.App.Tests'
 )
 foreach ($testProject in $testProjects) {
     Invoke-Gate "Run xUnit: $testProject" {
