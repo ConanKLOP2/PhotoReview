@@ -45,7 +45,8 @@
                        RenderOptions.BitmapScalingMode="{Binding Viewer.ScalingQuality, Converter={StaticResource ScalingConverter}}"
                        MaxWidth="{Binding Viewer.MaxImageWidth}"
                        MaxHeight="{Binding Viewer.MaxImageHeight}"
-                       RenderTransformOrigin="0,0">
+                       RenderTransformOrigin="0,0"
+                       SizeChanged="MainImage_SizeChanged">
                     <Image.LayoutTransform>
                         <ScaleTransform x:Name="ImageScale" ScaleX="{Binding Viewer.Zoom}" ScaleY="{Binding Viewer.Zoom}" />
                     </Image.LayoutTransform>

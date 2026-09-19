@@ -1,7 +1,7 @@
 # PhotoReview — trạng thái hiện hành
 
 - **Cập nhật:** 2026-09-20
-- **Branch:** `codex/t89-pointer-anchored-zoom` (chưa push)
+- **Branch:** `codex/t89-pointer-anchored-zoom` (đang triển khai one-click Fit convergence)
 - **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72, T73, T74 và T87 `DONE`; T89 đã triển khai phần sửa mã và kiểm thử, còn GUI acceptance wheel→Fit chờ người dùng xác nhận.
 - **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 167; tổng 741/741; smoke, fault injection, publish và verify-release đều PASS.
 - **Publish:** `src/PhotoReview.App/bin/Release/net10.0-windows/publish`.
@@ -16,6 +16,7 @@
 - Điều tra timing-flaky: `PreloadScheduler` nay drain tất cả worker task còn được scheduler theo dõi khi cancellation/exception trước khi hoàn tất; trước sửa test mục tiêu fail 9/30 lượt, sau sửa pass 30/30.
 - T89: wheel zoom tính lại ScrollViewer offset theo điểm con trỏ sau khi layout cập nhật; Fit từ nút, phím tắt và compatibility hook đều reset cả hai offset; thêm kiểm thử pure anchor math.
 - T89 follow-up: wheel thường (không cần Ctrl) zoom theo kiểu Windows Photos; đổi `RenderTransform` thành `LayoutTransform` để extent phản ánh kích thước zoom; Fit truyền viewport thật vào `ResetFit`.
+- T89 implementation pass: Fit dùng tối đa 3 lượt `UpdateLayout`/Render, đo lại kích thước client và cập nhật khi `MainImage`/CurrentImage đổi; tránh tình trạng click lần hai mới chuẩn. Targeted ViewerState 17/17 PASS; full `verify-all.ps1` PASS 741/741 sau patch, publish + verify-release PASS.
 - Phân tích lỗi Fit cần bấm hai lần: lần đầu đo viewport khi scrollbar zoom còn hiện; scrollbar biến mất làm viewport đổi nhưng `ImageScroll.SizeChanged` không bảo đảm chạy. Production presenter còn áp dụng InitialViewMode với `(0,0)`. Plan chi tiết: `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; chưa sửa behavior theo plan mới.
 
 ## Quyết định còn hiệu lực
@@ -28,7 +29,7 @@
 
 ## Việc còn lại
 
-1. **T89 — Zoom wheel/Fit:** thực hiện `docs/refactoring/T89-FIT-LAYOUT-PLAN.md`; ưu tiên one-click Fit convergence và sửa production InitialViewMode dùng viewport thật.
+1. **T89 — Zoom wheel/Fit:** đã triển khai one-click Fit convergence và đồng bộ presentation; full validation PASS, còn GUI acceptance để xác nhận lần đầu đã chuẩn.
 2. **Bổ sung T73:** nếu có fixture phù hợp thì kiểm tra Recovery retry và ảnh hỏng/định dạng lạ; không chặn việc tiếp tục T89.
 3. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
 

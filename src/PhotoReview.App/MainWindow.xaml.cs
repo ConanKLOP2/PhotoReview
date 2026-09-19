@@ -83,7 +83,12 @@ public partial class MainWindow : Window
         _moveHistory = _viewModel.UndoService.MoveHistory;
         _lastUndoAction = _viewModel.UndoService.LastUndoAction;
         _viewModel.Viewer.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ViewerState.IsFullscreen)) ApplyFullscreenState(_viewModel.Viewer.IsFullscreen); };
-        _viewModel.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _index = _viewModel.CurrentIndex; };
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _index = _viewModel.CurrentIndex;
+            if (e.PropertyName == nameof(MainViewModel.CurrentImage) && _viewModel.Viewer.IsFit)
+                Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
+        };
         _viewModel.Compare.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CompareViewModel.SelectedPath)) _compareSelectedPath = _viewModel.Compare.SelectedPath; };
         _viewModel.CatalogChanged += SyncFiles;
         SyncFiles();
@@ -143,6 +148,10 @@ public partial class MainWindow : Window
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
     private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
+    private void MainImage_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_viewModel.Viewer.IsFit) UpdateFitSize();
+    }
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
     private void Window_Closed(object? sender, EventArgs e)
@@ -246,8 +255,20 @@ public partial class MainWindow : Window
     private async Task ApplyFitViewAsync()
     {
         ++_viewportOperationVersion;
-        _viewModel.Viewer.ResetFit(ImageScroll.ViewportWidth, ImageScroll.ViewportHeight);
-        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+        var version = _viewportOperationVersion;
+        var (width, height) = GetViewportSize();
+        _viewModel.Viewer.ResetFit(width, height);
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            if (version != _viewportOperationVersion || !IsLoaded) return;
+            ImageScroll.UpdateLayout();
+            UpdateFitSize();
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+        }
+
+        if (version != _viewportOperationVersion || !IsLoaded) return;
+        ImageScroll.UpdateLayout();
         ImageScroll.ScrollToHome();
         ImageScroll.ScrollToHorizontalOffset(0);
         ImageScroll.ScrollToVerticalOffset(0);

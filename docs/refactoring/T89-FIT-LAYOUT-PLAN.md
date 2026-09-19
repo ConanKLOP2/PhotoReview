@@ -3,7 +3,7 @@
 - **Ngày lập:** 2026-09-20
 - **Branch:** `codex/t89-pointer-anchored-zoom`
 - **Phạm vi:** chỉ cơ chế zoom/Fit của ảnh chính; không thay đổi compare, decode, cache, file action hoặc shortcut ngoài zoom/Fit.
-- **Trạng thái tổng:** `TODO` — plan đã được lập và commit theo yêu cầu; chưa được xác nhận để bắt đầu sửa behavior.
+- **Trạng thái tổng:** `IN PROGRESS` — transaction Fit và UI viewport refresh đã triển khai; còn GUI acceptance và test WPF layout chuyên biệt.
 - **Baseline:** commit `a923106`; wheel thường đã zoom, anchor math đã có, `LayoutTransform` đã thay cho `RenderTransform`; `verify-all.ps1` gần nhất PASS 741/741.
 
 ## 1. Hiện tượng và hợp đồng mong muốn
@@ -112,7 +112,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 
 ### T89.1 — Ghi probe layout tái hiện lỗi
 
-- **Trạng thái:** `TODO`
+- **Trạng thái:** `TODO` — source analysis đã xác định được stale viewport; chưa thêm probe runtime.
 - **Có thể chạy độc lập:** Có, read-only/diagnostic.
 - **Files dự kiến:** `{App}/MainWindow.xaml.cs`, test/probe chuyên biệt nếu cần.
 - **Làm:** thu thập trước Fit, sau state change, sau từng layout pass và sau reset offset: zoom, stretch, max image size, actual image size, viewport, extent, offsets, computed scrollbar visibility và operation version.
@@ -121,7 +121,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 
 ### T89.2 — Tách snapshot và tiêu chí ổn định
 
-- **Trạng thái:** `TODO`
+- **Trạng thái:** `IN PROGRESS` — transaction dùng giới hạn 3 pass; snapshot/epsilon helper riêng chưa tách.
 - **Có thể chạy độc lập:** Có; có thể giao agent riêng viết pure helper/tests.
 - **Files dự kiến:** `{App}/MainWindowHelpers.cs`, `{AppT}/ViewModels/ViewerStateTests.cs` hoặc test helper mới.
 - **Làm:** thêm kiểu snapshot thuần dữ liệu và helper so sánh viewport/extent với epsilon; validate finite/positive; định nghĩa số lượt tối đa.
@@ -130,7 +130,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 
 ### T89.3 — Thay Fit một-pass bằng transaction hội tụ
 
-- **Trạng thái:** `TODO`
+- **Trạng thái:** `DONE (implementation)` — `ApplyFitViewAsync` dùng tối đa 3 lượt `UpdateLayout` + Render, version cancellation và reset offset cuối.
 - **Có thể chạy độc lập:** Không; phụ thuộc T89.2.
 - **Files dự kiến:** `{App}/MainWindow.xaml.cs`.
 - **Làm:** sửa `ApplyFitViewAsync()` để tăng version, áp dụng state Fit, chờ layout/render, đo lại, cập nhật viewport nếu cần, chờ lượt cuối rồi reset offsets. Mọi continuation kiểm tra version và `IsLoaded`.
@@ -139,7 +139,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 
 ### T89.4 — Đồng nhất mọi entry point của Fit
 
-- **Trạng thái:** `TODO`
+- **Trạng thái:** `DONE (implementation)` — nút, shortcut và compatibility hook dùng cùng transaction UI.
 - **Có thể chạy độc lập:** Không; phụ thuộc T89.3.
 - **Files dự kiến:** `{App}/MainWindow.xaml.cs`, `{App}/ViewModels/MainViewModel.cs` nếu cần thu hẹp API.
 - **Làm:** nút, shortcut, compatibility hook và command đều gọi transaction UI duy nhất. Không để đường nào chỉ gọi `ViewerState.ResetFit()` rồi bỏ qua layout.
@@ -148,7 +148,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 
 ### T89.5 — Sửa InitialViewMode production dùng viewport thật
 
-- **Trạng thái:** `TODO`
+- **Trạng thái:** `IN PROGRESS` — thêm refresh khi `CurrentImage`/`MainImage` đổi để bù callback production `(0,0)`; cần kiểm tra GUI và cân nhắc loại bỏ hẳn `(0,0)` ở sink.
 - **Có thể chạy độc lập:** Có thể khảo sát song song; khi merge phải phối hợp T89.3.
 - **Files dự kiến:** `{App}/App.xaml.cs`, `{App}/Services/WpfPresentationSink.cs`, `{App}/MainWindowHelpers.cs`, interface/callback liên quan nếu thật sự cần.
 - **Làm:** bỏ callback production `ApplyInitialViewMode(..., 0, 0)`; chuyển yêu cầu về UI owner có viewport thật. Bảo đảm thumbnail và final preview không ghi đè một Fit mới hơn của người dùng.
@@ -157,7 +157,7 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 
 ### T89.6 — Kiểm soát event SizeChanged/layout feedback
 
-- **Trạng thái:** `TODO`
+- **Trạng thái:** `IN PROGRESS` — thêm `MainImage.SizeChanged` và giới hạn 3 pass; chưa có probe CPU/layout loop.
 - **Có thể chạy độc lập:** Không.
 - **Files dự kiến:** `{App}/MainWindow.xaml.cs`.
 - **Làm:** giữ resize-window cập nhật Fit nhưng tránh feedback loop; không dựa riêng vào `ImageScroll_SizeChanged`; chỉ cập nhật khi measurement hữu hiệu và khác quá epsilon.
