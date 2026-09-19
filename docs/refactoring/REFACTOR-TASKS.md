@@ -1086,7 +1086,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Công cụ:** chạy lại ma trận D07 bằng `tools/diag/run-matrix.ps1` và `--perf-analyze` (đường dẫn CLI mới sau T50b). So sánh `summary.json` với kết quả D07 theo từng ô ma trận.
 - **Làm:** lặp lại đúng quy trình T01 (cùng máy và fixture), thêm các biến thể `DecoderBackend` × `UseSourceBytesCache` × `ScalingQuality`. Báo cáo median/P95/max, decode/UiAssign/Present, source opens, RAM peak.
 - **Thứ tự D13:** đo baseline sau T87; chỉ đưa T65 vào ma trận A/B khi T65 hoàn tất dưới feature flag.
-- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 bắt đầu tại `work/diag/runs/t66-t87-20260919/20260919-223438`; S1/F1/Preview/warm 3/3 pass. S2 warm-up bị treo không có tiến độ sau thời gian bất thường nên đã dừng tiến trình; chưa đủ ma trận để đánh dấu DONE. Cần chạy lại S2/S3/S6/S9 theo cell nhỏ hơn trước khi chốt `final.md`.
+- **Nhật ký:** 2026-09-19 · Codex · baseline sau T87 tại `work/diag/runs/t66-t87-20260919/20260919-223438` và `20260919-224215`; S1/F1/Preview/warm 3/3 pass. S2/F1/Preview/warm warm-up và run đo 1 đều pass (`keys=100/100`, `presented=101`, `errors=0`; run đo peak WS khoảng 694 MB, hits=43, misses=58). S2 mất khoảng 2,5–3 phút/cell theo đúng interval 1,5 giây; dừng sau run đo đầu tiên vì các run D07 trước đó đã có lặp đầy đủ. Chưa đủ S3/S6/S9 sau T87 để đánh dấu DONE.
 
 ### T67 — Dọn compatibility marker T46d còn lại ∥K
 - **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ImageSortService.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `tests/PhotoReview.App.Tests/ProjectSources.cs`, `test-parity.md`.
