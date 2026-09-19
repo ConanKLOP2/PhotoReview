@@ -2,7 +2,7 @@
 
 - **Cập nhật:** 2026-09-20
 - **Branch:** `master` (`origin/master` đồng bộ)
-- **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72, T74 và T87 `DONE`; T73 `BLOCKED` chờ quyền điều khiển GUI. Đã sửa lifecycle drain của `PreloadScheduler` cho cancel/dispose.
+- **Baseline hiện tại:** O1–O4 đã thực hiện; T65, T66, T67, T71, T72, T73, T74 và T87 `DONE`; T89 mở `TODO` cho lỗi zoom wheel/Fit. Đã sửa lifecycle drain của `PreloadScheduler` cho cancel/dispose.
 - **Verification gần nhất:** `verify-all.ps1` PASS — Architecture 7, Core 305, Imaging 203, Integration 59, App 163; tổng 737/737. Test flaky mục tiêu stress `30/30` PASS, Imaging suite `3/3` PASS; smoke, fault injection, publish và verify-release đều PASS.
 - **Publish:** `src/PhotoReview.App/bin/Release/net10.0-windows/publish`.
 
@@ -25,8 +25,9 @@
 
 ## Việc còn lại
 
-1. **T73 — GUI acceptance (BLOCKED):** chạy đủ 13 nhóm khi phiên có quyền điều khiển native Windows; ghi PASS/FAIL và tạo task sửa cho lỗi tái hiện được.
-2. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
+1. **T89 — Zoom wheel/Fit:** tái hiện và sửa lỗi zoom wheel, Fit sau zoom; giữ T73 ở mức acceptance app dùng được.
+2. **Bổ sung T73:** nếu có fixture phù hợp thì kiểm tra Recovery retry và ảnh hỏng/định dạng lạ; không chặn việc tiếp tục T89.
+3. **T74 — Release (DONE):** PR #8 đã merge, `v2.0.0` đã tag/push, publish và verify đã hoàn tất.
 
 ## Bàn giao và lưu ý
 
@@ -35,4 +36,4 @@
 - Hồ sơ review đã hoàn tất nằm trong `docs/refactoring/archive/`.
 - Cleanup 2026-09-19 đã bỏ 25 worktree, 72 local branch và 28 remote branch cũ; chi tiết và SHA phục hồi ở `docs/refactoring/archive/branch-cleanup-2026-09-19.md`.
 - Không dùng input mức OS (`SendInput`, `SendKeys`, `SetForegroundWindow`) cho perf harness; config action thật của người dùng không được ghi đè.
-- T73 bị hoãn có chủ đích; không suy diễn GUI PASS từ test tự động hoặc benchmark headless.
+- T73 đã được nghiệm thu thủ công ở mức app dùng được; follow-up T89 xử lý lỗi zoom wheel/Fit. Các nhóm Recovery retry và ảnh hỏng chưa có bằng chứng đầy đủ.

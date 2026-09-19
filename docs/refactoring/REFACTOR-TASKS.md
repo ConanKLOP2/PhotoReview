@@ -171,8 +171,9 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | DONE |
 | T72 | Cập nhật tài liệu | T66 | ∥L | | DONE |
-| T73 | GUI acceptance | T72 | | | BLOCKED |
+| T73 | GUI acceptance | T72 | | | DONE |
 | T74 | Release | T73 | | | DONE |
+| T89 | Sửa zoom wheel và Fit sau zoom | T73 | | | TODO |
 
 **Chẩn đoán hiệu năng:** các task D00–D13 nằm trong [`PERF-DIAGNOSIS-TASKS.md`](PERF-DIAGNOSIS-TASKS.md). Chúng chạy sau T00 và trước T14a (các task D sửa `MainWindow`/`PreviewImageService`/`PreloadScheduler`). Mọi task di chuyển hoặc tách code phải giữ event `PhotoReview-Perf` và biến môi trường chẩn đoán (ràng buộc **K-4**). T66 dùng lại `--perf-session`/`run-matrix.ps1`/`--perf-analyze` của D06/D11.
 
@@ -1128,7 +1129,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   12. Folder ≥ 5.000 ảnh và folder ảnh ≥ 16 GB: RAM, độ mượt, không treo UI.
   13. Ảnh hỏng hoặc định dạng lạ: vẫn hiển thị qua fallback hoặc báo lỗi đúng, không crash.
 - **Xong khi:** mọi mục PASS, hoặc mục lỗi đã có task sửa.
-- **Nhật ký:** 2026-09-20 — BLOCKED: chưa thể chạy 13 nhóm GUI vì phiên Codex không có quyền điều khiển native Windows; bản Release vẫn khởi chạy và phản hồi nhưng không có cửa sổ trong Computer Use inventory. Không đánh dấu PASS dựa trên unit/contract test. Tiếp tục khi desktop control được bật.
+- **Nhật ký:** 2026-09-20 — DONE theo acceptance thực tế của người dùng: app dùng được; nhóm 1, 2, 3, 7, 11, 12 PASS; nhóm 5 PASS cho Enter/Delete; nhóm 9 PASS cho đổi mode; nhóm 10 PASS cho Diagnostics; nhóm 4 ghi nhận lỗi zoom bằng wheel và Fit sau wheel; nhóm 6 hoạt động nhưng khó dùng; nhóm 8 chưa rõ/chưa test; nhóm 9 chưa xác nhận backend/phím trùng/import-export; nhóm 13 chưa có fixture ảnh hỏng. Follow-up T89 xử lý lỗi zoom/Fit. Acceptance được thực hiện thủ công bởi người dùng vì phiên Codex không expose native window.
 
 ### T74 — Release
 - **Làm:**
@@ -1138,4 +1139,11 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Cập nhật `task_on_progress.md`.
 - **Xong khi:** tag đã push, artifact đã được verify.
 - **Nhật ký:** 2026-09-20 — DONE; PR #8 (`codex/release-2.0.0 → master`) đã merge tại `ec790d3`; version `2.0.0` tại `99ce834`, tag `v2.0.0` tồn tại trên `origin`; publish artifact tại `src/PhotoReview.App/bin/Release/net10.0-windows/publish`; `verify-all.ps1` và `verify-release.ps1` đã PASS theo handoff. T73 vẫn chưa có GUI evidence nên được theo dõi độc lập sau release.
+
+### T89 — Sửa zoom wheel và Fit sau zoom
+- **Files:** `{App}/MainWindow.xaml(.cs)`, `{App}/ViewModels/ViewerState.cs`, `{AppT}/ViewModels/ViewerStateTests.cs`, các test GUI/hành vi liên quan nếu cần.
+- **Làm:** tái hiện lỗi bằng ảnh dọc và ảnh ngang; xác định hợp đồng wheel zoom (mức zoom, tâm zoom, cuộn/scroll offset và trạng thái Fit); sửa để wheel zoom không làm lệch ảnh ngoài ý muốn và nút Fit khôi phục đúng scale/position; giữ nguyên zoom phím và binding hiện có.
+- **Xong khi:** test hành vi ViewerState pass; kiểm tra thủ công wheel zoom → Fit trên ảnh dọc/ngang; `verify-all.ps1` và publish Release pass.
+- **Rủi ro/rollback:** thay đổi input/render lifecycle có thể ảnh hưởng pan, scroll và binding; giữ commit nhỏ để revert độc lập.
+- **Nhật ký:** —
 
