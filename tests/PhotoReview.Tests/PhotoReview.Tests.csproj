@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PhotoReview.App\PhotoReview.App.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Benchmarking\PhotoReview.Benchmarking.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.TurboJpeg\PhotoReview.Imaging.TurboJpeg.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />

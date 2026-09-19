@@ -2,7 +2,7 @@ using System.IO;
 using Microsoft.VisualBasic.FileIO;
 using PhotoReview.Core.Diagnostics;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Benchmarking;
 
 /// <summary>
 /// One workload iteration's real behavior, shared by the WPF benchmark window

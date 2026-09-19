@@ -154,7 +154,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T46d | `MainWindow` binding, rút gọn code-behind | T46c | | | DONE |
 | T47 | Xóa test source-presence | T46d | | | DONE |
 | T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | DONE |
-| T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | TODO |
+| T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | DONE |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | TODO |
 | T51 | Bỏ WinForms | T50b | | | TODO |
 | T52 | Dọn code chết | T47, T88 | | | DONE |
@@ -994,7 +994,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/Benchmark{Engine,ImageExecutor,Models,Profiles,WorkloadRunner}.cs` → `src/PhotoReview.Benchmarking/`, test benchmark, slnx, reference.
 - **Làm:** di chuyển. `BenchmarkImageExecutor` dựng service qua constructor, dùng lại đăng ký DI (tạo `ServiceCollection` riêng cho mỗi lần chạy).
 - **Xong khi:** VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Q2 = giữ `BenchmarkWindow`. Chuyển 5 file `Benchmark{Engine,ImageExecutor,Models,Profiles,WorkloadRunner}.cs` sang `src/PhotoReview.Benchmarking` (namespace `PhotoReview.Benchmarking`); `AppLog.` → `FileLog.Default.`, `PhysicalMemory` → `WindowsMemoryProbe`. `App`, `Tests`, `Tests.Unit` tham chiếu project mới; thêm Rule 7 (Benchmarking không phụ thuộc App). `verify-all.ps1` PASS (Architecture 7). **Chưa làm:** `BenchmarkImageExecutor` vẫn dựng service trực tiếp, chưa dùng `ServiceCollection` riêng như task mô tả. Test benchmark vẫn ở `Tests.Unit` (chưa tách project test).
 
 ### T50b — `Benchmark.Cli` ⛔Q2
 - **Files:** `{CLI}/Program.cs`, `LocalImageBenchmark.cs`, `LocalUiNextProbe.cs`, `DecoderBenchmark.cs` → `tools/PhotoReview.Benchmark.Cli/`; `tools/benchmark-folder.ps1`; `{App}/Views/BenchmarkWindow.*`; README.

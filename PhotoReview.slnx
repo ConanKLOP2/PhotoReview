@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
+  <Project Path="src/PhotoReview.Benchmarking/PhotoReview.Benchmarking.csproj" />
   <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
   <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
   <Project Path="src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj" />

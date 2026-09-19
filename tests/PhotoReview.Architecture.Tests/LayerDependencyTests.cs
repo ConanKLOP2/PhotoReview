@@ -65,6 +65,21 @@ public sealed class LayerDependencyTests
             $"Platform has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
 
+    [Fact(DisplayName = "Rule 7: Benchmarking does not depend on App or UI frameworks beyond WPF imaging types")]
+    public void Benchmarking_DoesNotDependOn_App()
+    {
+        var types = Types.InAssembly(typeof(PhotoReview.Benchmarking.BenchmarkEngine).Assembly);
+
+        var result = types
+            .ShouldNot()
+            .HaveDependencyOnAny("PhotoReview.App", "System.Windows.Forms")
+            .GetResult();
+
+        Assert.True(
+            result.IsSuccessful,
+            $"Benchmarking has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+    }
+
     [Fact(DisplayName = "Rule 6: ViewModels do not depend on System.Windows (K-2)")]
     [Trait("Category", "Architecture")]
     public void ViewModels_DoNotDependOn_SystemWindows()

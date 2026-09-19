@@ -2,7 +2,7 @@ using System.Text.Json;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Benchmarking;
 
 public enum BenchmarkWorkload { FirstFrame, Sequential, Random, WarmNext, Preload, FileAction, Correctness }
 public enum BenchmarkResultStatus { Pass, Warn, Fail, InsufficientData }

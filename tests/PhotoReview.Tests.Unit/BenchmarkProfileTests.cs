@@ -1,3 +1,4 @@
+using PhotoReview.Benchmarking;
 using System.IO;
 using PhotoReview.App;
 

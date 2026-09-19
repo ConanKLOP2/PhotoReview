@@ -1,3 +1,4 @@
+using PhotoReview.Benchmarking;
 using PhotoReview.App;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;

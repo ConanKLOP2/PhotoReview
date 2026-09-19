@@ -1,7 +1,7 @@
 using PhotoReview.Core.Settings;
 using PhotoReview.Core.Model;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Benchmarking;
 
 public static class BenchmarkProfiles
 {

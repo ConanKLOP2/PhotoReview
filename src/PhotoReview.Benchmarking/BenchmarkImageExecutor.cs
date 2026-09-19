@@ -1,3 +1,4 @@
+using PhotoReview.Platform.Windows;
 using PhotoReview.Core.Settings;
 using System.IO;
 using System.Windows.Media.Imaging;
@@ -5,7 +6,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 
-namespace PhotoReview.App;
+namespace PhotoReview.Benchmarking;
 
 /// <summary>
 /// Production-compatible image executor for benchmark runs. Routes every decode through
@@ -39,7 +40,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
             options: new PreloadOptions(
                 MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
                 FullFolderThresholdBytes: PerformanceOptions.ImageCacheCapacityBytes),
-            memoryProbe: hasHeadroom is null ? PhysicalMemory.Instance : new DelegateMemoryProbe(hasHeadroom),
+            memoryProbe: hasHeadroom is null ? WindowsMemoryProbe.Instance : new DelegateMemoryProbe(hasHeadroom),
             uiScheduler: ImmediateUiScheduler.Instance);
     }
 
@@ -105,7 +106,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
             // directory, so deleting it now could race that worker instead of just
             // leaving scratch data behind. Leave the directory for the OS temp cleaner
             // rather than risk a racy delete.
-            AppLog.Error($"Benchmark disk cache prune did not finish in time; leaving scratch directory: {_diskCacheDirectory}");
+            FileLog.Default.Error($"Benchmark disk cache prune did not finish in time; leaving scratch directory: {_diskCacheDirectory}");
             return;
         }
         try { if (Directory.Exists(_diskCacheDirectory)) Directory.Delete(_diskCacheDirectory, recursive: true); }
