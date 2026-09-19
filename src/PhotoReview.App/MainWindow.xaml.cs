@@ -165,21 +165,33 @@ public partial class MainWindow : Window
     {
         e.Handled = true;
         var mouse = e.GetPosition(ImageScroll);
-        var oldZoom = _viewModel.Viewer.Zoom;
-        var oldHorizontal = ImageScroll.HorizontalOffset;
-        var oldVertical = ImageScroll.VerticalOffset;
+        var pointInImage = ImageScroll.TranslatePoint(mouse, MainImage);
+        if (_viewModel.Viewer.IsFit && MainImage.Source is { Width: > 0, Height: > 0 } source)
+        {
+            var sourcePoint = MainWindowHelpers.CalculateUniformImagePoint(
+                MainImage.ActualWidth,
+                MainImage.ActualHeight,
+                source.Width,
+                source.Height,
+                pointInImage.X,
+                pointInImage.Y);
+            pointInImage = new Point(sourcePoint.X, sourcePoint.Y);
+        }
+        var anchorBefore = MainImage.TranslatePoint(pointInImage, ImageScroll);
         var version = ++_viewportOperationVersion;
         _viewModel.Viewer.WheelZoom(e.Delta);
-        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
         if (version != _viewportOperationVersion || !IsLoaded) return;
+        ImageScroll.UpdateLayout();
 
-        var offsets = MainWindowHelpers.CalculateZoomViewportOffsets(
-            oldZoom,
-            _viewModel.Viewer.Zoom,
-            mouse.X,
-            mouse.Y,
-            oldHorizontal,
-            oldVertical,
+        var anchorAfter = MainImage.TranslatePoint(pointInImage, ImageScroll);
+        var offsets = MainWindowHelpers.CalculateOffsetsFromAnchorDelta(
+            ImageScroll.HorizontalOffset,
+            ImageScroll.VerticalOffset,
+            anchorBefore.X,
+            anchorBefore.Y,
+            anchorAfter.X,
+            anchorAfter.Y,
             ImageScroll.ExtentWidth,
             ImageScroll.ExtentHeight,
             ImageScroll.ViewportWidth,

@@ -23,6 +23,42 @@ namespace PhotoReview.App;
 internal static class MainWindowHelpers
 {
     internal readonly record struct ZoomViewportOffsets(double Horizontal, double Vertical);
+    internal readonly record struct ZoomImagePoint(double X, double Y);
+
+    internal static ZoomImagePoint CalculateUniformImagePoint(
+        double elementWidth,
+        double elementHeight,
+        double sourceWidth,
+        double sourceHeight,
+        double pointerX,
+        double pointerY)
+    {
+        if (elementWidth <= 0 || elementHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0)
+            return new(0, 0);
+
+        var scale = Math.Min(elementWidth / sourceWidth, elementHeight / sourceHeight);
+        var renderedWidth = sourceWidth * scale;
+        var renderedHeight = sourceHeight * scale;
+        var left = (elementWidth - renderedWidth) / 2;
+        var top = (elementHeight - renderedHeight) / 2;
+        return new(
+            Math.Clamp((pointerX - left) / scale, 0, sourceWidth),
+            Math.Clamp((pointerY - top) / scale, 0, sourceHeight));
+    }
+
+    internal static ZoomViewportOffsets CalculateOffsetsFromAnchorDelta(
+        double currentHorizontalOffset,
+        double currentVerticalOffset,
+        double anchorBeforeX,
+        double anchorBeforeY,
+        double anchorAfterX,
+        double anchorAfterY,
+        double newExtentWidth,
+        double newExtentHeight,
+        double viewportWidth,
+        double viewportHeight) => new(
+            ClampOffset(currentHorizontalOffset + anchorAfterX - anchorBeforeX, newExtentWidth, viewportWidth),
+            ClampOffset(currentVerticalOffset + anchorAfterY - anchorBeforeY, newExtentHeight, viewportHeight));
 
     internal static ZoomViewportOffsets CalculateZoomViewportOffsets(
         double oldZoom,

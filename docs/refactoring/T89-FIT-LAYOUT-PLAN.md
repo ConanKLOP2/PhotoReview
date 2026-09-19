@@ -174,6 +174,8 @@ Giữ wheel thường giống Windows Photos và anchor tại con trỏ. Thay đ
 - **Đầu ra:** test thất bại trên baseline `a923106` ít nhất ở case một-click convergence và pass sau sửa.
 - **Xong khi:** test chứng minh triệu chứng hai-click không tái diễn ở level WPF.
 
+- **Tiến độ 2026-09-20:** thêm unit test loại bỏ letterbox và bù anchor theo screen delta; targeted 19/19, App 169/169. Test STA với ScrollViewer thật vẫn còn `TODO` nếu GUI tiếp tục sai.
+
 ### T89.8 — GUI acceptance
 
 - **Trạng thái:** `TODO`

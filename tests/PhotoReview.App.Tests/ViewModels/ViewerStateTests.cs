@@ -133,6 +133,25 @@ public sealed class ViewerStateTests
     }
 
     [Fact]
+    public void UniformImagePoint_RemovesLetterboxAndMapsToSourceCoordinates()
+    {
+        var point = MainWindowHelpers.CalculateUniformImagePoint(1000, 800, 1000, 500, 500, 400);
+
+        Assert.Equal(500, point.X, 6);
+        Assert.Equal(250, point.Y, 6);
+    }
+
+    [Fact]
+    public void AnchorDeltaOffsets_KeepSameImagePointAtPointer()
+    {
+        var result = MainWindowHelpers.CalculateOffsetsFromAnchorDelta(
+            40, 30, 300, 200, 440, 290, 1600, 1200, 800, 600);
+
+        Assert.Equal(180, result.Horizontal, 6);
+        Assert.Equal(120, result.Vertical, 6);
+    }
+
+    [Fact]
     public void ResetFit_RestoresUniformAndCalculatesViewport()
     {
         var state = new ViewerState();
