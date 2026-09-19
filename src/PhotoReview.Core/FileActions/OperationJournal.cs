@@ -20,6 +20,8 @@ public sealed record JournalEntry(
 
 public sealed class OperationJournal
 {
+    private const long FullScanThresholdBytes = 1 * 1024 * 1024;
+    private const int StartupCommittedMoveLimit = 200;
     private readonly string _path;
     private readonly IFileSystem _fileSystem;
     private readonly IClock _clock;
@@ -65,6 +67,14 @@ public sealed class OperationJournal
 
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
+        lock (_gate)
+        {
+            if (!_fileSystem.FileExists(_path)) return [];
+            using var stream = _fileSystem.OpenReadShared(_path, 64 * 1024);
+            if (stream.Length >= FullScanThresholdBytes)
+                return ReadCommittedMovesReverse(stream);
+        }
+
         var entries = new List<JournalEntry>();
         ReadEntries(entry =>
         {
@@ -72,6 +82,48 @@ public sealed class OperationJournal
                 entries.Add(entry);
         });
         return entries;
+    }
+
+    private static IReadOnlyList<JournalEntry> ReadCommittedMovesReverse(Stream stream)
+    {
+        if (!stream.CanSeek)
+            return [];
+
+        var window = 256 * 1024;
+        while (true)
+        {
+            var start = Math.Max(0, stream.Length - window);
+            stream.Seek(start, SeekOrigin.Begin);
+            var buffer = new byte[(int)(stream.Length - start)];
+            var read = stream.Read(buffer, 0, buffer.Length);
+            var entries = new List<JournalEntry>(StartupCommittedMoveLimit);
+            var lineStart = 0;
+            for (var i = 0; i <= read; i++)
+            {
+                if (i != read && buffer[i] is not (byte)'\n') continue;
+                var length = i - lineStart;
+                if (length > 0 && buffer[lineStart + length - 1] == '\r') length--;
+                if (length > 0)
+                {
+                    try
+                    {
+                        var entry = JsonSerializer.Deserialize<JournalEntry>(buffer.AsSpan(lineStart, length));
+                        if (entry is { Type: FileOperationType.Move, State: JournalState.Committed })
+                            entries.Add(entry);
+                    }
+                    catch (JsonException) { }
+                }
+                lineStart = i + 1;
+            }
+
+            if (entries.Count >= StartupCommittedMoveLimit || start == 0)
+            {
+                return entries.Count <= StartupCommittedMoveLimit
+                    ? entries
+                    : entries.Skip(entries.Count - StartupCommittedMoveLimit).ToList();
+            }
+            window *= 2;
+        }
     }
 
     public IReadOnlyList<JournalEntry> ReadPendingOperations() =>
