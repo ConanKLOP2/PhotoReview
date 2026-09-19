@@ -144,7 +144,11 @@ public partial class MainWindow : Window
     private void ImageScroll_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
-    private void Window_Closed(object? sender, EventArgs e) => _explorerOrder?.Dispose();
+    private void Window_Closed(object? sender, EventArgs e)
+    {
+        (_viewModel.PreloadController as IDisposable)?.Dispose();
+        _explorerOrder?.Dispose();
+    }
 
     private void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {

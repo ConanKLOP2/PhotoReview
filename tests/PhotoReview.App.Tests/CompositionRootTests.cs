@@ -4,6 +4,7 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
 using PhotoReview.App.Services;
+using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
@@ -94,6 +95,71 @@ public class CompositionRootTests
         var probeField = typeof(PreloadScheduler).GetField("_memoryProbe", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.Same(provider.GetRequiredService<IMemoryProbe>(), probeField!.GetValue(scheduler));
         scheduler.Dispose();
+    }
+
+    [Fact]
+    public void ConfigureServices_MainViewModel_UsesRealSchedulerWithRegisteredMemoryProbe()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var viewModel = provider.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>();
+        var controller = Assert.IsType<PreloadControllerAdapter>(viewModel.PreloadController);
+        var scheduler = GetScheduler(controller);
+        var probeField = typeof(PreloadScheduler).GetField("_memoryProbe", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.Same(provider.GetRequiredService<IMemoryProbe>(), probeField!.GetValue(scheduler));
+        controller.Dispose();
+    }
+
+    [Fact]
+    public void MainWindowClosed_DisposesProductionPreloadScheduler()
+    {
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                if (System.Windows.Application.Current is null)
+                    _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+                try
+                {
+                    System.Windows.Application.ResourceAssembly = typeof(MainWindow).Assembly;
+                }
+                catch
+                {
+                    var appField = typeof(System.Windows.Application).GetField("_resourceAssembly", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                    appField?.SetValue(null, typeof(MainWindow).Assembly);
+                }
+
+                var services = new ServiceCollection();
+                App.ConfigureServices(services);
+                var provider = services.BuildServiceProvider();
+                var window = provider.GetRequiredService<MainWindow>();
+                var controller = Assert.IsType<PreloadControllerAdapter>(window.ViewModel.PreloadController);
+                var scheduler = GetScheduler(controller);
+
+                typeof(MainWindow).GetMethod("Window_Closed", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, [null, EventArgs.Empty]);
+
+                var disposedField = typeof(PreloadScheduler).GetField("_disposed", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.True((bool)disposedField!.GetValue(scheduler)!);
+                Assert.True(scheduler.PreloadAroundAsync(0).IsCompletedSuccessfully);
+            }
+            catch (Exception ex) { threadException = ex; }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "STA window-close test timed out.");
+        Assert.Null(threadException);
+    }
+
+    private static PreloadScheduler GetScheduler(PreloadControllerAdapter controller)
+    {
+        var factoryField = typeof(PreloadControllerAdapter).GetField("_getScheduler", BindingFlags.Instance | BindingFlags.NonPublic);
+        return ((Func<PreloadScheduler>)factoryField!.GetValue(controller)!)();
     }
 
     [Fact]

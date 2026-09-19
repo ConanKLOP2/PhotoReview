@@ -126,6 +126,12 @@ public partial class App : System.Windows.Application
             var thumbs = sp.GetRequiredService<ThumbnailCache>();
             var natural = sp.GetRequiredService<INaturalComparer>();
             var explorerOrder = sp.GetRequiredService<IProgressiveExplorerOrderProvider>();
+            var schedulerFactory = sp.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>();
+
+            var preloadScheduler = schedulerFactory(
+                catalog.Snapshot,
+                () => catalog.Paths.Sum(path => fs.GetFileStat(path)?.Length ?? 0L));
+            var preloadController = new PhotoReview.App.Coordinators.PreloadControllerAdapter(() => preloadScheduler);
 
             PhotoReview.App.ViewModels.MainViewModel? vm = null;
             var sink = new PhotoReview.App.Services.WpfPresentationSink(
@@ -133,9 +139,8 @@ public partial class App : System.Windows.Application
                 onSetStatusText: _ => vm?.NotifyPresentationChanged(),
                 onApplyInitialViewMode: () => vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, 0, 0));
 
-            var dummyPreload = new DummyPreloadController();
             var presenter = new PhotoReview.App.Coordinators.ImagePresenter(
-                catalog, clock, preview, thumbs, dummyPreload, compare, hash,
+                catalog, clock, preview, thumbs, preloadController, compare, hash,
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session);
 
@@ -145,7 +150,7 @@ public partial class App : System.Windows.Application
 
             return vm = new PhotoReview.App.ViewModels.MainViewModel(
                 catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
-                fs, actions, undo, dialog, dummyPreload, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs);
+                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs);
         });
 
         // 8. Window
