@@ -2,7 +2,7 @@
 
 ## Cập nhật mới nhất — 2026-09-19 (đồng bộ trạng thái)
 
-- `refactor/integration` hiện ở `aaba591`, sạch và khớp `origin/refactor/integration`; đang đi trước `master` 13 commit. MR01–MR06/F01–F07 đã DONE, PR #5 đã merge vào `master`; validation chi tiết ở `docs/refactoring/results/merged-code-review-validation.md`.
+- `refactor/integration` hiện ở `3b33b7b`, working tree sạch và đang ahead `origin/refactor/integration` 2 commit tài liệu chưa push; nhánh này đi trước `master` 13 commit code/tài liệu trước hai commit đồng bộ. MR01–MR06/F01–F07 đã DONE, PR #5 đã merge vào `master`; validation chi tiết ở `docs/refactoring/results/merged-code-review-validation.md`.
 - T88 (ScalingQuality) DONE, chờ nhận xét thủ công zoom 400% ở hai chế độ.
 - **T47 DONE (an toàn):** xoá 60 test đã có thay thế thật, giữ 10 test chưa có thay thế; chi tiết ở `test-parity.md` mục "T47 outcome". 
 - **T52 IN PROGRESS:** đã bỏ Folder2Name, chuyển AppConstants → Core `PerformanceOptions`, và thêm comment cho `catch { }`; còn marker tương thích T46d và bind PerformanceOptions từ settings. T50a/b, T51, T53a/b, T60, T61 đã DONE.
