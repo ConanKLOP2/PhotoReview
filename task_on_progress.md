@@ -11,7 +11,7 @@
 - Bảng `REFACTOR-TASKS.md` đã đồng bộ T25b/T26a/T26b/T32/T33a/T33b sang DONE theo mô tả Wave 3 ở dưới; nên đối chiếu lại với code.
 
 - Validation sau hợp nhất T62–T64: OperationJournalTests 14/14, FolderLoadCoordinatorTests 6/6, RamBudgetPolicyTests 5/5. Full `verify-all.ps1` và publish Release còn phải chạy lại trên branch này trước bàn giao.
-- D07 probe ngày 2026-09-19 đã dừng sau ô đầu tiên: `PerfSession.WaitIdleAsync` phản chiếu field `_preloadSchedulerTask` thuộc `PreloadScheduler` trên `DummyPreloadController`, gây `ArgumentException`; không ghi nhận dữ liệu. Cần sửa harness để đọc task qua interface/controller hoặc bỏ qua dummy controller, sau đó chạy lại ma trận.
+- D07 probe ngày 2026-09-19 đã phát hiện và sửa harness: commit `0d551d6` làm `WaitIdleAsync` chỉ đọc `_preloadSchedulerTask` khi controller thực sự là `PreloadScheduler`; `DummyPreloadController` được coi là không có preload task. CLI build Release pass (0 lỗi). Probe lại S1/F1 warm chưa tạo session hợp lệ và đã dừng để tránh chờ vô hạn; cần điều tra idle condition tiếp theo trước khi chạy toàn ma trận.
 
 
 ## Review mới nhất — 2026-09-18
