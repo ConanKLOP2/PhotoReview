@@ -456,6 +456,25 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
     }
 
+    [Fact(DisplayName = "A disk cache entry without its metadata companion is a miss and is re-decoded from source")]
+    public async Task DiskCacheEntryWithoutMetadataIsMiss()
+    {
+        var diskDir = _root.Dir("cache-meta");
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        await writer.GetPreviewAsync(_previewPath);
+        var files = await WaitForCacheFilesAsync(diskDir);
+        var metaPath = files[0] + ".meta";
+        Assert.True(File.Exists(metaPath));
+        File.Delete(metaPath);
+
+        var readerMetrics = new ReviewMetrics();
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var image = await reader.GetPreviewAsync(_previewPath);
+        var snapshot = readerMetrics.Snapshot();
+
+        Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
+    }
+
     [Fact(DisplayName = "The disk cache directory is pruned instead of growing unbounded")]
     public async Task DiskCacheIsPrunedToConfiguredQuota()
     {
