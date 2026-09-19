@@ -81,6 +81,8 @@ public partial class App : System.Windows.Application
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(persistNewThumbnails: false, log: sp.GetService<ILog>()));
+        services.AddSingleton<SourceBytesCache>(sp => new SourceBytesCache(
+            sp.GetRequiredService<SettingsStore>().Current.SourceBytesCapacityBytes));
 
         services.AddSingleton<PreviewStateContext>();
         services.AddSingleton<PreviewImageService>(sp =>
@@ -95,7 +97,10 @@ public partial class App : System.Windows.Application
                 capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
-                log: sp.GetService<ILog>());
+                log: sp.GetService<ILog>(),
+                sourceBytesCache: settingsStore.Current.UseSourceBytesCache
+                    ? sp.GetRequiredService<SourceBytesCache>()
+                    : null);
         });
 
         services.AddSingleton<Func<Func<string[]>, Func<long>, PreloadScheduler>>(sp =>

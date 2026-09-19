@@ -42,6 +42,8 @@ public partial class SettingsWindow : Window
             PreloadWorkerCount = current.PreloadWorkerCount,
             PreloadMemoryLoadLimit = current.PreloadMemoryLoadLimit,
             PreviewDiskCacheCapacityBytes = current.PreviewDiskCacheCapacityBytes,
+            UseSourceBytesCache = current.UseSourceBytesCache,
+            SourceBytesCapacityBytes = current.SourceBytesCapacityBytes,
             Actions = current.Actions.Select(action => new ReviewAction
             {
                 Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
@@ -104,6 +106,8 @@ public partial class SettingsWindow : Window
         Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
         Settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
         Settings.PreviewDiskCacheCapacityBytes = PerformanceOptions.PreviewDiskCacheCapacityBytes;
+        Settings.UseSourceBytesCache = PerformanceOptions.UseSourceBytesCache;
+        Settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;
         Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = DecoderBackend.Wpf; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
     }
 

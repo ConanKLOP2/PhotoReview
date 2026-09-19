@@ -41,6 +41,7 @@ public sealed class PreviewImageService : IPreloadTarget
     // a mid-process environment change never makes DecodeAndCacheAsync and PersistToDiskCache
     // disagree about whether the disk cache is on.
     private readonly bool _disableDiskCache;
+    private readonly SourceBytesCache? _sourceBytesCache;
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
@@ -70,7 +71,8 @@ public sealed class PreviewImageService : IPreloadTarget
         IImageDecoder? decoder = null,
         ILog? log = null,
         Func<DecoderBackend>? currentBackend = null,
-        IImageDecoderFactory? decoderFactory = null)
+        IImageDecoderFactory? decoderFactory = null,
+        SourceBytesCache? sourceBytesCache = null)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
@@ -83,6 +85,7 @@ public sealed class PreviewImageService : IPreloadTarget
         _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log);
         _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
+        _sourceBytesCache = sourceBytesCache;
         _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
             capacityBytes, image => image.EstimatedBytes);
@@ -360,13 +363,18 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
+    public void ClearSourceBytesCache() => _sourceBytesCache?.Clear();
+
     private IImageDecoder GetDecoder(DecoderBackend backend) => _decoderFactory?.Create(backend) ?? _decoder;
 
     private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, int targetWidth, bool perf, long perfNav, string perfPathId)
     {
-        _metrics.RecordSourceOpen(path);
         ReadOnlyMemory<byte>? preReadBytes = null;
-        if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
+        if (_sourceBytesCache is not null)
+        {
+            preReadBytes = _sourceBytesCache.GetOrRead(path);
+        }
+        else if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
             long readStart = perf ? Stopwatch.GetTimestamp() : 0;
             byte[] bytes;
@@ -380,6 +388,8 @@ public sealed class PreviewImageService : IPreloadTarget
             if (perf) PhotoReviewPerf.Log.SourceRead(PhotoReviewPerf.NavContext, PhotoReviewPerf.PathId(path), PhotoReviewPerf.Ms(readStart), bytes.LongLength);
             preReadBytes = bytes;
         }
+
+        _metrics.RecordSourceOpen(path);
 
         long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
         var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));

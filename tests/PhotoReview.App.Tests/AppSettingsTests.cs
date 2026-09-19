@@ -33,6 +33,9 @@ public sealed class AppSettingsTests
         Assert.Equal(DecoderBackend.Wpf, JsonSerializer.Deserialize<AppSettings>("{\"DecoderBackend\":\"Unknown\"}")!.DecoderBackend);
     }
 
+    [Fact(DisplayName = "Source bytes cache is disabled by default")]
+    public void SourceBytesCacheDefaultsOff() => Assert.False(new AppSettings().UseSourceBytesCache);
+
     [Fact(DisplayName = "ImageSortMode defaults to Name and deserializes aliases")]
     public void ImageSortModeDefaultsAndDeserializesAliases()
     {

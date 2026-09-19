@@ -10,4 +10,6 @@ public static class PerformanceOptions
     public const int PreloadWorkerCount = 8;
     public const double PreloadMemoryLoadLimit = 0.80;
     public const long PreviewDiskCacheCapacityBytes = 4L * 1024 * 1024 * 1024;
+    public const bool UseSourceBytesCache = false;
+    public const long SourceBytesCapacityBytes = 16L * 1024 * 1024 * 1024;
 }

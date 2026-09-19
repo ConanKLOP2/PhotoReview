@@ -22,6 +22,8 @@ public class AppSettings
     public int PreloadWorkerCount { get; set; } = PerformanceOptions.PreloadWorkerCount;
     public double PreloadMemoryLoadLimit { get; set; } = PerformanceOptions.PreloadMemoryLoadLimit;
     public long PreviewDiskCacheCapacityBytes { get; set; } = PerformanceOptions.PreviewDiskCacheCapacityBytes;
+    public bool UseSourceBytesCache { get; set; } = PerformanceOptions.UseSourceBytesCache;
+    public long SourceBytesCapacityBytes { get; set; } = PerformanceOptions.SourceBytesCapacityBytes;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
 

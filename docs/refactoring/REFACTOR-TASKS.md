@@ -166,7 +166,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T62 | R-2 Journal startup | T60 | ∥K | | DONE |
 | T63 | R-3/R-6 Catalog metadata | T60 | ∥K | | DONE |
 | T64 | R-4a `RamBudgetPolicy` | T60 | ∥K | | DONE |
-| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | BLOCKED |
+| T65 | R-4b `SourceBytesCache` | T64, T87 | | ⛔Q5 | IN PROGRESS |
 | T66 | Benchmark so sánh cuối | T61–T65, T87, T88 | | | DONE |
 | T67 | Dọn compatibility marker T46d còn lại | T47, T52 | ∥K | | DONE |
 | T71 | ADR 0002 UI framework (C1 go/no-go) | T66 | ∥L | | TODO |
@@ -1078,7 +1078,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
   4. Preload hai tầng: nếu tổng nguồn ≤ capacity thì nạp byte toàn folder theo thứ tự lân cận (I/O tuần tự, giới hạn 2 worker đọc), song song với decode theo worker hiện có.
   5. Move/Delete thì evict path. Clear cache thì xóa hết.
 - **Xong khi:** `SourceOpenCount` mỗi ảnh ≤ 1 ở mọi mode (trừ khi bị evict). Headroom được tôn trọng. Test lifecycle đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Codex · `codex/w6-performance` · Đã thêm `SourceBytesCache` LRU theo `(path,length,mtime)`, dedup in-flight, generation clear/evict, cấu hình `UseSourceBytesCache=false` và `SourceBytesCapacityBytes=16 GiB`; `PreviewImageService` dùng cache khi flag bật, mặc định không đổi. Test mới 2/2 pass; full `verify-all.ps1` PASS (203 Imaging, 163 App). Chưa đánh dấu DONE: ThumbnailCache, FileHashService và PreloadScheduler chưa nối vào byte cache; cần hoàn thiện các seam còn lại và A/B sau T66.
 - **Quyết định D12/D13:** giữ feature flag tắt mặc định; chỉ mở sau T87 và T66 có baseline/source-open/memory evidence.
 
 ### T66 — Benchmark cuối
