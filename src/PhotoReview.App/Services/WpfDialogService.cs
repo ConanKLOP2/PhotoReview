@@ -51,16 +51,12 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
 
     public string? PickFolder(string? initialFolder = null)
     {
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog
-        {
-            Description = "Chọn folder ảnh",
-            SelectedPath = !string.IsNullOrEmpty(initialFolder) && Directory.Exists(initialFolder) ? initialFolder : null
-        };
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Chọn folder ảnh" };
+        if (!string.IsNullOrEmpty(initialFolder) && Directory.Exists(initialFolder)) dialog.InitialDirectory = initialFolder;
 
         var owner = System.Windows.Application.Current?.MainWindow;
-        var windowWrapper = owner is not null ? new WindowHandle(owner) : null;
-        var res = windowWrapper is not null ? dialog.ShowDialog(windowWrapper) : dialog.ShowDialog();
-        return res == System.Windows.Forms.DialogResult.OK ? dialog.SelectedPath : null;
+        var res = owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog();
+        return res == true ? dialog.FolderName : null;
     }
 
     public bool ShowBatchReview(IReadOnlyList<string> paths)
@@ -117,10 +113,5 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
             Owner = System.Windows.Application.Current?.MainWindow
         };
         window.Show();
-    }
-
-    private sealed class WindowHandle(Window window) : System.Windows.Forms.IWin32Window
-    {
-        public nint Handle => new System.Windows.Interop.WindowInteropHelper(window).Handle;
     }
 }

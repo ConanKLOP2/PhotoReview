@@ -156,7 +156,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 | T88 | `BitmapScalingMode` chất lượng cao + setting | T46d | ∥J | | DONE |
 | T50a | Project `PhotoReview.Benchmarking` | T47 | ∥J | | DONE |
 | T50b | `Benchmark.Cli` + quyết định `BenchmarkWindow` | T50a | | ⛔Q2 | DONE |
-| T51 | Bỏ WinForms | T50b | | | TODO |
+| T51 | Bỏ WinForms | T50b | | | DONE |
 | T52 | Dọn code chết | T47, T88 | | | DONE |
 | T87 | Tích hợp decoder đã chọn vào app | T86, T52 | | ⛔Q8 | TODO |
 | T53a | Xóa CLI test runner | T50b, T11 | | | TODO |
@@ -1006,7 +1006,7 @@ dotnet run --project {CLI} -c Release          # chỉ khi {CLI} vẫn là test 
 - **Files:** `{App}/PhotoReview.App.csproj`, `{App}/Services/DialogService.cs` (`PickFolder` dùng `Microsoft.Win32.OpenFolderDialog`), `{App}/Views/*.xaml.cs` có `Forms.` hoặc alias dài.
 - **Làm:** xóa `UseWindowsForms`. Rút gọn `System.Windows.MessageBox` thành `MessageBox`, tương tự cho `DragEventArgs`, `KeyEventArgs`. Ghi kích thước thư mục publish trước và sau.
 - **Xong khi:** `git grep "System.Windows.Forms" -- src` không có kết quả, VERIFY đạt.
-- **Nhật ký:** —
+- **Nhật ký:** 2026-09-19 · Claude · `refactor/integration` · Bỏ `UseWindowsForms` khỏi `PhotoReview.App` và `PhotoReview.Platform.Windows`. Chọn folder dùng `Microsoft.Win32.OpenFolderDialog` (WpfDialogService, BenchmarkWindow); Import/Export dùng `Microsoft.Win32.OpenFileDialog/SaveFileDialog` (ActionProfilesWindow); `Screen.AllScreens` trong `WindowPlacementService` thay bằng P/Invoke `EnumDisplayMonitors` + `GetMonitorInfo` (work area). Cập nhật 2 check source-presence liên quan (xUnit + CLI cũ). `git grep System.Windows.Forms -- src` không còn kết quả. Kích thước publish framework-dependent: 2.241.187 → 2.239.175 byte (gần như không đổi vì WinForms nằm trong shared framework, không đóng gói). `verify-all.ps1` PASS. **Chưa kiểm thủ công:** hộp thoại chọn folder/file và khôi phục vị trí cửa sổ trên máy đa màn hình.
 
 ### T52 — Dọn code chết (sau T88)
 - **Files:** `{Core}/Settings/*` (`Folder2Name`, `MoveToFolder2`), `{App}/Views/SettingsWindow.*`, `{App}/AppConstants.cs` → `{Core}/Settings/PerformanceOptions.cs`, các `catch { }` trong `src/**`.

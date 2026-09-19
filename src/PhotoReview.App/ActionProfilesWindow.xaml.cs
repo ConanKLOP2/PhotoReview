@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
-using Forms = System.Windows.Forms;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 
@@ -52,8 +51,8 @@ public partial class ActionProfilesWindow : Window
     private void Remove_Click(object sender, RoutedEventArgs e) { if (ActionList.SelectedItem is ReviewAction action) { Actions.Remove(action); ActionList.Items.Refresh(); if (Actions.Count > 0) ActionList.SelectedIndex = 0; } }
     private void Import_Click(object sender, RoutedEventArgs e)
     {
-        using var dialog = new Forms.OpenFileDialog { Filter = "JSON (*.json)|*.json|All files (*.*)|*.*" };
-        if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "JSON (*.json)|*.json|All files (*.*)|*.*" };
+        if (dialog.ShowDialog(this) != true) return;
         try
         {
             var imported = JsonSerializer.Deserialize<List<ReviewAction>>(System.IO.File.ReadAllText(dialog.FileName));
@@ -66,8 +65,8 @@ public partial class ActionProfilesWindow : Window
     private void Export_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
-        using var dialog = new Forms.SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "photoreview-actions.json" };
-        if (dialog.ShowDialog() == Forms.DialogResult.OK) System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, new JsonSerializerOptions { WriteIndented = true }));
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "photoreview-actions.json" };
+        if (dialog.ShowDialog(this) == true)System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, new JsonSerializerOptions { WriteIndented = true }));
     }
     private void Apply_Click(object sender, RoutedEventArgs e)
     {

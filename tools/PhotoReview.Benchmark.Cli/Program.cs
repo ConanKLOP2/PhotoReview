@@ -469,7 +469,7 @@ try
     Check(mainWindow.Contains("Title = $\"Photo Review — {folder}") && mainWindowXaml.Contains("x:Name=\"FolderText\" Visibility=\"Collapsed\""), "Current folder is shown in the native window title bar (source presence, not behavior)", failures);
     Check(File.ReadAllText(Path.Combine(projectRoot, "src", "PhotoReview.App", "PhotoReview.App.csproj")).Contains("BuildStamp") && settingsWindow.Contains("AssemblyInformationalVersionAttribute"), "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)", failures);
     Check(!mainWindow.Contains("Window_SourceInitialized") && mainWindow.Contains("WindowPlacementService.Restore(this)") && mainWindow.Contains("WindowPlacementService.Save(this)") && placementService.Contains("GetWindowPlacement") && placementService.Contains("SetWindowPlacement"), "Native window placement restores after Loaded and persists monitor, bounds, and maximized state (source presence: needs a real Window handle)", failures);
-    Check(placementService.Contains("Screen.AllScreens") && placementService.Contains("WorkingArea"), "Saved placement is rejected when its monitor is no longer connected (source presence: needs real multi-monitor hardware)", failures);
+    Check(placementService.Contains("EnumDisplayMonitors") && placementService.Contains("GetMonitorInfo"), "Saved placement is rejected when its monitor is no longer connected (source presence: needs real multi-monitor hardware)", failures);
     // ---- Source-presence checks: disk thumbnail cache quota ----
     // ThumbnailCache prunes the shared on-disk cache under the user's real LocalAppData, so
     // driving the quota path here would mutate the developer's own cache directory.

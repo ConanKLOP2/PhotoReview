@@ -5,7 +5,6 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
-using Forms = System.Windows.Forms;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
@@ -29,8 +28,9 @@ public partial class BenchmarkWindow : Window
 
     private void Browse_Click(object sender, RoutedEventArgs e)
     {
-        using var dialog = new Forms.FolderBrowserDialog { Description = "Chọn folder ảnh thật để benchmark", SelectedPath = Directory.Exists(FolderText.Text) ? FolderText.Text : null };
-        if (dialog.ShowDialog(new WindowHandle(this)) == Forms.DialogResult.OK) FolderText.Text = dialog.SelectedPath;
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Chọn folder ảnh thật để benchmark" };
+        if (Directory.Exists(FolderText.Text)) dialog.InitialDirectory = FolderText.Text;
+        if (dialog.ShowDialog(this) == true) FolderText.Text = dialog.FolderName;
     }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e) => ProfilesList.SelectAll();
@@ -171,11 +171,6 @@ protected override void OnClosed(EventArgs e)
     {
         var dir = _lastReport is null ? Path.GetTempPath() : Path.GetDirectoryName(_lastReport)!;
         Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
-    }
-
-    private sealed class WindowHandle(Window window) : Forms.IWin32Window
-    {
-        public IntPtr Handle => new WindowInteropHelper(window).Handle;
     }
 }
 

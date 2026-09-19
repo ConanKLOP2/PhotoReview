@@ -141,8 +141,8 @@ public sealed class SourcePresenceTests
 
     [Fact(DisplayName = "Saved placement is rejected when its monitor is no longer connected (source presence: needs real multi-monitor hardware)")]
     public void SavedPlacementIsRejectedWhenMonitorIsGone() =>
-        Assert.True(ProjectSources.WindowPlacementService.Contains("Screen.AllScreens")
-            && ProjectSources.WindowPlacementService.Contains("WorkingArea"));
+        Assert.True(ProjectSources.WindowPlacementService.Contains("EnumDisplayMonitors")
+            && ProjectSources.WindowPlacementService.Contains("GetMonitorInfo"));
 
     // ThumbnailCache does not use DiskCacheStore yet, and prunes the shared on-disk cache under the
     // user's real LocalAppData, so driving the quota path would mutate the developer's own cache.
