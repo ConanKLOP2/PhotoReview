@@ -499,7 +499,7 @@ internal static class PerfSession
         {
             await Task.Delay(250);
             var now = ((ReviewMetrics)metricsField.GetValue(window)!).Snapshot();
-            if (!now.Equals(last)) { last = now; stableSince = sw.Elapsed; }
+            if (!MetricsEquivalent(now, last)) { last = now; stableSince = sw.Elapsed; }
             var stable = sw.Elapsed - stableSince;
             // MainWindow uses object so tests can supply DummyPreloadController. Do not
             // reflect PreloadScheduler's private field on that adapter: it is a valid
@@ -518,6 +518,24 @@ internal static class PerfSession
         }
         return (false, $"TIMEOUT after {sw.ElapsedMilliseconds}ms (continuing)");
     }
+
+    private static bool MetricsEquivalent(ReviewMetricsSnapshot a, ReviewMetricsSnapshot b) =>
+        a.CacheHits == b.CacheHits &&
+        a.CacheMisses == b.CacheMisses &&
+        a.SourceBytesRead == b.SourceBytesRead &&
+        a.SourceReads == b.SourceReads &&
+        a.DecodeMilliseconds == b.DecodeMilliseconds &&
+        a.PresentedImages == b.PresentedImages &&
+        a.PresentMilliseconds == b.PresentMilliseconds &&
+        a.PreloadHits == b.PreloadHits &&
+        a.InflightJoins == b.InflightJoins &&
+        a.DiskCacheHits == b.DiskCacheHits &&
+        a.QueueWaitMilliseconds == b.QueueWaitMilliseconds &&
+        a.UiAssignMilliseconds == b.UiAssignMilliseconds &&
+        a.SourceOpenCount == b.SourceOpenCount &&
+        a.StatCount == b.StatCount &&
+        a.SessionWriteCount == b.SessionWriteCount &&
+        a.DecoderFallbackCount == b.DecoderFallbackCount;
 
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
     {
