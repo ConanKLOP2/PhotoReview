@@ -176,8 +176,12 @@ public sealed class PreloadScheduler : IDisposable
                 if (seenVersion != currentVersion)
                 {
                     order?.Dispose();
+                    var sourceBytes = _totalSourceBytes();
+                    var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolder(sourceBytes,
+                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
+                    _log.Info($"Preload policy: sourceBytes={sourceBytes} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder}");
                     order = PreloadOrderService.Build(Volatile.Read(ref _preloadCenter), files.Length,
-                        _totalSourceBytes() < _options.FullFolderThresholdBytes).GetEnumerator();
+                        wholeFolder).GetEnumerator();
                     seenVersion = currentVersion;
                 }
                 while (running.Count < workers && order!.MoveNext())
