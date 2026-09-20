@@ -78,13 +78,14 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Rủi ro: tăng thời gian shutdown; có lifetime async rõ thay vì timeout che lỗi. Rollback riêng commit scheduler, không ghép cache optimization.
 - Kết quả 2026-09-20: commit `4a81ba8`; targeted PreloadSafety 5/5 và full gate 748/748. Đã giữ scheduler lifetimes cũ tới khi drain và test cancel/restart trước drain.
 
-### 5. OC05 — Cache invalidation và disk quota — TODO
+### 5. OC05 — Cache invalidation và disk quota — DONE
 
 - Phụ thuộc OC01; có thể song song OC04, không sửa scheduler. Files: SourceBytesCache, PreviewImageService persistence, DiskCacheStore, cache tests.
 - Làm: epoch/lock cho check+publish, path invalidation in-flight và case normalization; prune PNG+metadata cùng entry, dọn orphan trong phạm vi cache, tính quota nhất quán.
 - Tests: Clear/Evict giữa read và publish bằng barrier; cùng path khác casing; write/prune/clear race; quota gồm metadata và không xóa file ngoài cache directory.
 - Xong khi: invalidated work không repopulate; bytes cache không tăng lại sau clear từ work cũ; không orphan sau prune. Giữ behavior mặc định SourceBytesCache off.
 - Rủi ro: locking tăng contention; đo cache-hit latency. Rollback độc lập phần RAM/disk; cache là rebuildable, không xóa nguồn ảnh.
+- Kết quả 2026-09-20: commit `3db9ae6`; targeted cache tests 10/10 và full gate wave hai 752/752. Evict invalidates in-flight reads; PNG metadata được prune cùng companion và orphan metadata được dọn.
 
 ### 6. OC06 — Journal / Undo / Recovery / Session — TODO
 
@@ -94,13 +95,14 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Xong khi: history hiện hành undo được trong giới hạn công bố; không đọc journal mỗi undo đã có history; vị trí file/UI/journal nhất quán khi lỗi; latest session thắng; native restore đúng version.
 - Rủi ro: contract rộng, chia 3 commit con Undo, outcome/restore, Session; giữ đọc journal cũ tương thích. Rollback bằng revert code, không rewrite/xóa journal hoặc revert filesystem mutation.
 
-### 7. OC07 — Display state và hoàn thành T89 — TODO
+### 7. OC07 — Display state và hoàn thành T89 — IN PROGRESS → display subset DONE, T89 TODO
 
 - Phụ thuộc OC01; agent UI riêng, merge tuần tự sau OC02 nếu cùng MainViewModel.
 - Files: MainViewModel, ImagePresenter, CompareViewModel, MainWindow, WpfPresentationSink, App composition, App/STA tests; tham chiếu `T89-FIT-LAYOUT-PLAN.md`.
 - Làm: tách intent compare khỏi loaded visibility; empty-folder clear presenter/compare; unify Fit button/key/initial-mode qua viewport owner có version. Giữ frame retention của Move/Delete đang load, không áp dụng empty-folder clearing nhầm sang action.
 - Tests: compare off/on với pair; single/compare -> empty; stale navigation; Fit một lần so hai lần <=0.5 DIP, offsets <=0.5 DIP; portrait/landscape, DPI, resize, thumbnail->full, wheel->Fit->pan. STA layout test và GUI acceptance đều cần.
 - Rủi ro: layout feedback và stale callbacks; bounded convergence/versioning theo T89. Rollback display fixes và T89 thành commit riêng; không đánh DONE từ pure math tests.
+- Kết quả 2026-09-20: display subset commit `5edd15d` + test seam `ecdbf2b`; App targeted 11/11, full gate 752/752. Compare toggle off và empty-folder clear đã được sửa. T89 layout/STA/GUI acceptance vẫn TODO.
 
 ### 8. OC08 — Folder/catalog I/O và allocations — TODO
 
@@ -117,12 +119,13 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Tests: profile A/B thay actual options/counters; CLI/GUI parity; action xảy ra khi decode pending; summary chứa đủ requested profiles và exit code đúng; logging restore; reproducible selection.
 - Rủi ro: số cũ không so trực tiếp được với workload mới; ghi schema/semantics version, giữ raw baseline. Rollback gói tooling, không dùng kết quả sai để chọn default.
 
-### 10. OC10 — Perf analysis grouping — TODO
+### 10. OC10 — Perf analysis grouping — DONE
 
 - Phụ thuộc OC01; độc lập OC09 nếu chỉ sửa PerfAnalyze*. Files: PerfAnalyze, Stats/Report/Rules, PerfAnalyzeTests.
 - Làm: key gồm worker và các điều kiện thực nghiệm cần tách (commit/config/fixture khi có); R-CONT chỉ so cùng cache condition và dataset, khác worker. Mixed/unknown metadata phải cảnh báo, không lấy first silently.
 - Tests: hai fixture probe 0/8 tạo hai group; cold/warm không thành cặp contention; mixed commits không trộn; thiếu metadata => N/A có lý do.
 - Rủi ro: output group/schema đổi; cập nhật consumers/docs, không mutate raw CSV. Rollback analyzer commit; raw có thể phân tích lại.
+- Kết quả 2026-09-20: commit `b8b97fb`; PerfAnalyze tests 33/33 và full gate 752/752. Group key tách worker count/condition; R-CONT không so sánh khác condition.
 
 ### 11. OC11 — Tối ưu decode/RAM theo số đo — TODO
 
