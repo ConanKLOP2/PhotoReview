@@ -15,10 +15,21 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     var reportDirectory = outputOverride is { Length: > 0 } ? Path.GetFullPath(outputOverride) : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
     Directory.CreateDirectory(reportDirectory);
     var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
-    var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly).Where(p => supported.Contains(Path.GetExtension(p))).Take(64).ToArray();
+    var allFiles = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
+        .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p, StringComparer.Ordinal)
+        .ToArray();
+    var unsupportedExtensions = allFiles
+        .Where(p => !supported.Contains(Path.GetExtension(p)))
+        .GroupBy(p => string.IsNullOrWhiteSpace(Path.GetExtension(p)) ? "<none>" : Path.GetExtension(p).ToLowerInvariant(), StringComparer.Ordinal)
+        .OrderBy(g => g.Key, StringComparer.Ordinal)
+        .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+    var files = allFiles.Where(p => supported.Contains(Path.GetExtension(p))).Take(64).ToArray();
     if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
     var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
     var reports = new List<BenchmarkReport>();
+    var outcomes = new List<BenchmarkPhaseResult>();
+    var manifest = new BenchmarkDatasetManifest(Path.GetFullPath(folder),
+        files.Select(Path.GetFullPath).ToArray(), unsupportedExtensions, 64);
     var anyFailed = false;
     foreach (var profile in profiles)
     {
@@ -32,6 +43,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
                 (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, token),
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
             reports.Add(report);
+            outcomes.Add(report.Phases[0]);
             var pathOut = Path.Combine(reportDirectory, $"{profile.Id}-{report.RunId}.json"); await File.WriteAllTextAsync(pathOut, report.ToJson());
             var phase = report.Phases[0];
             if (phase.Status == BenchmarkResultStatus.Fail) anyFailed = true;
@@ -41,10 +53,21 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         {
             // Report this profile's failure and continue the batch, as the WPF window does.
             anyFailed = true;
+            var failed = new BenchmarkPhaseResult(profile.Id, profile.Workload, [], BenchmarkResultStatus.Fail,
+                $"Profile failed before producing samples: {ex.GetType().Name}: {ex.Message}");
+            outcomes.Add(failed);
+            var failedReport = new BenchmarkReport(Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow,
+                Path.GetFullPath(folder), [failed], Machine: Environment.MachineName);
+            reports.Add(failedReport);
+            var failedPath = Path.Combine(reportDirectory, $"{profile.Id}-{failedReport.RunId}.json");
+            await File.WriteAllTextAsync(failedPath, failedReport.ToJson());
             Console.Error.WriteLine($"FAIL profile={profile.Id} error={ex.Message}");
         }
     }
-    var summary = Path.Combine(reportDirectory, "summary.json"); await File.WriteAllTextAsync(summary, System.Text.Json.JsonSerializer.Serialize(reports, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); Console.WriteLine($"REPORT: {summary}");
+    var summary = Path.Combine(reportDirectory, "summary.json");
+    var batch = new BenchmarkBatchSummary(manifest, reports, outcomes);
+    await File.WriteAllTextAsync(summary, batch.ToJson());
+    Console.WriteLine($"REPORT: {summary}");
     if (anyFailed) Environment.ExitCode = 1;
 }
 if (args.Length == 1 && args[0] == "--benchmark-list-profiles")

@@ -66,6 +66,26 @@ public sealed record BenchmarkReport(string RunId, DateTimeOffset StartedUtc,
     public string ToJson() => JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
 }
 
+/// <summary>Stable description of the input set used by a benchmark batch.</summary>
+public sealed record BenchmarkDatasetManifest(
+    string Folder,
+    IReadOnlyList<string> Files,
+    IReadOnlyDictionary<string, int> UnsupportedExtensions,
+    int FileLimit)
+{
+    public int SupportedFileCount => Files.Count;
+    public int UnsupportedFileCount => UnsupportedExtensions.Values.Sum();
+}
+
+/// <summary>Batch summary that retains failed and unsupported profile outcomes.</summary>
+public sealed record BenchmarkBatchSummary(
+    BenchmarkDatasetManifest Dataset,
+    IReadOnlyList<BenchmarkReport> Reports,
+    IReadOnlyList<BenchmarkPhaseResult> ProfileOutcomes)
+{
+    public string ToJson() => JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+}
+
 public static class BenchmarkRanking
 {
     public static IReadOnlyList<BenchmarkPhaseResult> Rank(IEnumerable<BenchmarkPhaseResult> phases, BenchmarkWorkload workload)
