@@ -69,6 +69,7 @@ public sealed class FileActionService
 
         var operationId = Guid.NewGuid().ToString("N");
         var prepared = false;
+        var mutationCompleted = false;
         string? destinationPath = null;
         long sourceSize = 0;
         var sourceLastWriteUtc = DateTime.MinValue;
@@ -135,8 +136,9 @@ public sealed class FileActionService
                 {
                     throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
                 }
+                mutationCompleted = true;
 
-                _journal.Append(new JournalEntry(
+                var committed = new JournalEntry(
                     operationId,
                     request.Operation,
                     JournalState.Committed,
@@ -144,7 +146,17 @@ public sealed class FileActionService
                     destinationPath,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow));
+                    _clock.UtcNow);
+                try
+                {
+                    _journal.Append(committed);
+                }
+                catch (Exception journalException)
+                {
+                    return new FileActionResult(true, request.Operation, source, destinationPath,
+                        sourceSize, sourceLastWriteUtc, null, JournalPersisted: false,
+                        JournalError: journalException.Message);
+                }
 
                 return new FileActionResult(
                     Succeeded: true,
@@ -176,8 +188,9 @@ public sealed class FileActionService
                 prepared = true;
 
                 await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
+                mutationCompleted = true;
 
-                _journal.Append(new JournalEntry(
+                var committed = new JournalEntry(
                     operationId,
                     FileOperationType.Recycle,
                     JournalState.Committed,
@@ -185,7 +198,17 @@ public sealed class FileActionService
                     null,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow));
+                    _clock.UtcNow);
+                try
+                {
+                    _journal.Append(committed);
+                }
+                catch (Exception journalException)
+                {
+                    return new FileActionResult(true, FileOperationType.Recycle, source, null,
+                        sourceSize, sourceLastWriteUtc, null, JournalPersisted: false,
+                        JournalError: journalException.Message);
+                }
 
                 return new FileActionResult(
                     Succeeded: true,
@@ -203,9 +226,12 @@ public sealed class FileActionService
         }
         catch (Exception ex)
         {
+            string? journalError = null;
             if (prepared)
             {
-                _journal.Append(new JournalEntry(
+                try
+                {
+                    _journal.Append(new JournalEntry(
                     operationId,
                     request.Operation,
                     JournalState.Failed,
@@ -214,17 +240,24 @@ public sealed class FileActionService
                     sourceSize,
                     sourceLastWriteUtc,
                     _clock.UtcNow,
-                    ex.Message));
+                        ex.Message));
+                }
+                catch (Exception journalException)
+                {
+                    journalError = journalException.Message;
+                }
             }
 
             return new FileActionResult(
-                Succeeded: false,
+                Succeeded: mutationCompleted,
                 Operation: request.Operation,
                 Source: request.Source,
                 DestinationPath: destinationPath,
                 Size: sourceSize,
                 LastWriteUtc: sourceLastWriteUtc,
-                Error: ex.Message);
+                Error: mutationCompleted ? null : ex.Message,
+                JournalPersisted: journalError is null,
+                JournalError: journalError);
         }
         finally
         {

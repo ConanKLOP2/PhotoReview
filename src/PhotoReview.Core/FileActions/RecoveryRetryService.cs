@@ -5,7 +5,12 @@ using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
 
-public sealed record RecoveryRetryResult(bool Succeeded, string Message, JournalEntry? Entry);
+public sealed record RecoveryRetryResult(
+    bool Succeeded,
+    string Message,
+    JournalEntry? Entry,
+    bool JournalPersisted = true,
+    string? JournalError = null);
 
 public sealed class RecoveryRetryService
 {
@@ -52,6 +57,7 @@ public sealed class RecoveryRetryService
             sourceStat.LastWriteUtc,
             _clock.UtcNow);
 
+        var mutationCompleted = false;
         try
         {
             _journal.Append(prepared);
@@ -69,16 +75,34 @@ public sealed class RecoveryRetryService
             var destinationStat = _fileSystem.GetFileStat(failed.Destination);
             if (destinationStat is null || destinationStat.Length != prepared.Size)
                 throw new IOException("Kiểm tra đích sau retry thất bại.");
+            mutationCompleted = true;
 
             var committed = prepared with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow };
-            _journal.Append(committed);
-            return new(true, "Retry thành công.", committed);
+            try
+            {
+                _journal.Append(committed);
+                return new(true, "Retry thành công.", committed);
+            }
+            catch (Exception journalException)
+            {
+                return new(true, "Retry đã hoàn tất nhưng không ghi được nhật ký.", committed,
+                    JournalPersisted: false, JournalError: journalException.Message);
+            }
         }
         catch (Exception ex)
         {
             var error = prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = ex.Message };
-            _journal.Append(error);
-            return new(false, ex.Message, error);
+            try
+            {
+                _journal.Append(error);
+                return new(false, ex.Message, error);
+            }
+            catch (Exception journalException)
+            {
+                return new(mutationCompleted, mutationCompleted
+                    ? "Thao tác đã hoàn tất nhưng không ghi được nhật ký thất bại."
+                    : ex.Message, error, JournalPersisted: false, JournalError: journalException.Message);
+            }
         }
     }
 
