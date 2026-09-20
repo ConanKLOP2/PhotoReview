@@ -14,6 +14,7 @@ namespace PhotoReview.App.Tests;
 /// They are kept deliberately rather than deleted; each names what would replace it.</item>
 /// </list>
 /// </summary>
+[Trait("Category", "HotPath")]
 public sealed class SourcePresenceTests
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";

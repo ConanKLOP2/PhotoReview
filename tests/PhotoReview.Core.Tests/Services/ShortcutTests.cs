@@ -6,6 +6,7 @@ using PhotoReview.Core.Diagnostics;
 namespace PhotoReview.Core.Tests.Services;
 
 /// <summary>Cross-scope shortcut conflict validation.</summary>
+[Trait("Category", "HotPath")]
 public sealed class ShortcutTests
 {
     [Fact(DisplayName = "Shortcut validator reports cross-scope conflicts")]

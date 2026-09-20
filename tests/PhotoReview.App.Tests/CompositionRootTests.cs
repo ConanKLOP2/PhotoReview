@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +17,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests;
 
+[Trait("Category", "HotPath")]
 public class CompositionRootTests
 {
     [Fact]
@@ -204,3 +205,4 @@ public class CompositionRootTests
         Assert.Null(threadException);
     }
 }
+

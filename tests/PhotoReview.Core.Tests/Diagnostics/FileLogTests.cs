@@ -1,9 +1,10 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Diagnostics;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Diagnostics;
 
+[Trait("Category", "HotPath")]
 public sealed class FileLogTests : IDisposable
 {
     private readonly string _tempDir;
@@ -120,3 +121,4 @@ public sealed class FileLogTests : IDisposable
         Assert.Contains("post-rotation-entry", File.ReadAllText(_logFile));
     }
 }
+

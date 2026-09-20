@@ -3,6 +3,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.Diagnostics;
 
+[Trait("Category", "HotPath")]
 public sealed class ReviewMetricsTests
 {
     [Fact]
@@ -175,3 +176,4 @@ public sealed class ReviewMetricsTests
             Assert.Contains($"\"{field}\"", json);
     }
 }
+

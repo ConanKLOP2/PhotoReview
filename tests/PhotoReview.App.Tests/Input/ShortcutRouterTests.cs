@@ -6,6 +6,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.Input;
 
+[Trait("Category", "HotPath")]
 public sealed class ShortcutRouterTests
 {
     private readonly AppSettings _settings;

@@ -7,6 +7,7 @@ namespace PhotoReview.App.Tests;
 
 /// <summary>Logging opt-in/opt-out and concurrency contracts.</summary>
 [Collection("GlobalState")]
+[Trait("Category", "HotPath")]
 public sealed class AppLogTests : IDisposable
 {
     private readonly DataRootFixture _data = new();

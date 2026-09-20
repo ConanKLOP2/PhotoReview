@@ -5,6 +5,7 @@ using PhotoReview.App;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>Benchmark profile registry and ranking contracts.</summary>
+[Trait("Category", "Slow")]
 public sealed class BenchmarkProfileTests
 {
     [Fact(DisplayName = "Expanded benchmark profile registry")]
@@ -23,6 +24,7 @@ public sealed class BenchmarkProfileTests
 }
 
 /// <summary>Relative performance harness probe.</summary>
+[Trait("Category", "Slow")]
 public sealed class PerformanceHarnessTests : IDisposable
 {
     private readonly TempRoot _root = new("performance");

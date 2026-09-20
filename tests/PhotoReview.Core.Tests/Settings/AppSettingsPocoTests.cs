@@ -4,6 +4,7 @@ using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
 
+[Trait("Category", "HotPath")]
 public sealed class AppSettingsPocoTests
 {
     [Fact(DisplayName = "Core AppSettings defaults match requirements")]

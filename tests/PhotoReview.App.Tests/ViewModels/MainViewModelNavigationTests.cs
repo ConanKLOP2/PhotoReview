@@ -23,6 +23,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 
+[Trait("Category", "HotPath")]
 public sealed class MainViewModelNavigationTests : IDisposable
 {
     private static readonly byte[] ValidPngBytes =

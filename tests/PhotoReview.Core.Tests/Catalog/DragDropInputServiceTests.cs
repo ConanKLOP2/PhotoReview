@@ -1,8 +1,9 @@
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class DragDropInputServiceTests
 {
     [Fact]
@@ -49,3 +50,4 @@ public class DragDropInputServiceTests
         Assert.False(DragDropInputService.Parse([root.Combine("notes.txt")]).IsValid);
     }
 }
+

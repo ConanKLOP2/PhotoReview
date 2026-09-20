@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
@@ -6,6 +6,7 @@ using PhotoReview.Imaging.Tests.Fixtures;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class DecoderContractRegressionTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(
@@ -136,3 +137,4 @@ public sealed class DecoderContractRegressionTests : IDisposable
         public ImageInfo ReadInfo(string path) => new(1, 1);
     }
 }
+

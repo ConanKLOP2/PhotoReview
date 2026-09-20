@@ -1,9 +1,10 @@
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class ImageSortServiceTests : IDisposable
 {
     private readonly string _tempDir;
@@ -99,3 +100,4 @@ public class ImageSortServiceTests : IDisposable
         Assert.True(string.Compare(key1, key2, StringComparison.OrdinalIgnoreCase) < 0);
     }
 }
+

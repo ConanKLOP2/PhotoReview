@@ -19,7 +19,7 @@ namespace PhotoReview.Imaging.Tests.Quality;
 /// 5. Immediate release of file handles (INV-8).
 /// 6. Reliable fallback to WPF when backend encounters unsupported formats (INV-12).
 /// </summary>
-[Trait("Category", "Quality")]
+[Trait("Category", "HotPath")]
 public sealed class DecoderQualityGateTests : IDisposable
 {
     private readonly string _tempDir;

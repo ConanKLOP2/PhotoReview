@@ -1,8 +1,9 @@
-using PhotoReview.Core.Abstractions;
+﻿using PhotoReview.Core.Abstractions;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Abstractions;
 
+[Trait("Category", "HotPath")]
 public class SystemClockTests
 {
     [Fact]
@@ -30,3 +31,4 @@ public class SystemClockTests
         Assert.True(t2 >= t1);
     }
 }
+

@@ -1,8 +1,9 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Tests;
 
+[Trait("Category", "HotPath")]
 public sealed class ImageCacheKeyTests : IDisposable
 {
     private readonly TempRoot _root = new("cache-key");
@@ -65,3 +66,4 @@ public sealed class ImageCacheKeyTests : IDisposable
         Assert.True(changedKey != previewKey && !previewKey.MatchesCurrentSource());
     }
 }
+

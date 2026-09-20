@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
@@ -6,6 +6,7 @@ using PhotoReview.Imaging.Preload;
 
 namespace PhotoReview.Imaging.Tests;
 
+[Trait("Category", "Slow")]
 public sealed class PreloadSafetyTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PhotoReview-PreloadSafety", Guid.NewGuid().ToString("N"));
@@ -157,3 +158,4 @@ public sealed class PreloadSafetyTests : IDisposable
         }
     }
 }
+

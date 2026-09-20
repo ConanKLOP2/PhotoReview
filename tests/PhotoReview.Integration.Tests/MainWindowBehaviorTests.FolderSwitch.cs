@@ -22,6 +22,7 @@ namespace PhotoReview.Integration.Tests;
 /// </para>
 /// </summary>
 [Collection("GlobalState")]
+[Trait("Category", "Slow")]
 public sealed class MainWindowBehaviorFolderSwitchTests
 {
     private const Key ActionKey = Key.F3;
@@ -294,11 +295,13 @@ public sealed class MainWindowBehaviorFolderSwitchTests
 
     private static async Task DrainAsync(TimeSpan duration)
     {
-        var deadline = DateTime.UtcNow + duration;
-        while (DateTime.UtcNow < deadline)
+        // TC09: Replace Task.Delay with multiple dispatcher pumps.
+        // Each pump ensures queued work from the previous invocation is processed.
+        // Pump multiple times to ensure deferred work executes.
+        var estimatedPumps = Math.Max(40, (int)(duration.TotalMilliseconds / 10));
+        for (int i = 0; i < estimatedPumps; i++)
         {
             await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-            await Task.Delay(10);
         }
     }
 

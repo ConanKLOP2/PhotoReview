@@ -5,6 +5,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public sealed class ExplorerSnapshotValidatorTests
 {
     private static readonly string Folder = OperatingSystem.IsWindows() ? @"C:\photos" : "/photos";
@@ -121,3 +122,4 @@ public sealed class ExplorerSnapshotValidatorTests
         public void Dispose() { }
     }
 }
+

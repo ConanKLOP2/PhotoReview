@@ -23,6 +23,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 
+[Trait("Category", "HotPath")]
 public sealed class MainViewModelFileActionTests : IDisposable
 {
     private static readonly byte[] ValidPngBytes =
@@ -490,26 +491,53 @@ public sealed class MainViewModelFileActionTests : IDisposable
         public List<object?> Images { get; } = [];
         public List<string> Statuses { get; } = [];
         public List<string> PresentedPaths { get; } = [];
+        private TaskCompletionSource<bool>? _countBarrier;
+        private int _targetCount;
 
         public void SetCurrentImage(object? image) => Images.Add(image);
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path)
         {
-            lock (PresentedPaths) PresentedPaths.Add(path);
+            lock (PresentedPaths)
+            {
+                PresentedPaths.Add(path);
+                if (_countBarrier is not null && PresentedPaths.Count >= _targetCount)
+                {
+                    _countBarrier.TrySetResult(true);
+                }
+            }
         }
         public void TracePresented(long token, string kind, long assignedTimestamp) { }
 
         public async Task WaitForPresentationCountAsync(int count, TimeSpan timeout)
         {
-            var start = DateTime.UtcNow;
-            while (DateTime.UtcNow - start < timeout)
+            lock (PresentedPaths)
+            {
+                if (PresentedPaths.Count >= count) return;
+                _targetCount = count;
+                _countBarrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            using var cts = new CancellationTokenSource(timeout);
+            try
+            {
+                await _countBarrier.Task.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
             {
                 lock (PresentedPaths)
                 {
                     if (PresentedPaths.Count >= count) return;
                 }
-                await Task.Delay(20);
+                throw;
+            }
+            finally
+            {
+                lock (PresentedPaths)
+                {
+                    _countBarrier = null;
+                }
             }
         }
     }

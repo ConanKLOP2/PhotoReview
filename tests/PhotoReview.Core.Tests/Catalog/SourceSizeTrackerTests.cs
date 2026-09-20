@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
@@ -7,6 +7,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class SourceSizeTrackerTests
 {
     [Fact]
@@ -160,3 +161,4 @@ public class SourceSizeTrackerTests
         Assert.Equal(300L, total2);
     }
 }
+

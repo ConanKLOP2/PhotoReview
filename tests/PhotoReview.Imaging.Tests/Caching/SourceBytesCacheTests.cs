@@ -1,8 +1,9 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Imaging.Caching;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 
+[Trait("Category", "HotPath")]
 public sealed class SourceBytesCacheTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PhotoReview-source-cache-" + Guid.NewGuid().ToString("N"));
@@ -44,3 +45,4 @@ public sealed class SourceBytesCacheTests : IDisposable
         catch { }
     }
 }
+

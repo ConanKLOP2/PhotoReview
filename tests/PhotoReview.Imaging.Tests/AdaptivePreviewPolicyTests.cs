@@ -1,7 +1,8 @@
-using PhotoReview.Imaging;
+﻿using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Tests;
 
+[Trait("Category", "Slow")]
 public sealed class AdaptivePreviewPolicyTests
 {
     [Fact(DisplayName = "Decode width clamped between MinimumDecodeWidth and MaximumDecodeWidth")]
@@ -30,3 +31,4 @@ public sealed class AdaptivePreviewPolicyTests
         Assert.Throws<ArgumentOutOfRangeException>(() => AdaptivePreviewPolicy.CalculateTargetDecodeWidth(1920, 1.0, -1));
     }
 }
+

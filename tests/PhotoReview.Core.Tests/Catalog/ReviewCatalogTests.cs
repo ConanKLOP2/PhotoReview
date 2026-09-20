@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using PhotoReview.Core.Catalog;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class ReviewCatalogTests
 {
     [Fact]
@@ -194,3 +195,4 @@ public class ReviewCatalogTests
         Assert.Equal("img1.jpg", snapshot[0]);
     }
 }
+

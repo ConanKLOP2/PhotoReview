@@ -1,5 +1,6 @@
-namespace PhotoReview.Imaging.Tests;
+﻿namespace PhotoReview.Imaging.Tests;
 
+[Trait("Category", "HotPath")]
 public sealed class RamBudgetPolicyTests
 {
     [Fact]
@@ -50,3 +51,4 @@ public sealed class RamBudgetPolicyTests
         Assert.False(RamBudgetPolicy.ShouldPreloadWholeFolder(101, 1_000, new FakeMemoryProbe(true)));
     }
 }
+

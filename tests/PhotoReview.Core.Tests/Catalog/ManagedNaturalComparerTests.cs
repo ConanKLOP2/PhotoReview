@@ -1,8 +1,9 @@
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class ManagedNaturalComparerTests
 {
     private readonly ManagedNaturalComparer _comparer = ManagedNaturalComparer.Instance;
@@ -49,3 +50,4 @@ public class ManagedNaturalComparerTests
         Assert.Equal(expected, input);
     }
 }
+

@@ -1,9 +1,10 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class WpfBitmapImageDecoderTests : IDisposable
 {
     private static readonly byte[] ValidPng1x1 = Convert.FromBase64String(
@@ -81,3 +82,4 @@ public sealed class WpfBitmapImageDecoderTests : IDisposable
         Assert.True(wpfImage.Source.IsFrozen);
     }
 }
+

@@ -16,6 +16,7 @@ namespace PhotoReview.Core.Tests;
 /// reproduces the original suite's committed-Move setup for every test.
 /// </summary>
 [Collection("GlobalState")]
+[Trait("Category", "HotPath")]
 public sealed class OperationJournalTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
@@ -106,6 +107,7 @@ public sealed class OperationJournalTests : IDisposable
 
 /// <summary>Pending-operation reconciliation contracts.</summary>
 [Collection("GlobalState")]
+[Trait("Category", "HotPath")]
 public sealed class JournalReconciliationTests : IDisposable
 {
     private readonly DataRootFixture _data = new();
@@ -157,6 +159,7 @@ public sealed class JournalReconciliationTests : IDisposable
 }
 
 /// <summary>Unit tests with mocked dependencies for precise contract verification.</summary>
+[Trait("Category", "HotPath")]
 public sealed class OperationJournalUnitTests
 {
     private sealed class FakeClock : IClock

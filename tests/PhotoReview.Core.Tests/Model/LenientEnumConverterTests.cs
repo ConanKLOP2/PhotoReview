@@ -1,9 +1,10 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using PhotoReview.Core.Model;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Model;
 
+[Trait("Category", "HotPath")]
 public class LenientEnumConverterTests
 {
     private static readonly JsonSerializerOptions DefaultOptions = new();
@@ -219,3 +220,4 @@ public class LenientEnumConverterTests
         Assert.Equal(LoadingMode.Preview, result);
     }
 }
+

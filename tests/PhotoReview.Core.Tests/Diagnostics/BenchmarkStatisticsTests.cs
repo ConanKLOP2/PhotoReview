@@ -3,6 +3,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.Diagnostics;
 
+[Trait("Category", "HotPath")]
 public sealed class BenchmarkStatisticsTests
 {
     [Fact]
@@ -52,3 +53,4 @@ public sealed class BenchmarkStatisticsTests
         Assert.Equal(95.05, p95, 2);
     }
 }
+

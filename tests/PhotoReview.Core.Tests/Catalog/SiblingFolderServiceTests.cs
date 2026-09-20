@@ -1,8 +1,9 @@
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class SiblingFolderServiceTests : IDisposable
 {
     private readonly string _root;
@@ -61,3 +62,4 @@ public class SiblingFolderServiceTests : IDisposable
         Assert.Null(end);
     }
 }
+

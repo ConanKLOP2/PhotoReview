@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
@@ -6,6 +6,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 
+[Trait("Category", "HotPath")]
 public sealed class CompareViewModelTests
 {
     [Fact]

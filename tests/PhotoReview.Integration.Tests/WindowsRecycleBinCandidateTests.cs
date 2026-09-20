@@ -2,7 +2,7 @@ using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.Integration.Tests;
 
-[Trait("Category", "Unit")]
+[Trait("Category", "Native")]
 public sealed class WindowsRecycleBinCandidateTests
 {
     [Fact]

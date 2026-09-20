@@ -8,6 +8,7 @@ namespace PhotoReview.App.Tests;
 /// <summary>
 /// Behavior contracts for cache/preload/Explorer regressions from ERROR-HISTORY.
 /// </summary>
+[Trait("Category", "HotPath")]
 public sealed class CacheExplorerRegressionTests : IDisposable
 {
     private readonly TempRoot _root = new("explorer-regression");

@@ -1,8 +1,9 @@
-using PhotoReview.Core.Tests.Fakes;
+﻿using PhotoReview.Core.Tests.Fakes;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.IO;
 
+[Trait("Category", "HotPath")]
 public class InMemoryFileSystemHookTests
 {
     private readonly InMemoryFileSystem _fs = new();
@@ -65,3 +66,4 @@ public class InMemoryFileSystemHookTests
         Assert.Equal("Simulated out of disk space", ex.Message);
     }
 }
+

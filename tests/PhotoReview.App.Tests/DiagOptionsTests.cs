@@ -11,6 +11,7 @@ namespace PhotoReview.App.Tests;
 /// static Lazy snapshot, so they run in the "GlobalState" collection like PerfTraceTests (D03).
 /// </summary>
 [Collection("GlobalState")]
+[Trait("Category", "HotPath")]
 public sealed class DiagOptionsTests : IDisposable
 {
     private const string PreReadVar = "PHOTOREVIEW_DIAG_PREREAD";

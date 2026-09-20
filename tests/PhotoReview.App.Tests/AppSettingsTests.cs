@@ -1,10 +1,11 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Tests;
 
+[Trait("Category", "HotPath")]
 public sealed class AppSettingsTests
 {
     [Fact(DisplayName = "LoadingMode defaults to Preview")]
@@ -57,7 +58,7 @@ public sealed class AppSettingsTests
     public void ConfigSupportsMultipleReviewActionsWithDistinctShortcuts()
     {
         var settings = new AppSettings();
-        settings.Actions.Add(new ReviewAction { Name = "Loại 3", Shortcut = "T", Operation = FileOperationType.Copy, Destination = "Loai-3" });
+        settings.Actions.Add(new ReviewAction { Name = "Loáº¡i 3", Shortcut = "T", Operation = FileOperationType.Copy, Destination = "Loai-3" });
         Assert.True(settings.Actions.Count >= 2
             && settings.Actions.All(a => a.Name.Length > 0 && Enum.IsDefined(a.Operation) && a.Destination.Length > 0)
             && AppSettings.ValidateShortcuts(settings) is null);
@@ -95,3 +96,4 @@ public sealed class AppSettingsTests
         Assert.Equal(FileOperationType.Recycle, settings.Actions[0].Operation);
     }
 }
+

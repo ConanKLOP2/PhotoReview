@@ -1,9 +1,10 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 
+[Trait("Category", "HotPath")]
 public sealed class ThumbnailCacheTests : IDisposable
 {
     private static readonly byte[] ValidPng1x1 = Convert.FromBase64String(
@@ -61,3 +62,4 @@ public sealed class ThumbnailCacheTests : IDisposable
         Assert.NotSame(first, second);
     }
 }
+

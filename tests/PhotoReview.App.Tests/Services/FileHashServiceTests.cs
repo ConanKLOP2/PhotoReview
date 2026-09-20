@@ -6,6 +6,7 @@ using PhotoReview.App;
 namespace PhotoReview.App.Tests.Services;
 
 /// <summary>File hash caching and deduplication.</summary>
+[Trait("Category", "HotPath")]
 public sealed class FileHashServiceTests : IDisposable
 {
     private readonly TempRoot _root = new("hash");

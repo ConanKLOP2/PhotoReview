@@ -1,7 +1,8 @@
-using PhotoReview.Imaging;
+﻿using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Tests;
 
+[Trait("Category", "Slow")]
 public sealed class PreloadOrderServiceTests
 {
     [Fact(DisplayName = "Full-folder preload prioritizes the next 32, then prior 8, and queues every other image once")]
@@ -20,3 +21,4 @@ public sealed class PreloadOrderServiceTests
             && order.Length == 40 && order.Distinct().Count() == order.Length);
     }
 }
+

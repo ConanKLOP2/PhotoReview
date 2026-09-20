@@ -8,6 +8,7 @@ namespace PhotoReview.Imaging.Tests;
 /// ThumbnailCache and PreviewImageService's disk cache (PR-029); tested directly here
 /// since it has no async/background timing to race against.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class DiskCacheStoreTests : IDisposable
 {
     private readonly TempRoot _root = new("disk-cache-store");

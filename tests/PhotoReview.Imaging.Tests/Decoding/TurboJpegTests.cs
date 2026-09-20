@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
@@ -10,6 +10,7 @@ using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class TurboJpegTests : IDisposable
 {
     private readonly string _tempDir;
@@ -228,3 +229,4 @@ public sealed class TurboJpegTests : IDisposable
         }
     }
 }
+

@@ -8,6 +8,7 @@ namespace PhotoReview.Imaging.Tests;
 /// PreviewImageService owns decode + the bounded RAM cache and needs no WPF Window, so the
 /// decode/cache/metrics contract is driven for real.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class PreviewImageServiceTests : IAsyncLifetime
 {
     private readonly TempRoot _root = new("preview-service");
@@ -359,6 +360,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
 /// The disk directory is always overridden to a TempRoot so these tests never touch
 /// the developer's real %LocalAppData%\PhotoReview\cache.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
 {
     private readonly TempRoot _root = new("preview-disk-cache");
@@ -399,11 +401,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         string[] files;
+        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits
         do
         {
             files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.png") : [];
             if (files.Length >= expectedCount) return files;
-            await Task.Delay(25);
+            await Task.Yield();
         } while (DateTime.UtcNow < deadline);
         return files;
     }

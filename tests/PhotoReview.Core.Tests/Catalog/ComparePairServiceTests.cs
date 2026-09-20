@@ -1,8 +1,9 @@
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class ComparePairServiceTests
 {
     [Fact]
@@ -58,3 +59,4 @@ public class ComparePairServiceTests
         Assert.Null(ComparePairService.Find([@"C:\Photos\DSC0001.JPG"], @"C:\Photos\DSC0001.JPG"));
     }
 }
+

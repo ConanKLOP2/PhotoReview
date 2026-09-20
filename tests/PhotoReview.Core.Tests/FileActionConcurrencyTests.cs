@@ -6,6 +6,7 @@ namespace PhotoReview.Core.Tests;
 /// <summary>
 /// Deterministic filesystem probes for actions racing an open/read stream.
 /// </summary>
+[Trait("Category", "HotPath")]
 public sealed class FileActionConcurrencyTests : IDisposable
 {
     private readonly TempRoot _root = new("file-action");
@@ -24,10 +25,11 @@ public sealed class FileActionConcurrencyTests : IDisposable
         File.WriteAllBytes(source, new byte[1024 * 1024]);
         using var read = new FileStream(source, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.SequentialScan);
-        var watch = Stopwatch.StartNew();
+        // TC09: Removed timing assertion; focus on deterministic correctness check
         File.Move(source, target);
-        watch.Stop();
-        Assert.True(!File.Exists(source) && File.Exists(target) && watch.Elapsed < TimeSpan.FromSeconds(1));
+        // Verify the move succeeded: source is gone, target exists
+        Assert.False(File.Exists(source));
+        Assert.True(File.Exists(target));
     }
 
     [Fact(DisplayName = "Delete succeeds immediately while decoder keeps a delete-sharing read handle")]

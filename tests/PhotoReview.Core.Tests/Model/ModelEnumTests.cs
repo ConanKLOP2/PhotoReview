@@ -1,8 +1,9 @@
-using PhotoReview.Core.Model;
+﻿using PhotoReview.Core.Model;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Model;
 
+[Trait("Category", "HotPath")]
 public class ModelEnumTests
 {
     [Fact]
@@ -75,3 +76,4 @@ public class ModelEnumTests
         Assert.Equal(ScalingQuality.HighQuality, values[1]);
     }
 }
+

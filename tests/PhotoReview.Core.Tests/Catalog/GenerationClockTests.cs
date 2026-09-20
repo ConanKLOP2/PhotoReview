@@ -4,6 +4,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public sealed class GenerationClockTests
 {
     [Fact]
@@ -144,3 +145,4 @@ public sealed class GenerationClockTests
         Assert.True(clock.IsInteractionCurrent(iterations));
     }
 }
+
