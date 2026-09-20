@@ -20,7 +20,7 @@ namespace PhotoReview.App.ViewModels;
 /// ViewModel chính quản lý trạng thái hiển thị, điều phối thao tác mở thư mục và điều hướng xem ảnh,
 /// tuân thủ tuyệt đối quy tắc K-2 (hoàn toàn độc lập với WPF và System.Windows).
 /// </summary>
-public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, IFileActionSink
+public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, IFileActionSink, ISiblingNavigatorSink, IDuplicateCleanupSink
 {
     private readonly ReviewCatalog _catalog;
     private readonly GenerationClock _clock;
@@ -43,6 +43,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     private readonly PreviewImageService? _previewService;
     private readonly ThumbnailCache? _thumbnailCache;
     private readonly FileActionController _fileActionController;
+    private readonly SiblingFolderNavigator _siblingNavigator;
+    private readonly DuplicateCleanupController _duplicateController;
 
     private string _folderTitle = "Photo Review";
     private string _folderText = string.Empty;
@@ -96,6 +98,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
             _naturalComparer, Settings, this);
+        _siblingNavigator = new SiblingFolderNavigator(
+            _clock, _catalog, _fileSystem, this, () => _currentSession);
+        _duplicateController = new DuplicateCleanupController(
+            _clock, _catalog, _fileActionService, _hashService, _fileSystem, _dialogService, _uiScheduler,
+            _preloadController, _thumbnailCache, _previewService, this);
         _viewerState.ScalingQuality = Settings.ScalingQuality;
     }
 
@@ -258,37 +265,17 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Chuyển tới thư mục anh em kế tiếp có chứa ảnh.
     /// </summary>
-    public Task NextFolderAsync() => NavigateSiblingFolderAsync(1);
+    public Task NextFolderAsync() => _siblingNavigator.NavigateSiblingFolderAsync(1);
 
     /// <summary>
     /// Chuyển tới thư mục anh em phía trước có chứa ảnh.
     /// </summary>
-    public Task PreviousFolderAsync() => NavigateSiblingFolderAsync(-1);
+    public Task PreviousFolderAsync() => _siblingNavigator.NavigateSiblingFolderAsync(-1);
 
     /// <summary>
     /// Điều hướng thư mục cùng cấp (sibling), bảo toàn kiểm tra thế hệ folder chống race condition.
     /// </summary>
-    public async Task NavigateSiblingFolderAsync(int direction)
-    {
-        var folder = _currentSession?.Folder ?? (_catalog.Current != null ? Path.GetDirectoryName(_catalog.Current.Path) : null);
-        if (string.IsNullOrWhiteSpace(folder)) return;
-
-        var currentFolder = Path.GetFullPath(folder);
-        var folderGeneration = _clock.CurrentFolder;
-
-        var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction)).ConfigureAwait(false);
-
-        // Kiểm tra generation để tránh race condition khi người dùng đã chuyển folder khác giữa chừng
-        if (!_clock.IsFolderCurrent(folderGeneration)) return;
-
-        if (targetFolder is null)
-        {
-            StatusText = StatusFormatter.SiblingFolderBoundary(direction);
-            return;
-        }
-
-        await OpenFolderAsync(targetFolder).ConfigureAwait(false);
-    }
+    public Task NavigateSiblingFolderAsync(int direction) => _siblingNavigator.NavigateSiblingFolderAsync(direction);
 
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
@@ -349,117 +336,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Tìm kiếm và xử lý các ảnh trùng lặp theo hash nội dung.
     /// </summary>
-    public async Task RemoveDuplicatesAsync(bool removeNumbered)
-    {
-        if (_fileActionService is null || _fileActionService.IsBusy) return;
-        if (_catalog.Count == 0) return;
-
-        var preHashGeneration = _clock.CurrentFolder;
-        var candidates = _catalog.Paths.ToArray();
-        if (candidates.Length == 0) return;
-
-        List<string> remove;
-        try
-        {
-            remove = await DuplicateFinder.FindAsync(
-                candidates,
-                removeNumbered,
-                (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
-                _fileSystem,
-                System.Threading.CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Lỗi kiểm tra trùng lặp: {ex.Message}";
-            return;
-        }
-
-        // Stale Folder Guard: Nếu folder đã bị đổi trong khi hash, hủy bỏ thao tác
-        if (!_clock.IsFolderCurrent(preHashGeneration))
-        {
-            StatusText = StatusFormatter.DuplicateCheckCanceledFolderChanged();
-            return;
-        }
-
-        if (remove.Count == 0)
-        {
-            StatusText = StatusFormatter.NoDuplicatesFound();
-            return;
-        }
-
-        if (_dialogService is not null)
-        {
-            var confirmed = false;
-            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove)).ConfigureAwait(false);
-            if (!confirmed)
-            {
-                StatusText = StatusFormatter.BatchCanceled();
-                return;
-            }
-        }
-
-        _clock.StopForAction();
-        _preloadController?.Cancel();
-        var actionFolderGeneration = _clock.CurrentFolder;
-
-        var failures = new List<string>();
-        var succeeded = 0;
-
-        foreach (var path in remove)
-        {
-            var request = new FileActionRequest(path, FileOperationType.Recycle);
-            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
-            if (result.Succeeded)
-            {
-                succeeded++;
-            }
-            else
-            {
-                failures.Add($"{Path.GetFileName(path)}: {result.Error}");
-            }
-        }
-
-        if (!_clock.IsFolderCurrent(actionFolderGeneration))
-        {
-            return;
-        }
-
-        StatusText = StatusFormatter.BatchDone(succeeded, failures.Count);
-        if (failures.Count > 0 && _dialogService is not null)
-        {
-            _dialogService.ShowError("Báo cáo lỗi batch", string.Join(Environment.NewLine, failures));
-        }
-
-        if (succeeded > 0 && remove.Count > 0)
-        {
-            var folder = Path.GetDirectoryName(remove[0]);
-            if (!string.IsNullOrEmpty(folder))
-            {
-                await OpenFolderAsync(folder).ConfigureAwait(false);
-            }
-        }
-    }
+    public async Task RemoveDuplicatesAsync(bool removeNumbered) =>
+        await _duplicateController.RemoveDuplicatesAsync(removeNumbered).ConfigureAwait(false);
 
     /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
     /// </summary>
-    public async Task ClearCacheAsync()
-    {
-        if (_dialogService is not null)
-        {
-            var confirmed = _dialogService.ShowConfirmation("Xác nhận xóa cache", "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.");
-            if (!confirmed) return;
-        }
-
-        _preloadController?.Cancel();
-        _thumbnailCache?.ClearDisk();
-        _thumbnailCache?.ClearMemory();
-        _previewService?.ClearCache();
-        _previewService?.ClearDisk();
-        _preloadController?.ClearPreloadedKeys();
-        StatusText = StatusFormatter.CacheCleared();
-        await Task.CompletedTask;
-    }
+    public async Task ClearCacheAsync() =>
+        await _duplicateController.ClearCacheAsync().ConfigureAwait(false);
 
     /// <summary>
     /// Hiển thị cửa sổ khôi phục thao tác tệp tin.
@@ -530,26 +414,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         FolderTitle = string.IsNullOrWhiteSpace(folder)
             ? "Photo Review"
             : $"Photo Review — {folder}{(settings.LoggingEnabled ? " · LOG" : "")}";
-    }
-
-    private string? FindNextImageFolder(string currentFolder, int direction)
-    {
-        var folders = SiblingFolderService.GetSorted(currentFolder);
-        var index = folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
-        if (index < 0) return null;
-
-        for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
-        {
-            try
-            {
-                var candidates = _fileSystem.EnumerateFiles(folders[i], "*")
-                    .Where(ImageFileTypes.IsSupported);
-                if (candidates.Any()) return folders[i];
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-        return null;
     }
 
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
@@ -653,6 +517,38 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     }
 
     void IFileActionSink.NotifyNavigationStateChanged()
+    {
+        NotifyNavigationStateChanged();
+    }
+
+    // ISiblingNavigatorSink implementation
+    void ISiblingNavigatorSink.SetStatusText(string status)
+    {
+        StatusText = status;
+    }
+
+    async Task ISiblingNavigatorSink.OpenFolderAsync(string folder, string? initialPath)
+    {
+        await OpenFolderAsync(folder, initialPath).ConfigureAwait(false);
+    }
+
+    void ISiblingNavigatorSink.NotifyNavigationStateChanged()
+    {
+        NotifyNavigationStateChanged();
+    }
+
+    // IDuplicateCleanupSink implementation
+    void IDuplicateCleanupSink.SetStatusText(string status)
+    {
+        StatusText = status;
+    }
+
+    async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
+    {
+        await OpenFolderAsync(folder, initialPath).ConfigureAwait(false);
+    }
+
+    void IDuplicateCleanupSink.NotifyNavigationStateChanged()
     {
         NotifyNavigationStateChanged();
     }
