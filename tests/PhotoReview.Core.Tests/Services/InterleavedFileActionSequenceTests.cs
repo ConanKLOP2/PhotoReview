@@ -10,6 +10,19 @@ namespace PhotoReview.Core.Tests.Services;
 /// navigation/action advances first, then the filesystem operation runs against the
 /// captured source path.
 /// </summary>
+/// <remarks>
+/// G1 TAUTOLOGICAL TESTS → TC05 REPLACEMENTS
+///
+/// Tests in this class are tautological: they test List<![CDATA[<string>]]> + File.Move/Delete against hardcoded logic,
+/// not against production code (ReviewCatalog, FileActionService, MainViewModel).
+///
+/// These have been superseded by TC05 production-path tests:
+/// - SequenceNextThenMoveKeepsNextImage → TC05a (Move×N sequential) + TC05c (random seed)
+/// - SequenceNextThenDeleteKeepsNextImage → TC05a/c (Delete variant)
+/// - SequenceDeleteAtEndSelectsPriorSurvivingSlot → TC05d (Delete at boundary)
+///
+/// Marked as [Obsolete] for eventual removal once TC05 integration is verified.
+/// </remarks>
 public sealed class InterleavedFileActionSequenceTests : IDisposable
 {
     private readonly TempRoot _root = new("sequence");
@@ -54,12 +67,27 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
 
     public void Dispose() => _root.Dispose();
 
+    /// <summary>
+    /// OBSOLETE: G1 tautological test on List<![CDATA[<string>]]> + File.Move.
+    /// Replaced by TC05a (Move×N sequential) and TC05c (random seed variation).
+    /// </summary>
+    [Obsolete("Use TC05 production-path tests instead (TC05a, TC05c)")]
     [Fact(DisplayName = "Sequence Next then Move keeps next image without skipping")]
     public void SequenceNextThenMoveKeepsNextImage() => Assert.True(_moveCheckpoint);
 
+    /// <summary>
+    /// OBSOLETE: G1 tautological test on List<![CDATA[<string>]]> + File.Delete.
+    /// Replaced by TC05a (Delete variant) and TC05c (random seed variation).
+    /// </summary>
+    [Obsolete("Use TC05 production-path tests instead (TC05a, TC05c)")]
     [Fact(DisplayName = "Sequence Next then Delete keeps next image without skipping")]
     public void SequenceNextThenDeleteKeepsNextImage() => Assert.True(_deleteCheckpoint);
 
+    /// <summary>
+    /// OBSOLETE: G1 tautological test on List<![CDATA[<string>]]> + File.Delete at boundary.
+    /// Replaced by TC05d (Delete at boundary condition).
+    /// </summary>
+    [Obsolete("Use TC05 production-path tests instead (TC05d)")]
     [Fact(DisplayName = "Sequence Delete at end selects the prior surviving slot")]
     public void SequenceDeleteAtEndSelectsPriorSurvivingSlot() => Assert.True(_finalDeleteCheckpoint);
 }
