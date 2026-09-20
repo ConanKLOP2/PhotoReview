@@ -7,13 +7,6 @@
 
 ## Quy trình bắt buộc trước khi thay đổi
 
-- Trước mọi thay đổi mã nguồn, cấu hình, giao diện hoặc cấu trúc dữ liệu, phải lập một plan chi tiết để người dùng xác nhận.
-- Plan phải nêu rõ: mục tiêu, nguyên nhân/phạm vi, các file hoặc khu vực dự kiến thay đổi, thứ tự thực hiện, tiêu chí hoàn thành, cách kiểm thử, rủi ro và phương án rollback.
-- Plan phải có danh sách task đánh số. Mỗi task cần ghi trạng thái `TODO`, `IN PROGRESS`, `BLOCKED` hoặc `DONE` trong quá trình thực hiện.
-- Phải đánh dấu task nào có thể chạy độc lập để chia cho multi-agent, nêu rõ đầu ra của từng agent và cách hợp nhất kết quả.
-- Không được bắt đầu chỉnh sửa hoặc commit trước khi người dùng xác nhận plan. Các bước đọc code, đọc log, phân tích hiện trạng và chuẩn bị plan được phép thực hiện trước khi xác nhận.
-- Nếu phát hiện phạm vi thay đổi khác với plan đã xác nhận, phải cập nhật plan và chờ người dùng xác nhận lại trước khi tiếp tục phần thay đổi mới.
-
 Ứng dụng phải ưu tiên các nguyên tắc sau khi xử lý và review ảnh:
 
 1. **Hạn chế đọc từ đĩa:** Luôn luôn đọc dữ liệu từ đĩa ít nhất có thể. Ưu tiên tái sử dụng dữ liệu đã đọc, cache và các cơ chế đọc tuần tự hiệu quả để tránh I/O dư thừa.
@@ -23,26 +16,4 @@
 
 ## Quy trình build, publish và push Git bắt buộc
 
-- Sau mỗi thay đổi hoàn thiện và mỗi commit, luôn chạy test/build Release trước khi bàn giao.
-- “Public” trong quy trình này nghĩa là push branch lên remote GitHub `origin` và mở Pull Request vào `master`.
-- Luôn publish bản kiểm tra vào đúng thư mục mặc định:
-
-  `src/PhotoReview.App/bin/Release/net10.0-windows/publish`
-
-- Lệnh chuẩn:
-
-  `.\tools\verify-all.ps1` (build + toàn bộ xUnit + smoke + publish + verify-release)
-
-  `dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish`
-
-- Không coi công việc là hoàn tất nếu chưa publish thành công vào thư mục trên. Quy trình này áp dụng trên mọi máy làm việc với project.
-- Quy trình bắt buộc sau test/publish thành công:
-  1. Làm việc trên feature branch (không commit thẳng `master`).
-  2. Push branch hiện tại lên remote: `git push origin <branch-name>`. 
-- Lệnh và đường dẫn mặc định luôn đồng bộ với `README.md`.
-
-Benchmark chuẩn chạy qua CLI:
-
-`dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-list-profiles`
-
-`dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all <folder-anh> [thu-muc-ket-qua]`
+- Sau mỗi thay đổi hoàn thiện, commit, push vào nhánh hợp lý để tôi merge.
