@@ -97,6 +97,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Rủi ro: contract rộng, chia 3 commit con Undo, outcome/restore, Session; giữ đọc journal cũ tương thích. Rollback bằng revert code, không rewrite/xóa journal hoặc revert filesystem mutation.
 - Kết quả 2026-09-20: Undo history commit `295f04b`, regression >250 moves pass. Fingerprint được giữ trong in-memory history để không phụ thuộc startup tail 200. FileAction durability, recovery retry, SessionWriter ordering và native recycle identity còn TODO.
 - Kết quả bổ sung: `481c130` tách filesystem outcome khỏi journal durability khi append Committed lỗi; `42b92e2` bảo đảm SessionWriter bỏ batch cũ; `32156f5` hiển thị rõ retry hoàn tất nhưng journal lỗi và giữ lỗi mutation gốc. FileAction/Session/Recovery tests và full gate 759/759 pass. Native restore identity còn TODO.
+- Kết quả wave sáu: `3a5c168` tách `RecycleCandidateSelector`, xác minh path/size/timestamp trước mutation và từ chối ambiguity; candidate tests 2/2, integration/full gate 761/761. Chưa chạy live Recycle Bin fixture nên native acceptance vẫn mở.
 
 ### 7. OC07 — Display state và hoàn thành T89 — IN PROGRESS → display subset DONE, T89 TODO
 
@@ -122,7 +123,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Làm: từng field profile có effect quan sát được hoặc bỏ/đánh unsupported rõ; cấu hình worker/window/reserve/fullfolder/disk/log nhất quán CLI/GUI. Race workload phải chặn decode ở barrier rồi thực hiện production file-action path. Không quảng bá decode-only là key-to-present/quality proof. Unsupported/failed profile luôn có record; --benchmark-all có capability semantics rõ; manifest dataset sorted, count/cap rõ. Tránh tích lũy fixture vào Recycle Bin ngoài native test riêng.
 - Tests: profile A/B thay actual options/counters; CLI/GUI parity; action xảy ra khi decode pending; summary chứa đủ requested profiles và exit code đúng; logging restore; reproducible selection.
 - Rủi ro: số cũ không so trực tiếp được với workload mới; ghi schema/semantics version, giữ raw baseline. Rollback gói tooling, không dùng kết quả sai để chọn default.
-- Kết quả 2026-09-20: commit `fb5155f`; `Workers`, `MemoryReserveBytes`, `DiskCache` đã truyền vào runtime. Commit `6dee023` bắt đầu file action khi decode đang in-flight và giữ cancellation/error semantics; targeted 7/7, full gate 759/759. Unsupported profile summary/dataset semantics còn TODO.
+- Kết quả 2026-09-20: commit `fb5155f`; `Workers`, `MemoryReserveBytes`, `DiskCache` đã truyền vào runtime. Commit `6dee023` bắt đầu file action khi decode đang in-flight. Commit `6ad5c15` thêm deterministic dataset manifest và giữ failed profile trong summary; targeted/full gate wave sáu pass. Chỉ còn benchmark trên ảnh thật và quality/perf interpretation.
 
 ### 10. OC10 — Perf analysis grouping — DONE
 
@@ -130,7 +131,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Làm: key gồm worker và các điều kiện thực nghiệm cần tách (commit/config/fixture khi có); R-CONT chỉ so cùng cache condition và dataset, khác worker. Mixed/unknown metadata phải cảnh báo, không lấy first silently.
 - Tests: hai fixture probe 0/8 tạo hai group; cold/warm không thành cặp contention; mixed commits không trộn; thiếu metadata => N/A có lý do.
 - Rủi ro: output group/schema đổi; cập nhật consumers/docs, không mutate raw CSV. Rollback analyzer commit; raw có thể phân tích lại.
-- Kết quả 2026-09-20: commit `b8b97fb`; PerfAnalyze tests 33/33 và full gate 752/752. Group key tách worker count/condition; R-CONT không so sánh khác condition.
+- Kết quả 2026-09-20: commit `b8b97fb`; PerfAnalyze tests 33/33 và full gate wave sáu 761/761. Group key tách worker count/condition; R-CONT không so sánh khác condition.
 
 ### 11. OC11 — Tối ưu decode/RAM theo số đo — TODO
 
