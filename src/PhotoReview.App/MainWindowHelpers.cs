@@ -117,7 +117,7 @@ internal static class MainWindowHelpers
         out SettingsStore resolvedSettingsStore,
         out AppSettings resolvedSettings,
         out ShortcutRouter resolvedShortcutRouter,
-        out IProgressiveExplorerOrderProvider resolvedExplorerOrder)
+        out IExplorerOrderProvider resolvedExplorerOrder)
     {
         hooks = ApplyTestEnvironment(hooks ?? new MainWindowTestHooks());
         var fs = new HookedFileSystem(hooks.MoveOverride);
@@ -137,7 +137,7 @@ internal static class MainWindowHelpers
         var hashService = new FileHashService();
         var compare = new CompareViewModel();
         var viewer = new ViewerState();
-        resolvedExplorerOrder = hooks.Explorer ?? new ExplorerOrderProviderAdapter();
+        resolvedExplorerOrder = hooks.Explorer ?? new ExplorerOrderService();
 
         MainViewModel? vm = null;
         var currentSettings = resolvedSettings;

@@ -8,6 +8,7 @@ using System.Windows.Input;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Settings;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -22,7 +23,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private readonly ShortcutRouter _shortcutRouter;
-    private readonly IProgressiveExplorerOrderProvider? _explorerOrder;
+    private readonly IExplorerOrderProvider? _explorerOrder;
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
     private double? _cachedDpiScale;
@@ -48,7 +49,7 @@ public partial class MainWindow : Window
     public MainViewModel ViewModel => _viewModel;
 
     [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, IProgressiveExplorerOrderProvider? explorerOrder = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, IExplorerOrderProvider? explorerOrder = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));

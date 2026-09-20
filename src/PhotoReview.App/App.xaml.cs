@@ -73,7 +73,6 @@ public partial class App : System.Windows.Application, IDisposable
 
         // 5. Platform Services
         services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();
-        services.AddSingleton<IProgressiveExplorerOrderProvider, ExplorerOrderProviderAdapter>();
         services.AddSingleton<IRecycleBin>(_ => WindowsRecycleBin.Instance);
         services.AddSingleton<IMemoryProbe>(_ => PhysicalMemory.Instance);
         services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
@@ -152,7 +151,7 @@ public partial class App : System.Windows.Application, IDisposable
             var preview = sp.GetRequiredService<PreviewImageService>();
             var thumbs = sp.GetRequiredService<ThumbnailCache>();
             var natural = sp.GetRequiredService<INaturalComparer>();
-            var explorerOrder = sp.GetRequiredService<IProgressiveExplorerOrderProvider>();
+            var explorerOrder = sp.GetRequiredService<IExplorerOrderProvider>();
             var schedulerFactory = sp.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>();
 
             var sourceSizeGate = new object();
@@ -208,7 +207,7 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddTransient<MainWindow>(sp => new MainWindow(
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
-            sp.GetRequiredService<IProgressiveExplorerOrderProvider>()));
+            sp.GetRequiredService<IExplorerOrderProvider>()));
     }
 
     private void App_Startup(object sender, StartupEventArgs e)

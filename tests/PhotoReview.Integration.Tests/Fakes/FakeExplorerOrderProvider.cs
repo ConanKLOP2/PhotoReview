@@ -1,4 +1,5 @@
 using PhotoReview.App;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Integration.Tests.Fakes;
@@ -16,7 +17,7 @@ namespace PhotoReview.Integration.Tests.Fakes;
 /// instead of a hope, while the delay still reproduces the task's "snapshot arrives late" shape.
 /// </para>
 /// </summary>
-internal sealed class FakeExplorerOrderProvider : IProgressiveExplorerOrderProvider
+internal sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
 {
     private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly string[] _orderedPaths;

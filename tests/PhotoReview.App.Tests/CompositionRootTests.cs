@@ -46,7 +46,6 @@ public class CompositionRootTests
 
         // 5. Platform Services
         Assert.NotNull(provider.GetRequiredService<IExplorerOrderProvider>());
-        Assert.NotNull(provider.GetRequiredService<IProgressiveExplorerOrderProvider>());
         Assert.NotNull(provider.GetRequiredService<IRecycleBin>());
         Assert.NotNull(provider.GetRequiredService<IMemoryProbe>());
         Assert.NotNull(provider.GetRequiredService<INaturalComparer>());
