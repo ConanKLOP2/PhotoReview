@@ -4,14 +4,35 @@ param(
     [string]$Configuration = 'Release',
     [switch]$RequireSelfContained,
     [string]$ReleaseDirectory = '',
+    [switch]$Stress,
+    [switch]$Native,
+    [switch]$Integration,
+    [switch]$Slow,
+    [switch]$All,
     [Parameter(DontShow)]
     [scriptblock]$TestCommandInvoker
 )
+
+# Usage examples:
+# ./verify-all.ps1                    # Default: HotPath only (~2-3 min)
+# ./verify-all.ps1 -Stress             # Include race-condition tests
+# ./verify-all.ps1 -Slow               # Include 10+ second tests
+# ./verify-all.ps1 -Stress -Slow       # Extended local run
+# ./verify-all.ps1 -All                # Everything (CI+local exhaustive)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
+
+# Build filter string dynamically
+$filter = "Category!=Manual"  # Always exclude Manual
+if (-not $All) {
+    if (-not $Stress) { $filter += " AND Category!=Stress" }
+    if (-not $Native) { $filter += " AND Category!=Native" }
+    if (-not $Slow) { $filter += " AND Category!=Slow" }
+    if (-not $Integration) { $filter += " AND Category!=Integration" }
+}
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
     # (src/PhotoReview.App/bin/Release/net10.0-windows/publish for -Configuration Release),
@@ -60,7 +81,7 @@ $testProjects = @(
 )
 foreach ($testProject in $testProjects) {
     Invoke-Gate "Run xUnit: $testProject" {
-        dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo --filter 'Category!=Manual'
+        dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo --filter "$filter"
     }
 }
 Invoke-Gate 'Run file-operation smoke test' {
