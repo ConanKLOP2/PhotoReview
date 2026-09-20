@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
@@ -83,7 +84,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 
     /// <summary>Progressive variant used by the UI: enumeration yields between small batches and can be cancelled.</summary>
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
     {
         batchSize = Math.Clamp(batchSize, 1, 128);
         return TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, progress, batchSize);
@@ -133,7 +134,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         try
         {
             shell = Activator.CreateInstance(shellType);
-            windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null);
+            windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
             var windowsInspected = 0;
             foreach (var window in (IEnumerable)windows!)
             {

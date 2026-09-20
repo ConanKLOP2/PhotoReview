@@ -9,10 +9,11 @@ using PhotoReview.Core.Model;
 using PhotoReview.Benchmarking.PerfAnalysis;
 using System.IO;
 using System.Windows.Media;
+using System.Globalization;
 static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkProfile> profiles, string? outputOverride)
 {
     if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
-    var reportDirectory = outputOverride is { Length: > 0 } ? Path.GetFullPath(outputOverride) : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
+    var reportDirectory = outputOverride is { Length: > 0 } ? Path.GetFullPath(outputOverride) : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
     Directory.CreateDirectory(reportDirectory);
     var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
     var allFiles = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
