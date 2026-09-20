@@ -1,7 +1,7 @@
 # Review toàn repo và plan optimize / clean code
 
 - Ngày: 2026-09-20. Baseline: `master`, `ba1317e54702e3af8bd32c0bf5d953b3766f1ba0` (merge PR #9); working tree sạch lúc bắt đầu.
-- Trạng thái: review `DONE`; toàn bộ implementation bên dưới `TODO`, **chờ người dùng xác nhận plan**. Chỉ chuẩn bị tài liệu; chưa sửa source/config, commit hoặc push.
+- Trạng thái: review `DONE`; OC02, OC03 và OC04 đã triển khai sau khi người dùng yêu cầu thực hiện. Các task còn lại vẫn `TODO`; không mở rộng scope ngoài các task đã giao.
 - Phạm vi review: Core + Platform.Windows; Imaging + TurboJpeg; App/UI/coordinators; Benchmarking + CLI/scripts/CI; tests và tài liệu trạng thái liên quan. Ba agent đọc các nhóm đầu, coordinator đối chiếu và review nhóm công cụ. Đây là review theo luồng/rủi ro xuyên repo, không phải bằng chứng mọi nhánh runtime đều đã chạy.
 - Nguyên tắc: an toàn dữ liệu/chất lượng trước; giảm I/O và latency; tận dụng RAM có headroom. Không đổi mặc định decoder hoặc bật byte cache 16 GiB chỉ từ suy đoán; không ép dùng đủ RAM khi gây paging/OOM.
 
@@ -53,27 +53,30 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Xong khi: mỗi patch sau có failure/test hoặc evidence rõ trên baseline; phân biệt static/runtime, không cần ép mọi concern thành defect. Không thêm source-text assertion thay cho behavior test.
 - Rủi ro/rollback: tests có thể động đến Recycle Bin; chỉ fixture temp có manifest, không dùng ảnh thật; giữ/xóa artifact riêng, không reset repo.
 
-### 2. OC02 — Duplicate cleanup và UI thread — TODO
+### 2. OC02 — Duplicate cleanup và UI thread — IN PROGRESS → phần duplicate DONE, UI thread TODO
 
 - Phụ thuộc OC01; song song với decoder/preload. Một agent sở hữu `DuplicateFinder`, `MainViewModel.RemoveDuplicatesAsync`, `WpfDialogService`, tests duplicate/dialog.
 - Làm: policy survivor deterministic cho all-original/all-numbered/mixed; loại duplicate path; xử lý hash không hợp lệ. Dialog trên UI dispatcher; kiểm tra lại generation và identity trước batch mutation. Không bỏ màn xác nhận hiện có.
 - Tests: hash cold asynchronous, STA thật, nhóm 2/3 bản, hash fail, folder đổi khi hash/dialog, file đổi giữa scan và action. Assert >=1 survivor mỗi content group và không recycle file ngoài snapshot đã duyệt.
 - Rủi ro: thay candidate list và synchronous dispatcher deadlock; không giữ lock file-action khi chờ dialog. Rollback nguyên gói commit; không đảo thao tác file người dùng tự động.
+- Kết quả 2026-09-20: duplicate survivor đã DONE trong commit `00cad65`; targeted 9/9 và full gate 748/748. UI-thread dialog boundary còn TODO do cần dispatcher abstraction và STA test riêng.
 
-### 3. OC03 — Decoder safety và fallback — TODO
+### 3. OC03 — Decoder safety và fallback — DONE
 
 - Phụ thuộc OC01; độc lập OC02/04. Files: TurboJpegDecoder, WicDirectDecoder sizing, WpfBitmapImageDecoder, decoder/quality tests.
 - Làm: checked long cho dimensions/stride/buffer, reject trước allocation/native nếu vượt supported budget; narrow WPF fallback theo lỗi codec thật, giữ missing/access/cancel/OOM nguyên nghĩa. Không tự đổi default backend hoặc giảm chất lượng.
 - Tests: arithmetic biên không allocate GB, xác nhận native không được gọi khi reject; preview fallback hợp lệ; missing file không retry; real fixtures ICC/EXIF/alpha, requested/actual backend, pixel quality gates.
 - Rủi ro: reject ảnh vốn có thể đọc được; thông báo rõ giới hạn và giữ backend WPF mặc định. Rollback commit behavior riêng; không tái bật native path mất guard.
+- Kết quả 2026-09-20: commit `6a4ec01`; decoder targeted 108/108 và full gate 748/748. Đã dùng checked long/overflow guard cho TurboJPEG và thu hẹp fallback WPF; quality/native large-image acceptance vẫn cần fixture bổ sung khi triển khai OC11.
 
-### 4. OC04 — Preload lifetime — TODO
+### 4. OC04 — Preload lifetime — DONE
 
 - Phụ thuộc OC01; agent riêng. Files: PreloadScheduler, PreloadSafetyTests, adapter/shutdown callsites nếu contract đổi.
 - Làm: drain mọi exit; giữ ownership các scheduler generation cũ tới khi worker kết thúc; cancel/restart/dispose không bỏ task và không dispose semaphore trước worker finally. Không block UI dispatcher bằng continuation cần chính dispatcher.
 - Tests: memory pressure giữa batch, cancel ở boundary while, restart trước old drain, close/folder switch khi target chậm; barrier xác định, chạy regression race 30 lần sau sửa.
 - Xong khi: task completion/disposal đồng nghĩa worker đã settle, không late cache write/Ode/unobserved error; native window close probe không treo.
 - Rủi ro: tăng thời gian shutdown; có lifetime async rõ thay vì timeout che lỗi. Rollback riêng commit scheduler, không ghép cache optimization.
+- Kết quả 2026-09-20: commit `4a81ba8`; targeted PreloadSafety 5/5 và full gate 748/748. Đã giữ scheduler lifetimes cũ tới khi drain và test cancel/restart trước drain.
 
 ### 5. OC05 — Cache invalidation và disk quota — TODO
 
