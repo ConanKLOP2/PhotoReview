@@ -137,6 +137,8 @@
 
 ### ST10 — Dọn test và rule kiến trúc còn lại — TODO
 
+> **Đã được mở rộng và ưu tiên lại bởi [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) (TC00–TC11).** Phần gộp `OperationJournalTests`, `SourcePresenceTests` và trait/README nằm ở TC10; test đường nóng (đọc đĩa, Next, Move/Delete liên tục) ở TC01–TC08. Các rule kiến trúc bên dưới vẫn thuộc ST10.
+
 - **Phụ thuộc:** làm rải theo từng task; hoàn tất sau ST04–ST09. **Mức:** L2.
 - **Files:** `tests/PhotoReview.Architecture.Tests/*`, `tests/PhotoReview.Core.Tests/OperationJournalTests.cs` và `FileActions/OperationJournalTests.cs`, `tests/PhotoReview.App.Tests/SourcePresenceTests.cs`, `ProjectSources.cs`.
 - **Làm:** (a) thêm rule sau khi các task tương ứng xong: Cli không reflection private vào App (ST06); project `PerfAnalysis` không phụ thuộc WPF (ST05); `FileHashService`/`PerfCsvListener` ở đúng tầng (ST04). (b) Gộp hai `OperationJournalTests` vào một chỗ (đổi tên lớp nếu trùng), không mất test nào — đối chiếu danh sách `[Fact]` trước/sau. (c) `SourcePresenceTests`: thay từng nhóm bằng test hành vi khi có hạ tầng (theo `docs/refactoring/test-parity.md` và OC12); nhóm chưa có thay thế giữ nguyên, ghi rõ vì sao.
