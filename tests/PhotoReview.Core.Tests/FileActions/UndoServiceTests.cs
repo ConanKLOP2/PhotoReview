@@ -85,6 +85,29 @@ public sealed class UndoServiceTests
         Assert.False(_service.CanUndoMove);
     }
 
+    [Fact(DisplayName = "In-session undo retains more than the startup journal tail")]
+    public async Task RegisterMoreThanStartupTail_UndoLatestUsesRegisteredFingerprint()
+    {
+        var writeTime = _clock.UtcNow.AddMinutes(-1);
+        for (var i = 0; i < 250; i++)
+        {
+            var source = $@"C:\photos\source-{i}.jpg";
+            var destination = $@"C:\photos\sorted\source-{i}.jpg";
+            _fs.AddFile(destination, $"image-{i}", writeTime);
+            _journal.Append(new JournalEntry($"move-{i}", FileOperationType.Move, JournalState.Committed,
+                source, destination, 7 + i, writeTime, _clock.UtcNow));
+            _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination,
+                7 + i, writeTime, null));
+        }
+
+        Assert.Equal(250, _service.MoveHistoryCount);
+        var result = await _service.UndoMoveAsync();
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(@"C:\photos\source-249.jpg", result.Source);
+        Assert.Equal(249, _service.MoveHistoryCount);
+    }
+
     [Fact]
     public async Task UndoMoveAsync_DestinationModified_FailsAndRestoresStack()
     {
