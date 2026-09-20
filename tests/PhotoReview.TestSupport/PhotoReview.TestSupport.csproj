@@ -5,4 +5,8 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
+  </ItemGroup>
+
 </Project>
