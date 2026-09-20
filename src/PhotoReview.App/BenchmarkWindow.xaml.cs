@@ -1,6 +1,7 @@
 using PhotoReview.Benchmarking;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -11,7 +12,7 @@ using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
 
-public partial class BenchmarkWindow : Window
+public partial class BenchmarkWindow : Window, IDisposable
 {
     private readonly ObservableCollection<BenchmarkResultRow> _rows = [];
     private CancellationTokenSource? _cts;
@@ -49,8 +50,16 @@ private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
 protected override void OnClosed(EventArgs e)
 {
-    _cts?.Cancel();
+    Dispose();
     base.OnClosed(e);
+}
+
+public void Dispose()
+{
+    var cts = Interlocked.Exchange(ref _cts, null);
+    if (cts is null) return;
+    cts.Cancel();
+    cts.Dispose();
 }
 
     private async Task RunAsync()
@@ -130,7 +139,7 @@ protected override void OnClosed(EventArgs e)
         finally
         {
             RunButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true;
-            _cts?.Dispose(); _cts = null;
+            Dispose();
         }
     }
 
@@ -153,7 +162,7 @@ protected override void OnClosed(EventArgs e)
 
     private async Task SaveSessionSummaryAsync(IReadOnlyList<BenchmarkReport> reports)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
+        var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(dir);
         foreach (var report in reports)
             await File.WriteAllTextAsync(Path.Combine(dir, $"{report.Phases[0].ProfileId}-{report.RunId}.json"), report.ToJson());
