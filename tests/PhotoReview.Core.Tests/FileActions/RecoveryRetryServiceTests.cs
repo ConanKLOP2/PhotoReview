@@ -79,6 +79,54 @@ public sealed class RecoveryRetryServiceTests
         Assert.True(_fs.FileExists(dest));
     }
 
+    [Fact(DisplayName = "RetryMoveOrCopy preserves completed move when commit journal fails")]
+    public void RetryMove_CommitJournalFailure_PreservesCompletedOutcome()
+    {
+        var source = @"C:\photos\journal-failure.jpg";
+        var dest = @"C:\photos\sub\journal-failure.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var appendCalls = 0;
+        _fs.OpenAppendHook = _ => ++appendCalls == 2
+            ? new IOException("journal unavailable")
+            : null;
+        var failed = new JournalEntry("op-journal-failure", FileOperationType.Move, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+
+        var result = _service.RetryMoveOrCopy(failed);
+
+        Assert.True(result.Succeeded);
+        Assert.False(result.JournalPersisted);
+        Assert.Equal("journal unavailable", result.JournalError);
+        Assert.False(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(dest));
+    }
+
+    [Fact(DisplayName = "RetryMoveOrCopy preserves mutation failure when failed journal append also fails")]
+    public void RetryMove_MutationAndFailureJournalFailure_PreservesOriginalFailure()
+    {
+        var source = @"C:\photos\mutation-failure.jpg";
+        var dest = @"C:\photos\sub\mutation-failure.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var appendCalls = 0;
+        _fs.OpenAppendHook = _ => ++appendCalls == 2
+            ? new IOException("journal unavailable")
+            : null;
+        _fs.MoveHook = (_, _) => new IOException("move unavailable");
+        var failed = new JournalEntry("op-mutation-journal-failure", FileOperationType.Move, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+
+        var result = _service.RetryMoveOrCopy(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.JournalPersisted);
+        Assert.Equal("journal unavailable", result.JournalError);
+        Assert.Contains("move unavailable", result.Message);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(dest));
+    }
+
     [Fact(DisplayName = "RetryMoveOrCopy rejects Recycle operation")]
     public void Retry_RejectsRecycle()
     {

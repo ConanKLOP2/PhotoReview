@@ -69,6 +69,7 @@ public sealed class MainViewModelAdvancedTests : IDisposable
     private readonly OperationJournal _journal;
     private readonly FakeRecycleBin _recycleBin;
     private readonly FakeDialogService _dialogService;
+    private readonly RecordingUiScheduler _uiScheduler = new();
     private AppSettings _settings;
 
     public MainViewModelAdvancedTests()
@@ -189,7 +190,8 @@ public sealed class MainViewModelAdvancedTests : IDisposable
             naturalComparer: ManagedNaturalComparer.Instance,
             hashService: _hashService,
             previewService: _previewService,
-            thumbnailCache: _thumbnailCache);
+            thumbnailCache: _thumbnailCache,
+            uiScheduler: _uiScheduler);
 
         return (vm, fileActions);
     }
@@ -216,6 +218,7 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         Assert.True(File.Exists(original));
         Assert.Equal(1, vm.TotalFiles);
         Assert.Contains("1/1", vm.StatusText);
+        Assert.Equal(1, _uiScheduler.InvokeCount);
     }
 
     [Fact]
@@ -377,6 +380,19 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         }
     }
 
+    private sealed class RecordingUiScheduler : IUiScheduler
+    {
+        public int InvokeCount { get; private set; }
+        public void Post(Action action) => action();
+        public Task InvokeAsync(Action action)
+        {
+            InvokeCount++;
+            action();
+            return Task.CompletedTask;
+        }
+        public ValueTask YieldAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
     private sealed class FakeDialogService : IDialogService
     {
         public bool ConfirmationResponse { get; set; } = true;
@@ -413,9 +429,9 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
             string folder,
             TimeSpan timeout,
-            CancellationToken cancellationToken,
             IProgress<ExplorerQueryProgress>? progress = null,
-            int progressInterval = 16) =>
+            int progressInterval = 16,
+            CancellationToken cancellationToken = default) =>
             TryGetSnapshotAsync(folder, timeout, cancellationToken);
 
         public void Dispose() { }

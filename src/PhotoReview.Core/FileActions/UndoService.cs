@@ -17,6 +17,12 @@ public sealed class UndoService
     private readonly Func<string, string, Task>? _moveOverride;
 
     private readonly Stack<(string Source, string Destination)> _moveHistory = new();
+    // Keep the committed fingerprint next to the in-memory history.  Undo must
+    // not rescan the journal for every action; the bounded startup tail is only
+    // a history bootstrap, while entries registered during this process carry
+    // their complete identity here.
+    private readonly Dictionary<string, (long Size, DateTime LastWriteUtc)> _moveFingerprints =
+        new(StringComparer.OrdinalIgnoreCase);
     private UndoActionRecord? _lastUndoAction;
     private int _internalInProgress;
 
@@ -88,6 +94,7 @@ public sealed class UndoService
     public void LoadFromJournal()
     {
         _moveHistory.Clear();
+        _moveFingerprints.Clear();
         var committedMoves = _journal.ReadCommittedMoves();
         foreach (var entry in committedMoves)
         {
@@ -96,6 +103,7 @@ public sealed class UndoService
             if (_fileSystem.FileExists(entry.Destination) && !_fileSystem.FileExists(entry.Source))
             {
                 _moveHistory.Push((entry.Source, entry.Destination));
+                _moveFingerprints[entry.Destination] = (entry.Size, entry.LastWriteUtc);
             }
         }
     }
@@ -112,6 +120,7 @@ public sealed class UndoService
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.DestinationPath))
         {
             _moveHistory.Push((result.Source, result.DestinationPath));
+            _moveFingerprints[result.DestinationPath] = (result.Size, result.LastWriteUtc);
             _lastUndoAction = new UndoActionRecord(FileOperationType.Move, result.Source, result.DestinationPath, result.Size, result.LastWriteUtc);
         }
         else if (result.Operation == FileOperationType.Recycle)
@@ -146,13 +155,22 @@ public sealed class UndoService
                 }
 
                 var destinationStat = _fileSystem.GetFileStat(move.Destination);
-                var committed = _journal.ReadCommittedMoves()
-                    .LastOrDefault(x => string.Equals(x.Destination, move.Destination, StringComparison.OrdinalIgnoreCase));
+                if (!_moveFingerprints.TryGetValue(move.Destination, out var fingerprint))
+                {
+                    // Compatibility fallback for callers that populated the
+                    // public history stack directly. Normal Register/Load paths
+                    // never need to scan the journal here.
+                    var committed = _journal.ReadCommittedMoves()
+                        .LastOrDefault(x => string.Equals(x.Destination, move.Destination, StringComparison.OrdinalIgnoreCase));
+                    if (committed is null)
+                        throw new IOException("Không tìm thấy fingerprint Move trong journal.");
+                    fingerprint = (committed.Size, committed.LastWriteUtc);
+                    _moveFingerprints[move.Destination] = fingerprint;
+                }
 
-                if (committed is null ||
-                    destinationStat is null ||
-                    destinationStat.Length != committed.Size ||
-                    destinationStat.LastWriteUtc != committed.LastWriteUtc)
+                if (destinationStat is null ||
+                    destinationStat.Length != fingerprint.Size ||
+                    destinationStat.LastWriteUtc != fingerprint.LastWriteUtc)
                 {
                     throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
                 }

@@ -38,6 +38,10 @@ public sealed class SourceBytesCache
 
     public void Evict(string path)
     {
+        // In-flight reads capture the generation before opening the file.  Advance it
+        // before removing the entry so a read that completes after eviction cannot
+        // republish bytes for the evicted source.
+        Interlocked.Increment(ref _generation);
         var full = Path.GetFullPath(path);
         _cache.RemoveWhere(key => string.Equals(key.Path, full, StringComparison.OrdinalIgnoreCase));
     }

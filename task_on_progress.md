@@ -2,8 +2,8 @@
 
 - **Cập nhật:** 2026-09-20.
 - **Checkout đã xác minh:** `master`, `ba1317e54702e3af8bd32c0bf5d953b3766f1ba0` (merge PR #9); working tree sạch trước review.
-- **Mục tiêu phiên:** review xuyên repo, lập plan optimize/clean; chưa triển khai source/config, commit hoặc push.
-- **Plan chờ duyệt:** `docs/refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`, 13 task OC01–OC13 đều `TODO`; có evidence, scope, dependencies, multi-agent, tests, risks và rollback.
+- **Mục tiêu phiên:** review xuyên repo và triển khai ba gói P1 đầu tiên trong plan optimize/clean.
+- **Plan:** `docs/refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`; correctness và benchmark semantics chính đã triển khai; T89 GUI/STA và native Recycle Bin live acceptance còn chờ evidence.
 
 ## Review / validation mới
 
@@ -12,11 +12,11 @@
 - **Runtime probes:** DuplicateFinder chọn 2/2 bản cùng hash ở cả group toàn original và toàn numbered; chỉ selection, không recycle/delete. PerfAnalyze gộp 2 run workers 0/8 thành 1 group, R-CONT báo thiếu dữ liệu. Chi tiết/artifact tạm trong plan.
 - **Source findings cần regression:** native buffer sizing unchecked; preload exit/restart chưa bảo đảm drain; batch dialog sau ConfigureAwait(false); WPF catch-all retry; folder remap O(n²)/stat lại; display state; cache invalidation/quota; Undo tail-limit; benchmark semantics.
 - **Chưa xác minh runtime:** race Session/journal failures, native recycle identity, GUI T89. Không biến static concern thành runtime defect.
-- Lượt này chưa chạy mới smoke/fault-injection/full verify-all/publish, vì chỉ review và tài liệu. Full release/publish sẽ chạy khi triển khai theo OC13.
+- `tools/verify-all.ps1` PASS sau API/lifecycle/culture wave: 7 Architecture + 314 Core + 205 Imaging + 62 Integration + 174 App = 762/762; smoke, fault-injection, publish và verify-release PASS.
 
 ## Quyết định và việc còn lại
 
-1. Chờ người dùng duyệt plan OC01–OC13 trước thay đổi source/config. Ưu tiên safety + benchmark correctness trước tối ưu và clean code.
+1. UI dispatcher, file outcome/journal durability, SessionWriter ordering, Recovery retry, native candidate identity, benchmark action/report semantics, API token ordering, disposal lifecycle, culture formatting và focused clean-code warnings đã triển khai; còn T89 layout/GUI acceptance, live Recycle Bin acceptance và đo tối ưu ảnh thật.
 2. T89 wheel/anchor/pan và transaction Fit đã merge qua PR #9; `docs/refactoring/T89-FIT-LAYOUT-PLAN.md` vẫn **IN PROGRESS**, còn unify initial-mode viewport, STA layout và GUI Fit → wheel → drag trên ảnh dọc/ngang. Không gọi DONE từ pure math tests.
 3. Giữ WPF, DecoderBackend=Wpf, ScalingQuality=HighQuality; SourceBytesCache mặc định off. Chỉ đổi theo số đo/plan được duyệt; không ép RAM gây paging/OOM.
 4. T73 còn coverage Recovery retry/ảnh hỏng nếu có fixture; T74 release trước đã DONE theo hồ sơ cũ, không phải release mới trong lượt review.
@@ -25,5 +25,5 @@
 ## Tiếp tục
 
 - Đọc AGENTS, plan mới và plan T89; kiểm tra branch/SHA/dirty tree lại trước làm.
-- Chỉ hai tài liệu được sửa/tạo trong phiên: plan mới và file này; chưa commit. Các hồ sơ lịch sử ở `docs/refactoring/archive/`.
+- Commit implementation: `4a81ba8` preload, `6a4ec01` decoder, `00cad65` duplicate, `3db9ae6` cache, `5edd15d` display, `b8b97fb` PerfAnalyze grouping, `295f04b` Undo history, `a16b327` folder/catalog, `fb5155f` benchmark profile propagation, `42b92e2` SessionWriter, `481c130` file outcome, `abecebc` UI dispatcher, `32156f5` recovery retry, `6dee023` benchmark action, `6ad5c15` benchmark report/manifest, `3a5c168` recycle candidate identity, `4b6b5ad` Core clean, `77c4441` Imaging clean, `8249fd2` App serializer clean, `e301271` API token ordering, `89019a1` disposal lifecycle, `6fadeb2` culture formatting. Tài liệu plan và file này được cập nhật sau validation.
 - Giữ frame khi Move/Delete đang loading; no hidden retry. Không dùng OS SendInput/SendKeys/SetForegroundWindow cho harness; dùng fixture riêng, không đổi config/action người dùng.

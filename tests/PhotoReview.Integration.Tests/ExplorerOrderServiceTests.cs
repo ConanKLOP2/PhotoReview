@@ -61,9 +61,9 @@ public sealed class ExplorerOrderServiceTests
         var snapshot = await service.TryGetSnapshotProgressiveAsync(
             Path.GetTempPath(),
             TimeSpan.FromSeconds(5),
-            CancellationToken.None,
             progress,
-            batchSize: 8);
+            batchSize: 8,
+            cancellationToken: CancellationToken.None);
 
         Assert.NotNull(snapshot);
         Assert.True(snapshot.Status is ExplorerOrderStatus.NoMatchingWindow or ExplorerOrderStatus.NativeViewUnavailable or ExplorerOrderStatus.Available);

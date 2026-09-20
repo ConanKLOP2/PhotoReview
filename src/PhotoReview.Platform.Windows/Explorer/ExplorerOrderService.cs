@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
@@ -83,17 +84,17 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 
     /// <summary>Progressive variant used by the UI: enumeration yields between small batches and can be cancelled.</summary>
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
     {
         batchSize = Math.Clamp(batchSize, 1, 128);
-        return TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, progress, batchSize);
+        return TryGetSnapshotCoreAsync(folder, timeout, progress, batchSize, cancellationToken);
     }
 
     public async Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
-        => await TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, null, int.MaxValue);
+        => await TryGetSnapshotCoreAsync(folder, timeout, null, int.MaxValue, cancellationToken);
 
     private async Task<ExplorerViewSnapshot> TryGetSnapshotCoreAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress, int batchSize)
+        IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
         if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
@@ -102,7 +103,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         var linkedToken = timeoutCts.Token;
         var workTask = _pump.Enqueue(() =>
         {
-            try { return QueryShell(canonicalFolder, linkedToken, progress, batchSize); }
+            try { return QueryShell(canonicalFolder, progress, batchSize, linkedToken); }
             catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
             catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
         });
@@ -117,8 +118,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
     }
 
-    private ExplorerViewSnapshot QueryShell(string folder, CancellationToken cancellationToken,
-        IProgress<ExplorerQueryProgress>? progress, int batchSize)
+    private ExplorerViewSnapshot QueryShell(string folder, IProgress<ExplorerQueryProgress>? progress,
+        int batchSize, CancellationToken cancellationToken)
     {
         var queryTimer = Stopwatch.StartNew();
         _log.Info($"Explorer query-start: folder={folder}");
@@ -133,7 +134,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         try
         {
             shell = Activator.CreateInstance(shellType);
-            windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null);
+            windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
             var windowsInspected = 0;
             foreach (var window in (IEnumerable)windows!)
             {
@@ -144,7 +145,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                     var location = (string?)((dynamic)window).LocationURL;
                     if (!TryCanonicalizeLocation(location, out var current)) continue;
                     if (!ExplorerSnapshotValidator.SamePath(current, folder)) continue;
-                    try { return TryReadNativeView(window, folder, cancellationToken, progress, batchSize); }
+                    try { return TryReadNativeView(window, folder, progress, batchSize, cancellationToken); }
                     catch (OperationCanceledException) { return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
                     catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
                 }
@@ -159,8 +160,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         finally { Release(windows); Release(shell); }
     }
 
-    private ExplorerViewSnapshot TryReadNativeView(object window, string folder, CancellationToken cancellationToken,
-        IProgress<ExplorerQueryProgress>? progress, int batchSize)
+    private ExplorerViewSnapshot TryReadNativeView(object window, string folder,
+        IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var timer = Stopwatch.StartNew();
         var getItemCalls = 0;

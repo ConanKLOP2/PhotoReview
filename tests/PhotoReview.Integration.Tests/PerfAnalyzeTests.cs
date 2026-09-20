@@ -422,4 +422,25 @@ public class PerfAnalyzeTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => PerfAnalyze.RunAsync(runDir, rulesPath: null));
     }
+
+    [Fact]
+    public async Task PerfAnalyzeKeepsWorkerTreatmentsSeparateAndOnlyComparesSameCondition()
+    {
+        var runDir = Path.Combine(Path.GetTempPath(), "PhotoReview-PerfAnalyze-Workers-" + Guid.NewGuid().ToString("N"));
+        var warm0 = Path.Combine(runDir, "S2", "fixture-Preview-warm", "run-01");
+        var cold8 = Path.Combine(runDir, "S2", "fixture-Preview-cold-app", "run-01");
+        Directory.CreateDirectory(warm0);
+        Directory.CreateDirectory(cold8);
+        File.Copy(SampleCsvPath(), Path.Combine(warm0, "perf-0.csv"));
+        File.Copy(SampleCsvPath(), Path.Combine(cold8, "perf-8.csv"));
+        File.WriteAllText(Path.Combine(warm0, "session.json"), "{\"scenario\":\"S2\",\"mode\":\"Preview\",\"condition\":\"warm\",\"preloadWorkers\":0}");
+        File.WriteAllText(Path.Combine(cold8, "session.json"), "{\"scenario\":\"S2\",\"mode\":\"Preview\",\"condition\":\"cold-app\",\"preloadWorkers\":8}");
+
+        var result = await PerfAnalyze.RunAsync(runDir, rulesPath: null);
+
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Contains(result.Groups, g => g.Summary.Key.PreloadWorkers == 0 && g.Summary.Key.Cond == "warm");
+        Assert.Contains(result.Groups, g => g.Summary.Key.PreloadWorkers == 8 && g.Summary.Key.Cond == "cold-app");
+        Assert.All(result.Groups, g => Assert.Null(g.Rules.Single(r => r.Rule == "R-CONT").Triggered));
+    }
 }

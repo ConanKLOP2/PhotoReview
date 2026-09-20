@@ -31,7 +31,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             var bitmap = DecodeSource(request, out int orientation);
             return new WpfDecodedImage(bitmap, downscaled: request.TargetWidth > 0, orientation: orientation);
         }
-        catch when (request.TargetWidth > 0)
+        catch (Exception ex) when (request.TargetWidth > 0 && IsDownscaleFallbackException(ex))
         {
             var fallbackRequest = new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes);
             var bitmap = DecodeSource(fallbackRequest, out int orientation);
@@ -108,4 +108,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
 
     public static BitmapSource DecodeSource(string path, int targetWidth)
         => DecodeSource(new DecodeRequest(path, targetWidth));
+
+    private static bool IsDownscaleFallbackException(Exception ex)
+        => ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException;
 }

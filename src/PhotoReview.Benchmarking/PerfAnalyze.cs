@@ -65,7 +65,9 @@ public static class PerfAnalyze
                     .OrderByDescending(g => g.Count())
                     .First().Key
                 : (string.IsNullOrEmpty(meta.Mode) ? "unknown" : meta.Mode);
-            var key = new GroupKey(meta.Scenario, mode, meta.Cond);
+            // Worker count is part of the experimental treatment. Pooling 0-worker and
+            // 8-worker runs hides contention and makes the R-CONT comparison meaningless.
+            var key = new GroupKey(meta.Scenario, mode, meta.Cond, meta.PreloadWorkers);
 
             Add(groupNavs, key).AddRange(analysis.Navs);
             Add(groupPreload, key).AddRange(analysis.PreloadItems);
@@ -134,9 +136,12 @@ public static class PerfAnalyze
         var dispatcherThreshold = rules.Get("R-THREAD", "dispatcherLongOpMs", 16);
         var dispatcherCount = s.DispatcherLongOps.Count(d => d.Ms > dispatcherThreshold);
 
-        // R-CONT: find a sibling group (same scenario+mode, any cond) with the smallest and the
-        // largest known PreloadWorkers value to compare against.
-        var siblings = allGroups.Where(g => g.Key.Scenario == s.Key.Scenario && g.Key.Mode == s.Key.Mode && g.PreloadWorkers.HasValue).ToList();
+        // R-CONT compares only compatible experimental cells: same scenario, mode and
+        // condition, with different known worker counts. Cold/warm cells have different cache
+        // state and must never be treated as a worker-count experiment.
+        var siblings = allGroups.Where(g => g.Key.Scenario == s.Key.Scenario
+            && g.Key.Mode == s.Key.Mode && g.Key.Cond == s.Key.Cond
+            && g.PreloadWorkers.HasValue).ToList();
         GroupSummary? lowGroup = siblings.Count > 0 ? siblings.OrderBy(g => g.PreloadWorkers).First() : null;
         GroupSummary? highGroup = siblings.Count > 0 ? siblings.OrderByDescending(g => g.PreloadWorkers).First() : null;
         double? decodeLow = lowGroup is null ? null : AverageDecodeMs(lowGroup);

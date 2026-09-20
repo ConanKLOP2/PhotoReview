@@ -34,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     private readonly FileActionService? _fileActionService;
     private readonly UndoService? _undoService;
     private readonly IDialogService? _dialogService;
+    private readonly IUiScheduler _uiScheduler;
     private readonly IPreloadController? _preloadController;
     private readonly INaturalComparer _naturalComparer;
     private readonly IFileSystem _fileSystem;
@@ -67,7 +68,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         PreviewImageService? previewService = null,
         ThumbnailCache? thumbnailCache = null,
         ReviewMetrics? metrics = null,
-        SessionWriter? sessionWriter = null)
+        SessionWriter? sessionWriter = null,
+        IUiScheduler? uiScheduler = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -80,6 +82,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _fileActionService = fileActionService;
         _undoService = undoService;
         _dialogService = dialogService;
+        _uiScheduler = uiScheduler ?? ImmediateUiScheduler.Instance;
         _preloadController = preloadController;
         _naturalComparer = naturalComparer ?? ManagedNaturalComparer.Instance;
         _fileSystem = fileSystem ?? new PhotoReview.Core.IO.PhysicalFileSystem();
@@ -147,10 +150,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
 
     public void ToggleCompare()
     {
-        _compare.IsVisible = !_compare.IsVisible;
+        var enableCompare = !_compare.IsVisible;
+        _compare.IsVisible = enableCompare;
         if (_catalog.CurrentIndex >= 0)
         {
-            _ = _presenter.PresentAsync(_catalog.CurrentIndex);
+            _ = _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare);
         }
     }
 
@@ -547,8 +551,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
                 candidates,
                 removeNumbered,
                 (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
-                System.Threading.CancellationToken.None,
-                _fileSystem).ConfigureAwait(false);
+                _fileSystem,
+                System.Threading.CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -571,7 +575,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
 
         if (_dialogService is not null)
         {
-            var confirmed = _dialogService.ShowBatchReview(remove);
+            var confirmed = false;
+            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove)).ConfigureAwait(false);
             if (!confirmed)
             {
                 StatusText = StatusFormatter.BatchCanceled();
@@ -777,7 +782,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         FolderText = $"{folder}  (0 ảnh)";
         UpdateFolderTitle(folder);
         StatusText = StatusFormatter.NoSupportedImages();
-        _compare.Clear();
+        _presenter.ClearPresentation();
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }

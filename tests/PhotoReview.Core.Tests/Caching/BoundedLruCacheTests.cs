@@ -33,4 +33,8 @@ public sealed class BoundedLruCacheTests
         cache.Set("c", "cc");
         Assert.True(cache.CurrentSize <= 4);
     }
+
+    [Fact(DisplayName = "LRU rejects a null removal predicate")]
+    public void RemoveWhereNullPredicateThrows() =>
+        Assert.Throws<ArgumentNullException>(() => Seeded().RemoveWhere(null!));
 }

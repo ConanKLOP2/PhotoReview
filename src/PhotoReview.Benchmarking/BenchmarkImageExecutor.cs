@@ -35,10 +35,13 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _diskCacheDirectory = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Cache", Guid.NewGuid().ToString("N"));
         var isOriginal = profile.LoadingMode == LoadingMode.Original;
         _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
-            PerformanceOptions.ImageCacheCapacityBytes, _diskCacheDirectory);
+            PerformanceOptions.ImageCacheCapacityBytes, _diskCacheDirectory,
+            disableDiskCacheOverride: !profile.DiskCache);
         _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,
             options: new PreloadOptions(
+                WorkerCount: profile.Workers,
                 MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
+                ReserveBytes: profile.MemoryReserveBytes,
                 FullFolderThresholdBytes: PerformanceOptions.ImageCacheCapacityBytes),
             memoryProbe: hasHeadroom is null ? WindowsMemoryProbe.Instance : new DelegateMemoryProbe(hasHeadroom),
             uiScheduler: ImmediateUiScheduler.Instance);

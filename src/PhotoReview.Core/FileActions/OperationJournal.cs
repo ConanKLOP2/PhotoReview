@@ -84,7 +84,7 @@ public sealed class OperationJournal
         return entries;
     }
 
-    private static IReadOnlyList<JournalEntry> ReadCommittedMovesReverse(Stream stream)
+    private static List<JournalEntry> ReadCommittedMovesReverse(Stream stream)
     {
         if (!stream.CanSeek)
             return [];

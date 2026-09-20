@@ -13,4 +13,6 @@ public sealed record FileActionResult(
     long Size,
     DateTime LastWriteUtc,
     string? Error,
-    bool Rejected = false);
+    bool Rejected = false,
+    bool JournalPersisted = true,
+    string? JournalError = null);

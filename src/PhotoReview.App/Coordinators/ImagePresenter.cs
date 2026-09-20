@@ -77,6 +77,13 @@ public sealed class ImagePresenter
     public string StatusText { get; private set; } = string.Empty;
     public bool IsCompareVisible => _compareViewModel.IsVisible;
 
+    /// <summary>Clears the displayed frame when the catalog has no images.</summary>
+    public void ClearPresentation()
+    {
+        UpdateCurrentImage(null);
+        _compareViewModel.Clear();
+    }
+
     /// <summary>
     /// Gỡ bỏ ảnh khỏi cache RAM/decode khi file bị di chuyển hoặc xóa.
     /// </summary>
@@ -88,7 +95,7 @@ public sealed class ImagePresenter
     /// <summary>
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
-    public async Task PresentAsync(int index)
+    public async Task PresentAsync(int index, bool allowCompare = true)
     {
         if (index < 0 || index >= _catalog.Count) return;
 
@@ -211,7 +218,7 @@ public sealed class ImagePresenter
                 else PhotoReviewPerf.Log.PostStart(token, "compare");
             }
 
-            if (pair is not null)
+            if (pair is not null && allowCompare)
             {
                 UpdateCurrentImage(null);
                 var loaded = await _compareViewModel.LoadAsync(

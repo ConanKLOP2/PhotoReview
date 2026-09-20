@@ -43,16 +43,32 @@ public sealed class WindowsRecycleBin : IRecycleBin
             object? items = recycleDynamic.Items();
             try
             {
+                var candidates = new List<(object Item, RecycleCandidate Candidate)>();
                 foreach (dynamic item in (IEnumerable)items!)
                 {
                     try
                     {
                         var deletedFrom = (string?)item.ExtendedProperty("System.Recycle.DeletedFrom");
                         var name = (string?)item.Name;
-                        if (!string.Equals(deletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
-                            && !string.Equals(Path.Combine(deletedFrom ?? string.Empty, name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase)) continue;
                         var sizeText = Convert.ToString(item.Size, CultureInfo.InvariantCulture);
-                        if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size) || size != expectedSize) continue;
+                        var modified = item.ExtendedProperty("System.DateModified");
+                        if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size)) continue;
+                        if (!DateTime.TryParse(Convert.ToString(modified, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out DateTime lastWrite)) continue;
+                        var candidate = new RecycleCandidate(deletedFrom, name, size, lastWrite.ToUniversalTime());
+                        if (RecycleCandidateSelector.IsMatch(candidate, originalPath, expectedSize, expectedLastWriteUtc))
+                            candidates.Add((item, candidate));
+                    }
+                    catch (Exception ex) when (ex is COMException or InvalidCastException or FormatException)
+                    {
+                        _log.Error("Recycle Bin item inspection failed", ex);
+                    }
+                }
+
+                if (candidates.Count != 1) return false;
+                var selected = candidates[0].Item;
+                try
+                {
+                    dynamic item = selected;
                         var restoredVerb = false;
                         foreach (dynamic verb in (IEnumerable)item.Verbs())
                         {
@@ -66,11 +82,9 @@ public sealed class WindowsRecycleBin : IRecycleBin
                             break;
                         }
                         if (!restoredVerb) item.InvokeVerb("Restore");
-                        return WaitForRestore(originalPath, expectedLastWriteUtc);
-                    }
-                    finally { Release(item); }
+                    return WaitForRestore(originalPath, expectedLastWriteUtc);
                 }
-                return false;
+                finally { foreach (var candidate in candidates) Release(candidate.Item); }
             }
             finally { Release(items); }
         }
@@ -102,5 +116,17 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private static void Release(object? value)
     {
         if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
+    }
+}
+
+internal readonly record struct RecycleCandidate(string? DeletedFrom, string? Name, long Size, DateTime LastWriteUtc);
+
+internal static class RecycleCandidateSelector
+{
+    internal static bool IsMatch(RecycleCandidate candidate, string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
+    {
+        var pathMatches = string.Equals(candidate.DeletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Path.Combine(candidate.DeletedFrom ?? string.Empty, candidate.Name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase);
+        return pathMatches && candidate.Size == expectedSize && candidate.LastWriteUtc == expectedLastWriteUtc;
     }
 }

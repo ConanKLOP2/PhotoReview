@@ -68,6 +68,46 @@ public sealed class DuplicateFinderTests
     }
 
     [Fact]
+    public async Task FindAsync_RemoveNumbered_WhenGroupContainsOnlyNumberedCopies_KeepsOneSurvivor()
+    {
+        var f1 = @"C:\photos\img (1).jpg";
+        var f2 = @"C:\photos\img (2).jpg";
+        var f3 = @"C:\photos\img (3).jpg";
+
+        _fs.WriteAllTextAtomic(f1, "identical-content");
+        _fs.WriteAllTextAtomic(f2, "identical-content");
+        _fs.WriteAllTextAtomic(f3, "identical-content");
+
+        var result = await DuplicateFinder.FindAsync(
+            new[] { f1, f2, f3 },
+            removeNumbered: true,
+            hash: (p, ct) => Task.FromResult("hash-abc"),
+            fileSystem: _fs);
+
+        Assert.Equal(new[] { f2, f3 }, result);
+    }
+
+    [Fact]
+    public async Task FindAsync_RemoveOriginal_WhenGroupContainsOnlyOriginals_KeepsOneSurvivor()
+    {
+        var f1 = @"C:\photos\img-a.jpg";
+        var f2 = @"C:\photos\img-b.jpg";
+        var f3 = @"C:\photos\img-c.jpg";
+
+        _fs.WriteAllTextAtomic(f1, "identical-content");
+        _fs.WriteAllTextAtomic(f2, "identical-content");
+        _fs.WriteAllTextAtomic(f3, "identical-content");
+
+        var result = await DuplicateFinder.FindAsync(
+            new[] { f1, f2, f3 },
+            removeNumbered: false,
+            hash: (p, ct) => Task.FromResult("hash-abc"),
+            fileSystem: _fs);
+
+        Assert.Equal(new[] { f2, f3 }, result);
+    }
+
+    [Fact]
     public async Task FindAsync_DifferentSizes_SkipsHashComputation()
     {
         var f1 = @"C:\photos\small.jpg";

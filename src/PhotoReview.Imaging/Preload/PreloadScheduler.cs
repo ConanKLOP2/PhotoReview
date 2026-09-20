@@ -33,6 +33,10 @@ public sealed class PreloadScheduler : IDisposable
     private readonly SemaphoreSlim _preloadSlots;
     private Task? _preloadSchedulerTask;
     private CancellationTokenSource? _preloadSchedulerCts;
+    // A cancelled lifetime can still be draining while navigation starts a fresh one.
+    // Keep every lifetime owned by this scheduler so Dispose waits for all of them.
+    private readonly List<CancellationTokenSource> _preloadLifetimes = [];
+    private readonly List<Task> _preloadLifetimeTasks = [];
     private int _preloadCenter;
     private long _preloadPriorityVersion;
     // Written from concurrent PreloadOneAsync worker tasks (PreloadWorkerCount at once)
@@ -76,6 +80,7 @@ public sealed class PreloadScheduler : IDisposable
         }
 
         _preloadSlots = new SemaphoreSlim(Math.Max(1, _workerCount), Math.Max(1, _workerCount));
+        _preloadLifetimes.Add(_preloadCts);
     }
 
     public PreloadScheduler(
@@ -151,8 +156,8 @@ public sealed class PreloadScheduler : IDisposable
             if (_disposed) return Task.CompletedTask;
             if (_preloadCts.IsCancellationRequested)
             {
-                _preloadCts.Dispose();
                 _preloadCts = new CancellationTokenSource();
+                _preloadLifetimes.Add(_preloadCts);
             }
             cts = _preloadCts;
             Volatile.Write(ref _preloadCenter, center);
@@ -161,6 +166,7 @@ public sealed class PreloadScheduler : IDisposable
                 ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
             _preloadSchedulerCts = cts;
             _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotFiles(), cts.Token);
+            _preloadLifetimeTasks.Add(_preloadSchedulerTask);
             return _preloadSchedulerTask;
         }
     }
@@ -315,26 +321,29 @@ public sealed class PreloadScheduler : IDisposable
 
     public void Dispose()
     {
-        Task? schedulerTask;
+        Task[] lifetimeTasks;
+        CancellationTokenSource[] lifetimeCts;
         lock (_preloadCtsGate)
         {
             if (_disposed) return;
             _disposed = true;
             _preloadCts.Cancel();
-            schedulerTask = _preloadSchedulerTask;
+            lifetimeTasks = _preloadLifetimeTasks.ToArray();
+            lifetimeCts = _preloadLifetimes.ToArray();
         }
 
         // The scheduler and workers use ConfigureAwait(false), so draining cannot require the
         // caller's UI context. Keep synchronization primitives alive until every waiter/holder
         // has observed cancellation and released its slot.
-        if (schedulerTask is not null)
+        foreach (var schedulerTask in lifetimeTasks)
         {
             try { schedulerTask.GetAwaiter().GetResult(); }
             catch (OperationCanceledException) { }
             catch (Exception ex) { _log.Error("Preload scheduler failed during disposal", ex); }
         }
 
-        lock (_preloadCtsGate) _preloadCts.Dispose();
+        foreach (var lifetimeCtsSource in lifetimeCts)
+            lifetimeCtsSource.Dispose();
         _preloadSlots.Dispose();
     }
 }

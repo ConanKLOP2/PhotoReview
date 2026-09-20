@@ -20,15 +20,15 @@ public static class DuplicateFinder
     /// Nếu false: chọn xóa các tệp gốc không có hậu tố đánh số.
     /// </param>
     /// <param name="hash">Hàm bất đồng bộ tính hash nội dung tệp.</param>
-    /// <param name="cancellationToken">Token thông báo hủy bỏ thao tác.</param>
     /// <param name="fileSystem">Tùy chọn trừu tượng hóa hệ thống tệp tin (dùng cho testing).</param>
+    /// <param name="cancellationToken">Token thông báo hủy bỏ thao tác.</param>
     /// <returns>Danh sách các đường dẫn tệp trùng lặp phù hợp điều kiện lọc.</returns>
     public static async Task<List<string>> FindAsync(
         IReadOnlyList<string> files,
         bool removeNumbered,
         Func<string, CancellationToken, Task<string>> hash,
-        CancellationToken cancellationToken = default,
-        IFileSystem? fileSystem = null)
+        IFileSystem? fileSystem = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(hash);
@@ -94,8 +94,20 @@ public static class DuplicateFinder
         var remove = new List<string>();
         foreach (var group in groups.Values.Where(group => group.Count > 1))
         {
-            remove.AddRange(group.Where(path =>
-                NumberedPattern.IsMatch(Path.GetFileNameWithoutExtension(path)) == removeNumbered));
+            var matching = group.Where(path =>
+                NumberedPattern.IsMatch(Path.GetFileNameWithoutExtension(path)) == removeNumbered)
+                .ToList();
+
+            // Never return every member of a content group. This can happen when a
+            // folder contains only numbered copies (or only originals), and the
+            // selected naming rule otherwise matches the complete group. Keep the
+            // first item in input order as a deterministic survivor.
+            if (matching.Count == group.Count)
+            {
+                matching.RemoveAt(0);
+            }
+
+            remove.AddRange(matching);
         }
 
         return remove;

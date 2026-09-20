@@ -186,6 +186,27 @@ public sealed class FileActionServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_MoveCompletedButCommitJournalFails_PreservesCompletedOutcome()
+    {
+        var source = @"C:\photos\journal-failure.jpg";
+        var destination = @"C:\photos\dest\journal-failure.jpg";
+        _fs.WriteAllTextAtomic(source, "content");
+        var appendCalls = 0;
+        _fs.OpenAppendHook = _ => ++appendCalls == 2
+            ? new IOException("journal unavailable")
+            : null;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"C:\photos\dest"));
+
+        Assert.True(result.Succeeded);
+        Assert.False(result.JournalPersisted);
+        Assert.Equal("journal unavailable", result.JournalError);
+        Assert.Null(result.Error);
+        Assert.False(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(destination));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenGateBusy_RejectsSecondAction()
     {
         var source1 = @"C:\photos\a.jpg";

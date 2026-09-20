@@ -1,7 +1,7 @@
 # Review toàn repo và plan optimize / clean code
 
 - Ngày: 2026-09-20. Baseline: `master`, `ba1317e54702e3af8bd32c0bf5d953b3766f1ba0` (merge PR #9); working tree sạch lúc bắt đầu.
-- Trạng thái: review `DONE`; toàn bộ implementation bên dưới `TODO`, **chờ người dùng xác nhận plan**. Chỉ chuẩn bị tài liệu; chưa sửa source/config, commit hoặc push.
+- Trạng thái: review `DONE`; phần lớn correctness tasks đã triển khai. T89/native GUI và đo tối ưu vẫn chờ runtime evidence; không đánh dấu DONE từ source-only audit.
 - Phạm vi review: Core + Platform.Windows; Imaging + TurboJpeg; App/UI/coordinators; Benchmarking + CLI/scripts/CI; tests và tài liệu trạng thái liên quan. Ba agent đọc các nhóm đầu, coordinator đối chiếu và review nhóm công cụ. Đây là review theo luồng/rủi ro xuyên repo, không phải bằng chứng mọi nhánh runtime đều đã chạy.
 - Nguyên tắc: an toàn dữ liệu/chất lượng trước; giảm I/O và latency; tận dụng RAM có headroom. Không đổi mặc định decoder hoặc bật byte cache 16 GiB chỉ từ suy đoán; không ép dùng đủ RAM khi gây paging/OOM.
 
@@ -53,73 +53,85 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Xong khi: mỗi patch sau có failure/test hoặc evidence rõ trên baseline; phân biệt static/runtime, không cần ép mọi concern thành defect. Không thêm source-text assertion thay cho behavior test.
 - Rủi ro/rollback: tests có thể động đến Recycle Bin; chỉ fixture temp có manifest, không dùng ảnh thật; giữ/xóa artifact riêng, không reset repo.
 
-### 2. OC02 — Duplicate cleanup và UI thread — TODO
+### 2. OC02 — Duplicate cleanup và UI thread — DONE
 
 - Phụ thuộc OC01; song song với decoder/preload. Một agent sở hữu `DuplicateFinder`, `MainViewModel.RemoveDuplicatesAsync`, `WpfDialogService`, tests duplicate/dialog.
 - Làm: policy survivor deterministic cho all-original/all-numbered/mixed; loại duplicate path; xử lý hash không hợp lệ. Dialog trên UI dispatcher; kiểm tra lại generation và identity trước batch mutation. Không bỏ màn xác nhận hiện có.
 - Tests: hash cold asynchronous, STA thật, nhóm 2/3 bản, hash fail, folder đổi khi hash/dialog, file đổi giữa scan và action. Assert >=1 survivor mỗi content group và không recycle file ngoài snapshot đã duyệt.
 - Rủi ro: thay candidate list và synchronous dispatcher deadlock; không giữ lock file-action khi chờ dialog. Rollback nguyên gói commit; không đảo thao tác file người dùng tự động.
+- Kết quả 2026-09-20: duplicate survivor đã DONE trong commit `00cad65`; targeted 9/9 và full gate 748/748. UI-thread dialog boundary còn TODO do cần dispatcher abstraction và STA test riêng.
+- Kết quả bổ sung: commit `abecebc`; MainViewModel dùng IUiScheduler/DispatcherUiScheduler cho dialog sau async hash, targeted MainViewModelAdvanced 8/8 và full gate wave bốn 758/758.
 
-### 3. OC03 — Decoder safety và fallback — TODO
+### 3. OC03 — Decoder safety và fallback — DONE
 
 - Phụ thuộc OC01; độc lập OC02/04. Files: TurboJpegDecoder, WicDirectDecoder sizing, WpfBitmapImageDecoder, decoder/quality tests.
 - Làm: checked long cho dimensions/stride/buffer, reject trước allocation/native nếu vượt supported budget; narrow WPF fallback theo lỗi codec thật, giữ missing/access/cancel/OOM nguyên nghĩa. Không tự đổi default backend hoặc giảm chất lượng.
 - Tests: arithmetic biên không allocate GB, xác nhận native không được gọi khi reject; preview fallback hợp lệ; missing file không retry; real fixtures ICC/EXIF/alpha, requested/actual backend, pixel quality gates.
 - Rủi ro: reject ảnh vốn có thể đọc được; thông báo rõ giới hạn và giữ backend WPF mặc định. Rollback commit behavior riêng; không tái bật native path mất guard.
+- Kết quả 2026-09-20: commit `6a4ec01`; decoder targeted 108/108 và full gate 748/748. Đã dùng checked long/overflow guard cho TurboJPEG và thu hẹp fallback WPF; quality/native large-image acceptance vẫn cần fixture bổ sung khi triển khai OC11.
 
-### 4. OC04 — Preload lifetime — TODO
+### 4. OC04 — Preload lifetime — DONE
 
 - Phụ thuộc OC01; agent riêng. Files: PreloadScheduler, PreloadSafetyTests, adapter/shutdown callsites nếu contract đổi.
 - Làm: drain mọi exit; giữ ownership các scheduler generation cũ tới khi worker kết thúc; cancel/restart/dispose không bỏ task và không dispose semaphore trước worker finally. Không block UI dispatcher bằng continuation cần chính dispatcher.
 - Tests: memory pressure giữa batch, cancel ở boundary while, restart trước old drain, close/folder switch khi target chậm; barrier xác định, chạy regression race 30 lần sau sửa.
 - Xong khi: task completion/disposal đồng nghĩa worker đã settle, không late cache write/Ode/unobserved error; native window close probe không treo.
 - Rủi ro: tăng thời gian shutdown; có lifetime async rõ thay vì timeout che lỗi. Rollback riêng commit scheduler, không ghép cache optimization.
+- Kết quả 2026-09-20: commit `4a81ba8`; targeted PreloadSafety 5/5 và full gate 748/748. Đã giữ scheduler lifetimes cũ tới khi drain và test cancel/restart trước drain.
 
-### 5. OC05 — Cache invalidation và disk quota — TODO
+### 5. OC05 — Cache invalidation và disk quota — DONE
 
 - Phụ thuộc OC01; có thể song song OC04, không sửa scheduler. Files: SourceBytesCache, PreviewImageService persistence, DiskCacheStore, cache tests.
 - Làm: epoch/lock cho check+publish, path invalidation in-flight và case normalization; prune PNG+metadata cùng entry, dọn orphan trong phạm vi cache, tính quota nhất quán.
 - Tests: Clear/Evict giữa read và publish bằng barrier; cùng path khác casing; write/prune/clear race; quota gồm metadata và không xóa file ngoài cache directory.
 - Xong khi: invalidated work không repopulate; bytes cache không tăng lại sau clear từ work cũ; không orphan sau prune. Giữ behavior mặc định SourceBytesCache off.
 - Rủi ro: locking tăng contention; đo cache-hit latency. Rollback độc lập phần RAM/disk; cache là rebuildable, không xóa nguồn ảnh.
+- Kết quả 2026-09-20: commit `3db9ae6`; targeted cache tests 10/10 và full gate wave hai 752/752. Evict invalidates in-flight reads; PNG metadata được prune cùng companion và orphan metadata được dọn.
 
-### 6. OC06 — Journal / Undo / Recovery / Session — TODO
+### 6. OC06 — Journal / Undo / Recovery / Session — IN PROGRESS → Undo/journal/session DONE, recovery/native TODO
 
 - Phụ thuộc OC01; một owner Core cho contract file actions. Files: UndoService, OperationJournal, FileActionService/result, RecoveryRetryService, SessionWriter, WindowsRecycleBin và tests; App consumer chỉ hợp nhất sau OC02/07.
 - Thứ tự: repro F09/C01–C03; typed history chứa operation ID + fingerprint; tách startup-tail khỏi lookup; phân biệt filesystem outcome và journal durability; ordering single writer/sequence cho session; identity check trước restore.
 - Tests: >200 moves và journal >1 MiB, reuse destination, undo mismatch/restart; Prepared/Committed/Failed append fault injection; stale session batch; native restore hai version cùng path/size khác timestamp, destination collision.
 - Xong khi: history hiện hành undo được trong giới hạn công bố; không đọc journal mỗi undo đã có history; vị trí file/UI/journal nhất quán khi lỗi; latest session thắng; native restore đúng version.
 - Rủi ro: contract rộng, chia 3 commit con Undo, outcome/restore, Session; giữ đọc journal cũ tương thích. Rollback bằng revert code, không rewrite/xóa journal hoặc revert filesystem mutation.
+- Kết quả 2026-09-20: Undo history commit `295f04b`, regression >250 moves pass. Fingerprint được giữ trong in-memory history để không phụ thuộc startup tail 200. FileAction durability, recovery retry, SessionWriter ordering và native recycle identity còn TODO.
+- Kết quả bổ sung: `481c130` tách filesystem outcome khỏi journal durability khi append Committed lỗi; `42b92e2` bảo đảm SessionWriter bỏ batch cũ; `32156f5` hiển thị rõ retry hoàn tất nhưng journal lỗi và giữ lỗi mutation gốc. FileAction/Session/Recovery tests và full gate 759/759 pass. Native restore identity còn TODO.
+- Kết quả wave sáu: `3a5c168` tách `RecycleCandidateSelector`, xác minh path/size/timestamp trước mutation và từ chối ambiguity; candidate tests 2/2, integration/full gate 761/761. Chưa chạy live Recycle Bin fixture nên native acceptance vẫn mở.
 
-### 7. OC07 — Display state và hoàn thành T89 — TODO
+### 7. OC07 — Display state và hoàn thành T89 — IN PROGRESS → display subset DONE, T89 TODO
 
 - Phụ thuộc OC01; agent UI riêng, merge tuần tự sau OC02 nếu cùng MainViewModel.
 - Files: MainViewModel, ImagePresenter, CompareViewModel, MainWindow, WpfPresentationSink, App composition, App/STA tests; tham chiếu `T89-FIT-LAYOUT-PLAN.md`.
 - Làm: tách intent compare khỏi loaded visibility; empty-folder clear presenter/compare; unify Fit button/key/initial-mode qua viewport owner có version. Giữ frame retention của Move/Delete đang load, không áp dụng empty-folder clearing nhầm sang action.
 - Tests: compare off/on với pair; single/compare -> empty; stale navigation; Fit một lần so hai lần <=0.5 DIP, offsets <=0.5 DIP; portrait/landscape, DPI, resize, thumbnail->full, wheel->Fit->pan. STA layout test và GUI acceptance đều cần.
 - Rủi ro: layout feedback và stale callbacks; bounded convergence/versioning theo T89. Rollback display fixes và T89 thành commit riêng; không đánh DONE từ pure math tests.
+- Kết quả 2026-09-20: display subset commit `5edd15d` + test seam `ecdbf2b`; App targeted 11/11, full gate 752/752. Compare toggle off và empty-folder clear đã được sửa. T89 layout/STA/GUI acceptance vẫn TODO.
 
-### 8. OC08 — Folder/catalog I/O và allocations — TODO
+### 8. OC08 — Folder/catalog I/O và allocations — DONE
 
 - Phụ thuộc OC01; triển khai sau khi UI contract OC07 ổn định hoặc branch riêng chỉ sở hữu FolderLoadCoordinator/Core Catalog. Coordinator merge App composition tránh đụng OC07.
 - Files: FolderLoadCoordinator, ReviewCatalog, ImageSortService, GetTotalSourceBytes composition; tests catalog/folder/CountingFileSystem.
 - Làm: sort entries trực tiếp hoặc map O(n); tái dùng Length/LastWrite đã scan; total bytes cập nhật theo membership/metadata thay vì re-stat toàn folder. Chỉ thêm index/snapshot cache khi trace cho thấy hot path cần.
 - Tests: order parity Natural/size/Explorer, case paths, file mất/đổi; 1k/10k/50k entries; counting stat sau 100 removals. Xong khi không còn remap O(n²) và không N stat sau mỗi removal; report time/alloc trước-sau.
 - Rủi ro: stale metadata; vẫn kiểm identity tại decode/file action boundary. Rollback riêng commit performance, giữ tests correctness.
+- Kết quả 2026-09-20: commit `a16b327`; sort entries O(n) và tái dùng Length/LastWrite đã scan. ImageSortService/FolderLoadCoordinator targeted tests pass; full gate 755/755.
 
-### 9. OC09 — Benchmark đúng semantics — TODO
+### 9. OC09 — Benchmark đúng semantics — IN PROGRESS → profile propagation DONE, workload action/report TODO
 
 - Phụ thuộc OC01; agent tooling, song song Core/UI. Files: BenchmarkModels/Profiles/ImageExecutor/WorkloadRunner/Engine, CLI Program, BenchmarkWindow, integration tests; preload options cần phối hợp OC04.
 - Làm: từng field profile có effect quan sát được hoặc bỏ/đánh unsupported rõ; cấu hình worker/window/reserve/fullfolder/disk/log nhất quán CLI/GUI. Race workload phải chặn decode ở barrier rồi thực hiện production file-action path. Không quảng bá decode-only là key-to-present/quality proof. Unsupported/failed profile luôn có record; --benchmark-all có capability semantics rõ; manifest dataset sorted, count/cap rõ. Tránh tích lũy fixture vào Recycle Bin ngoài native test riêng.
 - Tests: profile A/B thay actual options/counters; CLI/GUI parity; action xảy ra khi decode pending; summary chứa đủ requested profiles và exit code đúng; logging restore; reproducible selection.
 - Rủi ro: số cũ không so trực tiếp được với workload mới; ghi schema/semantics version, giữ raw baseline. Rollback gói tooling, không dùng kết quả sai để chọn default.
+- Kết quả 2026-09-20: commit `fb5155f`; `Workers`, `MemoryReserveBytes`, `DiskCache` đã truyền vào runtime. Commit `6dee023` bắt đầu file action khi decode đang in-flight. Commit `6ad5c15` thêm deterministic dataset manifest và giữ failed profile trong summary; targeted/full gate wave sáu pass. Chỉ còn benchmark trên ảnh thật và quality/perf interpretation.
 
-### 10. OC10 — Perf analysis grouping — TODO
+### 10. OC10 — Perf analysis grouping — DONE
 
 - Phụ thuộc OC01; độc lập OC09 nếu chỉ sửa PerfAnalyze*. Files: PerfAnalyze, Stats/Report/Rules, PerfAnalyzeTests.
 - Làm: key gồm worker và các điều kiện thực nghiệm cần tách (commit/config/fixture khi có); R-CONT chỉ so cùng cache condition và dataset, khác worker. Mixed/unknown metadata phải cảnh báo, không lấy first silently.
 - Tests: hai fixture probe 0/8 tạo hai group; cold/warm không thành cặp contention; mixed commits không trộn; thiếu metadata => N/A có lý do.
 - Rủi ro: output group/schema đổi; cập nhật consumers/docs, không mutate raw CSV. Rollback analyzer commit; raw có thể phân tích lại.
+- Kết quả 2026-09-20: commit `b8b97fb`; PerfAnalyze tests 33/33 và full gate wave sáu 761/761. Group key tách worker count/condition; R-CONT không so sánh khác condition.
 
 ### 11. OC11 — Tối ưu decode/RAM theo số đo — TODO
 
@@ -137,6 +149,9 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Đồng bộ verify-release default path với README/verify-all; CI chạy safety gates và test-verify-gates, xem codex branch trigger; script publish validate output path trước recursive clear. Mọi đổi script có targeted contract/fault tests, không đổi toolchain/package hàng loạt.
 - Tests: architecture, tests đã migrate còn phủ behavior; script gate failure propagation; build warnings baseline vs sau để ưu tiên resource/correctness warnings.
 - Rủi ro: tests còn dùng legacy hooks thật; rollback commit cleanup cơ học riêng, không lẫn behavior.
+
+- Kết quả 2026-09-20: focused clean pass đã hoàn tất một phần an toàn: `4b6b5ad` Core guards/serializer/invariant culture, `77c4441` Imaging argument guards, `8249fd2` App serializer reuse. Full gate sau clean pass 762/762. Warning còn lại chủ yếu là API ordering/lifecycle/test naming; không đổi public signature hoặc lifecycle khi chưa có task riêng.
+- Kết quả bổ sung: `e301271` đưa CancellationToken về cuối các API public/internal và cập nhật callers; `89019a1` gom dispose App/BenchmarkWindow theo ownership; `6fadeb2` xử lý invariant culture cho COM/CLI và giữ CurrentCulture ở UI. Full gate sau wave 762/762. Consumer ngoài repo cần đổi positional progressive API hoặc dùng named arguments.
 
 ### 13. OC13 — Tích hợp, nghiệm thu, publish và bàn giao — TODO
 

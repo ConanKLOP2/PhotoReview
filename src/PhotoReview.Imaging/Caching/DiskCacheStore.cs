@@ -17,6 +17,7 @@ public sealed class DiskCacheStore
     private readonly string _searchPattern;
     private readonly long _maxBytes;
     private readonly ILog _log;
+    private readonly string? _companionSuffix;
 
     // Prune coalescing state per store instance
     private int _pruneScheduled;
@@ -27,7 +28,7 @@ public sealed class DiskCacheStore
     public long MaxBytes => _maxBytes;
     public ILog Log => _log;
 
-    public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null)
+    public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, string? companionSuffix = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
@@ -35,6 +36,7 @@ public sealed class DiskCacheStore
         _searchPattern = searchPattern;
         _maxBytes = Math.Max(0, maxBytes);
         _log = log ?? NullLog.Instance;
+        _companionSuffix = companionSuffix;
     }
 
     /// <summary>
@@ -113,7 +115,7 @@ public sealed class DiskCacheStore
                 Volatile.Write(ref _prunePending, 0);
                 try
                 {
-                    PruneDirectory(_directory, _searchPattern, _maxBytes, _log);
+                    PruneDirectory(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
                 }
                 catch (IOException ex)
                 {
@@ -151,12 +153,12 @@ public sealed class DiskCacheStore
     /// <summary>
     /// Synchronously prunes least-recently-used files in this store's directory down to <see cref="MaxBytes"/>.
     /// </summary>
-    public void Prune() => PruneDirectory(_directory, _searchPattern, _maxBytes, _log);
+    public void Prune() => PruneDirectory(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
 
     /// <summary>
     /// Static helper: deletes least-recently-used files matching <paramref name="searchPattern"/> until directory size is at or under <paramref name="maxBytes"/>.
     /// </summary>
-    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, ILog? log = null)
+    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, ILog? log = null, string? companionSuffix = null)
     {
         if (!System.IO.Directory.Exists(directory)) return;
 
@@ -168,12 +170,27 @@ public sealed class DiskCacheStore
         foreach (var info in files)
         {
             if (total <= maxBytes) break;
-            if (TryDelete(info.FullName, log)) total -= info.Length;
+            if (TryDelete(info.FullName, log))
+            {
+                total -= info.Length;
+                if (companionSuffix is not null) TryDelete(info.FullName + companionSuffix, log);
+            }
+        }
+
+        // A crash between the two atomic writes can leave metadata without its PNG.
+        // Remove those orphans during the same maintenance pass.
+        if (companionSuffix is not null)
+        {
+            foreach (var companion in System.IO.Directory.EnumerateFiles(directory, searchPattern + companionSuffix))
+            {
+                var imagePath = companion[..^companionSuffix.Length];
+                if (!File.Exists(imagePath)) TryDelete(companion, log);
+            }
         }
     }
 
-    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, string? logContext)
-        => PruneDirectory(directory, searchPattern, maxBytes, log: null);
+    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, string? logContext, string? companionSuffix = null)
+        => PruneDirectory(directory, searchPattern, maxBytes, log: null, companionSuffix);
 
     /// <summary>
     /// Removes every file matching this store's pattern in its directory.

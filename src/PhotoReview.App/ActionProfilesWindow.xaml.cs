@@ -9,6 +9,7 @@ namespace PhotoReview.App;
 
 public partial class ActionProfilesWindow : Window
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     public List<ReviewAction> Actions { get; }
     private ReviewAction? _loaded;
 
@@ -66,7 +67,7 @@ public partial class ActionProfilesWindow : Window
     {
         SaveCurrent();
         var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "photoreview-actions.json" };
-        if (dialog.ShowDialog(this) == true)System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, new JsonSerializerOptions { WriteIndented = true }));
+        if (dialog.ShowDialog(this) == true)System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, JsonOptions));
     }
     private void Apply_Click(object sender, RoutedEventArgs e)
     {

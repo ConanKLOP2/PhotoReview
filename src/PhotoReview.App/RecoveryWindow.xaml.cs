@@ -32,7 +32,12 @@ public partial class RecoveryWindow : Window
             System.Windows.MessageBox.Show(this, ex.Message, "Retry bị từ chối", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        System.Windows.MessageBox.Show(this, result.Message, result.Succeeded ? "Retry thành công" : "Retry bị từ chối", MessageBoxButton.OK, result.Succeeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        var journalWarning = result.Succeeded && !result.JournalPersisted;
+        var title = result.Succeeded
+            ? journalWarning ? "Retry hoàn tất nhưng nhật ký lỗi" : "Retry thành công"
+            : "Retry bị từ chối";
+        var icon = result.Succeeded && !journalWarning ? MessageBoxImage.Information : MessageBoxImage.Warning;
+        System.Windows.MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, icon);
         if (result.Succeeded) Close();
     }
 }

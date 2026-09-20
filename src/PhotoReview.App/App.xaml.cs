@@ -14,7 +14,7 @@ using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 
-public partial class App : System.Windows.Application
+public partial class App : System.Windows.Application, IDisposable
 {
     private InstanceLock? _instanceLock;
     private PerfCsvListener? _perfListener;
@@ -200,7 +200,8 @@ public partial class App : System.Windows.Application
 
             return vm = new PhotoReview.App.ViewModels.MainViewModel(
                 catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
-                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter);
+                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter,
+                uiScheduler: sp.GetRequiredService<IUiScheduler>());
         });
 
         // 8. Window
@@ -238,7 +239,7 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, a) => { AppLog.Error("Dispatcher exception", a.Exception); a.Handled = true; };
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
-        Exit += (_, _) => { _services?.GetService<SessionWriter>()?.Flush(); AppLog.Shutdown(); _instanceLock?.Dispose(); _perfHooks?.Detach(); _perfListener?.Dispose(); };
+        Exit += (_, _) => Dispose();
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
         var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
@@ -264,6 +265,16 @@ public partial class App : System.Windows.Application
         AppLog.Error(message, ex);
         AppLog.Flush();
         AppLog.Enabled = wasEnabled;
+    }
+
+    public void Dispose()
+    {
+        _services?.GetService<SessionWriter>()?.Flush();
+        AppLog.Shutdown();
+        Interlocked.Exchange(ref _instanceLock, null)?.Dispose();
+        _perfHooks?.Detach();
+        _perfListener?.Dispose();
+        _perfListener = null;
     }
 
     /// <summary>

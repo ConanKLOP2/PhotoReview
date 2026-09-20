@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using System.Text.Json;
 
 namespace PhotoReview.Benchmarking.PerfAnalysis;
@@ -142,11 +143,11 @@ public static class PerfStats
     }
 }
 
-/// <summary>(scenario, mode, cond) grouping key used to bucket navigations for the summary table
+/// <summary>(scenario, mode, cond, preload worker count) grouping key used to bucket navigations for the summary table
 /// (D11 spec item 6).</summary>
-public readonly record struct GroupKey(string Scenario, string Mode, string Cond)
+public readonly record struct GroupKey(string Scenario, string Mode, string Cond, int? PreloadWorkers = null)
 {
-    public override string ToString() => $"{Scenario}/{Mode}/{Cond}";
+    public override string ToString() => $"{Scenario}/{Mode}/{Cond}/workers={PreloadWorkers?.ToString(CultureInfo.InvariantCulture) ?? "?"}";
 }
 
 public sealed class GroupSummary

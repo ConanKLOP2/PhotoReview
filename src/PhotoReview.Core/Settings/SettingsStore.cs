@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text.Json;
 using PhotoReview.Core.Abstractions;
 
@@ -10,6 +11,7 @@ public sealed class SettingsStore
     private readonly IFileSystem _fileSystem;
     private readonly ILog _log;
     private readonly Action<string, Exception>? _onStartupError;
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private AppSettings _current;
 
     public AppSettings Current => _current;
@@ -50,7 +52,7 @@ public sealed class SettingsStore
             LogStartupError("Corrupt config.json detected, resetting to defaults", ex);
             try
             {
-                _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
+                _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
             }
             catch
             {
@@ -89,7 +91,7 @@ public sealed class SettingsStore
         }
 
         settings.ConfigVersion = AppSettings.CurrentConfigVersion;
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(settings, JsonOptions);
         _fileSystem.WriteAllTextAtomic(filePath, json);
 
         _current = settings;
