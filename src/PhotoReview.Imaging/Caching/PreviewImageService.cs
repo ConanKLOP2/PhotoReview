@@ -82,7 +82,7 @@ public sealed class PreviewImageService : IPreloadTarget
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _log = log ?? NullLog.Instance;
-        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log);
+        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log, companionSuffix: ".meta");
         _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
         _sourceBytesCache = sourceBytesCache;

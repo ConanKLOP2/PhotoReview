@@ -46,6 +46,23 @@ public sealed class DiskCacheStoreTests : IDisposable
         DiskCacheStore.PruneDirectory(missing, "*.png", maxBytes: 10, logContext: "test");
     }
 
+    [Fact(DisplayName = "PruneDirectory removes preview metadata with evicted PNG and orphan metadata")]
+    public void PruneDirectoryKeepsPngAndMetadataPaired()
+    {
+        var dir = _root.Dir("paired-prune");
+        var old = WriteFile(dir, "old.png", 100, accessedAgo: TimeSpan.FromMinutes(30));
+        File.WriteAllText(old + ".meta", "Wpf|1");
+        var current = WriteFile(dir, "current.png", 100, accessedAgo: TimeSpan.FromMinutes(1));
+        File.WriteAllText(Path.Combine(dir, "orphan.png.meta"), "Wpf|1");
+
+        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 150, logContext: "test", companionSuffix: ".meta");
+
+        Assert.False(File.Exists(old));
+        Assert.False(File.Exists(old + ".meta"));
+        Assert.True(File.Exists(current));
+        Assert.False(File.Exists(Path.Combine(dir, "orphan.png.meta")));
+    }
+
     [Fact(DisplayName = "WriteAtomicallyAsync leaves no temp file behind and the final file is readable")]
     public async Task WriteAtomicallyAsyncProducesOnlyTheFinalFile()
     {
