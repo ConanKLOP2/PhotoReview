@@ -7,6 +7,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Model;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 
