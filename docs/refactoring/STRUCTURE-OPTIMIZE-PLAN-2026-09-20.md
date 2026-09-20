@@ -30,14 +30,14 @@
 
 ## 2. Quyết định cần chốt trước khi làm
 
-| Q | Câu hỏi | Mặc định đề xuất |
-|---|---|---|
-| Q-ST1 | `PerfAnalyze*` chuyển vào project mới `PhotoReview.PerfAnalysis` (`net10.0`) hay vào `Core`? | Project mới: giữ Core gọn, CLI/test tham chiếu trực tiếp. Chỉ vào Core nếu muốn tránh thêm project. |
-| Q-ST2 | `PerfCsvListener` + `DiagOptions` chuyển về `Core/Diagnostics`? | Có; giữ nguyên tên EventSource `PhotoReview-Perf` và event id (hợp đồng wire). Namespace đổi kéo theo CLI/tests. |
-| Q-ST3 | Chấp nhận Cli→App giữ nguyên, chỉ cấm reflection vào private? | Có. Cắt hẳn tham chiếu cần ST12 (project Presentation), chỉ mở sau khi có số đo lợi ích. |
-| Q-ST4 | Ctrl+Z là Move-only hay Move/Recycle? | Thuộc OC14; ST08 chờ quyết định này. |
+| Q | Câu hỏi | Mặc định đề xuất | **QUYẾT ĐỊNH (2026-09-20)** |
+|---|---|---|---|
+| Q-ST1 | `PerfAnalyze*` chuyển vào project mới `PhotoReview.PerfAnalysis` (`net10.0`) hay vào `Core`? | Project mới: giữ Core gọn, CLI/test tham chiếu trực tiếp. Chỉ vào Core nếu muốn tránh thêm project. | ✓ Project mới `PhotoReview.PerfAnalysis` (ST05 DONE) |
+| Q-ST2 | `PerfCsvListener` + `DiagOptions` chuyển về `Core/Diagnostics`? | Có; giữ nguyên tên EventSource `PhotoReview-Perf` và event id (hợp đồng wire). Namespace đổi kéo theo CLI/tests. | ✓ Chuyển về `Core/Diagnostics` (ST04 DONE) |
+| Q-ST3 | Chấp nhận Cli→App giữ nguyên, chỉ cấm reflection vào private? | Có. Cắt hẳn tham chiếu cần ST12 (project Presentation), chỉ mở sau khi có số đo lợi ích. | ✓ Chấp nhận, công khai MainWindow members (ST06 DONE) |
+| Q-ST4 | Ctrl+Z là Move-only hay Move/Recycle? | Thuộc OC14; ST08 chờ quyết định này. | ✓ Move+Recycle: hoàn tác cả Move lẫn Recycle |
 
-Chưa có câu trả lời của người dùng cho Q-ST1..3; task liên quan mang trạng thái `BLOCKED` tới khi chốt (hoặc chấp nhận mặc định bằng văn bản).
+Tất cả quyết định đã chốt. ST04–ST06 DONE. ST08–ST09 sẵn sàng.
 
 ## 3. Thứ tự và đụng độ owner
 
