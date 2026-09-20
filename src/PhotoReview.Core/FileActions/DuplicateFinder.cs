@@ -94,8 +94,20 @@ public static class DuplicateFinder
         var remove = new List<string>();
         foreach (var group in groups.Values.Where(group => group.Count > 1))
         {
-            remove.AddRange(group.Where(path =>
-                NumberedPattern.IsMatch(Path.GetFileNameWithoutExtension(path)) == removeNumbered));
+            var matching = group.Where(path =>
+                NumberedPattern.IsMatch(Path.GetFileNameWithoutExtension(path)) == removeNumbered)
+                .ToList();
+
+            // Never return every member of a content group. This can happen when a
+            // folder contains only numbered copies (or only originals), and the
+            // selected naming rule otherwise matches the complete group. Keep the
+            // first item in input order as a deterministic survivor.
+            if (matching.Count == group.Count)
+            {
+                matching.RemoveAt(0);
+            }
+
+            remove.AddRange(matching);
         }
 
         return remove;
