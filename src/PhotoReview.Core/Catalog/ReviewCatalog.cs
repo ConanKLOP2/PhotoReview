@@ -35,6 +35,11 @@ public sealed class ReviewCatalog
     public IReadOnlyList<string> Paths => _entries.Select(e => e.Path).ToArray();
 
     /// <summary>
+    /// Gets all catalog entries, for efficient access to metadata (Length, LastWriteUtc).
+    /// </summary>
+    public IReadOnlyList<CatalogEntry> Entries => _entries.AsReadOnly();
+
+    /// <summary>
     /// Finds the zero-based index of the entry with the specified path, using ordinal case-insensitive comparison.
     /// Returns -1 if not found.
     /// </summary>

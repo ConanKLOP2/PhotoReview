@@ -1,5 +1,6 @@
 namespace PhotoReview.Integration.Tests;
 
+[Trait("Category", "Slow")]
 public sealed class IntegrationSmokeTests
 {
     [Fact(DisplayName = "Integration test project initializes properly")]

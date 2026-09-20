@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +17,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests;
 
+[Trait("Category", "HotPath")]
 public class CompositionRootTests
 {
     [Fact]
@@ -46,7 +47,6 @@ public class CompositionRootTests
 
         // 5. Platform Services
         Assert.NotNull(provider.GetRequiredService<IExplorerOrderProvider>());
-        Assert.NotNull(provider.GetRequiredService<IProgressiveExplorerOrderProvider>());
         Assert.NotNull(provider.GetRequiredService<IRecycleBin>());
         Assert.NotNull(provider.GetRequiredService<IMemoryProbe>());
         Assert.NotNull(provider.GetRequiredService<INaturalComparer>());
@@ -205,3 +205,4 @@ public class CompositionRootTests
         Assert.Null(threadException);
     }
 }
+

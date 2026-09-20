@@ -22,6 +22,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;
 
+[Trait("Category", "HotPath")]
 public sealed class ImagePresenterTests : IDisposable
 {
     private readonly string _tempDir;
@@ -254,6 +255,7 @@ public sealed class ImagePresenterTests : IDisposable
         var f2 = CreateFakeImageFile("item2.jpg", 1024);
         _catalog.Reset([f1, f2]);
         var session = new SessionState { Folder = _tempDir, CurrentPath = "" };
+        // TC09: AUDIT - Replace with barrier (TaskCompletionSource) or IUiScheduler clock fake
         using var writer = new SessionWriter(_sessionStore, delay: (_, token) => Task.Delay(Timeout.Infinite, token));
         var presenter = CreatePresenter(session: session, sessionWriter: writer);
 

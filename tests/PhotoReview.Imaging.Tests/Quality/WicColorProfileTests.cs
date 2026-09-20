@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -10,6 +10,7 @@ using PhotoReview.Imaging.TurboJpeg;
 
 namespace PhotoReview.Imaging.Tests.Quality;
 
+[Trait("Category", "HotPath")]
 public sealed class WicColorProfileTests : IDisposable
 {
     private readonly string _tempDir = Path.Combine(
@@ -84,3 +85,4 @@ public sealed class WicColorProfileTests : IDisposable
         Assert.Equal(64, firstPixel[3]);
     }
 }
+

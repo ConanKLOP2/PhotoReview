@@ -8,6 +8,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;
 
+[Trait("Category", "HotPath")]
 public sealed class UndoServiceTests
 {
     private sealed class FakeClock : IClock
@@ -233,3 +234,4 @@ public sealed class UndoServiceTests
         Assert.False(_service.IsBusy);
     }
 }
+

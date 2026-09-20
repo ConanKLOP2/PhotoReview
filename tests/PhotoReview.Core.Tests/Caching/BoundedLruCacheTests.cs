@@ -3,6 +3,7 @@ using PhotoReview.Core.Caching;
 namespace PhotoReview.Core.Tests.Caching;
 
 /// <summary>Bounded LRU cache contracts.</summary>
+[Trait("Category", "HotPath")]
 public sealed class BoundedLruCacheTests
 {
     private static BoundedLruCache<string, string> Seeded()

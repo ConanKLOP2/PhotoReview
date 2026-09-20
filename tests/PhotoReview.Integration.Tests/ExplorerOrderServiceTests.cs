@@ -5,7 +5,7 @@ using PhotoReview.Platform.Windows.Explorer;
 
 namespace PhotoReview.Integration.Tests;
 
-[Trait("Category", "Integration")]
+[Trait("Category", "Native")]
 public sealed class ExplorerOrderServiceTests
 {
     private sealed class MemoryLog : ILog

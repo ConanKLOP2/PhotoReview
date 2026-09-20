@@ -1,9 +1,9 @@
-using System.ComponentModel;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Diagnostics;
 
 /// <summary>
 /// Shared STA host for in-process WPF drivers (<c>--ui-next-probe</c>, <c>--perf-session</c>).
@@ -16,14 +16,12 @@ using PhotoReview.App.Diagnostics;
 /// fields at the App assembly instead (see <see cref="EnsureResourceAssembly"/>).</item>
 /// <item>The perf CSV listener is normally started by <c>App.App_Startup</c>; the host starts it itself
 /// when <c>PHOTOREVIEW_PERF_TRACE</c> is set, and disposes it after the body finished.</item>
-/// <item>The D04 dispatcher hooks (<c>App.PerfDispatcherHooks</c>, private nested) are attached via
-/// reflection while the listener runs. App code is not modified.</item>
+/// <item>The D04 dispatcher hooks (<see cref="PerfDispatcherHooks"/>) are attached while the listener runs.</item>
 /// </list>
 /// Never sends OS-level input and never activates/foregrounds a window (PERF-DIAGNOSIS-TASKS rule 4).
 /// </summary>
 internal static class WpfTestHost
 {
-    private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.NonPublic;
     private const BindingFlags Static = BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
 
     /// <summary>Human-readable notes about how the host was set up (printed by callers that want them).</summary>
@@ -38,7 +36,7 @@ internal static class WpfTestHost
             dispatcher.BeginInvoke(async () =>
             {
                 PerfCsvListener? listener = null;
-                object? hooks = null;
+                PerfDispatcherHooks? hooks = null;
                 try
                 {
                     EnsureResourceAssembly();
@@ -115,37 +113,18 @@ internal static class WpfTestHost
         Notes.Add($"ResourceAssembly: reflection (Application._resourceAssembly{(helperProperty is null ? "" : $" + {helper!.Name}.ResourceAssembly")})");
     }
 
-    /// <summary>
-    /// Stops MainWindow from restoring/saving the user's real window-placement.json: marks placement as
-    /// already restored (Window_Loaded would otherwise call SetWindowPlacement, which can show/activate the
-    /// window and move it) and unhooks the XAML Closing handler that saves placement.
-    /// </summary>
-    public static void SuppressWindowPlacement(MainWindow window)
+    private static PerfDispatcherHooks? AttachPerfHooks(Dispatcher dispatcher)
     {
-        typeof(MainWindow).GetField("_placementRestored", Instance)!.SetValue(window, true);
-        var closing = typeof(MainWindow).GetMethod("Window_Closing", Instance)!;
-        window.Closing -= closing.CreateDelegate<CancelEventHandler>(window);
-    }
-
-    private static object? AttachPerfHooks(Dispatcher dispatcher)
-    {
-        var type = typeof(App).GetNestedType("PerfDispatcherHooks", BindingFlags.NonPublic);
-        var attach = type?.GetMethod("Attach", Static, [typeof(Dispatcher)]);
-        if (attach is null)
-        {
-            Notes.Add("DispatcherHooks: App.PerfDispatcherHooks not reachable via reflection; DispatcherLongOp disabled");
-            return null;
-        }
-        var hooks = attach.Invoke(null, [dispatcher]);
-        type!.GetMethod("TraceDiagMode", Static, Type.EmptyTypes)?.Invoke(null, null);
-        Notes.Add(hooks is null ? "DispatcherHooks: Attach returned null" : "DispatcherHooks: App.PerfDispatcherHooks attached via reflection");
+        var hooks = PerfDispatcherHooks.Attach(dispatcher);
+        PerfDispatcherHooks.TraceDiagMode();
+        Notes.Add(hooks is null ? "DispatcherHooks: Attach returned null; DispatcherLongOp disabled" : "DispatcherHooks: PerfDispatcherHooks attached");
         return hooks;
     }
 
-    private static void DetachPerfHooks(object? hooks)
+    private static void DetachPerfHooks(PerfDispatcherHooks? hooks)
     {
         if (hooks is null) return;
-        try { hooks.GetType().GetMethod("Detach", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.Invoke(hooks, null); }
+        try { hooks.Detach(); }
         catch { /* best effort */ }
     }
 }

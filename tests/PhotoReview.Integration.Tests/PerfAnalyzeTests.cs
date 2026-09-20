@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PhotoReview.Benchmarking.PerfAnalysis;
+using PhotoReview.PerfAnalysis;
 
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>Tests for D11 (`--perf-analyze`): CSV parsing, nav reassembly/classification,
 /// percentiles, phase-share weighting, and the R-* decision rules against synthetic aggregates.</summary>
+[Trait("Category", "Slow")]
 public class PerfAnalyzeTests
 {
     private static string RepoRoot()

@@ -10,7 +10,7 @@ namespace PhotoReview.App;
 internal sealed class MainWindowTestHooks
 {
     /// <summary>Nguồn cung cấp thứ tự Explorer thay thế (INV-7, INV-9).</summary>
-    public IProgressiveExplorerOrderProvider? Explorer { get; init; }
+    public IExplorerOrderProvider? Explorer { get; init; }
 
     /// <summary>Xử lý thùng rác thay thế.</summary>
     public IRecycleBin? RecycleBin { get; init; }

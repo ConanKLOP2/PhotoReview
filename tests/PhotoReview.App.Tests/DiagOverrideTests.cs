@@ -15,6 +15,7 @@ namespace PhotoReview.App.Tests;
 /// only exercise the "explicit parameter" leg of that chain; DiagOptionsTests covers the
 /// environment-variable parsing itself.
 /// </summary>
+[Trait("Category", "HotPath")]
 public sealed class DiagOverrideTests : IAsyncLifetime
 {
     private readonly TempRoot _root = new("diag-override");
@@ -163,13 +164,14 @@ public sealed class DiagOverrideTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory), diskDirectory);
         await writer.GetPreviewAsync(previewPath);
         await writer.ShutdownPersistWorkersAsync();
+        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits.
         var deadline = DateTime.UtcNow.AddSeconds(5);
         string[] seededFiles;
         do
         {
             seededFiles = Directory.GetFiles(diskDirectory, "*.png");
             if (seededFiles.Length > 0) break;
-            await Task.Delay(25);
+            await Task.Yield();
         } while (DateTime.UtcNow < deadline);
         Assert.True(seededFiles.Length == 1, "Expected the writer service to have persisted exactly one disk cache entry.");
 

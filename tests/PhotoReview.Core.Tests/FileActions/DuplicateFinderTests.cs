@@ -7,6 +7,7 @@ using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;
 
+[Trait("Category", "HotPath")]
 public sealed class DuplicateFinderTests
 {
     private readonly InMemoryFileSystem _fs = new();
@@ -198,3 +199,4 @@ public sealed class DuplicateFinderTests
         });
     }
 }
+

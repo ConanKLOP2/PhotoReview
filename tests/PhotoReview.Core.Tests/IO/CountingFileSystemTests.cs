@@ -1,9 +1,10 @@
-using PhotoReview.Core.Diagnostics;
+﻿using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.IO;
 
+[Trait("Category", "HotPath")]
 public sealed class CountingFileSystemTests
 {
     [Fact(DisplayName = "Metadata queries are counted and results are forwarded")]
@@ -36,3 +37,4 @@ public sealed class CountingFileSystemTests
         Assert.Equal(0, metrics.Snapshot().StatCount);
     }
 }
+

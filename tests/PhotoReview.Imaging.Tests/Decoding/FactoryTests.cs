@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using PhotoReview.Core.Abstractions;
@@ -12,6 +12,7 @@ using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class FactoryTests : IDisposable
 {
     private readonly string _tempDir;
@@ -208,3 +209,4 @@ public sealed class FactoryTests : IDisposable
         public ImageInfo ReadInfo(string path) => throw _exceptionToThrow;
     }
 }
+

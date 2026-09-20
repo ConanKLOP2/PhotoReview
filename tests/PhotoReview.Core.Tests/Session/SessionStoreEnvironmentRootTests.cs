@@ -4,6 +4,7 @@ namespace PhotoReview.Core.Tests.Session;
 
 /// <summary>The default constructor resolves its data root from PHOTOREVIEW_DATA_ROOT.</summary>
 [Collection("GlobalState")]
+[Trait("Category", "HotPath")]
 public sealed class SessionStoreEnvironmentRootTests : IDisposable
 {
     private readonly DataRootFixture _data = new();

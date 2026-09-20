@@ -8,6 +8,7 @@ using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Settings;
 
+[Trait("Category", "HotPath")]
 public sealed class SettingsStoreTests
 {
     private readonly InMemoryFileSystem _fileSystem;

@@ -11,6 +11,7 @@
     <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
     <ProjectReference Include="..\PhotoReview.Platform.Windows\PhotoReview.Platform.Windows.csproj" />
+    <ProjectReference Include="..\PhotoReview.PerfAnalysis\PhotoReview.PerfAnalysis.csproj" />
   </ItemGroup>
 
   <ItemGroup>

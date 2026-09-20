@@ -1,9 +1,14 @@
 <Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/PhotoReview.TestSupport.Windows/PhotoReview.TestSupport.Windows.csproj" />
+  </Folder>
   <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
   <Project Path="src/PhotoReview.Benchmarking/PhotoReview.Benchmarking.csproj" />
   <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
   <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
   <Project Path="src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj" />
+  <Project Path="src/PhotoReview.PerfAnalysis/PhotoReview.PerfAnalysis.csproj" />
   <Project Path="src/PhotoReview.Platform.Windows/PhotoReview.Platform.Windows.csproj" />
   <Project Path="tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj" />
   <Project Path="tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />

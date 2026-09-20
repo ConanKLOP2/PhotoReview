@@ -117,7 +117,7 @@ internal static class MainWindowHelpers
         out SettingsStore resolvedSettingsStore,
         out AppSettings resolvedSettings,
         out ShortcutRouter resolvedShortcutRouter,
-        out IProgressiveExplorerOrderProvider resolvedExplorerOrder)
+        out IExplorerOrderProvider resolvedExplorerOrder)
     {
         hooks = ApplyTestEnvironment(hooks ?? new MainWindowTestHooks());
         var fs = new HookedFileSystem(hooks.MoveOverride);
@@ -137,7 +137,7 @@ internal static class MainWindowHelpers
         var hashService = new FileHashService();
         var compare = new CompareViewModel();
         var viewer = new ViewerState();
-        resolvedExplorerOrder = hooks.Explorer ?? new ExplorerOrderProviderAdapter();
+        resolvedExplorerOrder = hooks.Explorer ?? new ExplorerOrderService();
 
         MainViewModel? vm = null;
         var currentSettings = resolvedSettings;
@@ -156,7 +156,11 @@ internal static class MainWindowHelpers
         var presenter = new ImagePresenter(catalog, clock, previewService, thumbs, dummyPreload, compare, hashService, metrics, () => currentSettings, sessionStore, sink, fs, getSession: () => vm?.Session, onPresentedHook: null);
         var coordinator = new FolderLoadCoordinator(catalog, clock, resolvedExplorerOrder, fs, sessionStore, resolvedSettingsStore, new ForwardingFolderSink(() => vm!));
 
-        vm = new MainViewModel(catalog, clock, coordinator, presenter, viewer, compare, resolvedSettingsStore, sessionStore, fs, fileActions, undo, new WpfDialogService(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider()), dummyPreload, WindowsNaturalComparer.Instance, hashService: hashService, previewService: previewService, thumbnailCache: thumbs, metrics: metrics);
+        vm = new MainViewModel(
+            catalog, clock, coordinator, presenter, viewer, compare, resolvedSettingsStore, sessionStore,
+            fs, fileActions, undo, new WpfDialogService(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider()),
+            hashService, previewService, thumbs, new SessionWriter(sessionStore, FileLog.Default),
+            preloadController: dummyPreload, naturalComparer: WindowsNaturalComparer.Instance, metrics: metrics);
 
         return vm;
     }

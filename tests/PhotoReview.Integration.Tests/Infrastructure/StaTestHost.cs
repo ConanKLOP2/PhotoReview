@@ -117,11 +117,16 @@ public static class StaTestHost
     public static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
+        // TC09: Replace Task.Delay with dispatcher pumps; pump multiple times per iteration
+        // to ensure deferred work gets a chance to execute without explicit waits.
+        const int PumpsPerIteration = 3;
         while (!condition())
         {
             if (DateTime.UtcNow > deadline) return false;
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-            await Task.Delay(10);
+            for (int i = 0; i < PumpsPerIteration; i++)
+            {
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+            }
         }
         return true;
     }

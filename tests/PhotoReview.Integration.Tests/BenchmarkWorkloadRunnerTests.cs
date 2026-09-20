@@ -8,6 +8,7 @@ namespace PhotoReview.Integration.Tests;
 /// Covers workload selection, file-action mapping and preload-hit bookkeeping used by the
 /// WPF benchmark window and CLI runner.
 /// </summary>
+[Trait("Category", "Slow")]
 public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 {
     private readonly TempRoot _root = new("benchmark-workload-runner");
@@ -117,11 +118,12 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 
         // WarmPreloadAround is fire-and-forget by design (matches production), so poll for
         // the background warm-up to land instead of asserting on a fixed delay.
+        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits.
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (executor.Metrics.PreloadHits == 0 && DateTime.UtcNow < deadline)
         {
             await executor.DecodeAsync(files[1]);
-            await Task.Delay(25);
+            await Task.Yield();
         }
 
         Assert.True(executor.Metrics.PreloadHits > 0);

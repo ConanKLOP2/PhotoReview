@@ -175,3 +175,174 @@ Tối đa 3 workers + coordinator; không cần chạy mọi task cùng lúc.
 ## 5. Phạm vi chưa làm
 
 Không rewrite framework UI/COM, đổi decoder mặc định, bật diagnostics thường trực, xóa work artifacts hàng loạt hoặc sửa package vì “mới hơn”. Không lấy lịch sử review 2026-09-18 làm bằng chứng defect hiện tại; chỉ dùng làm danh sách kiểm tra. T89 tiếp tục giữ IN PROGRESS tới khi có GUI/layout evidence.
+
+## 6. Kế hoạch bổ sung — review UI/clean-code ngày 2026-09-20
+
+Phần này ghi nhận năm review sau khi đối chiếu với `master` tại `5dc5cda`. Đây là kế hoạch, **chưa phải bằng chứng thay đổi đã triển khai**.
+
+### OC14 — Hợp nhất đường đi Undo và khóa cạnh tranh
+
+- **Mức:** P1 correctness. Shortcut hiện gọi `UndoAsync`/`UndoMoveAsync`, context menu gọi `UndoLastAsync`, còn helper `UndoLastActionAsync` mới có `Interlocked`; semantics và mutual exclusion chưa thống nhất.
+- **Mục tiêu:** chốt Ctrl+Z là Move-only hay Move/Recycle; cho shortcut/context menu đi qua cùng command boundary có guard; giữ cập nhật `_lastUndoAction`, catalog và status.
+- **Files:** `src/PhotoReview.App/MainWindow.xaml.cs`, `src/PhotoReview.App/ViewModels/MainViewModel.cs`, App/Integration tests Undo.
+- **Tests:** Move→Undo, Recycle→Undo, hai entry point đồng thời, hai Undo đồng thời, folder switch, không có history; assert không double-restore và guard release khi exception.
+- **Acceptance/rủi ro:** mọi entry point cùng semantics và không bypass guard. Ghi contract trước patch; commit riêng, không rewrite journal/filesystem.
+
+### OC15 — Short-circuit threshold trong panning
+
+- **Mức:** P3 clean-code/perf nhỏ. Chỉ tính threshold khi `_panMoved == false`; sau khi vượt threshold vẫn phải tính delta và scroll.
+- **Files/tests:** `src/PhotoReview.App/MainWindow.xaml.cs`; test click không kéo, dưới/vượt threshold, nhiều bước kéo, lost capture và clamp bốn cạnh.
+- **Acceptance:** không đổi click, wheel, Fit, Compare, cursor hay pan runtime. Không gọi đây là tối ưu lớn nếu chưa có trace.
+
+### OC16 — Pre-size danh sách compatibility `_files`
+
+- **Mức:** P3 allocation micro-optimization. Lấy snapshot `Catalog.Paths` một lần, tăng capacity tối đa tới `snapshot.Count` trước `AddRange`, không enumerate lặp và không đổi order/path.
+- **Acceptance:** catalog rỗng/lớn, sync lặp count tăng/giảm; chỉ gọi DONE nếu allocation trace cho thấy lợi ích, nếu không ghi nhận optional cleanup vì `_files` không phải nguồn UI chính.
+
+### OC17 — Pattern matching cho FileDrop/null guards
+
+- **Mức:** P3 readability. Có thể chuẩn hóa `is string[] { Length: > 0 } files` nhưng giữ nguyên behavior và không quảng bá là performance fix.
+- **Tests:** null, non-file-drop, empty array, nhiều file; không mass-format/refactor.
+
+### OC18 — Xác minh rồi mới thay đổi Fit layout
+
+- **Mức:** P1/P2 UI correctness, thuộc T89. `ApplyFitViewAsync` hiện có tối đa 3 pass `UpdateLayout` + Render để xử lý scrollbar/viewport; STA/GUI acceptance vẫn TODO.
+- **Mục tiêu:** đo viewport, extent, scrollbar visibility, image size và offset sau từng pass. Chỉ dùng early-stop theo snapshot/epsilon nếu trace chứng minh hội tụ; không bỏ retry chỉ vì lambda rỗng.
+- **Tests:** ảnh dọc/ngang; scrollbar ngang/dọc/cả hai; Fit sau zoom; resize/fullscreen/DPI; thumbnail→full; Fit→wheel→drag; request cũ bị hủy bởi request mới. Bắt buộc STA layout và GUI acceptance.
+- **Acceptance:** Fit lần một/lần hai khác ≤0.5 DIP; offset cuối ≤0.5 DIP khi không cần scroll; bounded pass rõ ràng, không layout loop/CPU bất thường. Nếu không đạt, giữ bounded multi-pass.
+- **Rủi ro/rollback:** ảnh nhảy hoặc pan sai; commit riêng, không trộn OC15–OC17. `Dispatcher.Yield()` không mặc định tốt hơn `Dispatcher.InvokeAsync`.
+
+### Thứ tự thực hiện
+
+1. OC14 chốt semantics và regression test Undo.
+2. OC15–OC17 thực hiện thành clean-code wave nhỏ, tuần tự nếu cùng `MainWindow.xaml.cs`.
+3. OC18 chỉ sau T89 trace STA.
+4. Mỗi wave chạy focused tests; trước bàn giao chạy `tools/verify-all.ps1`, publish/verify-release; cập nhật progress, commit branch riêng và push.
+
+## 7. Kế hoạch bổ sung — `WpfDialogService` review ngày 2026-09-20
+
+Phần này ghi nhận review riêng cho `src/PhotoReview.App/Services/WpfDialogService.cs`. Đây là plan, **chưa triển khai source**. Không mặc định rằng mọi đề xuất trong review đều là defect; phải giữ nguyên contract hiện tại nếu audit không chứng minh cần đổi.
+
+### WD01 — Audit contract UI-thread và call graph
+
+- **Mức:** P1/P2 investigation.
+- **Files:** `WpfDialogService.cs`, `IDialogService`, `MainViewModel`, `MainWindow`, `App.xaml.cs`, `IUiScheduler`/`DispatcherUiScheduler`, các call site và tests.
+- **Làm:** lập bảng mọi call site của `IDialogService`; đánh dấu UI event, continuation sau async, background worker và test seam. Xác định rõ service là UI-thread-only hay phải marshal được từ background. Kiểm tra dispatcher shutdown và nguy cơ caller giữ lock/chờ task.
+- **Không làm:** chưa thêm `Dispatcher.Invoke`, chưa đổi interface sync thành async, chưa đổi behavior fallback.
+- **Acceptance:** có kết luận source-backed cho từng call path; mọi caller production được phân loại; chỉ mở WD04 nếu có caller background thực sự hoặc contract yêu cầu thread-safe facade.
+- **Tests/evidence:** focused call-graph/source audit; nếu cần thêm test seam kiểm tra dispatcher access nhưng không dùng source-text assertion thay cho behavior.
+
+### WD02 — Gom owner và MessageBox helper
+
+- **Mức:** P3 clean-code, low risk.
+- **Files:** `src/PhotoReview.App/Services/WpfDialogService.cs`, tests dialog nếu có.
+- **Làm:** gom `Application.Current?.MainWindow`; tạo helper chung cho MessageBox có/không owner. Giữ nguyên title, message, button, icon, `MessageBoxResult` và fallback khi MainWindow null.
+- **Acceptance:** `ShowConfirmation`, `ShowMessage`, `ShowError` giữ nguyên kết quả; `PickFolder`/các window vẫn dùng owner đúng; không thay thread model.
+- **Rủi ro/rollback:** thấp; commit riêng, không gộp DI/dispatcher/lifecycle.
+
+### WD03 — Chốt DI contract, loại bỏ Service Locator có kiểm soát
+
+- **Mức:** P2 architecture/testability.
+- **Files:** `WpfDialogService.cs`, `App.xaml.cs`, `MainWindowHelpers.cs`, dependency registrations, tests/fakes.
+- **Làm:** phân loại dependency theo method: bắt buộc (`OperationJournal`/`SettingsStore` nếu composition root luôn đăng ký), optional (`RecoveryRetryService` nếu RecoveryWindow hỗ trợ null retry), và fallback có chủ ý (`ReviewMetrics` nếu contract cho phép snapshot rỗng). Ưu tiên constructor injection trực tiếp cho dependency bắt buộc; không thay tất cả `GetService` bằng `GetRequiredService` cơ học.
+- **Acceptance:** production registration đầy đủ; test helper không còn phụ thuộc empty provider hoặc có explicit fake/minimal dependencies; thiếu dependency bắt buộc fail sớm và có lỗi rõ; optional dependency vẫn giữ behavior đã chốt.
+- **Tests:** composition root, missing-required-dependency, optional retry absent, metrics behavior, settings dialog, MainWindow helper/test seams.
+- **Rủi ro/rollback:** constructor graph và test setup thay đổi; commit riêng sau WD01, không trộn UI dispatch.
+
+### WD04 — UI dispatch cho dialog nếu audit chứng minh cần
+
+- **Mức:** P1/P2 correctness, conditional.
+- **Phụ thuộc:** WD01; dùng `IUiScheduler`/abstraction hiện có nếu đủ contract, không lấy `Application.Current.Dispatcher` rải trực tiếp.
+- **Làm:** nếu có caller background, marshal phần WPF-critical (`MessageBox`, tạo Window, `Show`/`ShowDialog`) về UI dispatcher; xử lý `CheckAccess`, dispatcher shutdown và exception. Giữ filesystem/journal preparation ngoài dispatcher nếu có thể.
+- **Không làm:** không bọc toàn bộ method vào `Invoke` khi chưa cần; không giữ lock khi chờ modal UI; không đổi synchronous interface thành async trong task này.
+- **Tests/evidence:** gọi từ UI thread và background thread; owner đúng; timeout/deadlock guard; dispatcher shutdown; `PickFolder` và modal/modeless window. Nếu audit chứng minh mọi caller production đã ở UI thread, ghi WD04 là “not needed” thay vì thêm dispatch.
+
+### WD05 — BenchmarkWindow ownership và shutdown
+
+- **Mức:** P2 lifecycle.
+- **Files:** `WpfDialogService.cs`, `BenchmarkWindow.xaml.cs`, `App.xaml`, `MainWindow.xaml.cs`, lifecycle/STA tests.
+- **Làm:** xác minh `ShutdownMode`; chốt semantics single-instance hay multi-instance. Với single-instance, giữ reference có cleanup ở `Closed`, focus/activate instance đang mở và tạo lại sau khi đóng. Với multi-instance, ghi rõ ownership và shutdown contract.
+- **Acceptance:** mở Benchmark lặp lại có behavior xác định; đóng Benchmark rồi mở lại được; đóng MainWindow không để process/window mồ côi ngoài contract; không còn reference sau `Closed` nếu không cần.
+- **Cảnh báo:** không gọi là memory leak nếu chưa có runtime evidence; WPF window đang `Show()` thường được framework giữ. Cần kiểm tra process exit thực tế.
+- **Tests:** duplicate open, close/reopen, MainWindow close khi Benchmark đang mở, app shutdown, exception khi tạo window.
+
+### WD06 — Validation, documentation và delivery
+
+- **Phụ thuộc:** WD01–WD05 theo task thực sự được chấp nhận.
+- **Validation:** focused App/STA tests; `dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"`; `tools/verify-all.ps1`; publish/verify-release nếu có source change. Dispatcher/lifecycle change phải có runtime evidence phù hợp.
+- **Documentation:** cập nhật plan, `task_on_progress.md`, contract/decision nếu DI hoặc thread model đổi. Không đánh dấu DONE từ source review đơn thuần.
+- **Delivery:** mỗi behavior change là commit riêng trên feature branch `codex/...`; chỉ commit/push phần scope được duyệt; không commit thẳng `master`.
+
+### Thứ tự thực hiện nhóm WD
+
+1. WD01 audit trước, không sửa behavior.
+2. WD02 có thể triển khai độc lập sau audit vì chỉ là refactor low-risk.
+3. WD03 triển khai sau khi chốt dependency required/optional và cập nhật test seam.
+4. WD04 chỉ chạy nếu WD01 chứng minh cần UI marshal.
+5. WD05 chạy độc lập về code nhưng cần phối hợp App shutdown/STA validation.
+6. WD06 chỉ hoàn tất sau focused/full/runtime evidence tương ứng.
+
+## 8. Kế hoạch bổ sung — I/O durability/performance review ngày 2026-09-20
+
+Phần này ghi nhận review cho `PhysicalFileSystem.OpenAppendDurable`, `WriteAllTextAtomic` và enumeration. Đây là plan, **chưa triển khai source và chưa kết luận `WriteThrough` là defect**. Baseline hiện tại dùng `FileOptions.WriteThrough`; `OperationJournal.Append()` còn gọi `Flush(flushToDisk: true)` cho journal record.
+
+### IO01 — Xác minh durability contract
+
+- **Mức:** P1 investigation/correctness.
+- **Files:** `src/PhotoReview.Core/IO/PhysicalFileSystem.cs`, `IFileSystem.cs`, `OperationJournal`, `SessionStore`, `SettingsStore`, các call site và tests.
+- **Làm:** lập bảng call site của `OpenAppendDurable` và `WriteAllTextAtomic`; phân loại operation journal, settings và session. Ghi rõ record nào phải tồn tại sau process crash/mất điện, record nào có thể mất ở mức “last write”. Tách durability filesystem khỏi atomicity nội dung.
+- **Không làm:** chưa bỏ `FileOptions.WriteThrough`, chưa bỏ `Flush(true)`, chưa đổi interface sync sang async.
+- **Acceptance:** có decision record cho từng loại dữ liệu; giữ nguyên behavior nếu chưa chứng minh policy mới an toàn hơn.
+
+### IO02 — Benchmark latency/throughput của durability
+
+- **Mức:** P1 performance measurement.
+- **Phụ thuộc:** IO01.
+- **Matrix:** journal append với `WriteThrough + Flush(true)`, các policy flush khác chỉ để đo; atomic settings/session write; payload nhỏ/vừa/lớn; journal cold/warm; SSD/HDD nếu có.
+- **Metrics:** P50/P95/P99 latency, throughput, CPU, allocations, action latency và số record/giây. Ghi thiết bị, filesystem, runtime, kích thước payload và số iteration; không dùng benchmark synthetic duy nhất để khẳng định production.
+- **Acceptance:** có baseline lặp lại đủ để phân biệt noise; report không quảng bá con số chưa kiểm chứng. Không thay default chỉ vì một benchmark run.
+
+### IO03 — Journal durability redesign có điều kiện
+
+- **Mức:** P1 correctness/performance, chỉ mở sau IO01/IO02.
+- **Mục tiêu:** nếu contract cho phép, cân nhắc policy configurable, batching/coalescing có ordering rõ, hoặc giảm flush cho non-critical path. Nếu crash consistency không cho phép, giữ strong durability và chỉ tối ưu phần khác.
+- **Tests bắt buộc:** append ordering, partial record, crash/fault injection quanh write/flush, restart/recovery, journal lớn, concurrent append qua lock. Không để `Committed` xuất hiện trước filesystem mutation.
+- **Rollback:** commit riêng; không sửa/xóa journal người dùng và không thay đổi filesystem mutation trong rollback.
+
+### IO04 — Policy riêng cho settings/session atomic write
+
+- **Mức:** P2 correctness/performance.
+- **Phụ thuộc:** IO01/IO02.
+- **Làm:** đánh giá riêng nhu cầu `WriteThrough`/`Flush(true)` của settings và session; giữ temp-file + replace atomic; không dùng policy journal mặc định cho mọi text write nếu requirements khác nhau.
+- **Tests:** crash/fault quanh temp write và move/replace, file cũ/file mới, cleanup temp, Unicode không BOM, concurrent save theo contract. Chỉ giảm durability nếu recovery/settings requirements cho phép.
+
+### IO05 — Enumeration permissions và completeness
+
+- **Mức:** P2 behavior correctness.
+- **Files:** `PhysicalFileSystem.EnumerateFiles/EnumerateDirectories`, folder loading/catalog tests và logging/diagnostics nếu policy thay đổi.
+- **Làm:** reproduce inaccessible file/directory trên Windows; chốt một trong các policy: fail-fast, skip-with-warning hoặc partial catalog có cảnh báo rõ. Không bật `EnumerationOptions.IgnoreInaccessible = true` mặc định chỉ để tránh exception.
+- **Acceptance:** người dùng không bị hiểu nhầm rằng đã review toàn bộ khi catalog bị thiếu; nếu skip thì có metrics/log/user-visible warning và test kiểm tra partial result.
+- **Rủi ro:** bỏ qua silently làm sai completeness, duplicate scan và tổng số ảnh.
+
+### IO06 — Điều tra async boundary, không migration diện rộng mặc định
+
+- **Mức:** P2 architecture investigation.
+- **Làm:** profile UI thread và các đường journal/session/folder scan; xác định I/O nào thực sự gây frame drop hoặc block đáng kể. Chỉ sau khi có số đo mới cân nhắc `IAsyncFileSystem` hoặc async methods riêng.
+- **Nếu mở async:** cập nhật đồng bộ `IFileSystem`, `PhysicalFileSystem`, `CountingFileSystem`, fakes, callers, locking/ordering journal và cancellation contract. Kiểm tra `FileOptions.Asynchronous` bằng benchmark runtime, không coi đó là quy tắc bắt buộc tuyệt đối.
+- **Không làm:** không thêm async chỉ vì PhotoReview có thể được so sánh với Web API; đây là ứng dụng WPF desktop và sync contract hiện tại có nhiều consumer.
+
+### IO07 — Low-risk cleanup và validation
+
+- **Mức:** P3, chỉ sau khi behavior contract ổn định.
+- **Có thể xem xét:** static `UTF8Encoding(false)`; temp-name helper giữ `CreateNew`; buffer chỉ đổi nếu trace chứng minh lợi ích. Không dùng `text.Length` trực tiếp làm kích thước byte buffer và không gọi `Path.GetRandomFileName()` nhanh hơn nếu chưa đo.
+- **Tests:** FileSystem contract, Unicode/no-BOM, temp collision, cleanup sau exception, atomic round-trip, `CountingFileSystem` forwarding.
+- **Validation:** focused Core I/O tests; full `dotnet test ... -c Release --filter "Category!=Manual"`; `tools/verify-all.ps1`; benchmark artifact và decision log nếu đổi durability/performance.
+
+### Thứ tự thực hiện nhóm IO
+
+1. IO01: chốt durability/completeness contract, không sửa behavior.
+2. IO02: benchmark baseline trên fixture và thiết bị được ghi rõ.
+3. IO05 có thể chạy song song ở mức reproduction permission, nhưng không đổi default.
+4. IO03/IO04 chỉ triển khai sau decision IO01/IO02 và fault tests.
+5. IO06 chỉ mở nếu profiling chứng minh sync I/O là bottleneck thực tế.
+6. IO07 là cleanup cuối, commit riêng với behavior/performance redesign.

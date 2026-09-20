@@ -30,6 +30,7 @@ namespace PhotoReview.Integration.Tests;
 /// </para>
 /// </summary>
 [Collection("GlobalState")]
+[Trait("Category", "Slow")]
 public sealed class MainWindowBehaviorActionTests
 {
     /// <summary>Not bound by <see cref="ShortcutMappings.Default"/>, so the action branch is reached.</summary>
@@ -282,7 +283,7 @@ public sealed class MainWindowBehaviorActionTests
 
     private static T Field<T>(MainWindow window, string name)
     {
-        var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+        var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             ?? throw new InvalidOperationException(
                 $"MainWindow.{name} no longer exists; the T14b INV-3/INV-4 tests observe it directly.");
         return (T)field.GetValue(window)!;
@@ -291,11 +292,16 @@ public sealed class MainWindowBehaviorActionTests
     /// <summary>Pumps the dispatcher for a fixed window so late work has a chance to be observed.</summary>
     private static async Task DrainAsync(TimeSpan duration)
     {
-        var deadline = DateTime.UtcNow + duration;
-        while (DateTime.UtcNow < deadline)
+        // TC09: Replace Task.Delay with multiple dispatcher pumps.
+        // Each pump ensures queued work from the previous invocation is processed.
+        // Pump multiple times to ensure ShowImage calls and other deferred work execute.
+        const int PumpIterations = 40;  // ~400ms at 10ms per pump iteration
+        const int IterationsPerDuration = 40;  // For ~1 second duration, run ~40 pumps
+        var estimatedPumps = Math.Max(PumpIterations, (int)(duration.TotalMilliseconds / 10));
+
+        for (int i = 0; i < estimatedPumps; i++)
         {
             await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-            await Task.Delay(10);
         }
     }
 

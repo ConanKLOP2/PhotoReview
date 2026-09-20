@@ -8,6 +8,7 @@ using System.Windows.Input;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Settings;
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -22,7 +23,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private readonly ShortcutRouter _shortcutRouter;
-    private readonly IProgressiveExplorerOrderProvider? _explorerOrder;
+    private readonly IExplorerOrderProvider? _explorerOrder;
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
     private double? _cachedDpiScale;
@@ -33,22 +34,20 @@ public partial class MainWindow : Window
     private Point _panStartPoint;
     private Point _panLastPoint;
 
-#pragma warning disable CS0169, CS0414, IDE0044, IDE0051, IDE0052
-    // Reflection compatibility fields for legacy test harnesses
-    private readonly List<string> _files = [];
-    private int _fileActionInProgress;
-    private Stack<(string Source, string Destination)> _moveHistory = [];
-    private object? _lastUndoAction;
-    private int _index;
-    private string? _compareSelectedPath;
-    private ReviewMetrics? _metrics;
-    private object? _preloadScheduler;
-#pragma warning restore CS0169, CS0414, IDE0044, IDE0051, IDE0052
+    public readonly List<string> _files = [];
+    public int _fileActionInProgress;
+    public Stack<(string Source, string Destination)> _moveHistory = [];
+    public object? _lastUndoAction;
+    public int _index;
+    public string? _compareSelectedPath;
+    public ReviewMetrics? _metrics;
+    public object? _preloadScheduler;
 
     public MainViewModel ViewModel => _viewModel;
+    public AppSettings Settings => _settings;
 
     [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, IProgressiveExplorerOrderProvider? explorerOrder = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, IExplorerOrderProvider? explorerOrder = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -98,18 +97,22 @@ public partial class MainWindow : Window
         SyncFiles();
     }
 
-#pragma warning disable IDE0051
-    private Task LoadFolderAsync(string folder, string? initialPath = null) => _viewModel.OpenFolderAsync(folder, initialPath);
-    private async Task UndoLastActionAsync()
+    public Task LoadFolderAsync(string folder, string? initialPath = null) => _viewModel.OpenFolderAsync(folder, initialPath);
+
+    /// <summary>
+    /// Public test helper: Executes the unified undo operation with proper mutual exclusion guard.
+    /// Used by integration tests via reflection. Routes to MainViewModel.UndoAsync() with Interlocked guard.
+    /// </summary>
+    public async Task UndoLastActionAsync()
     {
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        try { await _viewModel.UndoLastAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+        try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
-    private void ResetFitView() => _ = ApplyFitViewAsync();
-    private void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
-    private Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
-    private bool TryGetCachedPreview(string path, out object? preview)
+    public void ResetFitView() => _ = ApplyFitViewAsync();
+    public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
+    public Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
+    public bool TryGetCachedPreview(string path, out object? preview)
     {
         if (_viewModel.PreviewService is not null && _viewModel.PreviewService.TryGetCachedPreview(path, out var decoded))
         {
@@ -119,7 +122,6 @@ public partial class MainWindow : Window
         preview = null;
         return false;
     }
-#pragma warning restore IDE0051
 
     private void SyncFiles()
     {
@@ -158,6 +160,13 @@ public partial class MainWindow : Window
     }
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
+
+    /// <summary>Harness use: never restore or save the user's real window-placement.json for this instance.</summary>
+    public void SuppressWindowPlacement()
+    {
+        _placementRestored = true;
+        Closing -= Window_Closing;
+    }
     private void Window_Closed(object? sender, EventArgs e)
     {
         CancelPan();
@@ -301,7 +310,11 @@ public partial class MainWindow : Window
             case ReviewCommandType.NextFolder: await _viewModel.NavigateSiblingFolderAsync(1); break;
             case ReviewCommandType.PreviousFolder: await _viewModel.NavigateSiblingFolderAsync(-1); break;
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
-            case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;
+            case ReviewCommandType.Undo:
+                if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+                try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+                finally { Volatile.Write(ref _fileActionInProgress, 0); }
+                break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.RunAction:
                 if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
@@ -359,6 +372,11 @@ public partial class MainWindow : Window
     private async void ClearCache_Click(object sender, RoutedEventArgs e) => await _viewModel.ClearCacheAsync();
     private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(true);
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
-    private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoLastAsync();
+    private async void UndoLastAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+        try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
+    }
 
 }

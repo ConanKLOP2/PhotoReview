@@ -20,7 +20,7 @@ namespace PhotoReview.App.ViewModels;
 /// ViewModel chính quản lý trạng thái hiển thị, điều phối thao tác mở thư mục và điều hướng xem ảnh,
 /// tuân thủ tuyệt đối quy tắc K-2 (hoàn toàn độc lập với WPF và System.Windows).
 /// </summary>
-public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
+public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, IFileActionSink, ISiblingNavigatorSink, IDuplicateCleanupSink
 {
     private readonly ReviewCatalog _catalog;
     private readonly GenerationClock _clock;
@@ -42,6 +42,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     private readonly FileHashService? _hashService;
     private readonly PreviewImageService? _previewService;
     private readonly ThumbnailCache? _thumbnailCache;
+    private readonly FileActionController _fileActionController;
+    private readonly SiblingFolderNavigator _siblingNavigator;
+    private readonly DuplicateCleanupController _duplicateController;
 
     private string _folderTitle = "Photo Review";
     private string _folderText = string.Empty;
@@ -57,18 +60,18 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         CompareViewModel compare,
         SettingsStore settingsStore,
         SessionStore sessionStore,
-        IFileSystem? fileSystem = null,
-        FileActionService? fileActionService = null,
-        UndoService? undoService = null,
-        IDialogService? dialogService = null,
+        IFileSystem fileSystem,
+        FileActionService fileActionService,
+        UndoService undoService,
+        IDialogService dialogService,
+        FileHashService hashService,
+        PreviewImageService previewService,
+        ThumbnailCache thumbnailCache,
+        SessionWriter sessionWriter,
         IPreloadController? preloadController = null,
         INaturalComparer? naturalComparer = null,
         Action? resetCachesAction = null,
-        FileHashService? hashService = null,
-        PreviewImageService? previewService = null,
-        ThumbnailCache? thumbnailCache = null,
         ReviewMetrics? metrics = null,
-        SessionWriter? sessionWriter = null,
         IUiScheduler? uiScheduler = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -79,19 +82,27 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _compare = compare ?? throw new ArgumentNullException(nameof(compare));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
-        _fileActionService = fileActionService;
-        _undoService = undoService;
-        _dialogService = dialogService;
+        _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        _fileActionService = fileActionService ?? throw new ArgumentNullException(nameof(fileActionService));
+        _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _hashService = hashService ?? throw new ArgumentNullException(nameof(hashService));
+        _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
+        _thumbnailCache = thumbnailCache ?? throw new ArgumentNullException(nameof(thumbnailCache));
+        _sessionWriter = sessionWriter ?? throw new ArgumentNullException(nameof(sessionWriter));
         _uiScheduler = uiScheduler ?? ImmediateUiScheduler.Instance;
         _preloadController = preloadController;
         _naturalComparer = naturalComparer ?? ManagedNaturalComparer.Instance;
-        _fileSystem = fileSystem ?? new PhotoReview.Core.IO.PhysicalFileSystem();
         _resetCachesAction = resetCachesAction;
-        _hashService = hashService;
-        _previewService = previewService;
-        _thumbnailCache = thumbnailCache;
         Metrics = metrics ?? new ReviewMetrics();
-        _sessionWriter = sessionWriter;
+        _fileActionController = new FileActionController(
+            _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
+            _naturalComparer, Settings, this);
+        _siblingNavigator = new SiblingFolderNavigator(
+            _clock, _catalog, _fileSystem, this, () => _currentSession);
+        _duplicateController = new DuplicateCleanupController(
+            _clock, _catalog, _fileActionService, _hashService, _fileSystem, _dialogService, _uiScheduler,
+            _preloadController, _thumbnailCache, _previewService, this);
         _viewerState.ScalingQuality = Settings.ScalingQuality;
     }
 
@@ -254,262 +265,57 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     /// <summary>
     /// Chuyển tới thư mục anh em kế tiếp có chứa ảnh.
     /// </summary>
-    public Task NextFolderAsync() => NavigateSiblingFolderAsync(1);
+    public Task NextFolderAsync() => _siblingNavigator.NavigateSiblingFolderAsync(1);
 
     /// <summary>
     /// Chuyển tới thư mục anh em phía trước có chứa ảnh.
     /// </summary>
-    public Task PreviousFolderAsync() => NavigateSiblingFolderAsync(-1);
+    public Task PreviousFolderAsync() => _siblingNavigator.NavigateSiblingFolderAsync(-1);
 
     /// <summary>
     /// Điều hướng thư mục cùng cấp (sibling), bảo toàn kiểm tra thế hệ folder chống race condition.
     /// </summary>
-    public async Task NavigateSiblingFolderAsync(int direction)
-    {
-        var folder = _currentSession?.Folder ?? (_catalog.Current != null ? Path.GetDirectoryName(_catalog.Current.Path) : null);
-        if (string.IsNullOrWhiteSpace(folder)) return;
-
-        var currentFolder = Path.GetFullPath(folder);
-        var folderGeneration = _clock.CurrentFolder;
-
-        var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction)).ConfigureAwait(false);
-
-        // Kiểm tra generation để tránh race condition khi người dùng đã chuyển folder khác giữa chừng
-        if (!_clock.IsFolderCurrent(folderGeneration)) return;
-
-        if (targetFolder is null)
-        {
-            StatusText = StatusFormatter.SiblingFolderBoundary(direction);
-            return;
-        }
-
-        await OpenFolderAsync(targetFolder).ConfigureAwait(false);
-    }
+    public Task NavigateSiblingFolderAsync(int direction) => _siblingNavigator.NavigateSiblingFolderAsync(direction);
 
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
-    public async Task RunActionAsync(int index)
-    {
-        if (_catalog.Count == 0) return;
-        var actions = Settings.Actions;
-        if (index < 0 || index >= actions.Count) return;
-
-        var action = actions[index];
-        if (!Enum.IsDefined(action.Operation))
-        {
-            StatusText = $"Không thực hiện được {action.Name}: Operation không hợp lệ.";
-            return;
-        }
-
-        if (action.Confirm && _dialogService is not null)
-        {
-            var ok = _dialogService.ShowConfirmation("Xác nhận action", $"Thực hiện action '{action.Name}' trên ảnh hiện tại?");
-            if (!ok) return;
-        }
-
-        if (action.Operation == FileOperationType.Recycle)
-        {
-            await ExecuteFileActionCoreAsync(action.Name, FileOperationType.Recycle, null).ConfigureAwait(false);
-            return;
-        }
-
-        var source = (_compare.IsVisible ? _compare.SelectedPath : null) ?? _catalog.Current?.Path;
-        if (string.IsNullOrEmpty(source)) return;
-
-        if (string.IsNullOrWhiteSpace(action.Destination))
-        {
-            StatusText = $"Không thực hiện được {action.Name}: Action chưa có thư mục đích.";
-            return;
-        }
-
-        await ExecuteFileActionCoreAsync(action.Name, action.Operation, action.Destination).ConfigureAwait(false);
-    }
+    public async Task RunActionAsync(int index) =>
+        await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path).ConfigureAwait(false);
 
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
-    public async Task RecycleAsync()
-    {
-        await ExecuteFileActionCoreAsync("Recycle", FileOperationType.Recycle, null).ConfigureAwait(false);
-    }
-
-    private async Task ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination)
-    {
-        if (_catalog.Count == 0) return;
-        if (_fileActionService is null) return;
-
-        // INV-4: Gate bận
-        if (_fileActionService.IsBusy) return;
-
-        var source = _compare.SelectedPath ?? _catalog.Current?.Path;
-        if (string.IsNullOrEmpty(source)) return;
-
-        var sourceIndex = _catalog.IndexOf(source);
-        _clock.StopForAction();
-        _preloadController?.Cancel();
-        var folderGen = _clock.CurrentFolder;
-
-        var isRemove = operation is FileOperationType.Move or FileOperationType.Recycle;
-        int nextIndex = -1;
-
-        if (isRemove)
-        {
-            nextIndex = _catalog.Remove(source);
-            CatalogChanged?.Invoke();
-            _presenter.EvictCachedPath(source);
-            _compare.Clear();
-
-            // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
-            if (nextIndex >= 0)
-            {
-                _ = _presenter.PresentAsync(nextIndex);
-            }
-            else
-            {
-                StatusText = "Đã xử lý hết ảnh trong folder.";
-            }
-        }
-
-        try
-        {
-            var request = new FileActionRequest(source, operation, destination);
-            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
-
-            // Stale Folder Guard: Nếu người dùng đã đổi thư mục trong khi I/O đang chạy, bỏ qua
-            if (!_clock.IsFolderCurrent(folderGen))
-            {
-                return;
-            }
-
-            if (result.Succeeded)
-            {
-                _undoService?.Register(result);
-
-                if (_currentSession is not null)
-                {
-                    _currentSession.CurrentPath = _catalog.Current?.Path;
-                    _currentSession.UpdatedUtc = DateTime.UtcNow;
-                    PersistSession(_currentSession);
-                }
-
-                if (_catalog.Count == 0)
-                {
-                    StatusText = isRemove ? "Đã xử lý hết ảnh trong folder." : $"Đã thực hiện: {actionName}";
-                }
-                else if (operation == FileOperationType.Copy)
-                {
-                    StatusText = $"Đã copy sang {Path.GetFileName(result.DestinationPath)}";
-                }
-            }
-            else
-            {
-                // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
-                if (isRemove && sourceIndex >= 0)
-                {
-                    _catalog.Restore(source, sourceIndex);
-                }
-
-                StatusText = $"Không thực hiện được {actionName}: {result.Error}";
-            }
-        }
-        finally
-        {
-            NotifyNavigationStateChanged();
-        }
-    }
+    public async Task RecycleAsync() =>
+        await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path).ConfigureAwait(false);
 
     /// <summary>
-    /// Hoàn tác thao tác di chuyển gần nhất (Ctrl+Z).
+    /// Unified entry point for Undo: reverses the last file action (Move or Recycle).
+    /// Replaces both legacy UndoAsync (Move-only) and UndoLastAsync to provide consistent semantics
+    /// across all callers (keyboard Ctrl+Z and button click).
     /// </summary>
     public async Task UndoAsync()
     {
-        if (_undoService is null) return;
+        var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path).ConfigureAwait(false);
 
-        var folderGen = _clock.CurrentFolder;
-        var result = await _undoService.UndoMoveAsync().ConfigureAwait(false);
-
-        if (!result.Succeeded)
+        // Handle Recycle Undo which needs folder change
+        if (result?.Succeeded == true && result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
         {
-            StatusText = result.ErrorMessage ?? "Không thể Undo.";
-            return;
-        }
-
-        if (!_clock.IsFolderCurrent(folderGen)) return;
-
-        if (!string.IsNullOrEmpty(result.Source))
-        {
-            _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
-            CatalogChanged?.Invoke();
-            var idx = _catalog.IndexOf(result.Source);
-            if (idx >= 0)
-            {
-                await _presenter.PresentAsync(idx).ConfigureAwait(false);
-            }
-
-            if (_currentSession is not null)
-            {
-                _currentSession.CurrentPath = result.Source;
-                _currentSession.UpdatedUtc = DateTime.UtcNow;
-                PersistSession(_currentSession);
-            }
-        }
-
-        NotifyNavigationStateChanged();
-    }
-
-    /// <summary>
-    /// Hoàn tác thao tác gần nhất (Move hoặc Recycle).
-    /// </summary>
-    public async Task UndoLastAsync()
-    {
-        if (_undoService is null) return;
-
-        var folderGen = _clock.CurrentFolder;
-        var result = await _undoService.UndoLastAsync().ConfigureAwait(false);
-
-        if (!result.Succeeded)
-        {
-            StatusText = result.ErrorMessage ?? "Không có thao tác nào để hoàn tác.";
-            return;
-        }
-
-        if (!_clock.IsFolderCurrent(folderGen)) return;
-
-        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
-        {
-            _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
-            CatalogChanged?.Invoke();
-            var idx = _catalog.IndexOf(result.Source);
-            if (idx >= 0)
-            {
-                await _presenter.PresentAsync(idx).ConfigureAwait(false);
-            }
-
-            if (_currentSession is not null)
-            {
-                _currentSession.CurrentPath = result.Source;
-                _currentSession.UpdatedUtc = DateTime.UtcNow;
-                PersistSession(_currentSession);
-            }
-        }
-        else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
-        {
-            if (_currentSession is not null)
-            {
-                _currentSession.CurrentPath = result.Source;
-                _currentSession.UpdatedUtc = DateTime.UtcNow;
-                PersistSession(_currentSession);
-            }
-
             var folder = Path.GetDirectoryName(result.Source);
             if (!string.IsNullOrEmpty(folder))
             {
                 await OpenFolderAsync(folder, result.Source).ConfigureAwait(false);
             }
         }
+    }
 
-        NotifyNavigationStateChanged();
+    /// <summary>
+    /// Deprecated: Use UndoAsync() instead. This method is kept for backward compatibility but redirects to UndoAsync().
+    /// </summary>
+    [Obsolete("Use UndoAsync() instead. This method provides the same behavior as UndoAsync() now.")]
+    public async Task UndoLastAsync()
+    {
+        await UndoAsync().ConfigureAwait(false);
     }
 
     public void ToggleFit() => _viewerState.ResetFit();
@@ -535,117 +341,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     /// <summary>
     /// Tìm kiếm và xử lý các ảnh trùng lặp theo hash nội dung.
     /// </summary>
-    public async Task RemoveDuplicatesAsync(bool removeNumbered)
-    {
-        if (_fileActionService is null || _fileActionService.IsBusy) return;
-        if (_catalog.Count == 0) return;
-
-        var preHashGeneration = _clock.CurrentFolder;
-        var candidates = _catalog.Paths.ToArray();
-        if (candidates.Length == 0) return;
-
-        List<string> remove;
-        try
-        {
-            remove = await DuplicateFinder.FindAsync(
-                candidates,
-                removeNumbered,
-                (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
-                _fileSystem,
-                System.Threading.CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Lỗi kiểm tra trùng lặp: {ex.Message}";
-            return;
-        }
-
-        // Stale Folder Guard: Nếu folder đã bị đổi trong khi hash, hủy bỏ thao tác
-        if (!_clock.IsFolderCurrent(preHashGeneration))
-        {
-            StatusText = StatusFormatter.DuplicateCheckCanceledFolderChanged();
-            return;
-        }
-
-        if (remove.Count == 0)
-        {
-            StatusText = StatusFormatter.NoDuplicatesFound();
-            return;
-        }
-
-        if (_dialogService is not null)
-        {
-            var confirmed = false;
-            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove)).ConfigureAwait(false);
-            if (!confirmed)
-            {
-                StatusText = StatusFormatter.BatchCanceled();
-                return;
-            }
-        }
-
-        _clock.StopForAction();
-        _preloadController?.Cancel();
-        var actionFolderGeneration = _clock.CurrentFolder;
-
-        var failures = new List<string>();
-        var succeeded = 0;
-
-        foreach (var path in remove)
-        {
-            var request = new FileActionRequest(path, FileOperationType.Recycle);
-            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
-            if (result.Succeeded)
-            {
-                succeeded++;
-            }
-            else
-            {
-                failures.Add($"{Path.GetFileName(path)}: {result.Error}");
-            }
-        }
-
-        if (!_clock.IsFolderCurrent(actionFolderGeneration))
-        {
-            return;
-        }
-
-        StatusText = StatusFormatter.BatchDone(succeeded, failures.Count);
-        if (failures.Count > 0 && _dialogService is not null)
-        {
-            _dialogService.ShowError("Báo cáo lỗi batch", string.Join(Environment.NewLine, failures));
-        }
-
-        if (succeeded > 0 && remove.Count > 0)
-        {
-            var folder = Path.GetDirectoryName(remove[0]);
-            if (!string.IsNullOrEmpty(folder))
-            {
-                await OpenFolderAsync(folder).ConfigureAwait(false);
-            }
-        }
-    }
+    public async Task RemoveDuplicatesAsync(bool removeNumbered) =>
+        await _duplicateController.RemoveDuplicatesAsync(removeNumbered).ConfigureAwait(false);
 
     /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
     /// </summary>
-    public async Task ClearCacheAsync()
-    {
-        if (_dialogService is not null)
-        {
-            var confirmed = _dialogService.ShowConfirmation("Xác nhận xóa cache", "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.");
-            if (!confirmed) return;
-        }
-
-        _preloadController?.Cancel();
-        _thumbnailCache?.ClearDisk();
-        _thumbnailCache?.ClearMemory();
-        _previewService?.ClearCache();
-        _previewService?.ClearDisk();
-        _preloadController?.ClearPreloadedKeys();
-        StatusText = StatusFormatter.CacheCleared();
-        await Task.CompletedTask;
-    }
+    public async Task ClearCacheAsync() =>
+        await _duplicateController.ClearCacheAsync().ConfigureAwait(false);
 
     /// <summary>
     /// Hiển thị cửa sổ khôi phục thao tác tệp tin.
@@ -718,26 +421,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
             : $"Photo Review — {folder}{(settings.LoggingEnabled ? " · LOG" : "")}";
     }
 
-    private string? FindNextImageFolder(string currentFolder, int direction)
-    {
-        var folders = SiblingFolderService.GetSorted(currentFolder);
-        var index = folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
-        if (index < 0) return null;
-
-        for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
-        {
-            try
-            {
-                var candidates = _fileSystem.EnumerateFiles(folders[i], "*")
-                    .Where(ImageFileTypes.IsSupported);
-                if (candidates.Any()) return folders[i];
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-        return null;
-    }
-
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
 
     private void NotifyNavigationStateChanged()
@@ -804,6 +487,74 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
     void IFolderLoadSink.OnFailed(string folder, Exception exception)
     {
         StatusText = StatusFormatter.FolderOpenFailed(exception.Message);
+        NotifyNavigationStateChanged();
+    }
+
+    // IFileActionSink implementation
+    void IFileActionSink.SetStatusText(string status)
+    {
+        StatusText = status;
+    }
+
+    void IFileActionSink.OnCatalogChanged()
+    {
+        CatalogChanged?.Invoke();
+        if (_catalog.Current?.Path is { } path)
+        {
+            _presenter.EvictCachedPath(path);
+        }
+        _compare.Clear();
+    }
+
+    async Task IFileActionSink.PresentAsync(int index)
+    {
+        await _presenter.PresentAsync(index).ConfigureAwait(false);
+    }
+
+    void IFileActionSink.UpdateSessionPath(string currentPath)
+    {
+        if (_currentSession is not null)
+        {
+            _currentSession.CurrentPath = currentPath;
+            _currentSession.UpdatedUtc = DateTime.UtcNow;
+            PersistSession(_currentSession);
+        }
+    }
+
+    void IFileActionSink.NotifyNavigationStateChanged()
+    {
+        NotifyNavigationStateChanged();
+    }
+
+    // ISiblingNavigatorSink implementation
+    void ISiblingNavigatorSink.SetStatusText(string status)
+    {
+        StatusText = status;
+    }
+
+    async Task ISiblingNavigatorSink.OpenFolderAsync(string folder, string? initialPath)
+    {
+        await OpenFolderAsync(folder, initialPath).ConfigureAwait(false);
+    }
+
+    void ISiblingNavigatorSink.NotifyNavigationStateChanged()
+    {
+        NotifyNavigationStateChanged();
+    }
+
+    // IDuplicateCleanupSink implementation
+    void IDuplicateCleanupSink.SetStatusText(string status)
+    {
+        StatusText = status;
+    }
+
+    async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
+    {
+        await OpenFolderAsync(folder, initialPath).ConfigureAwait(false);
+    }
+
+    void IDuplicateCleanupSink.NotifyNavigationStateChanged()
+    {
         NotifyNavigationStateChanged();
     }
 }

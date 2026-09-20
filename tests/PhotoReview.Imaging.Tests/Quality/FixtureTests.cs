@@ -9,6 +9,7 @@ using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Quality;
 
+[Trait("Category", "HotPath")]
 public sealed class FixtureTests : IDisposable
 {
     private readonly string _tempDir;

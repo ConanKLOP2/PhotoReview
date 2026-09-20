@@ -1,8 +1,9 @@
-using PhotoReview.Core.Diagnostics;
+﻿using PhotoReview.Core.Diagnostics;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Abstractions;
 
+[Trait("Category", "HotPath")]
 public class NullLogTests
 {
     [Fact]
@@ -15,3 +16,4 @@ public class NullLogTests
         log.Error("test error", new InvalidOperationException());
     }
 }
+

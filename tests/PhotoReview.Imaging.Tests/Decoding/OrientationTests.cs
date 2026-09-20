@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -9,6 +9,7 @@ using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class OrientationTests : IDisposable
 {
     private readonly string _tempDir;
@@ -178,3 +179,4 @@ public sealed class OrientationTests : IDisposable
         }
     }
 }
+

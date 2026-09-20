@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.IO;
@@ -15,6 +15,7 @@ using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 
+[Trait("Category", "HotPath")]
 public sealed class PreviewBackendIdentityTests : IAsyncLifetime
 {
     private readonly string _root = Path.Combine(
@@ -212,3 +213,4 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
         public ImageInfo ReadInfo(string path) => new(4, 3, 1);
     }
 }
+

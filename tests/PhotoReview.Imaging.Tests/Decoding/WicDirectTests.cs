@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -12,6 +12,7 @@ using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class WicDirectTests : IDisposable
 {
     private readonly string _tempDir;
@@ -214,4 +215,5 @@ public sealed class WicDirectTests : IDisposable
         }
     }
 }
+
 

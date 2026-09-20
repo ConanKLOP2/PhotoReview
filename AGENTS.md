@@ -1,19 +1,19 @@
-# Quy tắc ưu tiên bắt buộc cho ứng dụng PhotoReview
+# Mandatory Priority Rules for PhotoReview Application
 
-## Duy trì trạng thái công việc cho AI tiếp theo
+## Maintain Work Status for the Next AI
 
-- Duy trì `task_on_progress.md` ở thư mục gốc. Đọc khi bắt đầu; cập nhật sau thay đổi đáng kể và trước khi bàn giao.
-- Ghi ngắn gọn: mục tiêu, file đã xem/sửa, thay đổi, vướng mắc, việc còn lại, lưu ý tiếp tục và kết quả kiểm tra. Nêu ngày cập nhật; không biến điều chưa xác minh thành sự thật.
+- Maintain `task_on_progress.md` at the repository root. Read it upon starting; update it after substantial changes and prior to handoff.
+- Keep entries concise: objectives, files reviewed/modified, changes made, roadblocks, remaining tasks, notes for continuation, and test/validation results. Include the update date; never assume unverified claims as facts.
 
-## Quy trình bắt buộc trước khi thay đổi
+## Mandatory Process Before Making Changes
 
-Ứng dụng phải ưu tiên các nguyên tắc sau khi xử lý và review ảnh:
+The application must prioritize the following principles when processing and reviewing photos:
 
-1. **Hạn chế đọc từ đĩa:** Luôn luôn đọc dữ liệu từ đĩa ít nhất có thể. Ưu tiên tái sử dụng dữ liệu đã đọc, cache và các cơ chế đọc tuần tự hiệu quả để tránh I/O dư thừa.
-2. **Tận dụng RAM:** Ưu tiên sử dụng nhiều RAM để tối ưu tốc độ. Máy có 32 GB RAM, vì vậy mục tiêu sử dụng tối thiểu là 16 GB khi phù hợp. Nếu tổng dung lượng thư mục dữ liệu nhỏ hơn 16 GB, phải ưu tiên load toàn bộ thư mục lên RAM, miễn là không gây lỗi hoặc ảnh hưởng nghiêm trọng đến hệ thống.
-3. **Ưu tiên tốc độ review:** Mọi thiết kế và tối ưu phải ưu tiên tốc độ chuyển ảnh, hiển thị ảnh và thao tác review nhanh.
-4. **Ưu tiên chất lượng ảnh:** Khi có thể, bắt buộc load và hiển thị ảnh ở chất lượng tốt nhất có thể, hạn chế giảm chất lượng hoặc dùng ảnh xem trước nếu không cần thiết.
+1. **Minimize Disk Reads:** Always minimize disk I/O as much as possible. Prioritize reusing read data, caching, and efficient sequential reading mechanisms to avoid redundant disk I/O.
+2. **Maximize RAM Utilization:** Prioritize using high RAM amounts to optimize speed. The system has 32 GB of RAM, so the target usage is at least 16 GB where applicable. If the total size of the photo folder is under 16 GB, prioritize loading the entire folder into RAM, provided it does not cause errors or severely impact the system.
+3. **Prioritize Review Speed:** All designs and optimizations must prioritize the speed of photo switching, image rendering, and fast review operations.
+4. **Prioritize Image Quality:** Whenever possible, images must be loaded and rendered at the highest possible quality; avoid reducing quality or relying on lower-resolution previews unless strictly necessary.
 
-## Quy trình build, publish và push Git bắt buộc
+## Mandatory Build, Publish, and Git Push Workflow
 
-- Sau mỗi thay đổi hoàn thiện, commit, push vào nhánh hợp lý để tôi merge.
+- After each completed change: commit, and push to an appropriate branch for me to review and merge.

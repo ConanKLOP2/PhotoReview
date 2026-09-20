@@ -22,6 +22,7 @@ namespace PhotoReview.Integration.Tests;
 /// PHOTOREVIEW_DATA_ROOT; <see cref="DataRootFixture"/> owns that variable and its cleanup.
 /// </summary>
 [Collection("GlobalState")]
+[Trait("Category", "Slow")]
 public sealed class MainWindowExplorerOrderTests
 {
     /// <summary>Upper bound for a wait that is expected to succeed quickly.</summary>

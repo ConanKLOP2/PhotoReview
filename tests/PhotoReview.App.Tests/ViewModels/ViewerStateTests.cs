@@ -5,6 +5,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 
+[Trait("Category", "HotPath")]
 public sealed class ViewerStateTests
 {
     [Fact]

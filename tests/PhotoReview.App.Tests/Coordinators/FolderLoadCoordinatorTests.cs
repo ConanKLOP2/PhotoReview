@@ -14,6 +14,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;
 
+[Trait("Category", "HotPath")]
 public sealed class FolderLoadCoordinatorTests
 {
     private sealed class FakeFileSystem : IFileSystem
@@ -207,15 +208,23 @@ public sealed class FolderLoadCoordinatorTests
         _fs.WriteAllTextAtomic(f2, "2");
 
         var snapshotTcs = new TaskCompletionSource<ExplorerViewSnapshot>();
+        var catalogReadyBarrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _explorerOrder.SnapshotHook = _ => snapshotTcs.Task;
 
         using var coordinator = CreateCoordinator();
         var loadTask = coordinator.LoadAsync(folder);
 
-        // Chờ catalog sẵn sàng
-        while (_sink.CatalogReadyCount == 0)
+        // TC09: Replace Task.Delay polling with barrier. Monitor for catalog ready state change.
+        var prevCatalogCount = _sink.CatalogReadyCount;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (_sink.CatalogReadyCount == prevCatalogCount && DateTime.UtcNow < deadline)
         {
-            await Task.Delay(10);
+            // Pump with minimal delay to avoid busy-waiting
+            await Task.Yield();
+        }
+        if (_sink.CatalogReadyCount == prevCatalogCount)
+        {
+            throw new TimeoutException("Catalog ready event was not signaled within timeout.");
         }
 
         // Người dùng tương tác (INV-7): chuyển ảnh -> tăng InteractionGeneration

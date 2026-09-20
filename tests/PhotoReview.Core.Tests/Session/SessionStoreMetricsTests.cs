@@ -1,9 +1,10 @@
-using PhotoReview.Core.Diagnostics;
+﻿using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Session;
 
+[Trait("Category", "HotPath")]
 public sealed class SessionStoreMetricsTests
 {
     private sealed class Paths : PhotoReview.Core.Abstractions.IAppPaths
@@ -41,3 +42,4 @@ public sealed class SessionStoreMetricsTests
         Assert.Equal(@"C:\photos", store.Load(@"C:\photos").Folder);
     }
 }
+

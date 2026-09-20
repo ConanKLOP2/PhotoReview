@@ -1,9 +1,10 @@
-using System.Windows.Media;
+﻿using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
+[Trait("Category", "HotPath")]
 public sealed class WpfDecodedImageTests
 {
     [Fact(DisplayName = "WpfDecodedImage wraps BitmapSource and freezes unfrozen source")]
@@ -47,3 +48,4 @@ public sealed class WpfDecodedImageTests
         Assert.Equal(PixelFormats.Bgra32, bitmap.Format);
     }
 }
+

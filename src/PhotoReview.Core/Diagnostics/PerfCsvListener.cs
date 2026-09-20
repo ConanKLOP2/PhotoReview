@@ -10,7 +10,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace PhotoReview.App.Diagnostics;
+namespace PhotoReview.Core.Diagnostics;
 
 /// <summary>
 /// Opt-in CSV listener for the <see cref="PhotoReviewPerf"/> EventSource (D03). Only active when the

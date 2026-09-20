@@ -7,6 +7,7 @@ namespace PhotoReview.Core.Tests;
 /// (xUnit constructs a fresh instance
 /// per test) and each Fact asserts one of the original checkpoints.
 /// </summary>
+[Trait("Category", "HotPath")]
 public sealed class BenchmarkScenarioTests : IDisposable
 {
     private readonly TempRoot _root = new("benchmark-scenario");

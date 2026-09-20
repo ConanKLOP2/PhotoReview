@@ -1,8 +1,9 @@
-using PhotoReview.Core.Catalog;
+﻿using PhotoReview.Core.Catalog;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
+[Trait("Category", "HotPath")]
 public class ImageFileTypesTests
 {
     [Theory]
@@ -20,3 +21,4 @@ public class ImageFileTypesTests
         Assert.Equal(expected, ImageFileTypes.IsSupported(path!));
     }
 }
+

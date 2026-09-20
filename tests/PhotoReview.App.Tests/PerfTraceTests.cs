@@ -4,7 +4,6 @@ using System.Diagnostics.Tracing;
 using System.IO;
 using System.Linq;
 using PhotoReview.App;
-using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.App.Tests;
@@ -14,6 +13,7 @@ namespace PhotoReview.App.Tests;
 /// environment variable, so these run in the "GlobalState" collection (no parallel siblings).
 /// </summary>
 [Collection("GlobalState")]
+[Trait("Category", "Slow")]
 public sealed class PerfTraceTests : IDisposable
 {
     private readonly string? _previousTrace = Environment.GetEnvironmentVariable("PHOTOREVIEW_PERF_TRACE");
@@ -139,6 +139,7 @@ public sealed class PerfTraceTests : IDisposable
         listener!.Dispose();
         sw.Stop();
 
+        // TC09: AUDIT - Timing assertion; consider using clock fake or deterministic test instead
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"Took {sw.Elapsed}");
 
         var file = Directory.GetFiles(dir, "perf-*.csv").Single();

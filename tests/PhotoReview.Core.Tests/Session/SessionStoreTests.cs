@@ -1,9 +1,10 @@
-using PhotoReview.Core.Abstractions;
+﻿using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Session;
 
+[Trait("Category", "HotPath")]
 public sealed class SessionStoreTests
 {
     private sealed class FakeAppPaths : IAppPaths
@@ -134,3 +135,4 @@ public sealed class SessionStoreTests
         Assert.Throws<ArgumentNullException>(() => new SessionStore(paths, null!));
     }
 }
+
