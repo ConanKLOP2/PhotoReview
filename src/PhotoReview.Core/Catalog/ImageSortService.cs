@@ -7,6 +7,29 @@ namespace PhotoReview.Core.Catalog;
 
 public static class ImageSortService
 {
+    public static List<CatalogEntry> SortEntries(
+        IEnumerable<CatalogEntry> entries,
+        ImageSortMode mode,
+        INaturalComparer? naturalComparer = null)
+    {
+        var comparer = naturalComparer ?? ManagedNaturalComparer.Instance;
+
+        return mode switch
+        {
+            ImageSortMode.SizeDescending => entries
+                .OrderByDescending(entry => entry.Length ?? -1L)
+                .ThenBy(entry => Path.GetFileName(entry.Path), comparer)
+                .ToList(),
+            ImageSortMode.SizeAscending => entries
+                .OrderBy(entry => entry.Length ?? -1L)
+                .ThenBy(entry => Path.GetFileName(entry.Path), comparer)
+                .ToList(),
+            _ => entries
+                .OrderBy(entry => Path.GetFileName(entry.Path), comparer)
+                .ToList()
+        };
+    }
+
     public static List<string> Sort(
         IEnumerable<string> files,
         ImageSortMode mode,

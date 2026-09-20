@@ -96,8 +96,17 @@ public sealed class FolderLoadCoordinator : IDisposable
 
             entries = await Task.Run(() =>
             {
-                var sorted = ImageSortService.Sort(entries.Select(e => e.Path).ToList(), sortMode);
-                return sorted.Select(path => entries.First(e => string.Equals(e.Path, path, StringComparison.OrdinalIgnoreCase))).ToList();
+                // Sort the scanned entries directly so stat metadata travels with each item.
+                // The path map preserves the previous first-match behavior for unusual
+                // case-variant duplicate paths while avoiding an O(n²) First lookup.
+                var sorted = ImageSortService.SortEntries(entries, sortMode);
+                var firstByPath = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
+                foreach (var entry in entries)
+                {
+                    firstByPath.TryAdd(entry.Path, entry);
+                }
+
+                return sorted.Select(entry => firstByPath[entry.Path]).ToList();
             }, loadToken).ConfigureAwait(false);
 
             if (initialPath is not null)

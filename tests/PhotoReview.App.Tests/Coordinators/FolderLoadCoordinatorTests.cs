@@ -269,4 +269,25 @@ public sealed class FolderLoadCoordinatorTests
         // b.jpg được đưa lên đầu catalog
         Assert.Equal(f2, _catalog.Paths[0]);
     }
+
+    [Fact]
+    public async Task LoadAsync_SizeSort_PreservesScannedMetadataWithSortedEntries()
+    {
+        var folder = @"C:\photos";
+        _fs.CreateDirectory(folder);
+        var small = @"C:\photos\small.jpg";
+        var large = @"C:\photos\large.jpg";
+        _fs.WriteAllTextAtomic(small, "1");
+        _fs.WriteAllTextAtomic(large, "12345");
+        _settingsStore.Current.ImageSortMode = ImageSortMode.SizeDescending;
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(large, _catalog.Current?.Path);
+        Assert.Equal(5, _catalog.Current?.Length);
+        _catalog.SetCurrent(1);
+        Assert.Equal(small, _catalog.Current?.Path);
+        Assert.Equal(1, _catalog.Current?.Length);
+    }
 }
