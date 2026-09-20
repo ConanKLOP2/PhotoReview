@@ -18,10 +18,10 @@ public static class PerfAnalyzeReport
         sb.AppendLine("# Perf analyze summary");
         sb.AppendLine();
         sb.AppendLine(FormattableString.Invariant($"- Số file perf-*.csv: {result.CsvFileCount}"));
-        sb.AppendLine(FormattableString.Invariant($"- Số nhóm (scenario/mode/cond): {result.Groups.Count}"));
+        sb.AppendLine(FormattableString.Invariant($"- Số nhóm (scenario/mode/cond/workers): {result.Groups.Count}"));
         sb.AppendLine();
 
-        sb.AppendLine("## Nhóm điều hướng (scenario/mode/cond)");
+        sb.AppendLine("## Nhóm điều hướng (scenario/mode/cond/workers)");
         sb.AppendLine();
         sb.AppendLine("| Nhóm | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | hit rate | ghi chú |");
         sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
@@ -116,6 +116,7 @@ public static class PerfAnalyzeReport
                 scenario = g.Summary.Key.Scenario,
                 mode = g.Summary.Key.Mode,
                 cond = g.Summary.Key.Cond,
+                preloadWorkers = g.Summary.Key.PreloadWorkers,
                 count = g.Summary.Count,
                 incomplete = g.Summary.Incomplete,
                 lowSampleWarning = g.Summary.LowSampleWarning,
