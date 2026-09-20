@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using PhotoReview.Core.Abstractions;
 using Xunit;
 
@@ -30,13 +30,13 @@ public class AppPathsTests
     {
         var paths = new AppPaths(MockLocalAppData, MockOverride);
 
-        // ConfigFile vÃ  cache khÃ´ng bá»‹ Ä‘á»•i theo override
+        // ConfigFile và cache không bị đổi theo override
         Assert.Equal(Path.Combine(MockAppRoot, "config.json"), paths.ConfigFile);
         Assert.Equal(Path.Combine(MockAppRoot, "cache"), paths.PreviewCacheDir);
         Assert.Equal(Path.Combine(MockAppRoot, "thumbnails"), paths.ThumbnailCacheDir);
         Assert.Equal(Path.Combine(MockAppRoot, "window-placement.json"), paths.WindowPlacementFile);
 
-        // JournalFile, SessionsDir, LogFile dÃ¹ng override root
+        // JournalFile, SessionsDir, LogFile dùng override root
         Assert.Equal(Path.Combine(MockOverride, "operations.jsonl"), paths.JournalFile);
         Assert.Equal(Path.Combine(MockOverride, "Sessions"), paths.SessionsDir);
         Assert.Equal(Path.Combine(MockOverride, "logs", "app.log"), paths.LogFile);
@@ -90,4 +90,3 @@ public class AppPathsTests
         Assert.IsAssignableFrom<IAppPaths>(paths);
     }
 }
-

@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
@@ -52,7 +52,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("Retry thÃ nh cÃ´ng.", result.Message);
+        Assert.Equal("Retry thành công.", result.Message);
         Assert.NotNull(result.Entry);
         Assert.Equal(JournalState.Committed, result.Entry.State);
         Assert.False(_fs.FileExists(source));
@@ -73,7 +73,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("Retry thÃ nh cÃ´ng.", result.Message);
+        Assert.Equal("Retry thành công.", result.Message);
         Assert.NotNull(result.Entry);
         Assert.Equal(JournalState.Committed, result.Entry.State);
         Assert.True(_fs.FileExists(source));
@@ -137,7 +137,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Chá»‰ cho phÃ©p retry Move/Copy", result.Message);
+        Assert.Contains("Chỉ cho phép retry Move/Copy", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects missing destination")]
@@ -149,7 +149,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Operation khÃ´ng cÃ³ Ä‘Ã­ch.", result.Message);
+        Assert.Equal("Operation không có đích.", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects when source no longer exists")]
@@ -161,7 +161,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Nguá»“n khÃ´ng cÃ²n tá»“n táº¡i.", result.Message);
+        Assert.Equal("Nguồn không còn tồn tại.", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects when source fingerprint has changed")]
@@ -176,7 +176,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Nguá»“n Ä‘Ã£ thay Ä‘á»•i; tá»« chá»‘i retry Ä‘á»ƒ báº£o vá»‡ dá»¯ liá»‡u.", result.Message);
+        Assert.Equal("Nguồn đã thay đổi; từ chối retry để bảo vệ dữ liệu.", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects when destination already exists")]
@@ -194,7 +194,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("ÄÃ­ch Ä‘Ã£ tá»“n táº¡i; khÃ´ng ghi Ä‘Ã¨.", result.Message);
+        Assert.Equal("Đích đã tồn tại; không ghi đè.", result.Message);
     }
 
     [Fact(DisplayName = "Constructor validates null arguments")]
@@ -205,4 +205,3 @@ public sealed class RecoveryRetryServiceTests
         Assert.Throws<ArgumentNullException>(() => new RecoveryRetryService(_journal, _fs, null!));
     }
 }
-

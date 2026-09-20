@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PhotoReview.PerfAnalysis;
+namespace PhotoReview.Benchmarking.PerfAnalysis;
 
-/// <summary>One navigation (ShowImageAsync token) reassembled from its perf events (D11, plan má»¥c 3).</summary>
+/// <summary>One navigation (ShowImageAsync token) reassembled from its perf events (D11, plan mục 3).</summary>
 public sealed class NavRecord
 {
     public long Nav { get; init; }
@@ -38,13 +38,13 @@ public sealed class NavRecord
     public double? FinalVisualMs { get; set; }
     public string FinalPresentedKind { get; set; } = "";
 
-    /// <summary>True until a Presented(kind=final|compare) row is matched for this nav â€” e.g. the
+    /// <summary>True until a Presented(kind=final|compare) row is matched for this nav — e.g. the
     /// token was superseded by a newer navigation before it ever rendered. Excluded from
     /// percentiles but still counted (D11 spec item 2).</summary>
     public bool Incomplete { get; set; } = true;
 
     /// <summary>RamHit | InflightJoin | DiskCacheHit | SourceMiss, optionally prefixed
-    /// "Thumbnail+" when a thumbnail was shown first (plan má»¥c 3).</summary>
+    /// "Thumbnail+" when a thumbnail was shown first (plan mục 3).</summary>
     public string Kind { get; set; } = "Unknown";
 
     /// <summary>Sum of every t_post_* phase recorded via PostStart/PostEnd (preloadKick, compare,
@@ -76,7 +76,7 @@ public sealed class PerfFileAnalysis
     public List<DispatcherLongOpRow> DispatcherLongOps { get; } = [];
 
     /// <summary>DispatcherLongOp rows dropped because they happened before the first ShowStart or
-    /// Folder(start) in this file â€” driver/window setup (e.g. --perf-session's own STA harness
+    /// Folder(start) in this file — driver/window setup (e.g. --perf-session's own STA harness
     /// creating the WPF Window, ~700ms, per D06) rather than app UI-thread contention during the
     /// scenario itself (D11 coordinator note, 2026-09-17).</summary>
     public int DispatcherLongOpsBeforeStartCount { get; set; }
@@ -84,7 +84,7 @@ public sealed class PerfFileAnalysis
 
 public static class PerfAnalyzeNavBuilder
 {
-    /// <summary>KeyInputâ†’ShowStart matching window (D11 spec item 2): the nearest KeyInput on the
+    /// <summary>KeyInput→ShowStart matching window (D11 spec item 2): the nearest KeyInput on the
     /// same thread strictly at or before ShowStart's timestamp, within this many milliseconds.</summary>
     private const double KeyInputMatchWindowMs = 500.0;
 
@@ -146,7 +146,7 @@ public static class PerfAnalyzeNavBuilder
 
             if (row.Event == "Presented") presentedGlobal.Add(row);
 
-            // nav = -1 is preload work not tied to a live navigation (plan má»¥c 6); nav absent/unparseable
+            // nav = -1 is preload work not tied to a live navigation (plan mục 6); nav absent/unparseable
             // rows were already dispatched above. Only nav > 0 belongs to a navigation record.
             if (row.NavId is { } navId && navId > 0)
             {
@@ -322,4 +322,3 @@ public static class PerfAnalyzeNavBuilder
         return n.HasThumbnail ? $"Thumbnail+{@base}" : @base;
     }
 }
-

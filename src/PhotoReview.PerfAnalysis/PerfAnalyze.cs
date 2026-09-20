@@ -1,16 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PhotoReview.PerfAnalysis;
+namespace PhotoReview.Benchmarking.PerfAnalysis;
 
 /// <summary>
 /// D11 `--perf-analyze &lt;runDir&gt; [--rules &lt;json&gt;]`: reads every perf-*.csv under runDir
 /// (recursively), reassembles navigations, aggregates preload/dispatcher/folder data, applies the
-/// R-* decision rules (PERF-DIAGNOSIS-PLAN.md má»¥c 8), and writes summary.md + summary.json into
-/// runDir. See docs/refactoring/PERF-DIAGNOSIS-TASKS.md, má»¥c D11, for the full spec.
+/// R-* decision rules (PERF-DIAGNOSIS-PLAN.md mục 8), and writes summary.md + summary.json into
+/// runDir. See docs/refactoring/PERF-DIAGNOSIS-TASKS.md, mục D11, for the full spec.
 /// </summary>
 public static class PerfAnalyze
 {
@@ -38,7 +38,7 @@ public static class PerfAnalyze
                 .Any(part => string.Equals(part, "warmup", StringComparison.OrdinalIgnoreCase)))
             .OrderBy(p => p, StringComparer.Ordinal).ToList();
         if (csvFiles.Count == 0)
-            throw new InvalidOperationException($"KhÃ´ng tÃ¬m tháº¥y file perf-*.csv nÃ o trong {runDir}");
+            throw new InvalidOperationException($"Không tìm thấy file perf-*.csv nào trong {runDir}");
 
         var rules = !string.IsNullOrEmpty(rulesPath) ? RulesConfig.Load(rulesPath) : RulesConfig.Default();
 
@@ -115,7 +115,7 @@ public static class PerfAnalyze
 
     /// <summary>Evaluates all nine R-* rules for one group. R-CONT is the only cross-group rule: it
     /// compares this group against sibling groups sharing (scenario, mode) but a different
-    /// PreloadWorkers count (plan má»¥c 8).</summary>
+    /// PreloadWorkers count (plan mục 8).</summary>
     private static List<RuleResult> EvaluateAllRules(RulesConfig rules, GroupSummary s, List<GroupSummary> allGroups)
     {
         var complete = s.Navs.Where(n => !n.Incomplete).ToList();
@@ -182,4 +182,3 @@ public static class PerfAnalyze
         return list.Count > 0 ? list.Average() : null;
     }
 }
-

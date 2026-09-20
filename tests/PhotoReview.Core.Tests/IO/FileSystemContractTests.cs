@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Tests.Fakes;
@@ -115,7 +115,7 @@ public class FileSystemContractTests
 
         Assert.Null(fs.GetFileStat(filePath));
 
-        const string content = "Hello UTF-8 World Tiáº¿ng Viá»‡t";
+        const string content = "Hello UTF-8 World Tiếng Việt";
         fs.WriteAllTextAtomic(filePath, content);
 
         var stat = fs.GetFileStat(filePath);
@@ -244,7 +244,7 @@ public class FileSystemContractTests
         var fs = harness.FileSystem;
         var filePath = harness.Combine("nested", "dir", "atomic.txt");
 
-        const string unicodeText = "Dá»¯ liá»‡u thá»­ nghiá»‡m cÃ³ dáº¥u vÃ  kÃ½ tá»± Ä‘áº·c biá»‡t !@#$%^&*()";
+        const string unicodeText = "Dữ liệu thử nghiệm có dấu và ký tự đặc biệt !@#$%^&*()";
         fs.WriteAllTextAtomic(filePath, unicodeText);
 
         var readBack = fs.ReadAllText(filePath);
@@ -304,4 +304,3 @@ public class FileSystemContractTests
         Assert.Contains("Child2", dirs);
     }
 }
-
