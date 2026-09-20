@@ -93,7 +93,7 @@ public sealed class UndoServiceTests
         {
             var source = $@"C:\photos\source-{i}.jpg";
             var destination = $@"C:\photos\sorted\source-{i}.jpg";
-            _fs.AddFile(destination, $"image-{i}", writeTime);
+            _fs.AddFile(destination, new string('x', 7 + i), writeTime);
             _journal.Append(new JournalEntry($"move-{i}", FileOperationType.Move, JournalState.Committed,
                 source, destination, 7 + i, writeTime, _clock.UtcNow));
             _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination,
