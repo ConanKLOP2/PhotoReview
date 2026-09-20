@@ -11,7 +11,7 @@ public class AppSettings
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
     public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
-    public bool LoggingEnabled { get; set; } = false;
+    public bool LoggingEnabled { get; set; }
     public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Name;
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;

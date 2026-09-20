@@ -13,7 +13,7 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
 
     public BoundedLruCache(long capacity, Func<TValue, long> sizeOf, IEqualityComparer<TKey>? comparer = null)
     {
-        if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
         _capacity = capacity;
         _sizeOf = sizeOf ?? throw new ArgumentNullException(nameof(sizeOf));
         _items = new Dictionary<TKey, LinkedListNode<Entry>>(comparer);
@@ -61,6 +61,7 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
     public bool Remove(TKey key) { lock (_gate) return RemoveCore(key); }
     public int RemoveWhere(Func<TKey, bool> predicate)
     {
+        ArgumentNullException.ThrowIfNull(predicate);
         lock (_gate)
         {
             var keys = _items.Keys.Where(predicate).ToArray();
