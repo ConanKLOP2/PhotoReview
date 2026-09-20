@@ -18,6 +18,7 @@ public sealed class SessionWriter : IDisposable
     private readonly TimeSpan _debounce;
     private readonly object _gate = new();
     private readonly Dictionary<string, SessionState> _pending = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _versions = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private CancellationTokenSource? _timerCts;
     private Task _lastRun = Task.CompletedTask;
@@ -47,7 +48,9 @@ public sealed class SessionWriter : IDisposable
         };
         lock (_gate)
         {
-            if (_disposed) { WriteBatch([snapshot]); return; }
+            if (_disposed) return;
+            _versions.TryGetValue(snapshot.Folder, out var version);
+            _versions[snapshot.Folder] = version + 1;
             _pending[snapshot.Folder] = snapshot;
             if (_timerCts is not null) return; // a write is already scheduled; it will pick up the latest state
             var cts = new CancellationTokenSource();
@@ -98,23 +101,34 @@ public sealed class SessionWriter : IDisposable
 
     private void WritePending()
     {
-        List<SessionState> batch;
+        List<(SessionState State, long Version)> batch;
         lock (_gate)
         {
-            batch = [.. _pending.Values];
+            batch = _pending.Select(pair =>
+            {
+                _versions.TryGetValue(pair.Key, out var version);
+                return (pair.Value, version);
+            }).ToList();
             _pending.Clear();
         }
         WriteBatch(batch);
     }
 
-    private void WriteBatch(List<SessionState> batch)
+    private void WriteBatch(List<(SessionState State, long Version)> batch)
     {
         if (batch.Count == 0) return;
         _writeLock.Wait();
         try
         {
-            foreach (var state in batch)
+            foreach (var (state, version) in batch)
             {
+                // A newer snapshot may have arrived while this batch was waiting for
+                // the writer lock. Do not let an obsolete batch overwrite it.
+                lock (_gate)
+                {
+                    if (!_versions.TryGetValue(state.Folder, out var current) || current != version)
+                        continue;
+                }
                 try { _store.Save(state); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

@@ -78,6 +78,24 @@ public sealed class SessionWriterTests
         Assert.Equal(2, _metrics.Snapshot().SessionWriteCount);
     }
 
+    [Fact(DisplayName = "A newer snapshot wins when an older timer batch is already releasing")]
+    public async Task NewerSnapshotWinsOverOlderTimerBatch()
+    {
+        var (writer, store) = Create();
+        writer.Update(State(@"C:\photos", "old"));
+
+        // Release the debounce continuation and immediately publish the newer state.
+        // The writer must serialize the two batches so the old snapshot cannot remain
+        // on disk after the newer update has been accepted.
+        _timer.FireAll();
+        writer.Update(State(@"C:\photos", "new"));
+
+        await writer.FlushAsync();
+        await writer.WhenIdleAsync();
+
+        Assert.Equal("new", store.Load(@"C:\photos").CurrentPath);
+    }
+
     [Fact(DisplayName = "Flush writes pending state immediately (shutdown) and the cancelled timer does not write again")]
     public async Task FlushWritesImmediatelyAndOnlyOnce()
     {
