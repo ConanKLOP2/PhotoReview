@@ -41,8 +41,15 @@
 - **Real CLI test execution (synthetic fixtures, no user photos):** `--perf-session` PASS (5/5 keys, errors=0, logged "PerfDispatcherHooks attached"); `--benchmark-list-profiles` OK; `--ui-next-probe` FAIL "Next image did not reach RAM cache" **also on `master` `5dc5cda`** (`new MainWindow()` path uses `DummyPreloadController` so it does not preload): pre-existing issue, unaddressed, requires a dedicated task.
 - **TC00 in progress:** remaining trx timing, 30 iterations of G2/G4/G7, inventory table, traits. TC01–TC11 pending; awaiting Q-T1..Q-T4.
 
-### ST12 — investigation complete, awaiting approval
-- ADR `docs/adr/0004-presentation-project-separation.md`: technically viable (18 types, ~2.3k lines, all public, no cycles), but **0 projects** can drop the App reference (CLI instantiates real `MainWindow`; each test project has files requiring WPF). Recommendation: hold off; reconsider if a ViewModel-level headless harness is built. Build times not yet benchmarked.
+**Decisions finalized (2026-09-20):**
+- **Q-T1:** Queue keypresses when action is running (UX priority: don't silently drop). TC05 tests queue order and final state.
+- **Q-T2:** Yes, add small seam to detect blind spots in source-read measurement. TC02.
+- **Q-T3:** Yes if real-photo folder is available via env var; skip TC07 if not present on this machine.
+- **Q-T4:** Yes if Recycle Bin is functioning normally. TC06 self-cleans via Undo, so safe.
+
+### ST12 — APPROVED (2026-09-20)
+- **Decision:** Do not split Presentation project. ADR `docs/adr/0004-presentation-project-separation.md` approved.
+- Reason: technically viable (18 types, ~2.3k lines, all public, no cycles), but **0 projects** can drop the App reference. Build-time benefit unmeasured; cost is non-zero.
 
 ---
 
