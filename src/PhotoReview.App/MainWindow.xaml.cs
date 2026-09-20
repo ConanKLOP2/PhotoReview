@@ -352,12 +352,23 @@ public partial class MainWindow : Window
         var (width, height) = GetViewportSize();
         _viewModel.Viewer.ResetFit(width, height);
 
+        // Converge layout: loop until viewport stabilizes or max iterations reached
+        ViewportSnapshot? lastSnapshot = null;
         for (var pass = 0; pass < 3; pass++)
         {
             if (version != _viewportOperationVersion || !IsLoaded) return;
             ImageScroll.UpdateLayout();
             UpdateFitSize();
             await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+
+            // Check viewport convergence
+            var currentSnapshot = CaptureViewportSnapshot();
+            if (lastSnapshot != null && ViewportConvergence.IsStableViewport(lastSnapshot, currentSnapshot))
+            {
+                // Viewport stable, no need to continue
+                break;
+            }
+            lastSnapshot = currentSnapshot;
         }
 
         if (version != _viewportOperationVersion || !IsLoaded) return;
@@ -365,6 +376,26 @@ public partial class MainWindow : Window
         ImageScroll.ScrollToHome();
         ImageScroll.ScrollToHorizontalOffset(0);
         ImageScroll.ScrollToVerticalOffset(0);
+    }
+
+    private ViewportSnapshot CaptureViewportSnapshot()
+    {
+        var image = MainImage.Source;
+        return new ViewportSnapshot(
+            Zoom: _viewModel.Viewer.Zoom,
+            Stretch: _viewModel.Viewer.Stretch,
+            MaxImageWidth: _viewModel.Viewer.MaxImageWidth,
+            MaxImageHeight: _viewModel.Viewer.MaxImageHeight,
+            ActualImageWidth: MainImage.ActualWidth,
+            ActualImageHeight: MainImage.ActualHeight,
+            ExtentWidth: ImageScroll.ExtentWidth,
+            ExtentHeight: ImageScroll.ExtentHeight,
+            ViewportWidth: ImageScroll.ViewportWidth,
+            ViewportHeight: ImageScroll.ViewportHeight,
+            HorizontalOffset: ImageScroll.HorizontalOffset,
+            VerticalOffset: ImageScroll.VerticalOffset,
+            HorizontalScrollbarVisibility: ImageScroll.ComputedHorizontalScrollBarVisibility,
+            VerticalScrollbarVisibility: ImageScroll.ComputedVerticalScrollBarVisibility);
     }
     private void Recovery_Click(object sender, RoutedEventArgs e) => _viewModel.ShowRecovery();
     private void Diagnostics_Click(object sender, RoutedEventArgs e) => _viewModel.ShowDiagnostics();
