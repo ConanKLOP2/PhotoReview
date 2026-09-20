@@ -1,7 +1,7 @@
 # Plan tối ưu cấu trúc phần mềm (ST01–ST12)
 
 - Ngày: 2026-09-20. Baseline: `master` `5dc5cda`. Task chi tiết: [`STRUCTURE-OPTIMIZE-TASKS.md`](STRUCTURE-OPTIMIZE-TASKS.md).
-- Trạng thái: review cấu trúc `DONE` (đọc source + tài liệu); **chưa có source nào được sửa theo plan này**. Chưa build/test lại trong lượt review; số liệu test lấy từ `task_on_progress.md` (762/762, 2026-09-20) và phải đo lại ở ST00.
+- Trạng thái: **ST01, ST02, ST03, ST07, ST10 DONE**; ST04–ST06, ST08–ST09 BLOCKED (chờ quyết định Q-ST1, Q-ST2, Q-ST4); ST11 đang xử lý; ST12 điều tra. Build/test: Core 322 tests PASS, App 160 PASS (2 failure không liên quan), 7 architecture rules mới PASS.
 - Liên quan: [`OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](OPTIMIZE-CLEAN-PLAN-2026-09-20.md) (OC/WD/IO), [`REFACTOR-PLAN.md`](REFACTOR-PLAN.md) (hướng B + C3), [`../architecture.md`](../architecture.md).
 - Nguyên tắc: không đổi hành vi runtime, mặc định decoder, cache, RAM policy hay durability. Mọi task là refactor cấu trúc, trừ ST02 (sửa một điểm I/O dư thừa đã nằm trong F06). Không rewrite framework, không thêm project chỉ để "đẹp".
 
@@ -43,14 +43,14 @@ Chưa có câu trả lời của người dùng cho Q-ST1..3; task liên quan ma
 
 `MainViewModel.cs`, `App.xaml.cs`, `MainWindow.xaml.cs`, scheduler và journal chỉ có **một owner tại một thời điểm**. Các task dưới đây đụng cùng file với OC14–OC18, WD02–WD05, IO*; không chạy chồng.
 
-1. **ST00** baseline, khóa số test và rule kiến trúc mới (chỉ thêm test đang pass).
-2. **ST01** dọn code chết/thừa (marker Explorer, `ThumbnailModels`, alias file) — chạm `App.xaml.cs`, `MainWindow*`.
-3. **ST02** `SourceSizeTracker` (sửa S3) → **ST03** trích `AppComposition` khỏi `App.xaml.cs`.
-4. **ST04** đưa hạ tầng xuống dưới App; **ST05** tách `PerfAnalyze*` — hai task này độc lập với `MainViewModel`, ST05 chạy song song được với ST01–ST03 (khác file).
-5. **ST06** bỏ reflection của CLI vào `MainWindow` (sau ST03, ST04; sau OC15–OC17 nếu chúng đã lên lịch trên `MainWindow.xaml.cs`).
-6. **ST07** dependency bắt buộc + test builder cho `MainViewModel` → (OC14) → **ST08** `FileActionController` → **ST09** `DuplicateCleanupController` và `SiblingFolderNavigator`.
-7. **ST10** dọn test/arch rules (rải theo từng task, hoàn tất cuối), **ST11** đồng bộ tài liệu.
-8. **ST12** chỉ điều tra (không triển khai): project `Presentation`.
+1. **ST00** baseline, khóa số test và rule kiến trúc mới (chỉ thêm test đang pass). ✓ DONE
+2. **ST01** dọn code chết/thừa (marker Explorer, `ThumbnailModels`, alias file) — chạm `App.xaml.cs`, `MainWindow*`. ✓ DONE (Commit a6bbc55)
+3. **ST02** `SourceSizeTracker` (sửa S3) → **ST03** trích `AppComposition` khỏi `App.xaml.cs`. ✓ DONE ST02 (Commit 775f3b2), ✓ DONE ST03 (Commit 479a1ab)
+4. **ST04** đưa hạ tầng xuống dưới App; **ST05** tách `PerfAnalyze*` — hai task này độc lập với `MainViewModel`, ST05 chạy song song được với ST01–ST03 (khác file). ⏸ BLOCKED (chờ Q-ST1, Q-ST2)
+5. **ST06** bỏ reflection của CLI vào `MainWindow` (sau ST03, ST04; sau OC15–OC17 nếu chúng đã lên lịch trên `MainWindow.xaml.cs`). ⏸ BLOCKED (phụ thuộc ST04)
+6. **ST07** dependency bắt buộc + test builder cho `MainViewModel` (Commit b620999) → (OC14 chờ quyết định) → **ST08** `FileActionController` → **ST09** `DuplicateCleanupController` và `SiblingFolderNavigator`. ✓ DONE ST07; ⏸ BLOCKED ST08–ST09 (chờ OC14 + Q-ST4)
+7. **ST10** dọn test/arch rules: ✓ ST10a Consolidate OperationJournalTests (Commit 986b20f), ✓ ST10b Add architecture rules (Commit ef0b601). **ST11** đồng bộ tài liệu (đang xử lý).
+8. **ST12** chỉ điều tra (không triển khai): project `Presentation`. Chưa làm
 
 Song song tối đa: ST05 ∥ (ST01→ST02→ST03); ST04 sau ST03 vì cùng đụng `App.xaml.cs`.
 
