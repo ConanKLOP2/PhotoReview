@@ -323,11 +323,16 @@ public sealed class ImagePresenterTests : IDisposable
     private sealed class TestPresentationSink : IPresentationSink
     {
         public List<object?> Images { get; } = [];
+        public object? CurrentImage { get; private set; }
         public List<string> Statuses { get; } = [];
         public int InitialViewModeAppliedCount { get; private set; }
         public List<string> PresentedPaths { get; } = [];
 
-        public void SetCurrentImage(object? image) => Images.Add(image);
+        public void SetCurrentImage(object? image)
+        {
+            CurrentImage = image;
+            Images.Add(image);
+        }
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() => InitialViewModeAppliedCount++;
         public void OnPresented(string path) => PresentedPaths.Add(path);
