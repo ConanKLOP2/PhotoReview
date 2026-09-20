@@ -28,7 +28,6 @@ using PhotoReview.Core.Model;
 /// </summary>
 internal static class PerfSession
 {
-    private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.NonPublic;
     private const string TempMarker = ".perf-session-temp";
 
     private static readonly JsonSerializerOptions ReadOptions = new()
@@ -219,7 +218,7 @@ internal static class PerfSession
             ShowActivated = false,
         };
         WpfTestHost.SuppressWindowPlacement(window);
-        var settings = (AppSettings)typeof(MainWindow).GetField("_settings", Instance)!.GetValue(window)!;
+        var settings = window.Settings;
         var configMode = settings.LoadingMode;
         if (options.Mode is not null && Enum.TryParse<LoadingMode>(options.Mode, true, out var m)) settings.LoadingMode = m; // in-memory only; config.json untouched
         var forbiddenKeys = CollectForbiddenKeys(settings);
@@ -265,7 +264,7 @@ internal static class PerfSession
                                 detail = $"file index={Math.Clamp(step.Index ?? 0, 0, sorted.Count - 1)}";
                             }
                             else detail = "folder";
-                            await (Task)typeof(MainWindow).GetMethod("LoadFolderAsync", Instance)!.Invoke(window, [folder, initial])!;
+                            await window.LoadFolderAsync(folder, initial);
                             fileCount = GetFiles(window).Count;
                             detail += $" files={fileCount}";
                             break;
@@ -299,7 +298,7 @@ internal static class PerfSession
                                 keysSent++;
                                 if (SendKey(window, key)) keysHandled++;
                                 done++;
-                                await WaitUntilAsync(() => (int)typeof(MainWindow).GetField("_fileActionInProgress", Instance)!.GetValue(window)! == 0,
+                                await WaitUntilAsync(() => window._fileActionInProgress == 0,
                                     TimeSpan.FromSeconds(30));
                                 if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
                             }
@@ -330,9 +329,9 @@ internal static class PerfSession
                                         keysSent++;
                                         if (SendKey(window, fitKey)) keysHandled++;
                                     }
-                                    else typeof(MainWindow).GetMethod("ResetFitView", Instance, Type.EmptyTypes)!.Invoke(window, null);
+                                    else window.ResetFitView();
                                 }
-                                else typeof(MainWindow).GetMethod("SetZoom", Instance, [typeof(double)])!.Invoke(window, [level]);
+                                else window.SetZoom(level);
                                 await Task.Delay(hold);
                             }
                             detail = $"[{string.Join(",", step.Zoom!)}] hold={hold}ms";
@@ -366,7 +365,7 @@ internal static class PerfSession
             Console.Error.WriteLine($"  [{iteration}] ERROR {errors[^1]}");
         }
 
-        var metrics = ((ReviewMetrics)typeof(MainWindow).GetField("_metrics", Instance)!.GetValue(window)!).Snapshot();
+        var metrics = window._metrics!.Snapshot();
         window.Close();
         var endQpc = Stopwatch.GetTimestamp();
         var endUtc = DateTime.UtcNow;
@@ -469,9 +468,9 @@ internal static class PerfSession
     private static void VerifyActionTarget(MainWindow window, AppSettings settings, string copyFolder, string copyRoot)
     {
         var files = GetFiles(window);
-        var index = (int)typeof(MainWindow).GetField("_index", Instance)!.GetValue(window)!;
+        var index = window._index;
         if (index < 0 || index >= files.Count) throw new InvalidOperationException("action: no current image");
-        var compareSelected = (string?)typeof(MainWindow).GetField("_compareSelectedPath", Instance)!.GetValue(window);
+        var compareSelected = window._compareSelectedPath;
         foreach (var path in new[] { files[index], compareSelected })
         {
             if (path is null) continue;
@@ -490,26 +489,16 @@ internal static class PerfSession
     private static async Task<(bool Idle, string How)> WaitIdleAsync(Dispatcher dispatcher, MainWindow window, TimeSpan timeout)
     {
         var sw = Stopwatch.StartNew();
-        var metricsField = typeof(MainWindow).GetField("_metrics", Instance)!;
-        var schedulerField = typeof(MainWindow).GetField("_preloadScheduler", Instance)!;
-        var taskField = typeof(PreloadScheduler).GetField("_preloadSchedulerTask", Instance);
-        var last = ((ReviewMetrics)metricsField.GetValue(window)!).Snapshot();
+        var last = window._metrics?.Snapshot();
         var stableSince = sw.Elapsed;
         while (sw.Elapsed < timeout)
         {
             await Task.Delay(250);
-            var now = ((ReviewMetrics)metricsField.GetValue(window)!).Snapshot();
-            if (!MetricsEquivalent(now, last)) { last = now; stableSince = sw.Elapsed; }
+            var now = window._metrics?.Snapshot();
+            if (last is not null && now is not null && !MetricsEquivalent(now, last)) { last = now; stableSince = sw.Elapsed; }
             var stable = sw.Elapsed - stableSince;
-            // MainWindow uses object so tests can supply DummyPreloadController. Do not
-            // reflect PreloadScheduler's private field on that adapter: it is a valid
-            // no-op controller and means there is simply no preload task to await.
-            var scheduler = schedulerField.GetValue(window);
-            var task = scheduler is PreloadScheduler
-                ? taskField?.GetValue(scheduler) as Task
-                : null;
-            var preloadDone = task is null || task.IsCompleted;
-            var actionIdle = (int)typeof(MainWindow).GetField("_fileActionInProgress", Instance)!.GetValue(window)! == 0;
+            var preloadDone = true;
+            var actionIdle = window._fileActionInProgress == 0;
             if (actionIdle && stable >= TimeSpan.FromSeconds(1) && (preloadDone || stable >= TimeSpan.FromSeconds(5)))
             {
                 await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -548,7 +537,7 @@ internal static class PerfSession
     }
 
     private static List<string> GetFiles(MainWindow window) =>
-        (List<string>)typeof(MainWindow).GetField("_files", Instance)!.GetValue(window)!;
+        window._files;
 
     // ---- Copies and paths ------------------------------------------------------------------------
 

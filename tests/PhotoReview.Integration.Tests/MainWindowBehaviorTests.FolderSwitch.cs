@@ -265,14 +265,14 @@ public sealed class MainWindowBehaviorFolderSwitchTests
 
     private static async Task LoadFolderAsync(MainWindow window, string folder)
     {
-        var method = typeof(MainWindow).GetMethod("LoadFolderAsync", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(string), typeof(string)])
+        var method = typeof(MainWindow).GetMethod("LoadFolderAsync", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public, [typeof(string), typeof(string)])
             ?? throw new InvalidOperationException("MainWindow.LoadFolderAsync no longer exists.");
         await (Task)method.Invoke(window, [folder, null])!;
     }
 
     private static async Task TriggerUndoAsync(MainWindow window)
     {
-        var method = typeof(MainWindow).GetMethod("UndoLastActionAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+        var method = typeof(MainWindow).GetMethod("UndoLastActionAsync", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             ?? throw new InvalidOperationException("MainWindow.UndoLastActionAsync no longer exists.");
         await (Task)method.Invoke(window, null)!;
     }
@@ -287,7 +287,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
 
     private static T Field<T>(MainWindow window, string name)
     {
-        var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+        var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             ?? throw new InvalidOperationException($"MainWindow.{name} no longer exists.");
         return (T)field.GetValue(window)!;
     }

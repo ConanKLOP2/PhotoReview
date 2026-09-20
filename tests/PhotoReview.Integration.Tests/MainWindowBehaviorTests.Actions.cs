@@ -282,7 +282,7 @@ public sealed class MainWindowBehaviorActionTests
 
     private static T Field<T>(MainWindow window, string name)
     {
-        var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)
+        var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             ?? throw new InvalidOperationException(
                 $"MainWindow.{name} no longer exists; the T14b INV-3/INV-4 tests observe it directly.");
         return (T)field.GetValue(window)!;
