@@ -200,7 +200,8 @@ public partial class App : System.Windows.Application
 
             return vm = new PhotoReview.App.ViewModels.MainViewModel(
                 catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
-                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter);
+                fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter,
+                uiScheduler: sp.GetRequiredService<IUiScheduler>());
         });
 
         // 8. Window
