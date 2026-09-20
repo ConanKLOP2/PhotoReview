@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
 using PhotoReview.App;
-using PhotoReview.App.Diagnostics;
+using PhotoReview.Core.Diagnostics;
 
 /// <summary>
 /// Shared STA host for in-process WPF drivers (<c>--ui-next-probe</c>, <c>--perf-session</c>).

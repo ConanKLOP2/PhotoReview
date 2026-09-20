@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PhotoReview.App.Diagnostics;
+namespace PhotoReview.Core.Diagnostics;
 
 /// <summary>
 /// D05: diagnostic-only environment variables (see PERF-DIAGNOSIS-PLAN.md mục 6 and
