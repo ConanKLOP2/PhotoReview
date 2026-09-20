@@ -81,7 +81,7 @@ $testProjects = @(
 )
 foreach ($testProject in $testProjects) {
     Invoke-Gate "Run xUnit: $testProject" {
-        dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo --filter "$filter"
+        dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo --filter "$filter" --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
     }
 }
 Invoke-Gate 'Run file-operation smoke test' {
