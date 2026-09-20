@@ -1,7 +1,7 @@
 # Review toàn repo và plan optimize / clean code
 
 - Ngày: 2026-09-20. Baseline: `master`, `ba1317e54702e3af8bd32c0bf5d953b3766f1ba0` (merge PR #9); working tree sạch lúc bắt đầu.
-- Trạng thái: review `DONE`; OC02, OC03 và OC04 đã triển khai sau khi người dùng yêu cầu thực hiện. Các task còn lại vẫn `TODO`; không mở rộng scope ngoài các task đã giao.
+- Trạng thái: review `DONE`; phần lớn correctness tasks đã triển khai. T89/native GUI và đo tối ưu vẫn chờ runtime evidence; không đánh dấu DONE từ source-only audit.
 - Phạm vi review: Core + Platform.Windows; Imaging + TurboJpeg; App/UI/coordinators; Benchmarking + CLI/scripts/CI; tests và tài liệu trạng thái liên quan. Ba agent đọc các nhóm đầu, coordinator đối chiếu và review nhóm công cụ. Đây là review theo luồng/rủi ro xuyên repo, không phải bằng chứng mọi nhánh runtime đều đã chạy.
 - Nguyên tắc: an toàn dữ liệu/chất lượng trước; giảm I/O và latency; tận dụng RAM có headroom. Không đổi mặc định decoder hoặc bật byte cache 16 GiB chỉ từ suy đoán; không ép dùng đủ RAM khi gây paging/OOM.
 
@@ -96,7 +96,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Xong khi: history hiện hành undo được trong giới hạn công bố; không đọc journal mỗi undo đã có history; vị trí file/UI/journal nhất quán khi lỗi; latest session thắng; native restore đúng version.
 - Rủi ro: contract rộng, chia 3 commit con Undo, outcome/restore, Session; giữ đọc journal cũ tương thích. Rollback bằng revert code, không rewrite/xóa journal hoặc revert filesystem mutation.
 - Kết quả 2026-09-20: Undo history commit `295f04b`, regression >250 moves pass. Fingerprint được giữ trong in-memory history để không phụ thuộc startup tail 200. FileAction durability, recovery retry, SessionWriter ordering và native recycle identity còn TODO.
-- Kết quả bổ sung: `481c130` tách filesystem outcome khỏi journal durability khi append Committed lỗi; `42b92e2` bảo đảm SessionWriter bỏ batch cũ khi snapshot mới hơn đã chờ. FileAction/Session tests và full gate 758/758 pass. Recovery retry/native restore identity còn TODO.
+- Kết quả bổ sung: `481c130` tách filesystem outcome khỏi journal durability khi append Committed lỗi; `42b92e2` bảo đảm SessionWriter bỏ batch cũ; `32156f5` hiển thị rõ retry hoàn tất nhưng journal lỗi và giữ lỗi mutation gốc. FileAction/Session/Recovery tests và full gate 759/759 pass. Native restore identity còn TODO.
 
 ### 7. OC07 — Display state và hoàn thành T89 — IN PROGRESS → display subset DONE, T89 TODO
 
@@ -122,7 +122,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Làm: từng field profile có effect quan sát được hoặc bỏ/đánh unsupported rõ; cấu hình worker/window/reserve/fullfolder/disk/log nhất quán CLI/GUI. Race workload phải chặn decode ở barrier rồi thực hiện production file-action path. Không quảng bá decode-only là key-to-present/quality proof. Unsupported/failed profile luôn có record; --benchmark-all có capability semantics rõ; manifest dataset sorted, count/cap rõ. Tránh tích lũy fixture vào Recycle Bin ngoài native test riêng.
 - Tests: profile A/B thay actual options/counters; CLI/GUI parity; action xảy ra khi decode pending; summary chứa đủ requested profiles và exit code đúng; logging restore; reproducible selection.
 - Rủi ro: số cũ không so trực tiếp được với workload mới; ghi schema/semantics version, giữ raw baseline. Rollback gói tooling, không dùng kết quả sai để chọn default.
-- Kết quả 2026-09-20: commit `fb5155f`; `Workers`, `MemoryReserveBytes`, `DiskCache` đã truyền vào runtime; BenchmarkWorkloadRunner targeted tests pass. Action-at-decode barrier, unsupported profile summary và dataset semantics còn TODO.
+- Kết quả 2026-09-20: commit `fb5155f`; `Workers`, `MemoryReserveBytes`, `DiskCache` đã truyền vào runtime. Commit `6dee023` bắt đầu file action khi decode đang in-flight và giữ cancellation/error semantics; targeted 7/7, full gate 759/759. Unsupported profile summary/dataset semantics còn TODO.
 
 ### 10. OC10 — Perf analysis grouping — DONE
 
