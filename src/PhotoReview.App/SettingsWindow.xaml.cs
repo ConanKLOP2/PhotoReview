@@ -12,6 +12,7 @@ namespace PhotoReview.App;
 
 public partial class SettingsWindow : Window
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly SettingsStore? _store;
     public AppSettings Settings { get; }
 
@@ -87,7 +88,7 @@ public partial class SettingsWindow : Window
         RecycleText.Text = Settings.Shortcuts.SendToRecycleBin;
         CompareText.Text = Settings.Shortcuts.Compare; NextFolderText.Text = Settings.Shortcuts.NextFolder; PreviousFolderText.Text = Settings.Shortcuts.PreviousFolder;
         FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit; SkipText.Text = Settings.Shortcuts.Skip; UndoText.Text = Settings.Shortcuts.Undo; FullscreenText.Text = Settings.Shortcuts.Fullscreen;
-        ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, new JsonSerializerOptions { WriteIndented = true });
+        ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
@@ -169,7 +170,7 @@ public partial class SettingsWindow : Window
         {
             var actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? ReviewAction.Defaults();
             var editor = new ActionProfilesWindow(actions) { Owner = this };
-            if (editor.ShowDialog() == true) ActionsText.Text = JsonSerializer.Serialize(editor.Actions, new JsonSerializerOptions { WriteIndented = true });
+            if (editor.ShowDialog() == true) ActionsText.Text = JsonSerializer.Serialize(editor.Actions, JsonOptions);
         }
         catch { System.Windows.MessageBox.Show(this, "Action profiles JSON hiện tại không hợp lệ.", "Không thể mở editor", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
