@@ -98,11 +98,9 @@ public sealed class TurboJpegDecoder : IImageDecoder
                     factor = TjScalingFactor.One;
                 }
 
-                int scaledW = (origW * factor.Num + factor.Denom - 1) / factor.Denom;
-                int scaledH = (origH * factor.Num + factor.Denom - 1) / factor.Denom;
-
-                int stride = scaledW * 4;
-                byte[] dstBuffer = new byte[stride * scaledH];
+                (int scaledW, int scaledH, int stride, int bufferLength) =
+                    CalculateOutputBuffer(origW, origH, factor);
+                byte[] dstBuffer = new byte[bufferLength];
 
                 fixed (byte* pDst = dstBuffer)
                 {
@@ -243,8 +241,8 @@ public sealed class TurboJpegDecoder : IImageDecoder
     {
         foreach (var factor in SupportedScalingFactors)
         {
-            int scaledW = (origW * factor.Num + factor.Denom - 1) / factor.Denom;
-            int scaledH = (origH * factor.Num + factor.Denom - 1) / factor.Denom;
+            long scaledW = ((long)origW * factor.Num + factor.Denom - 1) / factor.Denom;
+            long scaledH = ((long)origH * factor.Num + factor.Denom - 1) / factor.Denom;
 
             if (scaledW >= targetW && scaledH >= targetH)
             {
@@ -253,6 +251,26 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
 
         return TjScalingFactor.One;
+    }
+
+    private static (int Width, int Height, int Stride, int BufferLength) CalculateOutputBuffer(
+        int originalWidth, int originalHeight, TjScalingFactor factor)
+    {
+        long width = ((long)originalWidth * factor.Num + factor.Denom - 1) / factor.Denom;
+        long height = ((long)originalHeight * factor.Num + factor.Denom - 1) / factor.Denom;
+        long stride = width > long.MaxValue / 4 ? long.MaxValue : width * 4;
+        long bufferLength = height > long.MaxValue / Math.Max(1, stride)
+            ? long.MaxValue
+            : stride * height;
+
+        if (width is <= 0 or > int.MaxValue || height is <= 0 or > int.MaxValue ||
+            stride > int.MaxValue || bufferLength > int.MaxValue)
+        {
+            throw new InvalidDataException(
+                $"TurboJPEG output dimensions are too large: {width}x{height} ({bufferLength} bytes).");
+        }
+
+        return ((int)width, (int)height, (int)stride, (int)bufferLength);
     }
 
     private static void ConfigureStrictDecoding(Native.SafeTurboJpegHandle decompressor)
