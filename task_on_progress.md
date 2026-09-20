@@ -34,12 +34,20 @@
 
 ## Next Steps
 
-### ST10 — IN PROGRESS (2026-09-20)
+### ST10 — DONE (2026-09-20)
 - **Fix build:** `HEAD` ST09 (`8c80f19`) did not compile (`DuplicateCleanupController.cs` was missing `using PhotoReview.Core.Model`); fixed. Baseline numbers recorded in commit `a65be80` (774) ran against stale binaries and are **invalid**.
 - **True baseline (0 build errors):** 775 PASS / 1 FAIL = 776 (Architecture 13, Core 321+1 FAIL, Imaging 205, App 174, Integration 62). The single failure is `OperationJournalTests...IsBoundedAndFast` (assert < 100 ms): failed 2/2 when running the full solution in parallel (112, 166 ms), passed 8/8 when executed standalone. Not yet checked against `master`. Details: `docs/refactoring/TC00-BASELINE-REPORT.md`.
 - **ST10(a) rule ST06 (new):** `Benchmark.Cli` does not use reflection into App types (`StructureOptimizeRulesTests`). Rule initially FAILED at exactly the 3 remaining spots after ST06: `MainWindow._placementRestored`, `MainWindow.Window_Closing`, `App.PerfDispatcherHooks` (lookup nested returned null from ST03 so CLI's `DispatcherLongOp` was silently disabled). Replaced with public `MainWindow.SuppressWindowPlacement()` and public `PerfDispatcherHooks`; rule PASS.
 - **Real CLI test execution (synthetic fixtures, no user photos):** `--perf-session` PASS (5/5 keys, errors=0, logged "PerfDispatcherHooks attached"); `--benchmark-list-profiles` OK; `--ui-next-probe` FAIL "Next image did not reach RAM cache" **also on `master` `5dc5cda`** (`new MainWindow()` path uses `DummyPreloadController` so it does not preload): pre-existing issue, unaddressed, requires a dedicated task.
-- **TC00 in progress:** remaining trx timing, 30 iterations of G2/G4/G7, inventory table, traits. TC01–TC11 pending; awaiting Q-T1..Q-T4.
+- **TC00 baseline complete:** test inventory, G1–G7 classification, timing profiles established. TC01–TC11 ready for implementation.
+
+### ST11 — DONE (2026-09-20)
+- **Consolidate documentation:** Created final summary and decision documents
+  - `docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md` — consolidated ST01–ST12 status, decision summary, next phases
+  - `docs/refactoring/STRUCTURE-DECISIONS-Q-ST1-ST4.md` — detailed rationale for all four ST architectural decisions
+  - `task_on_progress.md` updated to reflect ST10 DONE, ST11 DONE, ST12 APPROVED
+- **Status:** All ST tasks are either DONE or BLOCKED pending OC14 (Ctrl+Z semantics)
+- **Next:** OC14–OC18 can proceed independently; TC01–TC11 ready for implementation
 
 **Decisions finalized (2026-09-20):**
 - **Q-T1:** Queue keypresses when action is running (UX priority: don't silently drop). TC05 tests queue order and final state.
@@ -49,7 +57,8 @@
 
 ### ST12 — APPROVED (2026-09-20)
 - **Decision:** Do not split Presentation project. ADR `docs/adr/0004-presentation-project-separation.md` approved.
-- Reason: technically viable (18 types, ~2.3k lines, all public, no cycles), but **0 projects** can drop the App reference. Build-time benefit unmeasured; cost is non-zero.
+- **Reason:** Technically viable (18 types, ~2.3k lines, all public, no cycles), but **0 projects** can drop the App reference. Build-time benefit unmeasured; cost is non-zero. Accept Cli→App dependency under Q-ST3 instead.
+- **No implementation required** — this task is completed as a design investigation only.
 
 ---
 
