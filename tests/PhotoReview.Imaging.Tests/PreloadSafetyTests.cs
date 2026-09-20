@@ -80,6 +80,27 @@ public sealed class PreloadSafetyTests : IDisposable
         Assert.Equal(target.StartedCount, target.CompletedCount);
     }
 
+    [Fact]
+    public async Task CancelThenRestartBeforeDrain_DisposeWaitsForBothLifetimes()
+    {
+        var target = new RecordingTarget(blockUntilCancellation: true);
+        var scheduler = Create(target, new FakeMemoryProbe(true), workerCount: 1);
+        var first = scheduler.PreloadAroundAsync(0);
+        await target.WaitForStartsAsync(1);
+
+        scheduler.Cancel();
+        // Start the replacement lifetime before the cancelled worker has necessarily
+        // unwound. Dispose must retain ownership of both scheduler tasks.
+        var second = scheduler.PreloadAroundAsync(1);
+        await target.WaitForStartsAsync(2);
+
+        await Task.Run(scheduler.Dispose).WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(2, target.CancelledCount);
+        Assert.Equal(target.StartedCount, target.CompletedCount);
+    }
+
     private PreloadScheduler Create(IPreloadTarget target, IMemoryProbe probe, int workerCount) =>
         new(target, new ReviewMetrics(), () => _files, () => 0,
             new PreloadOptions(WorkerCount: workerCount), probe, ImmediateUiScheduler.Instance);
