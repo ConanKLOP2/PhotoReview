@@ -167,6 +167,11 @@ public sealed class FileActionController
         }
     }
 
+    /// <summary>
+    /// Deprecated: Use UndoLastAsync() instead. This method only handles Move operations.
+    /// For unified undo semantics that handle both Move and Recycle, use UndoLastAsync().
+    /// </summary>
+    [Obsolete("Use UndoLastAsync() instead. This method is Move-only; use UndoLastAsync() for full undo semantics.")]
     public async Task UndoAsync(string? currentPath)
     {
         if (_undoService is null) return;

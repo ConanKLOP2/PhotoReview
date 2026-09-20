@@ -290,15 +290,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path).ConfigureAwait(false);
 
     /// <summary>
-    /// Hoàn tác thao tác di chuyển gần nhất (Ctrl+Z).
+    /// Unified entry point for Undo: reverses the last file action (Move or Recycle).
+    /// Replaces both legacy UndoAsync (Move-only) and UndoLastAsync to provide consistent semantics
+    /// across all callers (keyboard Ctrl+Z and button click).
     /// </summary>
-    public async Task UndoAsync() =>
-        await _fileActionController.UndoAsync(_catalog.Current?.Path).ConfigureAwait(false);
-
-    /// <summary>
-    /// Hoàn tác thao tác gần nhất (Move hoặc Recycle).
-    /// </summary>
-    public async Task UndoLastAsync()
+    public async Task UndoAsync()
     {
         var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path).ConfigureAwait(false);
 
@@ -311,6 +307,15 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 await OpenFolderAsync(folder, result.Source).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>
+    /// Deprecated: Use UndoAsync() instead. This method is kept for backward compatibility but redirects to UndoAsync().
+    /// </summary>
+    [Obsolete("Use UndoAsync() instead. This method provides the same behavior as UndoAsync() now.")]
+    public async Task UndoLastAsync()
+    {
+        await UndoAsync().ConfigureAwait(false);
     }
 
     public void ToggleFit() => _viewerState.ResetFit();

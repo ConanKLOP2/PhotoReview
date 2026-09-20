@@ -98,10 +98,15 @@ public partial class MainWindow : Window
     }
 
     public Task LoadFolderAsync(string folder, string? initialPath = null) => _viewModel.OpenFolderAsync(folder, initialPath);
+
+    /// <summary>
+    /// Public test helper: Executes the unified undo operation with proper mutual exclusion guard.
+    /// Used by integration tests via reflection. Routes to MainViewModel.UndoAsync() with Interlocked guard.
+    /// </summary>
     public async Task UndoLastActionAsync()
     {
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        try { await _viewModel.UndoLastAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+        try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
     public void ResetFitView() => _ = ApplyFitViewAsync();
@@ -305,7 +310,11 @@ public partial class MainWindow : Window
             case ReviewCommandType.NextFolder: await _viewModel.NavigateSiblingFolderAsync(1); break;
             case ReviewCommandType.PreviousFolder: await _viewModel.NavigateSiblingFolderAsync(-1); break;
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
-            case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;
+            case ReviewCommandType.Undo:
+                if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+                try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+                finally { Volatile.Write(ref _fileActionInProgress, 0); }
+                break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.RunAction:
                 if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
@@ -363,6 +372,11 @@ public partial class MainWindow : Window
     private async void ClearCache_Click(object sender, RoutedEventArgs e) => await _viewModel.ClearCacheAsync();
     private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(true);
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
-    private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoLastAsync();
+    private async void UndoLastAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
+        try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+        finally { Volatile.Write(ref _fileActionInProgress, 0); }
+    }
 
 }
