@@ -147,10 +147,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
 
     public void ToggleCompare()
     {
-        _compare.IsVisible = !_compare.IsVisible;
+        var enableCompare = !_compare.IsVisible;
+        _compare.IsVisible = enableCompare;
         if (_catalog.CurrentIndex >= 0)
         {
-            _ = _presenter.PresentAsync(_catalog.CurrentIndex);
+            _ = _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare);
         }
     }
 
@@ -777,7 +778,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         FolderText = $"{folder}  (0 ảnh)";
         UpdateFolderTitle(folder);
         StatusText = StatusFormatter.NoSupportedImages();
-        _compare.Clear();
+        _presenter.ClearPresentation();
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }

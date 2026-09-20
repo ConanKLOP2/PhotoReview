@@ -177,6 +177,42 @@ public sealed class ImagePresenterTests : IDisposable
     }
 
     [Fact]
+    public async Task PresentAsync_WhenCompareIsSuppressed_ClearsCompareAndKeepsMainImage()
+    {
+        var f1 = CreateFakeImageFile("photo.jpg");
+        var f2 = CreateFakeImageFile("photo (1).jpg");
+        _catalog.Reset([f1, f2]);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+        Assert.True(_compareViewModel.IsVisible);
+
+        await presenter.PresentAsync(0, allowCompare: false);
+
+        Assert.False(_compareViewModel.IsVisible);
+        Assert.Null(_compareViewModel.LeftPath);
+        Assert.NotNull(presenter.CurrentImage);
+    }
+
+    [Fact]
+    public async Task ClearPresentation_ClearsCurrentImageAndCompareState()
+    {
+        var f1 = CreateFakeImageFile("photo.jpg");
+        var f2 = CreateFakeImageFile("photo (1).jpg");
+        _catalog.Reset([f1, f2]);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+        presenter.ClearPresentation();
+
+        Assert.Null(presenter.CurrentImage);
+        Assert.False(_compareViewModel.IsVisible);
+        Assert.Null(_compareViewModel.LeftImage);
+        Assert.Null(_compareViewModel.RightImage);
+        Assert.Null(_sink.CurrentImage);
+    }
+
+    [Fact]
     public async Task PresentAsync_WhenSingleImage_DisplaysFormattedStatusWithDimensions()
     {
         var f1 = CreateFakeImageFile("single.jpg", 1024);
