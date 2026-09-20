@@ -34,6 +34,28 @@
 
 ## Tiếp tục
 
+### ST10: Test Cleanup (TC00–TC11) — IN PROGRESS
+- **TC00**: Baseline complete — 774 PASS, 1 timing-flake (`OperationJournalTests` join startup took 112ms > 100ms)
+  - Report: `docs/refactoring/TC00-BASELINE-REPORT.md`
+  - Decision blockers: Q-T1 (action drop behavior), Q-T2 (disk read seam), Q-T3 (real photo path), Q-T4 (native Recycle)
+- **TC01–TC09**: Pending decisions. Design (no code changes yet):
+  - TC01: Real photo fixture builder (`PhotoReview.TestSupport.Windows`, `net10.0-windows` WPF)
+  - TC02: Disk read probe (`ReadBudgetProbe`)
+  - TC03–TC05: Hotpath invariants (Next key-repeat stress, Move/Delete stress, file action production path)
+  - TC06–TC07: Native Recycle + manual real-photo (blocked on Q-T3/Q-T4)
+  - TC08: Replace tautological tests (G1: `InterleavedFileActionSequenceTests`)
+  - TC09: Audit timing/flake, replace `Task.Delay` with barriers
+  - TC10–TC11: Consolidation + gate integration
+- **Next**: Clarify decisions Q-T1..Q-T4 from stakeholders; freeze TC00 baseline.
+
+### ST12: Presentation Project Investigation — COMPLETE
+- **ADR**: `docs/adr/0004-presentation-project-separation.md`
+- **Finding**: DO NOT separate Presentation; circular dependency trap after ST06/ST09
+- **Rationale**: App.xaml.cs + MainWindow.xaml.cs still need MainViewModel bindings; no actual decoupling; incremental improvements (ST07, WD01–WD06) achieve cleaner architecture cheaper
+- **Recommendation**: Revisit only if separate CLI deploy without App.xaml or XAML reuse identified
+
+---
+
 - Đọc AGENTS, plan mới và plan T89; kiểm tra branch/SHA/dirty tree lại trước làm.
 - Commit implementation: `4a81ba8` preload, `6a4ec01` decoder, `00cad65` duplicate, `3db9ae6` cache, `5edd15d` display, `b8b97fb` PerfAnalyze grouping, `295f04b` Undo history, `a16b327` folder/catalog, `fb5155f` benchmark profile propagation, `42b92e2` SessionWriter, `481c130` file outcome, `abecebc` UI dispatcher, `32156f5` recovery retry, `6dee023` benchmark action, `6ad5c15` benchmark report/manifest, `3a5c168` recycle candidate identity, `4b6b5ad` Core clean, `77c4441` Imaging clean, `8249fd2` App serializer clean, `e301271` API token ordering, `89019a1` disposal lifecycle, `6fadeb2` culture formatting. Tài liệu plan và file này được cập nhật sau validation.
 - Giữ frame khi Move/Delete đang loading; no hidden retry. Không dùng OS SendInput/SendKeys/SetForegroundWindow cho harness; dùng fixture riêng, không đổi config/action người dùng.
