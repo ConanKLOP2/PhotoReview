@@ -1,115 +1,42 @@
-# ADR 0004: Presentation Project Separation Investigation
+# ADR 0004: Tách project `Presentation` khỏi App (ST12 — điều tra)
 
-**Date**: 2026-09-20  
-**Status**: Investigation Complete — Recommendation: **DO NOT** separate at this time  
-**Related Tasks**: ST12 (investigation-only), ST06 (remove CLI reflection), ST09 (extract controllers)
+- Ngày: 2026-09-20. Trạng thái: **đề xuất, chờ người dùng duyệt** (ST12 chỉ điều tra, không sửa source).
+- Khuyến nghị: **chưa làm**. Không có consumer nào bỏ được tham chiếu tới `PhotoReview.App`.
+- Thay thế bản nháp đầu của ADR này: bản đó lập luận "vòng phụ thuộc" (sai — App → Presentation là một chiều) và có ước lượng thời gian build chưa đo (đã bỏ).
 
-## Context
+## Câu hỏi (từ STRUCTURE-OPTIMIZE-TASKS ST12)
 
-After ST06 (remove CLI reflection from MainWindow) and ST09 (extract FileActionController, DuplicateCleanupController, SiblingFolderNavigator), we investigated whether to create a `Presentation` project (`net10.0-windows`, no XAML or Window classes) to separate ViewModels/Coordinators from the main App project.
+Nếu ViewModels/Coordinators/Sinks chuyển sang project riêng (`net10.0-windows`, không `Window`/XAML), thì `Benchmark.Cli` và các test project có bỏ được tham chiếu `PhotoReview.App` không, với chi phí nào?
 
-**Motivation**: Reduce WPF dependency, simplify `Benchmark.Cli` and test references to App.
+## Số đo (đọc từ source tại `a65be80`, chưa build thử phương án)
 
-## Investigation Results
+**Tập ứng viên:** `App/ViewModels` (4 file, 1037 dòng, 5 type) + `App/Coordinators` (12 file, 1252 dòng, 13 type) = 16 file, 18 type, ~2,3k dòng. Tất cả đã `public`, nên không cần `InternalsVisibleTo` mới cho phần di chuyển.
 
-### 1. Types Candidate for Separation (16 files)
+**Phụ thuộc của tập ứng viên:** không dùng `System.Windows`/`DependencyProperty`/routed event (chỉ có một comment nhắc `System.Windows` trong `MainViewModel.cs`). Chúng dùng `Core` và `Imaging` (`PreviewImageService`, `ThumbnailCache`; `Imaging` là `net10.0-windows`) nên project mới vẫn phải là `net10.0-windows`.
 
-**ViewModels** (4 files):
-- `MainViewModel.cs` — claims K-2 compliance (WPF-independent per code comment)
-- `CompareViewModel.cs` — state holder, WPF reference free
-- `ViewerState.cs` — display state, no WPF
-- `StatusFormatter.cs` — utility, no WPF
+**Không có vòng:** chỉ 6 file ngoài tập dùng chúng — `App.xaml.cs`, `Composition/MainViewModelCompositionRoot.cs`, `Converters/ViewerStretchModeConverter.cs`, `MainWindow.xaml.cs`, `MainWindowHelpers.cs`, `Services/WpfPresentationSink.cs` — và cả 6 ở lại App. `Core`/`Imaging`/`Platform.Windows` không tham chiếu App. Về kỹ thuật, di chuyển khả thi.
 
-**Coordinators** (12 files):
-- `FolderLoadCoordinator.cs`, `ImagePresenter.cs` — no WPF
-- `FileActionController.cs`, `DuplicateCleanupController.cs`, `SiblingFolderNavigator.cs` — no WPF
-- Sink interfaces: `IFileActionSink.cs`, `IDuplicateCleanupSink.cs`, `ISiblingNavigatorSink.cs`, `IPresentationSink.cs`, `IFolderLoadSink.cs` — no WPF
-- `PreloadControllerAdapter.cs` — no WPF
+**Ai còn cần App sau khi di chuyển:**
 
-**Only WPF-dependent**: `Services/WpfPresentationSink.cs` (must stay in App).
+| Consumer | Bằng chứng | Bỏ được tham chiếu App? |
+|---|---|---|
+| `Benchmark.Cli` | `new MainWindow` / `typeof(MainWindow)` ở 3 file (`WpfTestHost`, `LocalUiNextProbe`, `PerfSession`), cộng `PerfDispatcherHooks` (App) | Không — CLI dựng cửa sổ thật |
+| `App.Tests` | 7/20 file dùng `MainWindow`/`StaTestHost`/`WpfDialogService`/`ShortcutRouter`… | Không |
+| `Integration.Tests` | 6/11 file dùng `MainWindow`/WPF | Không |
+| `Architecture.Tests` | tham chiếu App để kiểm rule kiến trúc | Không |
 
-### 2. Circular Reference Analysis: **ZERO RISK**
+Số project bỏ được tham chiếu `App`: **0**. Thời gian build/test: **chưa đo** (cần thực hiện tách mới đo được; không suy diễn).
 
-- **Core** does NOT reference App ✓
-- **Imaging** does NOT reference App ✓
-- **Platform.Windows** does NOT reference App ✓
+## Chi phí nếu làm
 
-Lower layers are already isolated → safe to move types.
+Di chuyển 16 file và đổi namespace `PhotoReview.App.ViewModels/Coordinators` (6 file consumer + test); thêm 1 project + `slnx` + reference ở App/tests; `MainViewModelCompositionRoot` (cần `IServiceProvider`) ở lại App.
 
-### 3. Dependency Bottleneck: App.xaml.cs & MainWindow.xaml.cs
+## Quyết định đề xuất
 
-Both are **heavily entangled** with MainViewModel. Every navigation/command flows through:
-1. App.xaml.cs composition root creates MainViewModel
-2. MainWindow.xaml.cs binds DataContext, wires events, calls ViewModel methods on every user action
-3. ~60 direct `_viewModel.` calls in MainWindow.xaml.cs alone
+Chưa tách. Lợi ích được nêu làm lý do (CLI/test không cần App) không đạt vì CLI dựng `MainWindow` thật và mỗi test project (App.Tests 7/20 file, Integration.Tests 6/11 file) còn file cần `MainWindow`/WPF. Chi phí nhỏ nhưng lợi ích đo được bằng 0.
 
-**Problem**: Moving MainViewModel to Presentation would require:
-- App still needs full reference to Presentation (not gain)
-- XAML bindings (MainWindow.xaml: `DataContext="{Binding ...}"`) need public APIs or clumsy internal visibility
-- `MainViewModelCompositionRoot` would split between projects, complicating DI wiring
+**Điều kiện để mở lại:** có harness ở mức ViewModel không cần `MainWindow` (ví dụ CLI perf-session chạy headless qua `MainViewModel`), hoặc số đo cho thấy build/test App.Tests chậm rõ vì WPF. Khi đó làm task mới (không mở rộng ST12) và đo thời gian build/test trước/sau.
 
-### 4. Build/Test Impact Analysis
+## Phát hiện phụ khi điều tra (thuộc ST06/ST10, đã xử lý riêng)
 
-**Current dependencies**:
-- `Benchmark.Cli` → `PhotoReview.App` (ST06 removes reflection; Cli still references App for types)
-- App.Tests, Integration.Tests → App (bindings, composition)
-
-**If we moved Presentation**:
-- App still requires Presentation reference (circular or at least mutual dependency)
-- Tests gain minimal benefit (still need both App + Presentation)
-- CLI would still reference both App (for composition, dialogs) and Presentation (for ViewModels)
-- **Result**: No dependency reduction; just more projects to maintain
-
-### 5. Build Performance Estimate
-
-- **Presentation project**: ~0.5 additional targets in build graph
-- **XAML binding resolution**: Complications without simplification
-- **Net build time delta**: ~0–5% slower (added project overhead vs minimal code removal from App)
-
-### 6. Test Impact
-
-- **Core.Tests**: Would need Presentation reference (currently only App)
-- **App.Tests**: Already reference App; moving VMs doesn't simplify fixture setup
-- **Integration.Tests**: Multi-project setup complicates scenario setup
-- **No test runtime improvement**: Still use `MainViewModel` in place via composition or builders
-
-## Decision
-
-**Recommendation: DO NOT separate Presentation at this time.**
-
-### Rationale
-
-1. **No actual decoupling**: App.xaml.cs and MainWindow.xaml.cs cannot move and are entangled with ViewModels. Moving types to Presentation creates a sibling project, not a dependency reduction.
-
-2. **Circular dependency trap**: Presentation would need public API for ViewModel properties, and App would still reference Presentation. Benefits of isolation disappear.
-
-3. **XAML binding complexity**: Binding to ViewModel from XAML in App (pointing to types in Presentation) is feasible but requires InternalsVisibleTo or public API design, adding boilerplate.
-
-4. **Negligible build benefit**: One additional project in build graph costs more than splitting 16 files buys. CLI and tests still reference App.
-
-5. **ST06 already solves the main pain**: Removing CLI reflection eliminates the need for private MainWindow members. CLI can reference App at library level without reflection tricks.
-
-6. **Simplicity wins**: Keeping ViewModels/Coordinators in App keeps composition root, XAML binding and tests in one place. Cost of change (file moves, namespace updates, InternalsVisibleTo, DI rewiring) exceeds ongoing maintenance burden of current structure.
-
-## Alternative: Incremental Improvement (Recommended)
-
-Instead of Presentation separation, pursue:
-1. **ST07**: Make MainViewModel dependencies explicit (required vs optional) — reduces parameter noise
-2. **ST08–ST09**: Extract FileActionController, DuplicateCleanupController — already done, improves MainViewModel readability
-3. **WD01–WD06**: Improve WpfDialogService layering — removes WPF from business logic layers (Core/Imaging stay clean)
-
-These changes achieve the goal (cleaner architecture, testability) without the overhead of a new project.
-
-## Conclusion
-
-The Presentation project would be **architecturally cleaner on paper but operationally heavier in practice**. The current structure, after ST06–ST09, is already well-layered (Core/Imaging separate from App) and the ViewModel/Coordinator split into controllable pieces. Further separation is premature.
-
-**Revisit only if**:
-- Separate CLI tool needs to deploy without App.xaml (post-issue: none identified)
-- XAML reuse across multiple apps (not planned)
-- Significant WPF performance issue traced to Presentation code (not observed)
-
----
-
-**Investigated by**: Claude Haiku 4.5 on branch `codex/st01-clean-dead-code` (2026-09-20)  
-**Evidence**: Project reference analysis, grep results, 16-file type inventory, circular dependency check.
+`Benchmark.Cli` còn 3 chỗ reflection vào type của App sau ST06, trong đó `typeof(App).GetNestedType("PerfDispatcherHooks")` trả về null từ ST03 (class đã chuyển ra `Diagnostics/`), làm `DispatcherLongOp` của CLI bị tắt im lặng. Đã thay bằng API công khai và thêm rule kiến trúc.

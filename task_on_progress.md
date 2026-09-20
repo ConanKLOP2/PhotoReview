@@ -34,25 +34,15 @@
 
 ## Tiếp tục
 
-### ST10: Test Cleanup (TC00–TC11) — IN PROGRESS
-- **TC00**: Baseline complete — 774 PASS, 1 timing-flake (`OperationJournalTests` join startup took 112ms > 100ms)
-  - Report: `docs/refactoring/TC00-BASELINE-REPORT.md`
-  - Decision blockers: Q-T1 (action drop behavior), Q-T2 (disk read seam), Q-T3 (real photo path), Q-T4 (native Recycle)
-- **TC01–TC09**: Pending decisions. Design (no code changes yet):
-  - TC01: Real photo fixture builder (`PhotoReview.TestSupport.Windows`, `net10.0-windows` WPF)
-  - TC02: Disk read probe (`ReadBudgetProbe`)
-  - TC03–TC05: Hotpath invariants (Next key-repeat stress, Move/Delete stress, file action production path)
-  - TC06–TC07: Native Recycle + manual real-photo (blocked on Q-T3/Q-T4)
-  - TC08: Replace tautological tests (G1: `InterleavedFileActionSequenceTests`)
-  - TC09: Audit timing/flake, replace `Task.Delay` with barriers
-  - TC10–TC11: Consolidation + gate integration
-- **Next**: Clarify decisions Q-T1..Q-T4 from stakeholders; freeze TC00 baseline.
+### ST10 — IN PROGRESS (2026-09-20)
+- **Sửa build:** `HEAD` ST09 (`8c80f19`) không biên dịch (`DuplicateCleanupController.cs` thiếu `using PhotoReview.Core.Model`); đã sửa. Số baseline ghi ở commit `a65be80` (774) chạy trên binary cũ nên **không hợp lệ**.
+- **Baseline thật (build 0 lỗi):** 775 PASS / 1 FAIL = 776 (Architecture 13, Core 321+1 FAIL, Imaging 205, App 174, Integration 62). FAIL là `OperationJournalTests...IsBoundedAndFast` (assert < 100 ms): lỗi 2/2 khi chạy song song toàn solution (112, 166 ms), PASS 8/8 khi chạy riêng. Chưa kiểm ở `master`. Chi tiết: `docs/refactoring/TC00-BASELINE-REPORT.md`.
+- **ST10(a) rule ST06 (mới):** `Benchmark.Cli` không reflection vào type của App (`StructureOptimizeRulesTests`). Rule ban đầu FAIL đúng 3 chỗ còn sót sau ST06: `MainWindow._placementRestored`, `MainWindow.Window_Closing`, `App.PerfDispatcherHooks` (lookup nested trả null từ ST03 nên `DispatcherLongOp` của CLI bị tắt im lặng). Đã thay bằng `MainWindow.SuppressWindowPlacement()` công khai và `PerfDispatcherHooks` công khai; rule PASS.
+- **Chạy thật CLI (fixture tổng hợp, không ảnh người dùng):** `--perf-session` PASS (5/5 phím, errors=0, log "PerfDispatcherHooks attached"); `--benchmark-list-profiles` OK; `--ui-next-probe` FAIL "Next image did not reach RAM cache" **cả trên `master` `5dc5cda`** (đường `new MainWindow()` dùng `DummyPreloadController` nên không preload): lỗi có từ trước, chưa xử lý, cần task riêng.
+- **TC00 chưa xong:** còn trx timing, lặp 30 lần G2/G4/G7, bảng kiểm kê, trait. TC01–TC11 chưa làm; chờ Q-T1..Q-T4.
 
-### ST12: Presentation Project Investigation — COMPLETE
-- **ADR**: `docs/adr/0004-presentation-project-separation.md`
-- **Finding**: DO NOT separate Presentation; circular dependency trap after ST06/ST09
-- **Rationale**: App.xaml.cs + MainWindow.xaml.cs still need MainViewModel bindings; no actual decoupling; incremental improvements (ST07, WD01–WD06) achieve cleaner architecture cheaper
-- **Recommendation**: Revisit only if separate CLI deploy without App.xaml or XAML reuse identified
+### ST12 — điều tra xong, chờ duyệt
+- ADR `docs/adr/0004-presentation-project-separation.md`: khả thi kỹ thuật (18 type, ~2,3k dòng, đều public, không vòng), nhưng **0 project** bỏ được tham chiếu App (CLI dựng `MainWindow` thật; mỗi test project còn file cần WPF). Khuyến nghị: chưa làm; mở lại nếu có harness headless mức ViewModel. Thời gian build chưa đo.
 
 ---
 

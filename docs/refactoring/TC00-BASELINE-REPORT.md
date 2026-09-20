@@ -1,65 +1,23 @@
-# TC00: Baseline Test Run Report
+# TC00 — baseline test (một phần)
 
-**Date**: 2026-09-20  
-**Branch**: `codex/st01-clean-dead-code` (ST09 completed)  
-**Build**: Release (`dotnet build PhotoReview.slnx -c Release`)  
-**Test Filter**: `Category!=Manual` (excludes manual image tests)
+- Ngày: 2026-09-20. Nhánh `codex/st01-clean-dead-code`. Lệnh: `dotnet build PhotoReview.slnx -c Release` rồi `dotnet test PhotoReview.slnx -c Release --no-build --filter "Category!=Manual"`.
+- **Đính chính:** bản báo cáo đầu (commit `a65be80`) ghi 774/775 nhưng chạy trên binary cũ — `HEAD` (`8c80f19`, ST09) không biên dịch (`DuplicateCleanupController.cs` thiếu `using PhotoReview.Core.Model`). Số liệu dưới đây là lần chạy sau khi sửa và build thật.
 
-## Summary
+## Kết quả (build 0 lỗi)
 
-- **Total Tests**: 774 PASS + 1 FAIL = 775 total
-- **Failure Rate**: 0.13% (1 failure)
-- **Duration**: ~36 seconds
+| Project | PASS | FAIL |
+|---|---|---|
+| Architecture | 13 (gồm rule ST06 mới) | 0 |
+| Core | 321 | 1 |
+| Imaging | 205 | 0 |
+| App | 174 | 0 |
+| Integration | 62 | 0 |
+| **Tổng** | **775** | **1** |
 
-| Project | PASS | FAIL | Duration |
-|---------|------|------|----------|
-| Architecture | 12 | 0 | 1 s |
-| Core | 321 | 1 | 5 s |
-| Imaging | 205 | 0 | 4 s |
-| App | 174 | 0 | 9 s |
-| Integration | 62 | 0 | 18 s |
-| **TOTAL** | **774** | **1** | **36 s** |
+## Test lỗi
 
-## Failing Test
+`OperationJournalTests.LargeJournal_ReadCommittedMoves_IsBoundedAndFast` (`Large journal startup reads only recent committed moves within threshold`): assert `< 100 ms`. Trong chạy song song toàn solution lỗi **2/2 lần** (112 ms, 166 ms); chạy riêng **8/8 PASS**. Kết luận có bằng chứng: nhạy tải khi các assembly chạy song song. Chưa xác định nguyên nhân gốc và chưa kiểm test này ở `master`. Không nới ngưỡng; xử lý theo TC09 (thay assert thời gian tường).
 
-**Test**: `PhotoReview.Core.Tests.OperationJournalTests.LargeJournal_ReadCommittedMoves_IsBoundedAndFast`  
-**Issue**: Journal startup took 112 ms (threshold: < 100 ms)  
-**Severity**: Timing-sensitive; flaky due to system load
+## TC00 chưa xong
 
-```
-Large journal startup reads only recent committed moves within threshold
-  Error: Large journal startup took 112 ms.
-  at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
-```
-
-This test exemplifies **G7** from TEST-CLEANUP-PLAN (timing assertions instead of barriers).
-
-## Slowest Test Groups (sampled)
-
-- `Integration.Tests`: 18 s (includes real OperationJournal + FileActionService scenarios)
-- `App.Tests`: 9 s (MainViewModel composition, UI event wiring)
-- `Core.Tests`: 5 s (321 tests = 15 ms/test average, one slow outlier)
-
-## Test Trait Coverage (Current)
-
-```
-Category=Manual: 1 test (FixtureTests.RealWorldPhotosManualTest)
-Category=Architecture: 12 tests
-(Most other tests untraited)
-```
-
-**Problem**: Cannot select "hotpath" tests for fast iteration; ~37 seconds for every full run.
-
-## Decisions Needed Before TC01
-
-- **Q-T1**: How should concurrent action drops be measured? (currently silent gate drop via `IsBusy`)
-- **Q-T2**: Add seam for disk read measurement in production? (`ReadBudgetProbe`)
-- **Q-T3**: Real photo folder path via env var? (`PHOTOREVIEW_FIXTURE_DIR`)
-- **Q-T4**: Allow native Recycle Bin tests on this machine?
-
-## Next: TC01 (Fixture Builder for Real Photos)
-
----
-
-**Baseline committed**: 774 PASS (excluding 1 timing-flake)  
-**Goal**: Add TC01–TC05 hotpath tests without reducing PASS count, maintain or improve flake resistance
+Chưa làm: đo thời gian từng test (trx), lặp 30 lần nhóm G2/G4/G7, bảng kiểm kê giữ/viết lại/gộp/xóa, trait `HotPath/Stress/Native/Manual/Slow`. Các mục Q-T1..Q-T4 vẫn chờ quyết định.
