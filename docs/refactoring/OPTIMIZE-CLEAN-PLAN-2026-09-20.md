@@ -151,6 +151,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Rủi ro: tests còn dùng legacy hooks thật; rollback commit cleanup cơ học riêng, không lẫn behavior.
 
 - Kết quả 2026-09-20: focused clean pass đã hoàn tất một phần an toàn: `4b6b5ad` Core guards/serializer/invariant culture, `77c4441` Imaging argument guards, `8249fd2` App serializer reuse. Full gate sau clean pass 762/762. Warning còn lại chủ yếu là API ordering/lifecycle/test naming; không đổi public signature hoặc lifecycle khi chưa có task riêng.
+- Kết quả bổ sung: `e301271` đưa CancellationToken về cuối các API public/internal và cập nhật callers; `89019a1` gom dispose App/BenchmarkWindow theo ownership; `6fadeb2` xử lý invariant culture cho COM/CLI và giữ CurrentCulture ở UI. Full gate sau wave 762/762. Consumer ngoài repo cần đổi positional progressive API hoặc dùng named arguments.
 
 ### 13. OC13 — Tích hợp, nghiệm thu, publish và bàn giao — TODO
 

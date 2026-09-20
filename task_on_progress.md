@@ -12,11 +12,11 @@
 - **Runtime probes:** DuplicateFinder chọn 2/2 bản cùng hash ở cả group toàn original và toàn numbered; chỉ selection, không recycle/delete. PerfAnalyze gộp 2 run workers 0/8 thành 1 group, R-CONT báo thiếu dữ liệu. Chi tiết/artifact tạm trong plan.
 - **Source findings cần regression:** native buffer sizing unchecked; preload exit/restart chưa bảo đảm drain; batch dialog sau ConfigureAwait(false); WPF catch-all retry; folder remap O(n²)/stat lại; display state; cache invalidation/quota; Undo tail-limit; benchmark semantics.
 - **Chưa xác minh runtime:** race Session/journal failures, native recycle identity, GUI T89. Không biến static concern thành runtime defect.
-- `tools/verify-all.ps1` PASS sau clean-code wave: 7 Architecture + 314 Core + 205 Imaging + 62 Integration + 174 App = 762/762; smoke, fault-injection, publish và verify-release PASS.
+- `tools/verify-all.ps1` PASS sau API/lifecycle/culture wave: 7 Architecture + 314 Core + 205 Imaging + 62 Integration + 174 App = 762/762; smoke, fault-injection, publish và verify-release PASS.
 
 ## Quyết định và việc còn lại
 
-1. UI dispatcher, file outcome/journal durability, SessionWriter ordering, Recovery retry, native candidate identity, benchmark action/report semantics và focused clean-code warnings đã triển khai; còn T89 layout/GUI acceptance, live Recycle Bin acceptance và đo tối ưu ảnh thật.
+1. UI dispatcher, file outcome/journal durability, SessionWriter ordering, Recovery retry, native candidate identity, benchmark action/report semantics, API token ordering, disposal lifecycle, culture formatting và focused clean-code warnings đã triển khai; còn T89 layout/GUI acceptance, live Recycle Bin acceptance và đo tối ưu ảnh thật.
 2. T89 wheel/anchor/pan và transaction Fit đã merge qua PR #9; `docs/refactoring/T89-FIT-LAYOUT-PLAN.md` vẫn **IN PROGRESS**, còn unify initial-mode viewport, STA layout và GUI Fit → wheel → drag trên ảnh dọc/ngang. Không gọi DONE từ pure math tests.
 3. Giữ WPF, DecoderBackend=Wpf, ScalingQuality=HighQuality; SourceBytesCache mặc định off. Chỉ đổi theo số đo/plan được duyệt; không ép RAM gây paging/OOM.
 4. T73 còn coverage Recovery retry/ảnh hỏng nếu có fixture; T74 release trước đã DONE theo hồ sơ cũ, không phải release mới trong lượt review.
@@ -25,5 +25,5 @@
 ## Tiếp tục
 
 - Đọc AGENTS, plan mới và plan T89; kiểm tra branch/SHA/dirty tree lại trước làm.
-- Commit implementation: `4a81ba8` preload, `6a4ec01` decoder, `00cad65` duplicate, `3db9ae6` cache, `5edd15d` display, `b8b97fb` PerfAnalyze grouping, `295f04b` Undo history, `a16b327` folder/catalog, `fb5155f` benchmark profile propagation, `42b92e2` SessionWriter, `481c130` file outcome, `abecebc` UI dispatcher, `32156f5` recovery retry, `6dee023` benchmark action, `6ad5c15` benchmark report/manifest, `3a5c168` recycle candidate identity, `4b6b5ad` Core clean, `77c4441` Imaging clean, `8249fd2` App serializer clean. Tài liệu plan và file này được cập nhật sau validation.
+- Commit implementation: `4a81ba8` preload, `6a4ec01` decoder, `00cad65` duplicate, `3db9ae6` cache, `5edd15d` display, `b8b97fb` PerfAnalyze grouping, `295f04b` Undo history, `a16b327` folder/catalog, `fb5155f` benchmark profile propagation, `42b92e2` SessionWriter, `481c130` file outcome, `abecebc` UI dispatcher, `32156f5` recovery retry, `6dee023` benchmark action, `6ad5c15` benchmark report/manifest, `3a5c168` recycle candidate identity, `4b6b5ad` Core clean, `77c4441` Imaging clean, `8249fd2` App serializer clean, `e301271` API token ordering, `89019a1` disposal lifecycle, `6fadeb2` culture formatting. Tài liệu plan và file này được cập nhật sau validation.
 - Giữ frame khi Move/Delete đang loading; no hidden retry. Không dùng OS SendInput/SendKeys/SetForegroundWindow cho harness; dùng fixture riêng, không đổi config/action người dùng.
