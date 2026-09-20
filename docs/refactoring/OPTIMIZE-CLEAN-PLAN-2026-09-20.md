@@ -87,13 +87,14 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Rủi ro: locking tăng contention; đo cache-hit latency. Rollback độc lập phần RAM/disk; cache là rebuildable, không xóa nguồn ảnh.
 - Kết quả 2026-09-20: commit `3db9ae6`; targeted cache tests 10/10 và full gate wave hai 752/752. Evict invalidates in-flight reads; PNG metadata được prune cùng companion và orphan metadata được dọn.
 
-### 6. OC06 — Journal / Undo / Recovery / Session — TODO
+### 6. OC06 — Journal / Undo / Recovery / Session — IN PROGRESS → Undo history DONE, remaining TODO
 
 - Phụ thuộc OC01; một owner Core cho contract file actions. Files: UndoService, OperationJournal, FileActionService/result, RecoveryRetryService, SessionWriter, WindowsRecycleBin và tests; App consumer chỉ hợp nhất sau OC02/07.
 - Thứ tự: repro F09/C01–C03; typed history chứa operation ID + fingerprint; tách startup-tail khỏi lookup; phân biệt filesystem outcome và journal durability; ordering single writer/sequence cho session; identity check trước restore.
 - Tests: >200 moves và journal >1 MiB, reuse destination, undo mismatch/restart; Prepared/Committed/Failed append fault injection; stale session batch; native restore hai version cùng path/size khác timestamp, destination collision.
 - Xong khi: history hiện hành undo được trong giới hạn công bố; không đọc journal mỗi undo đã có history; vị trí file/UI/journal nhất quán khi lỗi; latest session thắng; native restore đúng version.
 - Rủi ro: contract rộng, chia 3 commit con Undo, outcome/restore, Session; giữ đọc journal cũ tương thích. Rollback bằng revert code, không rewrite/xóa journal hoặc revert filesystem mutation.
+- Kết quả 2026-09-20: Undo history commit `295f04b`, regression >250 moves pass. Fingerprint được giữ trong in-memory history để không phụ thuộc startup tail 200. FileAction durability, recovery retry, SessionWriter ordering và native recycle identity còn TODO.
 
 ### 7. OC07 — Display state và hoàn thành T89 — IN PROGRESS → display subset DONE, T89 TODO
 
@@ -104,20 +105,22 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Rủi ro: layout feedback và stale callbacks; bounded convergence/versioning theo T89. Rollback display fixes và T89 thành commit riêng; không đánh DONE từ pure math tests.
 - Kết quả 2026-09-20: display subset commit `5edd15d` + test seam `ecdbf2b`; App targeted 11/11, full gate 752/752. Compare toggle off và empty-folder clear đã được sửa. T89 layout/STA/GUI acceptance vẫn TODO.
 
-### 8. OC08 — Folder/catalog I/O và allocations — TODO
+### 8. OC08 — Folder/catalog I/O và allocations — DONE
 
 - Phụ thuộc OC01; triển khai sau khi UI contract OC07 ổn định hoặc branch riêng chỉ sở hữu FolderLoadCoordinator/Core Catalog. Coordinator merge App composition tránh đụng OC07.
 - Files: FolderLoadCoordinator, ReviewCatalog, ImageSortService, GetTotalSourceBytes composition; tests catalog/folder/CountingFileSystem.
 - Làm: sort entries trực tiếp hoặc map O(n); tái dùng Length/LastWrite đã scan; total bytes cập nhật theo membership/metadata thay vì re-stat toàn folder. Chỉ thêm index/snapshot cache khi trace cho thấy hot path cần.
 - Tests: order parity Natural/size/Explorer, case paths, file mất/đổi; 1k/10k/50k entries; counting stat sau 100 removals. Xong khi không còn remap O(n²) và không N stat sau mỗi removal; report time/alloc trước-sau.
 - Rủi ro: stale metadata; vẫn kiểm identity tại decode/file action boundary. Rollback riêng commit performance, giữ tests correctness.
+- Kết quả 2026-09-20: commit `a16b327`; sort entries O(n) và tái dùng Length/LastWrite đã scan. ImageSortService/FolderLoadCoordinator targeted tests pass; full gate 755/755.
 
-### 9. OC09 — Benchmark đúng semantics — TODO
+### 9. OC09 — Benchmark đúng semantics — IN PROGRESS → profile propagation DONE, workload action/report TODO
 
 - Phụ thuộc OC01; agent tooling, song song Core/UI. Files: BenchmarkModels/Profiles/ImageExecutor/WorkloadRunner/Engine, CLI Program, BenchmarkWindow, integration tests; preload options cần phối hợp OC04.
 - Làm: từng field profile có effect quan sát được hoặc bỏ/đánh unsupported rõ; cấu hình worker/window/reserve/fullfolder/disk/log nhất quán CLI/GUI. Race workload phải chặn decode ở barrier rồi thực hiện production file-action path. Không quảng bá decode-only là key-to-present/quality proof. Unsupported/failed profile luôn có record; --benchmark-all có capability semantics rõ; manifest dataset sorted, count/cap rõ. Tránh tích lũy fixture vào Recycle Bin ngoài native test riêng.
 - Tests: profile A/B thay actual options/counters; CLI/GUI parity; action xảy ra khi decode pending; summary chứa đủ requested profiles và exit code đúng; logging restore; reproducible selection.
 - Rủi ro: số cũ không so trực tiếp được với workload mới; ghi schema/semantics version, giữ raw baseline. Rollback gói tooling, không dùng kết quả sai để chọn default.
+- Kết quả 2026-09-20: commit `fb5155f`; `Workers`, `MemoryReserveBytes`, `DiskCache` đã truyền vào runtime; BenchmarkWorkloadRunner targeted tests pass. Action-at-decode barrier, unsupported profile summary và dataset semantics còn TODO.
 
 ### 10. OC10 — Perf analysis grouping — DONE
 
