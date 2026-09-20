@@ -47,8 +47,8 @@ public sealed class ThumbnailCache : IDisposable
         ILog? log = null,
         SourceBytesCache? sourceBytesCache = null)
     {
-        if (maxRamBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxRamBytes));
-        if (maxDiskBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maxDiskBytes));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRamBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDiskBytes);
         _diskDirectory = diskDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PhotoReview", "thumbnails");

@@ -20,8 +20,8 @@ public static class RamBudgetPolicy
     public static long EstimateDecodedBytes(IEnumerable<RamBudgetEntry> entries, int targetWidth,
         double? measuredBytesPerPixel = null)
     {
-        if (entries is null) throw new ArgumentNullException(nameof(entries));
-        if (targetWidth <= 0) throw new ArgumentOutOfRangeException(nameof(targetWidth));
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetWidth);
         var fallbackBpp = measuredBytesPerPixel is > 0 ? measuredBytesPerPixel.Value : DefaultAverageBytesPerPixel;
         long total = 0;
         foreach (var entry in entries)
@@ -49,8 +49,8 @@ public static class RamBudgetPolicy
         long capacityBytes, IMemoryProbe memoryProbe, long reserveBytes = PerformanceOptionsDefaults.MemoryReserveBytes,
         double? measuredBytesPerPixel = null)
     {
-        if (memoryProbe is null) throw new ArgumentNullException(nameof(memoryProbe));
-        if (capacityBytes < 0) throw new ArgumentOutOfRangeException(nameof(capacityBytes));
+        ArgumentNullException.ThrowIfNull(memoryProbe);
+        ArgumentOutOfRangeException.ThrowIfNegative(capacityBytes);
         var estimated = EstimateDecodedBytes(entries, targetWidth, measuredBytesPerPixel);
         var headroom = memoryProbe.HasHeadroom(PerformanceOptionsDefaults.PreloadMemoryLoadLimit, reserveBytes);
         return new RamBudgetDecision(estimated, capacityBytes, headroom,
@@ -60,8 +60,8 @@ public static class RamBudgetPolicy
     public static bool ShouldPreloadWholeFolder(long totalSourceBytes, long capacityBytes, IMemoryProbe memoryProbe,
         long reserveBytes = PerformanceOptionsDefaults.MemoryReserveBytes)
     {
-        if (totalSourceBytes < 0) throw new ArgumentOutOfRangeException(nameof(totalSourceBytes));
-        if (memoryProbe is null) throw new ArgumentNullException(nameof(memoryProbe));
+        ArgumentOutOfRangeException.ThrowIfNegative(totalSourceBytes);
+        ArgumentNullException.ThrowIfNull(memoryProbe);
         var estimated = checked((long)(totalSourceBytes * JpegExpansionFactor));
         return estimated <= capacityBytes && memoryProbe.HasHeadroom(
             PerformanceOptionsDefaults.PreloadMemoryLoadLimit, reserveBytes);
