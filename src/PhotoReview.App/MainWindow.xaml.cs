@@ -155,6 +155,13 @@ public partial class MainWindow : Window
     }
     private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
+
+    /// <summary>Harness use: never restore or save the user's real window-placement.json for this instance.</summary>
+    public void SuppressWindowPlacement()
+    {
+        _placementRestored = true;
+        Closing -= Window_Closing;
+    }
     private void Window_Closed(object? sender, EventArgs e)
     {
         CancelPan();

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using NetArchTest.Rules;
 using Xunit;
 
@@ -118,6 +119,38 @@ public sealed class StructureOptimizeRulesTests
                 param.DefaultValue != System.DBNull.Value,
                 $"Required parameter '{param.Name}' should not have a default value");
         }
+    }
+
+    [Fact(DisplayName = "Rule ST06: Benchmark.Cli does not reflect into types of PhotoReview.App")]
+    [Trait("Category", "Architecture")]
+    public void BenchmarkCli_DoesNotReflectIntoAppTypes()
+    {
+        var repoRoot = FindRepoRoot();
+        var appTypeNames = typeof(PhotoReview.App.App).Assembly.GetTypes()
+            .Select(t => t.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var reflectionOnType = new Regex(
+            @"typeof\((?<type>\w+)\)\s*\.\s*Get(Field|Fields|Method|Methods|Property|Properties|NestedType|NestedTypes)\s*\(",
+            RegexOptions.CultureInvariant);
+
+        var violations = new List<string>();
+        var cliDir = Path.Combine(repoRoot, "tools", "PhotoReview.Benchmark.Cli");
+        foreach (var file in Directory.GetFiles(cliDir, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (Match match in reflectionOnType.Matches(lines[i]))
+                {
+                    if (appTypeNames.Contains(match.Groups["type"].Value))
+                        violations.Add($"{Path.GetRelativePath(repoRoot, file).Replace('\\', '/')}:{i + 1}: {lines[i].Trim()}");
+                }
+            }
+        }
+
+        Assert.True(violations.Count == 0,
+            $"Benchmark.Cli reflects into App types; expose a public member instead:\n{string.Join("\n", violations)}");
     }
 
     private static string FindRepoRoot()

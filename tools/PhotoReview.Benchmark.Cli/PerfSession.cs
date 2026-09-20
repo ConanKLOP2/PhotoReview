@@ -217,7 +217,7 @@ internal static class PerfSession
             WindowState = WindowState.Normal,
             ShowActivated = false,
         };
-        WpfTestHost.SuppressWindowPlacement(window);
+        window.SuppressWindowPlacement();
         var settings = window.Settings;
         var configMode = settings.LoadingMode;
         if (options.Mode is not null && Enum.TryParse<LoadingMode>(options.Mode, true, out var m)) settings.LoadingMode = m; // in-memory only; config.json untouched

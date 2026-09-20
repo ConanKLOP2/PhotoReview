@@ -16,7 +16,7 @@ namespace PhotoReview.App.Diagnostics;
 /// Durations are inclusive: an operation that pumps nested frames (Dispatcher.Yield/ShowDialog)
 /// also counts the nested operations' time.
 /// </summary>
-internal sealed class PerfDispatcherHooks
+public sealed class PerfDispatcherHooks
 {
     private const double LongOpThresholdMs = 16;
     // DispatcherOperation keeps its callback in a private field; reading it is best effort and only

@@ -16,7 +16,7 @@ internal static class LocalUiNextProbe
             {
                 window = new MainWindow { ShowActivated = false, WindowState = WindowState.Minimized };
                 // Never restore/save the user's real window placement (SetWindowPlacement could show/activate the window).
-                WpfTestHost.SuppressWindowPlacement(window);
+                window.SuppressWindowPlacement();
                 window.Show();
                 var load = window.LoadFolderAsync(folder, null);
                 await load;
