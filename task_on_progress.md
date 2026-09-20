@@ -32,6 +32,12 @@
 7. For `WpfDialogService`, do not add `Dispatcher.Invoke` or convert all `GetService` calls to `GetRequiredService` before completing WD01 and locking down required/optional contracts.
 8. For I/O, do not reduce journal durability, enable `IgnoreInaccessible`, or introduce wide-reaching `IAsyncFileSystem` before IO01/IO02 and supporting evidence.
 
+## Master Task List
+
+**→ [`docs/ACTIVE-TASKS-2026-09-20.md`](docs/ACTIVE-TASKS-2026-09-20.md)** — Complete consolidated list of all pending work (TC/OC/WD/IO/DT/T89/D tasks), blockers, and critical path.
+
+---
+
 ## Next Steps
 
 ### ST10 — DONE (2026-09-20)
