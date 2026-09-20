@@ -150,6 +150,8 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Tests: architecture, tests đã migrate còn phủ behavior; script gate failure propagation; build warnings baseline vs sau để ưu tiên resource/correctness warnings.
 - Rủi ro: tests còn dùng legacy hooks thật; rollback commit cleanup cơ học riêng, không lẫn behavior.
 
+- Kết quả 2026-09-20: focused clean pass đã hoàn tất một phần an toàn: `4b6b5ad` Core guards/serializer/invariant culture, `77c4441` Imaging argument guards, `8249fd2` App serializer reuse. Full gate sau clean pass 762/762. Warning còn lại chủ yếu là API ordering/lifecycle/test naming; không đổi public signature hoặc lifecycle khi chưa có task riêng.
+
 ### 13. OC13 — Tích hợp, nghiệm thu, publish và bàn giao — TODO
 
 - Phụ thuộc các task đã được chọn triển khai; coordinator thực hiện tuần tự, không nhiều build/publish cạnh tranh output.
