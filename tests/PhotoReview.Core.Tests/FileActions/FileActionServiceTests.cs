@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
@@ -136,7 +136,7 @@ public sealed class FileActionServiceTests
         var result = await _service.ExecuteAsync(request);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("KhÃ´ng thá»ƒ Move/Copy vÃ o chÃ­nh folder nguá»“n.", result.Error);
+        Assert.Equal("Không thể Move/Copy vào chính folder nguồn.", result.Error);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class FileActionServiceTests
         var result = await _service.ExecuteAsync(request);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("ÄÃ­ch Ä‘Ã£ tá»“n táº¡i:", result.Error);
+        Assert.Contains("Đích đã tồn tại:", result.Error);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class FileActionServiceTests
         var result = await _service.ExecuteAsync(request);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Nguá»“n khÃ´ng tá»“n táº¡i", result.Error);
+        Assert.Contains("Nguồn không tồn tại", result.Error);
     }
 
     [Fact]
@@ -224,20 +224,17 @@ public sealed class FileActionServiceTests
 
         var task1 = Task.Run(() => _service.ExecuteAsync(new FileActionRequest(source1, FileOperationType.Move, @"C:\photos\dest")));
 
-        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits.
         // Wait until task1 has acquired the gate
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (!_service.IsBusy && DateTime.UtcNow < deadline)
+        while (!_service.IsBusy)
         {
-            await Task.Yield();
+            await Task.Delay(10);
         }
-        if (!_service.IsBusy) throw new TimeoutException("Service did not become busy within timeout.");
 
         var result2 = await _service.ExecuteAsync(new FileActionRequest(source2, FileOperationType.Move, @"C:\photos\dest"));
 
         Assert.True(result2.Rejected);
         Assert.False(result2.Succeeded);
-        Assert.Equal("Thao tÃ¡c trÆ°á»›c Ä‘Ã³ Ä‘ang thá»±c hiá»‡n.", result2.Error);
+        Assert.Equal("Thao tác trước đó đang thực hiện.", result2.Error);
 
         tcs.SetResult(true);
         var result1 = await task1;
@@ -259,4 +256,3 @@ public sealed class FileActionServiceTests
         _service.End();
     }
 }
-

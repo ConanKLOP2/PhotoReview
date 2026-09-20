@@ -10,7 +10,8 @@
 
 | Group | Task Count | Status | Notes |
 |-------|-----------|--------|-------|
-| **TC** (Test Cleanup) | 11 | TC00 ✅, TC01-TC11 🔄 | Ready for implementation; decisions Q-T1..Q-T4 finalized |
+| **TS** (Test Speed / gate reliability) | 11 | TS00-TS10 TODO (P0 first) | Default gate hangs; plan + evidence in `TEST-SPEED-PLAN-2026-09-20.md` |
+| **TC** (Test Cleanup) | 11 | Claimed done, unverified | Decisions Q-T1..Q-T4 finalized; statuses untrusted until TS10 |
 | **OC** (Optimize/Clean) | 13 | ~65% done | OC01-OC13; many blocks on UI-thread/native/GUI acceptance |
 | **WD** (WPF Dialog) | 6 | All 🔄 | Blocked pending OC14 Undo semantics (ST06 DONE) |
 | **IO** (I/O Durability) | 7 | All 🔄 | Blocked pending contract lock-down |
@@ -20,7 +21,32 @@
 
 ---
 
-## TC Tasks — Test Cleanup (Implementation Ready)
+## TS Tasks — Test Speed and Gate Reliability (P0, do first)
+
+**Plan:** [`TEST-SPEED-PLAN-2026-09-20.md`](refactoring/TEST-SPEED-PLAN-2026-09-20.md) (measured evidence in section 1).
+The default gate `dotnet test PhotoReview.slnx ...` never finishes (App.Tests hangs in `WarmNavigationReadBoundsTests.WarmNext_InCachedRange_ReadsZeroSources`); with that class excluded it takes 41 s and shows 20 failures that all pass at `0fa4bcd` (regressions from `fe00f36`, plus mojibake from ST05 `937f642`).
+
+| ID | Name | Priority | Status |
+|----|------|----------|--------|
+| TS00 | Hang guard in gate and CI (`--blame-hang-timeout`, `WithTimeout`) | P0 | TODO |
+| TS01 | Fix hanging App test and its vacuous/failing siblings | P0 | TODO |
+| TS02 | Cheap, clean fixture (no noise, once per size, cleanup) | P0 | TODO |
+| TS03 | Restore `StaTestHost.WaitForAsync` (2 Integration timeouts) | P0 | TODO |
+| TS04 | Restore Vietnamese text (10 files) + mojibake guard rule | P0 | TODO |
+| TS05 | Deterministic, faster journal test (needs Q-S3) | P1 | TODO |
+| TS06 | Honest hot-path tests (no PASS without assertion) | P1 | TODO |
+| TS07 | Temp hygiene (`TempRoot`) | P1 | TODO |
+| TS08 | Timing report in `verify-all.ps1` | P2 | TODO |
+| TS09 | CI/local filter alignment | P2 | TODO |
+| TS10 | Re-audit commits claiming TC01-TC11 | P1 | TODO |
+
+Open decisions: Q-S1 (fix forward vs revert `fe00f36`), Q-S2 (Q-T1 queue: skip test vs implement), Q-S3 (journal assertion), Q-S4 (delete leaked `%TEMP%` folders).
+
+---
+
+## TC Tasks — Test Cleanup
+
+> **Statuses below are not trustworthy until TS10 finishes.** Commits `d5fc9c8`, `fe00f36`, `1c1f728`, `34886ec`, `7cab725` claim TC01-TC11 work, but the resulting tests hang, fail, or pass without asserting anything (see the TS plan, F1-F8).
 
 **Plan:** [`TEST-CLEANUP-PLAN-2026-09-20.md`](refactoring/TEST-CLEANUP-PLAN-2026-09-20.md)  
 **Decisions finalized (2026-09-20):**

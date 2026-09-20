@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 
-namespace PhotoReview.PerfAnalysis;
+namespace PhotoReview.Benchmarking.PerfAnalysis;
 
 /// <summary>Writes summary.md (human-readable Markdown tables) and summary.json (full numeric
 /// detail) for one `--perf-analyze` run (D11 spec item 8).</summary>
@@ -17,13 +17,13 @@ public static class PerfAnalyzeReport
         var sb = new StringBuilder();
         sb.AppendLine("# Perf analyze summary");
         sb.AppendLine();
-        sb.AppendLine(FormattableString.Invariant($"- Sá»‘ file perf-*.csv: {result.CsvFileCount}"));
-        sb.AppendLine(FormattableString.Invariant($"- Sá»‘ nhÃ³m (scenario/mode/cond/workers): {result.Groups.Count}"));
+        sb.AppendLine(FormattableString.Invariant($"- Số file perf-*.csv: {result.CsvFileCount}"));
+        sb.AppendLine(FormattableString.Invariant($"- Số nhóm (scenario/mode/cond/workers): {result.Groups.Count}"));
         sb.AppendLine();
 
-        sb.AppendLine("## NhÃ³m Ä‘iá»u hÆ°á»›ng (scenario/mode/cond/workers)");
+        sb.AppendLine("## Nhóm điều hướng (scenario/mode/cond/workers)");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | hit rate | ghi chÃº |");
+        sb.AppendLine("| Nhóm | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | hit rate | ghi chú |");
         sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
         foreach (var g in result.Groups)
         {
@@ -33,18 +33,18 @@ public static class PerfAnalyzeReport
         }
         sb.AppendLine();
 
-        sb.AppendLine("## PhÃ¢n loáº¡i theo kind");
+        sb.AppendLine("## Phân loại theo kind");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | kind | count |");
+        sb.AppendLine("| Nhóm | kind | count |");
         sb.AppendLine("|---|---|---:|");
         foreach (var g in result.Groups)
         foreach (var (kind, count) in g.Summary.KindCounts.OrderByDescending(kv => kv.Value))
             sb.AppendLine(FormattableString.Invariant($"| {g.Summary.Key} | {kind} | {count} |"));
         sb.AppendLine();
 
-        sb.AppendLine("## Tá»· trá»ng giai Ä‘oáº¡n á»Ÿ nhÃ³m 10% Ä‘iá»u hÆ°á»›ng cháº­m nháº¥t (trung bÃ¬nh t_x/finalVisual)");
+        sb.AppendLine("## Tỷ trọng giai đoạn ở nhóm 10% điều hướng chậm nhất (trung bình t_x/finalVisual)");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | giai Ä‘oáº¡n | tá»· trá»ng |");
+        sb.AppendLine("| Nhóm | giai đoạn | tỷ trọng |");
         sb.AppendLine("|---|---|---:|");
         foreach (var g in result.Groups)
         foreach (var (phase, share) in g.Summary.SlowestPhaseShare.OrderByDescending(kv => kv.Value))
@@ -53,7 +53,7 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Preload");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | worker | items | paused | cancel | queueWait P50 | queueWait P95 | decode P50 | decode P95 |");
+        sb.AppendLine("| Nhóm | worker | items | paused | cancel | queueWait P50 | queueWait P95 | decode P50 | decode P95 |");
         sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var g in result.Groups)
         {
@@ -67,10 +67,10 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Dispatcher (>16ms)");
         sb.AppendLine();
-        sb.AppendLine("Loáº¡i trá»« DispatcherLongOp xáº£y ra trÆ°á»›c ShowStart/Folder(start) Ä‘áº§u tiÃªn cá»§a má»—i file " +
-                       "(vd. --perf-session dá»±ng cá»­a sá»• WPF ~700ms trÆ°á»›c khi ká»‹ch báº£n báº¯t Ä‘áº§u â€” D06).");
+        sb.AppendLine("Loại trừ DispatcherLongOp xảy ra trước ShowStart/Folder(start) đầu tiên của mỗi file " +
+                       "(vd. --perf-session dựng cửa sổ WPF ~700ms trước khi kịch bản bắt đầu — D06).");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | count | (Ä‘Ã£ loáº¡i trá»« trÆ°á»›c start) | tá»•ng ms | top 5 tÃªn |");
+        sb.AppendLine("| Nhóm | count | (đã loại trừ trước start) | tổng ms | top 5 tên |");
         sb.AppendLine("|---|---:|---:|---:|---|");
         foreach (var g in result.Groups)
         {
@@ -78,7 +78,7 @@ public static class PerfAnalyzeReport
             var top5 = s.DispatcherLongOps.GroupBy(d => d.Name)
                 .Select(gr => (Name: gr.Key, Count: gr.Count(), Total: gr.Sum(x => x.Ms)))
                 .OrderByDescending(x => x.Total).Take(5)
-                .Select(x => FormattableString.Invariant($"{x.Name}Ã—{x.Count} ({x.Total:F1}ms)"));
+                .Select(x => FormattableString.Invariant($"{x.Name}×{x.Count} ({x.Total:F1}ms)"));
             sb.AppendLine(FormattableString.Invariant(
                 $"| {s.Key} | {s.DispatcherLongOps.Count} | {s.DispatcherLongOpsBeforeStartCount} | {s.DispatcherLongOps.Sum(d => d.Ms):F1} | {string.Join("; ", top5)} |"));
         }
@@ -86,7 +86,7 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Folder (T0..T3)");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | gen | T1 catalogReady | T2 (T0->present Ä‘áº§u) | T3 phase | T3 |");
+        sb.AppendLine("| Nhóm | gen | T1 catalogReady | T2 (T0->present đầu) | T3 phase | T3 |");
         sb.AppendLine("|---|---:|---:|---:|---|---:|");
         foreach (var g in result.Groups)
         foreach (var f in g.Summary.FolderGens.OrderBy(f => f.Gen))
@@ -94,14 +94,14 @@ public static class PerfAnalyzeReport
                 $"| {g.Summary.Key} | {f.Gen} | {Ms(f.T1CatalogReadyMs)} | {Ms(f.T2Ms)} | {f.T3Phase} | {Ms(f.T3Ms)} |"));
         sb.AppendLine();
 
-        sb.AppendLine("## Quy táº¯c quyáº¿t Ä‘á»‹nh (rules.json)");
+        sb.AppendLine("## Quy tắc quyết định (rules.json)");
         sb.AppendLine();
-        sb.AppendLine("| NhÃ³m | Quy táº¯c | KÃ­ch hoáº¡t | Báº±ng chá»©ng | Ghi chÃº |");
+        sb.AppendLine("| Nhóm | Quy tắc | Kích hoạt | Bằng chứng | Ghi chú |");
         sb.AppendLine("|---|---|---|---|---|");
         foreach (var g in result.Groups)
         foreach (var r in g.Rules)
             sb.AppendLine(FormattableString.Invariant(
-                $"| {g.Summary.Key} | {r.Rule} | {(r.Triggered is null ? "N/A" : r.Triggered.Value ? "CÃ“" : "khÃ´ng")} | {Escape(r.Evidence)} | {Escape(r.Note ?? "")} |"));
+                $"| {g.Summary.Key} | {r.Rule} | {(r.Triggered is null ? "N/A" : r.Triggered.Value ? "CÓ" : "không")} | {Escape(r.Evidence)} | {Escape(r.Note ?? "")} |"));
 
         File.WriteAllText(path, sb.ToString());
     }
@@ -149,4 +149,3 @@ public static class PerfAnalyzeReport
     private static string Pct(double value) => double.IsNaN(value) ? "N/A" : (value * 100).ToString("F1", CultureInfo.InvariantCulture) + "%";
     private static string Escape(string value) => value.Replace("|", "\\|").Replace("\n", " ");
 }
-

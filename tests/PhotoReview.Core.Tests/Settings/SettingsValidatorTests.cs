@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Core.Tests.Settings;
@@ -47,7 +47,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal("Shortcut Next khÃ´ng há»£p lá»‡.", error);
+        Assert.Equal("Shortcut Next không hợp lệ.", error);
     }
 
     [Fact(DisplayName = "Whitespace or empty shortcut key reports property error")]
@@ -60,7 +60,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal("Shortcut Previous khÃ´ng há»£p lá»‡.", error);
+        Assert.Equal("Shortcut Previous không hợp lệ.", error);
     }
 
     [Fact(DisplayName = "Action with missing name or invalid shortcut reports action error")]
@@ -76,7 +76,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal("Action pháº£i cÃ³ tÃªn vÃ  phÃ­m táº¯t há»£p lá»‡.", error);
+        Assert.Equal("Action phải có tên và phím tắt hợp lệ.", error);
     }
 
     [Fact(DisplayName = "Action with invalid key name reports action error")]
@@ -92,7 +92,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal("Action pháº£i cÃ³ tÃªn vÃ  phÃ­m táº¯t há»£p lá»‡.", error);
+        Assert.Equal("Action phải có tên và phím tắt hợp lệ.", error);
     }
 
     [Fact(DisplayName = "Duplicate shortcut keys report conflict message")]
@@ -106,7 +106,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Contains("PhÃ­m Right bá»‹ dÃ¹ng trÃ¹ng bá»Ÿi:", error);
+        Assert.Contains("Phím Right bị dùng trùng bởi:", error);
         Assert.Contains("Next", error);
         Assert.Contains("Previous", error);
     }
@@ -124,7 +124,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Contains("PhÃ­m Right bá»‹ dÃ¹ng trÃ¹ng bá»Ÿi:", error);
+        Assert.Contains("Phím Right bị dùng trùng bởi:", error);
         Assert.Contains("Next", error);
         Assert.Contains("Action: DuplicateAction", error);
     }
@@ -143,4 +143,3 @@ public sealed class SettingsValidatorTests
         Assert.Throws<ArgumentNullException>(() => new SettingsValidator(null!));
     }
 }
-
