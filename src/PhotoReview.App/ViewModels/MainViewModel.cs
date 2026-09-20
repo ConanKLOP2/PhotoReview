@@ -551,8 +551,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
                 candidates,
                 removeNumbered,
                 (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
-                System.Threading.CancellationToken.None,
-                _fileSystem).ConfigureAwait(false);
+                _fileSystem,
+                System.Threading.CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

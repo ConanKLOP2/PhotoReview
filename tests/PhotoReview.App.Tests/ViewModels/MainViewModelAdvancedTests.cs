@@ -429,9 +429,9 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
             string folder,
             TimeSpan timeout,
-            CancellationToken cancellationToken,
             IProgress<ExplorerQueryProgress>? progress = null,
-            int progressInterval = 16) =>
+            int progressInterval = 16,
+            CancellationToken cancellationToken = default) =>
             TryGetSnapshotAsync(folder, timeout, cancellationToken);
 
         public void Dispose() { }

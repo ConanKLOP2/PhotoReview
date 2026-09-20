@@ -115,7 +115,7 @@ public sealed class ExplorerSnapshotValidatorTests
             CancellationToken cancellationToken) => Task.FromResult(snapshot);
 
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-            CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+            IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
             => Task.FromResult(snapshot);
 
         public void Dispose() { }

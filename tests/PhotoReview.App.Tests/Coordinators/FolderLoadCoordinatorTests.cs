@@ -86,14 +86,14 @@ public sealed class FolderLoadCoordinatorTests
             string folder,
             TimeSpan timeout,
             CancellationToken cancellationToken) =>
-            TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken);
+            TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken: cancellationToken);
 
         public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
             string folder,
             TimeSpan timeout,
-            CancellationToken cancellationToken,
             IProgress<ExplorerQueryProgress>? progress = null,
-            int progressiveBatchSize = 16)
+            int progressiveBatchSize = 16,
+            CancellationToken cancellationToken = default)
         {
             if (SnapshotHook is not null)
             {

@@ -17,7 +17,7 @@ public interface IExplorerOrderProvider : IDisposable
     Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
         string folder,
         TimeSpan timeout,
-        CancellationToken cancellationToken,
         IProgress<ExplorerQueryProgress>? progress = null,
-        int batchSize = 16);
+        int batchSize = 16,
+        CancellationToken cancellationToken = default);
 }

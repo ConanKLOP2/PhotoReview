@@ -20,15 +20,15 @@ public static class DuplicateFinder
     /// Nếu false: chọn xóa các tệp gốc không có hậu tố đánh số.
     /// </param>
     /// <param name="hash">Hàm bất đồng bộ tính hash nội dung tệp.</param>
-    /// <param name="cancellationToken">Token thông báo hủy bỏ thao tác.</param>
     /// <param name="fileSystem">Tùy chọn trừu tượng hóa hệ thống tệp tin (dùng cho testing).</param>
+    /// <param name="cancellationToken">Token thông báo hủy bỏ thao tác.</param>
     /// <returns>Danh sách các đường dẫn tệp trùng lặp phù hợp điều kiện lọc.</returns>
     public static async Task<List<string>> FindAsync(
         IReadOnlyList<string> files,
         bool removeNumbered,
         Func<string, CancellationToken, Task<string>> hash,
-        CancellationToken cancellationToken = default,
-        IFileSystem? fileSystem = null)
+        IFileSystem? fileSystem = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(hash);

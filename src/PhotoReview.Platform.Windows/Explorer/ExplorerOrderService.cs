@@ -87,14 +87,14 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
     {
         batchSize = Math.Clamp(batchSize, 1, 128);
-        return TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, progress, batchSize);
+        return TryGetSnapshotCoreAsync(folder, timeout, progress, batchSize, cancellationToken);
     }
 
     public async Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
-        => await TryGetSnapshotCoreAsync(folder, timeout, cancellationToken, null, int.MaxValue);
+        => await TryGetSnapshotCoreAsync(folder, timeout, null, int.MaxValue, cancellationToken);
 
     private async Task<ExplorerViewSnapshot> TryGetSnapshotCoreAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress, int batchSize)
+        IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
         if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
@@ -103,7 +103,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         var linkedToken = timeoutCts.Token;
         var workTask = _pump.Enqueue(() =>
         {
-            try { return QueryShell(canonicalFolder, linkedToken, progress, batchSize); }
+            try { return QueryShell(canonicalFolder, progress, batchSize, linkedToken); }
             catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
             catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
         });
@@ -118,8 +118,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
     }
 
-    private ExplorerViewSnapshot QueryShell(string folder, CancellationToken cancellationToken,
-        IProgress<ExplorerQueryProgress>? progress, int batchSize)
+    private ExplorerViewSnapshot QueryShell(string folder, IProgress<ExplorerQueryProgress>? progress,
+        int batchSize, CancellationToken cancellationToken)
     {
         var queryTimer = Stopwatch.StartNew();
         _log.Info($"Explorer query-start: folder={folder}");
@@ -145,7 +145,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                     var location = (string?)((dynamic)window).LocationURL;
                     if (!TryCanonicalizeLocation(location, out var current)) continue;
                     if (!ExplorerSnapshotValidator.SamePath(current, folder)) continue;
-                    try { return TryReadNativeView(window, folder, cancellationToken, progress, batchSize); }
+                    try { return TryReadNativeView(window, folder, progress, batchSize, cancellationToken); }
                     catch (OperationCanceledException) { return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
                     catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
                 }
@@ -160,8 +160,8 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         finally { Release(windows); Release(shell); }
     }
 
-    private ExplorerViewSnapshot TryReadNativeView(object window, string folder, CancellationToken cancellationToken,
-        IProgress<ExplorerQueryProgress>? progress, int batchSize)
+    private ExplorerViewSnapshot TryReadNativeView(object window, string folder,
+        IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var timer = Stopwatch.StartNew();
         var getItemCalls = 0;

@@ -30,10 +30,10 @@ public sealed class ExplorerOrderProviderAdapter : IProgressiveExplorerOrderProv
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(
         string folder,
         TimeSpan timeout,
-        CancellationToken cancellationToken,
         IProgress<ExplorerQueryProgress>? progress = null,
-        int batchSize = 16)
-        => _service.TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken, progress, batchSize);
+        int batchSize = 16,
+        CancellationToken cancellationToken = default)
+        => _service.TryGetSnapshotProgressiveAsync(folder, timeout, progress, batchSize, cancellationToken);
 
     public void Dispose() => _service.Dispose();
 }

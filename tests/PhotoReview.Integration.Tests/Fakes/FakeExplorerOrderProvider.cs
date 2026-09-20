@@ -50,10 +50,10 @@ internal sealed class FakeExplorerOrderProvider : IProgressiveExplorerOrderProvi
     public void Release() => _gate.TrySetResult();
 
     public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
-        => TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken);
+        => TryGetSnapshotProgressiveAsync(folder, timeout, cancellationToken: cancellationToken);
 
     public async Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
-        CancellationToken cancellationToken, IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16)
+        IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _callCount);
         RequestedFolder = folder;

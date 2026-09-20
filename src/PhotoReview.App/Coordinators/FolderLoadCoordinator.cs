@@ -90,9 +90,9 @@ public sealed class FolderLoadCoordinator : IDisposable
             var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(
                 folder,
                 TimeSpan.FromSeconds(2),
-                loadToken,
                 null,
-                16);
+                16,
+                loadToken);
 
             entries = await Task.Run(() =>
             {
