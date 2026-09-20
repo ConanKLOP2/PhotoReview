@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Globalization;
 using System.Text.Json;
 
-namespace PhotoReview.Benchmarking.PerfAnalysis;
+namespace PhotoReview.PerfAnalysis;
 
 /// <summary>(scenario, mode, cond) metadata for one perf-*.csv run, read from sibling
 /// session.json/process.json written by D06 when present, with best-effort fallbacks when they
@@ -21,7 +21,7 @@ public sealed record RunFileMeta(string Scenario, string Mode, string Cond, int?
 
         // D06 (--perf-session) writes session.json alongside each iteration's perf-*.csv with the
         // scenario name/alias, mode, DIAG_* env vars and per-step QPC marks. Field names here are
-        // best-effort (D06's exact schema lands via a separate merge) — anything missing or
+        // best-effort (D06's exact schema lands via a separate merge) â€” anything missing or
         // differently named just falls back to "unknown"/majority-vote-from-navs (see PerfAnalyze).
         var sessionPath = Path.Combine(dir, "session.json");
         if (File.Exists(sessionPath))
@@ -100,7 +100,7 @@ public static class PerfStats
     }
 
     /// <summary>Average per-phase share (phase ms / finalVisual ms) across the slowest 10% of the
-    /// given complete navigations, ordered by finalVisual (plan mục 8 / D11 spec item 6). Only
+    /// given complete navigations, ordered by finalVisual (plan má»¥c 8 / D11 spec item 6). Only
     /// navs with a finalVisual are eligible; callers must already have filtered out Incomplete.</summary>
     public static Dictionary<string, double> SlowestDecilePhaseShare(IReadOnlyList<NavRecord> completeNavs)
     {
@@ -113,7 +113,7 @@ public static class PerfStats
 
         foreach (var (name, get) in PhaseGetters())
         {
-            // Only report a phase that at least one nav in the slice actually measured — a phase
+            // Only report a phase that at least one nav in the slice actually measured â€” a phase
             // absent for every nav (e.g. t_disk when nothing was a disk-cache hit) is omitted
             // rather than reported as a misleading 0% share.
             if (!slow.Any(n => get(n).HasValue)) continue;
@@ -138,7 +138,7 @@ public static class PerfStats
         yield return ("t_assign", n => n.TAssignMs);
         yield return ("t_render", n => n.TRenderMs);
         // t_post (preload kick, compare, hash, dims, session) runs after the frame is presented
-        // (plan mục 3), so it is not a share of key→present. Post-work cost stays available on
+        // (plan má»¥c 3), so it is not a share of keyâ†’present. Post-work cost stays available on
         // NavRecord.PostMs for a separate report section (not yet in summary.md).
     }
 }
@@ -220,3 +220,4 @@ public sealed class GroupSummary
         return summary;
     }
 }
+

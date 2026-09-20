@@ -1,14 +1,14 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace PhotoReview.Benchmarking.PerfAnalysis;
+namespace PhotoReview.PerfAnalysis;
 
 /// <summary>Loads tools/diag/rules.json (or an override path): a nested {rule: {key: number}}
 /// document of thresholds, so R-* thresholds can be tuned without rebuilding (D11 spec item 4 /
-/// PERF-DIAGNOSIS-PLAN.md mục 8).</summary>
+/// PERF-DIAGNOSIS-PLAN.md má»¥c 8).</summary>
 public sealed class RulesConfig
 {
     private readonly Dictionary<string, Dictionary<string, double>> _data;
@@ -30,13 +30,13 @@ public sealed class RulesConfig
 }
 
 /// <summary>Result of evaluating one R-* rule against one (scenario, mode, cond) group.
-/// Triggered is null when there isn't enough data to decide (N/A) — plan mục 8 explicitly allows
+/// Triggered is null when there isn't enough data to decide (N/A) â€” plan má»¥c 8 explicitly allows
 /// this for R-IO (no file-open counter yet) and R-CONT (needs runs at different worker counts).</summary>
 public sealed record RuleResult(string Rule, bool? Triggered, string Evidence, string? Note = null);
 
 /// <summary>
 /// Pure, independently-testable evaluators for the nine decision rules in
-/// docs/refactoring/PERF-DIAGNOSIS-PLAN.md mục 8. Each takes plain aggregates (not the full
+/// docs/refactoring/PERF-DIAGNOSIS-PLAN.md má»¥c 8. Each takes plain aggregates (not the full
 /// pipeline) so PerfAnalyzeTests can build a group's numbers by hand and check both the
 /// triggered and not-triggered branch.
 /// </summary>
@@ -45,7 +45,7 @@ public static class PerfRules
     /// <summary>R-IO: in the SourceMiss group, (t_open+t_read) share of finalVisual is high, or the
     /// source is opened too many times per image. t_open is never emitted by the current app (no
     /// call site yet) and t_read only exists under PHOTOREVIEW_DIAG_PREREAD, so this is N/A when
-    /// neither is present in the data (plan mục 8 / D11 spec item 7).</summary>
+    /// neither is present in the data (plan má»¥c 8 / D11 spec item 7).</summary>
     public static RuleResult EvaluateRIo(RulesConfig cfg, IReadOnlyList<NavRecord> sourceMissNavs)
     {
         var sharePct = cfg.Get("R-IO", "sourceMissIoSharePct", 40);
@@ -53,12 +53,12 @@ public static class PerfRules
         if (eligible.Count == 0)
         {
             return new RuleResult("R-IO", null,
-                $"0/{sourceMissNavs.Count} nav SourceMiss có t_open/t_read",
-                "Chưa có bộ đếm số lần mở file nguồn (SourceOpen chưa được gọi); chỉ có khi bật PHOTOREVIEW_DIAG_PREREAD. Dùng số liệu Procmon D02 để suy ra số lần mở file.");
+                $"0/{sourceMissNavs.Count} nav SourceMiss cÃ³ t_open/t_read",
+                "ChÆ°a cÃ³ bá»™ Ä‘áº¿m sá»‘ láº§n má»Ÿ file nguá»“n (SourceOpen chÆ°a Ä‘Æ°á»£c gá»i); chá»‰ cÃ³ khi báº­t PHOTOREVIEW_DIAG_PREREAD. DÃ¹ng sá»‘ liá»‡u Procmon D02 Ä‘á»ƒ suy ra sá»‘ láº§n má»Ÿ file.");
         }
         var avgShare = eligible.Average(n => ((n.TOpenMs ?? 0) + (n.TReadMs ?? 0)) / n.FinalVisualMs!.Value) * 100.0;
         return new RuleResult("R-IO", avgShare >= sharePct,
-            $"avg((t_open+t_read)/finalVisual)={avgShare:F1}% trên {eligible.Count} nav SourceMiss (ngưỡng {sharePct}%)");
+            $"avg((t_open+t_read)/finalVisual)={avgShare:F1}% trÃªn {eligible.Count} nav SourceMiss (ngÆ°á»¡ng {sharePct}%)");
     }
 
     /// <summary>R-DEC: in the SourceMiss/InflightJoin group, t_decode share of finalVisual is high.</summary>
@@ -67,10 +67,10 @@ public static class PerfRules
         var sharePct = cfg.Get("R-DEC", "decodeSharePct", 40);
         var eligible = decodeNavs.Where(n => n.FinalVisualMs is > 0 && n.TDecodeMs.HasValue).ToList();
         if (eligible.Count == 0)
-            return new RuleResult("R-DEC", null, "0 nav SourceMiss/InflightJoin có t_decode", "Không đủ dữ liệu decode.");
+            return new RuleResult("R-DEC", null, "0 nav SourceMiss/InflightJoin cÃ³ t_decode", "KhÃ´ng Ä‘á»§ dá»¯ liá»‡u decode.");
         var avgShare = eligible.Average(n => n.TDecodeMs!.Value / n.FinalVisualMs!.Value) * 100.0;
         return new RuleResult("R-DEC", avgShare >= sharePct,
-            $"avg(t_decode/finalVisual)={avgShare:F1}% trên {eligible.Count} nav (ngưỡng {sharePct}%)");
+            $"avg(t_decode/finalVisual)={avgShare:F1}% trÃªn {eligible.Count} nav (ngÆ°á»¡ng {sharePct}%)");
     }
 
     /// <summary>R-UI: in the RamHit group, (t_input+t_assign+t_render) share is high, or RamHit
@@ -91,11 +91,11 @@ public static class PerfRules
         var byFrameTime = frameTimeP95Ms is { } ft && ft > frameThreshold;
 
         var evidence = $"avg((t_input+t_assign+t_render)/finalVisual)={(avgShare is { } sv ? $"{sv:F1}%" : "N/A")} " +
-                        $"(ngưỡng {sharePct}%); RamHit finalVisual P95={ramHitFinalP95:F1}ms (ngưỡng {ramHitP95Threshold}ms); " +
-                        $"frameTime P95={(frameTimeP95Ms is { } f ? $"{f:F1}ms" : "N/A")} (ngưỡng {frameThreshold}ms)";
+                        $"(ngÆ°á»¡ng {sharePct}%); RamHit finalVisual P95={ramHitFinalP95:F1}ms (ngÆ°á»¡ng {ramHitP95Threshold}ms); " +
+                        $"frameTime P95={(frameTimeP95Ms is { } f ? $"{f:F1}ms" : "N/A")} (ngÆ°á»¡ng {frameThreshold}ms)";
 
         if (avgShare is null && double.IsNaN(ramHitFinalP95) && frameTimeP95Ms is null)
-            return new RuleResult("R-UI", null, evidence, "Không có nav RamHit hoặc dữ liệu frame time trong nhóm này.");
+            return new RuleResult("R-UI", null, evidence, "KhÃ´ng cÃ³ nav RamHit hoáº·c dá»¯ liá»‡u frame time trong nhÃ³m nÃ y.");
 
         return new RuleResult("R-UI", byShare || byRamHitP95 || byFrameTime, evidence);
     }
@@ -110,28 +110,28 @@ public static class PerfRules
         var threshold = cfg.Get("R-PRE", thresholdKey, isBurstScenario ? 30 : 10);
 
         if (double.IsNaN(ramHitFinalP95))
-            return new RuleResult("R-PRE", null, "Không có nav RamHit trong nhóm này.");
+            return new RuleResult("R-PRE", null, "KhÃ´ng cÃ³ nav RamHit trong nhÃ³m nÃ y.");
 
         var triggered = ramHitFinalP95 <= ramHitMax && nonRamHitSharePct >= threshold;
         return new RuleResult("R-PRE", triggered,
-            $"RamHit finalVisual P95={ramHitFinalP95:F1}ms (ngưỡng ≤{ramHitMax}ms); " +
-            $"tỷ lệ không phải RamHit={nonRamHitSharePct:F1}% (ngưỡng ≥{threshold}% cho {(isBurstScenario ? "S3/S4" : "S2")})");
+            $"RamHit finalVisual P95={ramHitFinalP95:F1}ms (ngÆ°á»¡ng â‰¤{ramHitMax}ms); " +
+            $"tá»· lá»‡ khÃ´ng pháº£i RamHit={nonRamHitSharePct:F1}% (ngÆ°á»¡ng â‰¥{threshold}% cho {(isBurstScenario ? "S3/S4" : "S2")})");
     }
 
     /// <summary>R-CONT: the viewed image's decode time grows substantially between a low- and a
-    /// high-preload-worker run of the same scenario/mode — preload contends with the foreground
-    /// decode. N/A when we don't have both a low- and a high-worker run to compare (plan mục 8).</summary>
+    /// high-preload-worker run of the same scenario/mode â€” preload contends with the foreground
+    /// decode. N/A when we don't have both a low- and a high-worker run to compare (plan má»¥c 8).</summary>
     public static RuleResult EvaluateRCont(RulesConfig cfg, double? decodeMsLowWorkers, double? decodeMsHighWorkers, int? lowWorkers, int? highWorkers)
     {
         var factor = cfg.Get("R-CONT", "decodeSlowdownFactor", 1.3);
         if (decodeMsLowWorkers is null || decodeMsHighWorkers is null || lowWorkers == highWorkers)
         {
-            return new RuleResult("R-CONT", null, "Thiếu cặp run PHOTOREVIEW_DIAG_PRELOAD_WORKERS khác nhau để so sánh.",
-                "Cần ít nhất 2 run cùng scenario/mode với PHOTOREVIEW_DIAG_PRELOAD_WORKERS khác nhau (D07).");
+            return new RuleResult("R-CONT", null, "Thiáº¿u cáº·p run PHOTOREVIEW_DIAG_PRELOAD_WORKERS khÃ¡c nhau Ä‘á»ƒ so sÃ¡nh.",
+                "Cáº§n Ã­t nháº¥t 2 run cÃ¹ng scenario/mode vá»›i PHOTOREVIEW_DIAG_PRELOAD_WORKERS khÃ¡c nhau (D07).");
         }
         var ratio = decodeMsHighWorkers.Value / Math.Max(decodeMsLowWorkers.Value, 0.0001);
         return new RuleResult("R-CONT", ratio >= factor,
-            $"t_decode(workers={highWorkers})={decodeMsHighWorkers:F1}ms so t_decode(workers={lowWorkers})={decodeMsLowWorkers:F1}ms, tỷ lệ={ratio:F2} (ngưỡng {factor})");
+            $"t_decode(workers={highWorkers})={decodeMsHighWorkers:F1}ms so t_decode(workers={lowWorkers})={decodeMsLowWorkers:F1}ms, tá»· lá»‡={ratio:F2} (ngÆ°á»¡ng {factor})");
     }
 
     /// <summary>R-THREAD: repeated DispatcherLongOp (>16ms) during S2/S3, or high t_input P95.</summary>
@@ -141,9 +141,9 @@ public static class PerfRules
         var inputThreshold = cfg.Get("R-THREAD", "inputP95Ms", 16);
         var byDispatcher = dispatcherLongOpCount > 0;
         var byInput = tInputP95Ms is { } t && t > inputThreshold;
-        var evidence = $"DispatcherLongOp>{msThreshold}ms count={dispatcherLongOpCount}; t_input P95={(tInputP95Ms is { } v ? $"{v:F1}ms" : "N/A")} (ngưỡng {inputThreshold}ms)";
+        var evidence = $"DispatcherLongOp>{msThreshold}ms count={dispatcherLongOpCount}; t_input P95={(tInputP95Ms is { } v ? $"{v:F1}ms" : "N/A")} (ngÆ°á»¡ng {inputThreshold}ms)";
         if (dispatcherLongOpCount == 0 && tInputP95Ms is null)
-            return new RuleResult("R-THREAD", null, evidence, "Không có DispatcherLongOp hay t_input trong nhóm này.");
+            return new RuleResult("R-THREAD", null, evidence, "KhÃ´ng cÃ³ DispatcherLongOp hay t_input trong nhÃ³m nÃ y.");
         return new RuleResult("R-THREAD", byDispatcher || byInput, evidence);
     }
 
@@ -152,8 +152,8 @@ public static class PerfRules
     {
         var threshold = cfg.Get("R-GC", "gcTimePct", 10);
         if (gcTimePercent is null)
-            return new RuleResult("R-GC", null, "Không có process.json/% time in GC cho nhóm này.", "Cần dotnet-counters (D09) hoặc process.json (D06).");
-        return new RuleResult("R-GC", gcTimePercent.Value >= threshold, $"% time in GC={gcTimePercent:F1}% (ngưỡng {threshold}%)");
+            return new RuleResult("R-GC", null, "KhÃ´ng cÃ³ process.json/% time in GC cho nhÃ³m nÃ y.", "Cáº§n dotnet-counters (D09) hoáº·c process.json (D06).");
+        return new RuleResult("R-GC", gcTimePercent.Value >= threshold, $"% time in GC={gcTimePercent:F1}% (ngÆ°á»¡ng {threshold}%)");
     }
 
     /// <summary>R-DISK: reading the on-disk preview cache is no faster than re-reading and
@@ -167,22 +167,23 @@ public static class PerfRules
             .Select(n => (n.TReadMs ?? 0) + n.TDecodeMs!.Value).ToList();
         if (diskTimes.Count == 0 || readDecodeTimes.Count == 0)
             return new RuleResult("R-DISK", null, $"diskCacheHit navs={diskTimes.Count}, sourceMiss navs={readDecodeTimes.Count}",
-                "Cần ít nhất một nav DiskCacheHit và một nav SourceMiss trong cùng nhóm.");
+                "Cáº§n Ã­t nháº¥t má»™t nav DiskCacheHit vÃ  má»™t nav SourceMiss trong cÃ¹ng nhÃ³m.");
         var avgDisk = diskTimes.Average();
         var avgReadDecode = readDecodeTimes.Average();
         return new RuleResult("R-DISK", avgDisk >= factor * avgReadDecode,
-            $"avg(t_disk)={avgDisk:F1}ms so avg(t_read+t_decode)={avgReadDecode:F1}ms (ngưỡng hệ số {factor})");
+            $"avg(t_disk)={avgDisk:F1}ms so avg(t_read+t_decode)={avgReadDecode:F1}ms (ngÆ°á»¡ng há»‡ sá»‘ {factor})");
     }
 
-    /// <summary>R-FOLDER: opening a folder (T0→T2, first image presented) takes too long.</summary>
+    /// <summary>R-FOLDER: opening a folder (T0â†’T2, first image presented) takes too long.</summary>
     public static RuleResult EvaluateRFolder(RulesConfig cfg, IReadOnlyList<FolderGenSummary> gens)
     {
         var thresholdMs = cfg.Get("R-FOLDER", "folderT0ToT2Ms", 1000);
         var withT2 = gens.Where(g => g.T2Ms.HasValue).ToList();
         if (withT2.Count == 0)
-            return new RuleResult("R-FOLDER", null, "Không có Folder gen nào có T2 (ảnh đầu tiên present).");
+            return new RuleResult("R-FOLDER", null, "KhÃ´ng cÃ³ Folder gen nÃ o cÃ³ T2 (áº£nh Ä‘áº§u tiÃªn present).");
         var worst = withT2.OrderByDescending(g => g.T2Ms).First();
         return new RuleResult("R-FOLDER", worst.T2Ms > thresholdMs,
-            $"T0->T2 tệ nhất={worst.T2Ms:F1}ms (gen={worst.Gen}, T1 catalogReady={worst.T1CatalogReadyMs:F1}ms, T3 {worst.T3Phase}={worst.T3Ms:F1}ms; ngưỡng {thresholdMs}ms)");
+            $"T0->T2 tá»‡ nháº¥t={worst.T2Ms:F1}ms (gen={worst.Gen}, T1 catalogReady={worst.T1CatalogReadyMs:F1}ms, T3 {worst.T3Phase}={worst.T3Ms:F1}ms; ngÆ°á»¡ng {thresholdMs}ms)");
     }
 }
+

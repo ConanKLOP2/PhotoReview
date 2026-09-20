@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PhotoReview.Benchmarking.PerfAnalysis;
+using PhotoReview.PerfAnalysis;
 
 namespace PhotoReview.Integration.Tests;
 

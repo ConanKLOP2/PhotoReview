@@ -6,7 +6,7 @@ using PhotoReview.Core.Caching;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
-using PhotoReview.Benchmarking.PerfAnalysis;
+using PhotoReview.PerfAnalysis;
 using System.IO;
 using System.Windows.Media;
 using System.Globalization;
