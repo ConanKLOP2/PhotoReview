@@ -156,7 +156,11 @@ internal static class MainWindowHelpers
         var presenter = new ImagePresenter(catalog, clock, previewService, thumbs, dummyPreload, compare, hashService, metrics, () => currentSettings, sessionStore, sink, fs, getSession: () => vm?.Session, onPresentedHook: null);
         var coordinator = new FolderLoadCoordinator(catalog, clock, resolvedExplorerOrder, fs, sessionStore, resolvedSettingsStore, new ForwardingFolderSink(() => vm!));
 
-        vm = new MainViewModel(catalog, clock, coordinator, presenter, viewer, compare, resolvedSettingsStore, sessionStore, fs, fileActions, undo, new WpfDialogService(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider()), dummyPreload, WindowsNaturalComparer.Instance, hashService: hashService, previewService: previewService, thumbnailCache: thumbs, metrics: metrics);
+        vm = new MainViewModel(
+            catalog, clock, coordinator, presenter, viewer, compare, resolvedSettingsStore, sessionStore,
+            fs, fileActions, undo, new WpfDialogService(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider()),
+            hashService, previewService, thumbs, new SessionWriter(sessionStore, FileLog.Default),
+            preloadController: dummyPreload, naturalComparer: WindowsNaturalComparer.Instance, metrics: metrics);
 
         return vm;
     }

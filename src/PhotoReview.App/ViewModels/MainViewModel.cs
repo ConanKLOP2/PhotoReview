@@ -57,18 +57,18 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         CompareViewModel compare,
         SettingsStore settingsStore,
         SessionStore sessionStore,
-        IFileSystem? fileSystem = null,
-        FileActionService? fileActionService = null,
-        UndoService? undoService = null,
-        IDialogService? dialogService = null,
+        IFileSystem fileSystem,
+        FileActionService fileActionService,
+        UndoService undoService,
+        IDialogService dialogService,
+        FileHashService hashService,
+        PreviewImageService previewService,
+        ThumbnailCache thumbnailCache,
+        SessionWriter sessionWriter,
         IPreloadController? preloadController = null,
         INaturalComparer? naturalComparer = null,
         Action? resetCachesAction = null,
-        FileHashService? hashService = null,
-        PreviewImageService? previewService = null,
-        ThumbnailCache? thumbnailCache = null,
         ReviewMetrics? metrics = null,
-        SessionWriter? sessionWriter = null,
         IUiScheduler? uiScheduler = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -79,19 +79,19 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink
         _compare = compare ?? throw new ArgumentNullException(nameof(compare));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
-        _fileActionService = fileActionService;
-        _undoService = undoService;
-        _dialogService = dialogService;
+        _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        _fileActionService = fileActionService ?? throw new ArgumentNullException(nameof(fileActionService));
+        _undoService = undoService ?? throw new ArgumentNullException(nameof(undoService));
+        _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _hashService = hashService ?? throw new ArgumentNullException(nameof(hashService));
+        _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
+        _thumbnailCache = thumbnailCache ?? throw new ArgumentNullException(nameof(thumbnailCache));
+        _sessionWriter = sessionWriter ?? throw new ArgumentNullException(nameof(sessionWriter));
         _uiScheduler = uiScheduler ?? ImmediateUiScheduler.Instance;
         _preloadController = preloadController;
         _naturalComparer = naturalComparer ?? ManagedNaturalComparer.Instance;
-        _fileSystem = fileSystem ?? new PhotoReview.Core.IO.PhysicalFileSystem();
         _resetCachesAction = resetCachesAction;
-        _hashService = hashService;
-        _previewService = previewService;
-        _thumbnailCache = thumbnailCache;
         Metrics = metrics ?? new ReviewMetrics();
-        _sessionWriter = sessionWriter;
         _viewerState.ScalingQuality = Settings.ScalingQuality;
     }
 

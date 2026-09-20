@@ -172,9 +172,13 @@ public sealed class MainViewModelFileActionTests : IDisposable
             _settingsStore,
             _sessionStore,
             activeFs,
-            fileActionService: fileActions,
-            undoService: undo,
-            dialogService: _dialogService,
+            fileActions,
+            undo,
+            _dialogService,
+            _hashService,
+            _previewService,
+            _thumbnailCache,
+            new SessionWriter(_sessionStore, FileLog.Default),
             preloadController: _preloadController,
             naturalComparer: ManagedNaturalComparer.Instance);
 

@@ -65,7 +65,8 @@ internal static class MainViewModelCompositionRoot
 
         vm = new MainViewModel(
             catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
-            fs, actions, undo, dialog, preloadController, natural, hashService: hash, previewService: preview, thumbnailCache: thumbs, sessionWriter: sessionWriter,
+            fs, actions, undo, dialog, hash, preview, thumbs, sessionWriter,
+            preloadController: preloadController, naturalComparer: natural,
             uiScheduler: sp.GetRequiredService<IUiScheduler>());
 
         return vm;

@@ -140,6 +140,12 @@ public sealed class MainViewModelNavigationTests : IDisposable
             _settingsStore,
             new ForwardingFolderLoadSink(() => vm!));
 
+        var appPaths = new PhotoReview.Core.AppPaths(_tempDir);
+        var journal = new OperationJournal(appPaths, _fileSystem, new SystemClock());
+        var fileActions = new FileActionService(journal, _fileSystem, new SystemClock(), new TestRecycleBin());
+        var undo = new UndoService(journal, _fileSystem, new TestRecycleBin(), fileActions);
+        var dialog = new TestDialogService();
+
         vm = new MainViewModel(
             _catalog,
             _clock,
@@ -149,9 +155,38 @@ public sealed class MainViewModelNavigationTests : IDisposable
             _compareViewModel,
             _settingsStore,
             _sessionStore,
-            _fileSystem);
+            _fileSystem,
+            fileActions,
+            undo,
+            dialog,
+            _hashService,
+            _previewService,
+            _thumbnailCache,
+            new SessionWriter(_sessionStore, new NullLog()),
+            preloadController: _preloadController);
 
         return (vm, presenter, coordinator);
+    }
+
+    private sealed class TestRecycleBin : IRecycleBin
+    {
+        public void Recycle(string path) { }
+        public void SendToRecycleBin(string path) { }
+        public bool TryRestore(string path, long length, DateTime lastWriteUtc) => false;
+        public bool IsAccessible => true;
+    }
+
+    private sealed class TestDialogService : IDialogService
+    {
+        public bool ShowConfirmation(string title, string message) => false;
+        public void ShowMessage(string title, string message) { }
+        public void ShowError(string title, string message) { }
+        public string? PickFolder(string? initialFolder = null) => null;
+        public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
+        public void ShowRecovery() { }
+        public void ShowDiagnostics() { }
+        public bool ShowSettings() => false;
+        public void ShowBenchmark(string? folder = null) { }
     }
 
     [Fact]
