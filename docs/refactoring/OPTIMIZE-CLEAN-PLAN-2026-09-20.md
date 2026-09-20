@@ -53,13 +53,14 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Xong khi: mỗi patch sau có failure/test hoặc evidence rõ trên baseline; phân biệt static/runtime, không cần ép mọi concern thành defect. Không thêm source-text assertion thay cho behavior test.
 - Rủi ro/rollback: tests có thể động đến Recycle Bin; chỉ fixture temp có manifest, không dùng ảnh thật; giữ/xóa artifact riêng, không reset repo.
 
-### 2. OC02 — Duplicate cleanup và UI thread — IN PROGRESS → phần duplicate DONE, UI thread TODO
+### 2. OC02 — Duplicate cleanup và UI thread — DONE
 
 - Phụ thuộc OC01; song song với decoder/preload. Một agent sở hữu `DuplicateFinder`, `MainViewModel.RemoveDuplicatesAsync`, `WpfDialogService`, tests duplicate/dialog.
 - Làm: policy survivor deterministic cho all-original/all-numbered/mixed; loại duplicate path; xử lý hash không hợp lệ. Dialog trên UI dispatcher; kiểm tra lại generation và identity trước batch mutation. Không bỏ màn xác nhận hiện có.
 - Tests: hash cold asynchronous, STA thật, nhóm 2/3 bản, hash fail, folder đổi khi hash/dialog, file đổi giữa scan và action. Assert >=1 survivor mỗi content group và không recycle file ngoài snapshot đã duyệt.
 - Rủi ro: thay candidate list và synchronous dispatcher deadlock; không giữ lock file-action khi chờ dialog. Rollback nguyên gói commit; không đảo thao tác file người dùng tự động.
 - Kết quả 2026-09-20: duplicate survivor đã DONE trong commit `00cad65`; targeted 9/9 và full gate 748/748. UI-thread dialog boundary còn TODO do cần dispatcher abstraction và STA test riêng.
+- Kết quả bổ sung: commit `abecebc`; MainViewModel dùng IUiScheduler/DispatcherUiScheduler cho dialog sau async hash, targeted MainViewModelAdvanced 8/8 và full gate wave bốn 758/758.
 
 ### 3. OC03 — Decoder safety và fallback — DONE
 
@@ -87,7 +88,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Rủi ro: locking tăng contention; đo cache-hit latency. Rollback độc lập phần RAM/disk; cache là rebuildable, không xóa nguồn ảnh.
 - Kết quả 2026-09-20: commit `3db9ae6`; targeted cache tests 10/10 và full gate wave hai 752/752. Evict invalidates in-flight reads; PNG metadata được prune cùng companion và orphan metadata được dọn.
 
-### 6. OC06 — Journal / Undo / Recovery / Session — IN PROGRESS → Undo history DONE, remaining TODO
+### 6. OC06 — Journal / Undo / Recovery / Session — IN PROGRESS → Undo/journal/session DONE, recovery/native TODO
 
 - Phụ thuộc OC01; một owner Core cho contract file actions. Files: UndoService, OperationJournal, FileActionService/result, RecoveryRetryService, SessionWriter, WindowsRecycleBin và tests; App consumer chỉ hợp nhất sau OC02/07.
 - Thứ tự: repro F09/C01–C03; typed history chứa operation ID + fingerprint; tách startup-tail khỏi lookup; phân biệt filesystem outcome và journal durability; ordering single writer/sequence cho session; identity check trước restore.
@@ -95,6 +96,7 @@ Mỗi task chỉ chuyển DONE sau evidence/kiểm thử nêu dưới đây. N�
 - Xong khi: history hiện hành undo được trong giới hạn công bố; không đọc journal mỗi undo đã có history; vị trí file/UI/journal nhất quán khi lỗi; latest session thắng; native restore đúng version.
 - Rủi ro: contract rộng, chia 3 commit con Undo, outcome/restore, Session; giữ đọc journal cũ tương thích. Rollback bằng revert code, không rewrite/xóa journal hoặc revert filesystem mutation.
 - Kết quả 2026-09-20: Undo history commit `295f04b`, regression >250 moves pass. Fingerprint được giữ trong in-memory history để không phụ thuộc startup tail 200. FileAction durability, recovery retry, SessionWriter ordering và native recycle identity còn TODO.
+- Kết quả bổ sung: `481c130` tách filesystem outcome khỏi journal durability khi append Committed lỗi; `42b92e2` bảo đảm SessionWriter bỏ batch cũ khi snapshot mới hơn đã chờ. FileAction/Session tests và full gate 758/758 pass. Recovery retry/native restore identity còn TODO.
 
 ### 7. OC07 — Display state và hoàn thành T89 — IN PROGRESS → display subset DONE, T89 TODO
 
