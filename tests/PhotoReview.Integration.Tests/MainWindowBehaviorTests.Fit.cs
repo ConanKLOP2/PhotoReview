@@ -96,8 +96,6 @@ public partial class MainWindowBehaviorTests
                     $"Offset=({window.ImageScroll.HorizontalOffset:F1}, {window.ImageScroll.VerticalOffset:F1})");
 
                 Assert.Equal(1.0, window.ViewModel.Viewer.Zoom);
-
-                return Task.CompletedTask;
             });
         }
         finally
@@ -156,8 +154,6 @@ public partial class MainWindowBehaviorTests
                 Assert.Equal(beforeStretch, window.ViewModel.Viewer.Stretch);
                 Assert.True(Math.Abs(window.MainImage.ActualWidth - beforeWidth) < 0.5, "Image width changed");
                 Assert.True(Math.Abs(window.MainImage.ActualHeight - beforeHeight) < 0.5, "Image height changed");
-
-                return Task.CompletedTask;
             });
         }
         finally
@@ -211,8 +207,6 @@ public partial class MainWindowBehaviorTests
                 // Should still be at Zoom 2.0
                 Assert.Equal(2.0, window.ViewModel.Viewer.Zoom);
                 Assert.False(window.ViewModel.Viewer.IsFit);
-
-                return Task.CompletedTask;
             });
         }
         finally
@@ -272,8 +266,6 @@ public partial class MainWindowBehaviorTests
                     TimeSpan.FromSeconds(5));
 
                 Assert.True(fitConverged, "Fit did not converge after pan and double-click");
-
-                return Task.CompletedTask;
             });
         }
         finally
@@ -307,7 +299,7 @@ public partial class MainWindowBehaviorTests
                 await StaTestHost.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
                 // Right-click (RightButton, ClickCount=2)
-                var args = new MouseButtonEventArgs(Mouse.SecondaryDevice, 0, MouseButton.Right)
+                var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Right)
                 {
                     RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
                 };
@@ -325,8 +317,6 @@ public partial class MainWindowBehaviorTests
 
                 // Should not fit
                 Assert.False(window.ViewModel.Viewer.IsFit, "Right-click should not trigger Fit");
-
-                return Task.CompletedTask;
             });
         }
         finally
@@ -348,10 +338,9 @@ public partial class MainWindowBehaviorTests
 
     private static async Task CloseAsync(MainWindow window)
     {
-        await StaTestHost.RunAsync(() =>
+        await StaTestHost.RunAsync(async () =>
         {
             try { window.Close(); } catch { }
-            return Task.CompletedTask;
         });
     }
 }
