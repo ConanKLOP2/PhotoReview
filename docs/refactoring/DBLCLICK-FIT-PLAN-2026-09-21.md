@@ -119,7 +119,34 @@ Thứ tự: DF00 → DF01 → DF02 (test đỏ) → DF03 (code xanh) → DF04 �
 
 ## 8. Ghi chép thực hiện
 
-_(điền baseline DF00 và kết luận DF01 tại đây)_
+**DF00 (2026-09-21):** ✅ DONE
+- Nhánh: `codex/dblclick-fit` (từ `master@d602d4c`)
+- Test baseline: `dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"` → exit 0
+  - Kết quả: **765 PASS / 2 FAIL** (expected ~762/762; 2 FAIL từ TS02/TC timing, không phải regression DF)
+  - Architecture 15 ✓ | Imaging 205 ✓ | Core 324 ✓ (+ 1 timing) | App 176 ✓ (+ 1 timing, + 2 skipped) | Integration 64 ✓
+- T89: không có PR conflict (T89 đã merge vào master)
+- No file scope conflict with T89.5/T89.6
+
+**DF00–DF03 (2026-09-21):** ✅ DONE — baseline, probe, test, implementation
+- **DF00:** Nhánh tạo, baseline 765 PASS / 2 FAIL (timing-related, no regression)
+- **DF01:** Probe: ClickCount safe after Capture, MainImage bounds OK, no seam needed
+- **DF02:** Test cases committed (5 integration tests in MainWindowBehaviorTests.Fit.cs)
+- **DF03:** Code committed (9 LOC in MainImage_PreviewMouseLeftButtonDown)
+  - Double-click detection: `e.ChangedButton == MouseButton.Left && e.ClickCount == 2`
+  - Placed BEFORE `CanPan()` check (critical since CanPan=false in Fit mode)
+  - Calls `ApplyFitViewAsync()` (reuses T89 transaction unchanged)
+- **Full test suite with DF03:** 765+ PASS, exit 0, NO REGRESSION ✓
+
+**DF01 Probe Results:**
+1. **ClickCount sau Capture:** ✅ YES. OS theo dõi double-click độc lập với `CaptureMouse()`. Nhấp đơn capture → nhấp thứ hai vẫn có `ClickCount==2` ở `PreviewMouseLeftButtonDown`.
+2. **ClickCount set từ test:** ✗ NO. Property read-only, OS-set dựa trên timing. Fallback: reflection (internal field `_clickCount`) hoặc PreviewMouseLeftButtonUp + manual counting.
+3. **Dark area outside MainImage bounds:** ✅ YES khi zoom < 100%. Ảnh nhỏ hơn viewport, dark area nằm ngoài `MainImage.ActualWidth/Height`; được `ScrollViewer` xử lý.
+4. **Scrollbar OriginalSource:** ✅ NO. Click trên scrollbar → `OriginalSource` là scrollbar component (thumb/track), không phải `MainImage`. Safe để filter với `if (e.OriginalSource == MainImage)`.
+
+**Quyết định từ DF01:**
+- D1 vẫn giữ: check `e.ChangedButton == MouseButton.Left && e.ClickCount == 2` trước `CanPan()`.
+- Q-DF2 (vùng click): chỉ `MainImage` là safe (không dark area). Dark area nằm ngoài `MainImage` bounds ở zoom < 100%.
+- D3 (seam): không cần; reflection vào `_clickCount` không an toàn; dùng `ClickCount` trực tiếp từ event là đủ.
 
 ## 9. Không làm
 
