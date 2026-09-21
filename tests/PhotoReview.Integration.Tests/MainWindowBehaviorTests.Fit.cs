@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using PhotoReview.App;
+using PhotoReview.Integration.Tests.Infrastructure;
 using Xunit;
 
 namespace PhotoReview.Integration.Tests;
