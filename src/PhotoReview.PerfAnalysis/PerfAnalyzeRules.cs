@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace PhotoReview.Benchmarking.PerfAnalysis;
+namespace PhotoReview.PerfAnalysis;
 
 /// <summary>Loads tools/diag/rules.json (or an override path): a nested {rule: {key: number}}
 /// document of thresholds, so R-* thresholds can be tuned without rebuilding (D11 spec item 4 /
