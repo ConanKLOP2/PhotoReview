@@ -1,6 +1,6 @@
 # PhotoReview — Current Status
 
-- **Updated:** 2026-09-20, after creating plans for UI/clean-code review and structural optimization (ST).
+- **Updated:** 2026-09-21, fixed the PerfAnalysis namespace mismatch reported by CI.
 - **Verified Checkout:** `master`, `ba1317e54702e3af8bd32c0bf5d953b3766f1ba0` (PR #9 merged); working tree was clean before review.
 - **Session Objective:** Repo-wide review and execution of the first three P1 packages in the optimize/clean plan. Also translated root documentation files to 100% English.
 - **Plan:** `docs/refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`; main correctness and benchmark semantics implemented; T89 GUI/STA and native Recycle Bin live acceptance pending evidence.
@@ -54,6 +54,12 @@
   - `task_on_progress.md` updated to reflect ST10 DONE, ST11 DONE, ST12 APPROVED
 - **Status:** All ST tasks are either DONE or BLOCKED pending OC14 (Ctrl+Z semantics)
 - **Next:** OC14–OC18 can proceed independently; TC01–TC11 ready for implementation
+
+### CI namespace fix — DONE (2026-09-21)
+- **Objective:** Fix CI compilation errors for `PhotoReview.PerfAnalysis` and `NavRecord` in the benchmark CLI and integration tests.
+- **Change:** Updated the namespace declaration in all six files under `src/PhotoReview.PerfAnalysis/` from `PhotoReview.Benchmarking.PerfAnalysis` to `PhotoReview.PerfAnalysis`, matching existing project references and `using` directives.
+- **Validation:** `dotnet build PhotoReview.slnx -c Release --no-restore` passed with 0 errors; focused `PerfAnalyzeTests` validation pending/recorded with this change.
+- **Continuation:** Keep the project namespace and consuming `using` directives aligned if PerfAnalysis files are moved or regenerated.
 
 **Decisions finalized (2026-09-20):**
 - **Q-T1:** Queue keypresses when action is running (UX priority: don't silently drop). TC05 tests queue order and final state.

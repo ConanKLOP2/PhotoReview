@@ -5,7 +5,7 @@ using System.Linq;
 using System.Globalization;
 using System.Text.Json;
 
-namespace PhotoReview.Benchmarking.PerfAnalysis;
+namespace PhotoReview.PerfAnalysis;
 
 /// <summary>(scenario, mode, cond) metadata for one perf-*.csv run, read from sibling
 /// session.json/process.json written by D06 when present, with best-effort fallbacks when they
