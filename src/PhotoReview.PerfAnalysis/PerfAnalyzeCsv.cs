@@ -5,7 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace PhotoReview.Benchmarking.PerfAnalysis;
+namespace PhotoReview.PerfAnalysis;
 
 /// <summary>
 /// One parsed data row from a perf-*.csv file written by
