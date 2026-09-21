@@ -18,6 +18,7 @@
 | **DT** (Docs Diet) | 10 | All 🔄 | Planning complete; not yet implemented |
 | **T89** (GUI/Layout) | 1 | 🔄 IN PROGRESS | Awaiting GUI/STA acceptance before Fit changes |
 | **D** (Perf Diagnosis) | 13 | D00-D07 mixed | D01-D02 BLOCKED; D08-D09 TODO |
+| **DF** (Double-click → Fit) | 8 | DF00-DF07 PLANNED | Plan: `refactoring/DBLCLICK-FIT-PLAN-2026-09-21.md`; reuses T89 Fit transaction, does not modify it |
 
 ---
 
