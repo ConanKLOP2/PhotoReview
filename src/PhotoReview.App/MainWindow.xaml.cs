@@ -217,6 +217,15 @@ public partial class MainWindow : Window
 
     private void MainImage_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // DF03: Double-click to Fit (before pan check since CanPan=false in Fit mode)
+        if (e.ChangedButton == MouseButton.Left && e.ClickCount == 2)
+        {
+            CancelPan();
+            _ = ApplyFitViewAsync();
+            e.Handled = true;
+            return;
+        }
+
         if (!CanPan()) return;
 
         _isPanning = true;
