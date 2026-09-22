@@ -343,42 +343,33 @@ public sealed class OperationJournalUnitTests
         try
         {
             const int totalEntries = 100_000;
-            var now = _clock.UtcNow;
-
-            // Create a template entry to serialize once, then modify the JSON bytes for each entry.
-            // This is much faster than JsonSerializer.Serialize per entry (was 3.3 s, now < 0.5 s).
-            var template = new JournalEntry("template", FileOperationType.Move, JournalState.Committed,
-                "C:\\photos\\source.jpg", "C:\\photos\\dest.jpg", 12345, now, now);
-            var templateJson = JsonSerializer.Serialize(template);
-
+            var setupWatch = Stopwatch.StartNew();
             using (var writer = new StreamWriter(path, false, Encoding.UTF8, 256 * 1024))
             {
                 for (var i = 0; i < totalEntries; i++)
                 {
-                    // Replace the template id and paths with the iteration number.
-                    var idString = $"old-{i}";
-                    var json = templateJson
-                        .Replace("\"Id\":\"template\"", $"\"Id\":\"{idString}\"")
-                        .Replace("\"Source\":\"C:\\\\photos\\\\source.jpg\"", $"\"Source\":\"C:\\\\photos\\\\source-{i}.jpg\"")
-                        .Replace("\"Destination\":\"C:\\\\photos\\\\dest.jpg\"", $"\"Destination\":\"C:\\\\photos\\\\dest-{i}.jpg\"")
-                        .Replace("\"Size\":12345", $"\"Size\":{i}");
-                    writer.WriteLine(json);
+                    var entry = new JournalEntry($"old-{i}", FileOperationType.Move, JournalState.Committed,
+                        $@"C:\photos\source-{i}.jpg", $@"C:\photos\dest-{i}.jpg", i,
+                        _clock.UtcNow, _clock.UtcNow);
+                    writer.WriteLine(JsonSerializer.Serialize(entry));
                 }
             }
+            setupWatch.Stop();
 
             var journal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
-            var stopwatch = Stopwatch.StartNew();
+            var readWatch = Stopwatch.StartNew();
             var entries = journal.ReadCommittedMoves();
-            stopwatch.Stop();
+            readWatch.Stop();
 
             Assert.Equal(200, entries.Count);
             Assert.Equal("old-99800", entries[0].Id);
             Assert.Equal("old-99999", entries[^1].Id);
 
-            // Ensure deterministic bounded work: ReadCommittedMovesReverse reads from the tail,
+            // Verify deterministic bounded work: tail read should be much faster than setup.
+            // ReadCommittedMovesReverse reads from the tail with an expanding window,
             // so adding more old entries does not increase the read cost.
-            Assert.True(stopwatch.ElapsedMilliseconds < 2000,
-                $"Journal tail read took {stopwatch.ElapsedMilliseconds} ms (bounded work, backstop 2000ms).");
+            Assert.True(readWatch.ElapsedMilliseconds < 500,
+                $"Journal tail read took {readWatch.ElapsedMilliseconds} ms (bounded work, target <= 500ms). Setup: {setupWatch.ElapsedMilliseconds} ms.");
         }
         finally
         {
