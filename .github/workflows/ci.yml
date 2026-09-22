@@ -23,10 +23,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # setup-dotnet checks this directory before downloading; if the exact SDK
+      # version from global.json is already here, it skips the download entirely.
+      # Keyed on global.json's hash so a version bump auto-invalidates the cache
+      # instead of silently reusing a stale SDK.
+      - name: Cache .NET SDK
+        uses: actions/cache@v4
+        with:
+          path: C:\hostedtoolcache\windows\dotnet
+          key: ${{ runner.os }}-dotnet-sdk-${{ hashFiles('global.json') }}
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
+        # No dotnet-version input: reads the pinned SDK version from global.json
+        # directly, so the workflow can't drift from what the repo actually pins.
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
