@@ -12,7 +12,6 @@ The application must prioritize the following principles when processing and rev
 1. **Minimize Disk Reads:** Always minimize disk I/O as much as possible. Prioritize reusing read data, caching, and efficient sequential reading mechanisms to avoid redundant disk I/O.
 2. **Maximize RAM Utilization:** Prioritize using high RAM amounts to optimize speed. The system has 32 GB of RAM, so the target usage is at least 16 GB where applicable. If the total size of the photo folder is under 16 GB, prioritize loading the entire folder into RAM, provided it does not cause errors or severely impact the system.
 3. **Prioritize Review Speed:** All designs and optimizations must prioritize the speed of photo switching, image rendering, and fast review operations.
-4. **Prioritize Image Quality:** Whenever possible, images must be loaded and rendered at the highest possible quality; avoid reducing quality or relying on lower-resolution previews unless strictly necessary.
 
 ## Documentation Reading Strategy (Token Diet)
 
