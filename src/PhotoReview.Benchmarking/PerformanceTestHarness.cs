@@ -18,6 +18,7 @@ public static class PerformanceTestHarness
 {
     private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
         { ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff" };
+    private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
 
     public static string CreateFixture(string root, int count = 30)
     {
@@ -49,7 +50,7 @@ public static class PerformanceTestHarness
         if (reportPath is null) reportPath = Path.Combine(folder, "photoreview-performance-report.json");
         var report = new PerformanceReport(started, folder, files.Length, totalBytes, samples);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
-        await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
+        await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(report, DefaultOptions), cancellationToken);
         Console.WriteLine($"PERF report={reportPath} files={files.Length} bytes={totalBytes} " +
             string.Join("; ", samples.Select(s => $"{s.Name}:p50={s.P50Ms}ms,p95={s.P95Ms}ms,status={s.Status}")));
         return report;
