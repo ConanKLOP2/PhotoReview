@@ -85,7 +85,7 @@ jobs:
           $failed = $false
           $trxFiles = Get-ChildItem -Path TestResults -Filter *.trx -Recurse -ErrorAction SilentlyContinue
           if (-not $trxFiles -or $trxFiles.Count -lt $projects.Count) {
-            Write-Error "Expected $($projects.Count) TRX result files, found $($trxFiles.Count) — a test run may have crashed before producing results."
+            Write-Error "Expected $($projects.Count) TRX result files, found $($trxFiles.Count) - a test run may have crashed before producing results."
             exit 1
           }
           foreach ($trx in $trxFiles) {
