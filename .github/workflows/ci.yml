@@ -118,7 +118,10 @@ jobs:
           }
 
       - name: Publish Release
-        run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
+        # --no-restore: the App project was already restored as part of the
+        # whole-solution restore above; dotnet publish restores again by
+        # default, which is redundant work on an unchanged dependency graph.
+        run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --no-restore --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
 
       - name: Verify Release
         shell: powershell
