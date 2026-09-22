@@ -251,6 +251,12 @@ if ($TestReport) {
     Generate-TestReport -TestProjects $testProjects -RootPath $root
 }
 
+# DT09: Documentation budget check (warning level; error after stabilization)
+Invoke-Gate 'Check documentation budget (T0 <= 12 KB)' {
+    & (Join-Path $PSScriptRoot 'docs-budget.ps1') -Check | Out-Null
+    # Note: T1 budget exceeded is a warning (see docs-budget.ps1 for details)
+}
+
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')
 }
