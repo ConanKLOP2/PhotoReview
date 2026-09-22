@@ -12,6 +12,8 @@ namespace PhotoReview.PerfAnalysis;
 /// detail) for one `--perf-analyze` run (D11 spec item 8).</summary>
 public static class PerfAnalyzeReport
 {
+    private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
+
     public static void WriteMarkdown(string path, PerfAnalyze.AnalysisResult result)
     {
         var sb = new StringBuilder();
@@ -140,7 +142,7 @@ public static class PerfAnalyzeReport
                 rules = g.Rules.Select(r => new { r.Rule, r.Triggered, r.Evidence, r.Note }),
             }),
         };
-        File.WriteAllText(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(path, JsonSerializer.Serialize(payload, DefaultOptions));
     }
 
     private static double PercentileOrNaN(List<double> sortedAsc, double p) => sortedAsc.Count == 0 ? double.NaN : PerfStats.NearestRank(sortedAsc, p);

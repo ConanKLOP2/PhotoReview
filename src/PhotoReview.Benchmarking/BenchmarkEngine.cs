@@ -9,7 +9,7 @@ public sealed record BenchmarkProgress(string ProfileId, BenchmarkWorkload Workl
 /// <summary>Runs measurable workloads through injected operations so the UI and CLI share one contract.</summary>
 public sealed class BenchmarkEngine
 {
-    public async Task<BenchmarkReport> RunAsync(string folder, BenchmarkProfile profile,
+    public static async Task<BenchmarkReport> RunAsync(string folder, BenchmarkProfile profile,
         BenchmarkWorkloadExecutor operation,
         IProgress<BenchmarkProgress>? progress = null, CancellationToken cancellationToken = default)
     {

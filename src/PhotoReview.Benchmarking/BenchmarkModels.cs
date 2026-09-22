@@ -63,7 +63,9 @@ public sealed record BenchmarkReport(string RunId, DateTimeOffset StartedUtc,
     string Folder, IReadOnlyList<BenchmarkPhaseResult> Phases,
     ReviewMetricsSnapshot? Metrics = null, string? Machine = null)
 {
-    public string ToJson() => JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+    private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
+
+    public string ToJson() => JsonSerializer.Serialize(this, DefaultOptions);
 }
 
 /// <summary>Stable description of the input set used by a benchmark batch.</summary>
@@ -83,7 +85,9 @@ public sealed record BenchmarkBatchSummary(
     IReadOnlyList<BenchmarkReport> Reports,
     IReadOnlyList<BenchmarkPhaseResult> ProfileOutcomes)
 {
-    public string ToJson() => JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+    private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
+
+    public string ToJson() => JsonSerializer.Serialize(this, DefaultOptions);
 }
 
 public static class BenchmarkRanking
