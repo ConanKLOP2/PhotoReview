@@ -106,7 +106,7 @@ public sealed class MainViewModelNavigationTests : IDisposable
         catch { }
     }
 
-    private string CreateImageFile(string folder, string name)
+    private static string CreateImageFile(string folder, string name)
     {
         var filePath = Path.Combine(folder, name);
         File.WriteAllBytes(filePath, ValidPngBytes);
@@ -171,10 +171,14 @@ public sealed class MainViewModelNavigationTests : IDisposable
 
     private sealed class TestRecycleBin : IRecycleBin
     {
+        // CA1822: Recycle and IsAccessible implement IRecycleBin (an instance interface
+        // contract), so they cannot be marked static regardless of body content.
+#pragma warning disable CA1822
         public void Recycle(string path) { }
         public void SendToRecycleBin(string path) { }
         public bool TryRestore(string path, long length, DateTime lastWriteUtc) => false;
         public bool IsAccessible => true;
+#pragma warning restore CA1822
     }
 
     private sealed class TestDialogService : IDialogService
