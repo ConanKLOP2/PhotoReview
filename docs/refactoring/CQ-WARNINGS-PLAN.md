@@ -1,6 +1,15 @@
-# CQ — Code Quality: Remaining Build Warnings
+# CQ — Code Quality: Build Warnings (COMPLETE)
 
-**Status:** 634 → 160 warnings after CA1707/CA1051 config fix (see AGENTS.md Coding Conventions + `.editorconfig`). This plan covers the remaining 160, grouped by risk and file scope for parallel agent work.
+**Status:** ✅ DONE. 634 → 0 warnings. Verified via clean rebuild (`--no-incremental`) on `codex/cq-wave1-warnings`: 0 warnings, 0 errors, 800/800 non-Manual tests passing (1 known-flaky timing test `TS02` excluded, confirmed unrelated — passes in isolation, fails only under parallel-build machine load).
+
+**Path:** 634 → 160 (CA1707/CA1051 config, 1 commit) → 94 (Wave 1: CQ01-03) → 48 (Wave 2: CQ04/05/08) → 0 (Wave 3: CQ06/07). 32 commits total across `codex/code-quality-conventions` + `codex/cq-wave1-warnings`.
+
+**Real bugs found and fixed along the way** (not just style):
+- `xUnit1031`: `Task.WaitAll()` in a test — real deadlock risk, converted to `await Task.WhenAll()`.
+- `PreloadSafetyTests.RecordingTarget`: held a `SemaphoreSlim` with no disposal path — real leak, fixed with `IDisposable`.
+- `CS8603` in `MainViewModel.UndoService`: investigated root cause (field is unconditionally non-null post-construction; annotation was just inconsistent with an unrelated optional-DI-field convention) rather than blindly suppressed.
+
+
 
 **Baseline:** commit `5e88704` on `codex/code-quality-conventions`. Verify with `dotnet build PhotoReview.slnx -c Release`.
 
