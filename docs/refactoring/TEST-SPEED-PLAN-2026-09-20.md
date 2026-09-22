@@ -1,7 +1,7 @@
 # Test speed and gate reliability plan (TS00-TS10)
 
 - Date: 2026-09-20. Measured on the working tree at `10ff31f` (= `master` `4afee69` + the T89.1-T89.2 files; nothing else differs), Windows 11, 12 logical cores, Release build.
-- Status: investigation `DONE` with measurements (section 1). **This plan changes no test or source.** Every number below was measured in this session unless marked "target".
+- Status: investigation `DONE` with measurements (section 1). **This plan changes no test or source.** Every number below was measured in this session unless marked "target". **Update 2026-09-22: TS00-TS04 implemented and merged (4 commits) — default gate no longer hangs, runs in ~23 s. TS05-TS10 remain TODO; see [`ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) for current status.**
 - Relation: prerequisite for [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) (TC00-TC11). Several TC commits reported "done" are defective (F5-F8), so TC03-TC11 must not be trusted until TS10 re-audits them.
 - Goal: the default gate finishes in about a minute, can never hang silently, leaves no garbage behind, and is green at `HEAD`.
 

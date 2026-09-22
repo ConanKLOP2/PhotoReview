@@ -78,7 +78,7 @@
                 <StackPanel Orientation="Horizontal">
                     <Button Content="📂" AutomationProperties.Name="Mở thư mục ảnh" ToolTip="Mở folder ảnh" FontSize="16" Padding="8,2" Click="OpenFolder_Click" />
                     <Button Content="⚙" AutomationProperties.Name="Mở cài đặt" ToolTip="Settings" Padding="8,4" Margin="5,0,0,0" Click="Settings_Click" />
-                    <Button Content="Fit" AutomationProperties.Name="Đưa ảnh về vừa khung" ToolTip="Đưa ảnh về vừa khung" Padding="8,4" Margin="5,0,0,0" Click="FitImage_Click" />
+                    <Button Content="Fit" AutomationProperties.Name="Đưa ảnh về vừa khung (bấp đúp ảnh)" ToolTip="Bấm nút Fit, phím F, hoặc đúp chuột trên ảnh để vừa khung" Padding="8,4" Margin="5,0,0,0" Click="FitImage_Click" />
                     <ToggleButton x:Name="ToolsButton" Content="⋮" AutomationProperties.Name="Mở công cụ phụ" ToolTip="Công cụ phụ" Margin="5,0,0,0" />
                     <Popup PlacementTarget="{Binding ElementName=ToolsButton}" Placement="Bottom" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=ToolsButton, Mode=TwoWay}" AllowsTransparency="True">
                         <Border Background="#202020" BorderBrush="#505050" BorderThickness="1" Padding="8" CornerRadius="4">

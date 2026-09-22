@@ -1,8 +1,8 @@
 # Structure Optimize — Final Status (ST01–ST12)
 
-**Date:** 2026-09-20  
+**Date:** 2026-09-20 (status confirmed current 2026-09-22 — only ST08/ST09 remain open)  
 **Baseline:** `master` `5dc5cda` (updated after ST01-ST10 implementation)  
-**Plan:** [`STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md`](STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md) · [`STRUCTURE-OPTIMIZE-TASKS.md`](STRUCTURE-OPTIMIZE-TASKS.md)
+**Plan (archived, all tasks resolved):** [`archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md`](archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md) · [`archive/STRUCTURE-OPTIMIZE-TASKS.md`](archive/STRUCTURE-OPTIMIZE-TASKS.md) · [`archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md`](archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md)
 
 ---
 
@@ -28,7 +28,7 @@
 
 ## 2. Decisions (Q-ST1 through Q-ST4)
 
-**All decisions finalized 2026-09-20.** See [`STRUCTURE-DECISIONS-Q-ST1-ST4.md`](STRUCTURE-DECISIONS-Q-ST1-ST4.md) for rationale.
+**All decisions finalized 2026-09-20.** See [`archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md`](archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md) for rationale.
 
 | Question | Decision | Rationale | Task Impact |
 |---|---|---|---|
@@ -139,9 +139,9 @@ See [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) for TC0
 
 ## 7. Cross-References
 
-- **Main plan:** [`STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md`](STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md)
-- **Task details:** [`STRUCTURE-OPTIMIZE-TASKS.md`](STRUCTURE-OPTIMIZE-TASKS.md)
-- **Decision rationale:** [`STRUCTURE-DECISIONS-Q-ST1-ST4.md`](STRUCTURE-DECISIONS-Q-ST1-ST4.md)
+- **Main plan (archived):** [`archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md`](archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md)
+- **Task details (archived):** [`archive/STRUCTURE-OPTIMIZE-TASKS.md`](archive/STRUCTURE-OPTIMIZE-TASKS.md)
+- **Decision rationale (archived):** [`archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md`](archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md)
 - **Architecture rules:** [`../architecture.md`](../architecture.md)
 - **Presentation project ADR:** [`../adr/0004-presentation-project-separation.md`](../adr/0004-presentation-project-separation.md)
 - **Overall roadmap:** [`OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](OPTIMIZE-CLEAN-PLAN-2026-09-20.md) (OC / WD / IO)
@@ -149,4 +149,4 @@ See [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) for TC0
 
 ---
 
-**Status:** Structure optimization ready for decision phase on OC14–OC18 and remaining ST tasks.
+**Status:** ST01-ST07, ST10-ST12 DONE and merged. Only ST08/ST09 remain, blocked on OC14 (Ctrl+Z semantics unification).

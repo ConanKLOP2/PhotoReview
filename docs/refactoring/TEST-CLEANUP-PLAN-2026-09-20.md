@@ -2,7 +2,7 @@
 
 - Ngày: 2026-09-20. Baseline: `master` `5dc5cda` (+ nhánh docs `codex/structure-optimize-plan`).
 - Trạng thái: khảo sát `DONE` (đọc source test + production); **chưa sửa test hay source nào**; chưa chạy test/đo thời gian trong lượt này. Mọi con số "số test", "số lần Delay" là đếm bằng grep, không phải kết quả chạy.
-- Liên quan: [`STRUCTURE-OPTIMIZE-TASKS.md`](STRUCTURE-OPTIMIZE-TASKS.md) (ST10 nay trỏ về plan này), [`test-parity.md`](test-parity.md), `OPTIMIZE-CLEAN-PLAN-2026-09-20.md` (OC11 acceptance, OC06 native).
+- Liên quan: [`archive/STRUCTURE-OPTIMIZE-TASKS.md`](archive/STRUCTURE-OPTIMIZE-TASKS.md) (ST10 nay trỏ về plan này), [`../archive/historical/test-parity.md`](../archive/historical/test-parity.md), `OPTIMIZE-CLEAN-PLAN-2026-09-20.md` (OC11 acceptance, OC06 native). Trạng thái hiện tại (2026-09-22): TC01-TC11 vẫn TODO thật sự — xem [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md); TS10 phải re-audit các claim "done" trước đây trước khi tin bất kỳ status nào.
 - Mục tiêu: có một bộ test **chạy production code thật** bảo vệ đường nóng của người dùng — đọc đĩa tối thiểu, Next liên tục, Move/Delete liên tục trên ảnh có kích thước/định dạng thật — trước khi dọn phần test còn lại.
 
 ## 1. Phát hiện từ khảo sát (bằng chứng)
