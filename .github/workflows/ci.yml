@@ -55,67 +55,27 @@ jobs:
       - name: Build Release
         run: dotnet build PhotoReview.slnx -c Release --no-restore
 
-      # CI runs HotPath tests only (fast, mocked deps); the 5 projects are independent
-      # (no shared state/ports), so they run as parallel background jobs on the runner
-      # instead of sequential steps — saves wall-clock time without paying Setup .NET /
-      # Restore / Build again per project (that would happen if these were separate
-      # GitHub Actions jobs instead of parallel processes within this one job).
+      # CI runs HotPath tests only (fast, mocked deps)
       # Stress/Native/Slow/Integration tests run locally only (optional via -Stress, -Native, -Slow, -Integration)
       # NOTE: Filter below is verified to match tools/verify-all.ps1 (TS09 verification)
-      - name: Run tests (HotPath, parallel)
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $filter = "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration"
-          $projects = @(
-            'PhotoReview.Architecture.Tests',
-            'PhotoReview.Core.Tests',
-            'PhotoReview.Imaging.Tests',
-            'PhotoReview.Integration.Tests',
-            'PhotoReview.App.Tests'
-          )
+      # Parallel execution via Start-Job was tried and reverted: windows-latest runners
+      # only have 2 vCPUs, so 5 concurrent dotnet test processes just contended for CPU
+      # instead of running faster (measured 28s parallel vs 26s sequential), while adding
+      # real fragility (job working-directory bug, unreliable exit-code propagation).
+      - name: Run Architecture tests (HotPath)
+        run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
-          # Start-Job spawns a separate PowerShell process that does NOT inherit the
-          # caller's working directory, so it must be passed in explicitly and set
-          # inside the job - otherwise relative project paths below resolve against
-          # the job's default directory instead of $GITHUB_WORKSPACE.
-          $workDir = $PWD.Path
-          $jobs = foreach ($proj in $projects) {
-            Start-Job -Name $proj -ScriptBlock {
-              param($proj, $filter, $workDir)
-              Set-Location $workDir
-              dotnet test "tests/$proj/$proj.csproj" -c Release --no-build --filter $filter --logger trx --results-directory "TestResults/$proj" --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
-              exit $LASTEXITCODE
-            } -ArgumentList $proj, $filter, $workDir
-          }
+      - name: Run Core tests (HotPath)
+        run: dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
-          $jobs | Wait-Job | Out-Null
-          foreach ($job in $jobs) {
-            Write-Host "===== $($job.Name) ====="
-            Receive-Job -Job $job
-            Remove-Job -Job $job
-          }
+      - name: Run Imaging tests (HotPath)
+        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
-          # Start-Job's own State doesn't reflect dotnet test's exit code reliably,
-          # so the pass/fail signal comes from the TRX results instead.
-          $failed = $false
-          $trxFiles = Get-ChildItem -Path TestResults -Filter *.trx -Recurse -ErrorAction SilentlyContinue
-          if (-not $trxFiles -or $trxFiles.Count -lt $projects.Count) {
-            Write-Error "Expected $($projects.Count) TRX result files, found $($trxFiles.Count) - a test run may have crashed before producing results."
-            exit 1
-          }
-          foreach ($trx in $trxFiles) {
-            [xml]$xml = Get-Content $trx.FullName
-            $counters = $xml.TestRun.ResultSummary.Counters
-            if ($xml.TestRun.ResultSummary.outcome -ne 'Completed' -or [int]$counters.failed -gt 0) {
-              Write-Error "$($trx.Name): failed=$($counters.failed) outcome=$($xml.TestRun.ResultSummary.outcome)"
-              $failed = $true
-            }
-          }
+      - name: Run Integration tests (HotPath)
+        run: dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
-          if ($failed) {
-            exit 1
-          }
+      - name: Run App tests (HotPath)
+        run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Publish Release
         # --no-restore: the App project was already restored as part of the
