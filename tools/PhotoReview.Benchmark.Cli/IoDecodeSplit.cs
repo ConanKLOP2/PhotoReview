@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Windows.Media.Imaging;
 using PhotoReview.App;
+using PhotoReview.Imaging.Decoding;
 
 /// <summary>
 /// D05: <c>--io-decode-split &lt;folder&gt; &lt;outDir&gt; [widths] [max]</c> splits a preview
@@ -14,7 +15,7 @@ using PhotoReview.App;
 /// For every supported file (up to <paramref name="max"/>, ordered by name like
 /// <see cref="LocalImageBenchmark"/>) this measures, three times each (run 1 = cold, P50 of runs 2-3
 /// = warm): a full sequential read into RAM, a decode from that in-memory copy at each width, a
-/// decode straight from the file via the real <see cref="PreviewImageService.DecodeSource"/> at each
+/// decode straight from the file via a real <see cref="WpfBitmapImageDecoder"/> instance at each
 /// width, a header-only <see cref="BitmapDecoder"/> read (DelayCreation, mirrors
 /// <c>GetOriginalDimensionsAsync</c>), and a PNG encode/decode round trip at width 2560 that stands
 /// in for the on-disk preview cache. Nothing here mutates <see cref="DiagOptions"/> or reads
@@ -88,6 +89,7 @@ internal static class IoDecodeSplit
     private static FileResult MeasureFile(int index, string path, int[] widths, StringBuilder rawCsv)
     {
         var result = new FileResult { Index = index, SourceBytes = SafeLength(path) };
+        var imageDecoder = new WpfBitmapImageDecoder();
 
         var readRuns = new double[3];
         byte[] bytes = [];
@@ -125,7 +127,7 @@ internal static class IoDecodeSplit
             result.DecodeFromMem[width] = TimeThree(rawCsv, index, "decodeFromMem", width,
                 () => DecodeFromMemory(bytes, width));
             result.DecodeFromFile[width] = TimeThree(rawCsv, index, "decodeFromFile", width,
-                () => PreviewImageService.DecodeSource(path, width));
+                () => imageDecoder.Decode(new DecodeRequest(path, width)));
         }
         result.Decode2560Mem = result.DecodeFromMem.TryGetValue(PngCompareWidth, out var existing)
             ? existing
@@ -156,7 +158,7 @@ internal static class IoDecodeSplit
                 AppendRaw(rawCsv, index, "pngEncode", PngCompareWidth, run, pngEncodeRuns[run], pngBytes);
 
                 var swDecode = Stopwatch.StartNew();
-                PreviewImageService.DecodeSource(tempPngPath, 0);
+                imageDecoder.Decode(new DecodeRequest(tempPngPath, 0));
                 swDecode.Stop();
                 pngDecodeRuns[run] = swDecode.Elapsed.TotalMilliseconds;
                 AppendRaw(rawCsv, index, "pngDecode", PngCompareWidth, run, pngDecodeRuns[run], pngBytes);
