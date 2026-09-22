@@ -55,6 +55,11 @@ Production code (`src/`) first — real correctness risk. Then culture/compariso
 - Same low-risk pattern as PR #17. Batch by file to keep commits reviewable.
 - **Acceptance:** Build succeeds, no behavior change, full gate green.
 
+### CQ08 — xUnit analyzer warnings (P2, discovered during Wave 1)
+- **xUnit1031** (1, `Core.Tests/Catalog/SourceSizeTrackerTests.cs:158`): blocking task operation (`.Wait()`/`.Result`/`GetAwaiter().GetResult()`) inside a test — can deadlock on sync context. Investigate: convert to `async Task` test method with `await`, unless there's a documented reason it must stay sync.
+- **xUnit2009** (22, `Core.Tests/Services/InterleavedFileActionSequenceTests.cs` — same file as CQ03): `Assert.True(x.Contains(y))` style assertions should be `Assert.Contains(y, x)` (or `Assert.EndsWith`/`Assert.StartsWith` as appropriate) for better failure messages. Mechanical rewrite, same semantics.
+- **Acceptance:** Build succeeds, `dotnet test tests/PhotoReview.Core.Tests -c Release --filter "Category!=Manual" --no-build` — 325/325 passing, no regression.
+
 ## Execution Plan
 
 Multi-agent, same pattern as PR #17 (4 agents completed 32 warnings there):
