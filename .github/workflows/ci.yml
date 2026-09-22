@@ -65,12 +65,18 @@ jobs:
             'PhotoReview.App.Tests'
           )
 
+          # Start-Job spawns a separate PowerShell process that does NOT inherit the
+          # caller's working directory, so it must be passed in explicitly and set
+          # inside the job - otherwise relative project paths below resolve against
+          # the job's default directory instead of $GITHUB_WORKSPACE.
+          $workDir = $PWD.Path
           $jobs = foreach ($proj in $projects) {
             Start-Job -Name $proj -ScriptBlock {
-              param($proj, $filter)
+              param($proj, $filter, $workDir)
+              Set-Location $workDir
               dotnet test "tests/$proj/$proj.csproj" -c Release --no-build --filter $filter --logger trx --results-directory "TestResults/$proj" --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
               exit $LASTEXITCODE
-            } -ArgumentList $proj, $filter
+            } -ArgumentList $proj, $filter, $workDir
           }
 
           $jobs | Wait-Job | Out-Null
