@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using PhotoReview.App;
@@ -146,7 +147,7 @@ public sealed class PerfTraceTests : IDisposable
         var lines = ReadLines(file);
         var droppedLine = lines[^1];
         Assert.StartsWith("# dropped=", droppedLine);
-        var dropped = long.Parse(droppedLine["# dropped=".Length..]);
+        var dropped = long.Parse(droppedLine["# dropped=".Length..], CultureInfo.InvariantCulture);
 
         var dataLines = lines[2..^1].Length;
         Assert.Equal(total, dataLines + dropped);
