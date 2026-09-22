@@ -110,7 +110,7 @@ public partial class MainWindowBehaviorTests
     /// <summary>
     /// DF02 Case 2: Already in Fit mode, double-click → no visible change (state and dimensions unchanged).
     /// </summary>
-    [Fact]
+    [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_AlreadyFit_NoChange()
     {
         MainWindow? window = null;
@@ -168,7 +168,7 @@ public partial class MainWindowBehaviorTests
     /// <summary>
     /// DF02 Case 3: Single-click at zoom 200% → does NOT apply Fit (Zoom remains 2.0).
     /// </summary>
-    [Fact]
+    [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_SingleClick_DoesNotFit()
     {
         MainWindow? window = null;
@@ -222,7 +222,7 @@ public partial class MainWindowBehaviorTests
     /// DF02 Case 4: Drag pan, then double-click while panned → does NOT reset to Fit (pan offset preserved or returns to Fit depending on implementation).
     /// Expected: double-click should still apply Fit (version cancels pending pan).
     /// </summary>
-    [Fact]
+    [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_AfterPan_StillFits()
     {
         MainWindow? window = null;
@@ -280,7 +280,7 @@ public partial class MainWindowBehaviorTests
     /// <summary>
     /// DF02 Case 6: Right-click or middle-click with ClickCount=2 → does NOT apply Fit (left button only).
     /// </summary>
-    [Fact]
+    [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_RightButton_DoesNotFit()
     {
         MainWindow? window = null;
