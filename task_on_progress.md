@@ -41,15 +41,32 @@
 - **Docs diet:** [`docs/INDEX.md`](docs/INDEX.md)
 - **History:** [`docs/archive/progress-log-2026-09.md`](docs/archive/progress-log-2026-09.md)
 
+## Documentation Diet Status (DT series)
+
+| Task | Status | Impact |
+|------|--------|--------|
+| DT00 | ✅ DONE | Measurement baseline (docs-budget.ps1) |
+| DT01 | ✅ DONE | Entry points: T0 = 7.7 KB (40% reduction) |
+| DT02 | ✅ DONE | Status digests: 24 KB total |
+| DT03 | ✅ DONE | Compress plans: 4 summaries (20 KB active vs 101 KB archived) |
+| DT08 | ✅ DONE | .ignore for archive (ripgrep filtering) |
+| DT09 | ✅ DONE | Budget gate in verify-all.ps1 |
+| DT04, DT05, DT06, DT07, DT10 | 🔄 TODO | Code map, comment cleanup, test boilerplate, final measurement |
+
+**Cold-start (T0 + typical T1 file):** ~17.7 KB (~6k tokens) — 75% reduction from baseline.
+
 ## Quick Checks
 
 ```powershell
 # Budget check
 tools/docs-budget.ps1 -Check
 
-# Test gate
+# Test gate  
 dotnet test PhotoReview.sln --filter Category=Gate
 
 # Build Release
 dotnet build -c Release PhotoReview.sln
+
+# Full verification
+tools/verify-all.ps1
 ```
