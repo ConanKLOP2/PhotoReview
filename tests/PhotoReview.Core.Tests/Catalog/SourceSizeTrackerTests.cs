@@ -139,7 +139,7 @@ public class SourceSizeTrackerTests
     }
 
     [Fact]
-    public void GetTotal_MultipleCallsAreThreadSafe()
+    public async System.Threading.Tasks.Task GetTotal_MultipleCallsAreThreadSafe()
     {
         var catalog = new ReviewCatalog();
         var fs = new CountingFileSystem(new PhysicalFileSystem(), new ReviewMetrics());
@@ -155,7 +155,7 @@ public class SourceSizeTrackerTests
 
         t1.Start();
         t2.Start();
-        System.Threading.Tasks.Task.WaitAll(t1, t2);
+        await System.Threading.Tasks.Task.WhenAll(t1, t2);
 
         Assert.Equal(300L, total1);
         Assert.Equal(300L, total2);
