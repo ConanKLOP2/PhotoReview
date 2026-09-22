@@ -9,7 +9,9 @@ namespace PhotoReview.Imaging.Tests;
 /// decode/cache/metrics contract is driven for real.
 /// </summary>
 [Trait("Category", "Slow")]
+#pragma warning disable CA1001 // _root (TempRoot) is disposed in DisposeAsync below via IAsyncLifetime, which xUnit invokes automatically; CA1001 doesn't recognize that async disposal pattern
 public sealed class PreviewImageServiceTests : IAsyncLifetime
+#pragma warning restore CA1001
 {
     private readonly TempRoot _root = new("preview-service");
     private readonly string _previewPath;
@@ -182,7 +184,9 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
 /// PreloadScheduler takes its memory-load limit by constructor injection, so the memory
 /// pressure guard is driven for real: a 0.0 limit can never have headroom
 /// </summary>
+#pragma warning disable CA1001 // _root (TempRoot) is disposed in DisposeAsync below via IAsyncLifetime, which xUnit invokes automatically; CA1001 doesn't recognize that async disposal pattern
 public sealed class PreloadSchedulerTests : IAsyncLifetime
+#pragma warning restore CA1001
 {
     private readonly TempRoot _root = new("preload-scheduler");
     private readonly string[] _preloadFiles;
@@ -361,7 +365,9 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
 /// the developer's real %LocalAppData%\PhotoReview\cache.
 /// </summary>
 [Trait("Category", "Slow")]
+#pragma warning disable CA1001 // _root (TempRoot) is disposed in DisposeAsync below via IAsyncLifetime, which xUnit invokes automatically; CA1001 doesn't recognize that async disposal pattern
 public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
+#pragma warning restore CA1001
 {
     private readonly TempRoot _root = new("preview-disk-cache");
     private readonly string _previewPath;
