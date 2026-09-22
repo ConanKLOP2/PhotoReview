@@ -27,7 +27,7 @@ public class EncodingTests
         Assert.Empty(mojibakeFiles);
     }
 
-    private List<string> ScanDirectory(string directory, string pattern)
+    private static List<string> ScanDirectory(string directory, string pattern)
     {
         var failures = new List<string>();
         if (!Directory.Exists(directory)) return failures;
@@ -55,7 +55,7 @@ public class EncodingTests
         return failures;
     }
 
-    private string RepositoryRoot(string subdir)
+    private static string RepositoryRoot(string subdir)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current != null && !File.Exists(Path.Combine(current.FullName, "PhotoReview.slnx")))
