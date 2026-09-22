@@ -40,20 +40,21 @@ jobs:
 
       # CI runs HotPath tests only (fast, mocked deps)
       # Stress/Native/Slow/Integration tests run locally only (optional via -Stress, -Native, -Slow, -Integration)
+      # Note: xUnit uses & (not AND) to join filter conditions (TS09 verified alignment with verify-all.ps1)
       - name: Run Architecture tests (HotPath)
-        run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "Category!=Manual AND Category!=Stress AND Category!=Native AND Category!=Slow AND Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run Core tests (HotPath)
-        run: dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --filter "Category!=Manual AND Category!=Stress AND Category!=Native AND Category!=Slow AND Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        run: dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run Imaging tests (HotPath)
-        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "Category!=Manual AND Category!=Stress AND Category!=Native AND Category!=Slow AND Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run Integration tests (HotPath)
-        run: dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --filter "Category!=Manual AND Category!=Stress AND Category!=Native AND Category!=Slow AND Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        run: dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run App tests (HotPath)
-        run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "Category!=Manual AND Category!=Stress AND Category!=Native AND Category!=Slow AND Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Publish Release
         run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
