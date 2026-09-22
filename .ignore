@@ -1,0 +1,6 @@
+# ripgrep .ignore file (per https://docs.rs/ignore/latest/ignore/)
+# Filters results for Grep/Glob tools to avoid searching archived/historical data
+
+docs/archive/
+docs/archive/future/
+docs/archive/historical/
