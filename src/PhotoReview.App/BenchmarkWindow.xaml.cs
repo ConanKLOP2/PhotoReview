@@ -56,6 +56,7 @@ protected override void OnClosed(EventArgs e)
 
 public void Dispose()
 {
+    GC.SuppressFinalize(this);
     var cts = Interlocked.Exchange(ref _cts, null);
     if (cts is null) return;
     cts.Cancel();
