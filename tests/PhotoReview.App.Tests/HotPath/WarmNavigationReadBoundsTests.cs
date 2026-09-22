@@ -228,7 +228,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         var afterSnapshot = probe.Capture();
 
         // Assert: Warm navigation did not read sources (images already cached).
-        probe.AssertSourceReadsDelta(beforeSnapshot, afterSnapshot, maxDelta: 0,
+        ReadBudgetProbe.AssertSourceReadsDelta(beforeSnapshot, afterSnapshot, maxDelta: 0,
             context: "Warm navigation should not read sources (cache hit only)");
 
         // Assert: Navigation succeeded (landed on index 0 + 5 - 3 = 2).

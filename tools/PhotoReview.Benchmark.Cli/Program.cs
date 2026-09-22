@@ -40,7 +40,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         try
         {
             // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior.
-            var report = await new BenchmarkEngine().RunAsync(folder, profile,
+            var report = await BenchmarkEngine.RunAsync(folder, profile,
                 (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, token),
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
             reports.Add(report);

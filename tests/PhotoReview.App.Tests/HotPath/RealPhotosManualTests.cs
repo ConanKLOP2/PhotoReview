@@ -108,7 +108,7 @@ public sealed class RealPhotosManualTests
 
             // Step 8: Assert - No source reads during warm navigation
             // All images should be served from cache, not disk reads
-            probe.AssertSourceReadsDelta(beforeSnapshot, afterSnapshot, maxDelta: 0,
+            ReadBudgetProbe.AssertSourceReadsDelta(beforeSnapshot, afterSnapshot, maxDelta: 0,
                 context: "TC07: Warm navigation within pre-cached range should not read sources");
 
             // Step 9: Verify navigation succeeded

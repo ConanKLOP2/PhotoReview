@@ -55,7 +55,7 @@ public sealed class ReadBudgetProbe
     }
 
     /// <summary>Assert source reads are bounded within a scenario (no regression).</summary>
-    public void AssertSourceReadsDelta(Snapshot before, Snapshot after, long maxDelta, string context = "")
+    public static void AssertSourceReadsDelta(Snapshot before, Snapshot after, long maxDelta, string context = "")
     {
         var delta = after.SourceReadsDelta(before);
         if (delta > maxDelta)
@@ -65,7 +65,7 @@ public sealed class ReadBudgetProbe
     }
 
     /// <summary>Assert stat calls are bounded (no pathological re-scanning).</summary>
-    public void AssertStatCountDelta(Snapshot before, Snapshot after, long maxDelta, string context = "")
+    public static void AssertStatCountDelta(Snapshot before, Snapshot after, long maxDelta, string context = "")
     {
         var delta = after.StatCountDelta(before);
         if (delta > maxDelta)

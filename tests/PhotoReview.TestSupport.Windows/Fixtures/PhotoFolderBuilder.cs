@@ -67,7 +67,6 @@ public sealed class PhotoFolderBuilder : IDisposable
             builder._cachedFolder = tempDir;
 
             // Generate JPEG files by cycling through sizes and copying from master with unique COM
-            int sizeIndex = 0;
             for (int i = 0; i < imageCount; i++)
             {
                 var size = SizeCfg[i % SizeCfg.Length];
