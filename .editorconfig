@@ -17,5 +17,16 @@ dotnet_style_prefer_collection_expression = true:suggestion
 [*.xaml]
 indent_size = 4
 
+# CA1707 (identifiers should not contain underscores): scope to public API surface only.
+# Test projects name methods `Method_Scenario_ExpectedResult` by deliberate convention
+# (see AGENTS.md > Coding Conventions #2) — this keeps that pattern from being flagged
+# for internal/test-only members while still catching underscores in real public APIs.
+dotnet_code_quality.CA1707.api_surface = public
+
+[tests/**.cs]
+# Test methods are not public API consumed outside the assembly; the underscore
+# naming convention (Method_Scenario_ExpectedResult) is intentional (AGENTS.md #2).
+dotnet_diagnostic.CA1707.severity = none
+
 [*.{csproj,props,slnx,json,yml}]
 indent_size = 2
