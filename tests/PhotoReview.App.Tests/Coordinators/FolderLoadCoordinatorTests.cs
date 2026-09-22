@@ -15,7 +15,9 @@ using Xunit;
 namespace PhotoReview.App.Tests.Coordinators;
 
 [Trait("Category", "HotPath")]
+#pragma warning disable CA1001 // _explorerOrder is FakeExplorerOrderProvider, a test double with an empty Dispose() (no real resource) implemented only to satisfy IExplorerOrderProvider
 public sealed class FolderLoadCoordinatorTests
+#pragma warning restore CA1001
 {
     private sealed class FakeFileSystem : IFileSystem
     {
