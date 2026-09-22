@@ -296,7 +296,6 @@ public sealed class MainWindowBehaviorActionTests
         // Each pump ensures queued work from the previous invocation is processed.
         // Pump multiple times to ensure ShowImage calls and other deferred work execute.
         const int PumpIterations = 40;  // ~400ms at 10ms per pump iteration
-        const int IterationsPerDuration = 40;  // For ~1 second duration, run ~40 pumps
         var estimatedPumps = Math.Max(PumpIterations, (int)(duration.TotalMilliseconds / 10));
 
         for (int i = 0; i < estimatedPumps; i++)
