@@ -14,6 +14,8 @@ namespace PhotoReview.App;
 
 public partial class BenchmarkWindow : Window, IDisposable
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
     private readonly ObservableCollection<BenchmarkResultRow> _rows = [];
     private CancellationTokenSource? _cts;
     private string? _lastReport;
@@ -152,7 +154,8 @@ public void Dispose()
         var phases = _rows.Select(r => r.Phase).ToArray();
         foreach (var workload in _rows.Select(r => r.Workload).Distinct())
         {
-            var winnerId = BenchmarkRanking.Rank(phases, workload).FirstOrDefault()?.ProfileId;
+            var ranked = BenchmarkRanking.Rank(phases, workload);
+            var winnerId = ranked.Count > 0 ? ranked[0].ProfileId : null;
             if (winnerId is null) continue;
             var winner = _rows.FirstOrDefault(r => r.Workload == workload && r.Phase.ProfileId == winnerId);
             if (winner is not null) winner.IsBest = true;
@@ -167,7 +170,7 @@ public void Dispose()
         foreach (var report in reports)
             await File.WriteAllTextAsync(Path.Combine(dir, $"{report.Phases[0].ProfileId}-{report.RunId}.json"), report.ToJson());
         var summaryPath = Path.Combine(dir, "summary.json");
-        await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(reports, new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(reports, JsonOptions));
         _lastReport = summaryPath;
     }
 

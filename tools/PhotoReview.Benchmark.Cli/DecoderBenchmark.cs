@@ -24,6 +24,8 @@ public static class DecoderBenchmark
         ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"
     };
 
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
     public sealed class BenchmarkRecord
     {
         public string FilePath { get; set; } = string.Empty;
@@ -324,9 +326,8 @@ public static class DecoderBenchmark
         };
 
         // Write outputs
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
         var summaryJsonPath = Path.Combine(outDir, "summary.json");
-        await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(summary, jsonOptions));
+        await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(summary, JsonOptions));
 
         var summaryMdPath = Path.Combine(outDir, "summary.md");
         await File.WriteAllTextAsync(summaryMdPath, GenerateMarkdownReport(summary));
