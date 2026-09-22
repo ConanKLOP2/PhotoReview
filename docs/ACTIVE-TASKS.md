@@ -1,7 +1,7 @@
 # Active Tasks — Consolidated Work Remaining
 
 **Updated:** 2026-09-22
-**Status:** ST, TS00-04, DF all DONE and merged to `master`. TC/OC/WD/IO/DT/T89(GUI)/D still open.
+**Status:** ST, TS00-04, DF, CQ all DONE and merged to `master`. TC/OC/WD/IO/DT/T89(GUI)/D still open.
 
 ---
 
@@ -12,6 +12,7 @@
 | **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS04 DONE, TS05-TS10 TODO | Gate no longer hangs, runs ~23s. Plan: `refactoring/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
+| **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Plan: `refactoring/CQ-WARNINGS-PLAN.md`. |
 | **TC** (Test Cleanup) | 🔄 TODO (unverified prior claims) | TS10 must re-audit before trusting any "done" status. Plan: `refactoring/TEST-CLEANUP-PLAN-2026-09-20.md`. |
 | **T89** (Fit Layout — GUI acceptance) | 🔄 IN PROGRESS, not on `master` | T89.1-T89.2 committed on `feature/Fit-Layout-Status` only. STA/GUI acceptance still TODO. Plan: `refactoring/T89-FIT-LAYOUT-PLAN.md`. |
 | **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 (Undo unification) is the key blocker for ST08/09, WD, and OC15-18. Plan: `refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`. |
@@ -154,6 +155,12 @@
 | D08 | ETW deep-dive | TODO | D07 |
 | D09 | GC + memory | TODO | D07 |
 | D12 | Approve optimizations | TODO | D08-D09, user sign-off |
+
+---
+
+## CQ Summary — Code Quality / Warnings (COMPLETE)
+
+✅ **DONE & MERGED (PR #18).** 634 → 0 warnings. All analyzer waves (Wave 1: CQ01-03, Wave 2: CQ04/05/08, Wave 3: CQ06/07) complete. See `refactoring/CQ-WARNINGS-PLAN.md` for details and real bugs fixed along the way.
 
 ---
 

@@ -1,6 +1,6 @@
 # CQ — Code Quality: Build Warnings (COMPLETE)
 
-**Status:** ✅ DONE. 634 → 0 warnings. Verified via clean rebuild (`--no-incremental`) on `codex/cq-wave1-warnings`: 0 warnings, 0 errors, 800/800 non-Manual tests passing (1 known-flaky timing test `TS02` excluded, confirmed unrelated — passes in isolation, fails only under parallel-build machine load).
+**Status:** ✅ DONE. 634 → 0 warnings. Verified via clean rebuild (`--no-incremental`) on `codex/cq-wave1-warnings`: 0 warnings, 0 errors, 800/800 non-Manual tests passing (1 known-flaky timing test `TS02` excluded, confirmed unrelated — passes in isolation, fails only under parallel-build machine load). **Merged to `master` via PR #18 (2026-09-22).**
 
 **Path:** 634 → 160 (CA1707/CA1051 config, 1 commit) → 94 (Wave 1: CQ01-03) → 48 (Wave 2: CQ04/05/08) → 0 (Wave 3: CQ06/07). 32 commits total across `codex/code-quality-conventions` + `codex/cq-wave1-warnings`.
 

@@ -1,6 +1,6 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-22 | **Branch:** `master` | **Last merge:** #15 (Fit-Layout-Status)
+**Updated:** 2026-09-22 | **Branch:** `master` | **Last merge:** #18 (codex/cq-wave1-warnings — all warnings reduced 634→0)
 
 ## Status by Group
 
@@ -9,6 +9,7 @@
 | ST | ✅ Mostly done (ST08/09 blocked) | ST01-07, ST10-12 merged. Blocked on OC14. |
 | TS | ✅ TS00-04 done | Gate ~23s (no hang). TS05-10 remain. TS10: re-audit before TC. |
 | DF | ✅ Done | PR #14 merged. |
+| **CQ** | ✅ DONE | 634→0 warnings (PR #18 merged). |
 | **T89** | 🔄 IN PROGRESS | GUI/STA acceptance on `feature/Fit-Layout-Status`. Not on `master` yet. |
 | **TC** | 🔄 TODO | Blocked on TS10 re-audit. 23 plans per Q-T1..Q-T4. |
 | **OC** | 🔄 ~65% done | OC14 (Undo) blocks ST08/09, WD, OC15-18. |
