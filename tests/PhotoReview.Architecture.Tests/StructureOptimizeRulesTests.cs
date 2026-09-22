@@ -153,6 +153,45 @@ public sealed class StructureOptimizeRulesTests
             $"Benchmark.Cli reflects into App types; expose a public member instead:\n{string.Join("\n", violations)}");
     }
 
+    [Fact(DisplayName = "Rule TS06: No [Fact] with TODO in body without [Skip]")]
+    [Trait("Category", "Architecture")]
+    public void FactWithTodoMustHaveSkip()
+    {
+        var repoRoot = FindRepoRoot();
+        var violations = new List<string>();
+        var todoRegex = new Regex(@"\bTODO\b", RegexOptions.CultureInvariant);
+        var skipRegex = new Regex(@"\[Fact.*Skip\s*=", RegexOptions.CultureInvariant);
+
+        foreach (var file in Directory.GetFiles(Path.Combine(repoRoot, "tests"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains("obj")) continue;
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (!line.Contains("[Fact")) continue;
+
+                // Check if this [Fact] line has Skip
+                bool hasSkip = skipRegex.IsMatch(line);
+
+                // Scan method body for TODO
+                for (var j = i + 1; j < lines.Length && j < i + 50; j++)
+                {
+                    if (lines[j].Contains("{")) continue;
+                    if (lines[j].Contains("}")) break;
+                    if (todoRegex.IsMatch(lines[j]) && !hasSkip)
+                    {
+                        violations.Add($"{Path.GetRelativePath(repoRoot, file).Replace('\\', '/')}:{i + 1}: [Fact] at line {i + 1} has TODO at line {j + 1} but no [Skip]");
+                        break;
+                    }
+                }
+            }
+        }
+
+        Assert.True(violations.Count == 0,
+            $"Test facts with TODO in body must have [Skip] attribute:\n{string.Join("\n", violations)}");
+    }
+
     private static string FindRepoRoot()
     {
         var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
