@@ -21,6 +21,8 @@ public sealed class FolderLoadCoordinatorTests
 {
     private sealed class FakeFileSystem : IFileSystem
     {
+        private static readonly string[] LineSeparators = ["\r\n", "\n"];
+
         public Dictionary<string, byte[]> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> Directories { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int StatCount { get; private set; }
@@ -52,7 +54,7 @@ public sealed class FolderLoadCoordinatorTests
         public string ReadAllText(string path) =>
             System.Text.Encoding.UTF8.GetString(Files[Path.GetFullPath(path)]);
         public IEnumerable<string> ReadLines(string path) =>
-            ReadAllText(path).Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            ReadAllText(path).Split(LineSeparators, StringSplitOptions.None);
 
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*")
         {
