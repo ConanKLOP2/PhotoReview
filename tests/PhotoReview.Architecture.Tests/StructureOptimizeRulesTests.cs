@@ -177,8 +177,8 @@ public sealed class StructureOptimizeRulesTests
                 // Scan method body for todo markers
                 for (var j = i + 1; j < lines.Length && j < i + 50; j++)
                 {
-                    if (lines[j].Contains("{")) continue;
-                    if (lines[j].Contains("}")) break;
+                    if (lines[j].Contains('{')) continue;
+                    if (lines[j].Contains('}')) break;
                     if (todoRegex.IsMatch(lines[j]) && !hasSkip)
                     {
                         violations.Add($"{Path.GetRelativePath(repoRoot, file).Replace('\\', '/')}:{i + 1}: [Fact] at line {i + 1} has TODO at line {j + 1} but no [Skip]");

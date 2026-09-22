@@ -166,7 +166,7 @@ public sealed class DuplicateFinderTests
             removeNumbered: true,
             hash: (p, ct) =>
             {
-                if (p.EndsWith("a (1).jpg")) throw new IOException("File disappeared");
+                if (p.EndsWith("a (1).jpg", StringComparison.OrdinalIgnoreCase)) throw new IOException("File disappeared");
                 return Task.FromResult("hash-same");
             },
             fileSystem: _fs);

@@ -201,6 +201,7 @@ public partial class App : System.Windows.Application, IDisposable
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         _services?.GetService<SessionWriter>()?.Flush();
         AppLog.Shutdown();
         Interlocked.Exchange(ref _instanceLock, null)?.Dispose();

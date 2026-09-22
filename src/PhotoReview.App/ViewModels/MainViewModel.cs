@@ -110,7 +110,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public ImagePresenter Presenter => _presenter;
     public IPreloadController? PreloadController => _preloadController;
     public PreviewImageService? PreviewService => _previewService;
-    public UndoService UndoService => _undoService;
+    // _undoService is a required constructor parameter (no default) that is null-checked via
+    // ArgumentNullException in the constructor, so it is never null once the object exists; the
+    // field is annotated `UndoService?` only by convention shared with the other DI fields above,
+    // not because null is a legitimate post-construction state. All call sites (MainWindow.xaml.cs)
+    // dereference this property unconditionally, confirming non-null is the real contract.
+    public UndoService UndoService => _undoService!;
 
     private AppSettings? _settingsOverride;
     public AppSettings Settings

@@ -77,7 +77,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(files is [var only] && only == cachePath && new FileInfo(cachePath).Length > 0);
     }
 
-    private static IDecodedImage DecodeFixture()
+    private static WpfDecodedImage DecodeFixture()
     {
         var bitmap = new BitmapImage();
         using var stream = new MemoryStream(TestImages.PreviewPng);
@@ -129,7 +129,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(!File.Exists(a) && !File.Exists(b));
     }
 
-    private string WriteFile(string dir, string name, int bytes, TimeSpan accessedAgo)
+    private static string WriteFile(string dir, string name, int bytes, TimeSpan accessedAgo)
     {
         var path = Path.Combine(dir, name);
         File.WriteAllBytes(path, new byte[bytes]);

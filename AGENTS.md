@@ -22,6 +22,17 @@ The application must prioritize the following principles when processing and rev
 3. **Archive (T2, unlimited):** `docs/archive/` and `docs/archive/future/` are historical only. Do not read unless referenced or verifying decisions. Use `git log --follow` for change rationale.
 4. **Task completion:** When a task is done and reaches status DONE, compress it to a single line (`ID · status · SHA`) in its plan, move detailed evidence/findings to archive, and reference the digest in `task_on_progress.md`.
 
+## Coding Conventions (Naming & Analyzer Warnings)
+
+**Goal:** Keep the build warning-free without fighting analyzer rules that don't fit the codebase's real conventions.
+
+1. **Production code (`src/`, `tools/`):** Strict PascalCase for all public/internal members. No public mutable fields (`CA1051`) — use properties. **Exception:** `MainWindow.xaml.cs` fields (`_files`, `_index`, etc.) are `public` by deliberate ST06/Q-ST3 decision (avoids test reflection); do not "fix" these by renaming — see [`docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md`](docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md). New public fields elsewhere are not permitted without the same kind of documented decision.
+2. **Test code (`tests/`):** `Method_Scenario_ExpectedResult` (underscore-separated) is the accepted naming convention — do not rename tests to remove underscores. `CA1707` is suppressed for test projects via `.editorconfig` (`dotnet_code_quality.CA1707.api_surface = public`, scoped so test assemblies' internal/test-only methods aren't flagged).
+3. **String comparisons (`CA1310`):** Always pass an explicit `StringComparison`. Use `Ordinal`/`OrdinalIgnoreCase` for file paths and file names (Windows path comparison is not culture-aware); `CurrentCulture`-based comparison is reserved for user-facing text sorting/display only.
+4. **Culture-sensitive formatting (`CA1305`):** Any `ToString`/`Parse`/`Format` that writes to a log, CSV, journal, or other machine-read/diagnostic file must use `CultureInfo.InvariantCulture` — never the user's locale (this app ships with Vietnamese UI text; do not let a Vietnamese locale reformat numbers/dates in diagnostic output). UI-facing display text may use `CurrentCulture`.
+5. **Nullable warnings (`CS8603` and similar):** Fix these for real — they flag a genuine possible-null-return path, not a style preference. Do not suppress.
+6. **New analyzer suppressions:** Any new `#pragma warning disable` or `.editorconfig` rule change must include a one-line justification comment/commit message citing the reason (architecture decision, false positive, etc.) — never suppress silently to make CI green.
+
 ## Mandatory Build, Publish, and Git Push Workflow
 
 - After each completed change: commit, and push to an appropriate branch for me to review and merge.

@@ -394,7 +394,7 @@ public sealed class MainViewModelFileActionTests : IDisposable
         await vm.RecycleAsync();
         Assert.Equal(0, vm.TotalFiles);
 
-        await vm.UndoLastAsync();
+        await vm.UndoAsync();
 
         Assert.True(File.Exists(img1));
         Assert.Equal(1, vm.TotalFiles);

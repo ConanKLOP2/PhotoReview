@@ -130,7 +130,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         catalog.SetCurrent(1);
         Assert.Equal(1, catalog.CurrentIndex);
         Assert.NotNull(catalog.Current);
-        Assert.True(catalog.Current.Path.EndsWith("2.jpg"));
+        Assert.EndsWith("2.jpg", catalog.Current.Path, StringComparison.OrdinalIgnoreCase);
 
         // Action 2: Move file at current index (2.jpg) - use Remove() which handles index adjustment
         var sourceToMove = catalog.Current.Path;
@@ -148,7 +148,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         Assert.Equal(4, catalog.Count);
         Assert.Equal(1, newIndex);
         Assert.NotNull(catalog.Current);
-        Assert.True(catalog.Current.Path.EndsWith("3.jpg"));
+        Assert.EndsWith("3.jpg", catalog.Current.Path, StringComparison.OrdinalIgnoreCase);
 
         // Verify file was actually moved
         Assert.True(File.Exists(destPath));
@@ -184,13 +184,13 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         catalog.SetCurrent(1);
         catalog.SetCurrent(2);
         Assert.NotNull(catalog.Current);
-        Assert.True(catalog.Current.Path.EndsWith("3.jpg"));
+        Assert.EndsWith("3.jpg", catalog.Current.Path, StringComparison.OrdinalIgnoreCase);
 
         // Action 3: Navigate to index 3 (4.jpg) - this is the one we'll delete
         catalog.SetCurrent(3);
         Assert.Equal(3, catalog.CurrentIndex);
         Assert.NotNull(catalog.Current);
-        Assert.True(catalog.Current.Path.EndsWith("4.jpg"));
+        Assert.EndsWith("4.jpg", catalog.Current.Path, StringComparison.OrdinalIgnoreCase);
 
         var sourceToDelete = catalog.Current.Path;
 
@@ -205,7 +205,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         Assert.Equal(4, catalog.Count);
         Assert.Equal(3, newIndex);
         Assert.NotNull(catalog.Current);
-        Assert.True(catalog.Current.Path.EndsWith("5.jpg"));
+        Assert.EndsWith("5.jpg", catalog.Current.Path, StringComparison.OrdinalIgnoreCase);
 
         // Verify file was deleted
         Assert.False(File.Exists(sourceToDelete));
@@ -237,18 +237,18 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
 
         // Step 1: Navigate to index 1 and remove/move 2.jpg
         catalog.SetCurrent(1);
-        Assert.True(catalog.Current!.Path.EndsWith("2.jpg"));
+        Assert.EndsWith("2.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
         var fileToMove = catalog.Current!.Path;
         File.Move(fileToMove, fileToMove + ".moved");
         catalog.Remove(fileToMove);
 
         // Now at [1.jpg, 3.jpg, 4.jpg, 5.jpg], current should be at index 1 (3.jpg)
         Assert.Equal(4, catalog.Count);
-        Assert.True(catalog.Current!.Path.EndsWith("3.jpg"));
+        Assert.EndsWith("3.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
 
         // Step 2: Navigate to index 2 and remove/delete 4.jpg
         catalog.SetCurrent(2);
-        Assert.True(catalog.Current!.Path.EndsWith("4.jpg"));
+        Assert.EndsWith("4.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
         var fileToDelete1 = catalog.Current!.Path;
         File.Delete(fileToDelete1);
         catalog.Remove(fileToDelete1);
@@ -256,11 +256,11 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         // Now at [1.jpg, 3.jpg, 5.jpg], current should be at index 2 (5.jpg)
         // Remove at index 2 of 4 items: Math.Min(2, 3-1) = Math.Min(2, 2) = 2
         Assert.Equal(3, catalog.Count);
-        Assert.True(catalog.Current!.Path.EndsWith("5.jpg"));
+        Assert.EndsWith("5.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
 
         // Step 3: Delete at end (index 2 of 3 items)
         var fileToDelete2 = catalog.Current!.Path;
-        Assert.True(fileToDelete2.EndsWith("5.jpg"));
+        Assert.EndsWith("5.jpg", fileToDelete2, StringComparison.OrdinalIgnoreCase);
         File.Delete(fileToDelete2);
 
         // Remove at index 2 of 3 items: Math.Min(Math.Max(2, 0), 3-1) = Math.Min(2, 2) = 2
@@ -271,7 +271,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         // Index should have been clamped: Math.Min(Math.Max(2, 0), 2-1) = Math.Min(2, 1) = 1
         Assert.Equal(2, catalog.Count);
         Assert.Equal(1, newIndex);
-        Assert.True(catalog.Current!.Path.EndsWith("3.jpg"));
+        Assert.EndsWith("3.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
     }
 }
 

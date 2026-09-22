@@ -144,27 +144,45 @@ public sealed class DiagOptionsTests : IDisposable
     }
 
     [Fact(DisplayName = "PHOTOREVIEW_DIAG_PREREAD=1 decodes the same bitmap size as the default path")]
-    public void PreReadDecodesSameSizeAsDefault()
+    public async Task PreReadDecodesSameSizeAsDefault()
     {
         ClearAll();
         // A valid, tiny 1x1 PNG, same fixture bytes used elsewhere in the suite for portable decode tests.
         var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
         var path = _root.File("prereadtest.png", png);
+        var metrics = new ReviewMetrics();
 
-        var withoutPreRead = PreviewImageService.DecodeSource(path, 0);
-        Assert.Equal(1, withoutPreRead.PixelWidth);
-        Assert.Equal(1, withoutPreRead.PixelHeight);
-
-        Environment.SetEnvironmentVariable(PreReadVar, "1");
-        DiagOptions.ResetForTests();
+        // Two separate instances (each with its own empty disk cache directory) so the
+        // second GetPreviewAsync call always re-decodes from source through DecodeFromSource
+        // instead of being served from the first instance's in-memory or on-disk cache --
+        // that's the only code path (PreviewImageService.DecodeFromSource) that still checks
+        // PHOTOREVIEW_DIAG_PREREAD, now that the obsolete static DecodeSource is gone.
+        var withoutPreReadService = new PreviewImageService(metrics, () => true, () => 0,
+            diskCacheDirectory: _root.Dir("preread-default-cache"));
         try
         {
-            var withPreRead = PreviewImageService.DecodeSource(path, 0);
-            Assert.Equal(withoutPreRead.PixelWidth, withPreRead.PixelWidth);
-            Assert.Equal(withoutPreRead.PixelHeight, withPreRead.PixelHeight);
+            var withoutPreRead = await withoutPreReadService.GetPreviewAsync(path);
+            Assert.Equal(1, withoutPreRead.PixelWidth);
+            Assert.Equal(1, withoutPreRead.PixelHeight);
+
+            Environment.SetEnvironmentVariable(PreReadVar, "1");
+            DiagOptions.ResetForTests();
+            var withPreReadService = new PreviewImageService(metrics, () => true, () => 0,
+                diskCacheDirectory: _root.Dir("preread-enabled-cache"));
+            try
+            {
+                var withPreRead = await withPreReadService.GetPreviewAsync(path);
+                Assert.Equal(withoutPreRead.PixelWidth, withPreRead.PixelWidth);
+                Assert.Equal(withoutPreRead.PixelHeight, withPreRead.PixelHeight);
+            }
+            finally
+            {
+                await withPreReadService.ShutdownPersistWorkersAsync();
+            }
         }
         finally
         {
+            await withoutPreReadService.ShutdownPersistWorkersAsync();
             ClearAll();
         }
     }

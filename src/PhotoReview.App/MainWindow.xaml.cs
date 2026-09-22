@@ -34,6 +34,11 @@ public partial class MainWindow : Window
     private Point _panStartPoint;
     private Point _panLastPoint;
 
+    // CA1051 (do not declare visible instance fields) is intentionally suppressed for the
+    // fields below: they are public by deliberate ST06/Q-ST3 decision so tests can access
+    // them directly instead of via reflection. See docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md.
+    // Do not "fix" this by renaming to properties without revisiting that decision.
+#pragma warning disable CA1051 // Do not declare visible instance fields
     public readonly List<string> _files = [];
     public int _fileActionInProgress;
     public Stack<(string Source, string Destination)> _moveHistory = [];
@@ -42,6 +47,7 @@ public partial class MainWindow : Window
     public string? _compareSelectedPath;
     public ReviewMetrics? _metrics;
     public object? _preloadScheduler;
+#pragma warning restore CA1051
 
     public MainViewModel ViewModel => _viewModel;
     public AppSettings Settings => _settings;

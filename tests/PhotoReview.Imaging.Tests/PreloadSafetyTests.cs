@@ -26,7 +26,7 @@ public sealed class PreloadSafetyTests : IDisposable
     [Fact]
     public async Task MemoryPressure_DoesNotStartDecode()
     {
-        var target = new RecordingTarget();
+        using var target = new RecordingTarget();
         using var scheduler = Create(target, new FakeMemoryProbe(false), workerCount: 2);
 
         await scheduler.PreloadAroundAsync(0);
@@ -37,7 +37,7 @@ public sealed class PreloadSafetyTests : IDisposable
     [Fact]
     public async Task AvailableMemory_ContinuesAcrossMultipleBatches()
     {
-        var target = new RecordingTarget();
+        using var target = new RecordingTarget();
         using var scheduler = Create(target, new FakeMemoryProbe(true), workerCount: 2);
 
         await scheduler.PreloadAroundAsync(0);
@@ -48,7 +48,7 @@ public sealed class PreloadSafetyTests : IDisposable
     [Fact]
     public async Task Dispose_CancelsAndDrainsActiveWorkersBeforeReturning()
     {
-        var target = new RecordingTarget(blockUntilCancellation: true);
+        using var target = new RecordingTarget(blockUntilCancellation: true);
         var scheduler = Create(target, new FakeMemoryProbe(true), workerCount: 2);
         var preload = scheduler.PreloadAroundAsync(0);
         await target.WaitForStartsAsync(2);
@@ -65,7 +65,7 @@ public sealed class PreloadSafetyTests : IDisposable
     [Fact]
     public async Task CancelThenRestart_UsesFreshLifetime_AndDisposeStopsIt()
     {
-        var target = new RecordingTarget(blockUntilCancellation: true);
+        using var target = new RecordingTarget(blockUntilCancellation: true);
         var scheduler = Create(target, new FakeMemoryProbe(true), workerCount: 1);
         var first = scheduler.PreloadAroundAsync(0);
         await target.WaitForStartsAsync(1);
@@ -84,7 +84,7 @@ public sealed class PreloadSafetyTests : IDisposable
     [Fact]
     public async Task CancelThenRestartBeforeDrain_DisposeWaitsForBothLifetimes()
     {
-        var target = new RecordingTarget(blockUntilCancellation: true);
+        using var target = new RecordingTarget(blockUntilCancellation: true);
         var scheduler = Create(target, new FakeMemoryProbe(true), workerCount: 1);
         var first = scheduler.PreloadAroundAsync(0);
         await target.WaitForStartsAsync(1);
@@ -113,7 +113,7 @@ public sealed class PreloadSafetyTests : IDisposable
         catch (UnauthorizedAccessException) { }
     }
 
-    private sealed class RecordingTarget(bool blockUntilCancellation = false) : IPreloadTarget
+    private sealed class RecordingTarget(bool blockUntilCancellation = false) : IPreloadTarget, IDisposable
     {
         private readonly ConcurrentDictionary<string, byte> _cached = new(StringComparer.OrdinalIgnoreCase);
         private readonly SemaphoreSlim _startedSignal = new(0);
@@ -156,6 +156,8 @@ public sealed class PreloadSafetyTests : IDisposable
             while (StartedCount < count)
                 await _startedSignal.WaitAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
+
+        public void Dispose() => _startedSignal.Dispose();
     }
 }
 

@@ -30,7 +30,7 @@ public sealed class RealPhotosManualTests
     /// <summary>
     /// Checks if the PHOTOREVIEW_FIXTURE_DIR environment variable is set.
     /// </summary>
-    private bool TryGetFixtureDirectory(out string fixtureDir)
+    private static bool TryGetFixtureDirectory(out string fixtureDir)
     {
         fixtureDir = Environment.GetEnvironmentVariable(FixtureDirEnvVar) ?? "";
         return !string.IsNullOrWhiteSpace(fixtureDir) && Directory.Exists(fixtureDir);
@@ -207,7 +207,7 @@ public sealed class RealPhotosManualTests
 
                 // Step 9: Delete current image (move to Recycle Bin)
                 // This verifies Delete operation handled properly
-                var preDeleteCatalogCount = vm.Catalog.Paths.Count();
+                var preDeleteCatalogCount = vm.Catalog.Paths.Count;
                 if (initialCatalogCount > 3) // Only if we have more than 3 images
                 {
                     // Execute any second action that might be Delete (or another Move)

@@ -180,11 +180,14 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         _writerTask = Task.Run(WriterLoopAsync);
     }
 
+    private static readonly string[] DiagFlagNames =
+        ["PHOTOREVIEW_DIAG_PREREAD", "PHOTOREVIEW_DIAG_PRELOAD_WORKERS", "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE"];
+
     private static void WriteHeader(StreamWriter writer)
     {
         var version = Assembly.GetEntryAssembly()?
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
-        var diagFlags = string.Join(";", new[] { "PHOTOREVIEW_DIAG_PREREAD", "PHOTOREVIEW_DIAG_PRELOAD_WORKERS", "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE" }
+        var diagFlags = string.Join(";", DiagFlagNames
             .Select(name => (name, value: Environment.GetEnvironmentVariable(name)))
             .Where(p => !string.IsNullOrEmpty(p.value))
             .Select(p => $"{p.name}={p.value}"));

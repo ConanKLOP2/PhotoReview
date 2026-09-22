@@ -72,7 +72,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         return filePath;
     }
 
-    private (MainViewModel ViewModel, FileActionService FileActions) CreateViewModelWithActions(
+    private static (MainViewModel ViewModel, FileActionService FileActions) CreateViewModelWithActions(
         string albumFolder,
         AppSettings? settings = null)
     {

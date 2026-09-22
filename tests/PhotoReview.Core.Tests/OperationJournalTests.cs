@@ -61,7 +61,7 @@ public sealed class OperationJournalTests : IDisposable
     {
         var journalFile = JournalFile;
         Assert.True(new FileInfo(journalFile).Length > 0
-            && File.ReadAllLines(journalFile).All(line => line.StartsWith("{", StringComparison.Ordinal)));
+            && File.ReadAllLines(journalFile).All(line => line.StartsWith('{')));
     }
 
     [Fact(DisplayName = "Journal concurrent append/read remains line-consistent")]

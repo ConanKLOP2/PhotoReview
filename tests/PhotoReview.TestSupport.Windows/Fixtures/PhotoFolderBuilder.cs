@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Media.Imaging;
@@ -61,7 +60,7 @@ public sealed class PhotoFolderBuilder : IDisposable
             }
 
             // Create new cache folder (use fixed name in temp to avoid leak on cache hit)
-            tempDir ??= Path.Combine(Path.GetTempPath(), "PhotoReview-TC01-" + Process.GetCurrentProcess().Id + "-cache");
+            tempDir ??= Path.Combine(Path.GetTempPath(), "PhotoReview-TC01-" + Environment.ProcessId + "-cache");
             if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
             builder._cachedFolder = tempDir;

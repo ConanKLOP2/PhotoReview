@@ -109,7 +109,7 @@ if (args.Length >= 1 && args[0] == "--perf-session")
 
 if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
 {
-    await LocalImageBenchmark.RunAsync(args[1], args.Length == 3 ? int.Parse(args[2]) : 8);
+    await LocalImageBenchmark.RunAsync(args[1], args.Length == 3 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 8);
     return;
 }
 
@@ -132,7 +132,7 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
     var ioWidths = args.Length >= 4
         ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray()
         : [0, 1920, 2560, 3840];
-    var ioMax = args.Length >= 5 ? int.Parse(args[4]) : 60;
+    var ioMax = args.Length >= 5 ? int.Parse(args[4], CultureInfo.InvariantCulture) : 60;
     await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax);
     return;
 }

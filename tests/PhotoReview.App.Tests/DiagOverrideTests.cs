@@ -16,7 +16,9 @@ namespace PhotoReview.App.Tests;
 /// environment-variable parsing itself.
 /// </summary>
 [Trait("Category", "HotPath")]
+#pragma warning disable CA1001 // _root (TempRoot) is disposed in DisposeAsync below via IAsyncLifetime, which xUnit invokes automatically; CA1001 doesn't recognize that async disposal pattern
 public sealed class DiagOverrideTests : IAsyncLifetime
+#pragma warning restore CA1001
 {
     private readonly TempRoot _root = new("diag-override");
     private readonly List<(PreviewImageService Service, string DiskDirectory)> _services = [];
