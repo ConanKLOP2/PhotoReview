@@ -403,7 +403,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         _root.Dispose();
     }
 
-    private async Task<string[]> WaitForCacheFilesAsync(string diskDir, int expectedCount = 1, int timeoutMs = 5000)
+    private static async Task<string[]> WaitForCacheFilesAsync(string diskDir, int expectedCount = 1, int timeoutMs = 5000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         string[] files;

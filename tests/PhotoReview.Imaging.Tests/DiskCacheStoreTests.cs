@@ -129,7 +129,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(!File.Exists(a) && !File.Exists(b));
     }
 
-    private string WriteFile(string dir, string name, int bytes, TimeSpan accessedAgo)
+    private static string WriteFile(string dir, string name, int bytes, TimeSpan accessedAgo)
     {
         var path = Path.Combine(dir, name);
         File.WriteAllBytes(path, new byte[bytes]);
