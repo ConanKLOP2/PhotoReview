@@ -55,7 +55,13 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        // Cleanup at session end, not per test
+        // TS07: Cleanup fixture folder on session end
+        if (_fixtureFolder != null && Directory.Exists(_fixtureFolder))
+        {
+            try { Directory.Delete(_fixtureFolder, recursive: true); }
+            catch { /* ignore cleanup errors */ }
+        }
+
         return Task.CompletedTask;
     }
 
