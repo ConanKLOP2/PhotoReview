@@ -52,7 +52,7 @@ public sealed class AppLogTests : IDisposable
     public void DisabledLoggingCreatesNoDirectoryOrFile()
     {
         AppLog.Info("disabled-info");
-        AppLog.Error("disabled-error", new Exception("test"));
+        AppLog.Error("disabled-error", new InvalidOperationException("test"));
         Assert.False(Directory.Exists(Path.GetDirectoryName(AppLog.FilePath)));
     }
 
