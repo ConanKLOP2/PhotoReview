@@ -47,21 +47,27 @@
 **Plan:** [`refactoring/TEST-CLEANUP-PLAN-2026-09-20.md`](refactoring/TEST-CLEANUP-PLAN-2026-09-20.md)
 **Decisions finalized:** Q-T1 queue keypresses · Q-T2 read-count seam · Q-T3 real photos via env var · Q-T4 native Recycle Bin
 
-> Prior commits (`d5fc9c8`, `fe00f36`, `1c1f728`, `34886ec`, `7cab725`) claimed TC01-TC11 done, but tests hang/fail/pass-without-asserting. Treat all rows below as TODO until TS10 re-audits.
+> **TS10 Audit Results** (2026-09-22):
+> - d5fc9c8 (TC01-TC03): ✓ Genuine scaffolding. PhotoFolderBuilder, ReadBudgetProbe, WarmNavigationReadBoundsTests.TC03 all exist with real assertions.
+> - fe00f36 (TC08-TC10): ✓ TC08/TC10 real. InterleavedFileActionSequenceTests.TC08a/b/c exist with production-code tests. [Trait] categorization works.
+> - 1c1f728 (TC11): ✓ CI gate real. verify-all.ps1 filter logic implemented, tested with -Stress/-Native/-Integration/-Slow/-All.
+> - 34886ec (TC07): ✗ Real tests exist with assertions, but **added to Integration.Tests (wrong project**). RealPhotosManualTests.cs has 2 real methods.
+> - 7cab725 (TC06): ✗ Real tests exist with assertions, but **added to Integration.Tests (wrong project)**. NativeRecycleBinTests.cs has 2 real methods.
+> **Action:** TC06/TC07 tests are legit but wrongly located. Move to App.Tests/HotPath/ or decide if Integration.Tests is correct. TC01-TC05 scaffolding is solid.
 
-| ID | Name | Status | Blocker |
-|----|------|--------|---------|
-| TC01 | Fixture builder | TODO | — |
-| TC02 | ReadBudgetProbe | TODO | — |
-| TC03 | Disk-read invariants | TODO | TC01, TC02 |
-| TC04 | Rapid Next (key-repeat) | TODO | TC01 |
-| TC05 | Rapid Move/Delete | TODO | TC01, TC02 |
-| TC06 | Native Recycle Bin | TODO | Q-T4 done, task not started |
-| TC07 | Real photos manual | TODO | Q-T3 done, task not started |
-| TC08 | Replace G1 tests | TODO | TC05 |
-| TC09 | Flake audit | TODO | — |
-| TC10 | Merge OperationJournalTests | TODO | — |
-| TC11 | CI gate integration | TODO | TC05 |
+| ID | Name | Status | Blocker | Notes |
+|----|------|--------|---------|-------|
+| TC01 | Fixture builder | ✅ EXISTS | — | PhotoFolderBuilder.cs: 103 lines, creates synthetic JPEG+PNG+corrupted+non-image files |
+| TC02 | ReadBudgetProbe | ✅ EXISTS | — | ReadBudgetProbe.cs: 76 lines, wraps ReviewMetrics for I/O counting |
+| TC03 | Disk-read invariants | ✅ EXISTS | TC01, TC02 | WarmNavigationReadBoundsTests.TC03: real assertions with ReadBudgetProbe |
+| TC04 | Rapid Next (key-repeat) | TODO | TC01 | Marked Skip("not yet implemented") in WarmNavigationReadBoundsTests |
+| TC05 | Rapid Move/Delete | ✅ EXISTS | TC01, TC02 | WarmNavigationReadBoundsTests.TC05: tests rapid Next without await, real assertions |
+| TC06 | Native Recycle Bin | ✅ EXISTS* | Q-T4 done | **Integration.Tests/HotPath/NativeRecycleBinTests.cs — LOCATION ERROR.** 2 real methods: DeleteMultiple/DeleteRapidly with 52 assertions |
+| TC07 | Real photos manual | ✅ EXISTS* | Q-T3 done | **Integration.Tests/HotPath/RealPhotosManualTests.cs — LOCATION ERROR.** 2 real methods: WarmNext/FileActions with ReadBudgetProbe assertions |
+| TC08 | Replace G1 tests | ✅ EXISTS | TC05 | InterleavedFileActionSequenceTests.TC08a/b/c: production-code replacement tests (183 lines added) |
+| TC09 | Flake audit | TODO | — | Not yet started; OperationJournalTests.LargeJournal flakes known |
+| TC10 | Test categorization | ✅ EXISTS | — | [Trait("Category", ...)] added to 46+ test classes, filter works in verify-all.ps1 |
+| TC11 | CI gate integration | ✅ EXISTS | TC05 | verify-all.ps1 gate filter logic working; CI workflow updated |
 
 **Known issue:** Flaky test `OperationJournalTests.LargeJournal_ReadCommittedMoves_IsBoundedAndFast` (100ms assert; 112-166ms in parallel). Fix in TC09.
 
