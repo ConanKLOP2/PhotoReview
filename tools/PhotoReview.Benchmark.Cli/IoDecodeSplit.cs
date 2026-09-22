@@ -230,17 +230,17 @@ internal static class IoDecodeSplit
         var sb = new StringBuilder();
         sb.AppendLine("# io-decode-split summary");
         sb.AppendLine();
-        sb.AppendLine($"- Generated (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine($"- Files measured: {fileCount} (max={max})");
-        sb.AppendLine($"- Widths: {string.Join(", ", widths)}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Generated (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Files measured: {fileCount} (max={max})");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Widths: {string.Join(", ", widths)}");
         sb.AppendLine("- Paths are not recorded; files are referenced by index only (see raw.csv).");
         sb.AppendLine();
 
         var megapixels = results.Select(r => r.OriginalWidth * (double)r.OriginalHeight / 1_000_000.0).ToArray();
         sb.AppendLine("## Nguồn ảnh");
         sb.AppendLine();
-        sb.AppendLine($"- Megapixel: P50={Percentile(megapixels, .5):F1} MP, min={megapixels.Min():F1} MP, max={megapixels.Max():F1} MP");
-        sb.AppendLine($"- Byte trung bình: {results.Average(r => r.SourceBytes) / 1024.0 / 1024.0:F2} MB");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Megapixel: P50={Percentile(megapixels, .5):F1} MP, min={megapixels.Min():F1} MP, max={megapixels.Max():F1} MP");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- Byte trung bình: {results.Average(r => r.SourceBytes) / 1024.0 / 1024.0:F2} MB");
         sb.AppendLine();
 
         sb.AppendLine("## Read (đọc toàn bộ vào RAM)");
@@ -259,7 +259,7 @@ internal static class IoDecodeSplit
         {
             var mem = results.Select(r => r.DecodeFromMem[width]).ToArray();
             var file = results.Select(r => r.DecodeFromFile[width]).ToArray();
-            sb.AppendLine($"| {width} | {Percentile(mem.Select(m => m.Cold), .5):F1} | {Percentile(mem.Select(m => m.WarmP50), .5):F1} | " +
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {width} | {Percentile(mem.Select(m => m.Cold), .5):F1} | {Percentile(mem.Select(m => m.WarmP50), .5):F1} | " +
                            $"{Percentile(mem.Select(m => m.WarmP50), .95):F1} | {Percentile(file.Select(m => m.Cold), .5):F1} | " +
                            $"{Percentile(file.Select(m => m.WarmP50), .5):F1} | {Percentile(file.Select(m => m.WarmP50), .95):F1} |");
         }
@@ -280,7 +280,7 @@ internal static class IoDecodeSplit
             var lowP50 = Percentile(results.Select(r => r.DecodeFromMem[low].WarmP50), .5);
             var highP50 = Percentile(results.Select(r => r.DecodeFromMem[high].WarmP50), .5);
             var h8Confirmed = Math.Abs(highP50 - lowP50) <= 0.15 * Math.Max(lowP50, highP50); // decode time roughly flat across width
-            sb.AppendLine($"- H8: decodeFromMem warm P50 tại width={low} là {lowP50:F1} ms, tại width={high} là {highP50:F1} ms " +
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- H8: decodeFromMem warm P50 tại width={low} là {lowP50:F1} ms, tại width={high} là {highP50:F1} ms " +
                            $"({(h8Confirmed ? "gần như không đổi -> H8 ĐÚNG cho bộ này" : "khác biệt đáng kể -> H8 SAI (DecodePixelWidth có ảnh hưởng) cho bộ này")}).");
         }
         sb.AppendLine();
@@ -290,7 +290,7 @@ internal static class IoDecodeSplit
         foreach (var width in widths)
         {
             var ratios = results.Select(r => r.Read.WarmP50 / Math.Max(0.001, r.Read.WarmP50 + r.DecodeFromMem[width].WarmP50)).ToArray();
-            sb.AppendLine($"- width={width}: P50={Percentile(ratios, .5):P0}, P95={Percentile(ratios, .95):P0}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- width={width}: P50={Percentile(ratios, .5):P0}, P95={Percentile(ratios, .95):P0}");
         }
         sb.AppendLine();
 
@@ -302,10 +302,10 @@ internal static class IoDecodeSplit
         var rebuildP50 = Percentile(rebuildWarm, .5);
         var pngSizeAvgKb = results.Average(r => r.PngDecode.Bytes) / 1024.0;
         var h9Confirmed = pngDecodeP50 > rebuildP50;
-        sb.AppendLine($"- pngDecode warm P50={pngDecodeP50:F1} ms, P95={Percentile(pngDecodeWarm, .95):F1} ms");
-        sb.AppendLine($"- read + decodeFromMem@2560 warm P50={rebuildP50:F1} ms, P95={Percentile(rebuildWarm, .95):F1} ms");
-        sb.AppendLine($"- pngEncode warm P50={Percentile(results.Select(r => r.PngEncode.WarmP50), .5):F1} ms, kích thước PNG trung bình={pngSizeAvgKb:F0} KB");
-        sb.AppendLine($"- H9 ({(h9Confirmed ? "ĐÚNG" : "SAI")} cho bộ này): t_disk (pngDecode) {(h9Confirmed ? ">" : "<=")} t_read + t_decode(JPEG nguồn)");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- pngDecode warm P50={pngDecodeP50:F1} ms, P95={Percentile(pngDecodeWarm, .95):F1} ms");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- read + decodeFromMem@2560 warm P50={rebuildP50:F1} ms, P95={Percentile(rebuildWarm, .95):F1} ms");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- pngEncode warm P50={Percentile(results.Select(r => r.PngEncode.WarmP50), .5):F1} ms, kích thước PNG trung bình={pngSizeAvgKb:F0} KB");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- H9 ({(h9Confirmed ? "ĐÚNG" : "SAI")} cho bộ này): t_disk (pngDecode) {(h9Confirmed ? ">" : "<=")} t_read + t_decode(JPEG nguồn)");
         sb.AppendLine();
         return sb.ToString();
     }
