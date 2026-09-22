@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
 using Xunit;
 
@@ -87,7 +87,7 @@ public class ImageSortServiceTests : IDisposable
 
         var sorted = ImageSortService.SortEntries(entries, ImageSortMode.SizeAscending);
 
-        Assert.Equal([_fixture[1], _fixture[2], _fixture[0]], sorted.Select(entry => entry.Path).ToArray());
+        Assert.Equal([_fixture[1], _fixture[2], _fixture[0]], [.. sorted.Select(entry => entry.Path)]);
         Assert.Equal(new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc), sorted[0].LastWriteUtc);
         Assert.Equal(100, sorted[0].Length);
     }

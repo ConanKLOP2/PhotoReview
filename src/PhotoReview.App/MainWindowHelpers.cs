@@ -190,7 +190,10 @@ internal sealed class HookedFileSystem : IFileSystem
     private readonly PhysicalFileSystem _inner = new();
     private readonly Func<string, string, Task>? _moveOverride;
 
-    public HookedFileSystem(Func<string, string, Task>? moveOverride) => _moveOverride = moveOverride;
+    public HookedFileSystem(Func<string, string, Task>? moveOverride)
+    {
+        _moveOverride = moveOverride;
+    }
 
     public bool FileExists(string path) => _inner.FileExists(path);
     public bool DirectoryExists(string path) => _inner.DirectoryExists(path);
