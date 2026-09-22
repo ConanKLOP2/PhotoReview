@@ -174,7 +174,7 @@ public sealed class StructureOptimizeRulesTests
                 // Check if this [Fact] line has Skip
                 bool hasSkip = skipRegex.IsMatch(line);
 
-                // Scan method body for TODO
+                // Scan method body for todo markers
                 for (var j = i + 1; j < lines.Length && j < i + 50; j++)
                 {
                     if (lines[j].Contains("{")) continue;

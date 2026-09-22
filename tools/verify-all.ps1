@@ -29,12 +29,13 @@ $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
 
 # Build filter string dynamically
 # NOTE: This filter is verified to match .github/workflows/ci.yml (TS09 verification)
+# xUnit uses & (not AND) to join filter conditions
 $filter = "Category!=Manual"  # Always exclude Manual
 if (-not $All) {
-    if (-not $Stress) { $filter += " AND Category!=Stress" }
-    if (-not $Native) { $filter += " AND Category!=Native" }
-    if (-not $Slow) { $filter += " AND Category!=Slow" }
-    if (-not $Integration) { $filter += " AND Category!=Integration" }
+    if (-not $Stress) { $filter += "&Category!=Stress" }
+    if (-not $Native) { $filter += "&Category!=Native" }
+    if (-not $Slow) { $filter += "&Category!=Slow" }
+    if (-not $Integration) { $filter += "&Category!=Integration" }
 }
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
