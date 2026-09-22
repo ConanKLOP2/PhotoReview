@@ -26,6 +26,7 @@ $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
 
 # Build filter string dynamically
+# NOTE: This filter is verified to match .github/workflows/ci.yml (TS09 verification)
 $filter = "Category!=Manual"  # Always exclude Manual
 if (-not $All) {
     if (-not $Stress) { $filter += " AND Category!=Stress" }
