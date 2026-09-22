@@ -13,7 +13,7 @@ using PhotoReview.Platform.Windows;
 using PhotoReview.TestSupport;
 using Xunit;
 
-namespace PhotoReview.Integration.Tests.HotPath;
+namespace PhotoReview.App.Tests.HotPath;
 
 /// <summary>
 /// TC06: Native Windows Recycle Bin integration tests.

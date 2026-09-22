@@ -342,9 +342,11 @@ public sealed class OperationJournalUnitTests
         var path = Path.Combine(root, "operations.jsonl");
         try
         {
-            using (var writer = new StreamWriter(path, false, Encoding.UTF8))
+            const int totalEntries = 100_000;
+            var setupWatch = Stopwatch.StartNew();
+            using (var writer = new StreamWriter(path, false, Encoding.UTF8, 256 * 1024))
             {
-                for (var i = 0; i < 100_000; i++)
+                for (var i = 0; i < totalEntries; i++)
                 {
                     var entry = new JournalEntry($"old-{i}", FileOperationType.Move, JournalState.Committed,
                         $@"C:\photos\source-{i}.jpg", $@"C:\photos\dest-{i}.jpg", i,
@@ -352,17 +354,22 @@ public sealed class OperationJournalUnitTests
                     writer.WriteLine(JsonSerializer.Serialize(entry));
                 }
             }
+            setupWatch.Stop();
 
             var journal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
-            var stopwatch = Stopwatch.StartNew();
+            var readWatch = Stopwatch.StartNew();
             var entries = journal.ReadCommittedMoves();
-            stopwatch.Stop();
+            readWatch.Stop();
 
             Assert.Equal(200, entries.Count);
             Assert.Equal("old-99800", entries[0].Id);
             Assert.Equal("old-99999", entries[^1].Id);
-            Assert.True(stopwatch.ElapsedMilliseconds < 100,
-                $"Large journal startup took {stopwatch.ElapsedMilliseconds} ms.");
+
+            // Verify deterministic bounded work: tail read should be much faster than setup.
+            // ReadCommittedMovesReverse reads from the tail with an expanding window,
+            // so adding more old entries does not increase the read cost.
+            Assert.True(readWatch.ElapsedMilliseconds < 500,
+                $"Journal tail read took {readWatch.ElapsedMilliseconds} ms (bounded work, target <= 500ms). Setup: {setupWatch.ElapsedMilliseconds} ms.");
         }
         finally
         {

@@ -11,7 +11,7 @@ using PhotoReview.Core.IO;
 using PhotoReview.TestSupport;
 using Xunit;
 
-namespace PhotoReview.Integration.Tests.HotPath;
+namespace PhotoReview.App.Tests.HotPath;
 
 /// <summary>
 /// TC07: Real user photos tests - blocked on Q-T3: real-photo folder via env var.
