@@ -99,7 +99,8 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         var store = serviceProvider.GetService<SettingsStore>();
         if (store is null) return false;
 
-        var window = new SettingsWindow(store)
+        var decoderFactory = serviceProvider.GetService<IImageDecoderFactory>();
+        var window = new SettingsWindow(store, decoderFactory)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };

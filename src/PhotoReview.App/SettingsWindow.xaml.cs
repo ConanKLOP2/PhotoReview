@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 
 using PhotoReview.Core.Settings;
 
@@ -16,12 +17,12 @@ public partial class SettingsWindow : Window
     private readonly SettingsStore? _store;
     public AppSettings Settings { get; }
 
-    public SettingsWindow(SettingsStore store) : this(store.Current)
+    public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null) : this(store.Current, decoderFactory)
     {
         _store = store;
     }
 
-    public SettingsWindow(AppSettings current)
+    public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null)
     {
         InitializeComponent();
         var assembly = Assembly.GetEntryAssembly();
@@ -62,6 +63,16 @@ public partial class SettingsWindow : Window
         foreach (var textBox in new[] { NextText, PreviousText, RecycleText, CompareText, NextFolderText, PreviousFolderText, FirstImageText, ZoomInText, ZoomOutText, ToggleFitText, SkipText, UndoText, FullscreenText })
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
         LoadFields();
+        ApplyDecoderAvailability(decoderFactory);
+    }
+
+    private void ApplyDecoderAvailability(IImageDecoderFactory? decoderFactory)
+    {
+        if (decoderFactory is not null && !decoderFactory.IsRegistered(DecoderBackend.TurboJpeg))
+        {
+            TurboJpegOption.IsEnabled = false;
+            TurboJpegOption.ToolTip = "TurboJPEG không khả dụng trong bản cài đặt này";
+        }
     }
 
     private void OpenLogLocation_Click(object sender, RoutedEventArgs e)
