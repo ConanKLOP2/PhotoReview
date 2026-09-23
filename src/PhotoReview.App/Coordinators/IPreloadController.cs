@@ -32,6 +32,18 @@ public interface IPreloadController
     /// with every existing implementer.
     /// </summary>
     bool IsIdle => true;
+
+    /// <summary>
+    /// perf(preload): called at the start of every navigation, before the image's own decode, so preload
+    /// can track direction and key rate and re-center immediately. Default no-op (test fakes).
+    /// </summary>
+    void NotifyNavigation(int index) { }
+
+    /// <summary>
+    /// perf(preload): delay before the viewer starts its own decode of a not-yet-cached image (non-zero
+    /// only during a key-held burst). Default zero (test fakes).
+    /// </summary>
+    TimeSpan GetViewerDecodeDelay() => TimeSpan.Zero;
 }
 
 /// <summary>
@@ -63,4 +75,8 @@ public sealed class PreloadSchedulerAdapter : IPreloadController
     public void ClearPreloadedKeys() => _getScheduler()?.ClearPreloadedKeys();
 
     public bool IsIdle => _getScheduler()?.IsIdle ?? true;
+
+    public void NotifyNavigation(int index) => _getScheduler()?.NotifyNavigation(index);
+
+    public TimeSpan GetViewerDecodeDelay() => _getScheduler()?.GetViewerDecodeDelay() ?? TimeSpan.Zero;
 }

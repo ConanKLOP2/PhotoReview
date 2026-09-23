@@ -49,6 +49,9 @@ public sealed class ImagePresenter
     // version check, race to build the same generation's index twice, and interleave writes to
     // these two fields.
     private readonly object _compareIndexGate = new();
+    // perf(preload): cancels the current navigation's viewer decode when the next navigation starts.
+    // A superseded source is cancelled, then disposed; none ever uses a timer or WaitHandle.
+    private CancellationTokenSource? _viewerDecodeCts;
     private int _compareIndexVersion = -1;
     private Dictionary<string, (string Left, string Right)>? _compareIndex;
 
@@ -123,6 +126,18 @@ public sealed class ImagePresenter
         _catalog.SetCurrent(index);
         var path = _catalog.PathAt(index);
 
+        // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
+        // has not started yet (a started one finishes and stays cached), and let preload re-center and
+        // track direction/key rate now rather than only after this image is presented.
+        var viewerDecodeCts = new CancellationTokenSource();
+        var supersededCts = Interlocked.Exchange(ref _viewerDecodeCts, viewerDecodeCts);
+        if (supersededCts is not null)
+        {
+            supersededCts.Cancel();
+            supersededCts.Dispose();
+        }
+        _preloadController.NotifyNavigation(index);
+
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
         if (perf)
         {
@@ -181,7 +196,10 @@ public sealed class ImagePresenter
             // the two run concurrently. GetPreviewAsync's in-flight dedup means calling it here just
             // starts (or joins) the same decode that step 5 used to start only after the thumbnail
             // finished, which serialized two independent pieces of I/O + decode work.
-            var previewTask = ramReady ? null : _previewService.GetPreviewAsync(path, currentKey);
+            // perf(preload): the viewer's decode gets its own priority lane and is dropped (before it
+            // starts) when a newer navigation supersedes this one; see GetViewerPreviewAsync.
+            var previewTask = ramReady ? null : _previewService.GetViewerPreviewAsync(path, currentKey,
+                viewerDecodeCts.Token, _preloadController.GetViewerDecodeDelay());
 
             // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: chạy song song thumbnail và
             // preview, hiển thị bất kỳ cái nào xong trước. Nếu preview thắng, bỏ qua thumbnail hoàn
@@ -341,6 +359,11 @@ public sealed class ImagePresenter
 
             presentStopwatch.Stop();
             _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (!_clock.IsNavigationCurrent(token))
+        {
+            // perf(preload): a newer navigation cancelled this one's not-yet-started viewer decode.
+            if (AppLog.Enabled) AppLog.Info($"ShowImage superseded token={token} path={path}");
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token) && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {

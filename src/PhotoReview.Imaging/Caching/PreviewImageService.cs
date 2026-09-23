@@ -208,7 +208,56 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
 
-    public async Task<IDecodedImage> GetPreviewAsync(string path, ImageCacheKey key)
+    public Task<IDecodedImage> GetPreviewAsync(string path, ImageCacheKey key) =>
+        GetPreviewCoreAsync(path, key, viewer: false, TimeSpan.Zero, CancellationToken.None);
+
+    /// <summary>
+    /// perf(preload): the viewer's decode of the image currently being navigated to. Unlike
+    /// <see cref="GetPreviewAsync(string, ImageCacheKey)"/> (preload / compare), a new decode started
+    /// here (a) never waits for thread-pool threads or preload workers -- it runs on a dedicated,
+    /// above-normal-priority thread in one of <see cref="ViewerDecodeSlots"/> viewer slots -- and
+    /// (b) is dropped, before it starts, once <paramref name="cancellationToken"/> is cancelled
+    /// (the navigation was superseded). <paramref name="startDelay"/> (a key-held burst, see
+    /// NavigationPace) waits a little first, so a decode the very next key supersedes is never started.
+    /// A decode that has already started can't be interrupted inside the decoder: it runs to completion
+    /// and its result is kept in the cache like a preloaded image. Joining an in-flight or cached
+    /// preview behaves exactly as <see cref="GetPreviewAsync(string, ImageCacheKey)"/>.
+    /// </summary>
+    public Task<IDecodedImage> GetViewerPreviewAsync(string path, ImageCacheKey key, CancellationToken cancellationToken, TimeSpan startDelay = default) =>
+        GetPreviewCoreAsync(path, key, viewer: true, startDelay, cancellationToken);
+
+    /// <summary>Concurrent viewer decodes: one for the current image plus one spare, so a superseded
+    /// viewer decode that is already inside the decoder never blocks the next image's decode.</summary>
+    public const int ViewerDecodeSlots = 2;
+    // A channel pre-filled with one token per slot is an async, cancellable counting gate (read =
+    // acquire, write = release) that, unlike SemaphoreSlim, owns nothing disposable -- this service is
+    // a process-lifetime singleton that is not IDisposable.
+    private readonly Channel<byte> _viewerSlots = CreateSlotTokens(ViewerDecodeSlots);
+    private int _activeViewerDecodes;
+
+    /// <inheritdoc cref="IPreloadTarget.ActiveViewerDecodes"/>
+    public int ActiveViewerDecodes => Volatile.Read(ref _activeViewerDecodes);
+
+    private static Channel<byte> CreateSlotTokens(int count)
+    {
+        var channel = Channel.CreateBounded<byte>(count);
+        for (var i = 0; i < count; i++) channel.Writer.TryWrite(0);
+        return channel;
+    }
+
+    private async Task<IDecodedImage> GetPreviewCoreAsync(string path, ImageCacheKey key, bool viewer, TimeSpan startDelay, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // null: the in-flight decode this call joined belonged to a superseded viewer navigation
+            // and was dropped before it started; this caller still wants the image, so start its own.
+            var image = await GetPreviewOnceAsync(path, key, viewer, startDelay, cancellationToken).ConfigureAwait(false);
+            if (image is not null) return image;
+        }
+    }
+
+    private async Task<IDecodedImage?> GetPreviewOnceAsync(string path, ImageCacheKey key, bool viewer, TimeSpan startDelay, CancellationToken cancellationToken)
     {
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
         var targetWidth = key.TargetWidth;
@@ -227,7 +276,9 @@ public sealed class PreviewImageService : IPreloadTarget
         // lost the race and joined someone else's in-flight decode. Constructing the
         // candidate up front and comparing it by reference to what GetOrAdd returns
         // identifies the true winner instead.
-        var candidate = new Lazy<Task<IDecodedImage>>(() => DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
+        var candidate = new Lazy<Task<IDecodedImage>>(() => viewer
+                ? DecodeForViewerAsync(path, key, targetWidth, cacheEpoch, startDelay, cancellationToken)
+                : DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
             LazyThreadSafetyMode.ExecutionAndPublication);
         var lazy = _previewLoads.GetOrAdd(loadKey, candidate);
         if (ReferenceEquals(lazy, candidate)) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
@@ -241,6 +292,10 @@ public sealed class PreviewImageService : IPreloadTarget
             perfJoin = Stopwatch.GetTimestamp();
         }
         try { return await lazy.Value.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (!ReferenceEquals(lazy, candidate) && !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
         finally
         {
             _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<IDecodedImage>>>(loadKey, lazy));
@@ -250,7 +305,47 @@ public sealed class PreviewImageService : IPreloadTarget
 
     // D04 perf: Task.Run captures the ExecutionContext, so PhotoReviewPerf.NavContext read inside
     // the lambda is the nav of the caller that created the Lazy (viewer token or -1 for preload).
-    private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) => Task.Run(() =>
+    private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) =>
+        Task.Run(() => DecodeAndCache(path, key, targetWidth, cacheEpoch));
+
+    // perf(preload): see GetViewerPreviewAsync. The 1.3 s "thumbnail shown, preview late" outlier at
+    // the end of a key-held burst was every superseded navigation's decode still running: each nav
+    // Task.Run-ed its own decode with no bound and no cancellation, so ~30 of them (plus 8 preload
+    // workers) shared 12 cores, the thread pool had to grow to fit them, and the image the burst
+    // stopped on decoded ~5x slower than alone. Here a superseded navigation's decode is dropped
+    // unless it already started, at most ViewerDecodeSlots run at once, and they run on dedicated
+    // threads so neither preload workers nor thread-pool growth delays them.
+    private async Task<IDecodedImage> DecodeForViewerAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch,
+        TimeSpan startDelay, CancellationToken cancellationToken)
+    {
+        if (startDelay > TimeSpan.Zero) await Task.Delay(startDelay, cancellationToken).ConfigureAwait(false);
+        await _viewerSlots.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var decoding = false;
+        try
+        {
+            // Last point where superseded work can be dropped: once DecodeAndCache starts it runs to
+            // completion (the decoder can't be interrupted) and its result is cached for a later visit.
+            cancellationToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _activeViewerDecodes);
+            decoding = true;
+            return await Task.Factory.StartNew(() =>
+            {
+                // LongRunning = a dedicated thread (not a pool thread), so raising its priority is
+                // safe; it lets the current image win the CPU against the (normal-priority) preload
+                // decodes without slowing the UI thread, which stays idle while this runs.
+                Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+                return DecodeAndCache(path, key, targetWidth, cacheEpoch);
+            }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            if (decoding) Interlocked.Decrement(ref _activeViewerDecodes);
+            _viewerSlots.Writer.TryWrite(0);
+        }
+    }
+
+    private IDecodedImage DecodeAndCache(string path, ImageCacheKey key, int targetWidth, long cacheEpoch)
     {
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
@@ -332,7 +427,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
         if (sourceRead) _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
         return decodedImage;
-    });
+    }
 
     public bool TryGetCachedPreview(string path, out IDecodedImage image)
     {
