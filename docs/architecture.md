@@ -49,7 +49,7 @@ MainWindow / command line / drag-drop
   -> PreloadController / PreloadScheduler (nền)
 ```
 
-Mở trực tiếp một file chờ Explorer snapshot để giữ thứ tự native trước frame đầu. Mở folder trình diễn fallback trước, sau đó chỉ áp dụng snapshot còn hợp lệ. `GenerationClock` và token presentation chặn kết quả của folder/ảnh cũ. `ImagePresenter` là choke point trình diễn và cập nhật session; view không tự decode.
+Mở trực tiếp một file trình diễn ngay file đó (không chờ Explorer snapshot — truy vấn Explorer mất ~1–2 s với folder lớn; perf/startup), rồi áp thứ tự native khi snapshot tới mà giữ nguyên ảnh đang xem (`ReplaceOrder` giữ current, preload re-center theo index mới). Trong lúc snapshot chưa tới, điều hướng và file action chờ `FolderLoadCoordinator.PendingOrder` (tối đa timeout của truy vấn) trước khi tăng interaction generation, nên bước đầu tiên rời khỏi ảnh vẫn đi theo thứ tự Explorer và INV-7 không vứt snapshot. Truy vấn Explorer được `App_Startup` prefetch ngay sau khi dựng service (`IExplorerOrderProvider.Prefetch`), folder load join truy vấn đó. Mở folder trình diễn fallback trước, sau đó chỉ áp dụng snapshot còn hợp lệ. `GenerationClock` và token presentation chặn kết quả của folder/ảnh cũ. `ImagePresenter` là choke point trình diễn và cập nhật session; view không tự decode.
 
 ## Luồng thao tác file và Undo
 
@@ -89,7 +89,7 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 | INV-6 | Recycle; journal Prepared → Committed/Failed; startup reconcile | `FileActionService`, `OperationJournal`, `RecoveryRetryService`, `UndoService` |
 | INV-7 | Bỏ snapshot Explorer trễ khi catalog đã tương tác/đổi | `FolderLoadCoordinator`, `ReviewCatalog`, `ExplorerSnapshotValidator` |
 | INV-8 | Handle decode dùng share ReadWrite/Delete, SequentialScan và đóng sớm | Các `IImageDecoder`, `ThumbnailCache` |
-| INV-9 | Mở file chờ snapshot; mở folder present fallback trước | `FolderLoadCoordinator` |
+| INV-9 | Mở file: present ngay, điều hướng/action chờ snapshot (`PendingOrder`) rồi đi theo thứ tự Explorer; mở folder present fallback trước | `FolderLoadCoordinator`, `MainViewModel` |
 | INV-10 | Logging mặc định tắt; tắt thì không tạo log | `FileLog`, `AppLog`, `AppSettings.LoggingEnabled` |
 | INV-11 | Config hỏng được backup/reset; config khóa dùng default RAM | `SettingsStore` |
 | INV-12 | Backend lỗi fallback WPF; cache không lẫn backend | `ImageDecoderFactory`, `FallbackImageDecoder`, `ImageCacheKey`, `ReviewMetrics` |

@@ -26,6 +26,7 @@ public sealed class FolderLoadCoordinator : IDisposable
     private readonly IFolderLoadSink _sink;
 
     private CancellationTokenSource? _loadCts;
+    private TaskCompletionSource? _pendingOrder;
     private bool _disposed;
 
     public FolderLoadCoordinator(
@@ -64,6 +65,10 @@ public sealed class FolderLoadCoordinator : IDisposable
         var loadToken = _loadCts.Token;
 
         var loadGeneration = _clock.NextFolder();
+        // A superseded load's gate must not strand navigation that is waiting on it.
+        _pendingOrder?.TrySetResult();
+        _pendingOrder = null;
+        TaskCompletionSource? pendingOrder = null;
         // perf(startup): Folder(gen, phase, msSinceStart) -- restores the T0..T3 trace the D11
         // analyzer reads (lost in T46d). T2 (first image presented) comes from the first Presented
         // event after "start"; the extra phases here split T0->T2 into its IO/sort/explorer parts.
@@ -78,7 +83,21 @@ public sealed class FolderLoadCoordinator : IDisposable
                 throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
             }
 
-            var entries = await Task.Run(() =>
+            // perf(startup): the Explorer query needs only the folder, so it starts before the scan
+            // instead of after it -- it is the slowest part of a load (~1-2 s of cross-process COM
+            // calls for a 1800-item Explorer view) and now runs in parallel with scan + sort.
+            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(
+                folder,
+                ExplorerQueryTimeout,
+                null,
+                16,
+                loadToken);
+            perf.TraceExplorer(explorerTask);
+
+            var sortMode = _settingsStore.Current.ImageSortMode;
+            // perf(startup): scan and sort in ONE background task. Two separate Task.Run hops made the
+            // sort wait for the UI thread in between -- at startup that is the whole of Window.Show().
+            var (scannedFiles, entries) = await Task.Run(() =>
             {
                 // EnumerateFilesWithStat gets Length/LastWriteUtc from the same directory entry
                 // used to list the file (see PhysicalFileSystem), so this needs no separate
@@ -90,37 +109,21 @@ public sealed class FolderLoadCoordinator : IDisposable
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
                     .ToList();
                 perf.Mark("scanned", scanned.Count);
-                return scanned;
-            }, loadToken);
-            perf.Mark("scanResumed");
+                loadToken.ThrowIfCancellationRequested();
 
-            var sortMode = _settingsStore.Current.ImageSortMode;
-            var scannedFiles = entries.Select(e => e.Path).ToArray();
-            var totalSourceBytes = entries.Sum(e => e.Length ?? 0L);
-
-            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(
-                folder,
-                TimeSpan.FromSeconds(2),
-                null,
-                16,
-                loadToken);
-            perf.TraceExplorer(explorerTask);
-
-            entries = await Task.Run(() =>
-            {
                 // Sort the scanned entries directly so stat metadata travels with each item.
                 // The path map preserves the previous first-match behavior for unusual
                 // case-variant duplicate paths while avoiding an O(n²) First lookup.
-                var sorted = ImageSortService.SortEntries(entries, sortMode);
+                var sorted = ImageSortService.SortEntries(scanned, sortMode);
                 var firstByPath = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
-                foreach (var entry in entries)
+                foreach (var entry in scanned)
                 {
                     firstByPath.TryAdd(entry.Path, entry);
                 }
 
                 var result = sorted.Select(entry => firstByPath[entry.Path]).ToList();
                 perf.Mark("sorted");
-                return result;
+                return (scanned.Select(e => e.Path).ToArray(), result);
             }, loadToken);
             perf.Mark("sortResumed");
 
@@ -144,28 +147,20 @@ public sealed class FolderLoadCoordinator : IDisposable
             _sink.ResetCaches();
             _sessionWriter?.Flush(); // a pending write for this folder must be visible to Load
             var session = _sessionStore.Load(folder);
+            if (initialPath is not null && !explorerTask.IsCompleted)
+            {
+                // INV-9 (file open): the requested file is presented right away instead of after the
+                // snapshot, but navigation/file actions wait for this gate (see PendingOrder), so the
+                // first step away from the opened file still follows the Explorer order.
+                pendingOrder = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingOrder = pendingOrder;
+            }
             _catalog.Reset(entries);
             _sink.OnCatalogReady(folder, _catalog.Count);
             perf.Mark("catalogReady");
 
             var interactionGeneration = _clock.CurrentInteraction;
             var resumePath = initialPath ?? session.CurrentPath;
-
-            ExplorerViewSnapshot? explorerSnapshot = null;
-            if (initialPath is not null)
-            {
-                explorerSnapshot = await explorerTask;
-                perf.Mark("explorerAwaited");
-                if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
-                {
-                    return;
-                }
-            }
-
-            if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
-            {
-                return;
-            }
 
             if (_catalog.Count > 0)
             {
@@ -184,7 +179,8 @@ public sealed class FolderLoadCoordinator : IDisposable
             }
 
             var presentationGeneration = _clock.CurrentNavigation;
-            explorerSnapshot ??= await explorerTask;
+            var explorerSnapshot = await explorerTask;
+            perf.Mark("explorerAwaited");
 
             if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
             {
@@ -201,11 +197,12 @@ public sealed class FolderLoadCoordinator : IDisposable
             {
                 if (_catalog.ReplaceOrder(explorerOrder))
                 {
-                    _sink.OnOrderApplied(explorerOrder.Count, _catalog.CurrentIndex);
+                    var mayReplaceInitialFallback = initialPath is null && _clock.CurrentNavigation == presentationGeneration
+                        && _catalog.Count > 0;
+                    _sink.OnOrderApplied(explorerOrder.Count, _catalog.CurrentIndex, currentKept: !mayReplaceInitialFallback);
                     perf.Mark("explorerApplied");
 
-                    var mayReplaceInitialFallback = initialPath is null && _clock.CurrentNavigation == presentationGeneration;
-                    if (mayReplaceInitialFallback && _catalog.Count > 0)
+                    if (mayReplaceInitialFallback)
                     {
                         _catalog.SetCurrent(0);
                         await _sink.PresentAsync(0, _clock.CurrentNavigation);
@@ -229,7 +226,26 @@ public sealed class FolderLoadCoordinator : IDisposable
         {
             _sink.OnFailed(folder, ex);
         }
+        finally
+        {
+            // Applied, ignored, timed out, failed or superseded: in every case the order is settled
+            // for this load, so gated navigation may proceed (it re-reads the catalog afterwards).
+            pendingOrder?.TrySetResult();
+        }
     }
+
+    /// <summary>
+    /// Completes once the Explorer order of the current file-open load has been applied or given up
+    /// on; already completed when no such load is pending (folder open, or the snapshot was already
+    /// in when the catalog became ready). INV-9: the opened file is presented before the snapshot
+    /// arrives, so navigation and file actions await this before they bump the interaction
+    /// generation -- otherwise the first key press would make INV-7 discard the Explorer order and
+    /// the user would silently review the folder in fallback order.
+    /// </summary>
+    public Task PendingOrder => _pendingOrder?.Task ?? Task.CompletedTask;
+
+    /// <summary>How long a load waits for Explorer's view order before falling back.</summary>
+    internal static readonly TimeSpan ExplorerQueryTimeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// perf(startup): per-load Folder/FolderInfo tracer. Every call is a no-op (no Stopwatch read,
@@ -265,13 +281,20 @@ public sealed class FolderLoadCoordinator : IDisposable
         {
             if (!Enabled) return;
             var self = this;
-            _ = explorerTask.ContinueWith(
-                t => self.Mark("explorerSnapshot",
-                    t.Status == TaskStatus.RanToCompletion ? t.Result.OrderedPaths.Count : -1,
-                    t.Status == TaskStatus.RanToCompletion ? t.Result.Status.ToString() : t.Status.ToString()),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+            // Awaited from a thread-pool context (no SynchronizationContext), so the mark is taken
+            // when the query completes, not when the UI thread next gets around to it.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var snapshot = await explorerTask;
+                    self.Mark("explorerSnapshot", snapshot.OrderedPaths.Count, snapshot.Status.ToString());
+                }
+                catch (Exception ex)
+                {
+                    self.Mark("explorerSnapshot", -1, ex.GetType().Name);
+                }
+            });
         }
     }
 
@@ -280,6 +303,7 @@ public sealed class FolderLoadCoordinator : IDisposable
         if (!_disposed)
         {
             _disposed = true;
+            _pendingOrder?.TrySetResult();
             _loadCts?.Cancel();
             _loadCts?.Dispose();
         }

@@ -88,14 +88,81 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         _pump = new StaThreadPump(_log);
     }
 
-    public void Dispose() => _pump.Dispose();
+    public void Dispose()
+    {
+        TakePrefetch()?.Cts.Cancel();
+        _pump.Dispose();
+    }
+
+    private sealed record PrefetchedQuery(string Folder, Task<ExplorerViewSnapshot> Task, CancellationTokenSource Cts);
+
+    private readonly object _prefetchGate = new();
+    private PrefetchedQuery? _prefetch;
+
+    private PrefetchedQuery? TakePrefetch()
+    {
+        lock (_prefetchGate)
+        {
+            var taken = _prefetch;
+            _prefetch = null;
+            return taken;
+        }
+    }
+
+    /// <inheritdoc />
+    public void Prefetch(string folder, TimeSpan timeout)
+    {
+        var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
+        var cts = new CancellationTokenSource();
+        var task = TryGetSnapshotCoreAsync(canonicalFolder, timeout, null, 16, cts.Token);
+        PrefetchedQuery? superseded;
+        lock (_prefetchGate)
+        {
+            superseded = _prefetch;
+            _prefetch = new PrefetchedQuery(canonicalFolder, task, cts);
+        }
+        superseded?.Cts.Cancel();
+        _log.Info($"Explorer prefetch-start: folder={canonicalFolder}");
+    }
 
     /// <summary>Progressive variant used by the UI: enumeration yields between small batches and can be cancelled.</summary>
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
         IProgress<ExplorerQueryProgress>? progress = null, int batchSize = 16, CancellationToken cancellationToken = default)
     {
         batchSize = Math.Clamp(batchSize, 1, 128);
+        // perf(startup): a query prefetched for this folder is joined (one-shot); one prefetched for
+        // another folder is cancelled so it stops occupying the single STA pump thread.
+        var prefetched = TakePrefetch();
+        if (prefetched is not null)
+        {
+            if (ExplorerSnapshotValidator.SamePath(prefetched.Folder, ExplorerSnapshotValidator.CanonicalizeFolder(folder)))
+                return JoinPrefetchAsync(prefetched, timeout, cancellationToken);
+            prefetched.Cts.Cancel();
+        }
         return TryGetSnapshotCoreAsync(folder, timeout, progress, batchSize, cancellationToken);
+    }
+
+    /// <summary>
+    /// Waits for a prefetched query under the caller's own timeout/cancellation. The query started
+    /// earlier, so it has already used part of its budget; the caller's timeout still bounds how long
+    /// the caller itself waits. Giving up cancels the query so the STA pump is freed.
+    /// </summary>
+    private static async Task<ExplorerViewSnapshot> JoinPrefetchAsync(PrefetchedQuery prefetched, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await prefetched.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            prefetched.Cts.Cancel();
+            return Unavailable(prefetched.Folder, ExplorerOrderStatus.TimedOut, "Native view query exceeded timeout");
+        }
+        catch (OperationCanceledException)
+        {
+            prefetched.Cts.Cancel();
+            return Unavailable(prefetched.Folder, ExplorerOrderStatus.Canceled, "Request canceled");
+        }
     }
 
     public async Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)

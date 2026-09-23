@@ -185,6 +185,16 @@ public partial class App : System.Windows.Application, IDisposable
         _services = Composition.AppHost.BuildServices();
         PhotoReviewPerf.StartupMark("servicesBuilt");
 
+        var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
+        var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
+        var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
+        // perf(startup): Explorer's view order is the slowest part of opening a photo (~1-2 s of
+        // cross-process COM for a large folder). Start it now, in parallel with settings, window
+        // construction and Show(); the folder load joins this query instead of starting its own.
+        var explorerFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder;
+        if (!string.IsNullOrEmpty(explorerFolder))
+            _services.GetRequiredService<IExplorerOrderProvider>().Prefetch(explorerFolder, ExplorerPrefetchTimeout);
+
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
         var appSettings = store.Load();
@@ -206,9 +216,6 @@ public partial class App : System.Windows.Application, IDisposable
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
-        var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
-        var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
-        var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
         _instanceLock = new InstanceLock(lockFolder);
         if (!_instanceLock.IsOwner)
         {
@@ -226,6 +233,12 @@ public partial class App : System.Windows.Application, IDisposable
         window.Show();
         PhotoReviewPerf.StartupMark("windowShown");
     }
+
+    /// <summary>
+    /// Budget of the startup Explorer prefetch. It starts ~1 s before the folder load asks for it, and
+    /// the load still bounds its own wait by its 2 s timeout, so this is 2 s plus that head start.
+    /// </summary>
+    private static readonly TimeSpan ExplorerPrefetchTimeout = TimeSpan.FromSeconds(3);
 
     internal static void LogStartupErrorForced(string message, Exception ex)
     {
