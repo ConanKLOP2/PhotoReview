@@ -206,10 +206,13 @@ public sealed class PreloadScheduler : IDisposable
                     // cadence as the progress log below, not on every candidate.
                     if (examinedSinceYield == 0 && !HasPreloadHeadroom())
                     {
-                        var memory = _memoryProbe.GetSnapshot();
-                        _log.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
-                        // GlobalMemoryStatusEx is a syscall: only taken while tracing (-1 = unavailable).
-                        if (PhotoReviewPerf.Log.IsEnabled())
+                        // GlobalMemoryStatusEx is a syscall: only taken when either the plain
+                        // log or the perf trace will actually consume it.
+                        var perfEnabled = PhotoReviewPerf.Log.IsEnabled();
+                        var memory = _log.Enabled || perfEnabled ? _memoryProbe.GetSnapshot() : null;
+                        if (_log.Enabled)
+                            _log.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
+                        if (perfEnabled)
                         {
                             PhotoReviewPerf.Log.PreloadPaused(memory is { } m ? (int)m.LoadPercent : -1,
                                 memory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
@@ -230,8 +233,14 @@ public sealed class PreloadScheduler : IDisposable
                     if (++examinedSinceYield >= workers)
                     {
                         examinedSinceYield = 0;
-                        var memory = _memoryProbe.GetSnapshot();
-                        _log.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes}");
+                        // GlobalMemoryStatusEx is a syscall taken on every batch here; skip it
+                        // entirely (this runs on the common, non-paused preload path) when
+                        // nothing will read the result.
+                        if (_log.Enabled)
+                        {
+                            var memory = _memoryProbe.GetSnapshot();
+                            _log.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes}");
+                        }
                         // Never yield through a UI Dispatcher here. Dispose is called by the
                         // window's Closed handler and synchronously drains this task; a queued
                         // Dispatcher continuation would deadlock against that same UI thread.
