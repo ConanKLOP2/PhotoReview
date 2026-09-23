@@ -9,7 +9,7 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** (Architecture Review 2026-09-23) | ✅ AR00, AR07 DONE; 🔄 PRs: AR03 #24, AR06 #26, AR02a #27, AR01 #28, AR02c #29, AR02b #30; TODO: AR02e (user machine), AR02d, AR04 | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
+| **AR** (Architecture Review 2026-09-23) | ✅ AR00, AR07 DONE; ✅ AR03 (#24 merged); 🔄 PRs: AR06 #26, AR02a #27, AR01 #28, AR02c #29, AR02b #30; TODO: AR02e (user machine), AR02d, AR04 | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS04, TS10 DONE; TS08/TS09 closed (Q-AR5); TS05-TS07 TODO | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
@@ -32,12 +32,12 @@
 |----|------|----------|------------|------------------|--------|
 | AR00 | Review + plans + ADR 0005 draft + stale-status fixes | — | — | No | ✅ DONE (PR #23 merged, `bff22d9`) |
 | AR01 | Ship TurboJpeg: explicit registration, native probe, Settings reflects availability, release gate | Q-AR1 = **A** (ship TurboJpeg) | — | 1 check | 🔄 PR #28 (GUI check by user) |
-| AR02a | `AppHost`, caches from `IAppPaths`, viewport provider, presentation/preload/move seams | Q-AR3 = **YES** | — | Fit check (with T89) | 🔄 PR #27, base #24 (Fit GUI check by user) |
-| AR02b | Integration tests build MainWindow via `AppHost` (12 sites) | Q-AR3 = **YES** | AR02a | No | ð PR #30, base #27 |
-| AR02c | `Benchmark.Cli` perf-session/ui-probe on production graph; report effective config | Q-AR3 = **YES** | AR02a | Run once | ð PR #29, base #27 |
+| AR02a | `AppHost`, caches from `IAppPaths`, viewport provider, presentation/preload/move seams | Q-AR3 = **YES** | — | Fit check (with T89) | 🔄 PR #27 (Fit GUI check by user) |
+| AR02b | Integration tests build MainWindow via `AppHost` (12 sites) | Q-AR3 = **YES** | AR02a | No | 🔄 PR #30, base #27 |
+| AR02c | `Benchmark.Cli` perf-session/ui-probe on production graph; report effective config | Q-AR3 = **YES** | AR02a | Run once | 🔄 PR #29, base #27 |
 | AR02e | Perf re-baseline on production graph | — | AR02c | **Yes** (user machine) | TODO — needs user's machine |
 | AR02d | Delete test ctors/`CreateTestViewModel`; public fields → read-only properties | Q-AR3 = **YES** | AR02b, AR02c | No | TODO |
-| AR03 | SourceBytes policy (a), `Platform.Windows` without WPF (b), startup dialog via `IDialogService` (c) | — | — | No | ð PR #24 |
+| AR03 | SourceBytes policy (a), `Platform.Windows` without WPF (b), startup dialog via `IDialogService` (c) | — | — | No | ✅ DONE (PR #24 merged, `b453fc6`) |
 | AR04 | UI-thread affinity: remove 47 `ConfigureAwait(false)` in App, arch test, catalog Debug guard | Q-AR2 = **YES** (ADR 0005 Accepted) | AR02c, AR02e | **Yes** (GUI + perf) | TODO |
 | AR06 | One release location, delete broken `outputs/release`, prune worktrees/leftovers | Q-AR4 = **YES** (CI path only) | — | No | 🔄 PR #26 (local `outputs/release/` deleted) |
 | AR07 | Fix 17 broken links, restore ADR evidence, link gate, docs-budget fix, group triage | Q-AR5 = **per §5 proposal table** | AR00 | No | ✅ DONE on `docs/ar07-docs-repair` (PR #25) |
@@ -87,7 +87,7 @@
 | TC06 | Native Recycle Bin | ✅ EXISTS* | Q-T4 done | **Integration.Tests/HotPath/NativeRecycleBinTests.cs.** Kept in `Integration.Tests` (Q-AR5, 2026-09-23) — needs real Recycle Bin. 2 real methods: DeleteMultiple/DeleteRapidly with 52 assertions |
 | TC07 | Real photos manual | ✅ EXISTS* | Q-T3 done | **Integration.Tests/HotPath/RealPhotosManualTests.cs.** Kept in `Integration.Tests` (Q-AR5, 2026-09-23) — needs real photos. 2 real methods: WarmNext/FileActions with ReadBudgetProbe assertions |
 | TC08 | Replace G1 tests | ✅ EXISTS | TC05 | InterleavedFileActionSequenceTests.TC08a/b/c: production-code replacement tests (183 lines added) |
-| TC09 | Flake audit | 🔄 TODO — kept (Q-AR5), the known flaky journal test | — | Not yet started; OperationJournalTests.LargeJournal flakes known |
+| TC09 | Flake audit | 🔄 PARTIAL — kept (Q-AR5) | — | TS02 `FixturePerfTest` fixed (PR #32 merged): gate asserts count/composition/size only; cost budget → `Category=Slow` test on thread CPU time (≤10 s, ~1.5 s cold). Full suite 3× 0 failures. Remaining: OperationJournalTests.LargeJournal |
 | TC10 | Test categorization | ✅ EXISTS | — | [Trait("Category", ...)] added to 46+ test classes, filter works in verify-all.ps1 |
 | TC11 | CI gate integration | ✅ EXISTS | TC05 | verify-all.ps1 gate filter logic working; CI workflow updated |
 

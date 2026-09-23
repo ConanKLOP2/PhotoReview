@@ -55,9 +55,7 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>()));
         services.AddSingleton<FileHashService>(sp => new FileHashService(
-            sp.GetRequiredService<SettingsStore>().Current.UseSourceBytesCache
-                ? sp.GetRequiredService<SourceBytesCache>()
-                : null));
+            sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
         services.AddSingleton<FileActionService>(sp => new FileActionService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
@@ -86,11 +84,13 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             persistNewThumbnails: false,
             log: sp.GetService<ILog>(),
-            sourceBytesCache: sp.GetRequiredService<SettingsStore>().Current.UseSourceBytesCache
-                ? sp.GetRequiredService<SourceBytesCache>()
-                : null));
-        services.AddSingleton<SourceBytesCache>(sp => new SourceBytesCache(
-            sp.GetRequiredService<SettingsStore>().Current.SourceBytesCapacityBytes));
+            sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
+        services.AddSingleton<SourceBytesCachePolicy>(sp =>
+        {
+            var settings = sp.GetRequiredService<SettingsStore>().Current;
+            return new SourceBytesCachePolicy(
+                settings.UseSourceBytesCache ? new SourceBytesCache(settings.SourceBytesCapacityBytes) : null);
+        });
 
         services.AddSingleton<PreviewStateContext>();
         services.AddSingleton<PreviewImageService>(sp =>
@@ -106,15 +106,14 @@ public partial class App : System.Windows.Application, IDisposable
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>(),
-                sourceBytesCache: settingsStore.Current.UseSourceBytesCache
-                    ? sp.GetRequiredService<SourceBytesCache>()
-                    : null);
+                sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache);
         });
 
         services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>
             (getEntries, getTotalBytes) =>
             {
                 var settingsStore = sp.GetRequiredService<SettingsStore>();
+                var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
                 return new PreloadScheduler(
                 sp.GetRequiredService<PreviewImageService>(),
                 sp.GetRequiredService<ReviewMetrics>(),
@@ -125,8 +124,8 @@ public partial class App : System.Windows.Application, IDisposable
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
                 workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,
                 log: sp.GetService<ILog>(),
-                prefetchSourceBytes: settingsStore.Current.UseSourceBytesCache
-                    ? (path, token) => Task.Run(() => sp.GetRequiredService<SourceBytesCache>().GetOrRead(path), token)
+                prefetchSourceBytes: sourceBytesCache is not null
+                    ? (path, token) => Task.Run(() => sourceBytesCache.GetOrRead(path), token)
                     : null);
             });
 
@@ -179,7 +178,7 @@ public partial class App : System.Windows.Application, IDisposable
         _instanceLock = new InstanceLock(lockFolder);
         if (!_instanceLock.IsOwner)
         {
-            System.Windows.MessageBox.Show("Folder này đang được mở trong một Photo Review khác.", "Photo Review", MessageBoxButton.OK, MessageBoxImage.Information);
+            _services.GetRequiredService<IDialogService>().ShowMessage("Photo Review", "Folder này đang được mở trong một Photo Review khác.");
             _instanceLock.Dispose();
             _instanceLock = null;
             Shutdown();
