@@ -46,6 +46,10 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
     private string? _fixtureFolder;
     private readonly int _photoCount = 20;
 
+    // TS07: per-instance temp dirs created by CreateViewModelWithActions (PhotoReview_TC05_*),
+    // deleted in DisposeAsync so a full test run leaves no leaked directories in %TEMP%.
+    private readonly List<string> _tempDirsToCleanup = [];
+
     public Task InitializeAsync()
     {
         // TC01: Build fixture folder with real JPEG photos
@@ -55,11 +59,14 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        // TS07: Cleanup fixture folder on session end
-        if (_fixtureFolder != null && Directory.Exists(_fixtureFolder))
+        // TS07: Cleanup fixture folder on session end. The fixture folder itself is the
+        // process-wide PhotoFolderBuilder cache (not per-test), so it is left for the
+        // builder's own process-exit cleanup and is not deleted here.
+
+        foreach (var dir in _tempDirsToCleanup)
         {
-            try { Directory.Delete(_fixtureFolder, recursive: true); }
-            catch { /* ignore cleanup errors */ }
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+            catch { /* best effort */ }
         }
 
         return Task.CompletedTask;
@@ -72,19 +79,21 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         return filePath;
     }
 
-    private static (MainViewModel ViewModel, FileActionService FileActions) CreateViewModelWithActions(
+    private (MainViewModel ViewModel, FileActionService FileActions) CreateViewModelWithActions(
         string albumFolder,
-        AppSettings? settings = null)
+        AppSettings? settings = null,
+        IPresentationSink? presentationSink = null)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "PhotoReview_TC05_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
+        _tempDirsToCleanup.Add(tempDir); // TS07: deleted in DisposeAsync
 
         var catalog = new ReviewCatalog();
         var clock = new GenerationClock();
         var metrics = new ReviewMetrics();
         var compareViewModel = new CompareViewModel();
         var viewerState = new ViewerState();
-        var sink = new StubPresentationSink();
+        var sink = presentationSink ?? new StubPresentationSink();
         var preloadController = new StubPreloadController();
         var explorerOrder = new StubExplorerOrderProvider();
         var fileSystem = new PhysicalFileSystem();
@@ -235,10 +244,131 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         Assert.Equal(2, vm.CurrentIndex);
     }
 
-    [Fact(DisplayName = "TC04: Move/Delete does not re-read remaining images", Skip = "TC04 not yet implemented; requires move/delete integration")]
-    public async Task MoveDelete_InFolder_DoesNotReadUnaffected()
+    [Fact(DisplayName = "TC04: Rapid Next (key-repeat) presents only the final image within read/handle budgets")]
+    public async Task RapidNext_KeyRepeatWithoutAwait_PresentsFinalWithinBudgets()
     {
-        await Task.CompletedTask;
+        Assert.NotNull(_fixtureFolder);
+        Assert.True(Directory.Exists(_fixtureFolder));
+
+        var presented = new List<string>();
+        var sink = new RecordingPresentationSink(presented);
+        var (vm, _) = CreateViewModelWithActions(_fixtureFolder!, presentationSink: sink);
+        await vm.OpenFolderAsync(_fixtureFolder!).WithTimeout(TimeSpan.FromSeconds(20), "OpenFolderAsync");
+        Assert.Equal(0, vm.CurrentIndex);
+
+        // Catalog.Paths is the actual, already-sorted order the ViewModel navigates - the
+        // authoritative index-to-path mapping (it may differ from a raw *.jpg-only directory
+        // listing, e.g. it also includes the fixture's sample.png).
+        var orderedFiles = vm.Catalog.Paths.ToArray();
+        Assert.True(orderedFiles.Length >= 20, "Fixture needs at least 20 images");
+
+        var probe = new ReadBudgetProbe(new PhysicalFileSystem(), vm.Metrics);
+        presented.Clear();
+        var before = probe.Capture();
+
+        // Simulate a held Next key: K key-repeats fired without awaiting each one, then all awaited.
+        const int K = 12;
+        var tasks = new List<Task>(K);
+        for (var i = 0; i < K; i++)
+        {
+            tasks.Add(vm.NextAsync().WithTimeout(TimeSpan.FromSeconds(5), $"NextAsync key-repeat #{i}"));
+        }
+
+        // No unobserved exceptions: await each queued task explicitly instead of letting a fault
+        // reach the finalizer thread (which is where "unobserved task exception" would otherwise fire).
+        var faulted = new List<Exception>();
+        foreach (var task in tasks)
+        {
+            try { await task; }
+            catch (Exception ex) { faulted.Add(ex); }
+        }
+        Assert.Empty(faulted);
+
+        var after = probe.Capture();
+
+        // INV-1: the last presentation matches Catalog.Current (the newest token wins); no stale
+        // (already-superseded) image is presented after a newer one, i.e. presented indices never
+        // regress across the sequence of OnPresented calls.
+        Assert.Equal(K, vm.CurrentIndex);
+        Assert.NotNull(vm.Catalog.Current);
+        Assert.Equal(orderedFiles[K], vm.Catalog.Current!.Path);
+
+        Assert.True(presented.Count <= K,
+            $"present count {presented.Count} exceeds the {K} key-repeats that were issued");
+
+        var presentedIndices = presented.Select(p => Array.IndexOf(orderedFiles, p)).ToList();
+        for (var i = 1; i < presentedIndices.Count; i++)
+        {
+            Assert.True(presentedIndices[i] >= presentedIndices[i - 1],
+                $"a stale image was presented out of order at position {i}: [{string.Join(",", presentedIndices)}]");
+        }
+
+        // Bounded reads: CreateViewModelWithActions wires a StubPreloadController that never
+        // preloads (preload window = 0 for this fixture), so every genuinely new index requires
+        // exactly one target decode. Formula: sourceReads <= K + preloadWindowSize(=0).
+        ReadBudgetProbe.AssertSourceReadsDelta(before, after, maxDelta: K,
+            context: "Rapid Next key-repeat should read at most K target images (no preload window)");
+
+        // INV-8 / no handle leak: the file just presented must not be left with an open handle -
+        // it can be renamed away and back immediately after the burst of navigations completes.
+        var currentPath = vm.Catalog.Current!.Path;
+        var probePath = currentPath + ".tc04-handle-check";
+        File.Move(currentPath, probePath);
+        File.Move(probePath, currentPath);
+    }
+
+    [Fact(DisplayName = "TC04: Rapid Next/Previous key-repeat clamps at folder boundaries without error")]
+    public async Task RapidNextPrevious_KeyRepeatAtBoundaries_ClampsWithoutError()
+    {
+        Assert.NotNull(_fixtureFolder);
+
+        var (vm, _) = CreateViewModelWithActions(_fixtureFolder!);
+        await vm.OpenFolderAsync(_fixtureFolder!).WithTimeout(TimeSpan.FromSeconds(20), "OpenFolderAsync");
+        var orderedFiles = vm.Catalog.Paths.ToArray();
+        var total = vm.TotalFiles;
+        Assert.True(total >= 20);
+        Assert.Equal(total, orderedFiles.Length);
+
+        // Holding Previous at the start of the folder: repeated key-repeats without await must
+        // clamp at index 0, never throw, never go negative.
+        var startTasks = Enumerable.Range(0, 8)
+            .Select(i => vm.PreviousAsync().WithTimeout(TimeSpan.FromSeconds(5), $"PreviousAsync boundary #{i}"))
+            .ToList();
+        await Task.WhenAll(startTasks);
+        Assert.Equal(0, vm.CurrentIndex);
+        Assert.NotNull(vm.Catalog.Current);
+        Assert.Equal(orderedFiles[0], vm.Catalog.Current!.Path);
+
+        // Drive close to the end (awaited, one step at a time), then hold Next past the last
+        // index: repeated key-repeats without await must clamp at Count-1.
+        for (var i = 0; i < total - 3; i++)
+        {
+            await vm.NextAsync().WithTimeout(TimeSpan.FromSeconds(5), $"NextAsync setup #{i}");
+        }
+        Assert.Equal(total - 3, vm.CurrentIndex);
+
+        var overshoot = 6; // more than the 2 remaining steps to the last index
+        var endTasks = Enumerable.Range(0, overshoot)
+            .Select(i => vm.NextAsync().WithTimeout(TimeSpan.FromSeconds(5), $"NextAsync overshoot #{i}"))
+            .ToList();
+        await Task.WhenAll(endTasks);
+        Assert.Equal(total - 1, vm.CurrentIndex);
+        Assert.NotNull(vm.Catalog.Current);
+        Assert.Equal(orderedFiles[total - 1], vm.Catalog.Current!.Path);
+
+        // Interleaved Next/Previous without await near the tail: net displacement must match the
+        // clamped arithmetic (INV-1), never throw, never leave CurrentIndex out of range.
+        var mixed = new List<Task>
+        {
+            vm.PreviousAsync().WithTimeout(TimeSpan.FromSeconds(5), "Previous interleave #1"),
+            vm.NextAsync().WithTimeout(TimeSpan.FromSeconds(5), "Next interleave #1"),
+            vm.NextAsync().WithTimeout(TimeSpan.FromSeconds(5), "Next interleave #2"), // clamps at last index
+            vm.PreviousAsync().WithTimeout(TimeSpan.FromSeconds(5), "Previous interleave #2"),
+        };
+        await Task.WhenAll(mixed);
+        Assert.InRange(vm.CurrentIndex, 0, total - 1);
+        Assert.NotNull(vm.Catalog.Current);
+        Assert.Equal(orderedFiles[vm.CurrentIndex], vm.Catalog.Current!.Path);
     }
 
     [Fact(DisplayName = "TC05: Rapid Next without await - all images presented without duplicates")]
@@ -380,6 +510,23 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }
+        public void TracePresented(long token, string kind, long assignedTimestamp) { }
+    }
+
+    /// <summary>TC04: records the order in which images are presented, for INV-1 verification.</summary>
+    private sealed class RecordingPresentationSink(List<string> presented) : IPresentationSink
+    {
+        private readonly object _gate = new();
+
+        public void SetCurrentImage(object? image) { }
+        public void SetStatusText(string status) { }
+        public void ApplyInitialViewMode() { }
+
+        public void OnPresented(string path)
+        {
+            lock (_gate) { presented.Add(path); }
+        }
+
         public void TracePresented(long token, string kind, long assignedTimestamp) { }
     }
 
