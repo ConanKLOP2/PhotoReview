@@ -253,7 +253,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_catalog.CurrentIndex < 0 || _catalog.CurrentIndex >= _catalog.Count) return;
         _clock.NextInteraction();
 
-        var currentPath = _catalog.Paths[_catalog.CurrentIndex];
+        var currentPath = _catalog.PathAt(_catalog.CurrentIndex);
         if (_currentSession != null)
         {
             _currentSession.Skipped.Add(currentPath);

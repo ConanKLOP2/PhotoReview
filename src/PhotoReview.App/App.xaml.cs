@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Settings;
@@ -110,14 +111,14 @@ public partial class App : System.Windows.Application, IDisposable
                     : null);
         });
 
-        services.AddSingleton<Func<Func<string[]>, Func<long>, PreloadScheduler>>(sp =>
-            (getFiles, getTotalBytes) =>
+        services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>
+            (getEntries, getTotalBytes) =>
             {
                 var settingsStore = sp.GetRequiredService<SettingsStore>();
                 return new PreloadScheduler(
                 sp.GetRequiredService<PreviewImageService>(),
                 sp.GetRequiredService<ReviewMetrics>(),
-                getFiles,
+                getEntries,
                 getTotalBytes,
                 fullFolderRamThresholdBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
                 memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,

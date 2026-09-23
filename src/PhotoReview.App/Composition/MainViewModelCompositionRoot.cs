@@ -39,11 +39,11 @@ internal static class MainViewModelCompositionRoot
         var thumbs = sp.GetRequiredService<ThumbnailCache>();
         var natural = sp.GetRequiredService<INaturalComparer>();
         var explorerOrder = sp.GetRequiredService<IExplorerOrderProvider>();
-        var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<string[]>, System.Func<long>, PreloadScheduler>>();
+        var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<CatalogEntry[]>, System.Func<long>, PreloadScheduler>>();
 
         var sourceSizeTracker = new SourceSizeTracker(catalog, fs);
         var preloadScheduler = schedulerFactory(
-            catalog.Snapshot,
+            catalog.EntriesSnapshot,
             sourceSizeTracker.GetTotal);
         var preloadController = new PreloadControllerAdapter(() => preloadScheduler);
 

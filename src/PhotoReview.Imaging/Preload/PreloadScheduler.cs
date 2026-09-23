@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 
@@ -15,7 +16,10 @@ public sealed class PreloadScheduler : IDisposable
 {
     private readonly IPreloadTarget _target;
     private readonly ReviewMetrics _metrics;
-    private readonly Func<string[]> _snapshotFiles;
+    // CatalogEntry (not string) so candidates can be filtered against the RAM cache via
+    // GetCurrentCacheKey(entry), which reuses the folder scan's Length/LastWriteUtc instead of
+    // stat-ing every candidate examined during a preload scan.
+    private readonly Func<CatalogEntry[]> _snapshotEntries;
     private readonly Func<long> _totalSourceBytes;
     private readonly PreloadOptions _options;
     private readonly IMemoryProbe _memoryProbe;
@@ -50,7 +54,7 @@ public sealed class PreloadScheduler : IDisposable
     public PreloadScheduler(
         IPreloadTarget target,
         ReviewMetrics metrics,
-        Func<string[]> snapshotFiles,
+        Func<CatalogEntry[]> snapshotEntries,
         Func<long> totalSourceBytes,
         PreloadOptions? options = null,
         IMemoryProbe? memoryProbe = null,
@@ -60,7 +64,7 @@ public sealed class PreloadScheduler : IDisposable
     {
         _target = target ?? throw new ArgumentNullException(nameof(target));
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
-        _snapshotFiles = snapshotFiles ?? throw new ArgumentNullException(nameof(snapshotFiles));
+        _snapshotEntries = snapshotEntries ?? throw new ArgumentNullException(nameof(snapshotEntries));
         _totalSourceBytes = totalSourceBytes ?? throw new ArgumentNullException(nameof(totalSourceBytes));
         _options = options ?? new PreloadOptions();
         _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
@@ -86,7 +90,7 @@ public sealed class PreloadScheduler : IDisposable
     public PreloadScheduler(
         IPreloadTarget target,
         ReviewMetrics metrics,
-        Func<string[]> snapshotFiles,
+        Func<CatalogEntry[]> snapshotEntries,
         Func<long> totalSourceBytes,
         long fullFolderRamThresholdBytes,
         double memoryLoadLimit,
@@ -96,7 +100,7 @@ public sealed class PreloadScheduler : IDisposable
         IUiScheduler? uiScheduler = null,
         ILog? log = null,
         Func<string, CancellationToken, Task>? prefetchSourceBytes = null)
-        : this(target, metrics, snapshotFiles, totalSourceBytes,
+        : this(target, metrics, snapshotEntries, totalSourceBytes,
             new PreloadOptions(
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
                 MemoryLoadLimit: memoryLoadLimit,
@@ -165,13 +169,13 @@ public sealed class PreloadScheduler : IDisposable
             if (_preloadSchedulerTask is { IsCompleted: false } &&
                 ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
             _preloadSchedulerCts = cts;
-            _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotFiles(), cts.Token);
+            _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotEntries(), cts.Token);
             _preloadLifetimeTasks.Add(_preloadSchedulerTask);
             return _preloadSchedulerTask;
         }
     }
 
-    private async Task RunPreloadSchedulerAsync(string[] files, CancellationToken cancellationToken)
+    private async Task RunPreloadSchedulerAsync(CatalogEntry[] entries, CancellationToken cancellationToken)
     {
         var workers = _workerCount;
         var running = new Dictionary<Task, string>();
@@ -191,7 +195,7 @@ public sealed class PreloadScheduler : IDisposable
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolder(sourceBytes,
                         _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
                     _log.Info($"Preload policy: sourceBytes={sourceBytes} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder}");
-                    order = PreloadOrderService.Build(Volatile.Read(ref _preloadCenter), files.Length,
+                    order = PreloadOrderService.Build(Volatile.Read(ref _preloadCenter), entries.Length,
                         wholeFolder).GetEnumerator();
                     seenVersion = currentVersion;
                 }
@@ -202,27 +206,41 @@ public sealed class PreloadScheduler : IDisposable
                     // cadence as the progress log below, not on every candidate.
                     if (examinedSinceYield == 0 && !HasPreloadHeadroom())
                     {
-                        var memory = _memoryProbe.GetSnapshot();
-                        _log.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
-                        // GlobalMemoryStatusEx is a syscall: only taken while tracing (-1 = unavailable).
-                        if (PhotoReviewPerf.Log.IsEnabled())
+                        // GlobalMemoryStatusEx is a syscall: only taken when either the plain
+                        // log or the perf trace will actually consume it.
+                        var perfEnabled = PhotoReviewPerf.Log.IsEnabled();
+                        var memory = _log.Enabled || perfEnabled ? _memoryProbe.GetSnapshot() : null;
+                        if (_log.Enabled)
+                            _log.Info($"Preload paused for memory: queued={queued.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes} loadPercent={memory?.LoadPercent}");
+                        if (perfEnabled)
                         {
                             PhotoReviewPerf.Log.PreloadPaused(memory is { } m ? (int)m.LoadPercent : -1,
                                 memory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
                         }
                         return;
                     }
-                    var path = files[order.Current];
-                    if (queued.Contains(path) || _target.TryGetCachedPreview(path)) continue;
+                    var entry = entries[order.Current];
+                    var path = entry.Path;
+                    if (queued.Contains(path)) continue;
+                    // Reuses the folder scan's Length/LastWriteUtc: no stat for candidates
+                    // already warm (the common case once preload has caught up).
+                    var key = _target.GetCurrentCacheKey(entry);
+                    if (_target.TryGetCachedPreview(key)) continue;
                     queued.Add(path);
-                    running.Add(PreloadOneAsync(path, cancellationToken), path);
+                    running.Add(PreloadOneAsync(path, key, cancellationToken), path);
                     // Yield only after actual queue work; give input/rendering a
                     // chance without limiting every batch to two decodes.
                     if (++examinedSinceYield >= workers)
                     {
                         examinedSinceYield = 0;
-                        var memory = _memoryProbe.GetSnapshot();
-                        _log.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes}");
+                        // GlobalMemoryStatusEx is a syscall taken on every batch here; skip it
+                        // entirely (this runs on the common, non-paused preload path) when
+                        // nothing will read the result.
+                        if (_log.Enabled)
+                        {
+                            var memory = _memoryProbe.GetSnapshot();
+                            _log.Info($"Preload progress: queued={queued.Count} active={running.Count} cacheCount={_target.CacheCount} cacheBytes={_target.CacheBytes} availableBytes={memory?.AvailableBytes}");
+                        }
                         // Never yield through a UI Dispatcher here. Dispose is called by the
                         // window's Closed handler and synchronously drains this task; a queued
                         // Dispatcher continuation would deadlock against that same UI thread.
@@ -264,7 +282,7 @@ public sealed class PreloadScheduler : IDisposable
 
     private bool HasPreloadHeadroom() => _memoryProbe.HasHeadroom(_options.MemoryLoadLimit, _options.ReserveBytes);
 
-    private async Task PreloadOneAsync(string path, CancellationToken cancellationToken)
+    private async Task PreloadOneAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
     {
         // D04 perf: preload work is not tied to a navigation. Setting the AsyncLocal here only
         // affects calls made downstream from this method (DecodeAndCacheAsync), not the caller
@@ -280,8 +298,9 @@ public sealed class PreloadScheduler : IDisposable
             var stopwatch = Stopwatch.StartNew();
             var queueWaitMs = perf ? PhotoReviewPerf.Ms(perfEnqueue) : 0;
             var pathId = perf ? PhotoReviewPerf.PathId(path) : "";
-            // If another task already decoded it while this one waited in the semaphore queue, skip.
-            if (_target.TryGetCachedPreview(path))
+            // If another task already decoded it while this one waited in the semaphore queue,
+            // skip. Reuses the key built when this candidate was queued -- no stat.
+            if (_target.TryGetCachedPreview(key))
             {
                 stopwatch.Stop();
                 if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "skipped", stopwatch.Elapsed.TotalMilliseconds);
@@ -294,9 +313,12 @@ public sealed class PreloadScheduler : IDisposable
                 var beforeReads = _metrics.Snapshot().SourceReads;
                 await _target.PreloadAsync(path, cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
-                var key = _target.GetCurrentCacheKey(path);
-                var isHit = _target.TryGetCachedPreview(key);
-                if (isHit) lock (_preloadedKeysGate) _preloadedKeys.Add(key);
+                // Must re-stat: the identity actually stored by PreloadAsync's decode is
+                // whatever GetCurrentCacheKey(path) resolved to at decode time, which can
+                // differ from the pre-decode `key` above if the source changed mid-flight.
+                var freshKey = _target.GetCurrentCacheKey(path);
+                var isHit = _target.TryGetCachedPreview(freshKey);
+                if (isHit) lock (_preloadedKeysGate) _preloadedKeys.Add(freshKey);
                 if (perf)
                 {
                     var sourceRead = _metrics.Snapshot().SourceReads > beforeReads;

@@ -48,6 +48,14 @@ public readonly record struct ImageCacheKey
         return new ImageCacheKey(fullPath, entry.Length.Value, entry.LastWriteUtc.Value.Ticks, isOriginal, isOriginal ? 0 : targetWidth, orientationApplied, backend);
     }
 
+    /// <summary>
+    /// Builds the "Original loading mode" key for the same source identity as <paramref name="source"/>,
+    /// without re-stating the file. Used when the caller already holds a key for this source (e.g. from
+    /// the current navigation) and only needs the full-resolution dimensions cache entry.
+    /// </summary>
+    public static ImageCacheKey CreateOriginal(ImageCacheKey source) =>
+        new(source.Path, source.Length, source.LastWriteUtcTicks, isOriginal: true, targetWidth: 0, source.OrientationApplied, source.Backend);
+
     public bool MatchesCurrentSource()
     {
         try

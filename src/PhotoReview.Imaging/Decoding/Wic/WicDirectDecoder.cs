@@ -22,7 +22,7 @@ public sealed class WicDirectDecoder : IImageDecoder
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         Stream stream = request.Bytes.HasValue
-            ? new MemoryStream(request.Bytes.Value.ToArray(), writable: false)
+            ? ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value)
             : new FileStream(request.Path, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
 

@@ -58,5 +58,61 @@ public class ComparePairServiceTests
     {
         Assert.Null(ComparePairService.Find([@"C:\Photos\DSC0001.JPG"], @"C:\Photos\DSC0001.JPG"));
     }
+
+    [Fact(DisplayName = "BuildIndex matches Find for every path in the catalog")]
+    public void BuildIndexMatchesFindForEveryPath()
+    {
+        var files = new List<string>
+        {
+            @"C:\Photos\DSC0001.JPG",
+            @"C:\Photos\DSC0001 (1).JPG",
+            @"C:\Photos\DSC0001 (2).JPG",
+            @"C:\Photos\DSC0002.JPG",
+            @"C:\Photos\Other\DSC0001.JPG",
+            @"C:\Photos\DSC0003.PNG",
+            @"C:\Photos\DSC0003 (1).PNG"
+        };
+
+        var index = ComparePairService.BuildIndex(files);
+
+        foreach (var path in files)
+        {
+            var expected = ComparePairService.Find(files, path);
+            var found = index.TryGetValue(path, out var pair);
+            Assert.Equal(expected is not null, found);
+            if (expected is not null)
+            {
+                Assert.Equal(expected.Value.Left, pair.Left);
+                Assert.Equal(expected.Value.Right, pair.Right);
+            }
+        }
+    }
+
+    [Fact(DisplayName = "BuildIndex pairs the original with the smallest-numbered variant")]
+    public void BuildIndexPairsOriginalWithSmallestNumbered()
+    {
+        var files = new List<string>
+        {
+            @"C:\Photos\DSC0001.JPG",
+            @"C:\Photos\DSC0001 (2).JPG",
+            @"C:\Photos\DSC0001 (1).JPG"
+        };
+
+        var index = ComparePairService.BuildIndex(files);
+
+        Assert.True(index.TryGetValue(@"C:\Photos\DSC0001.JPG", out var fromOriginal));
+        Assert.Equal(@"C:\Photos\DSC0001 (1).JPG", fromOriginal.Right);
+
+        Assert.True(index.TryGetValue(@"C:\Photos\DSC0001 (2).JPG", out var fromNumbered));
+        Assert.Equal(@"C:\Photos\DSC0001.JPG", fromNumbered.Left);
+        Assert.Equal(@"C:\Photos\DSC0001 (2).JPG", fromNumbered.Right);
+    }
+
+    [Fact(DisplayName = "BuildIndex omits a lone original with no numbered variant")]
+    public void BuildIndexOmitsUnpairedOriginal()
+    {
+        var index = ComparePairService.BuildIndex([@"C:\Photos\DSC0001.JPG", @"C:\Photos\DSC0002.JPG"]);
+        Assert.Empty(index);
+    }
 }
 

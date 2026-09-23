@@ -51,7 +51,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
 
         if (request.Bytes.HasValue)
         {
-            using var memoryStream = new MemoryStream(request.Bytes.Value.ToArray(), writable: false);
+            using var memoryStream = ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value);
             return DecodeStream(memoryStream, request, out orientation);
         }
 

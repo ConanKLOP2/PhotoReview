@@ -6,6 +6,7 @@ using PhotoReview.App;
 using PhotoReview.App.Services;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Session;
@@ -58,7 +59,7 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<ThumbnailCache>());
         Assert.NotNull(provider.GetRequiredService<PreviewStateContext>());
         Assert.NotNull(provider.GetRequiredService<PreviewImageService>());
-        Assert.NotNull(provider.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>());
+        Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>());
     }
 
     [Fact]
@@ -88,8 +89,8 @@ public class CompositionRootTests
         App.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        var factory = provider.GetRequiredService<Func<Func<string[]>, Func<long>, PreloadScheduler>>();
-        var scheduler = factory(() => ["image1.jpg"], () => 1024L);
+        var factory = provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>();
+        var scheduler = factory(() => [new CatalogEntry("image1.jpg")], () => 1024L);
 
         Assert.NotNull(scheduler);
         var probeField = typeof(PreloadScheduler).GetField("_memoryProbe", BindingFlags.Instance | BindingFlags.NonPublic);

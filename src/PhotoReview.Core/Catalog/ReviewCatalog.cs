@@ -14,6 +14,24 @@ public sealed class ReviewCatalog
 {
     private readonly List<CatalogEntry> _entries = [];
 
+    // Perf: IndexOf/Find run once per navigation (ImagePresenter, FileActionController) and
+    // must not be O(n) per call. The index is rebuilt lazily on the next lookup after any
+    // structural change (add/remove/reorder) instead of being kept incrementally in sync,
+    // which is simpler to keep correct and still turns "many lookups, few mutations" into
+    // O(1) lookups paid for by an occasional O(n) rebuild.
+    private readonly Dictionary<string, int> _indexByPath = new(StringComparer.OrdinalIgnoreCase);
+    private bool _indexDirty = true;
+    private string[]? _pathsCache;
+
+    /// <summary>
+    /// Bumped whenever membership or order changes (Reset/Remove/Restore/ReplaceOrder/
+    /// InsertSorted/MoveToFront). Lets callers that derive an expensive, whole-catalog cache
+    /// (compare-pair index, total source bytes) cheaply detect "nothing changed since I last
+    /// built this" instead of recomputing on every navigation or rebuilding a HashSet of paths
+    /// to compare membership.
+    /// </summary>
+    public int StructuralVersion { get; private set; }
+
     /// <summary>
     /// Gets the number of items currently in the catalog.
     /// </summary>
@@ -30,14 +48,19 @@ public sealed class ReviewCatalog
     public CatalogEntry? Current => CurrentIndex >= 0 && CurrentIndex < _entries.Count ? _entries[CurrentIndex] : null;
 
     /// <summary>
-    /// Gets a read-only list of paths of all items currently in the catalog.
+    /// Gets a read-only list of paths of all items currently in the catalog. Cached array,
+    /// rebuilt only after a structural change -- callers that need a single path should use
+    /// <see cref="PathAt"/> instead of indexing into this.
     /// </summary>
-    public IReadOnlyList<string> Paths => _entries.Select(e => e.Path).ToArray();
+    public IReadOnlyList<string> Paths => _pathsCache ??= _entries.Select(e => e.Path).ToArray();
 
     /// <summary>
     /// Gets all catalog entries, for efficient access to metadata (Length, LastWriteUtc).
     /// </summary>
     public IReadOnlyList<CatalogEntry> Entries => _entries.AsReadOnly();
+
+    /// <summary>Returns the path at <paramref name="index"/> without allocating the full Paths array.</summary>
+    public string PathAt(int index) => _entries[index].Path;
 
     /// <summary>
     /// Finds the zero-based index of the entry with the specified path, using ordinal case-insensitive comparison.
@@ -46,12 +69,28 @@ public sealed class ReviewCatalog
     public int IndexOf(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return -1;
+        EnsureIndex();
+        return _indexByPath.TryGetValue(path, out var index) ? index : -1;
+    }
+
+    private void EnsureIndex()
+    {
+        if (!_indexDirty) return;
+        _indexByPath.Clear();
         for (var i = 0; i < _entries.Count; i++)
         {
-            if (string.Equals(_entries[i].Path, path, StringComparison.OrdinalIgnoreCase))
-                return i;
+            // First occurrence wins for unusual case-variant duplicate paths, matching the
+            // previous linear-scan behavior (first match).
+            _indexByPath.TryAdd(_entries[i].Path, i);
         }
-        return -1;
+        _indexDirty = false;
+    }
+
+    private void InvalidateIndex()
+    {
+        _indexDirty = true;
+        _pathsCache = null;
+        StructuralVersion++;
     }
 
     /// <summary>
@@ -69,6 +108,7 @@ public sealed class ReviewCatalog
             }
         }
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
+        InvalidateIndex();
     }
 
     public void Reset(IEnumerable<CatalogEntry> entries)
@@ -77,6 +117,7 @@ public sealed class ReviewCatalog
         _entries.Clear();
         _entries.AddRange(entries.Where(e => e is not null && !string.IsNullOrWhiteSpace(e.Path)));
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
+        InvalidateIndex();
     }
 
     public CatalogEntry? Find(string path) => IndexOf(path) is var index && index >= 0 ? _entries[index] : null;
@@ -103,6 +144,7 @@ public sealed class ReviewCatalog
             var entry = _entries[index];
             _entries.RemoveAt(index);
             _entries.Insert(0, entry);
+            InvalidateIndex();
         }
 
         CurrentIndex = 0;
@@ -141,6 +183,7 @@ public sealed class ReviewCatalog
         if (removedIndex < 0) return CurrentIndex;
 
         _entries.RemoveAt(removedIndex);
+        InvalidateIndex();
         if (_entries.Count == 0)
         {
             CurrentIndex = -1;
@@ -163,6 +206,7 @@ public sealed class ReviewCatalog
 
         var clampedIndex = Math.Clamp(index, 0, _entries.Count);
         _entries.Insert(clampedIndex, new CatalogEntry(path));
+        InvalidateIndex();
 
         if (CurrentIndex == -1)
         {
@@ -203,6 +247,7 @@ public sealed class ReviewCatalog
         {
             _entries.Add(entryMap[path]);
         }
+        InvalidateIndex();
 
         if (currentPath is not null)
         {
@@ -237,6 +282,7 @@ public sealed class ReviewCatalog
         }
 
         _entries.Insert(targetIndex, new CatalogEntry(path));
+        InvalidateIndex();
 
         if (CurrentIndex == -1)
         {
@@ -254,4 +300,11 @@ public sealed class ReviewCatalog
     /// Creates a snapshot array of all paths currently in the catalog.
     /// </summary>
     public string[] Snapshot() => _entries.Select(e => e.Path).ToArray();
+
+    /// <summary>
+    /// Creates a true copy of all entries (unlike <see cref="Entries"/>, which wraps the live
+    /// list). For consumers -- e.g. the background preload scheduler -- that need a stable
+    /// snapshot including each entry's cached Length/LastWriteUtc, safe to read off the UI thread.
+    /// </summary>
+    public CatalogEntry[] EntriesSnapshot() => _entries.ToArray();
 }

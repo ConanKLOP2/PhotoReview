@@ -11,6 +11,7 @@ public sealed class PreloadSafetyTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PhotoReview-PreloadSafety", Guid.NewGuid().ToString("N"));
     private readonly string[] _files;
+    private readonly PhotoReview.Core.Catalog.CatalogEntry[] _entries;
 
     public PreloadSafetyTests()
     {
@@ -21,6 +22,7 @@ public sealed class PreloadSafetyTests : IDisposable
             File.WriteAllBytes(path, [1, 2, 3, (byte)i]);
             return path;
         }).ToArray();
+        _entries = Array.ConvertAll(_files, f => new PhotoReview.Core.Catalog.CatalogEntry(f));
     }
 
     [Fact]
@@ -103,7 +105,7 @@ public sealed class PreloadSafetyTests : IDisposable
     }
 
     private PreloadScheduler Create(IPreloadTarget target, IMemoryProbe probe, int workerCount) =>
-        new(target, new ReviewMetrics(), () => _files, () => 0,
+        new(target, new ReviewMetrics(), () => _entries, () => 0,
             new PreloadOptions(WorkerCount: workerCount), probe, ImmediateUiScheduler.Instance);
 
     public void Dispose()
@@ -130,6 +132,7 @@ public sealed class PreloadSafetyTests : IDisposable
         public bool TryGetCachedPreview(string path) => _cached.ContainsKey(path);
         public bool TryGetCachedPreview(ImageCacheKey key) => _cached.ContainsKey(key.Path);
         public ImageCacheKey GetCurrentCacheKey(string path) => ImageCacheKey.Create(path, false, 100);
+        public ImageCacheKey GetCurrentCacheKey(PhotoReview.Core.Catalog.CatalogEntry entry) => GetCurrentCacheKey(entry.Path);
 
         public async Task PreloadAsync(string path, CancellationToken cancellationToken = default)
         {

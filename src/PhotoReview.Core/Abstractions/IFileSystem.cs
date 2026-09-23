@@ -52,6 +52,15 @@ public interface IFileSystem
     /// <summary>Liệt kê các tệp tin trong thư mục khớp với mẫu tìm kiếm.</summary>
     IEnumerable<string> EnumerateFiles(string directory, string pattern = "*");
 
+    /// <summary>
+    /// Liệt kê tệp tin kèm Length/LastWriteUtc lấy thẳng từ directory entry, không cần một
+    /// GetFileStat riêng cho từng file (implementation mặc định gọi EnumerateFiles + GetFileStat
+    /// cho từng phần tử; <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè bằng
+    /// DirectoryInfo.EnumerateFiles để tránh syscall stat riêng).
+    /// </summary>
+    IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") =>
+        EnumerateFiles(directory, pattern).Select(path => (path, GetFileStat(path)));
+
     /// <summary>Liệt kê các thư mục con trong thư mục chỉ định.</summary>
     IEnumerable<string> EnumerateDirectories(string directory);
 
