@@ -106,6 +106,7 @@ internal static class PerfSession
         public required string Folder { get; init; }
         public required string OutDir { get; init; }
         public string? Mode { get; set; }
+        public string? Decoder { get; set; }
         public int Repeat { get; set; } = 1;
         public string? Alias { get; set; }
         public string? Commit { get; set; }
@@ -233,6 +234,7 @@ internal static class PerfSession
             throw new InvalidOperationException("AR02c invariant broken: window.Settings is not the DI SettingsStore.Current instance.");
         var configMode = settings.LoadingMode;
         if (options.Mode is not null && Enum.TryParse<LoadingMode>(options.Mode, true, out var m)) settings.LoadingMode = m; // in-memory only; config.json untouched
+        if (options.Decoder is not null && Enum.TryParse<DecoderBackend>(options.Decoder, true, out var d)) settings.DecoderBackend = d; // in-memory only; PreviewImageService reads the backend live
         var forbiddenKeys = CollectForbiddenKeys(settings);
         foreach (var step in scenario.Steps.Where(s => s.Key is not null))
         {
@@ -698,6 +700,11 @@ internal static class PerfSession
                     break;
                 case "--repeat":
                     options.Repeat = int.TryParse(Next(), out var r) && r is >= 1 and <= 1000 ? r : throw new ArgumentException("--repeat must be 1..1000");
+                    break;
+                case "--decoder":
+                    var decoder = Next();
+                    if (!Enum.TryParse<DecoderBackend>(decoder, true, out var parsedDecoder) || !Enum.IsDefined(parsedDecoder)) throw new ArgumentException($"invalid decoder '{decoder}' ({string.Join('|', Enum.GetNames<DecoderBackend>())})");
+                    options.Decoder = parsedDecoder.ToString();
                     break;
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
