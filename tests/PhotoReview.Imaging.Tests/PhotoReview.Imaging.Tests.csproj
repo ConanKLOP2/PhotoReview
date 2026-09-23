@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.TurboJpeg\PhotoReview.Imaging.TurboJpeg.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
+    <ProjectReference Include="..\PhotoReview.TestSupport.Windows\PhotoReview.TestSupport.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +29,7 @@
     <Using Include="PhotoReview.Imaging.TurboJpeg" />
     <Using Include="PhotoReview.Imaging.Preload" />
     <Using Include="PhotoReview.TestSupport" />
+    <Using Include="PhotoReview.TestSupport.Windows.Fixtures" />
   </ItemGroup>
 
 </Project>
