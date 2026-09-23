@@ -69,7 +69,7 @@ public sealed class FileActionController
 
         if (action.Operation == FileOperationType.Recycle)
         {
-            await ExecuteFileActionCoreAsync(action.Name, FileOperationType.Recycle, null, compareSelectedPath, currentPath).ConfigureAwait(false);
+            await ExecuteFileActionCoreAsync(action.Name, FileOperationType.Recycle, null, compareSelectedPath, currentPath);
             return;
         }
 
@@ -82,12 +82,12 @@ public sealed class FileActionController
             return;
         }
 
-        await ExecuteFileActionCoreAsync(action.Name, action.Operation, action.Destination, compareSelectedPath, currentPath).ConfigureAwait(false);
+        await ExecuteFileActionCoreAsync(action.Name, action.Operation, action.Destination, compareSelectedPath, currentPath);
     }
 
     public async Task RecycleAsync(string? compareSelectedPath, string? currentPath)
     {
-        await ExecuteFileActionCoreAsync("Recycle", FileOperationType.Recycle, null, compareSelectedPath, currentPath).ConfigureAwait(false);
+        await ExecuteFileActionCoreAsync("Recycle", FileOperationType.Recycle, null, compareSelectedPath, currentPath);
     }
 
     private async Task ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
@@ -128,7 +128,7 @@ public sealed class FileActionController
         try
         {
             var request = new FileActionRequest(source, operation, destination);
-            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
+            var result = await _fileActionService.ExecuteAsync(request);
 
             // Stale Folder Guard: Nếu người dùng đã đổi thư mục trong khi I/O đang chạy, bỏ qua
             if (!_clock.IsFolderCurrent(folderGen))
@@ -177,7 +177,7 @@ public sealed class FileActionController
         if (_undoService is null) return;
 
         var folderGen = _clock.CurrentFolder;
-        var result = await _undoService.UndoMoveAsync().ConfigureAwait(false);
+        var result = await _undoService.UndoMoveAsync();
 
         if (!result.Succeeded)
         {
@@ -194,7 +194,7 @@ public sealed class FileActionController
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
             {
-                await _sink.PresentAsync(idx).ConfigureAwait(false);
+                await _sink.PresentAsync(idx);
             }
 
             _sink.UpdateSessionPath(result.Source);
@@ -208,7 +208,7 @@ public sealed class FileActionController
         if (_undoService is null) return null;
 
         var folderGen = _clock.CurrentFolder;
-        var result = await _undoService.UndoLastAsync().ConfigureAwait(false);
+        var result = await _undoService.UndoLastAsync();
 
         if (!result.Succeeded)
         {
@@ -225,7 +225,7 @@ public sealed class FileActionController
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
             {
-                await _sink.PresentAsync(idx).ConfigureAwait(false);
+                await _sink.PresentAsync(idx);
             }
 
             _sink.UpdateSessionPath(result.Source);
