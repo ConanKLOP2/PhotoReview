@@ -12,10 +12,7 @@
 
 ## Previous: nav hot-path perf pass — DONE (#20 `94c5aeb..20300b4`, fix #21 `9161c35`)
 
-Details: `docs/archive/progress-log-2026-09.md` (2026-09-23 entry). Still deferred, **not fixed**:
-- `ConfigureAwait(false)` in App / catalog mutated off UI thread → now **AR04** (ADR 0005).
-- RAM-budget accuracy, disk-cache value, `SourceBytesCache` + preview budget > physical RAM, lazy EXIF/TurboJpeg transform → need real-folder numbers from the **AR02e** baseline (old `--perf-session` ran without preload, F2).
-- `GetOriginalDimensionsAsync` key reuse: implemented then reverted (race trade-off), keep reverted.
+Details: `docs/archive/progress-log-2026-09.md`. Deferred: App `ConfigureAwait(false)` → AR04; RAM budget / disk-cache value / lazy EXIF → tune from AR02e numbers; `GetOriginalDimensionsAsync` key reuse stays reverted.
 
 ## Status by Group
 
