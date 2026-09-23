@@ -198,6 +198,19 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         Assert.Equal(decoded.OriginalWidth, dimensions.Width);
         Assert.Equal(decoded.OriginalHeight, dimensions.Height);
     }
+
+    [Fact(DisplayName = "ClearCache also drops seeded original dimensions (next query reads the source again)")]
+    public async Task ClearCacheDropsSeededOriginalDimensions()
+    {
+        var key = _service.GetCurrentCacheKey(_previewPath);
+        await _service.GetPreviewAsync(_previewPath, key);
+
+        _service.ClearCache();
+        var opensBefore = _metrics.Snapshot().SourceOpenCount;
+        await _service.GetOriginalDimensionsAsync(_previewPath, key);
+
+        Assert.Equal(opensBefore + 1, _metrics.Snapshot().SourceOpenCount);
+    }
 }
 
 /// <summary>

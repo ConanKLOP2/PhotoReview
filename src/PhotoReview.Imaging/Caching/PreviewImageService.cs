@@ -397,6 +397,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public void ClearCache()
     {
         lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
+        _originalDimensions.Clear();
     }
 
     /// <summary>
