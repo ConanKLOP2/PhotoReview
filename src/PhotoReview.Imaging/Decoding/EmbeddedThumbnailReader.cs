@@ -61,7 +61,17 @@ public static class EmbeddedThumbnailReader
             var orientation = applyOrientation ? ExifOrientation.Read(frame.Metadata as BitmapMetadata) : 1;
             var oriented = ExifOrientation.Apply(materialized, orientation);
 
-            return new WpfDecodedImage(oriented, downscaled: true, orientation: orientation, actualBackend: DecoderBackend.Wpf);
+            // Perf: frame.PixelWidth/PixelHeight (the *main* image's own header dimensions, not
+            // the embedded thumbnail's) were already parsed above for free, alongside the
+            // orientation tag -- no extra open/read needed to learn the source's real size.
+            // A transposing orientation (5-8) swaps them, mirroring ExifOrientation.Apply above.
+            var frameWidth = frame.PixelWidth;
+            var frameHeight = frame.PixelHeight;
+            int originalWidth = orientation is >= 5 and <= 8 ? frameHeight : frameWidth;
+            int originalHeight = orientation is >= 5 and <= 8 ? frameWidth : frameHeight;
+
+            return new WpfDecodedImage(oriented, downscaled: true, orientation: orientation, actualBackend: DecoderBackend.Wpf,
+                originalWidth: originalWidth, originalHeight: originalHeight);
         }
         catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException
             or FileFormatException or UnauthorizedAccessException)

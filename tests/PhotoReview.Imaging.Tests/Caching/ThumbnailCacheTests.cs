@@ -84,6 +84,11 @@ public sealed class ThumbnailCacheTests : IDisposable
         Assert.NotNull(thumbnail);
         Assert.Equal(16, thumbnail!.PixelWidth);
         Assert.Equal(16, thumbnail.PixelHeight);
+        // perf(dims): the reader already parsed the *main* frame's header (to read the embedded
+        // thumbnail from it), so OriginalWidth/Height report the main image's real size (64) --
+        // not the embedded thumbnail's own size (16) that PixelWidth/Height report above.
+        Assert.Equal(64, thumbnail.OriginalWidth);
+        Assert.Equal(64, thumbnail.OriginalHeight);
     }
 
     [Fact(DisplayName = "The embedded-thumbnail reader is used instead of a full source decode -- proven via an injected fake")]
