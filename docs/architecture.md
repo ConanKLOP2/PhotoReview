@@ -27,7 +27,7 @@ Chi tiết và kế hoạch: [`refactoring/ARCH-REVIEW-SUMMARY.md`](refactoring/
 
 - **Hai composition root** (F2, F3): test và `Benchmark.Cli --perf-session` dựng `MainViewModel` qua `MainWindowHelpers.CreateTestViewModel` (không preload, cache 64 MiB, không disk cache), khác đồ thị production mô tả ở đây. → AR02.
 - **Disk cache bỏ qua `IAppPaths`** (F4): `ThumbnailCache`/`PreviewImageService` nay đọc thư mục đĩa từ `IAppPaths.ThumbnailCacheDir`/`PreviewCacheDir` thay vì tự hard-code lại default giống hệt (AR02a, đã xong — không còn 2 nguồn sự thật). Nhưng bản thân `AppPaths` vẫn cố ý giữ hai thư mục cache dưới `%LOCALAPPDATA%\PhotoReview` bất kể `PHOTOREVIEW_DATA_ROOT` (chỉ Journal/Sessions/Log theo override) — cô lập cache đĩa theo `PHOTOREVIEW_DATA_ROOT` vẫn là khoảng trống mở, nằm ngoài phạm vi AR02a.
-- **Thread affinity chưa được thực thi** (F5): tầng App dùng `ConfigureAwait(false)` rồi sửa `ReviewCatalog` ngoài UI thread. Quy tắc đề xuất: ADR 0005. → AR04.
+- ~~**Thread affinity chưa được thực thi** (F5)~~ — đã xử lý bởi AR04 (ADR 0005), xem mục [Threading](#threading-adr-0005). Còn lại: xác nhận perf gate/GUI trên máy thật.
 
 ## Luồng mở folder và trình diễn ảnh
 
@@ -66,6 +66,10 @@ Input/action profile
 ```
 
 Ảnh kế tiếp được advance đúng một lần trước I/O. Nếu action thất bại, vị trí catalog được khôi phục. Nếu người dùng đã đổi folder, kết quả action cũ không được ghi undo hoặc sửa catalog mới. Delete dùng Recycle Bin; journal và fingerprint bảo vệ recovery/undo.
+
+## Threading (ADR 0005)
+
+Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **không bao giờ** `ConfigureAwait(false)` và không chặn đồng bộ trên Task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), nên mọi continuation quay về `SynchronizationContext` của WPF và `ReviewCatalog`, `ViewerState`, `CompareViewModel`, `MainViewModel` chỉ bị sửa trên UI thread. Core, Imaging và Platform.Windows thì ngược lại: luôn `ConfigureAwait(false)` và đặt việc CPU/I-O nặng trong `Task.Run` (hoặc I/O async thật) — phần đồng bộ trước `await` đầu tiên của một method mà App gọi phải nhẹ, vì nó chạy trên UI thread. Khi một callee có phần đầu đồng bộ nặng, sửa ở callee (hoặc App bọc lời gọi trong `Task.Run`), không thêm `ConfigureAwait(false)` vào App. Khoá bằng: `AppThreadAffinityTests` (quét source `src/PhotoReview.App`), guard Debug `ReviewCatalog.AssertOwnerThread` (composition root gọi `BindToCurrentThread()`; unit test không bind thì không kiểm tra), và metric `CrossThreadPresentCount` (số lần `WpfPresentationSink` phải `Dispatcher.Invoke` vì nhận cập nhật ngoài UI thread; kỳ vọng 0, hiện trong cửa sổ Diagnostics và `metrics.json` của perf session).
 
 ## Luồng decoder và cache
 

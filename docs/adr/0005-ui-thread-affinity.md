@@ -1,6 +1,6 @@
 # ADR 0005: Quy tắc thread affinity cho tầng App (không `ConfigureAwait(false)` trong App)
 
-- **Trạng thái:** Chấp nhận (Accepted), 2026-09-23 (Q-AR2). Triển khai bởi AR04 — chưa thực hiện.
+- **Trạng thái:** Chấp nhận (Accepted), 2026-09-23 (Q-AR2). Implemented by AR04 (PR #…) — đã bỏ 47 `ConfigureAwait(false)` trong `src/PhotoReview.App`, thêm `AppThreadAffinityTests`, guard Debug trên `ReviewCatalog` và metric `CrossThreadPresentCount`; perf gate (so với baseline AR02e) và nghiệm thu GUI trên máy thật còn chờ.
 - **Ngày:** 2026-09-23
 - **Thực hiện bởi:** AR04 (`docs/refactoring/arch-review/AR04-ui-thread-affinity.md`)
 - **Thay thế phạm vi:** phần "UI-thread audit" của WD01
