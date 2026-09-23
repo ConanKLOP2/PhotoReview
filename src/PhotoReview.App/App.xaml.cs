@@ -178,7 +178,7 @@ public partial class App : System.Windows.Application, IDisposable
         _instanceLock = new InstanceLock(lockFolder);
         if (!_instanceLock.IsOwner)
         {
-            System.Windows.MessageBox.Show("Folder này đang được mở trong một Photo Review khác.", "Photo Review", MessageBoxButton.OK, MessageBoxImage.Information);
+            _services.GetRequiredService<IDialogService>().ShowMessage("Photo Review", "Folder này đang được mở trong một Photo Review khác.");
             _instanceLock.Dispose();
             _instanceLock = null;
             Shutdown();
