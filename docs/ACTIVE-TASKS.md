@@ -37,7 +37,7 @@
 | AR02c | `Benchmark.Cli` perf-session/ui-probe on production graph; report effective config | Q-AR3 | AR02a | Run once | TODO |
 | AR02e | Perf re-baseline on production graph | — | AR02c | **Yes** (user machine) | TODO |
 | AR02d | Delete test ctors/`CreateTestViewModel`; public fields → read-only properties | Q-AR3 | AR02b, AR02c | No | TODO |
-| AR03 | SourceBytes policy (a), `Platform.Windows` without WPF (b), startup dialog via `IDialogService` (c) | — | — | No | TODO |
+| AR03 | SourceBytes policy (a), `Platform.Windows` without WPF (b), startup dialog via `IDialogService` (c) | — | — | No | ✅ DONE on refactor/ar03-di-cleanup (PR pending) |
 | AR04 | UI-thread affinity: remove 47 `ConfigureAwait(false)` in App, arch test, catalog Debug guard | Q-AR2 | AR02c, AR02e | **Yes** (GUI + perf) | TODO |
 | AR06 | One release location, delete broken `outputs/release`, prune worktrees/leftovers | Q-AR4 | — | No | TODO |
 | AR07 | Fix 17 broken links, restore ADR evidence, link gate, docs-budget fix, group triage | Q-AR5 | AR00 | No | TODO |
@@ -136,7 +136,7 @@
 | ID | Name | Status |
 |----|------|--------|
 | WD01 | UI-thread audit | TODO → implemented by **AR04** / ADR 0005 (needs Q-AR2) |
-| WD02 | DRY refactor (low-risk) | TODO — startup `MessageBox` covered by **AR03c** |
+| WD02 | DRY refactor (low-risk) | partially covered by AR03c — startup `MessageBox` now routed through `IDialogService`; rest of DRY refactor still TODO |
 | WD03 | DI refactor | TODO (needs WD01) |
 | WD04-WD06 | Window lifecycle | TODO (needs WD01-WD03) |
 
