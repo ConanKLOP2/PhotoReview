@@ -60,12 +60,14 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>(),
-            sp.GetRequiredService<IRecycleBin>()));
+            sp.GetRequiredService<IRecycleBin>(),
+            moveOverride: GetMoveOverride(sp)));
         services.AddSingleton<UndoService>(sp => new UndoService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IRecycleBin>(),
-            sp.GetRequiredService<FileActionService>()));
+            sp.GetRequiredService<FileActionService>(),
+            moveOverride: GetMoveOverride(sp)));
 
         // 4. Diagnostics & Metrics
         services.AddSingleton<ReviewMetrics>();
@@ -78,10 +80,13 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
         services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
+        services.AddSingleton<PhotoReview.App.Services.ViewportSizeSource>();
+        services.AddSingleton<PhotoReview.App.Services.IPresentationObserver>(_ => PhotoReview.App.Services.NullPresentationObserver.Instance);
 
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
+            diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
             persistNewThumbnails: false,
             log: sp.GetService<ILog>(),
             sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
@@ -103,6 +108,7 @@ public partial class App : System.Windows.Application, IDisposable
                 () => ctx.IsOriginalLoadingMode(),
                 () => ctx.TargetDecodeWidth(),
                 capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
+                diskCacheDirectory: sp.GetRequiredService<IAppPaths>().PreviewCacheDir,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>(),
@@ -140,16 +146,26 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddTransient<MainWindow>(sp => new MainWindow(
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
+            sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
             sp.GetRequiredService<IExplorerOrderProvider>()));
+    }
+
+    /// <summary>
+    /// AR02a step 6 (F-move-seam): production registers no <see cref="PhotoReview.App.Coordinators.IMoveOverride"/>,
+    /// so <see cref="FileActionService"/>/<see cref="UndoService"/> get a <c>null</c> override and move files for
+    /// real. A DI override (test-only, from AR02b onward) can register one to intercept the move step.
+    /// </summary>
+    private static Func<string, string, Task>? GetMoveOverride(IServiceProvider sp)
+    {
+        var moveOverride = sp.GetService<PhotoReview.App.Coordinators.IMoveOverride>();
+        return moveOverride is null ? null : moveOverride.MoveAsync;
     }
 
     private void App_Startup(object sender, StartupEventArgs e)
     {
         PhotoReview.App.Services.WpfKeyNameValidator.WireUp();
 
-        var services = new ServiceCollection();
-        ConfigureServices(services);
-        _services = services.BuildServiceProvider();
+        _services = Composition.AppHost.BuildServices();
 
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;

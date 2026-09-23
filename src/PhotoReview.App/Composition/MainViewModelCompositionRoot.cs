@@ -40,18 +40,33 @@ internal static class MainViewModelCompositionRoot
         var natural = sp.GetRequiredService<INaturalComparer>();
         var explorerOrder = sp.GetRequiredService<IExplorerOrderProvider>();
         var schedulerFactory = sp.GetRequiredService<System.Func<System.Func<CatalogEntry[]>, System.Func<long>, PreloadScheduler>>();
+        var viewport = sp.GetRequiredService<ViewportSizeSource>();
+        var observer = sp.GetRequiredService<IPresentationObserver>();
 
-        var sourceSizeTracker = new SourceSizeTracker(catalog, fs);
-        var preloadScheduler = schedulerFactory(
-            catalog.EntriesSnapshot,
-            sourceSizeTracker.GetTotal);
-        var preloadController = new PreloadControllerAdapter(() => preloadScheduler);
+        // AR02a step 5: production registers no IPreloadController override, so this always
+        // falls through to the real PreloadScheduler below. A DI override (test-only) can
+        // replace preloading entirely without a second composition root; in that case the
+        // real scheduler is never created.
+        var preloadController = sp.GetService<IPreloadController>();
+        if (preloadController is null)
+        {
+            var sourceSizeTracker = new SourceSizeTracker(catalog, fs);
+            var preloadScheduler = schedulerFactory(
+                catalog.EntriesSnapshot,
+                sourceSizeTracker.GetTotal);
+            preloadController = new PreloadControllerAdapter(() => preloadScheduler);
+        }
 
         MainViewModel? vm = null;
         var sink = new WpfPresentationSink(
             onSetCurrentImage: _ => vm?.NotifyPresentationChanged(),
             onSetStatusText: _ => vm?.NotifyPresentationChanged(),
-            onApplyInitialViewMode: () => vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, 0, 0));
+            onApplyInitialViewMode: () =>
+            {
+                var (w, h) = viewport.Get();
+                vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, w, h);
+            },
+            onPresented: observer.OnPresented);
 
         var presenter = new ImagePresenter(
             catalog, clock, preview, thumbs, preloadController, compare, hash,
