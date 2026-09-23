@@ -312,7 +312,7 @@ internal static class PerfSession
                                 keysSent++;
                                 if (SendKey(window, key)) keysHandled++;
                                 done++;
-                                await WaitUntilAsync(() => window._fileActionInProgress == 0,
+                                await WaitUntilAsync(() => !window.IsFileActionInProgress,
                                     TimeSpan.FromSeconds(30));
                                 if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
                             }
@@ -379,7 +379,7 @@ internal static class PerfSession
             Console.Error.WriteLine($"  [{iteration}] ERROR {errors[^1]}");
         }
 
-        var metrics = window._metrics!.Snapshot();
+        var metrics = window.Metrics.Snapshot();
         // AR02c: effective configuration of the production graph this run actually used, so numbers
         // cannot be compared across the AR02c boundary (legacy test-root graph) by mistake (F2).
         var effectiveConfig = new
@@ -503,9 +503,9 @@ internal static class PerfSession
     private static void VerifyActionTarget(MainWindow window, AppSettings settings, string copyFolder, string copyRoot)
     {
         var files = GetFiles(window);
-        var index = window._index;
+        var index = window.CurrentIndex;
         if (index < 0 || index >= files.Count) throw new InvalidOperationException("action: no current image");
-        var compareSelected = window._compareSelectedPath;
+        var compareSelected = window.CompareSelectedPath;
         foreach (var path in new[] { files[index], compareSelected })
         {
             if (path is null) continue;
@@ -524,16 +524,16 @@ internal static class PerfSession
     private static async Task<(bool Idle, string How)> WaitIdleAsync(Dispatcher dispatcher, MainWindow window, TimeSpan timeout)
     {
         var sw = Stopwatch.StartNew();
-        var last = window._metrics?.Snapshot();
+        var last = window.Metrics.Snapshot();
         var stableSince = sw.Elapsed;
         while (sw.Elapsed < timeout)
         {
             await Task.Delay(250);
-            var now = window._metrics?.Snapshot();
+            var now = window.Metrics.Snapshot();
             if (last is not null && now is not null && !MetricsEquivalent(now, last)) { last = now; stableSince = sw.Elapsed; }
             var stable = sw.Elapsed - stableSince;
             var preloadDone = true;
-            var actionIdle = window._fileActionInProgress == 0;
+            var actionIdle = !window.IsFileActionInProgress;
             if (actionIdle && stable >= TimeSpan.FromSeconds(1) && (preloadDone || stable >= TimeSpan.FromSeconds(5)))
             {
                 await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -571,8 +571,8 @@ internal static class PerfSession
         }
     }
 
-    private static List<string> GetFiles(MainWindow window) =>
-        window._files;
+    private static IReadOnlyList<string> GetFiles(MainWindow window) =>
+        window.Files;
 
     // ---- Copies and paths ------------------------------------------------------------------------
 
