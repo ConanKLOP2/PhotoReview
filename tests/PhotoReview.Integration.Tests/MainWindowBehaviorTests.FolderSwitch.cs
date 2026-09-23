@@ -82,7 +82,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.Single(moveHistory);
                 Assert.NotNull(GetLastUndoAction(window));
 
-                var catalogAfterMove = Field<List<string>>(window, "_files");
+                var catalogAfterMove = window.Files;
                 Assert.DoesNotContain(first, catalogAfterMove, StringComparer.OrdinalIgnoreCase);
                 Assert.Contains(second, catalogAfterMove, StringComparer.OrdinalIgnoreCase);
 
@@ -101,7 +101,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.True(File.Exists(first), "The undone file was not restored to the source folder.");
                 Assert.False(File.Exists(movedTarget), "The destination file still exists after undo.");
 
-                var catalogAfterUndo = Field<List<string>>(window, "_files");
+                var catalogAfterUndo = window.Files;
                 Assert.Contains(first, catalogAfterUndo, StringComparer.OrdinalIgnoreCase);
                 Assert.Empty(GetMoveHistory(window));
                 Assert.Null(GetLastUndoAction(window));
@@ -182,7 +182,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                     await StaTestHost.WaitForAsync(() => presented.Any(p => string.Equals(p, fileB1, StringComparison.OrdinalIgnoreCase)), PresentTimeout),
                     $"Folder B was not presented. StatusText={window.StatusText.Text}");
 
-                var catalogB = Field<List<string>>(window, "_files");
+                var catalogB = window.Files;
                 Assert.Contains(fileB1, catalogB, StringComparer.OrdinalIgnoreCase);
                 Assert.Contains(fileB2, catalogB, StringComparer.OrdinalIgnoreCase);
                 Assert.DoesNotContain(fileA1, catalogB, StringComparer.OrdinalIgnoreCase);
@@ -199,7 +199,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
 
                 // 5. INV-5 Invariant Assertions:
                 // (a) Catalog of Folder B is untouched:
-                var finalCatalogB = Field<List<string>>(window, "_files");
+                var finalCatalogB = window.Files;
                 Assert.Equal(2, finalCatalogB.Count);
                 Assert.Contains(fileB1, finalCatalogB, StringComparer.OrdinalIgnoreCase);
                 Assert.Contains(fileB2, finalCatalogB, StringComparer.OrdinalIgnoreCase);
@@ -282,13 +282,13 @@ public sealed class MainWindowBehaviorFolderSwitchTests
         await (Task)method.Invoke(window, null)!;
     }
 
-    private static int FileActionInProgress(MainWindow window) => Field<int>(window, "_fileActionInProgress");
+    private static int FileActionInProgress(MainWindow window) => window.IsFileActionInProgress ? 1 : 0;
 
     private static Stack<(string Source, string Destination)> GetMoveHistory(MainWindow window)
-        => Field<Stack<(string Source, string Destination)>>(window, "_moveHistory");
+        => window.ViewModel.UndoService.MoveHistory;
 
     private static object? GetLastUndoAction(MainWindow window)
-        => Field<object?>(window, "_lastUndoAction");
+        => window.ViewModel.UndoService.LastUndoAction;
 
     private static T Field<T>(MainWindow window, string name)
     {

@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
+using PhotoReview.App.Composition;
+using PhotoReview.App.ViewModels;
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
@@ -36,6 +39,27 @@ public sealed class RealPhotosManualTests
         return !string.IsNullOrWhiteSpace(fixtureDir) && Directory.Exists(fixtureDir);
     }
 
+    /// <summary>
+    /// AR02d: these Manual tests used to build a bespoke non-DI view-model graph via
+    /// <c>MainWindowHelpers.CreateTestViewModel</c> (deleted along with the second composition
+    /// root). They now resolve <see cref="MainViewModel"/> from the same production graph as
+    /// everything else, via <see cref="AppHost.BuildServices"/>. A private data root is set up
+    /// first (when not already set) so these tests never touch the user's real
+    /// %LOCALAPPDATA%\PhotoReview state.
+    /// </summary>
+    private static (ServiceProvider Services, MainViewModel ViewModel) CreateIsolatedViewModel()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppPaths.DataRootEnvironmentVariable)))
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-RealPhotos-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            Environment.SetEnvironmentVariable(AppPaths.DataRootEnvironmentVariable, root);
+        }
+
+        var services = AppHost.BuildServices();
+        return (services, services.GetRequiredService<MainViewModel>());
+    }
+
     [Fact(DisplayName = "TC07: Real photos navigation (warm Next) does not read sources")]
     public async Task RealPhotosNavigation_WarmNext_NoSourceReads()
     {
@@ -60,15 +84,8 @@ public sealed class RealPhotosManualTests
             return;
         }
 
-        // Step 2: Create MainViewModel using test helpers
-        var vm = MainWindowHelpers.CreateTestViewModel(
-            hooks: null,
-            settingsStore: null,
-            getViewportSize: () => (1920, 1080),
-            out _,
-            out _,
-            out _,
-            out _);
+        // Step 2: Create MainViewModel via the production composition root
+        var (services, vm) = CreateIsolatedViewModel();
 
         try
         {
@@ -117,7 +134,7 @@ public sealed class RealPhotosManualTests
         }
         finally
         {
-            // Cleanup if needed
+            services.Dispose();
         }
     }
 
@@ -149,18 +166,11 @@ public sealed class RealPhotosManualTests
         var tempMoveDir = Path.Combine(Path.GetTempPath(), "TC07_Move_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempMoveDir);
 
+        // Step 2: Create MainViewModel via the production composition root
+        var (services, vm) = CreateIsolatedViewModel();
+
         try
         {
-            // Step 2: Create MainViewModel using test helpers
-            var vm = MainWindowHelpers.CreateTestViewModel(
-                hooks: null,
-                settingsStore: null,
-                getViewportSize: () => (1920, 1080),
-                out _,
-                out _,
-                out _,
-                out _);
-
             // Step 3: Open folder and wait for load to complete
             await vm.OpenFolderAsync(fixtureDir);
 
@@ -241,6 +251,7 @@ public sealed class RealPhotosManualTests
         }
         finally
         {
+            services.Dispose();
             // Cleanup temporary folder
             try
             {

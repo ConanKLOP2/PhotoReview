@@ -36,25 +36,19 @@ public partial class MainWindow : Window
     private Point _panStartPoint;
     private Point _panLastPoint;
 
-    // CA1051 (do not declare visible instance fields) is intentionally suppressed for the
-    // fields below: they are public by deliberate ST06/Q-ST3 decision so tests can access
-    // them directly instead of via reflection. See docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md.
-    // Do not "fix" this by renaming to properties without revisiting that decision.
-#pragma warning disable CA1051 // Do not declare visible instance fields
-    public readonly List<string> _files = [];
-    public int _fileActionInProgress;
-    public Stack<(string Source, string Destination)> _moveHistory = [];
-    public object? _lastUndoAction;
-    public int _index;
-    public string? _compareSelectedPath;
-    public ReviewMetrics? _metrics;
-    public object? _preloadScheduler;
-#pragma warning restore CA1051
+    // AR02d: read-only properties replacing the public mutable fields that used to be kept in
+    // sync by WireViewModelEvents/SyncFiles (ST06/Q-ST3 exception, superseded by this change).
+    private int _fileActionInProgress;
+
+    public IReadOnlyList<string> Files => _viewModel.Catalog.Paths;
+    public int CurrentIndex => _viewModel.CurrentIndex;
+    public string? CompareSelectedPath => _viewModel.Compare.SelectedPath;
+    public ReviewMetrics Metrics => _viewModel.Metrics;
+    public bool IsFileActionInProgress => Volatile.Read(ref _fileActionInProgress) != 0;
 
     public MainViewModel ViewModel => _viewModel;
     public AppSettings Settings => _settings;
 
-    [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
     public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IExplorerOrderProvider? explorerOrder = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
@@ -87,18 +81,6 @@ public partial class MainWindow : Window
         WireViewModelEvents();
     }
 
-    public MainWindow(string? initialPath = null) : this((MainWindowTestHooks?)null, initialPath, null) { }
-    public MainWindow(string? initialPath, SettingsStore? settingsStore) : this((MainWindowTestHooks?)null, initialPath, settingsStore) { }
-    internal MainWindow(string? initialPath, MainWindowTestHooks? hooks) : this(hooks, initialPath, null) { }
-    internal MainWindow(MainWindowTestHooks? hooks, string? initialPath = null, SettingsStore? settingsStore = null)
-    {
-        _viewModel = MainWindowHelpers.CreateTestViewModel(hooks, settingsStore, GetViewportSize, out _settingsStore, out _settings, out _shortcutRouter, out _explorerOrder);
-        DataContext = _viewModel;
-        InitializeComponent();
-        WireViewModelEvents();
-        InitializeWithInitialPath(initialPath);
-    }
-
     public void InitializeWithInitialPath(string? initialPath)
     {
         if (!string.IsNullOrWhiteSpace(initialPath)) _ = _viewModel.OpenPathAsync(initialPath);
@@ -106,22 +88,12 @@ public partial class MainWindow : Window
 
     private void WireViewModelEvents()
     {
-        _metrics = _viewModel.Metrics;
-        _preloadScheduler = _viewModel.PreloadController;
-        _index = _viewModel.CurrentIndex;
-        _compareSelectedPath = _viewModel.Compare.SelectedPath;
-        _moveHistory = _viewModel.UndoService.MoveHistory;
-        _lastUndoAction = _viewModel.UndoService.LastUndoAction;
         _viewModel.Viewer.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ViewerState.IsFullscreen)) ApplyFullscreenState(_viewModel.Viewer.IsFullscreen); };
         _viewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _index = _viewModel.CurrentIndex;
             if (e.PropertyName == nameof(MainViewModel.CurrentImage) && _viewModel.Viewer.IsFit)
                 Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
         };
-        _viewModel.Compare.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CompareViewModel.SelectedPath)) _compareSelectedPath = _viewModel.Compare.SelectedPath; };
-        _viewModel.CatalogChanged += SyncFiles;
-        SyncFiles();
     }
 
     public Task LoadFolderAsync(string folder, string? initialPath = null) => _viewModel.OpenFolderAsync(folder, initialPath);
@@ -133,7 +105,7 @@ public partial class MainWindow : Window
     public async Task UndoLastActionAsync()
     {
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+        try { await _viewModel.UndoAsync(); }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
     public void ResetFitView() => _ = ApplyFitViewAsync();
@@ -148,12 +120,6 @@ public partial class MainWindow : Window
         }
         preview = null;
         return false;
-    }
-
-    private void SyncFiles()
-    {
-        _files.Clear();
-        _files.AddRange(_viewModel.Catalog.Paths);
     }
 
     private void ApplyFullscreenState(bool isFullscreen)
@@ -367,18 +333,18 @@ public partial class MainWindow : Window
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
             case ReviewCommandType.Undo:
                 if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-                try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+                try { await _viewModel.UndoAsync(); }
                 finally { Volatile.Write(ref _fileActionInProgress, 0); }
                 break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.RunAction:
                 if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-                try { await _viewModel.RunActionAsync(cmd.Value.ActionIndex); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+                try { await _viewModel.RunActionAsync(cmd.Value.ActionIndex); }
                 finally { Volatile.Write(ref _fileActionInProgress, 0); }
                 break;
             case ReviewCommandType.Recycle:
                 if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-                try { await _viewModel.RecycleAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+                try { await _viewModel.RecycleAsync(); }
                 finally { Volatile.Write(ref _fileActionInProgress, 0); }
                 break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
@@ -461,7 +427,7 @@ public partial class MainWindow : Window
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e)
     {
         if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        try { await _viewModel.UndoAsync(); _lastUndoAction = _viewModel.UndoService.LastUndoAction; }
+        try { await _viewModel.UndoAsync(); }
         finally { Volatile.Write(ref _fileActionInProgress, 0); }
     }
 
