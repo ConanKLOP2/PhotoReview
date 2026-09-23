@@ -61,7 +61,9 @@ public static class ExifOrientation
     /// <summary>
     /// Applies geometric transformations (rotations / flips) to match the specified EXIF orientation.
     /// Returns the original <paramref name="source"/> if orientation is 1 or invalid.
-    /// The returned <see cref="BitmapSource"/> is always frozen.
+    /// The returned <see cref="BitmapSource"/> is always frozen. A rotated/flipped result is
+    /// materialized on the calling thread (not a lazy <see cref="TransformedBitmap"/>), so decode
+    /// workers pay the rotation cost instead of the UI thread at first render.
     /// </summary>
     public static BitmapSource Apply(BitmapSource source, int orientation)
     {
@@ -78,8 +80,7 @@ public static class ExifOrientation
 
         Transform transform = CreateTransform(orientation);
         var transformed = new TransformedBitmap(source, transform);
-        transformed.Freeze();
-        return transformed;
+        return WpfImageAdapter.Materialize(transformed);
     }
 
     /// <summary>
