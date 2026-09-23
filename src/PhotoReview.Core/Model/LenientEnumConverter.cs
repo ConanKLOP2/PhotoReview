@@ -32,25 +32,7 @@ public sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struct,
         switch (reader.TokenType)
         {
             case JsonTokenType.String:
-                var text = reader.GetString();
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    return _defaultValue;
-                }
-
-                var trimmed = text.Trim();
-                if (LookupTable.TryGetValue(trimmed, out var value))
-                {
-                    return value;
-                }
-
-                if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt)
-                    && Enum.IsDefined(typeof(T), parsedInt))
-                {
-                    return (T)(object)parsedInt;
-                }
-
-                return _defaultValue;
+                return ParseText(reader.GetString());
 
             case JsonTokenType.Number:
                 if (reader.TryGetInt32(out var intVal) && Enum.IsDefined(typeof(T), intVal))
@@ -73,11 +55,48 @@ public sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struct,
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(writer);
+        writer.WriteStringValue(ToText(value));
+    }
 
+    // Dictionary keys (e.g. ReviewMetricsSnapshot.DecoderFallbacks: Dictionary<DecoderBackend, long>).
+    // Without these overrides System.Text.Json throws NotSupportedException as soon as such a
+    // dictionary is non-empty.
+    public override T ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        ParseText(reader.GetString());
+
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        writer.WritePropertyName(ToText(value));
+    }
+
+    private T ParseText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return _defaultValue;
+        }
+
+        var trimmed = text.Trim();
+        if (LookupTable.TryGetValue(trimmed, out var value))
+        {
+            return value;
+        }
+
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt)
+            && Enum.IsDefined(typeof(T), parsedInt))
+        {
+            return (T)(object)parsedInt;
+        }
+
+        return _defaultValue;
+    }
+
+    private static string ToText(T value)
+    {
         if (typeof(T) == typeof(InitialViewMode))
         {
-            var initialView = (InitialViewMode)(object)value;
-            var text = initialView switch
+            return (InitialViewMode)(object)value switch
             {
                 InitialViewMode.Fit => "Fit",
                 InitialViewMode.Percent100 => "100%",
@@ -85,11 +104,9 @@ public sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struct,
                 InitialViewMode.Percent400 => "400%",
                 _ => value.ToString()
             };
-            writer.WriteStringValue(text);
-            return;
         }
 
-        writer.WriteStringValue(value.ToString());
+        return value.ToString();
     }
 
     private static Dictionary<string, T> BuildLookupTable()

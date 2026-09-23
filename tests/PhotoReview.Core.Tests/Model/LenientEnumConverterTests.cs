@@ -219,5 +219,30 @@ public class LenientEnumConverterTests
         var result = JsonSerializer.Deserialize<LoadingMode>("\"preview\"", FactoryOptions);
         Assert.Equal(LoadingMode.Preview, result);
     }
-}
 
+
+    [Fact]
+    public void EnumDictionaryKey_RoundTripsThroughFactory()
+    {
+        var source = new Dictionary<DecoderBackend, long> { [DecoderBackend.TurboJpeg] = 3, [DecoderBackend.WicDirect] = 1 };
+
+        var json = JsonSerializer.Serialize(source, FactoryOptions);
+        var result = JsonSerializer.Deserialize<Dictionary<DecoderBackend, long>>(json, FactoryOptions);
+
+        Assert.Contains("\"TurboJpeg\":3", json, StringComparison.Ordinal);
+        Assert.Equal(source, result);
+    }
+
+    [Fact]
+    public void ReviewMetricsSnapshot_WithDecoderFallbacks_Serializes()
+    {
+        // Benchmark.Cli perf-session wrote metrics.json with these options and crashed as soon as
+        // a decoder fallback had been recorded.
+        var metrics = new PhotoReview.Core.Diagnostics.ReviewMetrics();
+        metrics.RecordDecoderFallback(DecoderBackend.WicDirect);
+
+        var json = JsonSerializer.Serialize(metrics.Snapshot(), FactoryOptions);
+
+        Assert.Contains("\"WicDirect\":1", json, StringComparison.Ordinal);
+    }
+}
