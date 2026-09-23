@@ -37,15 +37,26 @@ if ($actualNativeHash -ne $expectedNativeHash) {
 $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
 if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
 $projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\PhotoReview.App.csproj'
-[xml]$project = Get-Content -LiteralPath $projectFile
-$expectedFileVersion = [string]$project.Project.PropertyGroup.FileVersion
-$actualFileVersion = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo.FileVersion
+# The version is computed from git by Directory.Build.targets (no <Version> in the csproj). Ask MSBuild
+# for the value the current commit produces, so a stale publish folder from another commit still fails.
+$versionJson = & dotnet msbuild $projectFile -nologo -t:PhotoReviewComputeVersion -getProperty:FileVersion -getProperty:InformationalVersion -p:Configuration=Release
+if ($LASTEXITCODE -ne 0) { Write-Error "Could not compute the expected version (dotnet msbuild exit $LASTEXITCODE)."; exit 1 }
+$expected = ($versionJson -join "`n" | ConvertFrom-Json).Properties
+$expectedFileVersion = [string]$expected.FileVersion
+$expectedCommit = ([string]$expected.InformationalVersion -split '\+', 2)[1] -replace '\.dirty$', ''
+$dllInfo = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo
+$actualFileVersion = $dllInfo.FileVersion
+$actualCommit = ([string]$dllInfo.ProductVersion -split '\+', 2)[1] -replace '\.dirty$', ''
 if ($actualFileVersion -ne $expectedFileVersion) {
     Write-Error "Release version mismatch: expected $expectedFileVersion, found $actualFileVersion"
     exit 1
 }
+if ($actualCommit -ne $expectedCommit) {
+    Write-Error "Release commit mismatch: expected $expectedCommit, found $actualCommit (stale publish folder?)"
+    exit 1
+}
 Write-Output "PASS: release files present ($resolved)"
-Write-Output "File version: $actualFileVersion"
+Write-Output "Version: $($dllInfo.ProductVersion) (file $actualFileVersion)"
 Write-Output "EXE bytes: $($exe.Length)"
 Write-Output "EXE SHA256: $((Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash)"
 if ($SelfContained) { Write-Output 'PASS: self-contained runtime files present' }
