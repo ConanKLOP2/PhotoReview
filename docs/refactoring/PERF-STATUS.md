@@ -45,7 +45,7 @@ Harness: `run-matrix.ps1` → `--perf-session` via `AppHost` (AR02c), window 192
 
 ## AR04 perf gate (UI-thread affinity) — 2026-09-24
 
-Same fixture/config as AR02e. A first batch (master e1375cc vs AR04, 3 runs/cell) looked like a regression (S2 P95 7.2 -> 11.1 ms) but master itself was degraded in that batch (S2 hit rate 37.7 %, preload did not start in S1 — consistent with the off-UI-thread catalog race ADR 0005 removes), so machine state was not comparable. Gate decided on **interleaved** runs (master, AR04, master, AR04; S2 + S4, warm):
+Same fixture/config as AR02e. A first batch (master e1375cc vs AR04, 3 runs/cell) looked like a regression (S2 P95 7.2 -> 11.1 ms) but the fixture folder was being modified during that batch (files grew 1689 → 1841 while photo sets were copied in), so master looked degraded (S2 hit rate 37.7 %) — not comparable. Gate decided on **interleaved** runs (master, AR04, master, AR04; S2 + S4, warm):
 
 | Round | master S2 P50/P95 | AR04 S2 P50/P95 | master S4 P50/P95 | AR04 S4 P50/P95 |
 |---|---:|---:|---:|---:|
@@ -54,4 +54,4 @@ Same fixture/config as AR02e. A first batch (master e1375cc vs AR04, 3 runs/cell
 | mean P95 | 9.7 | 10.1 (+0.4) | 10.2 | 9.1 (-1.1) |
 
 - **Passed** (<= 1 ms): same-build run-to-run P95 noise is ~5 ms, larger than the difference. Hit rate 99.0 % / 98.4 % both; peak WS equal; `CrossThreadPresentCount = 0` in every AR04 run. All values < 1 frame (16.7 ms).
-- AR04 was stable in all 20 runs; master lost preload in the first batch (all 3 S1 runs, 2 of 3 S2 runs), not in the interleaved rounds.
+- Interleaved rounds all ran on a stable folder (1841 files). The earlier "master lost preload" was the folder changing, not evidence of the catalog race. Note: AR02e baseline used 1625 files — compare only within the same folder state.
