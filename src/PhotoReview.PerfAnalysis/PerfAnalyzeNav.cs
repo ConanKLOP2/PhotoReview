@@ -32,6 +32,15 @@ public sealed class NavRecord
     public double? TAssignMs { get; set; }
     public double? TRenderFirstMs { get; set; }
     public double? TRenderMs { get; set; }
+
+    /// <summary>
+    /// perf(render-metric): time from the Source assign to the SECOND CompositionTarget.Rendering
+    /// tick after it (the RenderedFrame event) -- i.e. the frame containing the new image has
+    /// actually finished rendering, unlike <see cref="TRenderMs"/> which only measures the
+    /// dispatcher/vsync phase before layout/render run. Null for navs from an older perf-*.csv
+    /// that predates this event, or when the token was superseded before the second tick arrived.
+    /// </summary>
+    public double? TRenderFrameMs { get; set; }
     public Dictionary<string, double> PostMs { get; } = new(StringComparer.Ordinal);
 
     public double? FirstVisualMs { get; set; }
@@ -294,6 +303,12 @@ public static class PerfAnalyzeNavBuilder
                     break;
                 case "PostEnd":
                     rec.PostMs[row.Text] = row.ANum ?? 0;
+                    break;
+                case "RenderedFrame":
+                    // Unlike Rendered/Presented above, RenderedFrame is emitted after Presented
+                    // (it waits for a second Rendering tick), so it is assigned directly rather
+                    // than gated behind a later Presented row -- see WpfPresentationSink.
+                    rec.TRenderFrameMs = row.ANum;
                     break;
             }
         }

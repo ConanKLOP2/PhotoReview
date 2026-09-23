@@ -28,14 +28,16 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     {
         try
         {
-            var bitmap = DecodeSource(request, out int orientation, out bool downscaled);
-            return new WpfDecodedImage(bitmap, downscaled, orientation: orientation);
+            var bitmap = DecodeSource(request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight);
+            return new WpfDecodedImage(bitmap, downscaled, orientation: orientation,
+                originalWidth: originalWidth, originalHeight: originalHeight);
         }
         catch (Exception ex) when (request.IsDownscaleRequested && IsDownscaleFallbackException(ex))
         {
             var fallbackRequest = new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes);
-            var bitmap = DecodeSource(fallbackRequest, out int orientation, out _);
-            return new WpfDecodedImage(bitmap, downscaled: false, orientation: orientation);
+            var bitmap = DecodeSource(fallbackRequest, out int orientation, out _, out int originalWidth, out int originalHeight);
+            return new WpfDecodedImage(bitmap, downscaled: false, orientation: orientation,
+                originalWidth: originalWidth, originalHeight: originalHeight);
         }
     }
 
@@ -43,26 +45,28 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         => DecodeWithFallback(new DecodeRequest(path, targetWidth));
 
     public static BitmapSource DecodeSource(DecodeRequest request)
-        => DecodeSource(request, out _, out _);
+        => DecodeSource(request, out _, out _, out _, out _);
 
-    private static BitmapSource DecodeSource(DecodeRequest request, out int orientation, out bool downscaled)
+    private static BitmapSource DecodeSource(DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         if (request.Bytes.HasValue)
         {
             using var memoryStream = ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value);
-            return DecodeStream(memoryStream, request, out orientation, out downscaled);
+            return DecodeStream(memoryStream, request, out orientation, out downscaled, out originalWidth, out originalHeight);
         }
 
         using var stream = new FileStream(request.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-        return DecodeStream(stream, request, out orientation, out downscaled);
+        return DecodeStream(stream, request, out orientation, out downscaled, out originalWidth, out originalHeight);
     }
 
-    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, out int orientation, out bool downscaled)
+    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight)
     {
         orientation = 1;
+        originalWidth = 0;
+        originalHeight = 0;
         // A box (both axes, e.g. previews) needs the source size to pick the constraining side and
         // to avoid upscaling; width-only requests (thumbnails, legacy callers) keep the old path.
         bool isBox = request.TargetHeight > 0;
@@ -71,16 +75,16 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         {
             try
             {
+                // DelayCreation only parses the header (no pixel decode), so PixelWidth/Height
+                // here -- read for free alongside the orientation tag -- are the full source's
+                // own dimensions, pre-orientation-swap (matches WpfBitmapImageDecoder.ReadInfo).
                 var headerDecoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
                 if (headerDecoder.Frames.Count > 0)
                 {
                     var frame = headerDecoder.Frames[0];
                     if (request.ApplyOrientation) orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
-                    if (isBox)
-                    {
-                        rawWidth = frame.PixelWidth;
-                        rawHeight = frame.PixelHeight;
-                    }
+                    rawWidth = frame.PixelWidth;
+                    rawHeight = frame.PixelHeight;
                 }
             }
             catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException)
@@ -93,6 +97,14 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
 
         // For transposed orientations (5 to 8), decoded height becomes the final visual width after rotation.
         bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
+
+        // Original (post-orientation) dimensions reported via IDecodedImage -- mirrors what
+        // ExifOrientation.Apply below does to the final bitmap's own pixel dimensions.
+        if (rawWidth > 0)
+        {
+            (originalWidth, originalHeight) = isTransposed ? (rawHeight, rawWidth) : (rawWidth, rawHeight);
+        }
+
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;

@@ -200,7 +200,13 @@ public sealed class WicDirectDecoder : IImageDecoder
 
             bitmap.Freeze();
 
-            return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect);
+            // Perf: origW/origH (frame.GetSize) are already read above at zero extra cost; a
+            // transposing orientation (5-8) swaps them, exactly mirroring what happened to the
+            // final bitmap's own pixel dimensions -- see IDecodedImage.OriginalWidth/Height.
+            int originalWidth = isTransposed ? (int)origH : (int)origW;
+            int originalHeight = isTransposed ? (int)origW : (int)origH;
+
+            return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect, originalWidth, originalHeight);
         }
         catch (COMException ex) when (colorChain.IsActive)
         {

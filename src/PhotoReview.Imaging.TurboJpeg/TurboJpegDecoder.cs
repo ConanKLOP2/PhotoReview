@@ -150,11 +150,20 @@ public sealed class TurboJpegDecoder : IImageDecoder
                     bitmap = WpfImageAdapter.Materialize(new TransformedBitmap(bitmap, transform));
                 }
 
+                // Perf: origW/origH (tj3Get JpegWidth/JpegHeight from the header already parsed
+                // above) are free; a transposing orientation (5-8) swaps them, mirroring what
+                // happened to the final bitmap's own pixel dimensions -- see
+                // IDecodedImage.OriginalWidth/Height.
+                int originalWidth = isTransposed ? origH : origW;
+                int originalHeight = isTransposed ? origW : origH;
+
                 return new WpfDecodedImage(
                     bitmap,
                     downscaled: request.IsDownscaleRequested && (scaledW < origW || targetW < origW || targetH < origH),
                     orientation: orientation,
-                    actualBackend: DecoderBackend.TurboJpeg);
+                    actualBackend: DecoderBackend.TurboJpeg,
+                    originalWidth: originalWidth,
+                    originalHeight: originalHeight);
             }
         }
     }

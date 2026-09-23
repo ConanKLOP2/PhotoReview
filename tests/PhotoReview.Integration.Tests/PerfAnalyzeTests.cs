@@ -36,7 +36,7 @@ public class PerfAnalyzeTests
 
         Assert.Equal(10000000, file.QpcFrequency);
         Assert.Equal(0, file.DroppedRows);
-        Assert.Equal(75, file.Rows.Count);
+        Assert.Equal(82, file.Rows.Count);
         Assert.DoesNotContain(file.Rows, r => r.Event.StartsWith('#'));
         Assert.DoesNotContain(file.Rows, r => r.Event == "utcTicks");
     }
@@ -117,6 +117,25 @@ public class PerfAnalyzeTests
         Assert.Equal(63.05, nav5.FinalVisualMs!.Value, 3);
         Assert.Equal("thumbnail", "thumbnail"); // first-visual is the thumbnail Presented row
         Assert.Equal("final", nav5.FinalPresentedKind);
+    }
+
+    [Fact]
+    public void CapturesRenderedFrameAsTheFrameAccurateRenderProxyAlongsideRendered()
+    {
+        // perf(render-metric): RenderedFrame (second CompositionTarget.Rendering tick after the
+        // assign) is emitted after Presented in the real event stream, so it must still land on
+        // the right nav without needing to be gated behind a later Presented row like Rendered is.
+        var file = PerfCsvReader.Read(SampleCsvPath());
+        var analysis = PerfAnalyzeNavBuilder.Build(file);
+        var byNav = analysis.Navs.ToDictionary(n => n.Nav);
+
+        Assert.Equal(4.0, byNav[1].TRenderMs);
+        Assert.Equal(20.0, byNav[1].TRenderFrameMs);
+        Assert.Equal(19.5, byNav[2].TRenderFrameMs);
+        Assert.Equal(21.0, byNav[3].TRenderFrameMs);
+
+        // nav 8 is superseded before it ever renders: no RenderedFrame event exists for it.
+        Assert.Null(byNav[8].TRenderFrameMs);
     }
 
     [Fact]
@@ -411,8 +430,14 @@ public class PerfAnalyzeTests
         var md = File.ReadAllText(result.SummaryMdPath);
         Assert.Contains("Perf analyze summary", md);
         Assert.Contains("R-DEC", md);
+        Assert.Contains("renderedFrame P50", md);
         var json = File.ReadAllText(result.SummaryJsonPath);
         Assert.Contains("\"csvFileCount\": 1", json);
+        Assert.Contains("\"renderedFrameMs\"", json);
+
+        var summary = result.Groups.Single().Summary;
+        Assert.False(double.IsNaN(summary.RenderedFrameP50));
+        Assert.False(double.IsNaN(summary.RenderedFrameP95));
     }
 
     [Fact]
