@@ -129,3 +129,9 @@ Cả 3 backend đều đã vượt qua 100% bộ kiểm thử cổng chất lư�
 Quyết định này sẽ được xem xét lại nếu:
 1. Dự án mở rộng hỗ trợ các nền tảng hệ điều hành khác ngoài Windows (ví dụ Linux/macOS qua .NET MAUI / Avalonia), khi đó WIC sẽ không còn khả dụng và các backend đa nền tảng như SkiaSharp hoặc LibRaw sẽ cần được đánh giá lại.
 2. Nhu cầu hỗ trợ các định dạng ảnh RAW chuyên nghiệp của máy ảnh số (Canon CR3, Sony ARW, Nikon NEF) mà WIC codec của Windows không thể giải mã với tốc độ cao hoặc thiếu profile màu camera chuyên sâu.
+
+---
+
+## 9. Cập nhật (Addendum)
+
+- **2026-09-23:** TurboJpeg giờ được đăng ký tường minh trong `App.Composition.DecoderProviders` (AR01) thay vì `ImageDecoderFactory` dò tìm bằng `Type.GetType`/`Activator.CreateInstance`. `App.csproj` tham chiếu trực tiếp `PhotoReview.Imaging.TurboJpeg`, và một probe (`TurboJpegAvailability.Probe`) xác nhận `turbojpeg.dll` nạp và khởi tạo được trước khi đăng ký backend; nếu probe thất bại, TurboJpeg không được đăng ký và lý do được ghi log bắt buộc một lần. Quyết định chọn `WicDirect` làm mặc định ở Mục 6 không đổi.
