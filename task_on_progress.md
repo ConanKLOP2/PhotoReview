@@ -1,36 +1,35 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-23 | **Base:** `master@b2048b6` (#23, AR00 merged) | **Working branch:** `test/tc09-ts02-flake` (TC09 partial: TS02 wall-clock flake fixed; PR open)
+**Updated:** 2026-09-23 | **Base:** `master@b2048b6` (#23) | **Branch:** `docs/ar07-docs-repair` (PR #25)
 
-## Now: Architecture review → AR plan (AR00 merged #23)
+## Now: Q-AR1..5 decided (2026-09-23) → PRs open, none merged
 
-- Review verdict: layering is sound, no redesign. Problems are at boundaries. Summary + findings F1–F9: [`docs/refactoring/ARCH-REVIEW-SUMMARY.md`](docs/refactoring/ARCH-REVIEW-SUMMARY.md). Per-task plans: `docs/refactoring/arch-review/AR0x-*.md` (read only the one you work on).
-- AR00 (merged #23): summary + AR01–AR07 plans, ADR 0005 (Proposed), fixed stale status (T89 code **is** on master via PR #15; DT00–03/08/09 done), broken plan links in ACTIVE-TASKS, T0 budget (perf-pass detail moved to `docs/archive/progress-log-2026-09.md`), `architecture.md` TurboJpeg arrow (App did **not** reference it).
-- **Waiting on user:** Q-AR1 (ship TurboJpeg?), Q-AR2 (accept ADR 0005), Q-AR3 (single composition root, supersedes ST06 fields), Q-AR4 (release path), Q-AR5 (group triage). See `docs/refactoring/OPEN-DECISIONS.md`.
-- Next (no decision needed): AR03, AR06 prep. After Q-AR1: AR01. After Q-AR3: AR02a→b→c→e→d. After Q-AR2 + AR02e: AR04.
+- Decisions (see `docs/refactoring/OPEN-DECISIONS.md`): Q-AR1=A, Q-AR2=yes (ADR 0005 Accepted), Q-AR3=yes (ST06 fields → AR02d), Q-AR4=yes, Q-AR5=AR07 §5 table.
+- Open PRs: #24 AR03 · #25 AR07 (this) · #26 AR06 · #27 AR02a (base #24) · #28 AR01 · #29 AR02c, #30 AR02b (base #27). No conflicts between them. Merge: #25, #26, #28, #24 → #27 → #29, #30.
+- User, real machine: Fit GUI check (#27 + T89), TurboJPEG check (#28), then **AR02e** baseline → AR02d → AR04.
 
 ## Previous: nav hot-path perf pass — DONE (#20 `94c5aeb..20300b4`, fix #21 `9161c35`)
 
 Details: `docs/archive/progress-log-2026-09.md` (2026-09-23 entry). Still deferred, **not fixed**:
 - `ConfigureAwait(false)` in App / catalog mutated off UI thread → now **AR04** (ADR 0005).
-- RAM-budget accuracy, disk-cache value, `SourceBytesCache` + preview budget > physical RAM, lazy EXIF/TurboJpeg transform → need real-folder numbers; use the **AR02e** baseline (production graph), not older `--perf-session` numbers (those ran without preload — finding F2).
+- RAM-budget accuracy, disk-cache value, `SourceBytesCache` + preview budget > physical RAM, lazy EXIF/TurboJpeg transform → need real-folder numbers from the **AR02e** baseline (old `--perf-session` ran without preload, F2).
 - `GetOriginalDimensionsAsync` key reuse: implemented then reverted (race trade-off), keep reverted.
 
 ## Status by Group
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** | 🔄 AR00 merged (#23) | Plan ready; 5 decisions pending. |
-| ST | ✅ (ST08/09 wait OC14) | ST06 fields to be replaced by AR02d if Q-AR3 = yes. |
-| TS | ✅ TS00-04 | TS05-10 remain. |
+| **AR** | ✅ AR00, AR07; 🔄 PRs #24, #26–#30 | Next: AR02e, AR02d, AR04. |
+| ST | ✅ (ST08/09 wait OC14) | ST06 fields to be replaced by AR02d (Q-AR3=yes). |
+| TS | ✅ TS00-04, TS10 | TS05-07 open; TS08/09 closed (Q-AR5). |
 | DF, CQ | ✅ Done | |
-| **T89** | 🔄 GUI acceptance only | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
-| **TC** | 🔄 | TC04 open; TC09 partial (TS02 fixed on `test/tc09-ts02-flake`, LargeJournal remains); TC06/07 location → AR07 triage. |
-| **OC** | 🔄 ~65% | OC14 blocks ST08/09, WD03-06, OC15-18 (not WD01 if Q-AR2 = yes). |
-| **WD** | 🔄 | WD01 → AR04; WD02 low-risk part → AR03c. |
-| **IO** | 🔄 | Blocked on IO01 contract. |
-| **D** | 🔄 | Re-evaluate from AR02e baseline (AR07 triage). |
-| **DT** | 🔄 | DT00-03, 08, 09 done; DT04-07, 10 open. |
+| **T89** | 🔄 GUI acceptance only (kept, Q-AR5) | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
+| **TC** | 🔄 | TC04, TC09 open (kept); TC06/07 kept in Integration.Tests (documented, Q-AR5). |
+| **OC** | 🔄 ~65% | OC14 kept, re-scoped to "Undo gate location" (Q-AR5) — blocks ST08/09, OC15-18; no longer blocks WD (Q-AR2=yes). |
+| **WD** | ✅ WD01 unblocked (AR04/ADR 0005) | WD02-06 closed 2026-09-23 (Q-AR5, no known dialog bug). |
+| **IO** | 🔄 IO01 only (kept) | IO02-07 closed 2026-09-23 (Q-AR5, speculative). |
+| **D** | ❌ Closed (Q-AR5) | Legacy `--perf-session` numbers; re-open from AR02e baseline if needed. |
+| **DT** | 🔄 | DT00-03, 08, 09 done; DT04-07 closed (Q-AR5); DT10 kept. |
 
 ## Critical Process Rules
 

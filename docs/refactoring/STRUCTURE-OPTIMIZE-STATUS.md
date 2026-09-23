@@ -34,7 +34,7 @@
 |---|---|---|---|
 | **Q-ST1** | Separate `PerfAnalysis` project? | ✓ **Yes** — new project `PhotoReview.PerfAnalysis` (`net10.0`) | ST05 DONE |
 | **Q-ST2** | Move `PerfCsvListener` + `DiagOptions` to Core? | ✓ **Yes** — move to `Core/Diagnostics`; preserve EventSource contract | ST04 DONE |
-| **Q-ST3** | Keep Cli→App dependency? Censor reflection? | ✓ **Yes** — accept dependency; make MainWindow members public | ST06 DONE |
+| **Q-ST3** | Keep Cli→App dependency? Censor reflection? | ✓ **Yes** — accept dependency; make MainWindow members public | ST06 DONE. **Note (Q-AR3, 2026-09-23):** this public-fields exception will be removed by AR02d (single composition root, fields → read-only properties); still in effect until AR02d lands. |
 | **Q-ST4** | Ctrl+Z semantics: Move-only or Move+Recycle? | ✓ **Move+Recycle** — undo both Move and Recycle | ST08 awaits OC14 |
 
 ---

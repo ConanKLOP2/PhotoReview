@@ -50,7 +50,7 @@
 
 ## 3. Số liệu đo đạc thực tế (Benchmark Measurements)
 
-Thực hiện benchmark bằng lệnh chuẩn `--decoder-bench` trên tập dữ liệu kiểm thử Fixture F1 (58 tệp ảnh JPEG 24 MP, 6000 × 4000 px, 3 iterations per file, tổng cộng 2,088 lần đo độc lập) trên máy thử nghiệm 12 cores, RAM 32 GB, Windows 11 (chi tiết tại [`docs/refactoring/results/decoder-bench.md`](../refactoring/results/decoder-bench.md)):
+Thực hiện benchmark bằng lệnh chuẩn `--decoder-bench` trên tập dữ liệu kiểm thử Fixture F1 (58 tệp ảnh JPEG 24 MP, 6000 × 4000 px, 3 iterations per file, tổng cộng 2,088 lần đo độc lập) trên máy thử nghiệm 12 cores, RAM 32 GB, Windows 11 (chi tiết tại [`docs/archive/evidence/decoder-bench.md`](../archive/evidence/decoder-bench.md)):
 
 | Backend | Độ phân giải mục tiêu | P50 (ms) | P95 (ms) | Mean (ms) | Max (ms) | Throughput (MP/s) | Tăng tốc vs Wpf |
 |---|---|---|---|---|---|---|---|
