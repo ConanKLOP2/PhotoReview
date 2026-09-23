@@ -108,7 +108,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
 
                 // AR04 / ADR 0005: open folder -> present -> move -> present next -> undo -> present,
                 // all through the production graph; no sink update may arrive off the UI thread.
-                Assert.Equal(0, window._metrics!.Snapshot().CrossThreadPresentCount);
+                Assert.Equal(0, window.Metrics.Snapshot().CrossThreadPresentCount);
             });
         }
         finally
