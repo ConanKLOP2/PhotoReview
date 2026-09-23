@@ -31,7 +31,13 @@ public partial class App : System.Windows.Application, IDisposable
         // Metadata queries are counted into ReviewMetrics (StatCount) for the diagnostics/benchmark reports.
         services.AddSingleton<IFileSystem>(sp => new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()));
         services.AddSingleton<IClock, SystemClock>();
-        services.AddSingleton<ILog>(_ => FileLog.Default);
+        // AR02c/AR02b: FileLog.Default is a process-wide static singleton whose Shutdown/Dispose
+        // lifecycle is owned by the process (App.Dispose / PerfSession's own AppLog.Shutdown()), not by
+        // any one composition-root's ServiceProvider. A container that disposes itself (Benchmark.Cli
+        // building/disposing a fresh graph per iteration, and AR02b's per-window ServiceProvider) must
+        // not also dispose this shared instance -- registering the already-constructed instance (instead
+        // of a factory returning it) opts it out of container-owned disposal.
+        services.AddSingleton<ILog>(FileLog.Default);
 
         // 2. Settings & Session
         services.AddSingleton<SettingsStore>(sp => new SettingsStore(
