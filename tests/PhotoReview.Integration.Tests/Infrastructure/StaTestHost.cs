@@ -244,11 +244,11 @@ public sealed class StaTestHostSmokeTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                var hooks = new MainWindowTestHooks
+                var hooks = new TestHostHooks
                 {
                     OnPresented = presented.Add,
                 };
-                window = new MainWindow(folder, hooks);
+                window = TestAppHost.CreateMainWindow(folder, hooks);
                 var ok = await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(20));
                 // StatusText carries the window's own explanation when a load fails, which is the
                 // only useful diagnostic for a headless window that never presented anything.

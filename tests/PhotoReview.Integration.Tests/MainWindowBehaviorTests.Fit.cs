@@ -17,7 +17,7 @@ namespace PhotoReview.Integration.Tests;
 /// These tests verify that double-clicking on the main image applies the Fit operation.
 /// All cases expect usage of StaTestHost.WaitForAsync; no Task.Delay.
 /// </summary>
-[Collection("STA Test Collection")]
+[Collection("GlobalState")]
 public partial class MainWindowBehaviorTests
 {
     private const string FitTestFolder = @"C:\temp\photoreview-fit-test";
@@ -39,6 +39,7 @@ public partial class MainWindowBehaviorTests
     [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_From200Percent_ConvergesTo1x()
     {
+        using var dataRoot = new DataRootFixture();
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -47,11 +48,11 @@ public partial class MainWindowBehaviorTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(FitTestFolder, "square.png");
-                var hooks = new MainWindowTestHooks
+                var hooks = new TestHostHooks
                 {
                     OnPresented = path => presented.Add(path),
                 };
-                window = new MainWindow(FitTestFolder, hooks);
+                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
 
                 // Wait for image load
                 Assert.True(
@@ -113,6 +114,7 @@ public partial class MainWindowBehaviorTests
     [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_AlreadyFit_NoChange()
     {
+        using var dataRoot = new DataRootFixture();
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -121,8 +123,8 @@ public partial class MainWindowBehaviorTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(FitTestFolder, "test.png");
-                var hooks = new MainWindowTestHooks { OnPresented = path => presented.Add(path) };
-                window = new MainWindow(FitTestFolder, hooks);
+                var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
+                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
 
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => presented.Count > 0 && window.ViewModel.Viewer.IsFit,
@@ -171,6 +173,7 @@ public partial class MainWindowBehaviorTests
     [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_SingleClick_DoesNotFit()
     {
+        using var dataRoot = new DataRootFixture();
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -179,8 +182,8 @@ public partial class MainWindowBehaviorTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(FitTestFolder, "test.png");
-                var hooks = new MainWindowTestHooks { OnPresented = path => presented.Add(path) };
-                window = new MainWindow(FitTestFolder, hooks);
+                var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
+                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)));
 
@@ -225,6 +228,7 @@ public partial class MainWindowBehaviorTests
     [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_AfterPan_StillFits()
     {
+        using var dataRoot = new DataRootFixture();
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -233,8 +237,8 @@ public partial class MainWindowBehaviorTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(FitTestFolder, "test.png");
-                var hooks = new MainWindowTestHooks { OnPresented = path => presented.Add(path) };
-                window = new MainWindow(FitTestFolder, hooks);
+                var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
+                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)));
 
@@ -283,6 +287,7 @@ public partial class MainWindowBehaviorTests
     [Fact(Skip = "DF02 feature not yet implemented")]
     public async Task DoubleClickFit_RightButton_DoesNotFit()
     {
+        using var dataRoot = new DataRootFixture();
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -291,8 +296,8 @@ public partial class MainWindowBehaviorTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(FitTestFolder, "test.png");
-                var hooks = new MainWindowTestHooks { OnPresented = path => presented.Add(path) };
-                window = new MainWindow(FitTestFolder, hooks);
+                var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
+                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)));
 

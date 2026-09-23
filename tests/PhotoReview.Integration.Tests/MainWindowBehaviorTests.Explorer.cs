@@ -111,7 +111,7 @@ public sealed class MainWindowExplorerOrderTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                var opened = new MainWindow(requested, new MainWindowTestHooks
+                var opened = TestAppHost.CreateMainWindow(requested, new TestHostHooks
                 {
                     Explorer = fake,
                     OnPresented = path => { snapshotHadReturned.Add(fake.HasReturned); presented.Add(path); },
@@ -172,7 +172,7 @@ public sealed class MainWindowExplorerOrderTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                var opened = new MainWindow(folder, new MainWindowTestHooks
+                var opened = TestAppHost.CreateMainWindow(folder, new TestHostHooks
                 {
                     Explorer = fake,
                     OnPresented = path => { snapshotHadReturned.Add(fake.HasReturned); presented.Add(path); },
@@ -210,7 +210,7 @@ public sealed class MainWindowExplorerOrderTests
     // --------------------------------------------------------------- helpers
 
     private static MainWindow Open(string folder, FakeExplorerOrderProvider fake, List<string> presented)
-        => new(folder, new MainWindowTestHooks { Explorer = fake, OnPresented = presented.Add });
+        => TestAppHost.CreateMainWindow(folder, new TestHostHooks { Explorer = fake, OnPresented = presented.Add });
 
     private static async Task CloseAsync(MainWindow? window)
     {
