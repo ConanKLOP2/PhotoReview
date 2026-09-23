@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace PhotoReview.Core.Catalog;
@@ -8,11 +9,35 @@ namespace PhotoReview.Core.Catalog;
 /// Manages an ordered collection of image entries and tracks the current review position.
 /// </summary>
 /// <remarks>
-/// This class is not thread-safe and must only be accessed from the UI thread.
+/// This class is not thread-safe and must only be accessed from the UI thread (ADR 0005).
+/// The composition root calls <see cref="BindToCurrentThread"/>; in Debug builds every mutator
+/// then throws if it is invoked from any other thread. Unbound catalogs (unit tests) are unchecked.
 /// </remarks>
 public sealed class ReviewCatalog
 {
     private readonly List<CatalogEntry> _entries = [];
+
+    // 0 = unbound (no owner check). Managed thread ids start at 1.
+    private int _ownerThreadId;
+
+    /// <summary>
+    /// Binds this catalog to the calling thread (the UI thread, from the composition root). In Debug
+    /// builds, mutators invoked from any other thread afterwards throw <see cref="InvalidOperationException"/>
+    /// (ADR 0005). Release builds only record the id.
+    /// </summary>
+    public void BindToCurrentThread() => Volatile.Write(ref _ownerThreadId, Environment.CurrentManagedThreadId);
+
+    [Conditional("DEBUG")]
+    internal void AssertOwnerThread([System.Runtime.CompilerServices.CallerMemberName] string member = "")
+    {
+        var owner = Volatile.Read(ref _ownerThreadId);
+        var current = Environment.CurrentManagedThreadId;
+        if (owner != 0 && owner != current)
+        {
+            throw new InvalidOperationException(
+                $"ReviewCatalog.{member} called on thread {current}; the catalog is bound to thread {owner} (UI thread only, ADR 0005).");
+        }
+    }
 
     // Perf: IndexOf/Find run once per navigation (ImagePresenter, FileActionController) and
     // must not be O(n) per call. The index is rebuilt lazily on the next lookup after any
@@ -98,6 +123,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public void Reset(IEnumerable<string> paths)
     {
+        AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(paths);
         _entries.Clear();
         foreach (var path in paths)
@@ -113,6 +139,7 @@ public sealed class ReviewCatalog
 
     public void Reset(IEnumerable<CatalogEntry> entries)
     {
+        AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(entries);
         _entries.Clear();
         _entries.AddRange(entries.Where(e => e is not null && !string.IsNullOrWhiteSpace(e.Path)));
@@ -124,6 +151,7 @@ public sealed class ReviewCatalog
 
     public bool UpdateMetadata(string path, long length, DateTime lastWriteUtc, int? width = null, int? height = null)
     {
+        AssertOwnerThread();
         var index = IndexOf(path);
         if (index < 0) return false;
         _entries[index] = _entries[index].WithMetadata(length, lastWriteUtc, width, height);
@@ -136,6 +164,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public bool MoveToFront(string path)
     {
+        AssertOwnerThread();
         var index = IndexOf(path);
         if (index < 0) return false;
 
@@ -156,6 +185,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public bool SetCurrent(int index)
     {
+        AssertOwnerThread();
         if (_entries.Count == 0 && index == -1)
         {
             CurrentIndex = -1;
@@ -179,6 +209,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public int Remove(string path)
     {
+        AssertOwnerThread();
         var removedIndex = IndexOf(path);
         if (removedIndex < 0) return CurrentIndex;
 
@@ -201,6 +232,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public bool Restore(string path, int index)
     {
+        AssertOwnerThread();
         if (string.IsNullOrWhiteSpace(path)) return false;
         if (IndexOf(path) >= 0) return false; // Avoid duplicates
 
@@ -227,6 +259,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public bool ReplaceOrder(IReadOnlyList<string> newOrder)
     {
+        AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(newOrder);
 
         if (newOrder.Count != _entries.Count) return false;
@@ -268,6 +301,7 @@ public sealed class ReviewCatalog
     /// </summary>
     public int InsertSorted(string path, Comparison<string> comparison)
     {
+        AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(comparison);
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path cannot be empty.", nameof(path));
 

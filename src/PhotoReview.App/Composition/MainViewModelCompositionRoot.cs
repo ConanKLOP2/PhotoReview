@@ -24,6 +24,9 @@ internal static class MainViewModelCompositionRoot
         ArgumentNullException.ThrowIfNull(sp);
 
         var catalog = sp.GetRequiredService<ReviewCatalog>();
+        // ADR 0005: Create runs on the UI thread; Debug builds then assert every catalog mutation
+        // happens on it (no-op in Release, and unbound catalogs in unit tests stay unchecked).
+        catalog.BindToCurrentThread();
         var clock = sp.GetRequiredService<GenerationClock>();
         var viewer = sp.GetRequiredService<ViewerState>();
         var compare = sp.GetRequiredService<CompareViewModel>();
