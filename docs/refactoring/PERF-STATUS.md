@@ -42,3 +42,16 @@ Harness: `run-matrix.ps1` → `--perf-session` via `AppHost` (AR02c), window 192
 
 - **AR04 gate = the "After" column.** Older D-series / T66 numbers are legacy graph (no preload, F2) — not comparable.
 - Open questions: RAM-hit P50 is ~1.5 ms higher after (both < 1 frame; render-dominated); S3 records 85 decoder fallbacks after vs 14 before (WicDirect with a target width?) — investigate before tuning.
+
+## AR04 perf gate (UI-thread affinity) — 2026-09-24
+
+Same fixture/config as AR02e. A first batch (master e1375cc vs AR04, 3 runs/cell) looked like a regression (S2 P95 7.2 -> 11.1 ms) but master itself was degraded in that batch (S2 hit rate 37.7 %, preload did not start in S1 — consistent with the off-UI-thread catalog race ADR 0005 removes), so machine state was not comparable. Gate decided on **interleaved** runs (master, AR04, master, AR04; S2 + S4, warm):
+
+| Round | master S2 P50/P95 | AR04 S2 P50/P95 | master S4 P50/P95 | AR04 S4 P50/P95 |
+|---|---:|---:|---:|---:|
+| 1 | 6.5 / 12.4 | 7.9 / 12.4 | 5.6 / 11.0 | 4.5 / 11.9 |
+| 2 | 4.8 / 6.9 | 4.7 / 7.7 | 4.5 / 9.3 | 4.3 / 6.3 |
+| mean P95 | 9.7 | 10.1 (+0.4) | 10.2 | 9.1 (-1.1) |
+
+- **Passed** (<= 1 ms): same-build run-to-run P95 noise is ~5 ms, larger than the difference. Hit rate 99.0 % / 98.4 % both; peak WS equal; `CrossThreadPresentCount = 0` in every AR04 run. All values < 1 frame (16.7 ms).
+- AR04 was stable in all 20 runs; master lost preload in the first batch (all 3 S1 runs, 2 of 3 S2 runs), not in the interleaved rounds.

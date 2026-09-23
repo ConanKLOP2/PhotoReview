@@ -18,7 +18,7 @@ Consolidation of all pending decisions (Q-*) across active task groups. See link
 | Q-T4 | TC | Use real Recycle Bin? | ✅ YES (via fixture) | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
 | Q-OC14 | OC | Undo unification approach? | 🔄 IN PROGRESS | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
 | Q-OC15 | OC | UI pattern cleanup scope? | 🔄 WAITING OC14 | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
-| Q-S3 | TS | Journal test determinism? | 🔄 BLOCKED | ../archive/historical/TEST-SPEED-PLAN-2026-09-20.md |
+| Q-S3 | TS | Journal test determinism? | ✅ YES (recommendation applied in #36, 2026-09-24) | ../archive/historical/TEST-SPEED-PLAN-2026-09-20.md |
 | Q-AR1 | AR | Ship TurboJpeg in the release (A) or remove it from Settings (B)? | ✅ **A** (ship TurboJpeg) — 2026-09-23 | arch-review/AR01-turbojpeg-release.md |
 | Q-AR2 | AR | Accept ADR 0005 (no `ConfigureAwait(false)` in App; WD01 no longer waits for OC14)? | ✅ **YES** — 2026-09-23 | ../adr/0005-ui-thread-affinity.md, arch-review/AR04 |
 | Q-AR3 | AR | One composition root for app/tests/benchmarks; replace ST06 public fields with read-only properties (revisits ST06/Q-ST3 field decision, keeps Cli→App)? | ✅ **YES** — 2026-09-23 | arch-review/AR02-single-composition-root.md |
