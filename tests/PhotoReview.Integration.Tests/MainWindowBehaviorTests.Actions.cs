@@ -15,7 +15,7 @@ namespace PhotoReview.Integration.Tests;
 
 /// <summary>
 /// T14b: locks INV-3 and INV-4 on the real <see cref="MainWindow"/>, driven through the T14a
-/// seam (<c>MainWindowTestHooks</c>) on <see cref="StaTestHost"/>.
+/// seam (<c>TestHostHooks</c> via <c>TestAppHost</c>) on <see cref="StaTestHost"/>.
 /// <para>
 /// The action is triggered the way the app triggers it: a <c>PreviewKeyDown</c> raised through
 /// WPF's own routed-event system, which runs the real <c>Window_KeyDown</c> handler and from
@@ -70,7 +70,7 @@ public sealed class MainWindowBehaviorActionTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(folder, "a.png", "b.png", "c.png");
-                var hooks = new MainWindowTestHooks
+                var hooks = new TestHostHooks
                 {
                     OnPresented = path =>
                     {
@@ -91,7 +91,7 @@ public sealed class MainWindowBehaviorActionTests
                         Volatile.Write(ref moveCompleted, 1);
                     },
                 };
-                window = new MainWindow(folder, hooks);
+                window = TestAppHost.CreateMainWindow(folder, hooks);
 
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout),
@@ -168,7 +168,7 @@ public sealed class MainWindowBehaviorActionTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(folder, "a.png", "b.png", "c.png");
-                var hooks = new MainWindowTestHooks
+                var hooks = new TestHostHooks
                 {
                     OnPresented = presented.Add,
                     MoveOverride = async (source, target) =>
@@ -178,7 +178,7 @@ public sealed class MainWindowBehaviorActionTests
                         await Task.Run(() => File.Move(source, target));
                     },
                 };
-                window = new MainWindow(folder, hooks);
+                window = TestAppHost.CreateMainWindow(folder, hooks);
 
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout),

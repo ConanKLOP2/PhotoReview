@@ -5,7 +5,7 @@ using PhotoReview.Core.Catalog;
 namespace PhotoReview.Integration.Tests.Fakes;
 
 /// <summary>
-/// Substitute for <see cref="ExplorerOrderService"/> behind <c>MainWindowTestHooks.Explorer</c>
+/// Substitute for <see cref="ExplorerOrderService"/> behind <c>TestHostHooks.Explorer</c>
 /// (T14a seam). It returns a caller-supplied order — typically the reverse of the natural sort —
 /// so a test can tell "Explorer order was applied" from "Explorer order was ignored" (INV-7) and
 /// can observe whether the first frame was presented before or after the snapshot arrived (INV-9).

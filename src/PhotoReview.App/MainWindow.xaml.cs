@@ -60,7 +60,21 @@ public partial class MainWindow : Window
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
         _explorerOrder = explorerOrder;
-        _settings = _settingsStore.Load();
+        // AR02b finding (see AR02-single-composition-root.md AR02d step 1, applied a step early
+        // here because AR02b's migrated integration tests need it to observe real behaviour):
+        // this used to call _settingsStore.Load() again, which re-reads/deserializes config.json
+        // into a *new* AppSettings instance distinct from the one MainViewModelCompositionRoot
+        // already captured into FileActionController via SettingsStore.Current (production calls
+        // store.Load() once, in App.App_Startup, before resolving MainWindow). In production the
+        // second Load() happened to reparse the same unchanged file into content-identical settings,
+        // so the object-identity split was invisible; in tests -- where nothing else calls Load()
+        // first -- MainWindow's own Load() produced a *third* object, so mutating the settings a
+        // test held (window._settings.Actions = ...) never reached FileActionController, which
+        // kept whatever AppSettings' parameterless constructor defaults to. Using Current (already
+        // loaded by App_Startup in production, and the same shared default instance the rest of the
+        // graph was built from otherwise) keeps one settings object for the whole window and is also
+        // one fewer disk read at startup.
+        _settings = _settingsStore.Current;
         _shortcutRouter = new ShortcutRouter(_settings);
         _settingsStore.Changed += (_, s) => { _settings = s; _shortcutRouter.Rebuild(s); };
         DataContext = _viewModel;
