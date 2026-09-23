@@ -1,10 +1,10 @@
 {
   "name": "S2-next-slow",
-  "note": "Plan S2: 100 x Next at human pace (1.5 s). S5 = this scenario run with --mode Fast|Preview|Original.",
+  "note": "Plan S2: 100 x Next, event-driven settle (each key waits for present + preload-idle, capped at settleMaxMs, then >=settleMinMs) instead of a fixed 1500ms wait. Comparable with older interval-1500 runs only in semantics -- each key still starts from a settled state -- not in wall time. S5 = this scenario run with --mode Fast|Preview|Original.",
   "steps": [
     { "open": "folder" },
     { "waitIdle": true, "timeoutMs": 60000 },
-    { "key": "Right", "repeat": 100, "intervalMs": 1500 },
+    { "key": "Right", "repeat": 100, "intervalMs": 1500, "settle": true },
     { "waitMs": 2000 }
   ]
 }

@@ -27,5 +27,7 @@ public sealed class PreloadControllerAdapter : IPreloadController, IDisposable
 
     public void ClearPreloadedKeys() => _getScheduler().ClearPreloadedKeys();
 
+    public bool IsIdle => _getScheduler().IsIdle;
+
     public void Dispose() => _getScheduler().Dispose();
 }

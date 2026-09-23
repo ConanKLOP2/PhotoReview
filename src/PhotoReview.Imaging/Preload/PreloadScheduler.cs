@@ -141,6 +141,21 @@ public sealed class PreloadScheduler : IDisposable
             _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalizedPath, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// True when the current preload lifetime has no decode work in flight or queued (the scheduler
+    /// loop only returns when its running set is empty; see <see cref="RunPreloadSchedulerAsync"/>).
+    /// Best-effort: used by diagnostics/the perf harness to know a navigation has fully settled, not
+    /// for correctness. A fresh scheduler (or one paused for memory headroom) reports idle too.
+    /// </summary>
+    public bool IsIdle
+    {
+        get
+        {
+            lock (_preloadCtsGate)
+                return _preloadSchedulerTask is null || _preloadSchedulerTask.IsCompleted;
+        }
+    }
+
     /// <summary>True when this key was warmed by preload; consumes the entry.</summary>
     public bool TryConsumePreloadedKey(ImageCacheKey key) { lock (_preloadedKeysGate) return _preloadedKeys.Remove(key); }
 
