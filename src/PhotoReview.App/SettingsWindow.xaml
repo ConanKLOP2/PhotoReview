@@ -26,7 +26,7 @@
             <CheckBox x:Name="CompareHashCheck" Grid.Row="4" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" Margin="0,4,0,8" IsChecked="True"/>
             <CheckBox x:Name="CompareSizeCheck" Grid.Row="5" Grid.Column="1" Content="Compare kích thước file" Margin="0,4,0,8" IsChecked="True"/>
             <TextBlock Text="Backend giải mã" Grid.Row="6" Margin="0,7,10,7"/>
-            <ComboBox x:Name="DecoderBackendCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Backend giải mã ảnh"><ComboBoxItem Content="WPF (mặc định, an toàn)"/><ComboBoxItem Content="WIC Direct (nhanh)"/><ComboBoxItem Content="TurboJPEG (JPEG)"/></ComboBox>
+            <ComboBox x:Name="DecoderBackendCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Backend giải mã ảnh"><ComboBoxItem Content="WPF (mặc định, an toàn)"/><ComboBoxItem Content="WIC Direct (nhanh)"/><ComboBoxItem x:Name="TurboJpegOption" Content="TurboJPEG (JPEG)"/></ComboBox>
             <TextBlock Text="Chất lượng thu phóng" Grid.Row="7" Margin="0,7,10,7"/>
             <ComboBox x:Name="ScalingQualityCombo" Grid.Row="7" Grid.Column="1" AutomationProperties.Name="Chất lượng thu phóng ảnh"><ComboBoxItem Content="Cao (HighQuality)"/><ComboBoxItem Content="Nhanh (Linear, mượt hơn khi zoom)"/></ComboBox>
             </Grid></GroupBox>

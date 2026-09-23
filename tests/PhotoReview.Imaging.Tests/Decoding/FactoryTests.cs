@@ -7,6 +7,7 @@ using PhotoReview.Core.Model;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.Tests.Fixtures;
 using Xunit;
 
@@ -183,10 +184,16 @@ public sealed class FactoryTests : IDisposable
         Assert.Equal(48, preview.PixelHeight);
     }
 
-    [Fact(DisplayName = "ImageDecoderFactory resolves TurboJpeg backend dynamically when available")]
-    public void FactoryResolvesTurboJpegBackend()
+    [Fact(DisplayName = "ImageDecoderFactory with an explicit TurboJpeg provider wraps it in FallbackImageDecoder")]
+    public void FactoryWithExplicitTurboJpegProviderWrapsItInFallbackDecoder()
     {
-        var factory = new ImageDecoderFactory();
+        var mockDecoder = new MockFailingDecoder(new NotSupportedException());
+        var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
+        {
+            (DecoderBackend.TurboJpeg, () => mockDecoder),
+            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder())
+        });
+
         var decoder = factory.Create(DecoderBackend.TurboJpeg);
 
         Assert.IsType<FallbackImageDecoder>(decoder);
@@ -194,6 +201,30 @@ public sealed class FactoryTests : IDisposable
         Assert.NotNull(decoded);
         Assert.Equal(64, decoded.PixelWidth);
         Assert.Equal(48, decoded.PixelHeight);
+    }
+
+    [Fact(DisplayName = "ImageDecoderFactory falls back to Wpf decoder for an unregistered backend (AR01)")]
+    public void Create_UnregisteredBackend_ReturnsWpfDecoder()
+    {
+        var factory = new ImageDecoderFactory();
+
+        var decoder = factory.Create(DecoderBackend.TurboJpeg);
+
+        Assert.IsType<WpfBitmapImageDecoder>(decoder);
+    }
+
+    [Fact(DisplayName = "ImageDecoderFactory.IsRegistered reflects the providers passed to it (AR01)")]
+    public void IsRegistered_ReflectsProviders()
+    {
+        var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
+        {
+            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
+            (DecoderBackend.WicDirect, () => new WicDirectDecoder())
+        });
+
+        Assert.True(factory.IsRegistered(DecoderBackend.Wpf));
+        Assert.True(factory.IsRegistered(DecoderBackend.WicDirect));
+        Assert.False(factory.IsRegistered(DecoderBackend.TurboJpeg));
     }
 
     private sealed class MockFailingDecoder : IImageDecoder

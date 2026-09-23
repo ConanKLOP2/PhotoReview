@@ -84,7 +84,11 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<PhotoReview.App.Services.IPresentationObserver>(_ => PhotoReview.App.Services.NullPresentationObserver.Instance);
 
         // 6. Imaging & Decoding
-        services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
+        services.AddSingleton<IImageDecoderFactory>(sp =>
+        {
+            var log = sp.GetService<ILog>();
+            return new ImageDecoderFactory(Composition.DecoderProviders.Create(log), log, sp.GetService<ReviewMetrics>());
+        });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
             persistNewThumbnails: false,
