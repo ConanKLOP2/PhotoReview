@@ -1,11 +1,11 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-23 | **Base:** `master@fbdf48e` (#22) | **Working branch:** `docs/arch-review-plan` (AR00, committed locally, **not pushed yet** — push from Windows: `git push -u origin docs/arch-review-plan`, then open PR)
+**Updated:** 2026-09-23 | **Base:** `master@b2048b6` (#23, AR00 merged) | **Working branch:** `test/tc09-ts02-flake` (TC09 partial: TS02 wall-clock flake fixed; PR open)
 
-## Now: Architecture review → AR plan (AR00 done on branch)
+## Now: Architecture review → AR plan (AR00 merged #23)
 
 - Review verdict: layering is sound, no redesign. Problems are at boundaries. Summary + findings F1–F9: [`docs/refactoring/ARCH-REVIEW-SUMMARY.md`](docs/refactoring/ARCH-REVIEW-SUMMARY.md). Per-task plans: `docs/refactoring/arch-review/AR0x-*.md` (read only the one you work on).
-- AR00 (this branch): summary + AR01–AR07 plans, ADR 0005 (Proposed), fixed stale status (T89 code **is** on master via PR #15; DT00–03/08/09 done), broken plan links in ACTIVE-TASKS, T0 budget (perf-pass detail moved to `docs/archive/progress-log-2026-09.md`), `architecture.md` TurboJpeg arrow (App did **not** reference it).
+- AR00 (merged #23): summary + AR01–AR07 plans, ADR 0005 (Proposed), fixed stale status (T89 code **is** on master via PR #15; DT00–03/08/09 done), broken plan links in ACTIVE-TASKS, T0 budget (perf-pass detail moved to `docs/archive/progress-log-2026-09.md`), `architecture.md` TurboJpeg arrow (App did **not** reference it).
 - **Waiting on user:** Q-AR1 (ship TurboJpeg?), Q-AR2 (accept ADR 0005), Q-AR3 (single composition root, supersedes ST06 fields), Q-AR4 (release path), Q-AR5 (group triage). See `docs/refactoring/OPEN-DECISIONS.md`.
 - Next (no decision needed): AR03, AR06 prep. After Q-AR1: AR01. After Q-AR3: AR02a→b→c→e→d. After Q-AR2 + AR02e: AR04.
 
@@ -20,12 +20,12 @@ Details: `docs/archive/progress-log-2026-09.md` (2026-09-23 entry). Still deferr
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** | 🔄 AR00 on branch | Plan ready; 5 decisions pending. |
+| **AR** | 🔄 AR00 merged (#23) | Plan ready; 5 decisions pending. |
 | ST | ✅ (ST08/09 wait OC14) | ST06 fields to be replaced by AR02d if Q-AR3 = yes. |
 | TS | ✅ TS00-04 | TS05-10 remain. |
 | DF, CQ | ✅ Done | |
 | **T89** | 🔄 GUI acceptance only | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
-| **TC** | 🔄 | TC04, TC09 open; TC06/07 location → AR07 triage. |
+| **TC** | 🔄 | TC04 open; TC09 partial (TS02 fixed on `test/tc09-ts02-flake`, LargeJournal remains); TC06/07 location → AR07 triage. |
 | **OC** | 🔄 ~65% | OC14 blocks ST08/09, WD03-06, OC15-18 (not WD01 if Q-AR2 = yes). |
 | **WD** | 🔄 | WD01 → AR04; WD02 low-risk part → AR03c. |
 | **IO** | 🔄 | Blocked on IO01 contract. |
