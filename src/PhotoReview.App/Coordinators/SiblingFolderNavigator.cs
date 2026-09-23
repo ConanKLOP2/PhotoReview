@@ -46,7 +46,7 @@ public sealed class SiblingFolderNavigator
         var currentFolder = Path.GetFullPath(folder);
         var folderGeneration = _clock.CurrentFolder;
 
-        var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction)).ConfigureAwait(false);
+        var targetFolder = await Task.Run(() => FindNextImageFolder(currentFolder, direction));
 
         // Kiểm tra generation để tránh race condition khi người dùng đã chuyển folder khác giữa chừng
         if (!_clock.IsFolderCurrent(folderGeneration)) return;
@@ -57,7 +57,7 @@ public sealed class SiblingFolderNavigator
             return;
         }
 
-        await _sink.OpenFolderAsync(targetFolder).ConfigureAwait(false);
+        await _sink.OpenFolderAsync(targetFolder);
     }
 
     private string? FindNextImageFolder(string currentFolder, int direction)

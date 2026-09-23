@@ -1,9 +1,11 @@
 using System;
+using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Diagnostics;
+using ReviewMetrics = PhotoReview.Core.Diagnostics.ReviewMetrics;
 
 namespace PhotoReview.App.Services;
 
@@ -18,6 +20,8 @@ public sealed class WpfPresentationSink : IPresentationSink
     private readonly Action<string>? _onPresented;
     private readonly Action<long, string, long>? _onTracePresented;
     private readonly Dispatcher? _dispatcher;
+    private readonly ReviewMetrics? _metrics;
+    private int _crossThreadLogged;
 
     public WpfPresentationSink(
         Action<object?>? onSetCurrentImage = null,
@@ -25,7 +29,8 @@ public sealed class WpfPresentationSink : IPresentationSink
         Action? onApplyInitialViewMode = null,
         Action<string>? onPresented = null,
         Action<long, string, long>? onTracePresented = null,
-        Dispatcher? dispatcher = null)
+        Dispatcher? dispatcher = null,
+        ReviewMetrics? metrics = null)
     {
         _onSetCurrentImage = onSetCurrentImage;
         _onSetStatusText = onSetStatusText;
@@ -33,12 +38,20 @@ public sealed class WpfPresentationSink : IPresentationSink
         _onPresented = onPresented;
         _onTracePresented = onTracePresented;
         _dispatcher = dispatcher ?? System.Windows.Application.Current?.Dispatcher;
+        _metrics = metrics;
     }
 
     private void InvokeUi(Action action)
     {
         if (_dispatcher is not null && !_dispatcher.CheckAccess())
         {
+            // AR04 / ADR 0005: the App layer is UI-affine, so this safety-net branch should never be
+            // taken; count it (Diagnostics: CrossThreadPresentCount, expected 0) and log the first hit.
+            _metrics?.RecordCrossThreadPresent();
+            if (AppLog.Enabled && Interlocked.Exchange(ref _crossThreadLogged, 1) == 0)
+            {
+                AppLog.Warn($"WpfPresentationSink: update arrived off the UI thread (managed thread {Environment.CurrentManagedThreadId}); marshalled via Dispatcher.Invoke. ADR 0005 expects 0.\n{Environment.StackTrace}");
+            }
             _dispatcher.Invoke(action);
         }
         else

@@ -74,7 +74,7 @@ public sealed class DuplicateCleanupController
                 removeNumbered,
                 (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
                 _fileSystem,
-                System.Threading.CancellationToken.None).ConfigureAwait(false);
+                System.Threading.CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -98,7 +98,7 @@ public sealed class DuplicateCleanupController
         if (_dialogService is not null)
         {
             var confirmed = false;
-            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove)).ConfigureAwait(false);
+            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove));
             if (!confirmed)
             {
                 _sink.SetStatusText(StatusFormatter.BatchCanceled());
@@ -116,7 +116,10 @@ public sealed class DuplicateCleanupController
         foreach (var path in remove)
         {
             var request = new FileActionRequest(path, FileOperationType.Recycle);
-            var result = await _fileActionService.ExecuteAsync(request).ConfigureAwait(false);
+            // ADR 0005: ExecuteAsync stats + fsyncs its journal entry before its first await; run it
+            // on the pool so a batch of N files does not do N synchronous fsyncs on the UI thread.
+            // The continuation (counters, final status/dialog) still returns to the UI thread.
+            var result = await Task.Run(() => _fileActionService.ExecuteAsync(request));
             if (result.Succeeded)
             {
                 succeeded++;
@@ -143,7 +146,7 @@ public sealed class DuplicateCleanupController
             var folder = Path.GetDirectoryName(remove[0]);
             if (!string.IsNullOrEmpty(folder))
             {
-                await _sink.OpenFolderAsync(folder).ConfigureAwait(false);
+                await _sink.OpenFolderAsync(folder);
             }
         }
     }

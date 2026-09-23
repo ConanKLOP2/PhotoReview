@@ -24,6 +24,9 @@ internal static class MainViewModelCompositionRoot
         ArgumentNullException.ThrowIfNull(sp);
 
         var catalog = sp.GetRequiredService<ReviewCatalog>();
+        // ADR 0005: Create runs on the UI thread; Debug builds then assert every catalog mutation
+        // happens on it (no-op in Release, and unbound catalogs in unit tests stay unchecked).
+        catalog.BindToCurrentThread();
         var clock = sp.GetRequiredService<GenerationClock>();
         var viewer = sp.GetRequiredService<ViewerState>();
         var compare = sp.GetRequiredService<CompareViewModel>();
@@ -66,7 +69,8 @@ internal static class MainViewModelCompositionRoot
                 var (w, h) = viewport.Get();
                 vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, w, h);
             },
-            onPresented: observer.OnPresented);
+            onPresented: observer.OnPresented,
+            metrics: sp.GetRequiredService<ReviewMetrics>());
 
         var presenter = new ImagePresenter(
             catalog, clock, preview, thumbs, preloadController, compare, hash,

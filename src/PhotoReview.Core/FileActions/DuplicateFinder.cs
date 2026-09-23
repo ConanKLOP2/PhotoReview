@@ -41,7 +41,8 @@ public static class DuplicateFinder
         }
 
         // Bước 1: Nhóm theo kích thước (chỉ giữ các nhóm có từ 2 tệp cùng kích thước trở lên)
-        var sizeGroups = files
+        // ADR 0005: one stat per candidate; the App caller is on the UI thread, so run it on the pool.
+        var sizeGroups = await Task.Run(() => files
             .Select(path =>
             {
                 try
@@ -60,7 +61,7 @@ public static class DuplicateFinder
             .GroupBy(item => item.Size)
             .Where(group => group.Count() > 1)
             .Select(group => group.Select(item => item.Path).ToList())
-            .ToList();
+            .ToList(), cancellationToken).ConfigureAwait(false);
 
         // Bước 2: Với các tệp cùng kích thước, tính hash và nhóm theo hash
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);

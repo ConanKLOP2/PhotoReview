@@ -82,7 +82,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
                     .ToList();
-            }, loadToken).ConfigureAwait(false);
+            }, loadToken);
 
             var sortMode = _settingsStore.Current.ImageSortMode;
             var scannedFiles = entries.Select(e => e.Path).ToArray();
@@ -108,7 +108,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                 }
 
                 return sorted.Select(entry => firstByPath[entry.Path]).ToList();
-            }, loadToken).ConfigureAwait(false);
+            }, loadToken);
 
             if (initialPath is not null)
             {
@@ -139,7 +139,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             ExplorerViewSnapshot? explorerSnapshot = null;
             if (initialPath is not null)
             {
-                explorerSnapshot = await explorerTask.ConfigureAwait(false);
+                explorerSnapshot = await explorerTask;
                 if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
                 {
                     return;
@@ -157,7 +157,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                 var targetIndex = resumeIndex >= 0 ? resumeIndex : 0;
                 _catalog.SetCurrent(targetIndex);
                 var presentationGen = _clock.CurrentNavigation;
-                await _sink.PresentAsync(targetIndex, presentationGen).ConfigureAwait(false);
+                await _sink.PresentAsync(targetIndex, presentationGen);
             }
             else
             {
@@ -166,7 +166,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             }
 
             var presentationGeneration = _clock.CurrentNavigation;
-            explorerSnapshot ??= await explorerTask.ConfigureAwait(false);
+            explorerSnapshot ??= await explorerTask;
 
             if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
             {
@@ -188,7 +188,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                     if (mayReplaceInitialFallback && _catalog.Count > 0)
                     {
                         _catalog.SetCurrent(0);
-                        await _sink.PresentAsync(0, _clock.CurrentNavigation).ConfigureAwait(false);
+                        await _sink.PresentAsync(0, _clock.CurrentNavigation);
                     }
                 }
             }
