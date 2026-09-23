@@ -139,7 +139,7 @@ public sealed class ImagePresenter
         if (!TryGetFileInfo(path, out var initialInfo))
         {
             if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
-            await RemoveMissingCatalogItemAsync(path, index, token).ConfigureAwait(false);
+            await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
 
@@ -188,7 +188,7 @@ public sealed class ImagePresenter
                 long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
 
-                var thumbnail = await _thumbnailCache.GetAsync(path).ConfigureAwait(false);
+                var thumbnail = await _thumbnailCache.GetAsync(path);
 
                 if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
 
@@ -205,7 +205,7 @@ public sealed class ImagePresenter
             }
 
             // 5. Decode rồi present (đo UiAssign), kích preload
-            var image = ramReady ? readyImage : await previewTask!.ConfigureAwait(false);
+            var image = ramReady ? readyImage : await previewTask!;
             if (ramReady) _metrics.RecordCacheHit();
 
             // INV-1: kiểm tra token sau await
@@ -249,7 +249,7 @@ public sealed class ImagePresenter
                     t => _clock.IsNavigationCurrent(t),
                     async p =>
                     {
-                        var prev = await _previewService.GetPreviewAsync(p).ConfigureAwait(false);
+                        var prev = await _previewService.GetPreviewAsync(p);
                         return prev.PlatformImage;
                     },
                     p => _hashService.GetAsync(p),
@@ -257,7 +257,7 @@ public sealed class ImagePresenter
                     compareHashEnabled: settings.CompareHashEnabled,
                     currentIndex: index,
                     totalFiles: _catalog.Count,
-                    initialSelectedPath: path).ConfigureAwait(false);
+                    initialSelectedPath: path);
 
                 if (!loaded || !_clock.IsNavigationCurrent(token)) return;
 
@@ -275,7 +275,7 @@ public sealed class ImagePresenter
 
                 var original = settings.LoadingMode == LoadingMode.Original
                     ? (Width: image.PixelWidth, Height: image.PixelHeight)
-                    : await _previewService.GetOriginalDimensionsAsync(path).ConfigureAwait(false);
+                    : await _previewService.GetOriginalDimensionsAsync(path);
 
                 if (perfDims != 0) PhotoReviewPerf.Log.PostEnd(token, "dims", PhotoReviewPerf.Ms(perfDims));
 
@@ -312,7 +312,7 @@ public sealed class ImagePresenter
         catch (Exception ex) when (_clock.IsNavigationCurrent(token) && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {
             if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file token={token} path={path}");
-            await RemoveMissingCatalogItemAsync(path, index, token).ConfigureAwait(false);
+            await RemoveMissingCatalogItemAsync(path, index, token);
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token))
         {
@@ -343,7 +343,7 @@ public sealed class ImagePresenter
 
         if (nextIndex >= 0)
         {
-            await PresentAsync(nextIndex).ConfigureAwait(false);
+            await PresentAsync(nextIndex);
         }
     }
 
