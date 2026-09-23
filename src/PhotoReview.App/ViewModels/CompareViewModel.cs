@@ -191,7 +191,7 @@ public sealed partial class CompareViewModel : ObservableObject
         // 1. Tải hai ảnh song song
         var leftImageTask = loadImageAsync(pair.Left);
         var rightImageTask = loadImageAsync(pair.Right);
-        var previews = await Task.WhenAll(leftImageTask, rightImageTask).ConfigureAwait(false);
+        var previews = await Task.WhenAll(leftImageTask, rightImageTask);
 
         // Kiểm tra token sau await
         if (!isTokenCurrent(token)) return false;
@@ -219,7 +219,7 @@ public sealed partial class CompareViewModel : ObservableObject
         {
             var leftHashTask = getHashAsync(pair.Left);
             var rightHashTask = getHashAsync(pair.Right);
-            var hashes = await Task.WhenAll(leftHashTask, rightHashTask).ConfigureAwait(false);
+            var hashes = await Task.WhenAll(leftHashTask, rightHashTask);
 
             // Kiểm tra token sau await
             if (!isTokenCurrent(token)) return false;
