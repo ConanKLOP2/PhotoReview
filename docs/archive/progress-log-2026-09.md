@@ -43,3 +43,90 @@ Historical commits, validation details, and detailed task status from 2026-09-20
 - No broad `Dispatcher.Invoke` or `GetRequiredService` conversions before WD01
 - No journal durability reduction before IO01/IO02 evidence
 - No generic `IAsyncFileSystem` before proper contract proof
+
+---
+
+<!-- Moved from task_on_progress.md on 2026-09-23 (AR00, T0 budget) -->
+## 2026-09-23 — Done: navigation hot-path perf pass (merged via #20, #21)
+
+Requested as a general "analyze and optimize" pass; not tied to an existing task ID. Findings and
+a batch plan (4 batches) were proposed first, then batches 1–2 and part of 3/4 were implemented,
+merged as PR #20. A post-merge self-review then found and fixed two real bugs introduced by #20
+(case-sensitive compare-pair grouping; an unsynchronized cache race in `ImagePresenter`), merged
+as PR #21. Both are on `master` now.
+
+**Done (commits 94c5aeb, a654012, 1f982fe, 20300b4 → PR #20; 9161c35 → PR #21):**
+- `ImagePresenter`: preview decode now starts before the thumbnail await instead of after
+  (Preview loading mode), so the two run concurrently.
+- `ReviewCatalog`: O(1) `IndexOf`/`Find` via a lazily-rebuilt path→index dictionary (was O(n)
+  per call); `PathAt(index)` avoids allocating the whole `Paths` array just to read one entry;
+  new `StructuralVersion` counter (bumped on membership/order change) lets other layers cheaply
+  detect "nothing changed" instead of diffing a rebuilt collection every call.
+- `ComparePairService.BuildIndex`: O(n log n) once instead of `Find`'s O(n log n) *every*
+  navigation; `ImagePresenter` caches it against `ReviewCatalog.StructuralVersion`. `Find` itself
+  is untouched (still has its own unit tests); `BuildIndex` has new parity tests asserting it
+  agrees with `Find` for every path in a mixed catalog.
+- `SourceSizeTracker`: caches against `StructuralVersion` instead of rebuilding a `HashSet` of
+  every path on every call.
+- `PreviewImageService`: caches one decoder instance per backend (was constructing a fresh
+  `FallbackImageDecoder` + primary/fallback, including TurboJpeg's `Activator.CreateInstance`,
+  on every single decode — decoders are stateless, confirmed by inspection); added
+  `HasInflightPreview(ImageCacheKey)` to avoid a redundant stat.
+- `WpfBitmapImageDecoder` / `WicDirectDecoder`: decode from a `SourceBytesCache` buffer via a
+  non-owning `MemoryStream` (`ReadOnlyMemoryStreamFactory`) instead of `ToArray()`-copying it.
+- `PreloadScheduler`: takes `CatalogEntry[]` (Length/LastWriteUtc already known from the folder
+  scan) instead of `string[]`; builds the `ImageCacheKey` once per candidate via
+  `IPreloadTarget.GetCurrentCacheKey(entry)`, cutting 2 of the 3 stats per candidate examined
+  during a scan (the post-decode key rebuild still re-stats — the identity actually cached is
+  only known after decode). Progress/paused-for-memory logging no longer takes a
+  `GlobalMemoryStatusEx` syscall when `ILog.Enabled` (and, for the paused branch,
+  `PhotoReviewPerf.Log.IsEnabled()`) are both false.
+- `IFileSystem.EnumerateFilesWithStat`: default-interface method (`EnumerateFiles` +
+  `GetFileStat` per item — unchanged behavior for every existing implementer);
+  `PhysicalFileSystem` overrides it with `DirectoryInfo.EnumerateFiles()`, which already carries
+  Length/LastWriteTimeUtc from the same directory-listing syscall. `FolderLoadCoordinator`'s
+  folder scan uses it instead of a separate `GetFileStat()` per image file.
+- Verified after every batch: `dotnet build PhotoReview.slnx -c Release` (0 warnings/errors) and
+  `dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"` (829/829 passed, 7
+  skipped, same skips as before this work).
+
+**Deliberately deferred (do not assume these are fixed):**
+- `GetOriginalDimensionsAsync` reusing the current navigation's cache key instead of a fresh
+  stat: implemented, then **reverted** — it changes which of two pre-existing narrow races (file
+  vanishes/changes mid-navigation) hits the graceful-removal path vs. a generic error status.
+  Not worth the risk for one stat saved per navigation (non-Original loading mode only).
+- Batch 3 (`ImagePresenter`/`MainViewModel` `ConfigureAwait(false)` removal to cut the number of
+  `Dispatcher.Invoke` round-trips `WpfPresentationSink` does per present): **not attempted.**
+  This is a real, currently-present issue — e.g. `ImagePresenter.RemoveMissingCatalogItemAsync`
+  calls `ReviewCatalog.Remove`/`UpdateMetadata` from a background-thread continuation, even
+  though `ReviewCatalog`'s own doc comment says UI-thread-only — but it's pre-existing (not
+  introduced by this session), and per this file's own Critical Process Rules, broad
+  `Dispatcher.Invoke`-adjacent threading changes are gated behind **WD01**, which needs real
+  GUI/STA acceptance verification this sandbox can't do headlessly. Flagging for whoever picks
+  up WD01, not fixing ad hoc here.
+- RAM-budget accuracy (`RamBudgetPolicy.ShouldPreloadWholeFolder`'s flat ×10 JPEG-expansion
+  factor not accounting for downscaled preview target width), disk-cache effectiveness (whether
+  PNG-encoding preview-sized downscales actually saves I/O vs. re-decoding the source JPEG with
+  DCT scaling), and `SourceBytesCache`/`PreviewImageService` RAM budgets summing to more than
+  physical RAM when both are enabled: **not attempted.** These need before/after numbers from
+  `PhotoReview.Benchmark.Cli` against a real photo folder, which this sandbox doesn't have: a
+  wrong constant here risks *causing* memory pressure, not just missing a speedup.
+- EXIF-orientation / TurboJpeg fine-scale lazy `TransformedBitmap` (render-thread cost on first
+  frame): not attempted, same "needs real measurement" reasoning.
+
+**Fixed post-merge (PR #21, commit 9161c35):**
+- `ComparePairService.BuildIndex` grouped candidates by `(Folder, Extension)` with the default
+  (ordinal, case-**sensitive**) tuple comparer, while `Find` — the function it replaces on the
+  hot path — compares both with `OrdinalIgnoreCase`. Silently broke pairing for files whose
+  extension case differs (e.g. `DSC0001.JPG` / `DSC0001 (1).jpg`) or whose folder path differs
+  only by case. Fixed with an explicit `OrdinalIgnoreCase` comparer; two regression tests added.
+- `ImagePresenter._compareIndex`/`_compareIndexVersion` had no lock, but `PresentAsync` bodies
+  for overlapping navigations run concurrently (async-void key handlers don't serialize a
+  held-down arrow key). Two concurrent calls could race to rebuild the index redundantly.
+  Wrapped in a lock.
+
+**Next step (nothing further planned unless requested):** the deferred items below are real gaps,
+not bugs in what shipped. Picking any of them up needs either GUI/STA acceptance (WD01, for the
+`ConfigureAwait` item) or `PhotoReview.Benchmark.Cli` numbers from a real photo folder (for the
+RAM-budget/disk-cache items) — this sandbox can do neither, so they weren't attempted rather than
+guessed at.

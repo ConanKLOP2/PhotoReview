@@ -2,7 +2,7 @@
 
 **Status:** OC01–OC10 mostly complete; OC11–OC18 pending. OC14 is critical blocker for ST08/09/WD/OC15-18.
 
-Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`](../archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md) · [`OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
+Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`](../archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md) · [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
 
 ## Task Status
 
@@ -42,4 +42,4 @@ Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-202
 - **F10:** Benchmark profile propagation complete
 - **F11:** PerfAnalyze grouping by worker/condition
 
-See full findings and remediation details in [`OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](OPTIMIZE-CLEAN-PLAN-2026-09-20.md) section 2.
+See full findings and remediation details in [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md) section 2.
