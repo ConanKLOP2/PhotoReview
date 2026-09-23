@@ -65,5 +65,31 @@ public sealed class ImageCacheKeyTests : IDisposable
         var changedKey = ImageCacheKey.Create(_path, isOriginal: false, targetWidth: 2048);
         Assert.True(changedKey != previewKey && !previewKey.MatchesCurrentSource());
     }
+
+    [Fact(DisplayName = "Cache key carries the decode box: height is part of the identity")]
+    public void CacheKey_BoxHeight_IsPartOfIdentity()
+    {
+        var box = ImageCacheKey.Create(_path, false, new DecodeBox(2304, 1280));
+        var same = ImageCacheKey.Create(_path, false, new DecodeBox(2304, 1280));
+        var taller = ImageCacheKey.Create(_path, false, new DecodeBox(2304, 1408));
+        var widthOnly = ImageCacheKey.Create(_path, false, 2304);
+
+        Assert.Equal(new DecodeBox(2304, 1280), box.TargetBox);
+        Assert.Equal(1280, box.TargetHeight);
+        Assert.True(box == same);
+        Assert.True(box != taller);
+        Assert.True(box != widthOnly);
+        Assert.Equal(0, widthOnly.TargetHeight);
+    }
+
+    [Fact(DisplayName = "Original key ignores the box (always full size)")]
+    public void CacheKey_Original_IgnoresBox()
+    {
+        var original = ImageCacheKey.Create(_path, true, new DecodeBox(2304, 1280));
+
+        Assert.True(original.TargetBox.IsUnbounded);
+        Assert.True(original == ImageCacheKey.Create(_path, true, 0));
+        Assert.True(ImageCacheKey.CreateOriginal(ImageCacheKey.Create(_path, false, new DecodeBox(2304, 1280))) == original);
+    }
 }
 

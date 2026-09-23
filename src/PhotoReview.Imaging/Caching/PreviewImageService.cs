@@ -16,7 +16,7 @@ namespace PhotoReview.Imaging.Caching;
 /// Owns preview decode, the bounded RAM cache, in-flight decode de-duplication and
 /// the cache invalidation epoch. Extracted from MainWindow so the decode/cache
 /// contract can be exercised without constructing a WPF window.
-/// The current loading mode and target decode width are supplied by the caller
+/// The current loading mode and target decode box are supplied by the caller
 /// (they are UI/settings state) instead of being read from MainWindow.
 /// </summary>
 public sealed class PreviewImageService : IPreloadTarget
@@ -28,7 +28,7 @@ public sealed class PreviewImageService : IPreloadTarget
     private long _cacheEpoch;
     private readonly ReviewMetrics _metrics;
     private readonly Func<bool> _isOriginalLoadingMode;
-    private readonly Func<int> _targetDecodeWidth;
+    private readonly Func<DecodeBox> _targetDecodeBox;
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
     private readonly DiskCacheStore _diskStore;
@@ -67,6 +67,10 @@ public sealed class PreviewImageService : IPreloadTarget
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly Task[] _persistWorkers;
 
+    /// <summary>
+    /// Width-only overload (height unconstrained), kept for benchmark profiles and tests that pin
+    /// a single decode width. The app wires the viewport box overload instead.
+    /// </summary>
     public PreviewImageService(
         ReviewMetrics metrics,
         Func<bool> isOriginalLoadingMode,
@@ -80,10 +84,38 @@ public sealed class PreviewImageService : IPreloadTarget
         Func<DecoderBackend>? currentBackend = null,
         IImageDecoderFactory? decoderFactory = null,
         SourceBytesCache? sourceBytesCache = null)
+        : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
+            diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache)
+    {
+    }
+
+    private static Func<DecodeBox> WidthOnly(Func<int> targetDecodeWidth)
+    {
+        ArgumentNullException.ThrowIfNull(targetDecodeWidth);
+        return () => new DecodeBox(targetDecodeWidth(), 0);
+    }
+
+    /// <param name="targetDecodeBox">
+    /// Preview decode box (device pixels) read on every key build; previews decode to the largest
+    /// size inside it (see <see cref="DecodeBox.Fit"/>). <see cref="DecodeBox.Unbounded"/> = full size.
+    /// </param>
+    public PreviewImageService(
+        ReviewMetrics metrics,
+        Func<bool> isOriginalLoadingMode,
+        Func<DecodeBox> targetDecodeBox,
+        long capacityBytes = 16L * 1024 * 1024 * 1024,
+        string? diskCacheDirectory = null,
+        long diskCacheCapacityBytes = 4L * 1024 * 1024 * 1024,
+        bool? disableDiskCacheOverride = null,
+        IImageDecoder? decoder = null,
+        ILog? log = null,
+        Func<DecoderBackend>? currentBackend = null,
+        IImageDecoderFactory? decoderFactory = null,
+        SourceBytesCache? sourceBytesCache = null)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
-        _targetDecodeWidth = targetDecodeWidth ?? throw new ArgumentNullException(nameof(targetDecodeWidth));
+        _targetDecodeBox = targetDecodeBox ?? throw new ArgumentNullException(nameof(targetDecodeBox));
         _currentBackend = currentBackend ?? (() => DecoderBackend.Wpf);
         _diskCacheDirectory = diskCacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
@@ -190,20 +222,20 @@ public sealed class PreviewImageService : IPreloadTarget
     public ImageCacheKey GetCurrentCacheKey(string path)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(path, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
+        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
     }
 
     /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
     public ImageCacheKey GetCurrentCacheKey(FileInfo info)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(info, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
+        return ImageCacheKey.Create(info, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
     }
 
     public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? 0 : _targetDecodeWidth(), orientationApplied: true, backend: _currentBackend());
+        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
     }
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
@@ -211,7 +243,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public async Task<IDecodedImage> GetPreviewAsync(string path, ImageCacheKey key)
     {
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
-        var targetWidth = key.TargetWidth;
+        var targetBox = key.TargetBox;
         if (_cache.TryGet(key, out var cached)) { _metrics.RecordCacheHit(); return cached; }
         var cacheEpoch = Volatile.Read(ref _cacheEpoch);
         var loadKey = (key, cacheEpoch);
@@ -227,7 +259,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // lost the race and joined someone else's in-flight decode. Constructing the
         // candidate up front and comparing it by reference to what GetOrAdd returns
         // identifies the true winner instead.
-        var candidate = new Lazy<Task<IDecodedImage>>(() => DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
+        var candidate = new Lazy<Task<IDecodedImage>>(() => DecodeAndCacheAsync(path, key, targetBox, cacheEpoch),
             LazyThreadSafetyMode.ExecutionAndPublication);
         var lazy = _previewLoads.GetOrAdd(loadKey, candidate);
         if (ReferenceEquals(lazy, candidate)) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
@@ -250,7 +282,7 @@ public sealed class PreviewImageService : IPreloadTarget
 
     // D04 perf: Task.Run captures the ExecutionContext, so PhotoReviewPerf.NavContext read inside
     // the lambda is the nav of the caller that created the Lazy (viewer token or -1 for preload).
-    private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) => Task.Run(() =>
+    private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, DecodeBox targetBox, long cacheEpoch) => Task.Run(() =>
     {
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
@@ -292,13 +324,13 @@ public sealed class PreviewImageService : IPreloadTarget
             {
                 try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
                 sourceRead = true;
-                decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
+                decodedImage = DecodeFromSource(path, key.Backend, targetBox, perf, perfNav, perfPathId);
             }
         }
         else
         {
             sourceRead = true;
-            decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
+            decodedImage = DecodeFromSource(path, key.Backend, targetBox, perf, perfNav, perfPathId);
         }
 
         // A path can be replaced while decode is in flight. Never publish
@@ -417,7 +449,7 @@ public sealed class PreviewImageService : IPreloadTarget
     private IImageDecoder GetDecoder(DecoderBackend backend) =>
         _decoderFactory is null ? _decoder : _decodersByBackend.GetOrAdd(backend, _decoderFactory.Create);
 
-    private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, int targetWidth, bool perf, long perfNav, string perfPathId)
+    private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
         if (_sourceBytesCache is not null)
@@ -442,8 +474,8 @@ public sealed class PreviewImageService : IPreloadTarget
         _metrics.RecordSourceOpen(path);
 
         long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
-        var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetWidth, Bytes: preReadBytes));
-        if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetWidth, decoded.Downscaled, targetWidth > 0 && !decoded.Downscaled);
+        var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetBox, bytes: preReadBytes));
+        if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetBox.Width, decoded.Downscaled, !targetBox.IsUnbounded && !decoded.Downscaled);
         return decoded;
     }
 
@@ -499,7 +531,13 @@ public sealed class PreviewImageService : IPreloadTarget
         // size, version) -- no atomic metadata companion. Bumping "preview-v3" to "preview-v4"
         // here means every old-version file misses on lookup by construction (this hash never
         // matches one); ScheduleLegacyCacheCleanup/ClearDisk sweep the orphaned files themselves.
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v4|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
+        // perf(decode) "preview-v4-box": the key is a width x height decode box now; the new prefix
+        // makes every width-only v4 entry miss (its pixels were sized for a different target). The
+        // file format is unchanged, so those orphaned ".pv4" files simply age out through
+        // DiskCacheStore's quota prune.
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"preview-v4-box|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}x{key.TargetHeight}|{key.OrientationApplied}|{key.Backend}"))));
         return Path.Combine(_diskCacheDirectory, hash + ".pv4");
     }
 

@@ -80,18 +80,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 int targetH = origH;
                 TjScalingFactor factor = TjScalingFactor.One;
 
-                if (request.TargetWidth > 0)
+                if (request.IsDownscaleRequested)
                 {
-                    if (isTransposed)
-                    {
-                        targetH = request.TargetWidth;
-                        targetW = Math.Max(1, (int)((long)origW * request.TargetWidth / Math.Max(1, origH)));
-                    }
-                    else
-                    {
-                        targetW = request.TargetWidth;
-                        targetH = Math.Max(1, (int)((long)origH * request.TargetWidth / Math.Max(1, origW)));
-                    }
+                    // Box is in displayed (oriented) pixels; fit it on the stored grid, rotate later.
+                    (targetW, targetH) = request.Box.FitStored(origW, origH, isTransposed);
 
                     if (targetW < origW || targetH < origH)
                     {
@@ -140,7 +132,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 // Fine scale (DCT intermediate is >= target) and EXIF orientation in one WIC pass,
                 // materialized here on the worker so the UI thread never runs the lazy pipeline.
-                bool needsFineScale = request.TargetWidth > 0 && (scaledW > targetW || scaledH > targetH);
+                bool needsFineScale = request.IsDownscaleRequested && (scaledW > targetW || scaledH > targetH);
                 bool needsOrientation = request.ApplyOrientation && orientation > 1;
                 if (needsFineScale || needsOrientation)
                 {
@@ -160,7 +152,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 return new WpfDecodedImage(
                     bitmap,
-                    downscaled: request.TargetWidth > 0 && (scaledW < origW || targetW < origW),
+                    downscaled: request.IsDownscaleRequested && (scaledW < origW || targetW < origW || targetH < origH),
                     orientation: orientation,
                     actualBackend: DecoderBackend.TurboJpeg);
             }

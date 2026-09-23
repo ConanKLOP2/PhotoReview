@@ -1,3 +1,5 @@
+using PhotoReview.Imaging;
+
 namespace PhotoReview.App.Services;
 
 /// <summary>
@@ -10,19 +12,26 @@ namespace PhotoReview.App.Services;
 /// </summary>
 public sealed class ViewportSizeSource
 {
-    private int _targetDecodeWidth;
+    // Width in the high 32 bits, height in the low 32 bits: one 64-bit volatile slot so a reader
+    // never sees the width of one box paired with the height of another.
+    private long _packedTargetDecodeBox;
 
     public Func<(double Width, double Height)> Get { get; set; } = static () => (0, 0);
 
     /// <summary>
-    /// Preview decode width in device pixels, computed by <see cref="MainWindow"/> on the UI thread
-    /// whenever the viewport or DPI changes. Read lock-free from any thread (preload workers build
-    /// cache keys off the UI thread, so they must never touch WPF layout). 0 = no window wired:
-    /// decode at full size, the previous headless behaviour.
+    /// Preview decode box (width and height, device pixels) computed by <see cref="MainWindow"/>
+    /// on the UI thread whenever the viewport or DPI changes. Read lock-free from any thread
+    /// (preload workers build cache keys off the UI thread, so they must never touch WPF layout).
+    /// <see cref="DecodeBox.Unbounded"/> = no window wired: decode at full size, the previous
+    /// headless behaviour.
     /// </summary>
-    public int TargetDecodeWidth
+    public DecodeBox TargetDecodeBox
     {
-        get => Volatile.Read(ref _targetDecodeWidth);
-        set => Volatile.Write(ref _targetDecodeWidth, value);
+        get
+        {
+            var packed = Volatile.Read(ref _packedTargetDecodeBox);
+            return new DecodeBox((int)(packed >> 32), unchecked((int)packed));
+        }
+        set => Volatile.Write(ref _packedTargetDecodeBox, ((long)value.Width << 32) | (uint)value.Height);
     }
 }

@@ -100,19 +100,12 @@ public sealed class WicDirectDecoder : IImageDecoder
             currentSource = (IWICBitmapSource)frame;
             bool downscaled = false;
 
-            if (request.TargetWidth > 0)
+            if (request.IsDownscaleRequested)
             {
-                uint targetW, targetH;
-                if (isTransposed)
-                {
-                    targetH = (uint)request.TargetWidth;
-                    targetW = (uint)Math.Max(1, (long)origW * request.TargetWidth / Math.Max(1, origH));
-                }
-                else
-                {
-                    targetW = (uint)request.TargetWidth;
-                    targetH = (uint)Math.Max(1, (long)origH * request.TargetWidth / Math.Max(1, origW));
-                }
+                // The box applies to the displayed (oriented) image; FitStored maps it back onto
+                // the stored pixel grid so we scale first and rotate afterwards.
+                var (fitW, fitH) = request.Box.FitStored((int)origW, (int)origH, isTransposed);
+                uint targetW = (uint)fitW, targetH = (uint)fitH;
 
                 if (targetW < origW || targetH < origH)
                 {

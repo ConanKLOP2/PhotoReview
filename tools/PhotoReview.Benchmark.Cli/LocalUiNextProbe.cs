@@ -30,11 +30,11 @@ internal static class LocalUiNextProbe
                 var settings = window.Settings;
                 if (!ReferenceEquals(settings, settingsStore.Current))
                     throw new InvalidOperationException("AR02c invariant broken: window.Settings is not the DI SettingsStore.Current instance.");
-                var targetDecodeWidth = services.GetRequiredService<PreviewStateContext>().TargetDecodeWidth();
+                var targetDecodeBox = services.GetRequiredService<PreviewStateContext>().TargetDecodeBox();
                 Console.WriteLine($"config: graph=production cacheBytes={settings.ImageCacheCapacityBytes} " +
                     $"preloadWorkers={settings.PreloadWorkerCount} decoder={settings.DecoderBackend} " +
                     $"sourceBytesCache={settings.UseSourceBytesCache} loadingMode={settings.LoadingMode} " +
-                    $"preload=true diskCache=true targetDecodeWidth={targetDecodeWidth}");
+                    $"preload=true diskCache=true targetDecodeWidth={targetDecodeBox.Width} targetDecodeHeight={targetDecodeBox.Height}");
                 window.Show();
                 var load = window.LoadFolderAsync(folder, null);
                 await load;

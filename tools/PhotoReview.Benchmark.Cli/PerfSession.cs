@@ -446,7 +446,8 @@ internal static class PerfSession
             loadingMode = settings.LoadingMode.ToString(),
             preloadEnabled = true, // AR02a: production registers no IPreloadController override
             diskCacheEnabled = true, // AR02a: PreviewImageService/ThumbnailCache always get IAppPaths cache dirs
-            targetDecodeWidth = services.GetRequiredService<PreviewStateContext>().TargetDecodeWidth(),
+            targetDecodeWidth = services.GetRequiredService<PreviewStateContext>().TargetDecodeBox().Width,
+            targetDecodeHeight = services.GetRequiredService<PreviewStateContext>().TargetDecodeBox().Height,
             dataRoot = "<outDir>\\data",
             // perf(harness): "shared" means this run used the fixed %LOCALAPPDATA%\PhotoReview
             // caches (same as the real app on this machine); "isolated" means --cache-dir pointed
@@ -523,7 +524,7 @@ internal static class PerfSession
         Console.WriteLine($"  [{iteration}] config: graph={effectiveConfig.graph} cacheBytes={effectiveConfig.imageCacheCapacityBytes} " +
             $"preloadWorkers={effectiveConfig.preloadWorkerCount} decoder={effectiveConfig.decoderBackend} " +
             $"sourceBytesCache={effectiveConfig.useSourceBytesCache} loadingMode={effectiveConfig.loadingMode} " +
-            $"preload={effectiveConfig.preloadEnabled} diskCache={effectiveConfig.diskCacheEnabled} targetDecodeWidth={effectiveConfig.targetDecodeWidth} " +
+            $"preload={effectiveConfig.preloadEnabled} diskCache={effectiveConfig.diskCacheEnabled} targetDecodeWidth={effectiveConfig.targetDecodeWidth} targetDecodeHeight={effectiveConfig.targetDecodeHeight} " +
             $"cacheIsolation={effectiveConfig.cacheIsolation}");
         Console.WriteLine($"  [{iteration}] done keys={keysHandled}/{keysSent} presented={metrics.PresentedImages} hits={metrics.CacheHits} misses={metrics.CacheMisses} " +
             $"crossThreadPresents={metrics.CrossThreadPresentCount} peakWS={processInfo.peakWorkingSetBytes / (1024 * 1024)}MB errors={errors.Count}");
