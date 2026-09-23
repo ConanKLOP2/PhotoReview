@@ -9,11 +9,19 @@
   in-process WPF routed events (no OS-level input, no foreground changes; see
   docs/refactoring/diagnosis/perf-session.md if present -- otherwise this header is the usage doc). Conditions:
     cold-app       new process, caches left as they are
-    cold-diskcache delete %LOCALAPPDATA%\PhotoReview\cache\*.png and thumbnails\*.png before every run
+    cold-diskcache delete the active cache root's cache\*.pv4;*.png and thumbnails\*.png before every run
     warm           one unrecorded warm-up run for the cell, then the recorded runs
     cold-os        NOT automated: the script stops and prints what the user must do (reboot or RAMMap).
                    After doing it, re-run with -Conditions cold-os -ColdOsConfirmed (runs once per cell).
   Writes <OutRoot>\<stamp>\matrix.json (cells, status, durations) after every run. Run data is never committed.
+
+  Cache isolation (perf(harness)): every run passes --cache-dir <batchDir>\cache to perf-session by
+  default, so preview+thumbnail disk caches live under this batch's own folder instead of the real
+  %LOCALAPPDATA%\PhotoReview (shared across cells/runs WITHIN one batch, so 'warm' still means warm).
+  -SharedAppCache restores the old behavior (every run reads/writes the real app's caches -- useful
+  for an explicit before/after comparison, never the default). -ColdDiskCache empties the batch's own
+  cache dir before every recorded (non-warmup) run in every cell; it refuses to combine with
+  -SharedAppCache, since that would otherwise silently empty the real app's cache instead.
 
   Warm-up (condition 'warm'): by default the warm-up run for a cell runs -WarmupScenario (default
   s1-open-folder: open folder + waitIdle) instead of the full measured scenario, since its only job is to warm the
@@ -54,8 +62,24 @@ param(
     [ValidateSet('quick', 'gate', 'full')]
     [string]$Profile,
     [string]$WarmupScenario = 's1-open-folder',
-    [switch]$FullWarmup
+    [switch]$FullWarmup,
+    # perf(harness): by default every run in this batch passes --cache-dir <batchDir>\cache to
+    # perf-session, so preview+thumbnail disk caches live under this batch's own folder instead
+    # of the real %LOCALAPPDATA%\PhotoReview\{cache,thumbnails} (shared with whatever else is
+    # using this machine's real PhotoReview install). The directory is still shared ACROSS every
+    # run/cell in one batch, so a 'warm' condition's warm-up run still warms what its recorded
+    # runs then read. -SharedAppCache opts back into the old behavior (no --cache-dir; every run
+    # reads/writes the real app's caches) for an explicit before/after comparison against it.
+    [switch]$SharedAppCache,
+    # Empties the batch's own cache directory before every recorded (non-warmup) run in every
+    # cell. Safe specifically because it targets <batchDir>\cache, not the real app's cache --
+    # refuses to combine with -SharedAppCache, which would otherwise silently wipe that instead.
+    [switch]$ColdDiskCache
 )
+
+if ($ColdDiskCache -and $SharedAppCache) {
+    throw "-ColdDiskCache cannot be combined with -SharedAppCache: it would delete the real app's %LOCALAPPDATA%\PhotoReview cache, not a batch-owned one."
+}
 
 $ErrorActionPreference = 'Stop'
 
@@ -153,6 +177,14 @@ New-Item -ItemType Directory -Force -Path $batchDir | Out-Null
 $matrixPath = Join-Path $batchDir 'matrix.json'
 $cells = New-Object System.Collections.Generic.List[object]
 $localApp = Join-Path $env:LOCALAPPDATA 'PhotoReview'
+# perf(harness): $cacheDir is passed as --cache-dir to every perf-session invocation below (see
+# PerfSession.cs/CacheDirOverrideAppPaths) so this batch's preview+thumbnail disk caches live
+# under the batch folder instead of the real %LOCALAPPDATA%\PhotoReview -- shared across every
+# cell/run IN this batch (so 'warm' still means warm), but never touching whatever else uses the
+# real app install on this machine. $null (-SharedAppCache) restores the old shared-cache behavior.
+$cacheDir = if ($SharedAppCache) { $null } else { Join-Path $batchDir 'cache' }
+if ($cacheDir) { Write-Host "Cache isolation: preview+thumbnail caches under $cacheDir (batch-scoped)" }
+else { Write-Host "Cache isolation: -SharedAppCache -- using the real $localApp caches" -ForegroundColor Yellow }
 
 # Fixture-change guard: snapshot every fixture folder now, and re-check after every run.
 function Get-FixtureStat([string]$path) {
@@ -176,6 +208,7 @@ function Save-Matrix {
     $doc = [ordered]@{
         created = $stamp; commit = $commit; repeat = $Repeat
         scenarios = $Scenarios; modes = $Modes; conditions = $Conditions; fixtures = $FixtureAlias
+        cacheIsolation = if ($cacheDir) { 'isolated' } else { 'shared' }; cacheDir = $cacheDir; coldDiskCache = [bool]$ColdDiskCache
         fixtureBaseline = $fixtureBaseline; fixtureChanged = $script:fixtureChanged
         diagEnv = @(Get-ChildItem Env: | Where-Object Name -like 'PHOTOREVIEW_DIAG_*' | ForEach-Object { "$($_.Name)=$($_.Value)" })
         cells = $cells
@@ -183,24 +216,33 @@ function Save-Matrix {
     [System.IO.File]::WriteAllText($matrixPath, ($doc | ConvertTo-Json -Depth 6), (New-Object System.Text.UTF8Encoding($false)))
 }
 
-function Clear-DiskCache {
-    foreach ($sub in 'cache', 'thumbnails') {
-        $dir = Join-Path $localApp $sub
-        if (Test-Path -LiteralPath $dir) { Get-ChildItem -LiteralPath $dir -Filter '*.png' -File | Remove-Item -Force }
+# Preview cache entries are ".pv4" (perf(cache) v4 -- see PreviewCacheFile); thumbnails are still
+# plain PNGs. Removing both patterns from 'cache' also sweeps any pre-v4 ".png" leftovers so a
+# 'cold-diskcache' condition run always starts genuinely cache-empty, not just v4-empty.
+function Clear-DiskCache([string]$root) {
+    $cacheSubDir = Join-Path $root 'cache'
+    if (Test-Path -LiteralPath $cacheSubDir) {
+        Get-ChildItem -LiteralPath $cacheSubDir -Filter '*.pv4' -File | Remove-Item -Force
+        Get-ChildItem -LiteralPath $cacheSubDir -Filter '*.png' -File | Remove-Item -Force
+    }
+    $thumbSubDir = Join-Path $root 'thumbnails'
+    if (Test-Path -LiteralPath $thumbSubDir) {
+        Get-ChildItem -LiteralPath $thumbSubDir -Filter '*.png' -File | Remove-Item -Force
     }
 }
 
-function Invoke-Session([string]$scenario, [string]$folder, [string]$outDir, [string]$mode, [string]$alias) {
+function Invoke-Session([string]$scenario, [string]$folder, [string]$outDir, [string]$mode, [string]$alias, [string]$cacheDirForRun) {
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'   # native stderr must not become a terminating error (PS 5.1)
+    $cacheArgs = if ($cacheDirForRun) { @('--cache-dir', $cacheDirForRun) } else { @() }
     try {
         if ($cliExe) {
-            $output = & $cliExe.FullName --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit 2>&1
+            $output = & $cliExe.FullName --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit @cacheArgs 2>&1
         }
         else {
-            $output = & dotnet run --project $testsProject -c Release --no-build -- --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit 2>&1
+            $output = & dotnet run --project $testsProject -c Release --no-build -- --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit @cacheArgs 2>&1
         }
         $code = $LASTEXITCODE
     }
@@ -224,7 +266,7 @@ foreach ($scenario in $scenarioFiles) {
                     $warmupTarget = if ($FullWarmup) { $scenario } else { $warmupScenarioFile }
                     $warmupTargetName = [System.IO.Path]::GetFileNameWithoutExtension($warmupTarget)
                     Write-Host "[$scenarioName $alias $mode $condition] warm-up ($warmupTargetName)"
-                    $warm = Invoke-Session $warmupTarget $folders[$alias] (Join-Path $cellDir 'warmup') $mode $alias
+                    $warm = Invoke-Session $warmupTarget $folders[$alias] (Join-Path $cellDir 'warmup') $mode $alias $cacheDir
                     $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = 0; warmup = $true
                             warmupScenario = $warmupTargetName
                             status = $(if ($warm.ExitCode -eq 0) { 'ok' } else { "fail($($warm.ExitCode))" }); seconds = $warm.Seconds
@@ -232,11 +274,20 @@ foreach ($scenario in $scenarioFiles) {
                     Save-Matrix
                 }
                 for ($run = 1; $run -le $runs; $run++) {
-                    if ($condition -eq 'cold-diskcache') { Clear-DiskCache }
+                    # 'cold-diskcache' (a -Conditions value) always targets whichever cache root
+                    # is actually active for this batch: the batch-scoped $cacheDir by default, or
+                    # the real $localApp when -SharedAppCache restored the old behavior.
+                    $condColdCacheRoot = if ($cacheDir) { $cacheDir } else { $localApp }
+                    if ($condition -eq 'cold-diskcache') { Clear-DiskCache $condColdCacheRoot }
+                    # -ColdDiskCache (a standalone switch, independent of -Conditions) additionally
+                    # empties the batch's own cache dir before every recorded run in every cell,
+                    # regardless of condition; the param block above already refuses to combine it
+                    # with -SharedAppCache, so $cacheDir is always non-null here.
+                    if ($ColdDiskCache) { Clear-DiskCache $cacheDir }
                     $outDir = Join-Path $cellDir ('run-{0:00}' -f $run)
                     Write-Host "[$scenarioName $alias $mode $condition] run $run/$runs"
                     $started = (Get-Date).ToString('o')
-                    $result = Invoke-Session $scenario $folders[$alias] $outDir $mode $alias
+                    $result = Invoke-Session $scenario $folders[$alias] $outDir $mode $alias $cacheDir
                     $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = $run; warmup = $false
                             status = $(if ($result.ExitCode -eq 0) { 'ok' } else { "fail($($result.ExitCode))" }); started = $started
                             seconds = $result.Seconds; outDir = $outDir })
