@@ -105,7 +105,7 @@ public sealed class ImagePresenter
         // 1. Tăng Navigation generation
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
-        var path = _catalog.Paths[index];
+        var path = _catalog.PathAt(index);
 
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
         if (perf)
@@ -137,9 +137,10 @@ public sealed class ImagePresenter
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
         var ramReady = _previewService.TryGetCachedPreview(currentKey, out var readyImage);
+        var hasInflight = !ramReady && _previewService.HasInflightPreview(currentKey);
         if (perf)
         {
-            PhotoReviewPerf.Log.Lookup(token, perfPathId, ramReady ? "ramHit" : _previewService.HasInflightPreview(path) ? "inflight" : "miss");
+            PhotoReviewPerf.Log.Lookup(token, perfPathId, ramReady ? "ramHit" : hasInflight ? "inflight" : "miss");
         }
 
         if (ramReady)
@@ -160,8 +161,14 @@ public sealed class ImagePresenter
 
         try
         {
-            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: hiển thị thumbnail
-            if (settings.LoadingMode == LoadingMode.Preview && !ramReady && !_previewService.HasInflightPreview(path))
+            // Perf: start the preview decode immediately (instead of after the thumbnail below) so
+            // the two run concurrently. GetPreviewAsync's in-flight dedup means calling it here just
+            // starts (or joins) the same decode that step 5 used to start only after the thumbnail
+            // finished, which serialized two independent pieces of I/O + decode work.
+            var previewTask = ramReady ? null : _previewService.GetPreviewAsync(path, currentKey);
+
+            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: hiển thị thumbnail trong lúc preview decode chạy song song
+            if (settings.LoadingMode == LoadingMode.Preview && !ramReady && !hasInflight)
             {
                 long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
@@ -183,7 +190,7 @@ public sealed class ImagePresenter
             }
 
             // 5. Decode rồi present (đo UiAssign), kích preload
-            var image = ramReady ? readyImage : await _previewService.GetPreviewAsync(path, currentKey).ConfigureAwait(false);
+            var image = ramReady ? readyImage : await previewTask!.ConfigureAwait(false);
             if (ramReady) _metrics.RecordCacheHit();
 
             // INV-1: kiểm tra token sau await
@@ -341,12 +348,14 @@ public sealed class ImagePresenter
     {
         try
         {
-            if (_fileSystem != null && !_fileSystem.FileExists(path))
-            {
-                info = null!;
-                return false;
-            }
             info = new FileInfo(path);
+            // When an IFileSystem is available, its (counted, mockable) existence check is the
+            // source of truth and FileInfo.Exists below would just be a second, redundant stat.
+            if (_fileSystem != null)
+            {
+                if (!_fileSystem.FileExists(path)) { info = null!; return false; }
+                return true;
+            }
             if (!info.Exists) { info = null!; return false; }
             return true;
         }

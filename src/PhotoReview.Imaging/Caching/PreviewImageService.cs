@@ -35,6 +35,13 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly Func<DecoderBackend> _currentBackend;
     private readonly IImageDecoderFactory? _decoderFactory;
     private readonly IImageDecoder _decoder;
+    // Perf: decoders (WpfBitmapImageDecoder, WicDirectDecoder, TurboJpegDecoder, and the
+    // FallbackImageDecoder wrapping them) hold no mutable instance state -- every field is
+    // readonly and every COM/native handle is scoped to a single Decode() call -- so they are
+    // safe to share across concurrent decodes. Caching one instance per backend avoids
+    // reconstructing (and, for TurboJpeg, Activator.CreateInstance-ing) a fresh
+    // FallbackImageDecoder + primary/fallback pair on every single preview decode.
+    private readonly ConcurrentDictionary<DecoderBackend, IImageDecoder> _decodersByBackend = new();
     private readonly ILog _log;
     // D10: precedence is the explicit test parameter, then the diagnostic environment
     // variable, then "disk cache enabled" (unset behavior). Read once in the constructor so
@@ -276,7 +283,9 @@ public sealed class PreviewImageService : IPreloadTarget
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
         stopwatch.Stop();
-        if (sourceRead) try { _metrics.RecordSourceRead(new FileInfo(path).Length, stopwatch.ElapsedMilliseconds); } catch { /* metrics are best-effort; the source file may have vanished */ }
+        // key.Length is the stat already taken to build the cache key (validated above by
+        // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
+        if (sourceRead) _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
         return decodedImage;
     });
 
@@ -312,12 +321,14 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         try
         {
-            var key = GetCurrentCacheKey(path);
-            return _previewLoads.ContainsKey((key, Volatile.Read(ref _cacheEpoch)));
+            return HasInflightPreview(GetCurrentCacheKey(path));
         }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
     }
+
+    /// <summary>Reuses a key the caller already built instead of stat-ing the path again.</summary>
+    public bool HasInflightPreview(ImageCacheKey key) => _previewLoads.ContainsKey((key, Volatile.Read(ref _cacheEpoch)));
 
     /// <param name="alsoInvalidate">
     /// Runs inside the cache lifecycle lock with the normalized path, so callers can drop
@@ -365,7 +376,8 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public void ClearSourceBytesCache() => _sourceBytesCache?.Clear();
 
-    private IImageDecoder GetDecoder(DecoderBackend backend) => _decoderFactory?.Create(backend) ?? _decoder;
+    private IImageDecoder GetDecoder(DecoderBackend backend) =>
+        _decoderFactory is null ? _decoder : _decodersByBackend.GetOrAdd(backend, _decoderFactory.Create);
 
     private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, int targetWidth, bool perf, long perfNav, string perfPathId)
     {
@@ -397,9 +409,13 @@ public sealed class PreviewImageService : IPreloadTarget
         return decoded;
     }
 
-    public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path)
+    public Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path) =>
+        GetOriginalDimensionsAsync(path, ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend()));
+
+    /// <summary>Reuses a key the caller already built for this navigation instead of stat-ing the path again.</summary>
+    public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path, ImageCacheKey currentKey)
     {
-        var key = ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend());
+        var key = ImageCacheKey.CreateOriginal(currentKey);
         if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
         var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path));
         dimensions = (info.Width, info.Height);
