@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -62,6 +64,11 @@ public sealed class FolderLoadCoordinator : IDisposable
         var loadToken = _loadCts.Token;
 
         var loadGeneration = _clock.NextFolder();
+        // perf(startup): Folder(gen, phase, msSinceStart) -- restores the T0..T3 trace the D11
+        // analyzer reads (lost in T46d). T2 (first image presented) comes from the first Presented
+        // event after "start"; the extra phases here split T0->T2 into its IO/sort/explorer parts.
+        var perf = new FolderPerf(loadGeneration);
+        perf.Mark("start");
 
         try
         {
@@ -76,13 +83,16 @@ public sealed class FolderLoadCoordinator : IDisposable
                 // EnumerateFilesWithStat gets Length/LastWriteUtc from the same directory entry
                 // used to list the file (see PhysicalFileSystem), so this needs no separate
                 // GetFileStat() syscall per file the way EnumerateFiles + GetFileStat did.
-                return _fileSystem.EnumerateFilesWithStat(folder, "*")
+                var scanned = _fileSystem.EnumerateFilesWithStat(folder, "*")
                     .Where(f => ImageFileTypes.IsSupported(f.Path))
                     .Select(f => f.Stat is null
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
                     .ToList();
+                perf.Mark("scanned", scanned.Count);
+                return scanned;
             }, loadToken);
+            perf.Mark("scanResumed");
 
             var sortMode = _settingsStore.Current.ImageSortMode;
             var scannedFiles = entries.Select(e => e.Path).ToArray();
@@ -94,6 +104,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                 null,
                 16,
                 loadToken);
+            perf.TraceExplorer(explorerTask);
 
             entries = await Task.Run(() =>
             {
@@ -107,8 +118,11 @@ public sealed class FolderLoadCoordinator : IDisposable
                     firstByPath.TryAdd(entry.Path, entry);
                 }
 
-                return sorted.Select(entry => firstByPath[entry.Path]).ToList();
+                var result = sorted.Select(entry => firstByPath[entry.Path]).ToList();
+                perf.Mark("sorted");
+                return result;
             }, loadToken);
+            perf.Mark("sortResumed");
 
             if (initialPath is not null)
             {
@@ -132,6 +146,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             var session = _sessionStore.Load(folder);
             _catalog.Reset(entries);
             _sink.OnCatalogReady(folder, _catalog.Count);
+            perf.Mark("catalogReady");
 
             var interactionGeneration = _clock.CurrentInteraction;
             var resumePath = initialPath ?? session.CurrentPath;
@@ -140,6 +155,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             if (initialPath is not null)
             {
                 explorerSnapshot = await explorerTask;
+                perf.Mark("explorerAwaited");
                 if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
                 {
                     return;
@@ -157,7 +173,9 @@ public sealed class FolderLoadCoordinator : IDisposable
                 var targetIndex = resumeIndex >= 0 ? resumeIndex : 0;
                 _catalog.SetCurrent(targetIndex);
                 var presentationGen = _clock.CurrentNavigation;
+                perf.Mark("presentStart");
                 await _sink.PresentAsync(targetIndex, presentationGen);
+                perf.Mark("presentDone");
             }
             else
             {
@@ -175,6 +193,7 @@ public sealed class FolderLoadCoordinator : IDisposable
 
             if (!_clock.IsInteractionCurrent(interactionGeneration))
             {
+                perf.Mark("explorerIgnored");
                 return;
             }
 
@@ -183,6 +202,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                 if (_catalog.ReplaceOrder(explorerOrder))
                 {
                     _sink.OnOrderApplied(explorerOrder.Count, _catalog.CurrentIndex);
+                    perf.Mark("explorerApplied");
 
                     var mayReplaceInitialFallback = initialPath is null && _clock.CurrentNavigation == presentationGeneration;
                     if (mayReplaceInitialFallback && _catalog.Count > 0)
@@ -191,6 +211,14 @@ public sealed class FolderLoadCoordinator : IDisposable
                         await _sink.PresentAsync(0, _clock.CurrentNavigation);
                     }
                 }
+                else
+                {
+                    perf.Mark("explorerIgnored");
+                }
+            }
+            else
+            {
+                perf.Mark("explorerFallback");
             }
         }
         catch (OperationCanceledException) when (loadToken.IsCancellationRequested)
@@ -200,6 +228,50 @@ public sealed class FolderLoadCoordinator : IDisposable
         catch (Exception ex) when (_clock.IsFolderCurrent(loadGeneration))
         {
             _sink.OnFailed(folder, ex);
+        }
+    }
+
+    /// <summary>
+    /// perf(startup): per-load Folder/FolderInfo tracer. Every call is a no-op (no Stopwatch read,
+    /// no allocation beyond this struct) when no PhotoReview-Perf listener is attached.
+    /// </summary>
+    private readonly struct FolderPerf
+    {
+        private readonly long _generation;
+        private readonly long _start;
+
+        public FolderPerf(long generation)
+        {
+            _generation = generation;
+            _start = PhotoReviewPerf.Log.IsEnabled() ? Stopwatch.GetTimestamp() : 0;
+        }
+
+        private bool Enabled => _start != 0 && PhotoReviewPerf.Log.IsEnabled();
+
+        public void Mark(string phase)
+        {
+            if (Enabled) PhotoReviewPerf.Log.Folder(_generation, phase, PhotoReviewPerf.Ms(_start));
+        }
+
+        public void Mark(string phase, long value, string detail = "")
+        {
+            if (!Enabled) return;
+            PhotoReviewPerf.Log.Folder(_generation, phase, PhotoReviewPerf.Ms(_start));
+            PhotoReviewPerf.Log.FolderInfo(_generation, phase, value, detail);
+        }
+
+        /// <summary>Marks "explorerSnapshot" (+status/count) when the query completes, whoever awaits it.</summary>
+        public void TraceExplorer(Task<ExplorerViewSnapshot> explorerTask)
+        {
+            if (!Enabled) return;
+            var self = this;
+            _ = explorerTask.ContinueWith(
+                t => self.Mark("explorerSnapshot",
+                    t.Status == TaskStatus.RanToCompletion ? t.Result.OrderedPaths.Count : -1,
+                    t.Status == TaskStatus.RanToCompletion ? t.Result.Status.ToString() : t.Status.ToString()),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
     }
 

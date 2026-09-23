@@ -176,20 +176,25 @@ public partial class App : System.Windows.Application, IDisposable
 
     private void App_Startup(object sender, StartupEventArgs e)
     {
+        // perf(startup): the CSV listener depends on nothing but the environment, so it starts first
+        // and the Startup milestones below (msSinceProcessStart) cover services/settings/window too.
+        _perfListener = PerfCsvListener.TryStartFromEnvironment();
+        PhotoReviewPerf.StartupMark("appStartup");
         PhotoReview.App.Services.WpfKeyNameValidator.WireUp();
 
         _services = Composition.AppHost.BuildServices();
+        PhotoReviewPerf.StartupMark("servicesBuilt");
 
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
         var appSettings = store.Load();
+        PhotoReviewPerf.StartupMark("settingsLoaded");
         AppLog.Enabled = appSettings.LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
         // D05: PHOTOREVIEW_DIAG_* variables change app behavior for measurement purposes, so their
         // presence must be visible in the log even when logging is otherwise disabled -- same reasoning
         // as AppSettings.LogStartupErrorForced.
         if (DiagOptions.AnyEnabled) LogDiagModeForced();
-        _perfListener = PerfCsvListener.TryStartFromEnvironment();
         if (_perfListener is not null) AppLog.Info("Perf trace enabled (PHOTOREVIEW_PERF_TRACE)");
         if (_perfListener is not null)
         {
@@ -213,10 +218,13 @@ public partial class App : System.Windows.Application, IDisposable
             Shutdown();
             return;
         }
+        PhotoReviewPerf.StartupMark("instanceLock");
         var window = _services.GetRequiredService<MainWindow>();
+        PhotoReviewPerf.StartupMark("mainWindowConstructed");
         window.InitializeWithInitialPath(initial ?? initialFolder);
         MainWindow = window;
         window.Show();
+        PhotoReviewPerf.StartupMark("windowShown");
     }
 
     internal static void LogStartupErrorForced(string message, Exception ex)
