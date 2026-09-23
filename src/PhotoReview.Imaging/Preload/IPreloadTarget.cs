@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Catalog;
 
 namespace PhotoReview.Imaging.Preload;
 
@@ -16,4 +16,11 @@ public interface IPreloadTarget
     ImageCacheKey GetCurrentCacheKey(CatalogEntry entry);
     int CacheCount { get; }
     long CacheBytes { get; }
+
+    /// <summary>
+    /// perf(preload): viewer decodes (the image being navigated to) running right now.
+    /// While non-zero, preload holds back to its burst concurrency so the viewer's decode gets the CPU.
+    /// Default 0 for targets without a viewer (test fakes).
+    /// </summary>
+    int ActiveViewerDecodes => 0;
 }

@@ -14,6 +14,7 @@ public sealed class ReviewMetrics
     private long _sourceBytesRead;
     private long _sourceReads;
     private long _decodeMilliseconds;
+    private long _decodeEwmaBits; // double bits of DecodeMillisecondsEwma (0 = no sample yet)
     private long _presentedImages;
     private long _presentMilliseconds;
     private long _preloadHits;
@@ -49,6 +50,29 @@ public sealed class ReviewMetrics
         Interlocked.Increment(ref _sourceReads);
         Interlocked.Add(ref _sourceBytesRead, bytes);
         Interlocked.Add(ref _decodeMilliseconds, milliseconds);
+        UpdateDecodeEwma(milliseconds);
+    }
+
+    /// <summary>Weight of the newest sample in <see cref="DecodeMillisecondsEwma"/>.</summary>
+    public const double DecodeEwmaAlpha = 0.2;
+
+    /// <summary>
+    /// perf(preload): exponentially weighted moving average of source decode wall time (ms), as
+    /// actually observed under the current load (contention included), or 0 before the first decode.
+    /// PreloadScheduler combines it with the key rate to decide how far ahead a burst must preload.
+    /// </summary>
+    public double DecodeMillisecondsEwma => BitConverter.Int64BitsToDouble(Interlocked.Read(ref _decodeEwmaBits));
+
+    private void UpdateDecodeEwma(long milliseconds)
+    {
+        if (milliseconds <= 0) return;
+        while (true)
+        {
+            var oldBits = Interlocked.Read(ref _decodeEwmaBits);
+            var old = BitConverter.Int64BitsToDouble(oldBits);
+            var next = old <= 0 ? milliseconds : old + DecodeEwmaAlpha * (milliseconds - old);
+            if (Interlocked.CompareExchange(ref _decodeEwmaBits, BitConverter.DoubleToInt64Bits(next), oldBits) == oldBits) return;
+        }
     }
 
     public void RecordPresented(long milliseconds)

@@ -395,6 +395,45 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
     }
 
+    [Fact(DisplayName = "perf(preload): every navigation notifies preload before its own decode, and preload is still kicked after present")]
+    public async Task PresentAsync_NotifiesPreloadOfEachNavigation()
+    {
+        var f1 = CreateFakeImageFile("nav1.jpg");
+        var f2 = CreateFakeImageFile("nav2.jpg");
+        _catalog.Reset([f1, f2]);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+        await presenter.PresentAsync(1);
+
+        Assert.Equal([0, 1], _preloadController.NotifyNavigationCalls);
+        Assert.Equal([0, 1], _preloadController.PreloadAroundCalls);
+    }
+
+    [Fact(DisplayName = "perf(preload): a superseded navigation's not-yet-started viewer decode is dropped, not decoded, and reports no error")]
+    public async Task PresentAsync_SupersededNavigation_DropsPendingViewerDecode()
+    {
+        var f1 = CreateFakeImageFile("superseded.jpg");
+        var f2 = CreateFakeImageFile("current.jpg");
+        _catalog.Reset([f1, f2]);
+        var decoder = new RecordingDecoder();
+        var previewService = CreatePreviewService(decoder);
+        var presenter = CreatePresenterWithServices(previewService, _thumbnailCache);
+
+        _preloadController.ViewerDecodeDelay = TimeSpan.FromSeconds(30); // burst: first nav waits before decoding
+        var first = presenter.PresentAsync(0);
+        _preloadController.ViewerDecodeDelay = TimeSpan.Zero;
+        var second = presenter.PresentAsync(1);
+
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal([f2], decoder.Paths);
+        Assert.Contains(f2, _sink.PresentedPaths);
+        Assert.DoesNotContain(f1, _sink.PresentedPaths);
+        Assert.DoesNotContain(_sink.Statuses, s => s.Contains(Path.GetFileName(f1), StringComparison.Ordinal));
+        Assert.False(previewService.HasInflightPreview(previewService.GetCurrentCacheKey(f1)));
+    }
+
     private PreviewImageService CreatePreviewService(IImageDecoder decoder) => new(
         _metrics,
         () => _previewContext.IsOriginalLoadingMode(),
@@ -423,6 +462,21 @@ public sealed class ImagePresenterTests : IDisposable
     {
         public IDecodedImage Decode(DecodeRequest request) => image;
         public ImageInfo ReadInfo(string path) => new(image.PixelWidth, image.PixelHeight, image.Orientation);
+    }
+
+    /// <summary>Decoder that records every path it decodes.</summary>
+    private sealed class RecordingDecoder : IImageDecoder
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _paths = new();
+        public IReadOnlyCollection<string> Paths => _paths;
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            _paths.Enqueue(request.Path);
+            return new FakeDecodedImage();
+        }
+
+        public ImageInfo ReadInfo(string path) => new(1, 1);
     }
 
     /// <summary>Decoder whose Decode() blocks until the test calls Release() (used for the "thumbnail wins" race test).</summary>
@@ -479,7 +533,13 @@ public sealed class ImagePresenterTests : IDisposable
     private sealed class TestPreloadController : IPreloadController
     {
         public List<int> PreloadAroundCalls { get; } = [];
+        public List<int> NotifyNavigationCalls { get; } = [];
         public HashSet<ImageCacheKey> WarmedKeys { get; } = [];
+        public TimeSpan ViewerDecodeDelay { get; set; }
+
+        public void NotifyNavigation(int index) => NotifyNavigationCalls.Add(index);
+
+        public TimeSpan GetViewerDecodeDelay() => ViewerDecodeDelay;
 
         public Task PreloadAroundAsync(int center)
         {
