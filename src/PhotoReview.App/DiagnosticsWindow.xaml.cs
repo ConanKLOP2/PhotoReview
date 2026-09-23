@@ -24,6 +24,7 @@ public partial class DiagnosticsWindow : Window
         StatCountText.Text = snapshot.StatCount.ToString("N0", CultureInfo.CurrentCulture);
         SessionWritesText.Text = snapshot.SessionWriteCount.ToString("N0", CultureInfo.CurrentCulture);
         DecoderFallbacksText.Text = snapshot.DecoderFallbackCount.ToString("N0", CultureInfo.CurrentCulture);
-        PresentHistogramText.Text = snapshot.PresentHistogram.Count == 0 ? "N/A" : string.Join("  ", snapshot.PresentHistogram.Select(b => $"{b.Label}ms:{b.Count:N0}"));
+        CrossThreadPresentsText.Text = snapshot.CrossThreadPresentCount.ToString("N0", CultureInfo.CurrentCulture);
+        PresentHistogramText.Text =snapshot.PresentHistogram.Count == 0 ? "N/A" : string.Join("  ", snapshot.PresentHistogram.Select(b => $"{b.Label}ms:{b.Count:N0}"));
     }
 }

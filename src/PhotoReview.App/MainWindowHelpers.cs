@@ -147,7 +147,8 @@ internal static class MainWindowHelpers
             onSetStatusText: _ => vm?.NotifyPresentationChanged(),
             onApplyInitialViewMode: () => { var (w, h) = getViewportSize(); vm?.Viewer.ApplyInitialViewMode(currentSettings.InitialViewMode, w, h); },
             onPresented: hooks.OnPresented,
-            dispatcher: dispatcher);
+            dispatcher: dispatcher,
+            metrics: metrics);
 
         var previewService = new PreviewImageService(metrics, () => currentSettings.LoadingMode == LoadingMode.Original, () => 1920, 64 * 1024 * 1024, disableDiskCacheOverride: true);
         var thumbs = new ThumbnailCache(persistNewThumbnails: false);

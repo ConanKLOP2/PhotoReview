@@ -69,7 +69,8 @@ internal static class MainViewModelCompositionRoot
                 var (w, h) = viewport.Get();
                 vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, w, h);
             },
-            onPresented: observer.OnPresented);
+            onPresented: observer.OnPresented,
+            metrics: sp.GetRequiredService<ReviewMetrics>());
 
         var presenter = new ImagePresenter(
             catalog, clock, preview, thumbs, preloadController, compare, hash,

@@ -457,7 +457,7 @@ internal static class PerfSession
             $"sourceBytesCache={effectiveConfig.useSourceBytesCache} loadingMode={effectiveConfig.loadingMode} " +
             $"preload={effectiveConfig.preloadEnabled} diskCache={effectiveConfig.diskCacheEnabled} targetDecodeWidth={effectiveConfig.targetDecodeWidth}");
         Console.WriteLine($"  [{iteration}] done keys={keysHandled}/{keysSent} presented={metrics.PresentedImages} hits={metrics.CacheHits} misses={metrics.CacheMisses} " +
-            $"peakWS={processInfo.peakWorkingSetBytes / (1024 * 1024)}MB errors={errors.Count}");
+            $"crossThreadPresents={metrics.CrossThreadPresentCount} peakWS={processInfo.peakWorkingSetBytes / (1024 * 1024)}MB errors={errors.Count}");
         return errors.Count == 0;
     }
 
@@ -559,6 +559,7 @@ internal static class PerfSession
         a.SourceOpenCount == b.SourceOpenCount &&
         a.StatCount == b.StatCount &&
         a.SessionWriteCount == b.SessionWriteCount &&
+        a.CrossThreadPresentCount == b.CrossThreadPresentCount &&
         a.DecoderFallbackCount == b.DecoderFallbackCount;
 
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)

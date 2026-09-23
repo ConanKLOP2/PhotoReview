@@ -25,6 +25,7 @@ public sealed class ReviewMetrics
     private long _sourceOpenCount;
     private long _statCount;
     private long _sessionWriteCount;
+    private long _crossThreadPresentCount;
     private readonly ConcurrentDictionary<string, long> _sourceOpens = new(StringComparer.OrdinalIgnoreCase);
     private readonly long[] _presentBuckets = new long[PresentBucketLabels.Length];
 
@@ -69,6 +70,12 @@ public sealed class ReviewMetrics
 
     public void RecordSessionWrite() => Interlocked.Increment(ref _sessionWriteCount);
 
+    /// <summary>
+    /// AR04 / ADR 0005: counts presentation-sink updates that arrived off the UI thread and had to be
+    /// marshalled with a synchronous Dispatcher.Invoke. Expected to stay 0 once the App layer is UI-affine.
+    /// </summary>
+    public void RecordCrossThreadPresent() => Interlocked.Increment(ref _crossThreadPresentCount);
+
     private static int PresentBucketIndex(long milliseconds)
     {
         for (var i = 0; i < PresentBucketUpperBoundsMs.Count; i++)
@@ -92,6 +99,7 @@ public sealed class ReviewMetrics
             .Take(10).Select(p => new SourceOpenEntry(p.Key, p.Value)).ToArray(),
         StatCount = Interlocked.Read(ref _statCount),
         SessionWriteCount = Interlocked.Read(ref _sessionWriteCount),
+        CrossThreadPresentCount = Interlocked.Read(ref _crossThreadPresentCount),
         PresentHistogram = PresentBucketLabels.Select((label, i) => new PresentLatencyBucket(label, Interlocked.Read(ref _presentBuckets[i]))).ToArray()
     };
 }
@@ -110,6 +118,8 @@ public sealed record ReviewMetricsSnapshot(long CacheHits, long CacheMisses, lon
     public IReadOnlyList<SourceOpenEntry> TopSourceOpens { get; init; } = [];
     public long StatCount { get; init; }
     public long SessionWriteCount { get; init; }
+    /// <summary>Sink updates marshalled via Dispatcher.Invoke because they arrived off the UI thread (AR04: expected 0).</summary>
+    public long CrossThreadPresentCount { get; init; }
     public IReadOnlyList<PresentLatencyBucket> PresentHistogram { get; init; } = [];
 }
 

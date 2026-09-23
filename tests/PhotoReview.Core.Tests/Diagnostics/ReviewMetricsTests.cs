@@ -133,6 +133,18 @@ public sealed class ReviewMetricsTests
         Assert.Equal(3, snapshot.DecoderFallbackCount);
     }
 
+    [Fact(DisplayName = "AR04: CrossThreadPresentCount starts at 0 and accumulates")]
+    public void CrossThreadPresentCountAccumulates()
+    {
+        var metrics = new ReviewMetrics();
+        Assert.Equal(0, metrics.Snapshot().CrossThreadPresentCount);
+
+        metrics.RecordCrossThreadPresent();
+        metrics.RecordCrossThreadPresent();
+
+        Assert.Equal(2, metrics.Snapshot().CrossThreadPresentCount);
+    }
+
     [Theory(DisplayName = "Present latency lands in the documented histogram bucket")]
     [InlineData(0, "<=8")]
     [InlineData(8, "<=8")]
@@ -172,7 +184,7 @@ public sealed class ReviewMetricsTests
 
         var json = System.Text.Json.JsonSerializer.Serialize(metrics.Snapshot());
 
-        foreach (var field in new[] { "SourceOpenCount", "TopSourceOpens", "StatCount", "SessionWriteCount", "PresentHistogram", "DecoderFallbackCount" })
+        foreach (var field in new[] { "SourceOpenCount", "TopSourceOpens", "StatCount", "SessionWriteCount", "PresentHistogram", "DecoderFallbackCount", "CrossThreadPresentCount" })
             Assert.Contains($"\"{field}\"", json);
     }
 }
