@@ -53,7 +53,8 @@ public sealed class WicDirectDecoder : IImageDecoder
                 out decoder);
 
             decoder.GetFrame(0, out frame);
-            ThrowIfEmbeddedColorProfile(frame);
+            // Dimensions and orientation do not depend on the color profile, so profiled files
+            // no longer need to fall back to WPF here.
             frame.GetSize(out uint origW, out uint origH);
             int orientation = ReadExifOrientation(frame);
 
@@ -75,9 +76,12 @@ public sealed class WicDirectDecoder : IImageDecoder
         IWICBitmapDecoder? decoder = null;
         IWICBitmapFrameDecode? frame = null;
         IWICBitmapSource? currentSource = null;
+        IWICBitmapScaler? preScaler = null;
         IWICBitmapScaler? scaler = null;
         IWICFormatConverter? converter = null;
         IWICBitmapFlipRotator? rotator = null;
+        IWICColorContext[]? sourceContexts = null;
+        var colorChain = new ColorTransformChain();
 
         try
         {
@@ -88,7 +92,6 @@ public sealed class WicDirectDecoder : IImageDecoder
                 out decoder);
 
             decoder.GetFrame(0, out frame);
-            ThrowIfEmbeddedColorProfile(frame);
             frame.GetSize(out uint origW, out uint origH);
 
             int orientation = request.ApplyOrientation ? ReadExifOrientation(frame) : 1;
@@ -113,32 +116,23 @@ public sealed class WicDirectDecoder : IImageDecoder
 
                 if (targetW < origW || targetH < origH)
                 {
-                    // Try DCT pre-scaling via IWICBitmapSourceTransform if supported
-                    if (frame is IWICBitmapSourceTransform transform)
+                    // Stage 1: let the codec reduce natively (JPEG DCT scaling 1/2, 1/4, 1/8) to the
+                    // smallest size still >= target. A scaler sitting directly on the frame at exactly
+                    // that size is served by IWICBitmapSourceTransform without resampling.
+                    if (TryGetNativeReducedSize(frame, targetW, targetH, origW, origH, out uint nativeW, out uint nativeH))
                     {
-                        uint closestW = targetW;
-                        uint closestH = targetH;
-                        try
-                        {
-                            transform.GetClosestSize(ref closestW, ref closestH);
-                            // If transform found a valid closer intermediate size
-                            if (closestW >= targetW && closestW < origW)
-                            {
-                                // WIC scaler will scale down from the DCT-reduced frame
-                            }
-                        }
-                        catch
-                        {
-                            // Transform not supported for this format/driver, continue to normal scaler
-                        }
+                        factory.CreateBitmapScaler(out preScaler);
+                        preScaler.Initialize(currentSource, nativeW, nativeH, WICBitmapInterpolationMode.Fant);
+                        currentSource = (IWICBitmapSource)preScaler;
                     }
 
+                    // Stage 2: high-quality resample of the (already reduced) image to the target.
                     factory.CreateBitmapScaler(out scaler);
                     try
                     {
                         scaler.Initialize(currentSource, targetW, targetH, WICBitmapInterpolationMode.HighQualityCubic);
                     }
-                    catch
+                    catch (COMException)
                     {
                         scaler.Initialize(currentSource, targetW, targetH, WICBitmapInterpolationMode.Fant);
                     }
@@ -147,12 +141,25 @@ public sealed class WicDirectDecoder : IImageDecoder
                 }
             }
 
-            // Convert to 32bpp BGRA
+            // Output the formats WPF renders natively so the UI thread never has to convert:
+            // Bgr32 for opaque sources (JPEG), premultiplied Pbgra32 for anything that may carry alpha.
+            currentSource.GetPixelFormat(out Guid sourceFormat);
+            bool opaque = IsOpaqueFormat(sourceFormat);
+
+            // Embedded ICC (or non-sRGB EXIF color space): transform to sRGB after downscaling so the
+            // color math runs on the small image, not the full-resolution frame.
+            sourceContexts = ReadColorContexts(factory, frame);
+            IWICColorContext? sourceProfile = SelectSourceColorContext(sourceContexts);
+            if (sourceProfile is not null)
+            {
+                currentSource = colorChain.Build(factory, currentSource, sourceProfile, opaque);
+            }
+
             factory.CreateFormatConverter(out converter);
-            var bgraGuid = WicGuids.GUID_WICPixelFormat32bppBGRA;
+            var outputGuid = opaque ? WicGuids.GUID_WICPixelFormat32bppBGR : WicGuids.GUID_WICPixelFormat32bppPBGRA;
             converter.Initialize(
                 currentSource,
-                ref bgraGuid,
+                ref outputGuid,
                 WICBitmapDitherType.None,
                 IntPtr.Zero,
                 0.0,
@@ -172,36 +179,51 @@ public sealed class WicDirectDecoder : IImageDecoder
             }
 
             currentSource.GetSize(out uint finalW, out uint finalH);
-            var stride = (int)finalW * 4;
-            var buffer = new byte[stride * (int)finalH];
-            var pinHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            var stride = checked((int)finalW * 4);
+            var bufferSize = checked(stride * (int)finalH);
+
+            // Native scratch buffer: BitmapSource.Create copies it into its own WIC bitmap, so a
+            // managed array here would only add a large LOH allocation (GC pressure) per decode.
+            BitmapSource bitmap;
+            IntPtr buffer = Marshal.AllocHGlobal(bufferSize);
             try
             {
-                currentSource.CopyPixels(IntPtr.Zero, (uint)stride, (uint)buffer.Length, pinHandle.AddrOfPinnedObject());
+                currentSource.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, buffer);
+                bitmap = BitmapSource.Create(
+                    (int)finalW,
+                    (int)finalH,
+                    96,
+                    96,
+                    opaque ? PixelFormats.Bgr32 : PixelFormats.Pbgra32,
+                    null,
+                    buffer,
+                    bufferSize,
+                    stride);
             }
             finally
             {
-                pinHandle.Free();
+                Marshal.FreeHGlobal(buffer);
             }
 
-            var bitmap = BitmapSource.Create(
-                (int)finalW,
-                (int)finalH,
-                96,
-                96,
-                PixelFormats.Bgra32,
-                null,
-                buffer,
-                stride);
             bitmap.Freeze();
 
             return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect);
+        }
+        catch (COMException ex) when (colorChain.IsActive)
+        {
+            // The transform is evaluated lazily inside CopyPixels; a failure there must still route
+            // the file to the color-managed WPF fallback instead of surfacing as a hard error.
+            throw new NotSupportedException(
+                "WicDirect could not transform the embedded ICC profile to sRGB: " + ex.Message, ex);
         }
         finally
         {
             SafeReleaseCom(rotator);
             SafeReleaseCom(converter);
+            colorChain.Release();
+            ReleaseAll(sourceContexts);
             SafeReleaseCom(scaler);
+            SafeReleaseCom(preScaler);
             SafeReleaseCom(frame);
             SafeReleaseCom(decoder);
             SafeReleaseCom(factory);
@@ -218,15 +240,190 @@ public sealed class WicDirectDecoder : IImageDecoder
         return factory!;
     }
 
-    private static void ThrowIfEmbeddedColorProfile(IWICBitmapFrameDecode frame)
+    private static readonly HashSet<Guid> OpaquePixelFormats =
+    [
+        WicGuids.GUID_WICPixelFormatBlackWhite,
+        WicGuids.GUID_WICPixelFormat2bppGray,
+        WicGuids.GUID_WICPixelFormat4bppGray,
+        WicGuids.GUID_WICPixelFormat8bppGray,
+        WicGuids.GUID_WICPixelFormat16bppGray,
+        WicGuids.GUID_WICPixelFormat16bppBGR555,
+        WicGuids.GUID_WICPixelFormat16bppBGR565,
+        WicGuids.GUID_WICPixelFormat24bppBGR,
+        WicGuids.GUID_WICPixelFormat24bppRGB,
+        WicGuids.GUID_WICPixelFormat32bppBGR,
+        WicGuids.GUID_WICPixelFormat48bppRGB,
+        WicGuids.GUID_WICPixelFormat48bppBGR,
+        WicGuids.GUID_WICPixelFormat32bppCMYK,
+        WicGuids.GUID_WICPixelFormat64bppCMYK
+    ];
+
+    /// <summary>
+    /// True when the WIC pixel format cannot carry transparency. Unknown and indexed formats
+    /// (palettes may contain transparent entries) are conservatively treated as having alpha.
+    /// </summary>
+    internal static bool IsOpaqueFormat(Guid pixelFormat) => OpaquePixelFormats.Contains(pixelFormat);
+
+    private static bool TryGetNativeReducedSize(
+        IWICBitmapFrameDecode frame, uint targetW, uint targetH, uint origW, uint origH,
+        out uint nativeW, out uint nativeH)
     {
-        frame.GetColorContexts(0, IntPtr.Zero, out uint colorContextCount);
-        if (colorContextCount > 0)
+        nativeW = targetW;
+        nativeH = targetH;
+        if (frame is not IWICBitmapSourceTransform sourceTransform)
         {
-            // WicDirect currently converts straight to BGRA without an IWICColorTransform.
-            // Reject profiled pixels so ImageDecoderFactory can use the color-managed WPF path.
-            throw new NotSupportedException(
-                "WicDirect does not yet transform embedded ICC profiles to sRGB.");
+            return false;
+        }
+
+        try
+        {
+            sourceTransform.GetClosestSize(ref nativeW, ref nativeH);
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+
+        // Only useful when the codec actually reduces and does not undershoot the target.
+        return nativeW >= targetW && nativeH >= targetH && (nativeW < origW || nativeH < origH);
+    }
+
+    private static IWICColorContext[]? ReadColorContexts(IWICImagingFactory factory, IWICBitmapFrameDecode frame)
+    {
+        frame.GetColorContexts(0, null, out uint count);
+        if (count == 0)
+        {
+            return null;
+        }
+
+        var contexts = new IWICColorContext[count];
+        try
+        {
+            for (var i = 0; i < contexts.Length; i++)
+            {
+                factory.CreateColorContext(out contexts[i]);
+            }
+
+            frame.GetColorContexts(count, contexts, out _);
+            return contexts;
+        }
+        catch
+        {
+            ReleaseAll(contexts);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Picks the context describing the frame's pixels: an embedded ICC profile wins; otherwise a
+    /// non-sRGB EXIF color space (e.g. Adobe RGB = 2). sRGB (EXIF 1) needs no transform.
+    /// </summary>
+    private static IWICColorContext? SelectSourceColorContext(IWICColorContext[]? contexts)
+    {
+        if (contexts is null)
+        {
+            return null;
+        }
+
+        IWICColorContext? exifCandidate = null;
+        foreach (var context in contexts)
+        {
+            if (context is null)
+            {
+                continue;
+            }
+
+            context.GetContextType(out WICColorContextType type);
+            if (type == WICColorContextType.Profile)
+            {
+                return context;
+            }
+
+            if (type == WICColorContextType.ExifColorSpace && exifCandidate is null)
+            {
+                context.GetExifColorSpace(out uint colorSpace);
+                if (colorSpace != SrgbExifColorSpace)
+                {
+                    exifCandidate = context;
+                }
+            }
+        }
+
+        return exifCandidate;
+    }
+
+    private const uint SrgbExifColorSpace = 1;
+
+    /// <summary>
+    /// Owns the COM objects of the optional source-profile to sRGB stage of the decode pipeline.
+    /// </summary>
+    private sealed class ColorTransformChain
+    {
+        private IWICColorContext? _destination;
+        private IWICColorTransform? _transform;
+        private IWICFormatConverter? _normalizer;
+
+        public bool IsActive => _transform is not null;
+
+        public IWICBitmapSource Build(
+            IWICImagingFactory factory, IWICBitmapSource source, IWICColorContext sourceProfile, bool opaque)
+        {
+            // Straight (non-premultiplied) alpha: color math on premultiplied values would be wrong.
+            var transformFormat = opaque ? WicGuids.GUID_WICPixelFormat32bppBGR : WicGuids.GUID_WICPixelFormat32bppBGRA;
+            try
+            {
+                factory.CreateColorContext(out _destination);
+                _destination.InitializeFromExifColorSpace(SrgbExifColorSpace);
+
+                // First let the transform consume the native format (keeps CMYK/gray profiles valid).
+                factory.CreateColorTransformer(out _transform);
+                try
+                {
+                    _transform.Initialize(source, sourceProfile, _destination, ref transformFormat);
+                    return (IWICBitmapSource)_transform;
+                }
+                catch (COMException)
+                {
+                    // Source format not accepted directly: normalize to 32bpp BGR(A) and retry.
+                    SafeReleaseCom(_transform);
+                    _transform = null;
+                }
+
+                factory.CreateFormatConverter(out _normalizer);
+                _normalizer.Initialize(
+                    source, ref transformFormat, WICBitmapDitherType.None, IntPtr.Zero, 0.0, WICBitmapPaletteType.Custom);
+                factory.CreateColorTransformer(out _transform);
+                _transform.Initialize((IWICBitmapSource)_normalizer, sourceProfile, _destination, ref transformFormat);
+                return (IWICBitmapSource)_transform;
+            }
+            catch (Exception ex) when (ex is COMException or InvalidCastException or ArgumentException)
+            {
+                throw new NotSupportedException(
+                    "WicDirect could not transform the embedded ICC profile to sRGB: " + ex.Message, ex);
+            }
+        }
+
+        public void Release()
+        {
+            SafeReleaseCom(_transform);
+            SafeReleaseCom(_normalizer);
+            SafeReleaseCom(_destination);
+            _transform = null;
+            _normalizer = null;
+            _destination = null;
+        }
+    }
+
+    private static void ReleaseAll(IWICColorContext[]? contexts)
+    {
+        if (contexts is null)
+        {
+            return;
+        }
+
+        foreach (var context in contexts)
+        {
+            SafeReleaseCom(context);
         }
     }
 

@@ -114,25 +114,31 @@ public sealed class DecoderQualityGateTests : IDisposable
         Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(bytes),
             "The deterministic fixture must contain a JPEG APP2 ICC profile.");
 
-        // WPF is the color-managed reference and direct WIC must reject profiled pixels
-        // until an explicit IWICColorTransform is implemented.
+        // 1. WPF is the color-managed reference; direct WIC applies an IWICColorTransform to sRGB
+        //    and must match it.
         var decodedWpf = _wpfDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
         Assert.NotNull(decodedWpf);
-        Assert.Throws<NotSupportedException>(() =>
-            _wicDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0)));
-        Assert.Throws<NotSupportedException>(() => _wicDecoder.ReadInfo(generated));
+        var decodedWic = _wicDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
+        Assert.Equal(DecoderBackend.WicDirect, decodedWic.ActualBackend);
+        var cmpWic = ImageCompare.Compare(decodedWpf, decodedWic);
+        Assert.True(cmpWic.MeanDeltaE <= 1.0, $"WicDirect ICC MeanDeltaE {cmpWic.MeanDeltaE} > 1.0");
+        Assert.Equal(128, _wicDecoder.ReadInfo(generated).PixelWidth);
 
         // 2. TurboJpeg throws NotSupportedException to reject ICC rather than render incorrect colors
         Assert.Throws<NotSupportedException>(() => _turboDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0)));
 
-        // Both unsafe direct paths transparently resolve to WPF (INV-12).
-        foreach (var backend in new[] { DecoderBackend.WicDirect, DecoderBackend.TurboJpeg })
+        // The unsafe direct path transparently resolves to WPF (INV-12); WicDirect needs no fallback.
+        foreach (var (backend, expectedActual) in new[]
+                 {
+                     (DecoderBackend.WicDirect, DecoderBackend.WicDirect),
+                     (DecoderBackend.TurboJpeg, DecoderBackend.Wpf)
+                 })
         {
             var fallbackDecoder = _factory.Create(backend);
             var decodedFallback = fallbackDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0));
             Assert.Equal(128, decodedFallback.PixelWidth);
             Assert.Equal(96, decodedFallback.PixelHeight);
-            Assert.Equal(DecoderBackend.Wpf, decodedFallback.ActualBackend);
+            Assert.Equal(expectedActual, decodedFallback.ActualBackend);
             Assert.Equal(128, fallbackDecoder.ReadInfo(generated).PixelWidth);
         }
     }
