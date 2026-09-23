@@ -11,9 +11,7 @@
 - Left for user (visual): Fit first-frame (T89), Settings TurboJPEG greyed without dll, AR04 GUI acceptance, #47 zoom feel. Note: #46 measurement overwrote `%LOCALAPPDATA%\PhotoReview\window-placement.json`.
 - **Next:** OC14 (Undo gate → MainViewModel), IO01 (needs decision), DT10.
 
-## Previous: nav hot-path perf pass — DONE (#20 `94c5aeb..20300b4`, fix #21 `9161c35`)
-
-Details: `docs/archive/progress-log-2026-09.md`. Deferred: App `ConfigureAwait(false)` → AR04; RAM budget / disk-cache value / lazy EXIF → tune from AR02e numbers; `GetOriginalDimensionsAsync` key reuse stays reverted.
+## Previous: AR00–AR07 done (#23–#37); nav perf pass #20/#21 — details `docs/archive/progress-log-2026-09.md`.
 
 ## Status by Group
 
