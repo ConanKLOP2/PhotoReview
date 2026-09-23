@@ -88,7 +88,14 @@ public sealed class ReviewMetrics
         UiAssignMilliseconds = Interlocked.Read(ref _uiAssignMilliseconds),
         DecoderFallbacks = new Dictionary<DecoderBackend, long>(_decoderFallbacks),
         SourceOpenCount = Interlocked.Read(ref _sourceOpenCount),
-        TopSourceOpens = _sourceOpens.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+        // ConcurrentDictionary.ToArray() takes its own thread-safe snapshot; chaining Enumerable.OrderBy
+        // directly on the dictionary instead would let LINQ's array-buffering optimization call
+        // ICollection.CopyTo(array, 0) with a size from an earlier Count() -- if the dictionary grows
+        // between those two calls (concurrent preload workers are still calling RecordSourceOpen), CopyTo
+        // throws ArgumentException. Snapshot() is now polled much more often (perf harness key-settle,
+        // ~every 10ms per key) while preload is actively writing to this dictionary, which made the race
+        // easy to hit.
+        TopSourceOpens = _sourceOpens.ToArray().OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .Take(10).Select(p => new SourceOpenEntry(p.Key, p.Value)).ToArray(),
         StatCount = Interlocked.Read(ref _statCount),
         SessionWriteCount = Interlocked.Read(ref _sessionWriteCount),

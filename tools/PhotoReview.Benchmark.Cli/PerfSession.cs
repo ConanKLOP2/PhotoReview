@@ -75,6 +75,17 @@ internal static class PerfSession
         public int? WaitMs { get; set; }
         public bool? WaitIdle { get; set; }
         public int? TimeoutMs { get; set; }
+        /// <summary>
+        /// Event-driven pacing for a "key" step: wait for this key's image to be presented AND preload to
+        /// go idle (capped at <see cref="SettleMaxMs"/>), then wait at least <see cref="SettleMinMs"/>
+        /// before the next key. Replaces the fixed <see cref="IntervalMs"/> delay for this step. Absent
+        /// (or false), <see cref="IntervalMs"/> behaves exactly as before.
+        /// </summary>
+        public bool? Settle { get; set; }
+        /// <summary>Minimum pacing floor after a key settles (default 50ms).</summary>
+        public int? SettleMinMs { get; set; }
+        /// <summary>Cap on how long to wait for a key to settle before counting a timeout (default IntervalMs, else 3000ms).</summary>
+        public int? SettleMaxMs { get; set; }
         /// <summary>Zoom levels; 0 means Fit (ToggleFit shortcut), &gt;0 calls SetZoom(value).</summary>
         public double[]? Zoom { get; set; }
         public int? HoldMs { get; set; }
@@ -210,6 +221,8 @@ internal static class PerfSession
         var keysSent = 0;
         var keysHandled = 0;
         var idleTimeouts = 0;
+        var keySettleMs = new List<double>();
+        var keySettleTimeouts = 0;
 
         // AR02c: build the production DI graph (AppHost.BuildServices == App.ConfigureServices, no
         // test-root overrides) so --perf-session measures the shipped configuration (F2). SettingsStore
@@ -289,14 +302,36 @@ internal static class PerfSession
                             if (forbiddenKeys.Contains(key))
                                 throw new InvalidOperationException($"key step '{key}' maps to a file/folder/window action; use an 'action' step (runs on a copy) instead");
                             var repeat = Math.Max(1, step.Repeat ?? 1);
-                            for (var i = 0; i < repeat; i++)
+                            if (step.Settle == true)
                             {
-                                keysSent++;
-                                if (SendKey(window, key)) keysHandled++;
-                                if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
-                                else await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                                var settleMinMs = Math.Max(0, step.SettleMinMs ?? 50);
+                                var settleMaxMs = Math.Max(settleMinMs, step.SettleMaxMs ?? step.IntervalMs ?? 3000);
+                                var timeouts = 0;
+                                for (var i = 0; i < repeat; i++)
+                                {
+                                    var presentedBefore = window.Metrics.Snapshot().PresentedImages;
+                                    keysSent++;
+                                    if (SendKey(window, key)) keysHandled++;
+                                    var (settled, settleElapsedMs) = await WaitKeySettleAsync(
+                                        dispatcher, window, presentedBefore, TimeSpan.FromMilliseconds(settleMaxMs));
+                                    keySettleMs.Add(settleElapsedMs);
+                                    if (!settled) { timeouts++; keySettleTimeouts++; }
+                                    var remainingMs = settleMinMs - settleElapsedMs;
+                                    if (remainingMs > 0) await Task.Delay((int)Math.Ceiling(remainingMs));
+                                }
+                                detail = $"{key} x{repeat} settle min={settleMinMs}ms max={settleMaxMs}ms timeouts={timeouts}";
                             }
-                            detail = $"{key} x{repeat} @{step.IntervalMs ?? 0}ms";
+                            else
+                            {
+                                for (var i = 0; i < repeat; i++)
+                                {
+                                    keysSent++;
+                                    if (SendKey(window, key)) keysHandled++;
+                                    if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
+                                    else await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                                }
+                                detail = $"{key} x{repeat} @{step.IntervalMs ?? 0}ms";
+                            }
                             break;
                         }
                     case "action":
@@ -399,6 +434,7 @@ internal static class PerfSession
         window.Close();
         var endQpc = Stopwatch.GetTimestamp();
         var endUtc = DateTime.UtcNow;
+        var sortedKeySettleMs = keySettleMs.OrderBy(v => v).ToArray();
 
         process.Refresh();
         var processInfo = new
@@ -440,6 +476,13 @@ internal static class PerfSession
             keysSent,
             keysHandled,
             idleTimeouts,
+            keySettle = keySettleMs.Count == 0 ? null : new
+            {
+                count = keySettleMs.Count,
+                p50Ms = Math.Round(Percentile(sortedKeySettleMs, 50), 1),
+                p95Ms = Math.Round(Percentile(sortedKeySettleMs, 95), 1),
+                timeouts = keySettleTimeouts,
+            },
             startUtc,
             endUtc,
             startQpc,
@@ -541,6 +584,47 @@ internal static class PerfSession
             }
         }
         return (false, $"TIMEOUT after {sw.ElapsedMilliseconds}ms (continuing)");
+    }
+
+    /// <summary>
+    /// Event-driven settle for one key step (rule 1 of the faster-harness plan): polls every ~10ms,
+    /// no fixed delay and no 5s "metrics stable" fallback -- <paramref name="max"/> (settleMaxMs) is the
+    /// only cap. Settled once this key's image has been presented (PresentedImages advanced past
+    /// <paramref name="presentedBefore"/>, taken right before the key was sent) and preload has gone
+    /// idle (<see cref="PreloadScheduler.IsIdle"/> via <see cref="IPreloadController"/>, reached through
+    /// the production DI graph's <c>MainViewModel.PreloadController</c>). The preload kick for a
+    /// navigation is issued synchronously before its PresentedImages increment (see
+    /// <c>ImagePresenter.ShowImageAsync</c>), so by the time "presented" is observed the scheduler
+    /// already reflects this key's preload lifetime, not a stale one from an earlier key.
+    /// </summary>
+    private static async Task<(bool Settled, double ElapsedMs)> WaitKeySettleAsync(
+        Dispatcher dispatcher, MainWindow window, long presentedBefore, TimeSpan max)
+    {
+        var sw = Stopwatch.StartNew();
+        while (true)
+        {
+            var presented = window.Metrics.Snapshot().PresentedImages > presentedBefore;
+            var preloadIdle = window.ViewModel.PreloadController?.IsIdle ?? true;
+            if (presented && preloadIdle)
+            {
+                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                return (true, sw.Elapsed.TotalMilliseconds);
+            }
+            if (sw.Elapsed >= max) return (false, sw.Elapsed.TotalMilliseconds);
+            await Task.Delay(10);
+        }
+    }
+
+    /// <summary>Linear-interpolated percentile (nearest-rank would step too coarsely for small N here).</summary>
+    private static double Percentile(double[] sortedValues, double percentile)
+    {
+        if (sortedValues.Length == 0) return 0;
+        if (sortedValues.Length == 1) return sortedValues[0];
+        var rank = percentile / 100.0 * (sortedValues.Length - 1);
+        var lower = (int)Math.Floor(rank);
+        var upper = (int)Math.Ceiling(rank);
+        if (lower == upper) return sortedValues[lower];
+        return sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * (rank - lower);
     }
 
     private static bool MetricsEquivalent(ReviewMetricsSnapshot a, ReviewMetricsSnapshot b) =>
@@ -728,6 +812,12 @@ internal static class PerfSession
             if (step.Action is not null) ParseKey(step.Action);
             if (step.Open is not null && step.Open is not ("folder" or "file"))
                 throw new FormatException($"step {i + 1}: open must be \"folder\" or \"file\"");
+            if (step.Settle is not null && step.Key is null)
+                throw new FormatException($"step {i + 1}: \"settle\" is only valid on a \"key\" step");
+            if (step.SettleMinMs is < 0) throw new FormatException($"step {i + 1}: settleMinMs must be >= 0");
+            if (step.SettleMaxMs is <= 0) throw new FormatException($"step {i + 1}: settleMaxMs must be > 0");
+            if (step.SettleMinMs is not null && step.SettleMaxMs is not null && step.SettleMinMs > step.SettleMaxMs)
+                throw new FormatException($"step {i + 1}: settleMinMs must be <= settleMaxMs");
         }
         var actionKeys = scenario.Steps.Where(s => s.Action is not null).Select(s => ParseKey(s.Action!)).Distinct().Count();
         if (actionKeys > 1) throw new FormatException("only one action key per scenario is supported");

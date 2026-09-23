@@ -3,9 +3,11 @@
   D06: runs the perf-session scenario matrix (scenario x mode x condition x repeat), one fresh process per run.
 
 .DESCRIPTION
-  Every run is `dotnet run --project PhotoReview.Benchmark.Cli -c Release --no-build -- --perf-session ...` in a new
-  process. The driver only uses in-process WPF routed events (no OS-level input, no foreground changes; see
-  docs/refactoring/diagnosis/perf-session.md). Conditions:
+  Each run invokes the built PhotoReview.Benchmark.Cli.exe directly (tools\PhotoReview.Benchmark.Cli\bin\Release\<tfm>\)
+  in a new process; if that exe cannot be found (e.g. -SkipBuild before any build), falls back to
+  `dotnet run --project PhotoReview.Benchmark.Cli -c Release --no-build -- --perf-session ...`. The driver only uses
+  in-process WPF routed events (no OS-level input, no foreground changes; see
+  docs/refactoring/diagnosis/perf-session.md if present -- otherwise this header is the usage doc). Conditions:
     cold-app       new process, caches left as they are
     cold-diskcache delete %LOCALAPPDATA%\PhotoReview\cache\*.png and thumbnails\*.png before every run
     warm           one unrecorded warm-up run for the cell, then the recorded runs
@@ -13,8 +15,29 @@
                    After doing it, re-run with -Conditions cold-os -ColdOsConfirmed (runs once per cell).
   Writes <OutRoot>\<stamp>\matrix.json (cells, status, durations) after every run. Run data is never committed.
 
+  Warm-up (condition 'warm'): by default the warm-up run for a cell runs -WarmupScenario (default
+  s1-open-folder: open folder + waitIdle) instead of the full measured scenario, since its only job is to warm the
+  OS file cache and PhotoReview's disk cache before the recorded runs. Pass -FullWarmup to run the full scenario as
+  the warm-up instead (old behaviour).
+
+  -Profile quick|gate|full selects a scenario set and repeat count together (see table below). An explicit
+  -Scenarios and/or -Repeat overrides the profile's corresponding value; -Modes/-Conditions/-FixtureAlias are never
+  touched by -Profile.
+    quick  S2 + S3, Repeat 1  (fast smoke check of the event-driven settle path)
+    gate   S2 + S3 + S4, Repeat 2
+    full   S1 + S1b + S2 + S3 + S4, Repeat 3  (the previous unconditional default set)
+
+  Fixture-change guard: before the batch, and after every run, this script records each fixture folder's file count
+  and total byte size. If either changes mid-batch (e.g. someone copies photos into the folder while a batch is
+  running), it prints a loud WARNING for every affected run and marks matrix.json's top level `fixtureChanged: true`
+  -- treat every cell in that batch as unverified.
+
 .EXAMPLE
   .\tools\diag\run-matrix.ps1 -Scenarios s2-next-slow -Modes Fast,Preview,Original -Conditions warm -Repeat 3 -FixtureAlias F1
+
+.EXAMPLE
+  .\tools\diag\run-matrix.ps1 -Profile quick -FixtureAlias F1
+  .\tools\diag\run-matrix.ps1 -Profile gate -FixtureAlias F1 -FullWarmup
 #>
 [CmdletBinding()]
 param(
@@ -27,7 +50,11 @@ param(
     [string]$OutRoot,
     [string]$FixturesFile,
     [switch]$ColdOsConfirmed,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [ValidateSet('quick', 'gate', 'full')]
+    [string]$Profile,
+    [string]$WarmupScenario = 's1-open-folder',
+    [switch]$FullWarmup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,6 +67,19 @@ $Conditions = Split-List $Conditions
 $FixtureAlias = Split-List $FixtureAlias
 foreach ($m in $Modes) { if ($m -notin 'Fast', 'Preview', 'Original') { throw "Invalid mode '$m' (Fast|Preview|Original)" } }
 foreach ($c in $Conditions) { if ($c -notin 'cold-app', 'cold-diskcache', 'warm', 'cold-os') { throw "Invalid condition '$c' (cold-app|cold-diskcache|warm|cold-os)" } }
+
+# -Profile picks a scenario set + repeat count; an explicitly-passed -Scenarios/-Repeat wins over the profile.
+if ($Profile) {
+    $profileScenarios = switch ($Profile) {
+        'quick' { @('s2-next-slow', 's3-next-burst') }
+        'gate' { @('s2-next-slow', 's3-next-burst', 's4-jump') }
+        'full' { @('s1-open-folder', 's1b-open-file', 's2-next-slow', 's3-next-burst', 's4-jump') }
+    }
+    $profileRepeat = switch ($Profile) { 'quick' { 1 }; 'gate' { 2 }; 'full' { 3 } }
+    if (-not $PSBoundParameters.ContainsKey('Scenarios')) { $Scenarios = $profileScenarios }
+    if (-not $PSBoundParameters.ContainsKey('Repeat')) { $Repeat = $profileRepeat }
+    Write-Host "Profile '$Profile': scenarios=$($Scenarios -join ',') repeat=$Repeat"
+}
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scenarioDir = Join-Path $PSScriptRoot 'scenarios'
@@ -79,11 +119,13 @@ function Read-Fixtures([string]$path) {
 }
 $fixtures = Read-Fixtures $FixturesFile
 
-$scenarioFiles = foreach ($s in $Scenarios) {
+function Resolve-ScenarioFile([string]$s) {
     $candidate = if (Test-Path -LiteralPath $s) { $s } else { Join-Path $scenarioDir (($s -replace '\.json$', '') + '.json') }
     if (-not (Test-Path -LiteralPath $candidate)) { throw "Scenario not found: $s" }
-    (Resolve-Path -LiteralPath $candidate).Path
+    return (Resolve-Path -LiteralPath $candidate).Path
 }
+$scenarioFiles = foreach ($s in $Scenarios) { Resolve-ScenarioFile $s }
+$warmupScenarioFile = Resolve-ScenarioFile $WarmupScenario
 $folders = @{}
 foreach ($alias in $FixtureAlias) {
     $entry = $fixtures.$alias
@@ -99,6 +141,12 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw "Build failed ($LASTEXITCODE)" }
 }
 
+# Prefer the built exe (no `dotnet run` host/build-check overhead per process); fall back to `dotnet run --no-build`.
+$cliExe = Get-ChildItem -Path (Join-Path (Split-Path -Parent $testsProject) 'bin\Release') -Filter 'PhotoReview.Benchmark.Cli.exe' -Recurse -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($cliExe) { Write-Host "Using built exe: $($cliExe.FullName)" }
+else { Write-Host "Built exe not found under tools\PhotoReview.Benchmark.Cli\bin\Release; falling back to 'dotnet run --no-build' (slower, one MSBuild up-to-date check per process)." -ForegroundColor Yellow }
+
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $batchDir = Join-Path $OutRoot $stamp
 New-Item -ItemType Directory -Force -Path $batchDir | Out-Null
@@ -106,10 +154,29 @@ $matrixPath = Join-Path $batchDir 'matrix.json'
 $cells = New-Object System.Collections.Generic.List[object]
 $localApp = Join-Path $env:LOCALAPPDATA 'PhotoReview'
 
+# Fixture-change guard: snapshot every fixture folder now, and re-check after every run.
+function Get-FixtureStat([string]$path) {
+    $files = @(Get-ChildItem -LiteralPath $path -File -Recurse -ErrorAction SilentlyContinue)
+    $bytes = if ($files.Count -eq 0) { 0 } else { ($files | Measure-Object -Property Length -Sum).Sum }
+    return [pscustomobject]@{ Count = $files.Count; Bytes = [int64]$bytes }
+}
+$fixtureBaseline = @{}
+foreach ($alias in $FixtureAlias) { $fixtureBaseline[$alias] = Get-FixtureStat $folders[$alias] }
+$script:fixtureChanged = $false
+function Test-FixtureUnchanged([string]$alias) {
+    $current = Get-FixtureStat $folders[$alias]
+    $base = $fixtureBaseline[$alias]
+    if ($current.Count -ne $base.Count -or $current.Bytes -ne $base.Bytes) {
+        $script:fixtureChanged = $true
+        Write-Host "WARNING: fixture '$alias' ($($folders[$alias])) changed mid-batch: was $($base.Count) file(s)/$($base.Bytes) bytes, now $($current.Count) file(s)/$($current.Bytes) bytes. This entire batch is suspect." -ForegroundColor Red
+    }
+}
+
 function Save-Matrix {
     $doc = [ordered]@{
         created = $stamp; commit = $commit; repeat = $Repeat
         scenarios = $Scenarios; modes = $Modes; conditions = $Conditions; fixtures = $FixtureAlias
+        fixtureBaseline = $fixtureBaseline; fixtureChanged = $script:fixtureChanged
         diagEnv = @(Get-ChildItem Env: | Where-Object Name -like 'PHOTOREVIEW_DIAG_*' | ForEach-Object { "$($_.Name)=$($_.Value)" })
         cells = $cells
     }
@@ -129,7 +196,12 @@ function Invoke-Session([string]$scenario, [string]$folder, [string]$outDir, [st
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'   # native stderr must not become a terminating error (PS 5.1)
     try {
-        $output = & dotnet run --project $testsProject -c Release --no-build -- --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit 2>&1
+        if ($cliExe) {
+            $output = & $cliExe.FullName --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit 2>&1
+        }
+        else {
+            $output = & dotnet run --project $testsProject -c Release --no-build -- --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit 2>&1
+        }
         $code = $LASTEXITCODE
     }
     finally { $ErrorActionPreference = $previous }
@@ -137,6 +209,7 @@ function Invoke-Session([string]$scenario, [string]$folder, [string]$outDir, [st
     $text = ($output | ForEach-Object { "$_" }) -join [Environment]::NewLine
     [System.IO.File]::WriteAllText((Join-Path $outDir 'console.log'), $text, (New-Object System.Text.UTF8Encoding($false)))
     $output | Select-Object -Last 3 | ForEach-Object { Write-Host "    $_" }
+    Test-FixtureUnchanged $alias
     return [pscustomobject]@{ ExitCode = $code; Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1) }
 }
 
@@ -148,9 +221,12 @@ foreach ($scenario in $scenarioFiles) {
                 $cellDir = Join-Path $batchDir "$scenarioName\$alias-$mode-$condition"
                 $runs = if ($condition -eq 'cold-os') { 1 } else { $Repeat }
                 if ($condition -eq 'warm') {
-                    Write-Host "[$scenarioName $alias $mode $condition] warm-up"
-                    $warm = Invoke-Session $scenario $folders[$alias] (Join-Path $cellDir 'warmup') $mode $alias
+                    $warmupTarget = if ($FullWarmup) { $scenario } else { $warmupScenarioFile }
+                    $warmupTargetName = [System.IO.Path]::GetFileNameWithoutExtension($warmupTarget)
+                    Write-Host "[$scenarioName $alias $mode $condition] warm-up ($warmupTargetName)"
+                    $warm = Invoke-Session $warmupTarget $folders[$alias] (Join-Path $cellDir 'warmup') $mode $alias
                     $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = 0; warmup = $true
+                            warmupScenario = $warmupTargetName
                             status = $(if ($warm.ExitCode -eq 0) { 'ok' } else { "fail($($warm.ExitCode))" }); seconds = $warm.Seconds
                             outDir = (Join-Path $cellDir 'warmup') })
                     Save-Matrix
@@ -173,4 +249,5 @@ foreach ($scenario in $scenarioFiles) {
 
 $failed = @($cells | Where-Object { $_.status -ne 'ok' }).Count
 Write-Host "Matrix done: $($cells.Count) run(s), $failed failed. $matrixPath"
+if ($script:fixtureChanged) { Write-Host "WARNING: fixtureChanged=true -- one or more fixture folders changed mid-batch; treat these results as invalid." -ForegroundColor Red }
 if ($failed -gt 0) { exit 1 }
