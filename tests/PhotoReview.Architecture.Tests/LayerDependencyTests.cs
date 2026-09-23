@@ -65,6 +65,24 @@ public sealed class LayerDependencyTests
             $"Platform has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
 
+    [Fact(DisplayName = "Rule 8: Platform.Windows does not reference WPF presentation assemblies (AR03b: builds without UseWPF)")]
+    public void PlatformWindows_DoesNotDependOn_WpfPresentationAssemblies()
+    {
+        var platformTypes = Types.InAssembly(typeof(PhotoReview.Platform.Windows.WindowsRecycleBin).Assembly);
+
+        var result = platformTypes
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "PresentationFramework",
+                "PresentationCore",
+                "WindowsBase")
+            .GetResult();
+
+        Assert.True(
+            result.IsSuccessful,
+            $"Platform.Windows has forbidden WPF dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+    }
+
     [Fact(DisplayName = "Rule 7: Benchmarking does not depend on App or UI frameworks beyond WPF imaging types")]
     public void Benchmarking_DoesNotDependOn_App()
     {
