@@ -61,8 +61,16 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             return completion.Task;
         }
 
+        private int _disposed;
+
         public void Dispose()
         {
+            // AR02c: MainWindow.Window_Closed disposes the (singleton) IExplorerOrderProvider explicitly,
+            // and a DI container that owns this singleton (Benchmark.Cli/AppHost, and AR02b's integration
+            // tests) disposes it again when the ServiceProvider itself is disposed. IDisposable.Dispose
+            // must tolerate being called more than once (standard contract) rather than throw on the
+            // second call's CompleteAdding()/Dispose() against an already-disposed BlockingCollection.
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             _queue.CompleteAdding();
             if (_thread.Join(TimeSpan.FromSeconds(5)))
                 _queue.Dispose();
