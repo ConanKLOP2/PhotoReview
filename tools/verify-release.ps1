@@ -5,12 +5,32 @@ param(
 )
 
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) { $ReleaseDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'outputs\release\PhotoReview-framework-dependent' }
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $resolved = [IO.Path]::GetFullPath($ReleaseDirectory)
-$required = @('PhotoReview.App.exe', 'PhotoReview.App.dll', 'PhotoReview.App.deps.json', 'PhotoReview.App.runtimeconfig.json')
+$required = @(
+    'PhotoReview.App.exe',
+    'PhotoReview.App.dll',
+    'PhotoReview.App.deps.json',
+    'PhotoReview.App.runtimeconfig.json',
+    'PhotoReview.Core.dll',
+    'PhotoReview.Imaging.dll',
+    'PhotoReview.Platform.Windows.dll',
+    'PhotoReview.Benchmarking.dll',
+    'PhotoReview.PerfAnalysis.dll',
+    'PhotoReview.Imaging.TurboJpeg.dll',
+    'turbojpeg.dll')
 $required += if ($SelfContained) { @('coreclr.dll', 'hostfxr.dll') } else { @() }
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $resolved $_) -PathType Leaf) })
 if ($missing.Count -gt 0) {
     $missing | ForEach-Object { Write-Error "Missing release file: $_" }
+    exit 1
+}
+
+$hashFile = Join-Path $repoRoot 'native\turbojpeg.sha256'
+$expectedNativeHash = (Get-Content -LiteralPath $hashFile -TotalCount 1).Trim().ToUpperInvariant()
+$actualNativeHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'turbojpeg.dll') -Algorithm SHA256).Hash
+if ($actualNativeHash -ne $expectedNativeHash) {
+    Write-Error "turbojpeg.dll SHA-256 mismatch: expected $expectedNativeHash, found $actualNativeHash"
     exit 1
 }
 

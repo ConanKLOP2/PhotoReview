@@ -2,7 +2,8 @@
 
 $ErrorActionPreference = "Stop"
 
-$expectedHash = "E9BDEC69FA2008EAF557CB68BD483E62A350B740A1588497D14AC157A0DD583D"
+$hashFile = Join-Path $PSScriptRoot "..\native\turbojpeg.sha256"
+$expectedHash = (Get-Content -LiteralPath $hashFile -TotalCount 1).Trim().ToUpperInvariant()
 $nativeDir = Join-Path $PSScriptRoot "..\native\x64"
 $targetDll = Join-Path $nativeDir "turbojpeg.dll"
 
