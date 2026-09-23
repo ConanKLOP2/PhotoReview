@@ -114,5 +114,44 @@ public class ComparePairServiceTests
         var index = ComparePairService.BuildIndex([@"C:\Photos\DSC0001.JPG", @"C:\Photos\DSC0002.JPG"]);
         Assert.Empty(index);
     }
+
+    [Fact(DisplayName = "BuildIndex matches Find when the numbered variant's extension case differs")]
+    public void BuildIndexMatchesFindWithMixedExtensionCase()
+    {
+        // Find compares extensions with OrdinalIgnoreCase; BuildIndex's folder+extension
+        // grouping must agree, or a pair like this (original .JPG, duplicate .jpg) silently
+        // stops being detected once BuildIndex replaces Find on the hot path.
+        var files = new List<string>
+        {
+            @"C:\Photos\DSC0001.JPG",
+            @"C:\Photos\DSC0001 (1).jpg"
+        };
+
+        var expected = ComparePairService.Find(files, @"C:\Photos\DSC0001.JPG");
+        Assert.NotNull(expected);
+
+        var index = ComparePairService.BuildIndex(files);
+        Assert.True(index.TryGetValue(@"C:\Photos\DSC0001.JPG", out var pair));
+        Assert.Equal(expected.Value.Left, pair.Left);
+        Assert.Equal(expected.Value.Right, pair.Right);
+    }
+
+    [Fact(DisplayName = "BuildIndex matches Find when the folder's case differs across entries")]
+    public void BuildIndexMatchesFindWithMixedFolderCase()
+    {
+        var files = new List<string>
+        {
+            @"C:\Photos\DSC0001.JPG",
+            @"c:\photos\DSC0001 (1).JPG"
+        };
+
+        var expected = ComparePairService.Find(files, @"C:\Photos\DSC0001.JPG");
+        Assert.NotNull(expected);
+
+        var index = ComparePairService.BuildIndex(files);
+        Assert.True(index.TryGetValue(@"C:\Photos\DSC0001.JPG", out var pair));
+        Assert.Equal(expected.Value.Left, pair.Left);
+        Assert.Equal(expected.Value.Right, pair.Right);
+    }
 }
 

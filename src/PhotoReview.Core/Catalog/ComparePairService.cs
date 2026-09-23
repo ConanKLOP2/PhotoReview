@@ -48,8 +48,13 @@ public static class ComparePairService
             .OrderBy(f => f.Full, StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.Full, StringComparer.Ordinal);
 
+        // Find compares folder and extension with StringComparison.OrdinalIgnoreCase; the
+        // default tuple/string comparer GroupBy would otherwise use here is ordinal
+        // case-SENSITIVE, which would silently stop pairing e.g. "DSC0001.JPG" with
+        // "DSC0001 (1).jpg", or two entries whose folder differs only by case.
         var byFolderAndExtension = ordered.GroupBy(f =>
-            (Folder: Path.GetDirectoryName(f.Full), Extension: Path.GetExtension(f.Full)));
+            (Folder: Path.GetDirectoryName(f.Full), Extension: Path.GetExtension(f.Full)),
+            FolderExtensionComparer.Instance);
 
         foreach (var group in byFolderAndExtension)
         {
@@ -97,5 +102,18 @@ public static class ComparePairService
     {
         var match = NumberedSuffixPattern.Match(Path.GetFileNameWithoutExtension(candidate));
         return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : int.MaxValue;
+    }
+
+    private sealed class FolderExtensionComparer : IEqualityComparer<(string? Folder, string Extension)>
+    {
+        public static readonly FolderExtensionComparer Instance = new();
+
+        public bool Equals((string? Folder, string Extension) x, (string? Folder, string Extension) y) =>
+            string.Equals(x.Folder, y.Folder, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.Extension, y.Extension, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string? Folder, string Extension) obj) => HashCode.Combine(
+            obj.Folder is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Folder),
+            StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Extension));
     }
 }

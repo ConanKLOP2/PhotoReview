@@ -41,6 +41,13 @@ public sealed class ImagePresenter
     // every single navigation would cost as much as the old per-call ComparePairService.Find did.
     // Cache it against ReviewCatalog.StructuralVersion so it's rebuilt only when membership/order
     // actually changes (folder load, file action, reorder), not on every present.
+    // PresentAsync bodies for overlapping navigations run concurrently on threadpool threads
+    // (async-void key handlers don't serialize each other -- a held-down arrow key can start a
+    // second PresentAsync before the first's post-thumbnail-await continuation runs), so this
+    // check-then-rebuild pair needs its own lock: without it, two threads could each pass the
+    // version check, race to build the same generation's index twice, and interleave writes to
+    // these two fields.
+    private readonly object _compareIndexGate = new();
     private int _compareIndexVersion = -1;
     private Dictionary<string, (string Left, string Right)>? _compareIndex;
 
@@ -342,12 +349,15 @@ public sealed class ImagePresenter
 
     private (string Left, string Right)? GetComparePair(string path)
     {
-        if (_compareIndexVersion != _catalog.StructuralVersion)
+        lock (_compareIndexGate)
         {
-            _compareIndex = ComparePairService.BuildIndex(_catalog.Paths);
-            _compareIndexVersion = _catalog.StructuralVersion;
+            if (_compareIndexVersion != _catalog.StructuralVersion)
+            {
+                _compareIndex = ComparePairService.BuildIndex(_catalog.Paths);
+                _compareIndexVersion = _catalog.StructuralVersion;
+            }
+            return _compareIndex!.TryGetValue(path, out var pair) ? pair : null;
         }
-        return _compareIndex!.TryGetValue(path, out var pair) ? pair : null;
     }
 
     private void UpdateCurrentImage(object? image)
