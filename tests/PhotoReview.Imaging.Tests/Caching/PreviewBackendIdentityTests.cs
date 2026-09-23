@@ -82,22 +82,42 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
         Assert.Equal([DecoderBackend.Wpf], factory.CreatedBackends);
     }
 
+    // perf(cache) task 2: a preview whose decode fell back to a different backend than the one
+    // requested (e.g. an ICC JPEG the configured TurboJpeg backend can't handle, decoded via
+    // FallbackImageDecoder's inner backend instead) used to never be disk-cached at all -- every
+    // future open re-ran the same fallback chain from source. It is now persisted like any other
+    // downscaled preview: GetDiskCachePath still hashes the *requested* backend (WicDirect here),
+    // but the v4 header truthfully records whichever backend actually produced the pixels (Wpf).
     [Fact]
-    public async Task SourceThenRamHitPreserveActualFallbackBackendWithoutPersistingItAsNative()
+    public async Task FallbackDecodedPreviewIsPersistedAndDiskHitReportsTheActualBackend()
     {
         var disk = Path.Combine(_root, "fallback");
         var decoder = new FakeDecoder(DecoderBackend.Wpf);
         var factory = new RecordingFactory(_ => decoder);
-        var service = Track(CreateService(disk, () => DecoderBackend.WicDirect, factory));
+        var writer = Track(CreateService(disk, () => DecoderBackend.WicDirect, factory));
 
-        var first = await service.GetPreviewAsync(_source);
-        var second = await service.GetPreviewAsync(_source);
-        await service.ShutdownPersistWorkersAsync();
+        var first = await writer.GetPreviewAsync(_source);
+        var second = await writer.GetPreviewAsync(_source);
+        await writer.ShutdownPersistWorkersAsync();
 
         Assert.Same(first, second);
         Assert.Equal(DecoderBackend.Wpf, first.ActualBackend);
         Assert.Equal(1, decoder.DecodeCount);
-        Assert.Empty(Directory.Exists(disk) ? Directory.GetFiles(disk, "*.png") : []);
+        Assert.Single(Directory.GetFiles(disk, "*.pv4"));
+
+        // A fresh service requesting the same (WicDirect) backend must hit the disk entry
+        // without decoding from source, and see the same ActualBackend (Wpf) a fresh fallback
+        // decode would have reported -- the header, not the request, is the source of truth here.
+        var readerDecoder = new FakeDecoder(DecoderBackend.Wpf);
+        var metrics = new ReviewMetrics();
+        var reader = Track(CreateService(disk, () => DecoderBackend.WicDirect,
+            new RecordingFactory(_ => readerDecoder), metrics: metrics));
+        var fromDisk = await reader.GetPreviewAsync(_source);
+
+        Assert.Equal(DecoderBackend.Wpf, fromDisk.ActualBackend);
+        Assert.Equal(0, readerDecoder.DecodeCount);
+        Assert.Equal(1, metrics.Snapshot().DiskCacheHits);
+        Assert.Equal(0, metrics.Snapshot().SourceReads);
     }
 
     [Fact]
@@ -110,7 +130,7 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
         var produced = await writer.GetPreviewAsync(_source);
         await writer.ShutdownPersistWorkersAsync();
         Assert.Equal(DecoderBackend.WicDirect, produced.ActualBackend);
-        Assert.Single(Directory.GetFiles(disk, "*.png"));
+        Assert.Single(Directory.GetFiles(disk, "*.pv4"));
 
         var readerDecoder = new FakeDecoder(DecoderBackend.WicDirect);
         var metrics = new ReviewMetrics();

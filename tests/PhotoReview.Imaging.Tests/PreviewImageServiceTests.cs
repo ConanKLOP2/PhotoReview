@@ -413,7 +413,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits
         do
         {
-            files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.png") : [];
+            files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.pv4") : [];
             if (files.Length >= expectedCount) return files;
             await Task.Yield();
         } while (DateTime.UtcNow < deadline);
@@ -477,16 +477,19 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
     }
 
-    [Fact(DisplayName = "A disk cache entry without its metadata companion is a miss and is re-decoded from source")]
-    public async Task DiskCacheEntryWithoutMetadataIsMiss()
+    [Fact(DisplayName = "A disk cache entry with a mismatched format version is a miss and is re-decoded from source")]
+    public async Task DiskCacheEntryWithMismatchedVersionIsMiss()
     {
-        var diskDir = _root.Dir("cache-meta");
+        // perf(cache) v4: the whole point of the header's version byte is that bumping the cache
+        // key/file version (e.g. a future v5) never needs to parse or migrate an older layout --
+        // every entry stamped with a different version is simply ignored as if it didn't exist.
+        var diskDir = _root.Dir("cache-version");
         var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
-        var metaPath = files[0] + ".meta";
-        Assert.True(File.Exists(metaPath));
-        File.Delete(metaPath);
+        var bytes = File.ReadAllBytes(files[0]);
+        bytes[4] = unchecked((byte)(PreviewCacheFile.CurrentVersion + 1)); // offset 4 = version byte
+        File.WriteAllBytes(files[0], bytes);
 
         var readerMetrics = new ReviewMetrics();
         var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
@@ -525,14 +528,14 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var remainingBytes = DirectoryBytes(diskDir);
         Assert.True(remainingBytes <= quotaBytes,
             $"Expected the {quotaBytes}-byte quota to be enforced; " +
-            $"{Directory.GetFiles(diskDir, "*.png").Length} file(s) totaling {remainingBytes} bytes remained.");
+            $"{Directory.GetFiles(diskDir, "*.pv4").Length} file(s) totaling {remainingBytes} bytes remained.");
     }
 
     // Runs concurrently with the real fire-and-forget prune worker, which can delete a file
     // between GetFiles listing it and FileInfo reading its length -- treat a file that
     // vanished mid-count as already pruned (0 bytes) instead of letting the test fail.
     private static long DirectoryBytes(string directory) =>
-        Directory.Exists(directory) ? Directory.GetFiles(directory, "*.png").Sum(FileLengthOrZero) : 0;
+        Directory.Exists(directory) ? Directory.GetFiles(directory, "*.pv4").Sum(FileLengthOrZero) : 0;
 
     private static long FileLengthOrZero(string path)
     {

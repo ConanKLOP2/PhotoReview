@@ -1,0 +1,200 @@
+using System.Buffers.Binary;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
+
+namespace PhotoReview.Imaging.Caching;
+
+/// <summary>
+/// perf(cache) v4 preview disk-cache entry: a single file (no separate ".meta" companion) whose
+/// fixed 16-byte header carries everything <see cref="PreviewImageService"/> used to store in a
+/// companion file (source orientation, decode backend, pixel dimensions) plus an explicit format
+/// version, followed immediately by the encoded payload (JPEG bytes, to end of file).
+/// </summary>
+/// <remarks>
+/// Format chosen by measurement (see <c>PreviewCacheFormatBenchmarkTests</c>, Manual category):
+/// on a synthetic 2190x1460 photo-like image, JPEG q95 4:4:4 produced ~0.5-1 MB files decoding in
+/// well under raw Bgr32's ~12.8 MB per file, at PSNR in the mid-30s dB (visually lossless for a
+/// downscaled preview) -- the 4 GB disk-cache cap holds an order of magnitude more previews than
+/// either the old 32-bit PNG format or a raw pixel dump. Header layout (all integers little-endian):
+/// <code>
+/// offset 0  (4 bytes) magic "PRVC"
+/// offset 4  (1 byte)  format version (<see cref="CurrentVersion"/>; a mismatch makes the whole
+///                     file a cache miss -- see <see cref="Read"/> -- so a version bump never
+///                     needs to parse or migrate an older layout)
+/// offset 5  (1 byte)  DecoderBackend that actually produced the pixels (may differ from the
+///                     backend requested by the cache key when the source decode fell back --
+///                     see PreviewImageService's disk-cache persistence)
+/// offset 6  (1 byte)  EXIF orientation already baked into the pixels (1-8)
+/// offset 7  (1 byte)  1 if the payload carries an alpha channel, else 0 (JPEG never does; this
+///                     flag exists so a future payload format can add real alpha support without
+///                     another version bump)
+/// offset 8  (4 bytes) pixel width
+/// offset 12 (4 bytes) pixel height
+/// offset 16 ...       payload bytes (currently always a JPEG-encoded frame) to end of file
+/// </code>
+/// </remarks>
+public static class PreviewCacheFile
+{
+    /// <summary>preview-v4: bumped from the old PNG+".meta" companion format (preview-v3).</summary>
+    public const int CurrentVersion = 4;
+
+    /// <summary>JPEG quality chosen by measurement -- see the format decision in the type doc.</summary>
+    public const int DefaultJpegQuality = 95;
+
+    private const int HeaderSize = 16;
+    private static ReadOnlySpan<byte> MagicBytes => "PRVC"u8;
+
+    /// <summary>Decoded contents of a v4 preview cache entry, ready to hand to <see cref="WpfDecodedImage"/>.</summary>
+    // Internal, not public: architecture rule K-1 forbids public types in PhotoReview.Imaging.Caching
+    // from exposing System.Windows.Media.* on their public surface (see
+    // ImagingPublicSurfaceTests.Imaging_CachingAndPreload_PublicMembers_DoNotExpose_SystemWindowsMediaTypes).
+    // PreviewImageService (same assembly) uses this directly; a caller outside the assembly goes
+    // through the IDecodedImage-based WriteAtomicallyAsync/ReadAsDecodedImage overloads below,
+    // exactly like DiskCacheStore's public IDecodedImage overload vs. its internal BitmapSource one.
+    internal readonly record struct ReadResult(BitmapSource Bitmap, DecoderBackend ActualBackend, int Orientation, long FileBytes);
+
+    /// <summary>Public, framework-agnostic entry point: encodes an already-decoded preview.</summary>
+    public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, int jpegQuality = DefaultJpegQuality, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        if (image.PlatformImage is not BitmapSource bitmap)
+            throw new ArgumentException("PlatformImage must be a BitmapSource for the preview cache.", nameof(image));
+        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, cachePath, jpegQuality, cancellationToken);
+    }
+
+    /// <summary>Public, framework-agnostic entry point: reads a v4 entry back as an <see cref="IDecodedImage"/>.</summary>
+    public static IDecodedImage ReadAsDecodedImage(string cachePath)
+    {
+        var result = Read(cachePath);
+        return new WpfDecodedImage(result.Bitmap, downscaled: true, orientation: result.Orientation, actualBackend: result.ActualBackend);
+    }
+
+    /// <summary>
+    /// Atomically encodes <paramref name="bitmap"/> as a v4 cache entry (header + JPEG payload) via a
+    /// temporary file and rename. Unlike <see cref="DiskCacheStore.WriteAtomicallyAsync(System.Windows.Media.Imaging.BitmapSource,string,System.Threading.CancellationToken)"/>,
+    /// this never opens the file with <c>FileOptions.WriteThrough</c> or calls <c>Flush(true)</c>:
+    /// this is a disposable cache, not a durability-critical journal, so the atomic
+    /// temp-file-then-rename is the only guarantee that matters (a crash never leaves a
+    /// half-written file at <paramref name="cachePath"/>).
+    /// </summary>
+    internal static async Task WriteAtomicallyAsync(
+        BitmapSource bitmap,
+        DecoderBackend actualBackend,
+        int orientation,
+        string cachePath,
+        int jpegQuality = DefaultJpegQuality,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
+        if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+        var temporaryPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight);
+            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                64 * 1024, FileOptions.SequentialScan))
+            {
+                stream.Write(header);
+                var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                encoder.Save(stream);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            File.Move(temporaryPath, cachePath, overwrite: true);
+        }
+        finally
+        {
+            DiskCacheStore.TryDelete(temporaryPath);
+        }
+    }
+
+    /// <summary>
+    /// Reads and fully decodes a v4 cache entry in one file open (no separate metadata file to
+    /// read). Throws <see cref="InvalidDataException"/> for a bad magic, an unsupported/mismatched
+    /// version, or any other structurally invalid header -- callers treat that exactly like a
+    /// corrupt payload (delete the entry, fall back to decoding the source).
+    /// </summary>
+    internal static ReadResult Read(string cachePath)
+    {
+        using var stream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.SequentialScan);
+
+        Span<byte> header = stackalloc byte[HeaderSize];
+        stream.ReadExactly(header);
+
+        if (!header[..4].SequenceEqual(MagicBytes))
+            throw new InvalidDataException("Preview cache entry has an invalid header magic.");
+
+        var version = header[4];
+        if (version != CurrentVersion)
+            throw new InvalidDataException($"Preview cache entry is version {version.ToString(System.Globalization.CultureInfo.InvariantCulture)}, expected {CurrentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)}.");
+
+        var backendValue = (DecoderBackend)header[5];
+        if (!Enum.IsDefined(backendValue))
+            throw new InvalidDataException("Preview cache entry has an invalid decoder backend byte.");
+
+        var orientation = header[6];
+        if (orientation is < 1 or > 8)
+            throw new InvalidDataException("Preview cache entry has an invalid orientation byte.");
+
+        var hasAlpha = header[7] != 0;
+        var width = BinaryPrimitives.ReadInt32LittleEndian(header[8..12]);
+        var height = BinaryPrimitives.ReadInt32LittleEndian(header[12..16]);
+        if (width <= 0 || height <= 0)
+            throw new InvalidDataException("Preview cache entry has invalid pixel dimensions.");
+
+        var fileBytes = stream.Length;
+        var payloadLength = fileBytes - HeaderSize;
+        if (payloadLength <= 0)
+            throw new InvalidDataException("Preview cache entry has no payload.");
+
+        // BitmapImage always decodes its StreamSource from that stream's absolute beginning
+        // (it seeks back to 0 internally, e.g. to read ColorContexts during FinalizeCreation) --
+        // handing it the still-open FileStream positioned right after the header would make it
+        // decode the header bytes themselves as if they were the JPEG. Copying just the payload
+        // (still a single file open/read) into a fresh, independently-zero-based stream sidesteps
+        // that without a second file open.
+        using var payloadStream = new MemoryStream((int)payloadLength);
+        stream.CopyTo(payloadStream);
+        payloadStream.Position = 0;
+
+        var bitmap = new BitmapImage();
+        bitmap.BeginInit();
+        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        bitmap.StreamSource = payloadStream;
+        bitmap.EndInit();
+
+        if (bitmap.PixelWidth != width || bitmap.PixelHeight != height)
+            throw new InvalidDataException("Preview cache entry payload dimensions do not match its header.");
+
+        // Render-native output (D-item 3): the disk-cache read path used to hand back whatever
+        // format BitmapImage produced (Bgra32 for a PNG decode); converting once here means the
+        // renderer never has to format-convert this bitmap on every present.
+        var targetFormat = hasAlpha ? PixelFormats.Pbgra32 : PixelFormats.Bgr32;
+        BitmapSource native = bitmap.Format == targetFormat ? bitmap : new FormatConvertedBitmap(bitmap, targetFormat, null, 0);
+        native.Freeze();
+
+        return new ReadResult(native, backendValue, orientation, fileBytes);
+    }
+
+    private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height)
+    {
+        var header = new byte[HeaderSize];
+        MagicBytes.CopyTo(header);
+        header[4] = CurrentVersion;
+        header[5] = (byte)actualBackend;
+        header[6] = (byte)orientation;
+        header[7] = 0; // JPEG payload never carries alpha -- see the type doc.
+        BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(8, 4), width);
+        BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(12, 4), height);
+        return header;
+    }
+}
