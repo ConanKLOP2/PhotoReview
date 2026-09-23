@@ -63,6 +63,55 @@ public class CompositionRootTests
     }
 
     [Fact]
+    public void ConfigureServices_SourceBytesCachePolicy_DisabledWhenSettingOff()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var settingsStore = provider.GetRequiredService<SettingsStore>();
+        settingsStore.Current.UseSourceBytesCache = false;
+
+        var policy = provider.GetRequiredService<SourceBytesCachePolicy>();
+
+        Assert.False(policy.Enabled);
+        Assert.Null(policy.Cache);
+    }
+
+    [Fact]
+    public void ConfigureServices_SourceBytesCachePolicy_EnabledSharesSameCacheAcrossConsumers()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var settingsStore = provider.GetRequiredService<SettingsStore>();
+        settingsStore.Current.UseSourceBytesCache = true;
+
+        var policy = provider.GetRequiredService<SourceBytesCachePolicy>();
+        Assert.True(policy.Enabled);
+        Assert.NotNull(policy.Cache);
+
+        var fileHashService = provider.GetRequiredService<FileHashService>();
+        var thumbnailCache = provider.GetRequiredService<ThumbnailCache>();
+        var previewImageService = provider.GetRequiredService<PreviewImageService>();
+
+        var fileHashCache = typeof(FileHashService)
+            .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(fileHashService);
+        var thumbnailCacheField = typeof(ThumbnailCache)
+            .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(thumbnailCache);
+        var previewCacheField = typeof(PreviewImageService)
+            .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(previewImageService);
+
+        Assert.Same(policy.Cache, fileHashCache);
+        Assert.Same(policy.Cache, thumbnailCacheField);
+        Assert.Same(policy.Cache, previewCacheField);
+    }
+
+    [Fact]
     public void ConfigureServices_SingletonsReturnSameInstance()
     {
         var services = new ServiceCollection();
