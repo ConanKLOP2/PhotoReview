@@ -123,7 +123,7 @@
 | OC06 | Journal/Undo/Recovery | PARTIAL | Undo history + recovery retry done; native restore identity TODO |
 | OC07 | Display state + T89 | PARTIAL | Display subset done; T89 GUI/STA acceptance TODO |
 | OC09 | Benchmark semantics | PARTIAL | Profile propagation done; workload action/report TODO |
-| OC11 | Decode/RAM optimization | TODO | Pending P95 measurements |
+| OC11 | Decode/RAM optimization | 🔄 PRs #40–#48 (perf night 2026-09-24) | See PERF-STATUS "Perf night"; #43 waits on zoom decision |
 | OC12 | Clean code limits | TODO | Post-implementation cleanup |
 | OC13 | Integration/validation | TODO | Final testing before publish |
 | OC14 | Undo unification + gate | PARTIAL — kept, re-scoped 2026-09-23 (Q-AR5) to "Undo gate location" | Mutual exclusion done; semantics tests refactored — blocks ST08/09, OC15-18 (no longer blocks WD01, see ADR 0005/AR04) |
