@@ -45,16 +45,14 @@
                        RenderOptions.BitmapScalingMode="{Binding Viewer.ScalingQuality, Converter={StaticResource ScalingConverter}}"
                        MaxWidth="{Binding Viewer.MaxImageWidth}"
                        MaxHeight="{Binding Viewer.MaxImageHeight}"
+                       Width="{Binding Viewer.ImageWidth}"
+                       Height="{Binding Viewer.ImageHeight}"
                        RenderTransformOrigin="0,0"
                        SizeChanged="MainImage_SizeChanged"
                        PreviewMouseLeftButtonDown="MainImage_PreviewMouseLeftButtonDown"
                        PreviewMouseMove="MainImage_PreviewMouseMove"
                        PreviewMouseLeftButtonUp="MainImage_PreviewMouseLeftButtonUp"
-                       LostMouseCapture="MainImage_LostMouseCapture">
-                    <Image.LayoutTransform>
-                        <ScaleTransform x:Name="ImageScale" ScaleX="{Binding Viewer.Zoom}" ScaleY="{Binding Viewer.Zoom}" />
-                    </Image.LayoutTransform>
-                </Image>
+                       LostMouseCapture="MainImage_LostMouseCapture" />
             </ScrollViewer>
         </Border>
         <Border x:Name="ComparePanel"

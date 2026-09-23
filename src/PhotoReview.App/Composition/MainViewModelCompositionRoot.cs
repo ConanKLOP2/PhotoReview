@@ -62,7 +62,7 @@ internal static class MainViewModelCompositionRoot
 
         MainViewModel? vm = null;
         var sink = new WpfPresentationSink(
-            onSetCurrentImage: _ => vm?.NotifyPresentationChanged(),
+            onSetCurrentImage: _ => vm?.NotifyCurrentImageChanged(),
             onSetStatusText: _ => vm?.NotifyPresentationChanged(),
             onApplyInitialViewMode: () =>
             {

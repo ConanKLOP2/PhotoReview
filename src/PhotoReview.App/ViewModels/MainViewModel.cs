@@ -104,6 +104,20 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             _clock, _catalog, _fileActionService, _hashService, _fileSystem, _dialogService, _uiScheduler,
             _preloadController, _thumbnailCache, _previewService, this);
         _viewerState.ScalingQuality = Settings.ScalingQuality;
+        // feat(zoom): leaving Fit requests the current image's full-resolution decode; Fit reverts
+        // to the preview.
+        _viewerState.ZoomModeChanged += (_, _) => _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
+        _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
+    }
+
+    /// <summary>
+    /// The presenter replaced the displayed bitmap (thumbnail, preview or full-resolution decode):
+    /// size the viewer from the source's original dimensions, then refresh bindings.
+    /// </summary>
+    public void NotifyCurrentImageChanged()
+    {
+        _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
+        NotifyNavigationStateChanged();
     }
 
     public ReviewMetrics Metrics { get; }
