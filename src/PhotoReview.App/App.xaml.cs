@@ -103,6 +103,9 @@ public partial class App : System.Windows.Application, IDisposable
             var ctx = sp.GetRequiredService<PreviewStateContext>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
             ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
+            // T46d dropped the viewport-based decode width, so Preview decoded every image at full size.
+            var viewport = sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
+            ctx.TargetDecodeWidth = () => viewport.TargetDecodeWidth;
             return new PreviewImageService(
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),

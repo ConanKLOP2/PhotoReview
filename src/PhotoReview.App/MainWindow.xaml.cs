@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
     private double? _cachedDpiScale;
+    private readonly ViewportSizeSource? _viewport;
     private bool _placementRestored;
     private long _viewportOperationVersion;
     private bool _isPanning;
@@ -66,6 +67,9 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         InitializeComponent();
         viewport.Get = GetViewportSize;
+        _viewport = viewport;
+        DpiChanged += MainWindow_DpiChanged;
+        UpdateTargetDecodeWidth();
         WireViewModelEvents();
     }
 
@@ -153,6 +157,21 @@ public partial class MainWindow : Window
     {
         var (w, h) = GetViewportSize();
         _viewModel.Viewer.UpdateViewport(w, h);
+        UpdateTargetDecodeWidth();
+    }
+
+    // Before T46d this was read live by PreviewImageService; it is now pushed on the UI thread
+    // (viewport/DPI change) so preload workers can read it without touching WPF layout.
+    private const double FallbackViewportWidth = 2200;
+    private const double PreviewQualityMultiplier = 1.15;
+
+    private void UpdateTargetDecodeWidth()
+    {
+        if (_viewport is null) return;
+        var (w, _) = GetViewportSize();
+        var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+        _viewport.TargetDecodeWidth = PhotoReview.Imaging.AdaptivePreviewPolicy.CalculateTargetDecodeWidth(
+            w > 1 ? w : FallbackViewportWidth, dpi, PreviewQualityMultiplier);
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -167,7 +186,11 @@ public partial class MainWindow : Window
     {
         if (_viewModel.Viewer.IsFit) UpdateFitSize();
     }
-    private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
+    private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e)
+    {
+        _cachedDpiScale = e.NewDpi.DpiScaleX;
+        UpdateTargetDecodeWidth();
+    }
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
 
     /// <summary>Harness use: never restore or save the user's real window-placement.json for this instance.</summary>
