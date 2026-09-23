@@ -99,7 +99,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     }
 
     public async Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken)
-        => await TryGetSnapshotCoreAsync(folder, timeout, null, int.MaxValue, cancellationToken);
+        => await TryGetSnapshotCoreAsync(folder, timeout, null, int.MaxValue, cancellationToken).ConfigureAwait(false);
 
     private async Task<ExplorerViewSnapshot> TryGetSnapshotCoreAsync(string folder, TimeSpan timeout,
         IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
@@ -117,7 +117,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         });
         try
         {
-            return await workTask.WaitAsync(linkedToken);
+            return await workTask.WaitAsync(linkedToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

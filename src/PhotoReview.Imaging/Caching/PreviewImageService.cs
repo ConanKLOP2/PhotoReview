@@ -119,7 +119,7 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private async Task RunPersistWorkerAsync()
     {
-        await foreach (var request in _persistQueue.Reader.ReadAllAsync())
+        await foreach (var request in _persistQueue.Reader.ReadAllAsync().ConfigureAwait(false))
         {
             // The folder/cache may have moved on since this was queued (folder switch,
             // Clear Cache): the RAM-cache epoch check upstream only stopped the bitmap
@@ -209,7 +209,7 @@ public sealed class PreviewImageService : IPreloadTarget
             PhotoReviewPerf.Log.JoinStart(perfNav, perfPathId);
             perfJoin = Stopwatch.GetTimestamp();
         }
-        try { return await lazy.Value; }
+        try { return await lazy.Value.ConfigureAwait(false); }
         finally
         {
             _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<IDecodedImage>>>(loadKey, lazy));
@@ -417,7 +417,7 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var key = ImageCacheKey.CreateOriginal(currentKey);
         if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
-        var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path));
+        var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path)).ConfigureAwait(false);
         dimensions = (info.Width, info.Height);
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
         _originalDimensions[key] = dimensions;

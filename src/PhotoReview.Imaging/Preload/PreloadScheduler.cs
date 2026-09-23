@@ -169,6 +169,12 @@ public sealed class PreloadScheduler : IDisposable
             if (_preloadSchedulerTask is { IsCompleted: false } &&
                 ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
             _preloadSchedulerCts = cts;
+            // ADR 0005: callers (ImagePresenter) are on the UI thread, so the loop's synchronous
+            // prefix (order build + at most one worker batch of candidate starts, each a cache
+            // lookup/stat before its decode Task.Run) runs there -- deliberately kept synchronous
+            // so the first candidates are queued before the caller moves on. Every await in the
+            // loop uses ConfigureAwait(false), so no continuation is ever posted to the Dispatcher
+            // (Dispose drains this task synchronously on the UI thread).
             _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotEntries(), cts.Token);
             _preloadLifetimeTasks.Add(_preloadSchedulerTask);
             return _preloadSchedulerTask;
@@ -248,9 +254,9 @@ public sealed class PreloadScheduler : IDisposable
                     }
                 }
                 if (running.Count == 0) return;
-                var finished = await Task.WhenAny(running.Keys);
+                var finished = await Task.WhenAny(running.Keys).ConfigureAwait(false);
                 running.Remove(finished);
-                await finished;
+                await finished.ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

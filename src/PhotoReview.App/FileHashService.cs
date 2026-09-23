@@ -25,8 +25,11 @@ public sealed class FileHashService
         if (_cache.TryGet(fullPath, out var cached) && cached.Length == info.Length && cached.LastWriteUtc == info.LastWriteTimeUtc)
             return cached.Hash;
         var generation = Volatile.Read(ref _generation);
+        // ADR 0005: callers (CompareViewModel, DuplicateFinder) start this on the UI thread, and
+        // ComputeAndCacheAsync reads + hashes synchronously on the SourceBytesCache path, so the
+        // whole computation runs on the thread pool.
         var lazy = _inFlight.GetOrAdd(fullPath, _ => new Lazy<Task<string>>(
-            () => ComputeAndCacheAsync(fullPath, info.Length, info.LastWriteTimeUtc, generation, CancellationToken.None),
+            () => Task.Run(() => ComputeAndCacheAsync(fullPath, info.Length, info.LastWriteTimeUtc, generation, CancellationToken.None)),
             LazyThreadSafetyMode.ExecutionAndPublication));
         var task = lazy.Value;
         _ = task.ContinueWith(
