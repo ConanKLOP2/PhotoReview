@@ -37,6 +37,6 @@ Mở lại ADR khi một phép đo runtime có cùng workload và điều kiện
 
 ## Liên kết bằng chứng
 
-- D12: `docs/refactoring/diagnosis/REPORT.md`
-- T66: `docs/refactoring/results/final.md`
+- D12: `docs/archive/evidence/D-diagnosis-REPORT.md`
+- T66: `docs/archive/evidence/T66-final.md`
 - T87: commit `ec120fd` (decoder setting/fallback, WPF default)

@@ -42,7 +42,7 @@ dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.c
 dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all 'C:\path\to\image-folder' 'C:\path\to\output-folder'
 ```
 
-Keep the machine, fixtures, viewport, mode, and cache state consistent when comparing runs. The final runtime refactoring results are documented in [T66](docs/refactoring/results/final.md).
+Keep the machine, fixtures, viewport, mode, and cache state consistent when comparing runs. The final runtime refactoring results are documented in [T66](docs/archive/evidence/T66-final.md).
 
 ### Performance and Display Settings
 
@@ -108,7 +108,7 @@ dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.c
 dotnet run --project tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj -c Release -- --benchmark-all 'C:\duong-dan\folder-anh' 'C:\duong-dan\ket-qua'
 ```
 
-Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh. Kết quả runtime cuối của đợt refactor nằm trong [T66](docs/refactoring/results/final.md).
+Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh. Kết quả runtime cuối của đợt refactor nằm trong [T66](docs/archive/evidence/T66-final.md).
 
 ### Cài đặt hiệu năng và hiển thị
 
