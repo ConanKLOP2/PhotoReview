@@ -19,13 +19,15 @@ PhotoReview.Imaging.TurboJpeg ─> PhotoReview.Imaging + PhotoReview.Core
 
 `PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi. `App.xaml.cs` là composition root đăng ký dependency và nối implementation Windows/WPF vào abstraction.
 
+**AppHost (AR02a):** `PhotoReview.App.Composition.AppHost.BuildServices(overrides)` là điểm vào duy nhất dựng `IServiceProvider` — nó gọi `App.ConfigureServices`, áp `overrides` (nếu có), rồi `BuildServiceProvider()`. `App.App_Startup` dùng nó không tham số; `Benchmark.Cli` (AR02c) và test tích hợp (AR02b) sẽ dùng cùng hàm này với override để thay `IPreloadController`, `IPresentationObserver` hay `IMoveOverride` mà không cần một composition root thứ hai. AR02a cũng thêm các seam production để việc override này khả thi: `ViewportSizeSource` (F3 — `MainWindow` gán `Get` về `GetViewportSize` ngay sau `InitializeComponent()`), `IPresentationObserver`/`NullPresentationObserver` (thay `MainWindowTestHooks.OnPresented`), seam preload (`MainViewModelCompositionRoot` chỉ dựng `PreloadScheduler` thật khi không có `IPreloadController` nào được đăng ký) và seam di chuyển tệp (`IMoveOverride`, `null` ở production).
+
 ## Khoảng trống đã biết (rà soát 2026-09-23)
 
 Chi tiết và kế hoạch: [`refactoring/ARCH-REVIEW-SUMMARY.md`](refactoring/ARCH-REVIEW-SUMMARY.md).
 
 - **TurboJPEG không có trong bản phát hành** (F1): App không tham chiếu `Imaging.TurboJpeg`; `ImageDecoderFactory` nạp bằng `Type.GetType(string)` nên chọn TurboJpeg trong Settings sẽ âm thầm dùng WPF. → AR01.
 - **Hai composition root** (F2, F3): test và `Benchmark.Cli --perf-session` dựng `MainViewModel` qua `MainWindowHelpers.CreateTestViewModel` (không preload, cache 64 MiB, không disk cache), khác đồ thị production mô tả ở đây. → AR02.
-- **Disk cache bỏ qua `IAppPaths`** (F4): preview/thumbnail cache luôn ở `%LOCALAPPDATA%\PhotoReview`, không theo `PHOTOREVIEW_DATA_ROOT`. → AR02a.
+- **Disk cache bỏ qua `IAppPaths`** (F4): `ThumbnailCache`/`PreviewImageService` nay đọc thư mục đĩa từ `IAppPaths.ThumbnailCacheDir`/`PreviewCacheDir` thay vì tự hard-code lại default giống hệt (AR02a, đã xong — không còn 2 nguồn sự thật). Nhưng bản thân `AppPaths` vẫn cố ý giữ hai thư mục cache dưới `%LOCALAPPDATA%\PhotoReview` bất kể `PHOTOREVIEW_DATA_ROOT` (chỉ Journal/Sessions/Log theo override) — cô lập cache đĩa theo `PHOTOREVIEW_DATA_ROOT` vẫn là khoảng trống mở, nằm ngoài phạm vi AR02a.
 - **Thread affinity chưa được thực thi** (F5): tầng App dùng `ConfigureAwait(false)` rồi sửa `ReviewCatalog` ngoài UI thread. Quy tắc đề xuất: ADR 0005. → AR04.
 
 ## Luồng mở folder và trình diễn ảnh

@@ -1,8 +1,11 @@
 ﻿using System;
+using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
+using PhotoReview.App.Composition;
 using PhotoReview.App.Services;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
@@ -14,6 +17,7 @@ using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
+using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests;
@@ -53,6 +57,8 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<INaturalComparer>());
         Assert.NotNull(provider.GetRequiredService<IKeyNameValidator>());
         Assert.NotNull(provider.GetRequiredService<IUiScheduler>());
+        Assert.NotNull(provider.GetRequiredService<ViewportSizeSource>());
+        Assert.NotNull(provider.GetRequiredService<IPresentationObserver>());
 
         // 6. Imaging & Decoding
         Assert.NotNull(provider.GetRequiredService<IImageDecoderFactory>());
@@ -60,6 +66,234 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<PreviewStateContext>());
         Assert.NotNull(provider.GetRequiredService<PreviewImageService>());
         Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>());
+    }
+
+    // AR02a step 1: AppHost is the single entry point App.App_Startup, Benchmark.Cli (AR02c) and
+    // integration tests (AR02b) build the container from.
+    [Fact]
+    public void AppHost_BuildServices_ResolvesMainViewModel()
+    {
+        using var provider = AppHost.BuildServices();
+
+        Assert.NotNull(provider.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>());
+    }
+
+    [Fact]
+    public void AppHost_BuildServices_AppliesOverridesAfterConfigureServices()
+    {
+        var sentinel = NullPresentationObserver.Instance;
+        using var provider = AppHost.BuildServices(s => s.AddSingleton<IPresentationObserver>(sentinel));
+
+        Assert.Same(sentinel, provider.GetRequiredService<IPresentationObserver>());
+    }
+
+    // AR02a step 2 (F4): ThumbnailCache/PreviewImageService must read their disk directory from
+    // IAppPaths instead of duplicating the hard-coded %LOCALAPPDATA%\PhotoReview\{cache,thumbnails}
+    // default independently -- otherwise IAppPaths and the imaging services can silently disagree.
+    [Fact]
+    public void ConfigureServices_ThumbnailCacheAndPreviewImageService_UseAppPathsDiskDirectories()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var paths = provider.GetRequiredService<IAppPaths>();
+        var thumbnailCache = provider.GetRequiredService<ThumbnailCache>();
+        var previewImageService = provider.GetRequiredService<PreviewImageService>();
+
+        Assert.Equal(paths.ThumbnailCacheDir, thumbnailCache.DiskDirectory);
+        Assert.Equal(paths.PreviewCacheDir, previewImageService.DiskDirectory);
+    }
+
+    // Default (no PHOTOREVIEW_DATA_ROOT override) IAppPaths cache directories must equal the
+    // literal defaults ThumbnailCache/PreviewImageService used to hard-code themselves, so that
+    // routing them through IAppPaths does not orphan an existing user's on-disk cache.
+    [Fact]
+    public void AppPaths_DefaultCacheDirectories_MatchOldHardCodedDefaults()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var oldThumbnailDefault = Path.Combine(localAppData, "PhotoReview", "thumbnails");
+        var oldPreviewDefault = Path.Combine(localAppData, "PhotoReview", "cache");
+
+        var paths = new PhotoReview.Core.AppPaths(localAppData);
+
+        Assert.Equal(oldThumbnailDefault, paths.ThumbnailCacheDir);
+        Assert.Equal(oldPreviewDefault, paths.PreviewCacheDir);
+    }
+
+    // NOTE: AppPaths deliberately does NOT redirect PreviewCacheDir/ThumbnailCacheDir when
+    // PHOTOREVIEW_DATA_ROOT is set (see AppPathsTests.WithOverrideRedirectsJournalSessionsAndLogWhileKeepingConfigAndCache) --
+    // only JournalFile/SessionsDir/LogFile move. Isolating on-disk image caches under
+    // PHOTOREVIEW_DATA_ROOT is therefore still open (F4 is only fixed for the *duplication*, not
+    // the isolation gap) and stays out of AR02a's scope. This test proves the DI wiring reads
+    // whatever IAppPaths.ThumbnailCacheDir currently resolves to, override or not.
+    [Collection("GlobalState")]
+    public sealed class CacheDirectoriesFollowAppPathsUnderDataRootOverride
+    {
+        [Fact]
+        public void ConfigureServices_WithDataRootOverride_ThumbnailCacheDiskDirectory_MatchesAppPaths()
+        {
+            using var dataRoot = new DataRootFixture();
+
+            var services = new ServiceCollection();
+            App.ConfigureServices(services);
+            using var provider = services.BuildServiceProvider();
+
+            var paths = provider.GetRequiredService<IAppPaths>();
+            var thumbnailCache = provider.GetRequiredService<ThumbnailCache>();
+
+            Assert.Equal(paths.ThumbnailCacheDir, thumbnailCache.DiskDirectory);
+        }
+    }
+
+    // AR02a step 3 (F3): default ViewportSizeSource.Get returns (0, 0), matching the old
+    // hard-coded behavior, until something rewires it.
+    [Fact]
+    public void ConfigureServices_ViewportSizeSource_DefaultsToZeroZero()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var (w, h) = provider.GetRequiredService<ViewportSizeSource>().Get();
+
+        Assert.Equal(0, w);
+        Assert.Equal(0, h);
+    }
+
+    // AR02a step 3 (F3): MainWindow's DI constructor must rewire ViewportSizeSource.Get to its
+    // own GetViewportSize right after InitializeComponent(), so ApplyInitialViewMode (via
+    // MainViewModelCompositionRoot) sees the real viewport instead of (0, 0).
+    [Fact]
+    public void ConfigureServices_ResolvingMainWindow_WiresViewportSizeSourceToWindowViewport()
+    {
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                if (System.Windows.Application.Current is null)
+                    _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+                try
+                {
+                    System.Windows.Application.ResourceAssembly = typeof(MainWindow).Assembly;
+                }
+                catch
+                {
+                    var appField = typeof(System.Windows.Application).GetField("_resourceAssembly", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                    appField?.SetValue(null, typeof(MainWindow).Assembly);
+                }
+
+                var services = new ServiceCollection();
+                App.ConfigureServices(services);
+                using var provider = services.BuildServiceProvider();
+
+                var viewport = provider.GetRequiredService<ViewportSizeSource>();
+                var window = provider.GetRequiredService<MainWindow>();
+                var getViewportSizeMethod = typeof(MainWindow).GetMethod("GetViewportSize", BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.NotNull(getViewportSizeMethod);
+                Assert.Equal(getViewportSizeMethod, viewport.Get.Method);
+                Assert.Same(window, viewport.Get.Target);
+            }
+            catch (Exception ex) { threadException = ex; }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "STA MainWindow resolution timed out.");
+        Assert.Null(threadException);
+    }
+
+    // AR02a step 4: production wires WpfPresentationSink's onPresented to the registered
+    // IPresentationObserver (replacing MainWindowTestHooks.OnPresented).
+    [Fact]
+    public void ConfigureServices_DefaultPresentationObserver_IsNullPresentationObserver()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Same(NullPresentationObserver.Instance, provider.GetRequiredService<IPresentationObserver>());
+    }
+
+    // AR02a step 5: registering an IPreloadController override must suppress the real
+    // PreloadScheduler entirely -- MainViewModelCompositionRoot must not create one it never uses.
+    [Fact]
+    public void ConfigureServices_WithRegisteredPreloadControllerOverride_MainViewModel_UsesOverrideInstead()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        var fake = new FakePreloadController();
+        services.AddSingleton<IPreloadController>(fake);
+        using var provider = services.BuildServiceProvider();
+
+        var viewModel = provider.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>();
+
+        Assert.Same(fake, viewModel.PreloadController);
+    }
+
+    private sealed class FakePreloadController : IPreloadController
+    {
+        public Task PreloadAroundAsync(int center) => Task.CompletedTask;
+        public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
+        public void Cancel() { }
+        public void RemovePreloadedKeysForPath(string normalizedPath) { }
+        public void ClearPreloadedKeys() { }
+    }
+
+    // AR02a step 6: with no IMoveOverride registered, FileActionService/UndoService receive a
+    // null moveOverride (production moves files for real).
+    [Fact]
+    public void ConfigureServices_WithNoMoveOverrideRegistered_FileActionServiceAndUndoService_HaveNullMoveOverride()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var fileActions = provider.GetRequiredService<FileActionService>();
+        var undo = provider.GetRequiredService<UndoService>();
+
+        var fileActionsOverride = typeof(FileActionService)
+            .GetField("_moveOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(fileActions);
+        var undoOverride = typeof(UndoService)
+            .GetField("_moveOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(undo);
+
+        Assert.Null(fileActionsOverride);
+        Assert.Null(undoOverride);
+    }
+
+    // A registered IMoveOverride must reach both services as their moveOverride delegate.
+    [Fact]
+    public void ConfigureServices_WithMoveOverrideRegistered_FileActionServiceAndUndoService_UseIt()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        var fake = new FakeMoveOverride();
+        services.AddSingleton<IMoveOverride>(fake);
+        using var provider = services.BuildServiceProvider();
+
+        var fileActions = provider.GetRequiredService<FileActionService>();
+        var undo = provider.GetRequiredService<UndoService>();
+
+        var fileActionsOverride = (Func<string, string, Task>?)typeof(FileActionService)
+            .GetField("_moveOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(fileActions);
+        var undoOverride = (Func<string, string, Task>?)typeof(UndoService)
+            .GetField("_moveOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(undo);
+
+        Assert.NotNull(fileActionsOverride);
+        Assert.NotNull(undoOverride);
+        Assert.Same(fake, fileActionsOverride!.Target);
+        Assert.Same(fake, undoOverride!.Target);
+    }
+
+    private sealed class FakeMoveOverride : IMoveOverride
+    {
+        public Task MoveAsync(string source, string destination) => Task.CompletedTask;
     }
 
     [Fact]

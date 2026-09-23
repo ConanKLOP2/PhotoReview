@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Input;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Input;
+using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
@@ -53,16 +54,18 @@ public partial class MainWindow : Window
     public AppSettings Settings => _settings;
 
     [Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor]
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, IExplorerOrderProvider? explorerOrder = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IExplorerOrderProvider? explorerOrder = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+        ArgumentNullException.ThrowIfNull(viewport);
         _explorerOrder = explorerOrder;
         _settings = _settingsStore.Load();
         _shortcutRouter = new ShortcutRouter(_settings);
         _settingsStore.Changed += (_, s) => { _settings = s; _shortcutRouter.Rebuild(s); };
         DataContext = _viewModel;
         InitializeComponent();
+        viewport.Get = GetViewportSize;
         WireViewModelEvents();
     }
 
