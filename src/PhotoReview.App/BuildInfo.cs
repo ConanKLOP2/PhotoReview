@@ -29,7 +29,7 @@ internal static class BuildInfo
         if (DateTimeOffset.TryParseExact(buildTime, "yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture, DateTimeStyles.None, out var built))
         {
             // Shown in the machine's local time (same clock as file and log timestamps).
-            parts.Add($"build {built.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.CurrentCulture)}");
+            parts.Add($"build {built.ToLocalTime().ToString("dd'/'MM'/'yyyy HH':'mm", CultureInfo.InvariantCulture)}");
         }
         if (!string.IsNullOrEmpty(commit)) parts.Add(commit);
         return string.Join(" · ", parts);
