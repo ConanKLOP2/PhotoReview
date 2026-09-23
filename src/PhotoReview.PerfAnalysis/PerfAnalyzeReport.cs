@@ -96,6 +96,16 @@ public static class PerfAnalyzeReport
                 $"| {g.Summary.Key} | {f.Gen} | {Ms(f.T1CatalogReadyMs)} | {Ms(f.T2Ms)} | {f.T3Phase} | {Ms(f.T3Ms)} |"));
         sb.AppendLine();
 
+        sb.AppendLine("## Startup (ms kể từ lúc process start, median qua các run)");
+        sb.AppendLine();
+        sb.AppendLine("| Nhóm | phase | median | min | max | N |");
+        sb.AppendLine("|---|---|---:|---:|---:|---:|");
+        foreach (var g in result.Groups)
+        foreach (var phase in StartupPhases(g.Summary))
+            sb.AppendLine(FormattableString.Invariant(
+                $"| {g.Summary.Key} | {phase.Phase} | {phase.Median:F1} | {phase.Min:F1} | {phase.Max:F1} | {phase.Count} |"));
+        sb.AppendLine();
+
         sb.AppendLine("## Quy tắc quyết định (rules.json)");
         sb.AppendLine();
         sb.AppendLine("| Nhóm | Quy tắc | Kích hoạt | Bằng chứng | Ghi chú |");
@@ -140,11 +150,26 @@ public static class PerfAnalyzeReport
                 gcTimePercent = g.Summary.GcTimePercent,
                 frameTimeP95Ms = g.Summary.FrameTimeP95Ms,
                 folder = g.Summary.FolderGens.Select(f => new { f.Gen, f.T1CatalogReadyMs, f.T2Ms, f.T3Phase, f.T3Ms }),
+                startup = StartupPhases(g.Summary).Select(p => new { p.Phase, p.Median, p.Min, p.Max, p.Count }),
                 rules = g.Rules.Select(r => new { r.Rule, r.Triggered, r.Evidence, r.Note }),
             }),
         };
         File.WriteAllText(path, JsonSerializer.Serialize(payload, DefaultOptions));
     }
+
+    /// <summary>perf(startup): per-phase median/min/max over the group's runs, ordered by median.</summary>
+    internal static IEnumerable<(string Phase, double Median, double Min, double Max, int Count)> StartupPhases(GroupSummary summary) =>
+        summary.StartupRuns
+            .SelectMany(run => run)
+            .GroupBy(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var sorted = group.OrderBy(v => v).ToList();
+                var mid = sorted.Count / 2;
+                var median = sorted.Count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+                return (group.Key, median, sorted[0], sorted[^1], sorted.Count);
+            })
+            .OrderBy(p => p.Item2);
 
     private static double PercentileOrNaN(List<double> sortedAsc, double p) => sortedAsc.Count == 0 ? double.NaN : PerfStats.NearestRank(sortedAsc, p);
 

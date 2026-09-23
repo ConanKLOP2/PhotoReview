@@ -152,6 +152,41 @@ public class PerfAnalyzeTests
     }
 
     [Fact]
+    public void BuildsStartupMilestonesAndMapsFirstPresentedOntoTheProcessStartTimeline()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PhotoReview-PerfAnalyze-Tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        try
+        {
+            var csv = Path.Combine(path, "perf-2-x.csv");
+            // qpcFrequency 10 MHz: 10000 ticks = 1 ms. appStartup at 250 ms since process start.
+            File.WriteAllText(csv,
+                "# commit=test diag= qpcFrequency=10000000\n" +
+                "utcTicks,qpcTicks,thread,event,nav,pathId,a,b,c,d,text\n" +
+                "1,2500000,1,Startup,,,250,,,,appStartup\n" +
+                "1,3000000,1,Startup,,,300,,,,servicesBuilt\n" +
+                "1,9000000,1,Startup,,,900,,,,openPathBegin\n" +
+                "1,9000000,1,Folder,1,,0,,,,start\n" +
+                "1,9100000,4,FolderInfo,1,,1841,,,,scanned;\n" +
+                "1,14000000,1,Folder,1,,500,,,,catalogReady\n" +
+                "1,15000000,1,Presented,1,,,,,,final\n" +
+                "1,16000000,1,Presented,2,,,,,,final\n");
+
+            var analysis = PerfAnalyzeNavBuilder.Build(PerfCsvReader.Read(csv));
+
+            Assert.Equal(250.0, analysis.Startup["appStartup"]);
+            Assert.Equal(900.0, analysis.Startup["openPathBegin"]);
+            // First Presented is 1250 ms after the appStartup row, which itself is 250 ms in.
+            Assert.Equal(1500.0, analysis.Startup["firstPresented"], 3);
+            Assert.Equal(500.0, Assert.Single(analysis.FolderGens).T1CatalogReadyMs);
+        }
+        finally
+        {
+            Directory.Delete(path, recursive: true);
+        }
+    }
+
+    [Fact]
     public void AggregatesPreloadItemsDispatcherAndPausedCounters()
     {
         var file = PerfCsvReader.Read(SampleCsvPath());

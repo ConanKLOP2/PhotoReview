@@ -190,6 +190,9 @@ public sealed class GroupSummary
     public int DispatcherLongOpsBeforeStartCount { get; set; }
     public List<FolderGenSummary> FolderGens { get; } = [];
 
+    /// <summary>perf(startup): one entry per perf-*.csv that has Startup rows (phase -> ms since process start).</summary>
+    public List<Dictionary<string, double>> StartupRuns { get; } = [];
+
     public List<NavRecord> Navs { get; } = [];
 
     public static GroupSummary Build(GroupKey key, List<NavRecord> navs)

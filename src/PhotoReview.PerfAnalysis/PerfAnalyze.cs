@@ -49,6 +49,7 @@ public static class PerfAnalyze
         var groupDispatcher = new Dictionary<GroupKey, List<DispatcherLongOpRow>>();
         var groupDispatcherBeforeStart = new Dictionary<GroupKey, int>();
         var groupFolder = new Dictionary<GroupKey, List<FolderGenSummary>>();
+        var groupStartup = new Dictionary<GroupKey, List<Dictionary<string, double>>>();
         var groupMetas = new Dictionary<GroupKey, List<RunFileMeta>>();
 
         foreach (var path in csvFiles)
@@ -76,6 +77,7 @@ public static class PerfAnalyze
             Add(groupDispatcher, key).AddRange(analysis.DispatcherLongOps);
             groupDispatcherBeforeStart[key] = groupDispatcherBeforeStart.GetValueOrDefault(key) + analysis.DispatcherLongOpsBeforeStartCount;
             Add(groupFolder, key).AddRange(analysis.FolderGens);
+            if (analysis.Startup.Count > 0) Add(groupStartup, key).Add(analysis.Startup);
             Add(groupMetas, key).Add(meta);
         }
 
@@ -95,6 +97,7 @@ public static class PerfAnalyze
             s.DispatcherLongOps.AddRange(groupDispatcher.GetValueOrDefault(s.Key, []));
             s.DispatcherLongOpsBeforeStartCount = groupDispatcherBeforeStart.GetValueOrDefault(s.Key);
             s.FolderGens.AddRange(groupFolder.GetValueOrDefault(s.Key, []));
+            s.StartupRuns.AddRange(groupStartup.GetValueOrDefault(s.Key, []));
         }
 
         var results = new List<GroupResult>();
