@@ -41,5 +41,5 @@ The application must prioritize the following principles when processing and rev
 ## Mandatory Build, Publish, and Git Push Workflow
 
 - After each completed change: commit, and push to an appropriate branch for me to review and merge.
-- Versioning is automatic (`Directory.Build.targets`): `2.0.N`, N = first-parent commits on master since `v2.0.0`, so every merge bumps N by one; CI tags `v2.0.N` after a green master build. Never hand-edit `<Version>`. Unmerged branches build `2.0.(N+1)-dev.A`. Build time is local time with UTC offset.
-- Base every PR on `master` (no stacked PRs — stacked children merged after their parent never reach master).
+- Version is automatic (`Directory.Build.targets`): `2.0.N`, +1 per merge to master, CI tags `v2.0.N`; never hand-edit `<Version>`.
+- Base every PR on `master` (no stacked PRs).
