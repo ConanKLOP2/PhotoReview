@@ -78,6 +78,18 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>());
     }
 
+    // MainViewModel.Metrics (read by Benchmark.Cli through MainWindow._metrics) must be the
+    // ReviewMetrics singleton the presenter/preview services record into, not a private empty one.
+    [Fact]
+    public void AppHost_BuildServices_MainViewModelMetrics_IsSharedReviewMetricsSingleton()
+    {
+        using var provider = AppHost.BuildServices();
+
+        var vm = provider.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>();
+
+        Assert.Same(provider.GetRequiredService<ReviewMetrics>(), vm.Metrics);
+    }
+
     [Fact]
     public void AppHost_BuildServices_AppliesOverridesAfterConfigureServices()
     {
@@ -195,6 +207,12 @@ public class CompositionRootTests
                 Assert.NotNull(getViewportSizeMethod);
                 Assert.Equal(getViewportSizeMethod, viewport.Get.Method);
                 Assert.Same(window, viewport.Get.Target);
+
+                // The window also publishes the preview decode width (lost in T46d, so Preview
+                // decoded at full size); PreviewImageService reads it through PreviewStateContext.
+                Assert.InRange(viewport.TargetDecodeWidth, PhotoReview.Imaging.AdaptivePreviewPolicy.MinimumDecodeWidth, PhotoReview.Imaging.AdaptivePreviewPolicy.MaximumDecodeWidth);
+                _ = provider.GetRequiredService<PhotoReview.Imaging.Caching.PreviewImageService>();
+                Assert.Equal(viewport.TargetDecodeWidth, provider.GetRequiredService<PreviewStateContext>().TargetDecodeWidth());
             }
             catch (Exception ex) { threadException = ex; }
         });

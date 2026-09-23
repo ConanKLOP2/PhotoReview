@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
     private double? _cachedDpiScale;
+    private readonly ViewportSizeSource? _viewport;
     private bool _placementRestored;
     private long _viewportOperationVersion;
     private bool _isPanning;
@@ -60,12 +61,29 @@ public partial class MainWindow : Window
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
         _explorerOrder = explorerOrder;
-        _settings = _settingsStore.Load();
+        // AR02b finding (see AR02-single-composition-root.md AR02d step 1, applied a step early
+        // here because AR02b's migrated integration tests need it to observe real behaviour):
+        // this used to call _settingsStore.Load() again, which re-reads/deserializes config.json
+        // into a *new* AppSettings instance distinct from the one MainViewModelCompositionRoot
+        // already captured into FileActionController via SettingsStore.Current (production calls
+        // store.Load() once, in App.App_Startup, before resolving MainWindow). In production the
+        // second Load() happened to reparse the same unchanged file into content-identical settings,
+        // so the object-identity split was invisible; in tests -- where nothing else calls Load()
+        // first -- MainWindow's own Load() produced a *third* object, so mutating the settings a
+        // test held (window._settings.Actions = ...) never reached FileActionController, which
+        // kept whatever AppSettings' parameterless constructor defaults to. Using Current (already
+        // loaded by App_Startup in production, and the same shared default instance the rest of the
+        // graph was built from otherwise) keeps one settings object for the whole window and is also
+        // one fewer disk read at startup.
+        _settings = _settingsStore.Current;
         _shortcutRouter = new ShortcutRouter(_settings);
         _settingsStore.Changed += (_, s) => { _settings = s; _shortcutRouter.Rebuild(s); };
         DataContext = _viewModel;
         InitializeComponent();
         viewport.Get = GetViewportSize;
+        _viewport = viewport;
+        DpiChanged += MainWindow_DpiChanged;
+        UpdateTargetDecodeWidth();
         WireViewModelEvents();
     }
 
@@ -153,6 +171,21 @@ public partial class MainWindow : Window
     {
         var (w, h) = GetViewportSize();
         _viewModel.Viewer.UpdateViewport(w, h);
+        UpdateTargetDecodeWidth();
+    }
+
+    // Before T46d this was read live by PreviewImageService; it is now pushed on the UI thread
+    // (viewport/DPI change) so preload workers can read it without touching WPF layout.
+    private const double FallbackViewportWidth = 2200;
+    private const double PreviewQualityMultiplier = 1.15;
+
+    private void UpdateTargetDecodeWidth()
+    {
+        if (_viewport is null) return;
+        var (w, _) = GetViewportSize();
+        var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+        _viewport.TargetDecodeWidth = PhotoReview.Imaging.AdaptivePreviewPolicy.CalculateTargetDecodeWidth(
+            w > 1 ? w : FallbackViewportWidth, dpi, PreviewQualityMultiplier);
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -167,7 +200,11 @@ public partial class MainWindow : Window
     {
         if (_viewModel.Viewer.IsFit) UpdateFitSize();
     }
-    private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e) => _cachedDpiScale = e.NewDpi.DpiScaleX;
+    private void MainWindow_DpiChanged(object sender, DpiChangedEventArgs e)
+    {
+        _cachedDpiScale = e.NewDpi.DpiScaleX;
+        UpdateTargetDecodeWidth();
+    }
     private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
 
     /// <summary>Harness use: never restore or save the user's real window-placement.json for this instance.</summary>

@@ -15,7 +15,7 @@ namespace PhotoReview.Integration.Tests;
 
 /// <summary>
 /// T14c: locks INV-5 on the real <see cref="MainWindow"/>, driven through the T14a
-/// seam (<c>MainWindowTestHooks</c>) on <see cref="StaTestHost"/>.
+/// seam (<c>TestHostHooks</c> via <c>TestAppHost</c>) on <see cref="StaTestHost"/>.
 /// <para>
 /// INV-5: An action that completes after the user has navigated away to a different folder
 /// must not register an undo entry or modify the catalog of the newly opened folder.
@@ -51,7 +51,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
             await StaTestHost.RunAsync(async () =>
             {
                 WriteTestImages(folder, "a1.png", "a2.png");
-                var hooks = new MainWindowTestHooks
+                var hooks = new TestHostHooks
                 {
                     OnPresented = presented.Add,
                     MoveOverride = async (source, target) =>
@@ -61,7 +61,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                         Volatile.Write(ref moveCompleted, 1);
                     },
                 };
-                window = new MainWindow(folder, hooks);
+                window = TestAppHost.CreateMainWindow(folder, hooks);
 
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout),
@@ -140,7 +140,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 WriteTestImages(folderA, "a1.png", "a2.png");
                 WriteTestImages(folderB, "b1.png", "b2.png");
 
-                var hooks = new MainWindowTestHooks
+                var hooks = new TestHostHooks
                 {
                     OnPresented = presented.Add,
                     MoveOverride = async (source, target) =>
@@ -152,7 +152,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                         Volatile.Write(ref moveCompleted, 1);
                     },
                 };
-                window = new MainWindow(folderA, hooks);
+                window = TestAppHost.CreateMainWindow(folderA, hooks);
 
                 // 1. Initial folder A presentation
                 Assert.True(

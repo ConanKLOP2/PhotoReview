@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
+using PhotoReview.App.Composition;
+using PhotoReview.App.Services;
 
 internal static class LocalUiNextProbe
 {
@@ -12,11 +15,26 @@ internal static class LocalUiNextProbe
         var result = await WpfTestHost.RunAsync(async _ =>
         {
             MainWindow? window = null;
+            // AR02c: production DI graph (AppHost.BuildServices == App.ConfigureServices, no test-root
+            // overrides), so --ui-next-probe measures the shipped preload/cache/decoder configuration (F2).
+            using var services = AppHost.BuildServices();
             try
             {
-                window = new MainWindow { ShowActivated = false, WindowState = WindowState.Minimized };
+                var settingsStore = services.GetRequiredService<SettingsStore>();
+                settingsStore.Load(); // must run before MainWindow is resolved -- see PerfSession.cs comment
+                window = services.GetRequiredService<MainWindow>();
+                window.ShowActivated = false;
+                window.WindowState = WindowState.Minimized;
                 // Never restore/save the user's real window placement (SetWindowPlacement could show/activate the window).
                 window.SuppressWindowPlacement();
+                var settings = window.Settings;
+                if (!ReferenceEquals(settings, settingsStore.Current))
+                    throw new InvalidOperationException("AR02c invariant broken: window.Settings is not the DI SettingsStore.Current instance.");
+                var targetDecodeWidth = services.GetRequiredService<PreviewStateContext>().TargetDecodeWidth();
+                Console.WriteLine($"config: graph=production cacheBytes={settings.ImageCacheCapacityBytes} " +
+                    $"preloadWorkers={settings.PreloadWorkerCount} decoder={settings.DecoderBackend} " +
+                    $"sourceBytesCache={settings.UseSourceBytesCache} loadingMode={settings.LoadingMode} " +
+                    $"preload=true diskCache=true targetDecodeWidth={targetDecodeWidth}");
                 window.Show();
                 var load = window.LoadFolderAsync(folder, null);
                 await load;

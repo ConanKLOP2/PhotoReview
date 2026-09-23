@@ -9,8 +9,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
+using PhotoReview.App.Composition;
 using PhotoReview.App.Diagnostics;
+using PhotoReview.App.Services;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
@@ -103,6 +106,7 @@ internal static class PerfSession
         public required string Folder { get; init; }
         public required string OutDir { get; init; }
         public string? Mode { get; set; }
+        public string? Decoder { get; set; }
         public int Repeat { get; set; } = 1;
         public string? Alias { get; set; }
         public string? Commit { get; set; }
@@ -207,20 +211,30 @@ internal static class PerfSession
         var keysHandled = 0;
         var idleTimeouts = 0;
 
-        var window = new MainWindow
-        {
-            Width = 1920,
-            Height = 1080,
-            WindowStartupLocation = WindowStartupLocation.Manual,
-            Left = 0,
-            Top = 0,
-            WindowState = WindowState.Normal,
-            ShowActivated = false,
-        };
+        // AR02c: build the production DI graph (AppHost.BuildServices == App.ConfigureServices, no
+        // test-root overrides) so --perf-session measures the shipped configuration (F2). SettingsStore
+        // must be Load()-ed before MainWindow is resolved: PreviewImageService/PreloadScheduler are
+        // singletons created while the MainViewModel dependency chain resolves (i.e. before MainWindow's
+        // own constructor body runs), and they capture SettingsStore.Current by value at that point --
+        // exactly the order App.App_Startup uses (store.Load() before GetRequiredService<MainWindow>()).
+        using var services = AppHost.BuildServices();
+        var settingsStore = services.GetRequiredService<SettingsStore>();
+        settingsStore.Load();
+        var window = services.GetRequiredService<MainWindow>();
+        window.Width = 1920;
+        window.Height = 1080;
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = 0;
+        window.Top = 0;
+        window.WindowState = WindowState.Normal;
+        window.ShowActivated = false;
         window.SuppressWindowPlacement();
         var settings = window.Settings;
+        if (!ReferenceEquals(settings, settingsStore.Current))
+            throw new InvalidOperationException("AR02c invariant broken: window.Settings is not the DI SettingsStore.Current instance.");
         var configMode = settings.LoadingMode;
         if (options.Mode is not null && Enum.TryParse<LoadingMode>(options.Mode, true, out var m)) settings.LoadingMode = m; // in-memory only; config.json untouched
+        if (options.Decoder is not null && Enum.TryParse<DecoderBackend>(options.Decoder, true, out var d)) settings.DecoderBackend = d; // in-memory only; PreviewImageService reads the backend live
         var forbiddenKeys = CollectForbiddenKeys(settings);
         foreach (var step in scenario.Steps.Where(s => s.Key is not null))
         {
@@ -366,6 +380,22 @@ internal static class PerfSession
         }
 
         var metrics = window._metrics!.Snapshot();
+        // AR02c: effective configuration of the production graph this run actually used, so numbers
+        // cannot be compared across the AR02c boundary (legacy test-root graph) by mistake (F2).
+        var effectiveConfig = new
+        {
+            graph = "production",
+            imageCacheCapacityBytes = settings.ImageCacheCapacityBytes,
+            preloadWorkerCount = settings.PreloadWorkerCount,
+            decoderBackend = settings.DecoderBackend.ToString(),
+            useSourceBytesCache = settings.UseSourceBytesCache,
+            sourceBytesCapacityBytes = settings.SourceBytesCapacityBytes,
+            loadingMode = settings.LoadingMode.ToString(),
+            preloadEnabled = true, // AR02a: production registers no IPreloadController override
+            diskCacheEnabled = true, // AR02a: PreviewImageService/ThumbnailCache always get IAppPaths cache dirs
+            targetDecodeWidth = services.GetRequiredService<PreviewStateContext>().TargetDecodeWidth(),
+            dataRoot = "<outDir>\\data",
+        };
         window.Close();
         var endQpc = Stopwatch.GetTimestamp();
         var endUtc = DateTime.UtcNow;
@@ -403,6 +433,7 @@ internal static class PerfSession
             commit = options.Commit,
             entryVersion = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
             appVersion = typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+            effectiveConfig,
             env = DiagEnvironment(),
             window = new { width = 1920, height = 1080, left = 0, top = 0, dpiScale = dpi, showActivated = false, foregroundNotGuaranteed = true },
             keyDelivery = "WPF routed PreviewKeyDown (+KeyDown if unhandled) raised on the window in-process; no OS input queue",
@@ -421,6 +452,10 @@ internal static class PerfSession
         await File.WriteAllTextAsync(Path.Combine(iterationDir, "metrics.json"), JsonSerializer.Serialize(metrics, WriteOptions));
         await File.WriteAllTextAsync(Path.Combine(iterationDir, "process.json"), JsonSerializer.Serialize(processInfo, WriteOptions));
         await File.WriteAllTextAsync(Path.Combine(iterationDir, "session.json"), JsonSerializer.Serialize(sessionInfo, WriteOptions));
+        Console.WriteLine($"  [{iteration}] config: graph={effectiveConfig.graph} cacheBytes={effectiveConfig.imageCacheCapacityBytes} " +
+            $"preloadWorkers={effectiveConfig.preloadWorkerCount} decoder={effectiveConfig.decoderBackend} " +
+            $"sourceBytesCache={effectiveConfig.useSourceBytesCache} loadingMode={effectiveConfig.loadingMode} " +
+            $"preload={effectiveConfig.preloadEnabled} diskCache={effectiveConfig.diskCacheEnabled} targetDecodeWidth={effectiveConfig.targetDecodeWidth}");
         Console.WriteLine($"  [{iteration}] done keys={keysHandled}/{keysSent} presented={metrics.PresentedImages} hits={metrics.CacheHits} misses={metrics.CacheMisses} " +
             $"peakWS={processInfo.peakWorkingSetBytes / (1024 * 1024)}MB errors={errors.Count}");
         return errors.Count == 0;
@@ -665,6 +700,11 @@ internal static class PerfSession
                     break;
                 case "--repeat":
                     options.Repeat = int.TryParse(Next(), out var r) && r is >= 1 and <= 1000 ? r : throw new ArgumentException("--repeat must be 1..1000");
+                    break;
+                case "--decoder":
+                    var decoder = Next();
+                    if (!Enum.TryParse<DecoderBackend>(decoder, true, out var parsedDecoder) || !Enum.IsDefined(parsedDecoder)) throw new ArgumentException($"invalid decoder '{decoder}' ({string.Join('|', Enum.GetNames<DecoderBackend>())})");
+                    options.Decoder = parsedDecoder.ToString();
                     break;
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
