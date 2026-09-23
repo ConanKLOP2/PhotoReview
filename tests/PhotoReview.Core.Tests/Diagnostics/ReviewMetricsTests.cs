@@ -27,6 +27,22 @@ public sealed class ReviewMetricsTests
     }
 
     [Fact]
+    public void DecodeMillisecondsEwma_StartsAtFirstSampleThenSmooths()
+    {
+        var metrics = new ReviewMetrics();
+        Assert.Equal(0, metrics.DecodeMillisecondsEwma);
+
+        metrics.RecordSourceRead(100, 300);
+        Assert.Equal(300, metrics.DecodeMillisecondsEwma);
+
+        metrics.RecordSourceRead(100, 400);
+        Assert.Equal(300 + ReviewMetrics.DecodeEwmaAlpha * 100, metrics.DecodeMillisecondsEwma, 6);
+
+        metrics.RecordSourceRead(100, 0); // a zero-time read (e.g. rounding) is not a decode sample
+        Assert.Equal(300 + ReviewMetrics.DecodeEwmaAlpha * 100, metrics.DecodeMillisecondsEwma, 6);
+    }
+
+    [Fact]
     public void RecordMethodsAccumulateCorrectly()
     {
         var metrics = new ReviewMetrics();
