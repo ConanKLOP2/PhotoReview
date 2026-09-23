@@ -24,6 +24,15 @@ public sealed class ReviewCatalog
     private string[]? _pathsCache;
 
     /// <summary>
+    /// Bumped whenever membership or order changes (Reset/Remove/Restore/ReplaceOrder/
+    /// InsertSorted/MoveToFront). Lets callers that derive an expensive, whole-catalog cache
+    /// (compare-pair index, total source bytes) cheaply detect "nothing changed since I last
+    /// built this" instead of recomputing on every navigation or rebuilding a HashSet of paths
+    /// to compare membership.
+    /// </summary>
+    public int StructuralVersion { get; private set; }
+
+    /// <summary>
     /// Gets the number of items currently in the catalog.
     /// </summary>
     public int Count => _entries.Count;
@@ -81,6 +90,7 @@ public sealed class ReviewCatalog
     {
         _indexDirty = true;
         _pathsCache = null;
+        StructuralVersion++;
     }
 
     /// <summary>
@@ -290,4 +300,11 @@ public sealed class ReviewCatalog
     /// Creates a snapshot array of all paths currently in the catalog.
     /// </summary>
     public string[] Snapshot() => _entries.Select(e => e.Path).ToArray();
+
+    /// <summary>
+    /// Creates a true copy of all entries (unlike <see cref="Entries"/>, which wraps the live
+    /// list). For consumers -- e.g. the background preload scheduler -- that need a stable
+    /// snapshot including each entry's cached Length/LastWriteUtc, safe to read off the UI thread.
+    /// </summary>
+    public CatalogEntry[] EntriesSnapshot() => _entries.ToArray();
 }

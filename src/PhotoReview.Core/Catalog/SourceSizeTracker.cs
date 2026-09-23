@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 
@@ -11,15 +9,17 @@ namespace PhotoReview.Core.Catalog;
 /// avoiding filesystem calls when possible by using cached Length metadata.
 /// </summary>
 /// <remarks>
-/// Thread-safe via lock. Caches total size based on the current entry set;
-/// invalidates cache when membership (add/remove/restore/reorder) changes.
+/// Thread-safe via lock. Caches total size against <see cref="ReviewCatalog.StructuralVersion"/>;
+/// invalidates (and recomputes) only when membership or order (add/remove/restore/reorder)
+/// changes, instead of rebuilding a HashSet of every path to check for a change on each call --
+/// this runs once per preload priority version change (i.e. roughly once per navigation).
 /// </remarks>
 public sealed class SourceSizeTracker
 {
     private readonly ReviewCatalog _catalog;
     private readonly IFileSystem _fileSystem;
     private readonly object _gate = new();
-    private HashSet<string> _cachedPaths = [];
+    private int _cachedVersion = -1;
     private long _cachedTotalBytes;
     private int _fsCallCount;
 
@@ -39,12 +39,10 @@ public sealed class SourceSizeTracker
     {
         lock (_gate)
         {
+            var version = _catalog.StructuralVersion;
+            if (_cachedVersion == version) return _cachedTotalBytes;
+
             var entries = _catalog.Entries;
-            var currentPaths = new HashSet<string>(entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
-
-            if (_cachedPaths.Count == currentPaths.Count && _cachedPaths.SetEquals(currentPaths))
-                return _cachedTotalBytes;
-
             _cachedTotalBytes = 0;
             _fsCallCount = 0;
 
@@ -75,7 +73,7 @@ public sealed class SourceSizeTracker
                 _cachedTotalBytes += size;
             }
 
-            _cachedPaths = currentPaths;
+            _cachedVersion = version;
             return _cachedTotalBytes;
         }
     }

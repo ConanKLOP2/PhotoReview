@@ -129,6 +129,20 @@ public sealed class PhysicalFileSystem : IFileSystem
         return Directory.EnumerateFiles(directory, pattern ?? "*");
     }
 
+    /// <summary>
+    /// DirectoryInfo.EnumerateFiles() returns FileInfo already populated with
+    /// Length/LastWriteTimeUtc from the same FindFirstFile/FindNextFile directory entry used to
+    /// list the file, so a folder scan doesn't need one extra GetFileStat() syscall per file.
+    /// </summary>
+    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        foreach (var info in new DirectoryInfo(directory).EnumerateFiles(pattern ?? "*"))
+        {
+            yield return (info.FullName, new FileStat(info.Length, info.LastWriteTimeUtc));
+        }
+    }
+
     public IEnumerable<string> EnumerateDirectories(string directory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);

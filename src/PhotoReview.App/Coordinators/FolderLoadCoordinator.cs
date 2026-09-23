@@ -73,13 +73,14 @@ public sealed class FolderLoadCoordinator : IDisposable
 
             var entries = await Task.Run(() =>
             {
-                return _fileSystem.EnumerateFiles(folder, "*")
-                    .Where(ImageFileTypes.IsSupported)
-                    .Select(path =>
-                    {
-                        var stat = _fileSystem.GetFileStat(path);
-                        return stat is null ? new CatalogEntry(path) : new CatalogEntry(path) { Length = stat.Length, LastWriteUtc = stat.LastWriteUtc };
-                    })
+                // EnumerateFilesWithStat gets Length/LastWriteUtc from the same directory entry
+                // used to list the file (see PhysicalFileSystem), so this needs no separate
+                // GetFileStat() syscall per file the way EnumerateFiles + GetFileStat did.
+                return _fileSystem.EnumerateFilesWithStat(folder, "*")
+                    .Where(f => ImageFileTypes.IsSupported(f.Path))
+                    .Select(f => f.Stat is null
+                        ? new CatalogEntry(f.Path)
+                        : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
                     .ToList();
             }, loadToken).ConfigureAwait(false);
 

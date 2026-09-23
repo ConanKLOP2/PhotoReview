@@ -37,7 +37,8 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         _previewService = new PreviewImageService(_metrics, () => isOriginal, () => profile.TargetWidth(),
             PerformanceOptions.ImageCacheCapacityBytes, _diskCacheDirectory,
             disableDiskCacheOverride: !profile.DiskCache);
-        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => files, () => totalSourceBytes,
+        var catalogEntries = Array.ConvertAll(files, f => new PhotoReview.Core.Catalog.CatalogEntry(f));
+        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => catalogEntries, () => totalSourceBytes,
             options: new PreloadOptions(
                 WorkerCount: profile.Workers,
                 MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,

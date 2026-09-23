@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Imaging.Tests;
@@ -216,6 +217,8 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         }).ToArray();
     }
 
+    private static CatalogEntry[] ToEntries(string[] files) => Array.ConvertAll(files, f => new CatalogEntry(f));
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
@@ -240,7 +243,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
-        var scheduler = new PreloadScheduler(service, metrics, () => _preloadFiles, () => 0L, long.MaxValue,
+        var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_preloadFiles), () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: hasHeadroom ?? (_ => true),
             workerCountOverride: workerCount,
             uiScheduler: ImmediateUiScheduler.Instance);
@@ -319,7 +322,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         var service = new PreviewImageService(metrics, () => false, () => 256, capacityBytes: 64L * 1024 * 1024,
             diskCacheDirectory: diskDirectory);
         _services.Add((service, diskDirectory));
-        using var scheduler = new PreloadScheduler(service, metrics, () => _singleFiles, () => 0L, long.MaxValue,
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(_singleFiles), () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: _ => true, uiScheduler: ImmediateUiScheduler.Instance);
         await scheduler.PreloadAroundAsync(0);
         var warmedKey = service.GetCurrentCacheKey(_singleFiles[1]);
@@ -346,7 +349,7 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
 
         // 2 workers, 6 files -> requires multiple batch yields
         var options = new PreloadOptions(WorkerCount: 2, MemoryLoadLimit: 1.0);
-        using var scheduler = new PreloadScheduler(service, metrics, () => batchFiles, () => 0L,
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(batchFiles), () => 0L,
             options: options, memoryProbe: new FakeMemoryProbe(true), uiScheduler: ImmediateUiScheduler.Instance);
 
         await scheduler.PreloadAroundAsync(0);

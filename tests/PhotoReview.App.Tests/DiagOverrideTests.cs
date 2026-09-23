@@ -1,4 +1,5 @@
 using System.IO;
+using PhotoReview.Core.Catalog;
 using System.Reflection;
 using PhotoReview.App;
 using PhotoReview.Core.Diagnostics;
@@ -51,6 +52,8 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         }).ToArray();
     }
 
+    private static CatalogEntry[] ToEntries(string[] files) => Array.ConvertAll(files, f => new CatalogEntry(f));
+
     // PreloadScheduler keeps the resolved worker count (and the SemaphoreSlim sized from it)
     // in private fields; reflection is the only way to observe them without adding
     // production-only test hooks.
@@ -85,7 +88,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // abandon the in-flight decode as unobserved background work -- PreloadSchedulerTests
         // avoids the same trap by always using fewer files than PerformanceOptions.PreloadWorkerCount (8).
         var files = MakePreviewFiles(_root, "override-2", 2);
-        using var scheduler = new PreloadScheduler(service, metrics, () => files, () => 0L, long.MaxValue,
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: _ => true, workerCountOverride: 2);
 
         Assert.Equal(2, ReadWorkerCountField(scheduler));
@@ -105,7 +108,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var metrics = new ReviewMetrics();
         var service = Track(new PreviewImageService(metrics, () => false, () => 256,
             diskCacheDirectory: diskDirectory), diskDirectory);
-        using var scheduler = new PreloadScheduler(service, metrics, () => files, () => 0L, long.MaxValue,
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: _ => true, workerCountOverride: 0);
 
         Assert.Equal(0, ReadWorkerCountField(scheduler));
@@ -127,7 +130,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         var diskDirectory = _root.Dir("no-override-cache");
         var metrics = new ReviewMetrics();
         var service = Track(new PreviewImageService(metrics, () => false, () => 256, diskCacheDirectory: diskDirectory), diskDirectory);
-        using var scheduler = new PreloadScheduler(service, metrics, () => files, () => 0L, long.MaxValue,
+        using var scheduler = new PreloadScheduler(service, metrics, () => ToEntries(files), () => 0L, long.MaxValue,
             memoryLoadLimit: 1.0, hasHeadroom: _ => true);
 
         Assert.Equal(DefaultPreloadWorkerCount, ReadWorkerCountField(scheduler));

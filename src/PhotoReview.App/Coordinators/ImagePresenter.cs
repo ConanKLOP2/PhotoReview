@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -35,6 +36,13 @@ public sealed class ImagePresenter
     private readonly IFileSystem? _fileSystem;
     private readonly Func<SessionState?>? _getSession;
     private readonly Action<string>? _onPresentedHook;
+
+    // Perf: ComparePairService.BuildIndex is O(n log n) over the whole catalog; rebuilding it on
+    // every single navigation would cost as much as the old per-call ComparePairService.Find did.
+    // Cache it against ReviewCatalog.StructuralVersion so it's rebuilt only when membership/order
+    // actually changes (folder load, file action, reorder), not on every present.
+    private int _compareIndexVersion = -1;
+    private Dictionary<string, (string Left, string Right)>? _compareIndex;
 
     public ImagePresenter(
         ReviewCatalog catalog,
@@ -217,7 +225,7 @@ public sealed class ImagePresenter
 
             // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)
             long perfCompare = perf ? Stopwatch.GetTimestamp() : 0;
-            var pair = ComparePairService.Find(_catalog.Paths, path);
+            var pair = GetComparePair(path);
 
             if (perf)
             {
@@ -330,6 +338,16 @@ public sealed class ImagePresenter
         {
             await PresentAsync(nextIndex).ConfigureAwait(false);
         }
+    }
+
+    private (string Left, string Right)? GetComparePair(string path)
+    {
+        if (_compareIndexVersion != _catalog.StructuralVersion)
+        {
+            _compareIndex = ComparePairService.BuildIndex(_catalog.Paths);
+            _compareIndexVersion = _catalog.StructuralVersion;
+        }
+        return _compareIndex!.TryGetValue(path, out var pair) ? pair : null;
     }
 
     private void UpdateCurrentImage(object? image)
