@@ -260,6 +260,24 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             if (countResult < 0 || count <= 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.ItemCount failed/empty: 0x{countResult:X8}, count={count}");
             var itemCountElapsed = timer.ElapsedMilliseconds;
             _log.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
+
+            // perf(startup): one IEnumIDList over the whole view in view order, fetched in batches of
+            // PIDLs, with the paths resolved in-process -- a handful of cross-process calls instead of
+            // two per item (GetItem + GetDisplayName, ~1.1 s for 1841 items while also loading
+            // explorer.exe during our window's creation). Any failure or an incomplete result falls
+            // back to the per-item loop below, so the snapshot is never less complete than before.
+            var batched = TryReadViewOrderBatched(folderViewPtr, folder, count, cancellationToken, out var batchedReason);
+            if (batched is not null)
+            {
+                progress?.Report(new ExplorerQueryProgress(batched.Count, count, 1));
+                var batchedSorts = ReadSortColumns(folderViewPtr);
+                var batchedGrouped = ExplorerNativeVtable.GetGroupBy(folderViewPtr, out var batchedGroupKey, out _) >= 0 && (batchedGroupKey.fmtid != Guid.Empty || batchedGroupKey.pid != 0);
+                _log.Info($"Explorer native-read-complete: count={batched.Count}, mode=batched, elapsedMs={timer.ElapsedMilliseconds}, firstPath={batched[0]}, lastPath={batched[^1]}, sortColumns={batchedSorts.Length}, grouped={batchedGrouped}");
+                return new ExplorerViewSnapshot(folder, batched, batchedSorts, batchedGrouped ? ExplorerGroupState.Active : ExplorerGroupState.None,
+                    ExplorerOrderStatus.Available, null, DateTime.UtcNow);
+            }
+            _log.Info($"Explorer batched read unavailable, using per-item read: {batchedReason}");
+
             var paths = new List<string>(count);
             var comCalls = 1;
             var getItem = ExplorerNativeVtable.ResolveGetItem(folderViewPtr);
@@ -310,6 +328,73 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             if (browserPtr != IntPtr.Zero) Marshal.Release(browserPtr);
             if (servicePtr != IntPtr.Zero) Marshal.Release(servicePtr);
             if (windowPtr != IntPtr.Zero) Marshal.Release(windowPtr);
+        }
+    }
+
+    /// <summary>
+    /// Reads the view's items in view order through IFolderView::Items(SVGIO_ALLVIEW |
+    /// SVGIO_FLAG_VIEWORDER, IEnumIDList), up to 512 child PIDLs per Next call, and
+    /// resolves each to its file-system path locally (ILCombine with the folder's own PIDL +
+    /// SHGetNameFromIDList(SIGDN_FILESYSPATH), the same name kind the per-item read asks for).
+    /// Returns null (with <paramref name="reason"/>) on any failure or when the result does not
+    /// hold exactly <paramref name="expectedCount"/> items.
+    /// </summary>
+    private static List<string>? TryReadViewOrderBatched(IntPtr folderView, string folder, int expectedCount,
+        CancellationToken cancellationToken, out string? reason)
+    {
+        const int BatchSize = 512;
+        IntPtr enumPtr = IntPtr.Zero, parentPidl = IntPtr.Zero;
+        var children = new IntPtr[Math.Clamp(expectedCount, 1, BatchSize)];
+        try
+        {
+            var iid = ExplorerComInterop.IidEnumIdList;
+            var hr = ExplorerNativeVtable.Items(folderView, ExplorerComInterop.SvgioAllView | ExplorerComInterop.SvgioFlagViewOrder, ref iid, out enumPtr);
+            if (hr < 0 || enumPtr == IntPtr.Zero) { reason = $"IFolderView.Items(IEnumIDList) failed: 0x{hr:X8}"; return null; }
+            hr = ExplorerComInterop.SHParseDisplayName(folder, IntPtr.Zero, out parentPidl, 0, out _);
+            if (hr < 0 || parentPidl == IntPtr.Zero) { reason = $"SHParseDisplayName failed: 0x{hr:X8}"; return null; }
+
+            var paths = new List<string>(expectedCount);
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var nextHr = ExplorerNativeVtable.EnumNext(enumPtr, (uint)children.Length, children, out var fetched);
+                if (nextHr < 0) { reason = $"IEnumIDList.Next failed: 0x{nextHr:X8}"; return null; }
+                for (var i = 0; i < (int)fetched; i++)
+                {
+                    var absolute = ExplorerComInterop.ILCombine(parentPidl, children[i]);
+                    if (absolute == IntPtr.Zero) { reason = "ILCombine failed"; return null; }
+                    try
+                    {
+                        hr = ExplorerComInterop.SHGetNameFromIDList(absolute, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
+                        if (hr < 0 || namePtr == IntPtr.Zero) { reason = $"SHGetNameFromIDList({paths.Count}) failed: 0x{hr:X8}"; return null; }
+                        try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
+                        finally { Marshal.FreeCoTaskMem(namePtr); }
+                    }
+                    finally { Marshal.FreeCoTaskMem(absolute); }
+                }
+                FreeChildren(children);
+                if (nextHr == ExplorerComInterop.SFalse || fetched == 0) break;
+            }
+
+            if (paths.Count != expectedCount) { reason = $"Batched read returned {paths.Count} of {expectedCount} items"; return null; }
+            reason = null;
+            return paths;
+        }
+        finally
+        {
+            FreeChildren(children);
+            if (parentPidl != IntPtr.Zero) Marshal.FreeCoTaskMem(parentPidl);
+            if (enumPtr != IntPtr.Zero) Marshal.Release(enumPtr);
+        }
+
+        static void FreeChildren(IntPtr[] items)
+        {
+            for (var i = 0; i < items.Length; i++)
+            {
+                if (items[i] == IntPtr.Zero) continue;
+                Marshal.FreeCoTaskMem(items[i]);
+                items[i] = IntPtr.Zero;
+            }
         }
     }
 

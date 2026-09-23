@@ -147,7 +147,43 @@ public sealed class FolderLoadCoordinator : IDisposable
             _sink.ResetCaches();
             _sessionWriter?.Flush(); // a pending write for this folder must be visible to Load
             var session = _sessionStore.Load(folder);
-            if (initialPath is not null && !explorerTask.IsCompleted)
+            _catalog.Reset(entries);
+            _sink.OnCatalogReady(folder, _catalog.Count);
+            perf.Mark("catalogReady");
+
+            var interactionGeneration = _clock.CurrentInteraction;
+            var resumePath = initialPath ?? session.CurrentPath;
+
+            // perf(startup): with the batched Explorer read and the startup prefetch the snapshot is
+            // usually in before the catalog. Applying it before the first frame reaches the same end
+            // state as the late path below (file open: the opened file, now at its Explorer index;
+            // folder open: the first image of the Explorer order) without the transient fallback
+            // frame, and preload starts around the right neighbours.
+            var orderSettled = false;
+            if (explorerTask.IsCompleted)
+            {
+                var earlySnapshot = await explorerTask; // already complete: continues synchronously
+                perf.Mark("explorerAwaited");
+                orderSettled = true;
+                if (ExplorerSnapshotValidator.TryValidate(earlySnapshot, scannedFiles, out var earlyOrder, out _))
+                {
+                    if (_catalog.ReplaceOrder(earlyOrder))
+                    {
+                        _sink.OnOrderApplied(earlyOrder.Count, _catalog.CurrentIndex, currentKept: false);
+                        perf.Mark("explorerApplied");
+                        if (initialPath is null) resumePath = null;
+                    }
+                    else
+                    {
+                        perf.Mark("explorerIgnored");
+                    }
+                }
+                else
+                {
+                    perf.Mark("explorerFallback");
+                }
+            }
+            else if (initialPath is not null)
             {
                 // INV-9 (file open): the requested file is presented right away instead of after the
                 // snapshot, but navigation/file actions wait for this gate (see PendingOrder), so the
@@ -155,12 +191,6 @@ public sealed class FolderLoadCoordinator : IDisposable
                 pendingOrder = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _pendingOrder = pendingOrder;
             }
-            _catalog.Reset(entries);
-            _sink.OnCatalogReady(folder, _catalog.Count);
-            perf.Mark("catalogReady");
-
-            var interactionGeneration = _clock.CurrentInteraction;
-            var resumePath = initialPath ?? session.CurrentPath;
 
             if (_catalog.Count > 0)
             {
@@ -176,6 +206,11 @@ public sealed class FolderLoadCoordinator : IDisposable
             {
                 _clock.NextNavigation();
                 _sink.OnEmpty(folder);
+            }
+
+            if (orderSettled)
+            {
+                return;
             }
 
             var presentationGeneration = _clock.CurrentNavigation;

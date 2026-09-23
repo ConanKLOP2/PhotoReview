@@ -420,6 +420,42 @@ public sealed class FolderLoadCoordinatorTests
     }
 
     [Fact]
+    public async Task LoadAsync_DirectFileOpen_SnapshotAlreadyIn_AppliesOrderBeforeTheOnlyFrame()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        _explorerOrder.SnapshotHook = f => Task.FromResult(MakeSnapshot(f, [c, b, a]));
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder, initialPath: b);
+
+        // Same end state as when the order arrives after the frame, minus the transient fallback
+        // index: the opened file is presented once, already at its Explorer position.
+        Assert.Equal(new[] { c, b, a }, _catalog.Paths);
+        Assert.Equal(1, Assert.Single(_sink.Presented).Index);
+        Assert.Equal(b, _catalog.Current?.Path);
+        Assert.Equal(1, _sink.OrderAppliedCount);
+        Assert.False(_sink.LastOrderCurrentKept);
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+    }
+
+    [Fact]
+    public async Task LoadAsync_FolderOpen_SnapshotAlreadyIn_PresentsExplorerFirstImageOnly()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        _explorerOrder.SnapshotHook = f => Task.FromResult(MakeSnapshot(f, [c, b, a]));
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        // INV-9b end state (first image of the Explorer order) without the fallback frame first.
+        Assert.Equal(0, Assert.Single(_sink.Presented).Index);
+        Assert.Equal(c, _catalog.Current?.Path);
+        Assert.Equal(1, _sink.OrderAppliedCount);
+    }
+
+    [Fact]
     public async Task LoadAsync_StartsExplorerQueryBeforeScanning()
     {
         var folder = @"C:\photos";
