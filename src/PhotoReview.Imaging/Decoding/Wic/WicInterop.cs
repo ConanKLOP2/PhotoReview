@@ -13,6 +13,31 @@ internal static class WicGuids
     public static readonly Guid CLSID_WICImagingFactory = new("cac5261a-05e2-4928-9d9d-a30f36abf114");
     public static readonly Guid CLSID_WICImagingFactory2 = new("31741610-e414-49f2-b690-acf12f15ecab");
     public static readonly Guid GUID_WICPixelFormat32bppBGRA = new("6fddc324-4e03-4bfe-b185-3d77768dc90f");
+    public static readonly Guid GUID_WICPixelFormat32bppBGR = new("6fddc324-4e03-4bfe-b185-3d77768dc90e");
+    public static readonly Guid GUID_WICPixelFormat32bppPBGRA = new("6fddc324-4e03-4bfe-b185-3d77768dc910");
+
+    // Pixel formats WIC defines without an alpha channel. Anything not listed is treated as
+    // potentially transparent and decoded to premultiplied BGRA (see WicDirectDecoder).
+    public static readonly Guid GUID_WICPixelFormatBlackWhite = new("6fddc324-4e03-4bfe-b185-3d77768dc905");
+    public static readonly Guid GUID_WICPixelFormat2bppGray = new("6fddc324-4e03-4bfe-b185-3d77768dc906");
+    public static readonly Guid GUID_WICPixelFormat4bppGray = new("6fddc324-4e03-4bfe-b185-3d77768dc907");
+    public static readonly Guid GUID_WICPixelFormat8bppGray = new("6fddc324-4e03-4bfe-b185-3d77768dc908");
+    public static readonly Guid GUID_WICPixelFormat16bppGray = new("6fddc324-4e03-4bfe-b185-3d77768dc90b");
+    public static readonly Guid GUID_WICPixelFormat16bppBGR555 = new("6fddc324-4e03-4bfe-b185-3d77768dc909");
+    public static readonly Guid GUID_WICPixelFormat16bppBGR565 = new("6fddc324-4e03-4bfe-b185-3d77768dc90a");
+    public static readonly Guid GUID_WICPixelFormat24bppBGR = new("6fddc324-4e03-4bfe-b185-3d77768dc90c");
+    public static readonly Guid GUID_WICPixelFormat24bppRGB = new("6fddc324-4e03-4bfe-b185-3d77768dc90d");
+    public static readonly Guid GUID_WICPixelFormat48bppRGB = new("6fddc324-4e03-4bfe-b185-3d77768dc915");
+    public static readonly Guid GUID_WICPixelFormat48bppBGR = new("e605a384-b468-46ce-bb2e-36f180e64313");
+    public static readonly Guid GUID_WICPixelFormat32bppCMYK = new("6fddc324-4e03-4bfe-b185-3d77768dc91c");
+    public static readonly Guid GUID_WICPixelFormat64bppCMYK = new("6fddc324-4e03-4bfe-b185-3d77768dc91f");
+}
+
+internal enum WICColorContextType : uint
+{
+    Uninitialized = 0,
+    Profile = 1,
+    ExifColorSpace = 2
 }
 
 internal enum WICDecodeOptions : uint
@@ -88,8 +113,46 @@ internal interface IWICBitmapFrameDecode
 
     // IWICBitmapFrameDecode methods
     void GetMetadataQueryReader(out IWICMetadataQueryReader ppIMetadataQueryReader);
-    void GetColorContexts(uint cCount, IntPtr ppIColorContexts, out uint pcActualCount);
+    void GetColorContexts(
+        uint cCount,
+        [In, MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.Interface, SizeParamIndex = 0)]
+        IWICColorContext[]? ppIColorContexts,
+        out uint pcActualCount);
     void GetThumbnail(out IWICBitmapSource ppIThumbnail);
+}
+
+[ComImport]
+[Guid("3C613A02-34B2-44EA-9A7C-45AEA9C6FD6D")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IWICColorContext
+{
+    void InitializeFromFilename([MarshalAs(UnmanagedType.LPWStr)] string wzFilename);
+    void InitializeFromMemory(IntPtr pbBuffer, uint cbBufferSize);
+    void InitializeFromExifColorSpace(uint value);
+    // IWICColorContext::GetType (renamed to avoid confusion with object.GetType; vtable slot is unchanged).
+    void GetContextType(out WICColorContextType pType);
+    void GetProfileBytes(uint cbBuffer, IntPtr pbBuffer, out uint pcbActual);
+    void GetExifColorSpace(out uint pValue);
+}
+
+[ComImport]
+[Guid("B66F034F-D0E2-40AB-B436-6DE39E321A94")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IWICColorTransform
+{
+    // IWICBitmapSource methods
+    void GetSize(out uint puiWidth, out uint puiHeight);
+    void GetPixelFormat(out Guid pPixelFormat);
+    void GetResolution(out double pDpiX, out double pDpiY);
+    void CopyPalette(IntPtr pIPalette);
+    void CopyPixels(IntPtr prc, uint cbStride, uint cbBufferSize, IntPtr pbBuffer);
+
+    // IWICColorTransform methods
+    void Initialize(
+        IWICBitmapSource pIBitmapSource,
+        IWICColorContext pIContextSource,
+        IWICColorContext pIContextDest,
+        [In] ref Guid pixelFmtDest);
 }
 
 [ComImport]
@@ -234,8 +297,8 @@ internal interface IWICImagingFactory
     void CreateBitmapClipper(out IntPtr ppIBitmapClipper);
     void CreateBitmapFlipRotator(out IWICBitmapFlipRotator ppIBitmapFlipRotator);
     void CreateStream(out IWICStream ppIWICStream);
-    void CreateColorContext(out IntPtr ppIColorContext);
-    void CreateColorTransformer(out IntPtr ppIColorTransform);
+    void CreateColorContext(out IWICColorContext ppIColorContext);
+    void CreateColorTransformer(out IWICColorTransform ppIColorTransform);
     void CreateBitmap(uint uiWidth, uint uiHeight, ref Guid pixelFormat, uint option, out IntPtr ppIBitmap);
     void CreateBitmapFromSource(IWICBitmapSource pIBitmapSource, uint option, out IntPtr ppIBitmap);
     void CreateBitmapFromSourceRect(IWICBitmapSource pIBitmapSource, uint x, uint y, uint width, uint height, out IntPtr ppIBitmap);
