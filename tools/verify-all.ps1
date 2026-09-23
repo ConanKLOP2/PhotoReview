@@ -257,6 +257,11 @@ Invoke-Gate 'Check documentation budget (T0 <= 12 KB)' {
     # Note: T1 budget exceeded is a warning (see docs-budget.ps1 for details)
 }
 
+# AR07 §3: doc link check (non-archive markdown must have no broken links)
+Invoke-Gate 'Check documentation links' {
+    & (Join-Path $PSScriptRoot 'check-doc-links.ps1')
+}
+
 Invoke-Gate 'Run file-operation smoke test' {
     & (Join-Path $PSScriptRoot 'smoke-test.ps1')
 }

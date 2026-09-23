@@ -7,9 +7,12 @@ $Budget = @{ 'T0' = 12 * 1024; 'T1' = 15 * 1024 }
 
 function Get-DocTier {
     param([string]$Path)
+    $normalized = $Path -replace '\\', '/'
     $rel = $Path -replace '^docs[/\\]refactoring[/\\]', ''
 
-    if ($rel -match '^(AGENTS|task_on_progress|INDEX)\.md$') { return 'T0' }
+    # T0: matched on the repo-relative path (backslashes normalized) so
+    # docs/INDEX.md counts as T0 per AGENTS.md, not just AGENTS.md/task_on_progress.md.
+    if ($normalized -match '^(AGENTS|task_on_progress|docs/INDEX)\.md$') { return 'T0' }
     if ($rel -match '^(OPTIMIZE-CLEAN|STRUCTURE-OPTIMIZE|TEST-CLEANUP|T89-FIT|DOCS-TOKEN-DIET|OPEN-DECISIONS)' -and $rel -notmatch 'archive') { return 'T1' }
     if ($rel -match '^(adr|APP-MECHANISMS)') { return 'T1' }
     if ($rel -match 'archive|results|diagnosis') { return 'T2' }
