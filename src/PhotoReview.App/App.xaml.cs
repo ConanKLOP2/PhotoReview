@@ -174,7 +174,7 @@ public partial class App : System.Windows.Application, IDisposable
         return moveOverride is null ? null : moveOverride.MoveAsync;
     }
 
-    private void App_Startup(object sender, StartupEventArgs e)
+    private async void App_Startup(object sender, StartupEventArgs e)
     {
         // perf(startup): the CSV listener depends on nothing but the environment, so it starts first
         // and the Startup milestones below (msSinceProcessStart) cover services/settings/window too.
@@ -197,7 +197,14 @@ public partial class App : System.Windows.Application, IDisposable
 
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
-        var appSettings = store.Load();
+        // perf(startup): config.json (IO + JSON metadata, ~100 ms) is read on the thread pool while the
+        // UI thread is blocked connecting to WPF's render thread (~350 ms, it would otherwise happen
+        // inside MainWindow's InitializeComponent). Nothing reads the settings in between; the await
+        // normally finds the load finished and continues synchronously, without a dispatcher yield.
+        var settingsLoad = Task.Run(() => store.Load());
+        PhotoReview.App.Services.StartupWarmup.ConnectRenderThread();
+        PhotoReviewPerf.StartupMark("renderThreadConnected");
+        var appSettings = await settingsLoad;
         PhotoReviewPerf.StartupMark("settingsLoaded");
         AppLog.Enabled = appSettings.LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
