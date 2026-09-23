@@ -58,7 +58,7 @@
 - **Q-T3:** Real-photo directory via env var? **✓ YES** (if available on machine)
 - **Q-T4:** Real Recycle Bin in tests? **✓ YES** (TC06 self-cleans via Undo)
 
-See [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) for TC00–TC11 details.
+See [`../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`](../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md) for TC00–TC11 details.
 
 ### Dialog Refactor (WD) Tasks
 
@@ -144,8 +144,8 @@ See [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) for TC0
 - **Decision rationale (archived):** [`archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md`](archive/STRUCTURE-DECISIONS-Q-ST1-ST4.md)
 - **Architecture rules:** [`../architecture.md`](../architecture.md)
 - **Presentation project ADR:** [`../adr/0004-presentation-project-separation.md`](../adr/0004-presentation-project-separation.md)
-- **Overall roadmap:** [`OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](OPTIMIZE-CLEAN-PLAN-2026-09-20.md) (OC / WD / IO)
-- **Test cleanup:** [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md) (TC00–TC11)
+- **Overall roadmap:** [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md) (OC / WD / IO)
+- **Test cleanup:** [`../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`](../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md) (TC00–TC11)
 
 ---
 

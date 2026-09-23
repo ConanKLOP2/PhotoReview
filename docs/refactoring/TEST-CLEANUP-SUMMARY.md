@@ -2,7 +2,7 @@
 
 **Status:** Baseline (TC00) not started; TC01–TC11 blocked on TS10 re-audit. Decisions Q-T1..Q-T4 finalized.
 
-Full plan: [`TEST-CLEANUP-PLAN-2026-09-20.md`](TEST-CLEANUP-PLAN-2026-09-20.md)
+Full plan: [`../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`](../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md)
 
 ## Objective
 

@@ -16,7 +16,7 @@ For full details see: [`STRUCTURE-OPTIMIZE-STATUS.md`](STRUCTURE-OPTIMIZE-STATUS
 
 ## OC (Optimize-Clean) — Key Blockers
 
-Plan: [`OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
+Plan: [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
 
 | ID | Status | Notes |
 |---|---|---|

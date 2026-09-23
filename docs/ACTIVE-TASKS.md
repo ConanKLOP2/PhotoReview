@@ -1,7 +1,7 @@
 # Active Tasks — Consolidated Work Remaining
 
-**Updated:** 2026-09-22
-**Status:** ST, TS00-04, DF, CQ all DONE and merged to `master`. TC/OC/WD/IO/DT/T89(GUI)/D still open.
+**Updated:** 2026-09-23
+**Status:** ST, TS00-04, DF, CQ all DONE and merged to `master`. New group **AR** (architecture review, plan only). TC/OC/WD/IO/DT/T89(GUI)/D still open.
 
 ---
 
@@ -9,23 +9,44 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
+| **AR** (Architecture Review 2026-09-23) | 🔄 AR00 DONE on branch `docs/arch-review-plan`; AR01-AR07 TODO | 5 decisions Q-AR1..Q-AR5 pending. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
-| **TS** (Test Speed / gate reliability) | ✅ TS00-TS04 DONE, TS05-TS10 TODO | Gate no longer hangs, runs ~23s. Plan: `refactoring/TEST-SPEED-PLAN-2026-09-20.md`. |
+| **TS** (Test Speed / gate reliability) | ✅ TS00-TS04 DONE, TS05-TS10 TODO | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
 | **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Plan: `refactoring/CQ-WARNINGS-PLAN.md`. |
-| **TC** (Test Cleanup) | 🔄 TODO (unverified prior claims) | TS10 must re-audit before trusting any "done" status. Plan: `refactoring/TEST-CLEANUP-PLAN-2026-09-20.md`. |
-| **T89** (Fit Layout — GUI acceptance) | 🔄 IN PROGRESS, not on `master` | T89.1-T89.2 committed on `feature/Fit-Layout-Status` only. STA/GUI acceptance still TODO. Plan: `refactoring/T89-FIT-LAYOUT-PLAN.md`. |
-| **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 (Undo unification) is the key blocker for ST08/09, WD, and OC15-18. Plan: `refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`. |
-| **WD** (WPF Dialog) | 🔄 All TODO | Blocked on OC14. |
+| **TC** (Test Cleanup) | 🔄 TODO (unverified prior claims) | TS10 must re-audit before trusting any "done" status. Plan: `archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`. |
+| **T89** (Fit Layout — GUI acceptance) | 🔄 GUI acceptance only | T89.1-T89.2 (`10ff31f`) **merged to `master` via PR #15**; branch deleted. DF02 Fit tests skipped in `9f880d1`. STA/GUI acceptance still TODO. Plan: `archive/historical/T89-FIT-LAYOUT-PLAN.md`. |
+| **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 (Undo unification) is the key blocker for ST08/09, WD, and OC15-18. Plan: `archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`. |
+| **WD** (WPF Dialog) | 🔄 All TODO | WD01 → implemented by AR04 (if Q-AR2 = yes, no longer waits for OC14); WD02 low-risk part → AR03c; WD03-06 blocked on OC14. |
 | **IO** (I/O Durability) | 🔄 All TODO | Blocked on IO01 contract lock-down. |
-| **DT** (Docs Token Diet) | 🔄 All TODO | Planning complete; 4 decisions (Q-D1..Q-D4) pending. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
-| **D** (Perf Diagnosis) | 🔄 Mixed, partially blocked | D01/D02 wait on D06 data; D08/D09/D12 wait on D07. |
+| **DT** (Docs Token Diet) | 🔄 Partial | DT00-03, DT08, DT09 DONE; Q-D1..Q-D4 decided. DT04-07, DT10 TODO. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
+| **D** (Perf Diagnosis) | 🔄 Mixed, partially blocked | D01/D02 wait on D06 data; D08/D09/D12 wait on D07. **Note:** `--perf-session` ran a non-production graph (no preload) until AR02c — re-baseline in AR02e before trusting D numbers. |
+
+---
+
+## AR Tasks — Architecture Review 2026-09-23
+
+**Summary:** [`refactoring/ARCH-REVIEW-SUMMARY.md`](refactoring/ARCH-REVIEW-SUMMARY.md) · **Per-task plans:** `refactoring/arch-review/`
+
+| ID | Name | Decision | Depends on | Real machine/GUI | Status |
+|----|------|----------|------------|------------------|--------|
+| AR00 | Review + plans + ADR 0005 draft + stale-status fixes | — | — | No | ✅ DONE on `docs/arch-review-plan` (PR pending) |
+| AR01 | Ship TurboJpeg: explicit registration, native probe, Settings reflects availability, release gate | Q-AR1 | — | 1 check | TODO |
+| AR02a | `AppHost`, caches from `IAppPaths`, viewport provider, presentation/preload/move seams | Q-AR3 | — | Fit check (with T89) | TODO |
+| AR02b | Integration tests build MainWindow via `AppHost` (12 sites) | Q-AR3 | AR02a | No | TODO |
+| AR02c | `Benchmark.Cli` perf-session/ui-probe on production graph; report effective config | Q-AR3 | AR02a | Run once | TODO |
+| AR02e | Perf re-baseline on production graph | — | AR02c | **Yes** (user machine) | TODO |
+| AR02d | Delete test ctors/`CreateTestViewModel`; public fields → read-only properties | Q-AR3 | AR02b, AR02c | No | TODO |
+| AR03 | SourceBytes policy (a), `Platform.Windows` without WPF (b), startup dialog via `IDialogService` (c) | — | — | No | TODO |
+| AR04 | UI-thread affinity: remove 47 `ConfigureAwait(false)` in App, arch test, catalog Debug guard | Q-AR2 | AR02c, AR02e | **Yes** (GUI + perf) | TODO |
+| AR06 | One release location, delete broken `outputs/release`, prune worktrees/leftovers | Q-AR4 | — | No | TODO |
+| AR07 | Fix 17 broken links, restore ADR evidence, link gate, docs-budget fix, group triage | Q-AR5 | AR00 | No | TODO |
 
 ---
 
 ## TS Tasks — Test Speed and Gate Reliability
 
-**Plan:** [`refactoring/TEST-SPEED-PLAN-2026-09-20.md`](refactoring/TEST-SPEED-PLAN-2026-09-20.md)
+**Plan:** [`archive/historical/TEST-SPEED-PLAN-2026-09-20.md`](archive/historical/TEST-SPEED-PLAN-2026-09-20.md)
 
 | ID | Name | Priority | Status |
 |----|------|----------|--------|
@@ -45,7 +66,7 @@
 
 ## TC Tasks — Test Cleanup
 
-**Plan:** [`refactoring/TEST-CLEANUP-PLAN-2026-09-20.md`](refactoring/TEST-CLEANUP-PLAN-2026-09-20.md)
+**Plan:** [`archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`](archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md)
 **Decisions finalized:** Q-T1 queue keypresses · Q-T2 read-count seam · Q-T3 real photos via env var · Q-T4 native Recycle Bin
 
 > **TS10 Audit Results** (2026-09-22):
@@ -74,19 +95,19 @@
 
 ---
 
-## T89 — Fit Layout (GUI acceptance, not yet on master)
+## T89 — Fit Layout (code on master, GUI acceptance open)
 
-**Plan:** [`refactoring/T89-FIT-LAYOUT-PLAN.md`](refactoring/T89-FIT-LAYOUT-PLAN.md)
-**Branch:** `feature/Fit-Layout-Status` (commit `10ff31f`, T89.1-T89.2) — **not merged to `master`**.
+**Plan:** [`archive/historical/T89-FIT-LAYOUT-PLAN.md`](archive/historical/T89-FIT-LAYOUT-PLAN.md)
+**Branch:** `feature/Fit-Layout-Status` (commit `10ff31f`, T89.1-T89.2) — **merged to `master` via PR #15** (verified 2026-09-23: `git branch --contains 10ff31f` → master; branch no longer on origin).
 
 | Aspect | Status |
 |--------|--------|
 | Wheel scroll | ✅ DONE (merged, PR #9) |
 | Pan threshold | ✅ DONE (merged, PR #9) |
-| Viewport convergence helpers | ✅ on feature branch only |
+| Viewport convergence helpers | ✅ on master (PR #15) |
 | Fit initial | TODO — STA layout assertion needed |
 | Fit zoom | TODO — viewport + scrollbar edge cases |
-| GUI acceptance | TODO — manual test on real images, then merge to `master` |
+| GUI acceptance | TODO — manual test on real images; do it together with AR02a step 3 (production viewport currently `(0,0)` in `ApplyInitialViewMode`, finding F3) |
 
 **Blocker:** do not reduce `ApplyFitViewAsync` to a single pass without GUI/STA evidence.
 
@@ -94,7 +115,7 @@
 
 ## OC Tasks — Optimize/Clean
 
-**Plan:** [`refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](refactoring/OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
+**Plan:** [`archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
 
 | ID | Name | Status | Blocker |
 |----|------|--------|---------|
@@ -110,12 +131,12 @@
 
 ---
 
-## WD Tasks — WPF Dialog Service (Blocked on OC14)
+## WD Tasks — WPF Dialog Service
 
 | ID | Name | Status |
 |----|------|--------|
-| WD01 | UI-thread audit | TODO |
-| WD02 | DRY refactor (low-risk) | TODO |
+| WD01 | UI-thread audit | TODO → implemented by **AR04** / ADR 0005 (needs Q-AR2) |
+| WD02 | DRY refactor (low-risk) | TODO — startup `MessageBox` covered by **AR03c** |
 | WD03 | DI refactor | TODO (needs WD01) |
 | WD04-WD06 | Window lifecycle | TODO (needs WD01-WD03) |
 
@@ -134,11 +155,11 @@
 
 ---
 
-## DT Tasks — Docs Token Diet (Planning Complete, Not Implemented)
+## DT Tasks — Docs Token Diet (Partial)
 
 **Plan:** [`archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`](archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md)
 
-10 tasks (DT00-DT10) all TODO. Blocked on 4 open decisions: Q-D1 (edit `AGENTS.md`?), Q-D2 (archive location — now `docs/archive/`, `docs/refactoring/archive/`), Q-D3 (`CLAUDE.md` required?), Q-D4 (git cleanup allowed?).
+DT00-DT03, DT08, DT09 DONE; Q-D1..Q-D4 decided (see OPEN-DECISIONS). DT04-DT07, DT10 TODO. Known gap: `docs-budget.ps1` does not count `docs/INDEX.md` as T0 → fixed in AR07 §4.
 
 ---
 
@@ -171,12 +192,16 @@ TC01 → TC02 → (TC03 ∥ TC04) → TC05 → TC08 → (TC06, TC07) → TC09-TC
                                                 (TS10 must re-audit first)
 
 OC14 (Undo) → ST08 → ST09
-           → WD01 → (WD02 ∥ WD03) → WD04-WD06
+           → WD03 → WD04-WD06
            → OC15-OC18
+
+AR00 → (AR01 ∥ AR03 ∥ AR06) → AR07
+AR00 → AR02a → AR02b ∥ AR02c → AR02e (user machine) → AR02d
+                               AR02e → AR04 (= WD01) → WD02 rest
 
 IO01-IO02 → (IO03-IO07)
 
-T89 (GUI/STA evidence, on feature/Fit-Layout-Status) → merge to master
+T89 GUI/STA acceptance (code already on master) ↔ AR02a step 3 (viewport)
 
 DT02 → DT03 → (DT04 ∥ DT05) → DT06-DT10
 ```

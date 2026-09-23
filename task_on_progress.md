@@ -1,157 +1,55 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-23 | **Branch:** `master` | **Last merges:** #21 (fix/compare-pair-case-and-race), #20 (perf/nav-hot-path-optimizations)
+**Updated:** 2026-09-23 | **Base:** `master@fbdf48e` (#22) | **Working branch:** `docs/arch-review-plan` (AR00, committed locally, **not pushed yet** — push from Windows: `git push -u origin docs/arch-review-plan`, then open PR)
 
-## Done: navigation hot-path perf pass (merged via #20, #21)
+## Now: Architecture review → AR plan (AR00 done on branch)
 
-Requested as a general "analyze and optimize" pass; not tied to an existing task ID. Findings and
-a batch plan (4 batches) were proposed first, then batches 1–2 and part of 3/4 were implemented,
-merged as PR #20. A post-merge self-review then found and fixed two real bugs introduced by #20
-(case-sensitive compare-pair grouping; an unsynchronized cache race in `ImagePresenter`), merged
-as PR #21. Both are on `master` now.
+- Review verdict: layering is sound, no redesign. Problems are at boundaries. Summary + findings F1–F9: [`docs/refactoring/ARCH-REVIEW-SUMMARY.md`](docs/refactoring/ARCH-REVIEW-SUMMARY.md). Per-task plans: `docs/refactoring/arch-review/AR0x-*.md` (read only the one you work on).
+- AR00 (this branch): summary + AR01–AR07 plans, ADR 0005 (Proposed), fixed stale status (T89 code **is** on master via PR #15; DT00–03/08/09 done), broken plan links in ACTIVE-TASKS, T0 budget (perf-pass detail moved to `docs/archive/progress-log-2026-09.md`), `architecture.md` TurboJpeg arrow (App did **not** reference it).
+- **Waiting on user:** Q-AR1 (ship TurboJpeg?), Q-AR2 (accept ADR 0005), Q-AR3 (single composition root, supersedes ST06 fields), Q-AR4 (release path), Q-AR5 (group triage). See `docs/refactoring/OPEN-DECISIONS.md`.
+- Next (no decision needed): AR03, AR06 prep. After Q-AR1: AR01. After Q-AR3: AR02a→b→c→e→d. After Q-AR2 + AR02e: AR04.
 
-**Done (commits 94c5aeb, a654012, 1f982fe, 20300b4 → PR #20; 9161c35 → PR #21):**
-- `ImagePresenter`: preview decode now starts before the thumbnail await instead of after
-  (Preview loading mode), so the two run concurrently.
-- `ReviewCatalog`: O(1) `IndexOf`/`Find` via a lazily-rebuilt path→index dictionary (was O(n)
-  per call); `PathAt(index)` avoids allocating the whole `Paths` array just to read one entry;
-  new `StructuralVersion` counter (bumped on membership/order change) lets other layers cheaply
-  detect "nothing changed" instead of diffing a rebuilt collection every call.
-- `ComparePairService.BuildIndex`: O(n log n) once instead of `Find`'s O(n log n) *every*
-  navigation; `ImagePresenter` caches it against `ReviewCatalog.StructuralVersion`. `Find` itself
-  is untouched (still has its own unit tests); `BuildIndex` has new parity tests asserting it
-  agrees with `Find` for every path in a mixed catalog.
-- `SourceSizeTracker`: caches against `StructuralVersion` instead of rebuilding a `HashSet` of
-  every path on every call.
-- `PreviewImageService`: caches one decoder instance per backend (was constructing a fresh
-  `FallbackImageDecoder` + primary/fallback, including TurboJpeg's `Activator.CreateInstance`,
-  on every single decode — decoders are stateless, confirmed by inspection); added
-  `HasInflightPreview(ImageCacheKey)` to avoid a redundant stat.
-- `WpfBitmapImageDecoder` / `WicDirectDecoder`: decode from a `SourceBytesCache` buffer via a
-  non-owning `MemoryStream` (`ReadOnlyMemoryStreamFactory`) instead of `ToArray()`-copying it.
-- `PreloadScheduler`: takes `CatalogEntry[]` (Length/LastWriteUtc already known from the folder
-  scan) instead of `string[]`; builds the `ImageCacheKey` once per candidate via
-  `IPreloadTarget.GetCurrentCacheKey(entry)`, cutting 2 of the 3 stats per candidate examined
-  during a scan (the post-decode key rebuild still re-stats — the identity actually cached is
-  only known after decode). Progress/paused-for-memory logging no longer takes a
-  `GlobalMemoryStatusEx` syscall when `ILog.Enabled` (and, for the paused branch,
-  `PhotoReviewPerf.Log.IsEnabled()`) are both false.
-- `IFileSystem.EnumerateFilesWithStat`: default-interface method (`EnumerateFiles` +
-  `GetFileStat` per item — unchanged behavior for every existing implementer);
-  `PhysicalFileSystem` overrides it with `DirectoryInfo.EnumerateFiles()`, which already carries
-  Length/LastWriteTimeUtc from the same directory-listing syscall. `FolderLoadCoordinator`'s
-  folder scan uses it instead of a separate `GetFileStat()` per image file.
-- Verified after every batch: `dotnet build PhotoReview.slnx -c Release` (0 warnings/errors) and
-  `dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"` (829/829 passed, 7
-  skipped, same skips as before this work).
+## Previous: nav hot-path perf pass — DONE (#20 `94c5aeb..20300b4`, fix #21 `9161c35`)
 
-**Deliberately deferred (do not assume these are fixed):**
-- `GetOriginalDimensionsAsync` reusing the current navigation's cache key instead of a fresh
-  stat: implemented, then **reverted** — it changes which of two pre-existing narrow races (file
-  vanishes/changes mid-navigation) hits the graceful-removal path vs. a generic error status.
-  Not worth the risk for one stat saved per navigation (non-Original loading mode only).
-- Batch 3 (`ImagePresenter`/`MainViewModel` `ConfigureAwait(false)` removal to cut the number of
-  `Dispatcher.Invoke` round-trips `WpfPresentationSink` does per present): **not attempted.**
-  This is a real, currently-present issue — e.g. `ImagePresenter.RemoveMissingCatalogItemAsync`
-  calls `ReviewCatalog.Remove`/`UpdateMetadata` from a background-thread continuation, even
-  though `ReviewCatalog`'s own doc comment says UI-thread-only — but it's pre-existing (not
-  introduced by this session), and per this file's own Critical Process Rules, broad
-  `Dispatcher.Invoke`-adjacent threading changes are gated behind **WD01**, which needs real
-  GUI/STA acceptance verification this sandbox can't do headlessly. Flagging for whoever picks
-  up WD01, not fixing ad hoc here.
-- RAM-budget accuracy (`RamBudgetPolicy.ShouldPreloadWholeFolder`'s flat ×10 JPEG-expansion
-  factor not accounting for downscaled preview target width), disk-cache effectiveness (whether
-  PNG-encoding preview-sized downscales actually saves I/O vs. re-decoding the source JPEG with
-  DCT scaling), and `SourceBytesCache`/`PreviewImageService` RAM budgets summing to more than
-  physical RAM when both are enabled: **not attempted.** These need before/after numbers from
-  `PhotoReview.Benchmark.Cli` against a real photo folder, which this sandbox doesn't have: a
-  wrong constant here risks *causing* memory pressure, not just missing a speedup.
-- EXIF-orientation / TurboJpeg fine-scale lazy `TransformedBitmap` (render-thread cost on first
-  frame): not attempted, same "needs real measurement" reasoning.
-
-**Fixed post-merge (PR #21, commit 9161c35):**
-- `ComparePairService.BuildIndex` grouped candidates by `(Folder, Extension)` with the default
-  (ordinal, case-**sensitive**) tuple comparer, while `Find` — the function it replaces on the
-  hot path — compares both with `OrdinalIgnoreCase`. Silently broke pairing for files whose
-  extension case differs (e.g. `DSC0001.JPG` / `DSC0001 (1).jpg`) or whose folder path differs
-  only by case. Fixed with an explicit `OrdinalIgnoreCase` comparer; two regression tests added.
-- `ImagePresenter._compareIndex`/`_compareIndexVersion` had no lock, but `PresentAsync` bodies
-  for overlapping navigations run concurrently (async-void key handlers don't serialize a
-  held-down arrow key). Two concurrent calls could race to rebuild the index redundantly.
-  Wrapped in a lock.
-
-**Next step (nothing further planned unless requested):** the deferred items below are real gaps,
-not bugs in what shipped. Picking any of them up needs either GUI/STA acceptance (WD01, for the
-`ConfigureAwait` item) or `PhotoReview.Benchmark.Cli` numbers from a real photo folder (for the
-RAM-budget/disk-cache items) — this sandbox can do neither, so they weren't attempted rather than
-guessed at.
+Details: `docs/archive/progress-log-2026-09.md` (2026-09-23 entry). Still deferred, **not fixed**:
+- `ConfigureAwait(false)` in App / catalog mutated off UI thread → now **AR04** (ADR 0005).
+- RAM-budget accuracy, disk-cache value, `SourceBytesCache` + preview budget > physical RAM, lazy EXIF/TurboJpeg transform → need real-folder numbers; use the **AR02e** baseline (production graph), not older `--perf-session` numbers (those ran without preload — finding F2).
+- `GetOriginalDimensionsAsync` key reuse: implemented then reverted (race trade-off), keep reverted.
 
 ## Status by Group
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| ST | ✅ Mostly done (ST08/09 blocked) | ST01-07, ST10-12 merged. Blocked on OC14. |
-| TS | ✅ TS00-04 done | Gate ~23s (no hang). TS05-10 remain. TS10: re-audit before TC. |
-| DF | ✅ Done | PR #14 merged. |
-| **CQ** | ✅ DONE | 634→0 warnings (PR #18 merged). |
-| **T89** | 🔄 IN PROGRESS | GUI/STA acceptance on `feature/Fit-Layout-Status`. Not on `master` yet. |
-| **TC** | 🔄 TODO | Blocked on TS10 re-audit. 23 plans per Q-T1..Q-T4. |
-| **OC** | 🔄 ~65% done | OC14 (Undo) blocks ST08/09, WD, OC15-18. |
-| **WD** | 🔄 TODO | Blocked on OC14. |
-| **IO** | 🔄 TODO | Blocked on IO01/02 contract. |
-| **D** | 🔄 Mixed | D06 Procmon data needed for D01/02/08/09. |
-| **DT** | 🔄 TODO | Docs token diet: DT00 baseline taken, DT01+ in progress. |
-
-## Key Blockers
-
-1. **OC14** (Undo unification) — critical path for ST08/09, WD, OC15-18
-2. **T89** GUI acceptance — needed before merging Fit to `master`
-3. **IO01/02** journal contract — gates I/O durability work
-4. **TS10** audit — required before trusting TC status
+| **AR** | 🔄 AR00 on branch | Plan ready; 5 decisions pending. |
+| ST | ✅ (ST08/09 wait OC14) | ST06 fields to be replaced by AR02d if Q-AR3 = yes. |
+| TS | ✅ TS00-04 | TS05-10 remain. |
+| DF, CQ | ✅ Done | |
+| **T89** | 🔄 GUI acceptance only | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
+| **TC** | 🔄 | TC04, TC09 open; TC06/07 location → AR07 triage. |
+| **OC** | 🔄 ~65% | OC14 blocks ST08/09, WD03-06, OC15-18 (not WD01 if Q-AR2 = yes). |
+| **WD** | 🔄 | WD01 → AR04; WD02 low-risk part → AR03c. |
+| **IO** | 🔄 | Blocked on IO01 contract. |
+| **D** | 🔄 | Re-evaluate from AR02e baseline (AR07 triage). |
+| **DT** | 🔄 | DT00-03, 08, 09 done; DT04-07, 10 open. |
 
 ## Critical Process Rules
 
 - ❌ No direct `master` commits: branch → PR → review
 - ❌ No `ApplyFitViewAsync` single-pass without T89 evidence
-- ❌ No broad `Dispatcher.Invoke` / `GetRequiredService` before WD01
+- ❌ No broad `Dispatcher.Invoke` / `GetRequiredService` before WD01 (→ replaced by ADR 0005 rule once AR04 is DONE)
 - ❌ No journal durability reduction / `IgnoreInaccessible` before IO01/02
 - ❌ No OS SendInput/SetForegroundWindow in test harnesses
+- ❌ Do not compare perf numbers across the AR02c boundary (legacy vs production graph)
 
 ## Key Links
 
-- **Master plan:** [`docs/ACTIVE-TASKS.md`](docs/ACTIVE-TASKS.md)
-- **Structure status:** [`docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md`](docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md)
-- **Test plan:** [`docs/refactoring/TEST-SPEED-PLAN-2026-09-20.md`](docs/refactoring/TEST-SPEED-PLAN-2026-09-20.md)
-- **Fit layout:** [`docs/refactoring/T89-FIT-LAYOUT-PLAN.md`](docs/refactoring/T89-FIT-LAYOUT-PLAN.md)
-- **Docs diet:** [`docs/INDEX.md`](docs/INDEX.md)
-- **History:** [`docs/archive/progress-log-2026-09.md`](docs/archive/progress-log-2026-09.md)
-
-## Documentation Diet Status (DT series)
-
-| Task | Status | Impact |
-|------|--------|--------|
-| DT00 | ✅ DONE | Measurement baseline (docs-budget.ps1) |
-| DT01 | ✅ DONE | Entry points: T0 = 7.7 KB (40% reduction) |
-| DT02 | ✅ DONE | Status digests: 24 KB total |
-| DT03 | ✅ DONE | Compress plans: 4 summaries (20 KB active vs 101 KB archived) |
-| DT08 | ✅ DONE | .ignore for archive (ripgrep filtering) |
-| DT09 | ✅ DONE | Budget gate in verify-all.ps1 |
-| DT04, DT05, DT06, DT07, DT10 | 🔄 TODO | Code map, comment cleanup, test boilerplate, final measurement |
-
-**Cold-start (T0 + typical T1 file):** ~17.7 KB (~6k tokens) — 75% reduction from baseline.
+[ACTIVE-TASKS](docs/ACTIVE-TASKS.md) · [AR summary](docs/refactoring/ARCH-REVIEW-SUMMARY.md) · [Open decisions](docs/refactoring/OPEN-DECISIONS.md) · [Structure status](docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md) · [T89 summary](docs/refactoring/T89-FIT-SUMMARY.md) · [INDEX](docs/INDEX.md) · [History](docs/archive/progress-log-2026-09.md)
 
 ## Quick Checks
 
 ```powershell
-# Budget check
 tools/docs-budget.ps1 -Check
-
-# Test gate  
-dotnet test PhotoReview.sln --filter Category=Gate
-
-# Build Release
-dotnet build -c Release PhotoReview.sln
-
-# Full verification
+dotnet build PhotoReview.slnx -c Release
+dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"
 tools/verify-all.ps1
 ```

@@ -4,7 +4,7 @@
 
 **GUI acceptance & STA layout tests still TODO** — must verify before merge to `master`.
 
-Full plan: [`T89-FIT-LAYOUT-PLAN.md`](T89-FIT-LAYOUT-PLAN.md)
+Full plan: [`../archive/historical/T89-FIT-LAYOUT-PLAN.md`](../archive/historical/T89-FIT-LAYOUT-PLAN.md)
 
 ## Problem
 

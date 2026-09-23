@@ -2,7 +2,7 @@
 
 **Status:** TS00–TS04 DONE (4 commits merged); gate now runs ~23s without hang. TS05–TS10 TODO.
 
-Full plan: [`TEST-SPEED-PLAN-2026-09-20.md`](TEST-SPEED-PLAN-2026-09-20.md)
+Full plan: [`../archive/historical/TEST-SPEED-PLAN-2026-09-20.md`](../archive/historical/TEST-SPEED-PLAN-2026-09-20.md)
 
 ## Target
 

@@ -8,9 +8,9 @@ Tài liệu này mô tả cấu trúc sau đợt refactor, các luồng runtime 
 PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
   ├─> PhotoReview.Core (catalog, settings, session, file action, abstractions)
   ├─> PhotoReview.Imaging (decode, cache, preload)
-  ├─> PhotoReview.Imaging.TurboJpeg (backend JPEG tùy chọn)
   ├─> PhotoReview.Platform.Windows (Explorer, Recycle Bin, memory/monitor)
   └─> PhotoReview.Benchmarking (benchmark dùng chung)
+  ✗   PhotoReview.Imaging.TurboJpeg — App CHƯA tham chiếu (xem "Khoảng trống đã biết", AR01)
 
 PhotoReview.Imaging ─> PhotoReview.Core
 PhotoReview.Platform.Windows ─> PhotoReview.Core
@@ -18,6 +18,15 @@ PhotoReview.Imaging.TurboJpeg ─> PhotoReview.Imaging + PhotoReview.Core
 ```
 
 `PhotoReview.Core` không phụ thuộc WPF. `MainWindow` giữ phần view/input; `MainViewModel`, coordinator và service điều phối hành vi. `App.xaml.cs` là composition root đăng ký dependency và nối implementation Windows/WPF vào abstraction.
+
+## Khoảng trống đã biết (rà soát 2026-09-23)
+
+Chi tiết và kế hoạch: [`refactoring/ARCH-REVIEW-SUMMARY.md`](refactoring/ARCH-REVIEW-SUMMARY.md).
+
+- **TurboJPEG không có trong bản phát hành** (F1): App không tham chiếu `Imaging.TurboJpeg`; `ImageDecoderFactory` nạp bằng `Type.GetType(string)` nên chọn TurboJpeg trong Settings sẽ âm thầm dùng WPF. → AR01.
+- **Hai composition root** (F2, F3): test và `Benchmark.Cli --perf-session` dựng `MainViewModel` qua `MainWindowHelpers.CreateTestViewModel` (không preload, cache 64 MiB, không disk cache), khác đồ thị production mô tả ở đây. → AR02.
+- **Disk cache bỏ qua `IAppPaths`** (F4): preview/thumbnail cache luôn ở `%LOCALAPPDATA%\PhotoReview`, không theo `PHOTOREVIEW_DATA_ROOT`. → AR02a.
+- **Thread affinity chưa được thực thi** (F5): tầng App dùng `ConfigureAwait(false)` rồi sửa `ReviewCatalog` ngoài UI thread. Quy tắc đề xuất: ADR 0005. → AR04.
 
 ## Luồng mở folder và trình diễn ảnh
 
