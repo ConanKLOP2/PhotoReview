@@ -78,7 +78,7 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>());
     }
 
-    // MainViewModel.Metrics (read by Benchmark.Cli through MainWindow._metrics) must be the
+    // MainViewModel.Metrics (read by Benchmark.Cli through MainWindow.Metrics) must be the
     // ReviewMetrics singleton the presenter/preview services record into, not a private empty one.
     [Fact]
     public void AppHost_BuildServices_MainViewModelMetrics_IsSharedReviewMetricsSingleton()

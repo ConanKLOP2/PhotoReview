@@ -16,7 +16,7 @@
 | ST03 | Extract AppComposition from App.xaml.cs | ✓ DONE | — | `479a1ab` | Factory cleanup, < 200 lines App.xaml.cs |
 | ST04 | Move infrastructure down (FileHashService, PhysicalMemory, PerfCsvListener) | ✓ DONE | Q-ST2 | Multiple commits | PerfCsvListener → Core/Diagnostics; FileHashService → Imaging; PhysicalMemory → Platform.Windows |
 | ST05 | Extract PerfAnalyze* from WPF project | ✓ DONE | Q-ST1 | Separate project | New project: `PhotoReview.PerfAnalysis` (`net10.0`, no WPF) |
-| ST06 | Remove CLI reflection into MainWindow; make members public | ✓ DONE | ST03, ST04, Q-ST3 | Multiple commits | `SuppressWindowPlacement()` & `PerfDispatcherHooks` public |
+| ST06 | Remove CLI reflection into MainWindow; make members public | ✓ DONE — superseded by AR02d (read-only properties) | ST03, ST04, Q-ST3 | Multiple commits | `SuppressWindowPlacement()` & `PerfDispatcherHooks` public; AR02d replaced the public mutable fields (`_files`, `_index`, …) with read-only properties (`Files`, `CurrentIndex`, …) |
 | ST07 | Mandatory dependencies + test builder for MainViewModel | ✓ DONE | ST03 | `b620999` | Reduces optional params; enables ST08–ST09 |
 | ST08 | Extract FileActionController | ⏸ BLOCKED | ST07, OC14, Q-ST4 | — | Depends on OC14 (Ctrl+Z semantics) + Q-ST4 decision |
 | ST09 | Extract DuplicateCleanupController & SiblingFolderNavigator | ⏸ BLOCKED | ST08 | — | Depends on ST08 |
@@ -34,7 +34,7 @@
 |---|---|---|---|
 | **Q-ST1** | Separate `PerfAnalysis` project? | ✓ **Yes** — new project `PhotoReview.PerfAnalysis` (`net10.0`) | ST05 DONE |
 | **Q-ST2** | Move `PerfCsvListener` + `DiagOptions` to Core? | ✓ **Yes** — move to `Core/Diagnostics`; preserve EventSource contract | ST04 DONE |
-| **Q-ST3** | Keep Cli→App dependency? Censor reflection? | ✓ **Yes** — accept dependency; make MainWindow members public | ST06 DONE. **Note (Q-AR3, 2026-09-23):** this public-fields exception will be removed by AR02d (single composition root, fields → read-only properties); still in effect until AR02d lands. |
+| **Q-ST3** | Keep Cli→App dependency? Censor reflection? | ✓ **Yes** — accept dependency; make MainWindow members public | ST06 DONE. **Note (Q-AR3, 2026-09-23):** AR02d landed — the public-fields exception is removed; `MainWindow` now exposes read-only properties (`Files`, `CurrentIndex`, `CompareSelectedPath`, `Metrics`, `IsFileActionInProgress`) instead. |
 | **Q-ST4** | Ctrl+Z semantics: Move-only or Move+Recycle? | ✓ **Move+Recycle** — undo both Move and Recycle | ST08 awaits OC14 |
 
 ---

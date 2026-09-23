@@ -38,7 +38,7 @@ internal static class LocalUiNextProbe
                 window.Show();
                 var load = window.LoadFolderAsync(folder, null);
                 await load;
-                var files = window._files;
+                var files = window.Files;
                 if (files.Count < 2) throw new InvalidOperationException("Probe needs at least two images");
                 var second = files[1];
                 var deadline = DateTime.UtcNow.AddSeconds(45);
@@ -55,7 +55,7 @@ internal static class LocalUiNextProbe
                 if (status.Contains("Đang tải", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException($"Warm Next showed loading: {status}");
                 await show;
-                var index = window._index;
+                var index = window.CurrentIndex;
                 if (index != 1) throw new InvalidOperationException($"Warm Next selected wrong index: {index}");
                 var sampleCount = Math.Min(30, files.Count);
                 deadline = DateTime.UtcNow.AddSeconds(150);
@@ -89,7 +89,7 @@ internal static class LocalUiNextProbe
                         throw new InvalidOperationException($"Warm navigation showed loading at {sample + 1}: {status}");
                     await show;
                     durations[sample] = sw.ElapsedMilliseconds;
-                    index = window._index;
+                    index = window.CurrentIndex;
                     if (index != sample) throw new InvalidOperationException($"Navigation selected {index}, expected {sample}");
                     if ((sample + 1) % 10 == 0) Console.WriteLine($"WPF navigation progress: {sample + 1}/{sampleCount}");
                 }

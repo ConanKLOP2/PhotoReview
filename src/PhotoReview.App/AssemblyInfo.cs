@@ -1,7 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
 
-// T14a: the xUnit suite hosts MainWindow on an STA thread through its internal test seam (MainWindowTestHooks).
+// AR02d: the xUnit suites resolve MainWindow through AppHost.BuildServices (TestAppHost/CompositionRootTests)
+// on an STA thread; InternalsVisibleTo remains for other internal test seams (e.g. MainWindowHelpers).
 [assembly: InternalsVisibleTo("PhotoReview.App.Tests")]
 [assembly: InternalsVisibleTo("PhotoReview.Integration.Tests")]
 

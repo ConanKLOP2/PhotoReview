@@ -52,17 +52,11 @@ internal static class TestAppHost
 }
 
 /// <summary>
-/// T14a test seam, migrated by AR02b (AR02-single-composition-root.md, AR02b step 2) from
-/// <c>src/PhotoReview.App/MainWindowTestHooks.cs</c>: plain data describing which AR02a DI seams a
-/// given test wants overridden, consumed only by <see cref="TestAppHost.CreateMainWindow"/>.
-/// <para>
-/// Named <c>TestHostHooks</c> rather than reusing <c>MainWindowTestHooks</c> because the pre-AR02d
-/// non-DI <c>MainWindow</c> constructors and <c>MainWindowHelpers.CreateTestViewModel</c> (kept
-/// until AR02d, out of AR02b's scope) still take
-/// <see cref="PhotoReview.App.MainWindowTestHooks"/> from the App project; giving the two types
-/// different names avoids relying on subtle same-name/using-directive shadowing rules in the test
-/// files that import both <c>PhotoReview.App</c> and this namespace.
-/// </para>
+/// T14a test seam, migrated by AR02b (AR02-single-composition-root.md, AR02b step 2) from the
+/// App project's now-deleted <c>MainWindowTestHooks.cs</c> (removed by AR02d once the last
+/// non-DI <c>MainWindow</c> constructors and <c>MainWindowHelpers.CreateTestViewModel</c> were
+/// deleted): plain data describing which AR02a DI seams a given test wants overridden, consumed
+/// only by <see cref="TestAppHost.CreateMainWindow"/>.
 /// </summary>
 internal sealed class TestHostHooks
 {

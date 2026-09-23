@@ -81,7 +81,7 @@ public sealed class MainWindowBehaviorActionTests
                     {
                         Interlocked.Increment(ref moveInvocations);
                         Volatile.Write(ref movePending, 1);
-                        catalogWhenMoveStarted = [.. Field<List<string>>(window!, "_files")];
+                        catalogWhenMoveStarted = [.. window!.Files];
                         await moveGate.Task;
                         // Mirrors production's Task.Run(() => File.Move(...)) so the success
                         // path (post-move size check, journal Committed, undo registration)
@@ -279,7 +279,7 @@ public sealed class MainWindowBehaviorActionTests
         return args.Handled;
     }
 
-    private static int FileActionInProgress(MainWindow window) => Field<int>(window, "_fileActionInProgress");
+    private static int FileActionInProgress(MainWindow window) => window.IsFileActionInProgress ? 1 : 0;
 
     private static T Field<T>(MainWindow window, string name)
     {
