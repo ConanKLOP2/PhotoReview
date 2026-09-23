@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Threading;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
@@ -24,7 +23,6 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         private readonly BlockingCollection<Action> _queue = new();
         private readonly Thread _thread;
         private readonly ILog _log;
-        private int _disposed;
 
         public StaThreadPump(ILog log)
         {
@@ -63,14 +61,15 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             return completion.Task;
         }
 
+        private int _disposed;
+
         public void Dispose()
         {
-            // AR02b: with the DI composition root, MainWindow.Window_Closed disposes the
-            // resolved IExplorerOrderProvider explicitly *and* the owning ServiceProvider
-            // disposes its tracked singletons, so this can legitimately run twice. Dispose is
-            // required to be idempotent per IDisposable convention; a second CompleteAdding()/
-            // Dispose() on the already-disposed BlockingCollection would otherwise crash the
-            // process (ObjectDisposedException escaping a WM_DESTROY callback is fatal).
+            // AR02c: MainWindow.Window_Closed disposes the (singleton) IExplorerOrderProvider explicitly,
+            // and a DI container that owns this singleton (Benchmark.Cli/AppHost, and AR02b's integration
+            // tests) disposes it again when the ServiceProvider itself is disposed. IDisposable.Dispose
+            // must tolerate being called more than once (standard contract) rather than throw on the
+            // second call's CompleteAdding()/Dispose() against an already-disposed BlockingCollection.
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             _queue.CompleteAdding();
             if (_thread.Join(TimeSpan.FromSeconds(5)))
@@ -82,7 +81,6 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
 
     private readonly ILog _log;
     private readonly StaThreadPump _pump;
-    private int _disposed;
 
     public ExplorerOrderService(ILog? log = null)
     {
@@ -90,11 +88,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         _pump = new StaThreadPump(_log);
     }
 
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        _pump.Dispose();
-    }
+    public void Dispose() => _pump.Dispose();
 
     /// <summary>Progressive variant used by the UI: enumeration yields between small batches and can be cancelled.</summary>
     public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
