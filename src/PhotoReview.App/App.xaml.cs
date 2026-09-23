@@ -112,6 +112,8 @@ public partial class App : System.Windows.Application, IDisposable
         {
             var ctx = sp.GetRequiredService<PreviewStateContext>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
+            // Also lost in T46d: without this the "Original" loading mode still decoded previews.
+            ctx.IsOriginalLoadingMode = () => settingsStore.Current.LoadingMode == PhotoReview.Core.Model.LoadingMode.Original;
             ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
             // T46d dropped the viewport-based decode width, so Preview decoded every image at full size.
             var viewport = sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
