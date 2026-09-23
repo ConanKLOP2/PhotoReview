@@ -47,20 +47,14 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
 
     private static List<(DecoderBackend, Func<IImageDecoder>)> CreateDefaultProviders()
     {
-        var list = new List<(DecoderBackend, Func<IImageDecoder>)>
-        {
+        return
+        [
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
             (DecoderBackend.WicDirect, () => new WicDirectDecoder())
-        };
-
-        var turboType = Type.GetType("PhotoReview.Imaging.TurboJpeg.TurboJpegDecoder, PhotoReview.Imaging.TurboJpeg");
-        if (turboType is not null)
-        {
-            list.Add((DecoderBackend.TurboJpeg, () => (IImageDecoder)Activator.CreateInstance(turboType)!));
-        }
-
-        return list;
+        ];
     }
+
+    public bool IsRegistered(DecoderBackend backend) => _registry.ContainsKey(backend);
 
     public IImageDecoder Create(DecoderBackend backend)
     {

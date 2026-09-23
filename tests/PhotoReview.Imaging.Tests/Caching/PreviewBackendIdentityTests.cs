@@ -193,6 +193,8 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
             _created.Enqueue(backend);
             return create(backend);
         }
+
+        public bool IsRegistered(DecoderBackend backend) => true;
     }
 
     private sealed class FakeDecoder(

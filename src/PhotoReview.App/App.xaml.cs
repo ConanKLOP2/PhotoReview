@@ -82,7 +82,11 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
 
         // 6. Imaging & Decoding
-        services.AddSingleton<IImageDecoderFactory>(sp => new ImageDecoderFactory(sp.GetService<ILog>(), sp.GetService<ReviewMetrics>()));
+        services.AddSingleton<IImageDecoderFactory>(sp =>
+        {
+            var log = sp.GetService<ILog>();
+            return new ImageDecoderFactory(Composition.DecoderProviders.Create(log), log, sp.GetService<ReviewMetrics>());
+        });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             persistNewThumbnails: false,
             log: sp.GetService<ILog>(),
