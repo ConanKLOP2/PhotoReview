@@ -1,15 +1,16 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-23 | **Branch:** `master` (this session's work is on `perf/nav-hot-path-optimizations`, not yet merged) | **Last merge:** #18 (codex/cq-wave1-warnings — all warnings reduced 634→0)
+**Updated:** 2026-09-23 | **Branch:** `master` | **Last merges:** #21 (fix/compare-pair-case-and-race), #20 (perf/nav-hot-path-optimizations)
 
-## In-progress: navigation hot-path perf pass (`perf/nav-hot-path-optimizations`)
+## Done: navigation hot-path perf pass (merged via #20, #21)
 
 Requested as a general "analyze and optimize" pass; not tied to an existing task ID. Findings and
-a batch plan (4 batches) were proposed first, then batches 1–2 and part of 3/4 were implemented
-in one session (three commits). **Not yet reviewed or merged** — open a PR and get it reviewed
-before treating any of this as done.
+a batch plan (4 batches) were proposed first, then batches 1–2 and part of 3/4 were implemented,
+merged as PR #20. A post-merge self-review then found and fixed two real bugs introduced by #20
+(case-sensitive compare-pair grouping; an unsynchronized cache race in `ImagePresenter`), merged
+as PR #21. Both are on `master` now.
 
-**Done (commits 94c5aeb, a654012, 1f982fe on `perf/nav-hot-path-optimizations`):**
+**Done (commits 94c5aeb, a654012, 1f982fe, 20300b4 → PR #20; 9161c35 → PR #21):**
 - `ImagePresenter`: preview decode now starts before the thumbnail await instead of after
   (Preview loading mode), so the two run concurrently.
 - `ReviewCatalog`: O(1) `IndexOf`/`Find` via a lazily-rebuilt path→index dictionary (was O(n)
@@ -68,9 +69,22 @@ before treating any of this as done.
 - EXIF-orientation / TurboJpeg fine-scale lazy `TransformedBitmap` (render-thread cost on first
   frame): not attempted, same "needs real measurement" reasoning.
 
-**Next step:** open a PR from `perf/nav-hot-path-optimizations`, get it reviewed, and — if the
-deferred RAM-budget/disk-cache items are wanted — run `PhotoReview.Benchmark.Cli` before/after on
-a real folder first.
+**Fixed post-merge (PR #21, commit 9161c35):**
+- `ComparePairService.BuildIndex` grouped candidates by `(Folder, Extension)` with the default
+  (ordinal, case-**sensitive**) tuple comparer, while `Find` — the function it replaces on the
+  hot path — compares both with `OrdinalIgnoreCase`. Silently broke pairing for files whose
+  extension case differs (e.g. `DSC0001.JPG` / `DSC0001 (1).jpg`) or whose folder path differs
+  only by case. Fixed with an explicit `OrdinalIgnoreCase` comparer; two regression tests added.
+- `ImagePresenter._compareIndex`/`_compareIndexVersion` had no lock, but `PresentAsync` bodies
+  for overlapping navigations run concurrently (async-void key handlers don't serialize a
+  held-down arrow key). Two concurrent calls could race to rebuild the index redundantly.
+  Wrapped in a lock.
+
+**Next step (nothing further planned unless requested):** the deferred items below are real gaps,
+not bugs in what shipped. Picking any of them up needs either GUI/STA acceptance (WD01, for the
+`ConfigureAwait` item) or `PhotoReview.Benchmark.Cli` numbers from a real photo folder (for the
+RAM-budget/disk-cache items) — this sandbox can do neither, so they weren't attempted rather than
+guessed at.
 
 ## Status by Group
 
