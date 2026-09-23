@@ -87,7 +87,7 @@
 | TC06 | Native Recycle Bin | ✅ EXISTS* | Q-T4 done | **Integration.Tests/HotPath/NativeRecycleBinTests.cs — LOCATION ERROR.** 2 real methods: DeleteMultiple/DeleteRapidly with 52 assertions |
 | TC07 | Real photos manual | ✅ EXISTS* | Q-T3 done | **Integration.Tests/HotPath/RealPhotosManualTests.cs — LOCATION ERROR.** 2 real methods: WarmNext/FileActions with ReadBudgetProbe assertions |
 | TC08 | Replace G1 tests | ✅ EXISTS | TC05 | InterleavedFileActionSequenceTests.TC08a/b/c: production-code replacement tests (183 lines added) |
-| TC09 | Flake audit | TODO | — | Not yet started; OperationJournalTests.LargeJournal flakes known |
+| TC09 | Flake audit | 🔄 PARTIAL | — | TS02 `FixturePerfTest` fixed (branch `test/tc09-ts02-flake`): gate asserts count/composition/size only; cost budget → `Category=Slow` test on thread CPU time (≤10 s, ~1.5 s cold). Full suite 3× 0 failures. Remaining: OperationJournalTests.LargeJournal |
 | TC10 | Test categorization | ✅ EXISTS | — | [Trait("Category", ...)] added to 46+ test classes, filter works in verify-all.ps1 |
 | TC11 | CI gate integration | ✅ EXISTS | TC05 | verify-all.ps1 gate filter logic working; CI workflow updated |
 
