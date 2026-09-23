@@ -1,8 +1,10 @@
 using System.Text;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
@@ -334,7 +336,7 @@ public sealed class OperationJournalUnitTests
         Assert.Throws<ArgumentNullException>(() => new OperationJournal(paths, _fs, null!));
     }
 
-    [Fact(DisplayName = "Large journal startup reads only recent committed moves within threshold")]
+    [Fact(DisplayName = "Large journal startup reads only recent committed moves within a bounded-work budget (Q-S3/TS05)")]
     public void LargeJournal_ReadCommittedMoves_IsBoundedAndFast()
     {
         var root = Path.Combine(Path.GetTempPath(), "PhotoReview-T62-" + Guid.NewGuid().ToString("N"));
@@ -344,19 +346,33 @@ public sealed class OperationJournalUnitTests
         {
             const int totalEntries = 100_000;
             var setupWatch = Stopwatch.StartNew();
+
+            // TS05: format the JSONL line directly instead of JsonSerializer.Serialize per entry -
+            // reflection-based serialization of 100_000 entries was the ~3.3 s setup cost this test
+            // used to pay before it ever measured the thing it cares about (the bounded tail read).
+            var tsText = _clock.UtcNow.ToString("o", CultureInfo.InvariantCulture);
             using (var writer = new StreamWriter(path, false, Encoding.UTF8, 256 * 1024))
             {
                 for (var i = 0; i < totalEntries; i++)
                 {
-                    var entry = new JournalEntry($"old-{i}", FileOperationType.Move, JournalState.Committed,
-                        $@"C:\photos\source-{i}.jpg", $@"C:\photos\dest-{i}.jpg", i,
-                        _clock.UtcNow, _clock.UtcNow);
-                    writer.WriteLine(JsonSerializer.Serialize(entry));
+                    writer.Write(
+                        "{\"Id\":\"old-" + i.ToString(CultureInfo.InvariantCulture) +
+                        "\",\"Type\":\"Move\",\"State\":\"Committed\",\"Source\":\"C:\\\\photos\\\\source-" +
+                        i.ToString(CultureInfo.InvariantCulture) +
+                        ".jpg\",\"Destination\":\"C:\\\\photos\\\\dest-" +
+                        i.ToString(CultureInfo.InvariantCulture) +
+                        ".jpg\",\"Size\":" + i.ToString(CultureInfo.InvariantCulture) +
+                        ",\"LastWriteUtc\":\"" + tsText + "\",\"TimestampUtc\":\"" + tsText +
+                        "\",\"Error\":null}\n");
                 }
             }
             setupWatch.Stop();
 
-            var journal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+            // Q-S3: assert bounded work (bytes read and lines scanned), not just wall-clock time -
+            // this is what actually enforces "startup reads only the recent tail" deterministically.
+            var boundedFileSystem = new BoundedReadFileSystem(new PhysicalFileSystem());
+            var journal = new OperationJournal(new FakeAppPaths(path), boundedFileSystem, _clock);
+
             var readWatch = Stopwatch.StartNew();
             var entries = journal.ReadCommittedMoves();
             readWatch.Stop();
@@ -365,15 +381,104 @@ public sealed class OperationJournalUnitTests
             Assert.Equal("old-99800", entries[0].Id);
             Assert.Equal("old-99999", entries[^1].Id);
 
-            // Verify deterministic bounded work: tail read should be much faster than setup.
-            // ReadCommittedMovesReverse reads from the tail with an expanding window,
-            // so adding more old entries does not increase the read cost.
-            Assert.True(readWatch.ElapsedMilliseconds < 500,
-                $"Journal tail read took {readWatch.ElapsedMilliseconds} ms (bounded work, target <= 500ms). Setup: {setupWatch.ElapsedMilliseconds} ms.");
+            // Each line is ~140 bytes, so the 200-entry tail is ~28 KB. The reverse-tail reader
+            // doubles its read window (starting at 256 KB) until it has >= 200 committed moves, so
+            // for this all-Move-Committed fixture it reads exactly one window. Bound generously at
+            // 1 MB (~35x the 200-entry tail) - a regression to a full-file scan would read close to
+            // the whole ~14 MB file, which trips this by more than an order of magnitude.
+            const long maxBytes = 1024 * 1024;
+            Assert.True(boundedFileSystem.TotalBytesRead <= maxBytes,
+                $"ReadCommittedMoves read {boundedFileSystem.TotalBytesRead} bytes " +
+                $"(bounded-work budget: {maxBytes}). A full-file-scan regression reads ~{new FileInfo(path).Length} bytes.");
+
+            const long maxLinesScanned = 3_000; // >> 200-entry tail, << 100_000 total lines
+            Assert.True(boundedFileSystem.ApproxLinesScanned <= maxLinesScanned,
+                $"ReadCommittedMoves scanned ~{boundedFileSystem.ApproxLinesScanned} lines (budget: {maxLinesScanned}).");
+
+            // Generous wall-clock backstop only (TS05/Q-S3): the byte/line-bounded assertions above
+            // are the real, deterministic regression guard; this just catches pathological slowness
+            // (e.g. an O(n^2) rewrite) that the counters wouldn't otherwise flag.
+            Assert.True(readWatch.ElapsedMilliseconds < 2000,
+                $"Journal tail read took {readWatch.ElapsedMilliseconds} ms (backstop budget: 2000 ms). Setup: {setupWatch.ElapsedMilliseconds} ms.");
         }
         finally
         {
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// TS05: wraps <see cref="IFileSystem.OpenReadShared"/> to count bytes actually read and an
+    /// approximate line count (newline bytes seen), so the bounded-tail-read contract can be
+    /// asserted deterministically instead of only via wall-clock time.
+    /// </summary>
+    private sealed class BoundedReadFileSystem(IFileSystem inner) : IFileSystem
+    {
+        private long _totalBytesRead;
+        private long _approxLinesScanned;
+
+        public long TotalBytesRead => Interlocked.Read(ref _totalBytesRead);
+        public long ApproxLinesScanned => Interlocked.Read(ref _approxLinesScanned);
+
+        public Stream OpenReadShared(string path, int bufferSize = 65536) =>
+            new CountingReadStream(inner.OpenReadShared(path, bufferSize), this);
+
+        private void RecordRead(byte[] buffer, int offset, int count)
+        {
+            Interlocked.Add(ref _totalBytesRead, count);
+            var lines = 0;
+            for (var i = offset; i < offset + count; i++)
+            {
+                if (buffer[i] == (byte)'\n') lines++;
+            }
+            Interlocked.Add(ref _approxLinesScanned, lines);
+        }
+
+        private sealed class CountingReadStream(Stream inner, BoundedReadFileSystem owner) : Stream
+        {
+            public override bool CanRead => inner.CanRead;
+            public override bool CanSeek => inner.CanSeek;
+            public override bool CanWrite => false;
+            public override long Length => inner.Length;
+
+            public override long Position
+            {
+                get => inner.Position;
+                set => inner.Position = value;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                var read = inner.Read(buffer, offset, count);
+                if (read > 0) owner.RecordRead(buffer, offset, read);
+                return read;
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override void Flush() => inner.Flush();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing) inner.Dispose();
+                base.Dispose(disposing);
+            }
+        }
+
+        // Pass-through: everything else is untouched, only OpenReadShared is instrumented.
+        public bool FileExists(string path) => inner.FileExists(path);
+        public bool DirectoryExists(string path) => inner.DirectoryExists(path);
+        public FileStat? GetFileStat(string path) => inner.GetFileStat(path);
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Copy(string source, string destination) => inner.Copy(source, destination);
+        public void Delete(string path) => inner.Delete(path);
+        public Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
+        public void WriteAllTextAtomic(string path, string text) => inner.WriteAllTextAtomic(path, text);
+        public string ReadAllText(string path) => inner.ReadAllText(path);
+        public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
+        public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
+        public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
     }
 }
