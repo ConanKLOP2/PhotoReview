@@ -41,3 +41,5 @@ The application must prioritize the following principles when processing and rev
 ## Mandatory Build, Publish, and Git Push Workflow
 
 - After each completed change: commit, and push to an appropriate branch for me to review and merge.
+- Version is automatic (`Directory.Build.targets`): `2.0.N`, +1 per merge to master, CI tags `v2.0.N`; never hand-edit `<Version>`.
+- Base every PR on `master` (no stacked PRs).

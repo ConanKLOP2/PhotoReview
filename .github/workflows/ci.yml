@@ -14,7 +14,8 @@ on:
 
 concurrency:
   group: ${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel master runs: each merge is a version (2.0.N) that must be built and tagged.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   build-test-publish:
@@ -22,6 +23,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + tags: Directory.Build.targets derives the version from
+          # `git rev-list --count --first-parent v2.0.0..HEAD`.
+          fetch-depth: 0
 
       # setup-dotnet checks this directory before downloading; if the exact SDK
       # version from global.json is already here, it skips the download entirely.
@@ -54,6 +59,13 @@ jobs:
 
       - name: Build Release
         run: dotnet build PhotoReview.slnx -c Release --no-restore
+
+      - name: Show version
+        shell: powershell
+        run: |
+          $v = (Get-Item 'src/PhotoReview.App/bin/Release/net10.0-windows/PhotoReview.App.dll').VersionInfo.ProductVersion
+          Write-Host "PhotoReview $v"
+          "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       # CI runs HotPath tests only (fast, mocked deps)
       # Stress/Native/Slow/Integration tests run locally only (optional via -Stress, -Native, -Slow, -Integration)
@@ -100,3 +112,34 @@ jobs:
         with:
           name: test-results
           path: TestResults
+
+  # One tag per merge to master: v<MajorMinor>.<N>, the same number the build embeds
+  # (Directory.Build.targets). Runs only after build + tests + publish succeeded.
+  tag-version:
+    needs: build-test-publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          mm=$(sed -n 's:.*<PhotoReviewVersionMajorMinor>\(.*\)</PhotoReviewVersionMajorMinor>.*:\1:p' Directory.Build.targets)
+          anchor=$(sed -n 's:.*<PhotoReviewVersionAnchorTag>\(.*\)</PhotoReviewVersionAnchorTag>.*:\1:p' Directory.Build.targets)
+          n=$(git rev-list --count --first-parent "${anchor}..HEAD")
+          tag="v${mm}.${n}"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${tag}" -m "PhotoReview ${mm}.${n}" "${GITHUB_SHA}"
+          git push origin "${tag}"
+          echo "Tagged ${tag} at ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"

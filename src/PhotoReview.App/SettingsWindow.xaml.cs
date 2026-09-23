@@ -25,10 +25,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null)
     {
         InitializeComponent();
-        var assembly = Assembly.GetEntryAssembly();
-        var version = assembly?.GetName().Version?.ToString(3) ?? "unknown";
-        var build = assembly?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        VersionText.Text = string.IsNullOrWhiteSpace(build) || build == version ? $"Phiên bản {version}" : $"Phiên bản {version} · {build}";
+        VersionText.Text = BuildInfo.Describe(typeof(SettingsWindow).Assembly);
         Settings = new AppSettings
         {
             InitialViewMode = current.InitialViewMode,

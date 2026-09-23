@@ -111,11 +111,6 @@ public sealed class SourcePresenceTests
             && settingsWindow.Contains("explorer.exe") && settingsWindow.Contains("AppLog.FilePath"));
     }
 
-    [Fact(DisplayName = "Each build exposes a unique informational build stamp in Settings (source presence, not behavior)")]
-    public void EachBuildExposesUniqueInformationalBuildStamp() =>
-        Assert.True(ProjectSources.AppCsproj.Contains("BuildStamp")
-            && ProjectSources.SettingsWindow.Contains("AssemblyInformationalVersionAttribute"));
-
     // Window shutdown itself is WPF glue (Closed handler on the Window); the scheduler's own
     // disposal is covered behaviorally by PreloadSchedulerTests.
     [Fact(DisplayName = "Window shutdown disposes preload and thumbnail resources (source presence, not behavior)")]

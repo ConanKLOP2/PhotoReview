@@ -1,0 +1,91 @@
+<Project>
+
+  <!--
+    Automatic versioning from git (one source of truth, no manual bumps):
+
+      Version  = $(PhotoReviewVersionMajorMinor).N          on master (or any commit already merged)
+               = $(PhotoReviewVersionMajorMinor).(N+1)-dev.A on a branch A commits ahead of master
+      N        = first-parent commits on master since tag $(PhotoReviewVersionAnchorTag)
+                 (every PR merge adds exactly one, whatever the merge style)
+
+    InformationalVersion = Version + "+" + 8-char sha (+ ".dirty" for PhotoReview.App when the tree has
+    uncommitted changes). PhotoReview.App also gets AssemblyMetadata "BuildTime" in LOCAL time with the
+    UTC offset (e.g. "2026-09-24 07:15:30 +07:00"), so it can be compared with file/log times directly.
+    Build time and the dirty flag are App-only: they change on every build/edit and would otherwise force
+    every project to recompile on every build.
+
+    CI must check out full history + tags (actions/checkout fetch-depth: 0). Without git the version
+    falls back to $(PhotoReviewVersionMajorMinor).0-nogit.
+    To start a new minor/major line: bump PhotoReviewVersionMajorMinor and tag the first commit of it.
+  -->
+  <PropertyGroup>
+    <PhotoReviewVersionMajorMinor>2.0</PhotoReviewVersionMajorMinor>
+    <PhotoReviewVersionAnchorTag>v2.0.0</PhotoReviewVersionAnchorTag>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="PhotoReviewComputeVersion" BeforeTargets="GetAssemblyVersion;GetAssemblyAttributes">
+    <Exec Command="git rev-parse --short=8 HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PrSha" />
+      <Output TaskParameter="ExitCode" PropertyName="_PrGitExit" />
+    </Exec>
+
+    <!-- Base = where this commit joins master: origin/master, else local master, else HEAD itself. -->
+    <Exec Condition="'$(_PrGitExit)' == '0'" Command="git merge-base HEAD origin/master" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PrBase" />
+      <Output TaskParameter="ExitCode" PropertyName="_PrBaseExit" />
+    </Exec>
+    <Exec Condition="'$(_PrGitExit)' == '0' And '$(_PrBaseExit)' != '0'" Command="git merge-base HEAD master" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PrBase" />
+      <Output TaskParameter="ExitCode" PropertyName="_PrBaseExit" />
+    </Exec>
+    <PropertyGroup Condition="'$(_PrGitExit)' == '0' And '$(_PrBaseExit)' != '0'">
+      <_PrBase>HEAD</_PrBase>
+    </PropertyGroup>
+
+    <Exec Condition="'$(_PrGitExit)' == '0'" Command="git rev-list --count --first-parent $(PhotoReviewVersionAnchorTag)..$(_PrBase)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PrPatch" />
+      <Output TaskParameter="ExitCode" PropertyName="_PrPatchExit" />
+    </Exec>
+    <Exec Condition="'$(_PrGitExit)' == '0' And '$(_PrPatchExit)' == '0'" Command="git rev-list --count $(_PrBase)..HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PrAhead" />
+    </Exec>
+
+    <PropertyGroup Condition="'$(_PrGitExit)' == '0' And '$(_PrPatchExit)' == '0'">
+      <_PrAhead Condition="'$(_PrAhead)' == ''">0</_PrAhead>
+      <_PrReleasePatch Condition="'$(_PrAhead)' == '0'">$(_PrPatch)</_PrReleasePatch>
+      <_PrReleasePatch Condition="'$(_PrAhead)' != '0'">$([MSBuild]::Add($(_PrPatch), 1))</_PrReleasePatch>
+      <VersionPrefix>$(PhotoReviewVersionMajorMinor).$(_PrReleasePatch)</VersionPrefix>
+      <VersionSuffix Condition="'$(_PrAhead)' != '0'">dev.$(_PrAhead)</VersionSuffix>
+      <VersionSuffix Condition="'$(_PrAhead)' == '0'"></VersionSuffix>
+      <Version Condition="'$(VersionSuffix)' == ''">$(VersionPrefix)</Version>
+      <Version Condition="'$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</Version>
+      <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+      <FileVersion>$(VersionPrefix).$(_PrAhead)</FileVersion>
+      <InformationalVersion>$(Version)+$(_PrSha)</InformationalVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(_PrGitExit)' != '0' Or '$(_PrPatchExit)' != '0'">
+      <Version>$(PhotoReviewVersionMajorMinor).0-nogit</Version>
+      <AssemblyVersion>$(PhotoReviewVersionMajorMinor).0.0</AssemblyVersion>
+      <FileVersion>$(PhotoReviewVersionMajorMinor).0.0</FileVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="PhotoReviewAppBuildStamp" AfterTargets="PhotoReviewComputeVersion" BeforeTargets="GetAssemblyAttributes" Condition="'$(MSBuildProjectName)' == 'PhotoReview.App'">
+    <Exec Condition="'$(_PrGitExit)' == '0'" Command="git status --porcelain --untracked-files=no" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true" WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" ItemName="_PrDirtyLines" />
+    </Exec>
+    <PropertyGroup>
+      <_PrDirty Condition="'@(_PrDirtyLines)' != ''">true</_PrDirty>
+      <InformationalVersion Condition="'$(_PrDirty)' == 'true'">$(InformationalVersion).dirty</InformationalVersion>
+      <_PrBuildTime>$([System.DateTime]::Now.ToString('yyyy-MM-dd HH\:mm\:ss zzz'))</_PrBuildTime>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="BuildTime" Value="$(_PrBuildTime)" />
+      <AssemblyMetadata Include="CommitSha" Value="$(_PrSha)" Condition="'$(_PrSha)' != ''" />
+    </ItemGroup>
+  </Target>
+
+</Project>
