@@ -9,7 +9,7 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** (Architecture Review 2026-09-23) | 🔄 AR00 DONE on branch `docs/arch-review-plan`; AR01-AR07 TODO | 5 decisions Q-AR1..Q-AR5 pending. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
+| **AR** (Architecture Review 2026-09-23) | ✅ AR00 DONE (PR #23 merged); 🔄 AR07 §1-4 DONE on `docs/ar07-docs-repair`; AR01-AR06, AR07 §5 TODO | 5 decisions Q-AR1..Q-AR5 pending. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS04 DONE, TS05-TS10 TODO | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
@@ -30,7 +30,7 @@
 
 | ID | Name | Decision | Depends on | Real machine/GUI | Status |
 |----|------|----------|------------|------------------|--------|
-| AR00 | Review + plans + ADR 0005 draft + stale-status fixes | — | — | No | ✅ DONE on `docs/arch-review-plan` (PR pending) |
+| AR00 | Review + plans + ADR 0005 draft + stale-status fixes | — | — | No | ✅ DONE (PR #23 merged, `bff22d9`) |
 | AR01 | Ship TurboJpeg: explicit registration, native probe, Settings reflects availability, release gate | Q-AR1 | — | 1 check | TODO |
 | AR02a | `AppHost`, caches from `IAppPaths`, viewport provider, presentation/preload/move seams | Q-AR3 | — | Fit check (with T89) | TODO |
 | AR02b | Integration tests build MainWindow via `AppHost` (12 sites) | Q-AR3 | AR02a | No | TODO |
@@ -40,7 +40,7 @@
 | AR03 | SourceBytes policy (a), `Platform.Windows` without WPF (b), startup dialog via `IDialogService` (c) | — | — | No | TODO |
 | AR04 | UI-thread affinity: remove 47 `ConfigureAwait(false)` in App, arch test, catalog Debug guard | Q-AR2 | AR02c, AR02e | **Yes** (GUI + perf) | TODO |
 | AR06 | One release location, delete broken `outputs/release`, prune worktrees/leftovers | Q-AR4 | — | No | TODO |
-| AR07 | Fix 17 broken links, restore ADR evidence, link gate, docs-budget fix, group triage | Q-AR5 | AR00 | No | TODO |
+| AR07 | Fix 17 broken links, restore ADR evidence, link gate, docs-budget fix, group triage | Q-AR5 | AR00 | No | 🔄 §1-4 DONE on `docs/ar07-docs-repair` (PR pending); §5 triage waits Q-AR5 |
 
 ---
 

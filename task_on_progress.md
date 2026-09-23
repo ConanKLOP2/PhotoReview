@@ -1,11 +1,11 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-23 | **Base:** `master@fbdf48e` (#22) | **Working branch:** `docs/arch-review-plan` (AR00, committed locally, **not pushed yet** — push from Windows: `git push -u origin docs/arch-review-plan`, then open PR)
+**Updated:** 2026-09-23 | **Base:** `master@b2048b6` (#23) | **Working branch:** `docs/ar07-docs-repair` (AR07 §1-4, PR pending)
 
-## Now: Architecture review → AR plan (AR00 done on branch)
+## Now: AR07 §1-4 done (this branch); AR01-AR06 + AR07 §5 remain
 
-- Review verdict: layering is sound, no redesign. Problems are at boundaries. Summary + findings F1–F9: [`docs/refactoring/ARCH-REVIEW-SUMMARY.md`](docs/refactoring/ARCH-REVIEW-SUMMARY.md). Per-task plans: `docs/refactoring/arch-review/AR0x-*.md` (read only the one you work on).
-- AR00 (this branch): summary + AR01–AR07 plans, ADR 0005 (Proposed), fixed stale status (T89 code **is** on master via PR #15; DT00–03/08/09 done), broken plan links in ACTIVE-TASKS, T0 budget (perf-pass detail moved to `docs/archive/progress-log-2026-09.md`), `architecture.md` TurboJpeg arrow (App did **not** reference it).
+- AR00 merged to master via PR #23 (`bff22d9`). Review verdict: layering is sound, no redesign. Problems are at boundaries. Summary + findings F1–F9: [`docs/refactoring/ARCH-REVIEW-SUMMARY.md`](docs/refactoring/ARCH-REVIEW-SUMMARY.md). Per-task plans: `docs/refactoring/arch-review/AR0x-*.md` (read only the one you work on).
+- AR07 §1-4 (this branch): restored ADR evidence (`docs/archive/evidence/`), fixed remaining broken links, added `tools/check-doc-links.ps1` gate (wired into `verify-all.ps1`), fixed `docs-budget.ps1` T0 match for `docs/INDEX.md`. §5 triage waits on Q-AR5.
 - **Waiting on user:** Q-AR1 (ship TurboJpeg?), Q-AR2 (accept ADR 0005), Q-AR3 (single composition root, supersedes ST06 fields), Q-AR4 (release path), Q-AR5 (group triage). See `docs/refactoring/OPEN-DECISIONS.md`.
 - Next (no decision needed): AR03, AR06 prep. After Q-AR1: AR01. After Q-AR3: AR02a→b→c→e→d. After Q-AR2 + AR02e: AR04.
 
@@ -20,7 +20,7 @@ Details: `docs/archive/progress-log-2026-09.md` (2026-09-23 entry). Still deferr
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** | 🔄 AR00 on branch | Plan ready; 5 decisions pending. |
+| **AR** | ✅ AR00 merged (#23); 🔄 AR07 §1-4 on branch | 5 decisions pending; AR01-AR06 + AR07 §5 TODO. |
 | ST | ✅ (ST08/09 wait OC14) | ST06 fields to be replaced by AR02d if Q-AR3 = yes. |
 | TS | ✅ TS00-04 | TS05-10 remain. |
 | DF, CQ | ✅ Done | |
