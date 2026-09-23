@@ -181,7 +181,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         _statusText = string.Empty;
-        await _folderCoordinator.LoadAsync(folder, initialPath).ConfigureAwait(false);
+        await _folderCoordinator.LoadAsync(folder, initialPath);
         NotifyNavigationStateChanged();
     }
 
@@ -204,7 +204,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             StatusText = input.Warning;
         }
 
-        await OpenFolderAsync(input.FolderPath!, input.InitialImagePath).ConfigureAwait(false);
+        await OpenFolderAsync(input.FolderPath!, input.InitialImagePath);
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock.NextInteraction();
         var nextIdx = Math.Min(_catalog.CurrentIndex + 1, _catalog.Count - 1);
         _statusText = string.Empty;
-        await _presenter.PresentAsync(nextIdx).ConfigureAwait(false);
+        await _presenter.PresentAsync(nextIdx);
         NotifyNavigationStateChanged();
     }
 
@@ -229,7 +229,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock.NextInteraction();
         var prevIdx = Math.Max(_catalog.CurrentIndex - 1, 0);
         _statusText = string.Empty;
-        await _presenter.PresentAsync(prevIdx).ConfigureAwait(false);
+        await _presenter.PresentAsync(prevIdx);
         NotifyNavigationStateChanged();
     }
 
@@ -241,7 +241,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_catalog.Count == 0) return;
         _clock.NextInteraction();
         _statusText = string.Empty;
-        await _presenter.PresentAsync(0).ConfigureAwait(false);
+        await _presenter.PresentAsync(0);
         NotifyNavigationStateChanged();
     }
 
@@ -263,7 +263,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
         var nextIdx = Math.Min(_catalog.CurrentIndex + 1, _catalog.Count - 1);
         _statusText = string.Empty;
-        await _presenter.PresentAsync(nextIdx).ConfigureAwait(false);
+        await _presenter.PresentAsync(nextIdx);
         NotifyNavigationStateChanged();
     }
 
@@ -286,13 +286,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
     public async Task RunActionAsync(int index) =>
-        await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path).ConfigureAwait(false);
+        await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
 
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
     public async Task RecycleAsync() =>
-        await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path).ConfigureAwait(false);
+        await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
 
     /// <summary>
     /// Unified entry point for Undo: reverses the last file action (Move or Recycle).
@@ -301,7 +301,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public async Task UndoAsync()
     {
-        var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path).ConfigureAwait(false);
+        var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path);
 
         // Handle Recycle Undo which needs folder change
         if (result?.Succeeded == true && result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
@@ -309,7 +309,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             var folder = Path.GetDirectoryName(result.Source);
             if (!string.IsNullOrEmpty(folder))
             {
-                await OpenFolderAsync(folder, result.Source).ConfigureAwait(false);
+                await OpenFolderAsync(folder, result.Source);
             }
         }
     }
@@ -320,7 +320,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     [Obsolete("Use UndoAsync() instead. This method provides the same behavior as UndoAsync() now.")]
     public async Task UndoLastAsync()
     {
-        await UndoAsync().ConfigureAwait(false);
+        await UndoAsync();
     }
 
     public void ToggleFit() => _viewerState.ResetFit();
@@ -339,7 +339,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var selected = _dialogService.PickFolder(current);
         if (!string.IsNullOrWhiteSpace(selected))
         {
-            await OpenFolderAsync(selected).ConfigureAwait(false);
+            await OpenFolderAsync(selected);
         }
     }
 
@@ -347,13 +347,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Tìm kiếm và xử lý các ảnh trùng lặp theo hash nội dung.
     /// </summary>
     public async Task RemoveDuplicatesAsync(bool removeNumbered) =>
-        await _duplicateController.RemoveDuplicatesAsync(removeNumbered).ConfigureAwait(false);
+        await _duplicateController.RemoveDuplicatesAsync(removeNumbered);
 
     /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
     /// </summary>
     public async Task ClearCacheAsync() =>
-        await _duplicateController.ClearCacheAsync().ConfigureAwait(false);
+        await _duplicateController.ClearCacheAsync();
 
     /// <summary>
     /// Hiển thị cửa sổ khôi phục thao tác tệp tin.
@@ -513,7 +513,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     async Task IFileActionSink.PresentAsync(int index)
     {
-        await _presenter.PresentAsync(index).ConfigureAwait(false);
+        await _presenter.PresentAsync(index);
     }
 
     void IFileActionSink.UpdateSessionPath(string currentPath)
@@ -539,7 +539,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     async Task ISiblingNavigatorSink.OpenFolderAsync(string folder, string? initialPath)
     {
-        await OpenFolderAsync(folder, initialPath).ConfigureAwait(false);
+        await OpenFolderAsync(folder, initialPath);
     }
 
     void ISiblingNavigatorSink.NotifyNavigationStateChanged()
@@ -555,7 +555,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
     {
-        await OpenFolderAsync(folder, initialPath).ConfigureAwait(false);
+        await OpenFolderAsync(folder, initialPath);
     }
 
     void IDuplicateCleanupSink.NotifyNavigationStateChanged()
