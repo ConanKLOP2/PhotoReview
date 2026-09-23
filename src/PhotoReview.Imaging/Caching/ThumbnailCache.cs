@@ -28,9 +28,10 @@ public sealed class ThumbnailCache : IDisposable
     private readonly bool _persistNewThumbnails;
     private readonly ILog _log;
     private readonly SourceBytesCache? _sourceBytesCache;
+    private readonly Func<string, CancellationToken, Task<IDecodedImage?>> _embeddedThumbnailReader;
     private readonly DiskCacheStore _diskStore;
     private readonly BoundedLruCache<string, IDecodedImage> _ramCache;
-    private readonly ConcurrentDictionary<string, Lazy<Task<IDecodedImage>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Lazy<Task<IDecodedImage?>>> _inFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly object _lifecycleGate = new();
     private long _cacheGeneration;
@@ -41,11 +42,12 @@ public sealed class ThumbnailCache : IDisposable
 
     public ThumbnailCache(
         string? diskDirectory = null,
-        long maxRamBytes = 256L * 1024 * 1024,
+        long maxRamBytes = 1L * 1024 * 1024 * 1024,
         long maxDiskBytes = DefaultMaxDiskBytes,
         bool persistNewThumbnails = true,
         ILog? log = null,
-        SourceBytesCache? sourceBytesCache = null)
+        SourceBytesCache? sourceBytesCache = null,
+        Func<string, CancellationToken, Task<IDecodedImage?>>? embeddedThumbnailReader = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRamBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDiskBytes);
@@ -57,11 +59,12 @@ public sealed class ThumbnailCache : IDisposable
         _persistNewThumbnails = persistNewThumbnails;
         _log = log ?? NullLog.Instance;
         _sourceBytesCache = sourceBytesCache;
+        _embeddedThumbnailReader = embeddedThumbnailReader ?? DefaultReadEmbeddedThumbnailAsync;
         _diskStore = new DiskCacheStore(_diskDirectory, "*.png", _maxDiskBytes, _log);
         _ramCache = new BoundedLruCache<string, IDecodedImage>(_maxRamBytes, EstimateBytes, StringComparer.OrdinalIgnoreCase);
     }
 
-    public Task<IDecodedImage> GetAsync(string sourcePath, CancellationToken cancellationToken = default)
+    public Task<IDecodedImage?> GetAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         // D04 perf: ThumbEnd(source=ram) covers the key build (one stat) + RAM lookup.
@@ -81,15 +84,22 @@ public sealed class ThumbnailCache : IDisposable
         if (_ramCache.TryGet(key, out var cached))
         {
             if (perfT0 != 0) PhotoReviewPerf.Log.ThumbEnd(PhotoReviewPerf.NavContext, PhotoReviewPerf.PathId(fullPath), "ram", PhotoReviewPerf.Ms(perfT0));
-            return Task.FromResult(cached);
+            return Task.FromResult<IDecodedImage?>(cached);
         }
 
-        var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<IDecodedImage>>(
+        var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<IDecodedImage?>>(
             () => LoadOrCreateAsync(fullPath, key, disposeToken),
             LazyThreadSafetyMode.ExecutionAndPublication));
 
         return AwaitAndCacheAsync(key, lazy, cancellationToken);
     }
+
+    private static Task<IDecodedImage?> DefaultReadEmbeddedThumbnailAsync(string path, CancellationToken cancellationToken)
+        => Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return EmbeddedThumbnailReader.TryRead(path);
+        }, cancellationToken);
 
     public void ClearMemory()
     {
@@ -100,27 +110,30 @@ public sealed class ThumbnailCache : IDisposable
         }
     }
 
-    private async Task<IDecodedImage> AwaitAndCacheAsync(
+    private async Task<IDecodedImage?> AwaitAndCacheAsync(
         string key,
-        Lazy<Task<IDecodedImage>> lazy,
+        Lazy<Task<IDecodedImage?>> lazy,
         CancellationToken cancellationToken)
     {
         var generation = Volatile.Read(ref _cacheGeneration);
         var underlyingTask = lazy.Value;
         _ = underlyingTask.ContinueWith(
-            _ => _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<IDecodedImage>>>(key, lazy)),
+            _ => _inFlight.TryRemove(new KeyValuePair<string, Lazy<Task<IDecodedImage?>>>(key, lazy)),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
         var image = await underlyingTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-        lock (_lifecycleGate)
+        if (image is not null)
         {
-            if (!_disposed && generation == _cacheGeneration) _ramCache.Set(key, image);
+            lock (_lifecycleGate)
+            {
+                if (!_disposed && generation == _cacheGeneration) _ramCache.Set(key, image);
+            }
         }
         return image;
     }
 
-    private async Task<IDecodedImage> LoadOrCreateAsync(string sourcePath, string key, CancellationToken cancellationToken)
+    private async Task<IDecodedImage?> LoadOrCreateAsync(string sourcePath, string key, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         // D04 perf: runs under the nav of whoever started this shared (Lazy) load; the AsyncLocal is
@@ -151,18 +164,24 @@ public sealed class ThumbnailCache : IDisposable
             }
         }
 
+        // Perf: on a disk-cache miss, never fall back to a full source decode -- that was the
+        // original open-folder slow path (decoding the same JPEG twice, once here and once for
+        // the preview, serialized behind each other). Read only the JPEG's embedded EXIF
+        // thumbnail (APP1); if the source has none (or isn't a JPEG), return null and let the
+        // preview decode that ImagePresenter already started concurrently supply the image.
         var generationBeforeDecode = Volatile.Read(ref _cacheGeneration);
-        var image = await DecodeAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+        var embedded = await _embeddedThumbnailReader(sourcePath, cancellationToken).ConfigureAwait(false);
         // Includes a failed disk-cache attempt, if any; excludes persisting the new thumbnail.
-        if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, "decode", PhotoReviewPerf.Ms(perfT0));
-        if (!_persistNewThumbnails) return image;
+        if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, embedded is not null ? "embedded" : "none", PhotoReviewPerf.Ms(perfT0));
+        if (embedded is null) return null;
+        if (!_persistNewThumbnails) return embedded;
         // ClearDisk() bumps _cacheGeneration and wipes the directory; without this check an
         // in-flight decode that started before the clear can still recreate a PNG right after
         // the user asked for the disk cache to be emptied.
-        if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode) return image;
+        if (Volatile.Read(ref _cacheGeneration) != generationBeforeDecode) return embedded;
         try
         {
-            if (image.PlatformImage is BitmapSource bmp)
+            if (embedded.PlatformImage is BitmapSource bmp)
             {
                 await _diskStore.WriteAtomicallyAsync(bmp, cachePath, cancellationToken).ConfigureAwait(false);
             }
@@ -176,7 +195,7 @@ public sealed class ThumbnailCache : IDisposable
         }
         catch (IOException ex) { _log.Error($"Disk thumbnail write failed: {cachePath}", ex); }
         catch (UnauthorizedAccessException ex) { _log.Error($"Disk thumbnail write failed: {cachePath}", ex); }
-        return image;
+        return embedded;
     }
 
     public void ClearDisk()

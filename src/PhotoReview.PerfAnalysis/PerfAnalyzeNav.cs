@@ -234,14 +234,15 @@ public static class PerfAnalyzeNavBuilder
                 case "Lookup":
                     rec.LookupResult = row.Text;
                     break;
-                case "ThumbStart":
-                    rec.HasThumbnail = true;
-                    break;
                 case "ThumbEnd":
-                    rec.HasThumbnail = true;
                     // MainWindow emits its own call-site total as source="unknown"; ThumbnailCache
-                    // emits a second ThumbEnd with the real source (ram|disk|decode) for the same nav.
-                    // D11: prefer the specific one; fall back to "unknown" if that's all there is.
+                    // emits a second ThumbEnd with the real source (ram|disk|embedded|none) for the
+                    // same nav. D11: prefer the specific one; fall back to "unknown" if that's all
+                    // there is. Since ImagePresenter races the thumbnail against the preview (perf:
+                    // never block the preview on the thumbnail), ThumbStart/ThumbEnd alone no longer
+                    // mean a thumbnail was actually shown -- only a fetch was attempted, and it may
+                    // have lost the race or found nothing embedded. HasThumbnail is set below, from
+                    // Presented(kind=thumbnail), which fires only when one was really shown first.
                     if (row.Text != "unknown" || rec.TThumbMs is null)
                     {
                         rec.TThumbMs = row.ANum;
@@ -275,6 +276,7 @@ public static class PerfAnalyzeNavBuilder
                     pendingRenderMs = row.ANum;
                     break;
                 case "Presented":
+                    if (row.Text == "thumbnail") rec.HasThumbnail = true;
                     if (!firstPresentedSeen)
                     {
                         firstPresentedSeen = true;
