@@ -4,6 +4,11 @@
 
 - Maintain `task_on_progress.md` at the repository root. Read it upon starting; update it after substantial changes and prior to handoff.
 - Keep entries concise: objectives, files reviewed/modified, changes made, roadblocks, remaining tasks, notes for continuation, and test/validation results. Include the update date; never assume unverified claims as facts.
+- **Update it again at every one of these triggers, not just once per task** — a doc that says "not yet merged" after it *was* merged is worse than no doc:
+  1. **A branch/PR you documented as open gets merged or closed.** Check this proactively — before writing "not yet merged"/"in progress" into the doc, `git fetch` and confirm it's still true; if you later learn (via `git log`, the user saying "đã merge", a CI notification, etc.) that status changed, update the doc in that same turn, don't wait to be asked to "review" or "rà soát".
+  2. **You push a new commit/branch/PR that supersedes or fixes something already described in the doc** (e.g. a post-merge fix) — fold it into the existing entry instead of leaving the old entry standing alone.
+  3. **A deferred/blocked item gets unblocked or explicitly declined by the user** — move it out of "deferred" instead of leaving stale reasoning behind.
+  4. **Before ending a turn where you pushed anything** — re-read what you're about to write and ask: "if someone reads only this file next session, will they know the *current* merge/branch state, not the state as of when I started this turn?"
 
 ## Mandatory Process Before Making Changes
 
