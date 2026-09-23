@@ -82,6 +82,7 @@ internal static class MainViewModelCompositionRoot
             catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,
             fs, actions, undo, dialog, hash, preview, thumbs, sessionWriter,
             preloadController: preloadController, naturalComparer: natural,
+            metrics: sp.GetRequiredService<ReviewMetrics>(),
             uiScheduler: sp.GetRequiredService<IUiScheduler>());
 
         return vm;
