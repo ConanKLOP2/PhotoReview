@@ -641,13 +641,17 @@ public sealed class PreviewImageService : IPreloadTarget
         // size, version) -- no atomic metadata companion. Bumping "preview-v3" to "preview-v4"
         // here means every old-version file misses on lookup by construction (this hash never
         // matches one); ScheduleLegacyCacheCleanup/ClearDisk sweep the orphaned files themselves.
-        // perf(decode) "preview-v4-box": the key is a width x height decode box now; the new prefix
-        // makes every width-only v4 entry miss (its pixels were sized for a different target). The
-        // file format is unchanged, so those orphaned ".pv4" files simply age out through
-        // DiskCacheStore's quota prune.
+        // perf(decode) "preview-v5-box": two independent format bumps landed together -- the key
+        // is a width x height decode box now (was width-only, "preview-v4-box"), and the on-disk
+        // header itself grew original-source-dimension fields (PreviewCacheFile.CurrentVersion
+        // 4 -> 5). Either change alone would make old entries miss (a different hash) or fail the
+        // header version check (see PreviewCacheFile.Read) and get deleted/re-decoded, but bumping
+        // the key prefix past both means every pre-merge entry (box or non-box, v4 or v5 header)
+        // misses on lookup by construction instead of taking the slower throw/catch/delete path;
+        // ScheduleLegacyCacheCleanup/ClearDisk sweep the orphaned ".pv4" files themselves.
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
             string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                $"preview-v4-box|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}x{key.TargetHeight}|{key.OrientationApplied}|{key.Backend}"))));
+                $"preview-v5-box|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}x{key.TargetHeight}|{key.OrientationApplied}|{key.Backend}"))));
         return Path.Combine(_diskCacheDirectory, hash + ".pv4");
     }
 

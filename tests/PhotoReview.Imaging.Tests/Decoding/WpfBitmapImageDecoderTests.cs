@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Windows.Media.Imaging;
+using PhotoReview.Imaging;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
 
@@ -85,6 +86,28 @@ public sealed class WpfBitmapImageDecoderTests : IDisposable
         // downscaled decode result.
         Assert.Equal(400, decoded.OriginalWidth);
         Assert.Equal(300, decoded.OriginalHeight);
+    }
+
+    [Fact(DisplayName = "Box-fitted decode reports correct original dimensions for EXIF-rotated input")]
+    public void DecodeWithBoxReportsOriginalDimensionsForRotatedInput()
+    {
+        var path = Path.Combine(_tempDir, "box_orient_6.jpg");
+        // Stored (pre-orientation) frame is 256x192; orientation 6 is transposing, so the
+        // displayed (post-orientation) size is 192x256.
+        FixtureGenerator.GenerateJpegWithOrientation(path, 256, 192, 6);
+
+        var decoded = _decoder.Decode(new DecodeRequest(path, new DecodeBox(50, 100)));
+
+        Assert.True(decoded.Downscaled);
+        // perf(decode)+perf(dims) together: OriginalWidth/Height must report the full displayed
+        // (post-orientation) source size -- 192x256 -- not the box-fitted pixels below, and not
+        // the stored (pre-orientation) 256x192 raw frame size either.
+        Assert.Equal(192, decoded.OriginalWidth);
+        Assert.Equal(256, decoded.OriginalHeight);
+        // DecodeBox.FitStored fits the 50x100 box against the displayed 192x256 size: width
+        // constrains (50/192 <= 100/256), giving exactly 50 x floor(256*50/192) = 50x66.
+        Assert.Equal(50, decoded.PixelWidth);
+        Assert.Equal(66, decoded.PixelHeight);
     }
 
     [Fact(DisplayName = "Decode with in-memory bytes decodes from memory stream")]
