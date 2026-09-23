@@ -370,6 +370,12 @@ FodyWeavers.xsd
 /.claude/worktrees/
 /.claude/settings.local.json
 
+# Stale/half-built local release copies (only src/PhotoReview.App/bin/.../publish is supported; see README)
+/outputs/release/
+
+# Stray local assistant report copy (content lives in docs/refactoring/ARCH-REVIEW-SUMMARY.md)
+/Claude outputs/
+
 # Performance diagnosis artifacts: raw traces, raw per-run CSVs, local-only mappings
 *.pml
 *.etl
