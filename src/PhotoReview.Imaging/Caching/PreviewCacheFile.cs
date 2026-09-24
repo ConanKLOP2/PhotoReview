@@ -116,8 +116,9 @@ public static class PreviewCacheFile
             var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
             var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
             var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
-            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan))
+            var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                64 * 1024, FileOptions.SequentialScan);
+            await using (stream.ConfigureAwait(false))
             {
                 stream.Write(header);
                 var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };

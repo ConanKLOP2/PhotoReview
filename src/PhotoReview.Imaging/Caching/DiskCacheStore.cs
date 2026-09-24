@@ -81,8 +81,9 @@ public sealed class DiskCacheStore
             // leaves a half-written file at cachePath). WriteThrough/Flush(true) forced every write
             // through to physical disk before the rename, which only slows down cache writes for a
             // durability guarantee this data doesn't need (a lost write is just a future cache miss).
-            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan))
+            var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                64 * 1024, FileOptions.SequentialScan);
+            await using (stream.ConfigureAwait(false))
             {
                 encoder.Save(stream);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
