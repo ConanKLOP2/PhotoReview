@@ -62,10 +62,10 @@ See [`../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`](../archive/histori
 
 ### Dialog Refactor (WD) Tasks
 
-**Status:** WD01 audit pending; WD02–WD05 blocked on DI/dispatcher/lifecycle contracts.
+**Status:** WD01 done via AR04 (#37, ADR 0005); WD02–WD06 closed 2026-09-23 (Q-AR5).
 
-- WD01 — UI-thread/call-graph audit
-- WD02–WD05 — DRY refactor (low-risk), then DI/dispatcher changes
+- WD01 — UI-thread/call-graph audit — ✅ DONE (#37)
+- WD02–WD06 — DRY refactor / DI / dispatcher / lifecycle — ❌ Closed 2026-09-23 (Q-AR5): WD02's only real case is covered by AR03c; WD03-06 had no known dialog bug to justify keeping open
 
 ### I/O Durability (IO) Tasks
 

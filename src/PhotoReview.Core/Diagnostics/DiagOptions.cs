@@ -13,7 +13,7 @@ namespace PhotoReview.Core.Diagnostics;
 ///
 /// <see cref="PreloadWorkers"/> and <see cref="DisableDiskCache"/> are consumed by D10
 /// (PreloadScheduler / PreviewImageService disk cache); D05 only declares them and covers them with
-/// tests. <see cref="PreRead"/> is consumed here in D05, by <c>PreviewImageService.DecodeSource</c>.
+/// tests. <see cref="PreRead"/> is consumed here in D05, by <c>PreviewImageService.DecodeFromSource</c>.
 /// </summary>
 public static class DiagOptions
 {

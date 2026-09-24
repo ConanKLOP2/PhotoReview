@@ -1,8 +1,8 @@
 # T89 — Fit Layout: Double-Click Issue (Summary)
 
-**Status:** Transaction Fit + UI viewport refresh implemented on `feature/Fit-Layout-Status` (not on `master`). Acceptance criteria: single Fit idempotent, ≤0.5 DIP error, no STA-blocking timeouts.
+**Status:** Transaction Fit + UI viewport refresh merged to `master` via PR #15 (`feature/Fit-Layout-Status` deleted). Acceptance criteria: single Fit idempotent, ≤0.5 DIP error, no STA-blocking timeouts.
 
-**GUI acceptance & STA layout tests still TODO** — must verify before merge to `master`.
+**Only GUI acceptance remains** — STA/GUI layout verification still TODO (kept open, Q-AR5 2026-09-23); code is on `master`.
 
 Full plan: [`../archive/historical/T89-FIT-LAYOUT-PLAN.md`](../archive/historical/T89-FIT-LAYOUT-PLAN.md)
 

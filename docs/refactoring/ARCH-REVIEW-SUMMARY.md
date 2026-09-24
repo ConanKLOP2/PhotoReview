@@ -1,6 +1,6 @@
 # AR — Architecture Review 2026-09-23 (Summary)
 
-**Status:** PLANNED (AR00 done in branch `docs/arch-review-plan`) · **Tier:** T1 · **Base:** `master@fbdf48e`
+**Status:** ✅ DONE — AR00–AR07 all merged to `master` (#23–#37); only T89/AR04 GUI acceptance left (user). · **Tier:** T1 · **Base:** `master@fbdf48e`
 **Detailed per-task plans:** `docs/refactoring/arch-review/ARxx-*.md` — read ONLY the one for the task you are doing.
 
 ## Verdict
