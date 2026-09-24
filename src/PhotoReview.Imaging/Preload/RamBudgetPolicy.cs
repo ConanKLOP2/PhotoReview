@@ -20,6 +20,9 @@ public static class RamBudgetPolicy
     /// <summary>Largest share of physical RAM a single in-memory cache budget may claim (IMG-11).</summary>
     public const double MaxPhysicalMemoryShare = 0.5;
 
+    /// <summary>Largest share of physical RAM the optional source-bytes cache may claim (R2-A-06).</summary>
+    public const double MaxSourceBytesShare = 0.2;
+
     /// <summary>
     /// Physical memory the runtime may use (physical RAM, or the container/GC hard limit when one is
     /// set); 0 when unknown.
@@ -36,6 +39,26 @@ public static class RamBudgetPolicy
         if (physicalBytes <= 0) return requestedBytes;
         var limit = (long)(physicalBytes * MaxPhysicalMemoryShare);
         return Math.Min(requestedBytes, limit);
+    }
+
+    /// <summary>Clamps the source-bytes cache budget to <see cref="MaxSourceBytesShare"/> of physical RAM (also bounded by the overall share).</summary>
+    public static long ClampSourceBytesToPhysicalMemory(long requestedBytes, long physicalBytes)
+    {
+        if (physicalBytes <= 0) return requestedBytes;
+        return Math.Min(ClampToPhysicalMemory(requestedBytes, physicalBytes), (long)(physicalBytes * MaxSourceBytesShare));
+    }
+
+    /// <summary>
+    /// Clamps the preview cache so that it plus the source-bytes cache together stay within
+    /// <see cref="MaxPhysicalMemoryShare"/> of physical RAM (R2-A-06). With no source-bytes cache this equals
+    /// <see cref="ClampToPhysicalMemory"/>.
+    /// </summary>
+    public static long ClampPreviewToPhysicalMemory(long requestedBytes, long physicalBytes, long sourceBytesCapacity)
+    {
+        var clamped = ClampToPhysicalMemory(requestedBytes, physicalBytes);
+        if (physicalBytes <= 0) return clamped;
+        var remaining = Math.Max(0, ClampToPhysicalMemory(long.MaxValue, physicalBytes) - Math.Max(0, sourceBytesCapacity));
+        return Math.Min(clamped, remaining);
     }
 
     public static long EstimateDecodedBytes(IEnumerable<RamBudgetEntry> entries, int targetWidth,

@@ -143,12 +143,13 @@ public partial class App : System.Windows.Application, IDisposable
             {
                 var settingsStore = sp.GetRequiredService<SettingsStore>();
                 var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
+                var previewService = sp.GetRequiredService<PreviewImageService>();
                 return new PreloadScheduler(
-                sp.GetRequiredService<PreviewImageService>(),
+                previewService,
                 sp.GetRequiredService<ReviewMetrics>(),
                 getEntries,
                 getTotalBytes,
-                fullFolderRamThresholdBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
+                fullFolderRamThresholdBytes: previewService.CapacityBytes, // effective (clamped) budget, R2-A-05
                 memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
                 workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,

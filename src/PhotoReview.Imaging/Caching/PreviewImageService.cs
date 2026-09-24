@@ -35,6 +35,9 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly Func<DecodeBox> _targetDecodeBox;
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
+
+    /// <summary>Effective (post-clamp) RAM budget of the preview cache; use it for full-folder preload decisions.</summary>
+    public long CapacityBytes { get; }
     private readonly DiskCacheStore _diskStore;
     private readonly Func<DecoderBackend> _currentBackend;
     private readonly IImageDecoderFactory? _decoderFactory;
@@ -138,7 +141,9 @@ public sealed class PreviewImageService : IPreloadTarget
             originalDimensionsCapacity, _ => 1);
         // IMG-11: clamp to half of physical RAM and log what is actually in effect.
         var requestedCapacity = capacityBytes;
-        capacityBytes = RamBudgetPolicy.ClampToPhysicalMemory(capacityBytes, RamBudgetPolicy.GetPhysicalMemoryBytes());
+        capacityBytes = RamBudgetPolicy.ClampPreviewToPhysicalMemory(
+            capacityBytes, RamBudgetPolicy.GetPhysicalMemoryBytes(), sourceBytesCache?.CapacityBytes ?? 0);
+        CapacityBytes = capacityBytes;
         _log.Info($"Memory budgets: preview cache {capacityBytes / (1024 * 1024)} MiB"
             + (capacityBytes != requestedCapacity ? $" (clamped from {requestedCapacity / (1024 * 1024)} MiB to 50% of physical RAM)" : "")
             + (sourceBytesCache is null ? ", source-bytes cache off" : $", source-bytes cache {sourceBytesCache.CapacityBytes / (1024 * 1024)} MiB")

@@ -13,8 +13,8 @@ public sealed class SourceBytesCache
 
     public SourceBytesCache(long capacityBytes)
     {
-        // IMG-11: never claim more than half of physical RAM, whatever the setting says.
-        CapacityBytes = PhotoReview.Imaging.Preload.RamBudgetPolicy.ClampToPhysicalMemory(
+        // IMG-11/R2-A-06: never claim more than 20% of physical RAM (so it cannot starve the preview cache).
+        CapacityBytes = PhotoReview.Imaging.Preload.RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(
             capacityBytes, PhotoReview.Imaging.Preload.RamBudgetPolicy.GetPhysicalMemoryBytes());
         capacityBytes = CapacityBytes;
         _cache = new BoundedLruCache<Key, byte[]>(capacityBytes, bytes => bytes.LongLength);

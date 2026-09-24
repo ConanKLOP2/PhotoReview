@@ -21,6 +21,45 @@ public sealed class MemoryBudgetClampTests
         Assert.Equal(expected, RamBudgetPolicy.ClampToPhysicalMemory(requested, physical));
     }
 
+    [Theory]
+    [InlineData(16 * Gib, 16 * Gib, 0, 8 * Gib)]        // no source cache: preview keeps the 50% share
+    [InlineData(16 * Gib, 16 * Gib, 3 * Gib, 5 * Gib)]  // source cache present: the two together stay within 50%
+    [InlineData(2 * Gib, 16 * Gib, 3 * Gib, 2 * Gib)]   // already fits
+    [InlineData(16 * Gib, 32 * Gib, 6 * Gib, 10 * Gib)]
+    [InlineData(16 * Gib, 0, 6 * Gib, 16 * Gib)]        // unknown physical size: unchanged
+    public void ClampPreviewToPhysicalMemory_LeavesRoomForSourceBytes(long requested, long physical, long source, long expected)
+    {
+        Assert.Equal(expected, RamBudgetPolicy.ClampPreviewToPhysicalMemory(requested, physical, source));
+    }
+
+    [Fact]
+    public void ClampSourceBytesToPhysicalMemory_LimitsToTwentyPercent()
+    {
+        Assert.Equal((long)(16 * Gib * 0.2), RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(16 * Gib, 16 * Gib));
+        Assert.Equal(1 * Gib, RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(1 * Gib, 16 * Gib));
+    }
+
+    [Fact]
+    public async Task PreviewService_CapacityBytes_ReportsEffectiveClampedBudget()
+    {
+        var physical = RamBudgetPolicy.GetPhysicalMemoryBytes();
+        Assert.True(physical > 0);
+        var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Clamp-" + Guid.NewGuid().ToString("N"));
+        var source = new SourceBytesCache(long.MaxValue / 2);
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 100,
+            capacityBytes: long.MaxValue / 2, diskCacheDirectory: dir, disableDiskCacheOverride: true, sourceBytesCache: source);
+
+        try
+        {
+            Assert.True(service.CapacityBytes + source.CapacityBytes <= physical / 2 + 1);
+            Assert.True(service.CapacityBytes > 0);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
     [Fact]
     public void SourceBytesCache_HugeRequest_IsClampedToHalfOfPhysical()
     {
@@ -29,7 +68,7 @@ public sealed class MemoryBudgetClampTests
 
         var cache = new SourceBytesCache(long.MaxValue / 2);
 
-        Assert.Equal(RamBudgetPolicy.ClampToPhysicalMemory(long.MaxValue / 2, physical), cache.CapacityBytes);
+        Assert.Equal(RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(long.MaxValue / 2, physical), cache.CapacityBytes);
         Assert.True(cache.CapacityBytes <= physical / 2);
     }
 
