@@ -187,6 +187,37 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async void App_Startup(object sender, StartupEventArgs e)
     {
+        // R2-F-04: this is an async void handler installed before the unhandled-exception hooks exist, and the default
+        // ShutdownMode only ends the process when the last window closes. Any fault here used to leave a windowless
+        // process holding the instance mutex, so it is caught and turned into a message plus a clean shutdown.
+        try
+        {
+            await StartupCoreAsync(e);
+        }
+        catch (Exception ex)
+        {
+            FailStartup(ex);
+        }
+    }
+
+    private void FailStartup(Exception ex)
+    {
+        try { LogStartupErrorForced("Startup failed", ex); } catch { /* logging must not block the shutdown */ }
+        try
+        {
+            System.Windows.MessageBox.Show(
+                PhotoReview.Core.Localization.Tr.AppStartupFailed(ex.Message),
+                PhotoReview.Core.Localization.Tr.AppTitle,
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+        catch { /* no UI available: still shut down below */ }
+        try { Dispose(); } catch { /* release what we can; the process exits next */ }
+        Shutdown(1);
+    }
+
+    private async Task StartupCoreAsync(StartupEventArgs e)
+    {
         // perf(startup): the CSV listener depends on nothing but the environment, so it starts first
         // and the Startup milestones below (msSinceProcessStart) cover services/settings/window too.
         _perfListener = PerfCsvListener.TryStartFromEnvironment();
@@ -259,6 +290,12 @@ public partial class App : System.Windows.Application, IDisposable
         MainWindow = window;
         window.Show();
         PhotoReviewPerf.StartupMark("windowShown");
+        if (store.LastLoadRepairs.Count > 0)
+        {
+            _services.GetRequiredService<IDialogService>().ShowMessage(
+                PhotoReview.Core.Localization.Tr.AppTitle,
+                PhotoReview.Core.Localization.Tr.SettingsLoadRepaired(string.Join(", ", store.LastLoadRepairs)));
+        }
     }
 
     /// <summary>

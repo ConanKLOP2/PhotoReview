@@ -459,5 +459,7 @@
   "settings.journalDurability.safe.hint": "Every record is forced to disk before the file operation starts. Safest, but about 4x slower per record (still off the UI thread, so the app stays responsive).",
   "core.fileAction.destinationOutsideSource": "The destination folder must not be outside the folder being reviewed.",
   "actionProfiles.error.destinationEscapes": "Action \"{name}\": a relative destination must stay inside the photo folder (no \"..\"). Use an absolute path to save elsewhere.",
-  "actionProfiles.error.destinationInvalid": "Action \"{name}\": the destination folder is empty or contains invalid characters."
+  "actionProfiles.error.destinationInvalid": "Action \"{name}\": the destination folder is empty or contains invalid characters.",
+  "settings.load.repaired": "config.json contained invalid values. These settings were reset to their defaults: {items}.",
+  "app.startupFailed": "Photo Review could not start and will close. Details: {message}"
 }

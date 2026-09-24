@@ -453,5 +453,7 @@
   "settings.journalDurability.safe.hint": "Mỗi bản ghi được ghi xuống đĩa trước khi thao tác tệp bắt đầu. An toàn nhất nhưng mỗi bản ghi chậm hơn khoảng 4 lần (vẫn chạy ngoài luồng giao diện nên ứng dụng không bị đơ).",
   "core.fileAction.destinationOutsideSource": "Thư mục đích không được nằm ngoài thư mục ảnh đang duyệt.",
   "actionProfiles.error.destinationEscapes": "Hành động \"{name}\": thư mục đích tương đối phải nằm trong thư mục ảnh (không dùng \"..\"). Hãy dùng đường dẫn tuyệt đối nếu muốn lưu ở nơi khác.",
-  "actionProfiles.error.destinationInvalid": "Hành động \"{name}\": thư mục đích đang trống hoặc chứa ký tự không hợp lệ."
+  "actionProfiles.error.destinationInvalid": "Hành động \"{name}\": thư mục đích đang trống hoặc chứa ký tự không hợp lệ.",
+  "settings.load.repaired": "config.json có giá trị không hợp lệ. Các cài đặt sau đã được đặt lại về mặc định: {items}.",
+  "app.startupFailed": "Photo Review không thể khởi động và sẽ đóng. Chi tiết: {message}"
 }
