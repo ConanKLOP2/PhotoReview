@@ -16,7 +16,7 @@ Consolidation of all pending decisions (Q-*) across active task groups. See link
 | Q-T2 | TC | Read-count seam approach? | ✅ Real-file-in-temp | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
 | Q-T3 | TC | Real photos via env var? | ✅ YES | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
 | Q-T4 | TC | Use real Recycle Bin? | ✅ YES (via fixture) | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
-| Q-OC14 | OC | Undo unification approach? | 🔄 OPEN — Undo gate location → MainViewModel (next after IO03–IO05) | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
+| Q-OC14 | OC | Undo unification approach? | ✅ Gate in the ViewModel layer (`FileActionGate`, PR #64) | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
 | Q-OC15 | OC | UI pattern cleanup scope? | 🔄 WAITING OC14 | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
 | Q-S3 | TS | Journal test determinism? | ✅ YES (recommendation applied in #36, 2026-09-24) | ../archive/historical/TEST-SPEED-PLAN-2026-09-20.md |
 | Q-AR1 | AR | Ship TurboJpeg in the release (A) or remove it from Settings (B)? | ✅ **A** (ship TurboJpeg) — 2026-09-23 | arch-review/AR01-turbojpeg-release.md |

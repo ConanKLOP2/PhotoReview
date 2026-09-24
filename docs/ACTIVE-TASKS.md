@@ -1,7 +1,7 @@
 # Active Tasks — Consolidated Work Remaining
 
 **Updated:** 2026-09-24
-**Status:** AR00-AR07, ST, TS, TC, DF, CQ, L (i18n L00-L11) all DONE and merged to `master` (v2.0.64). IO01 decided (ADR 0007); IO03-IO05, OC14, DT10 open. T89 (GUI acceptance) waits on the user.
+**Status:** AR, ST, TS, TC, DF, CQ, L (i18n L00-L11) DONE on `master` (v2.0.64). **PR batch #64-#70 open (2026-09-24):** OC14 gate (#64), IO03 (#65), IO04+IO05 (#66), Recovery details + live check (#67), test diet (#68-#70, TC06 Ctrl+Z bug fix in #69). Open after merge: L12, DT10, ST08/09, OC15-18; T89 GUI acceptance waits on the user.
 
 ---
 
@@ -17,9 +17,9 @@
 | **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Plan: `refactoring/CQ-WARNINGS-PLAN.md`. |
 | **TC** (Test Cleanup) | ✅ TC04, TC09 DONE (#36); TC06/TC07 live in `App.Tests/HotPath` (real Recycle Bin / real photos) | TS10 audit complete 2026-09-22. Plan: `archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`. |
 | **T89** (Fit Layout — GUI acceptance) | 🔄 GUI acceptance only (kept, Q-AR5) | T89.1-T89.2 (`10ff31f`) **merged to `master` via PR #15**; branch deleted. DF02 Fit tests skipped in `9f880d1`. STA/GUI acceptance still TODO. Plan: `archive/historical/T89-FIT-LAYOUT-PLAN.md`. |
-| **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 kept, re-scoped to "Undo gate location" (Q-AR5) — blocks ST08/09, OC15-18 (no longer WD, see ADR 0005). Plan: `archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`. |
+| **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 gate moved to the ViewModel (#64, open); unblocks ST08/09 and OC15-18. |
 | **WD** (WPF Dialog) | ✅ WD01 unblocked (AR04/ADR 0005); WD02-06 closed 2026-09-23 (Q-AR5) | WD02 low-risk part covered by AR03c; WD03-06 had no known dialog bug to justify keeping open. |
-| **IO** (I/O Durability) | 🔄 IO01 DECIDED (ADR 0007, 2026-09-24); IO03–IO05 TODO | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
+| **IO** (I/O Durability) | 🔄 IO01 DECIDED (ADR 0007, 2026-09-24); IO03 #65, IO04+IO05 #66 open | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
 | **DT** (Docs Token Diet) | 🔄 Partial | DT00-03, DT08, DT09 DONE; Q-D1..Q-D4 decided. DT04-07 closed 2026-09-23 (Q-AR5, diminishing returns); DT10 kept. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
 | **D** (Perf Diagnosis) | ❌ Closed 2026-09-23 (Q-AR5) | Numbers were from the legacy `--perf-session` graph (no preload). Re-open any item from the AR02e production-graph baseline if a bottleneck shows. |
 
@@ -126,7 +126,7 @@
 | OC11 | Decode/RAM optimization | 🔄 PRs #40–#48 (perf night 2026-09-24) | See PERF-STATUS "Perf night"; #43 waits on zoom decision |
 | OC12 | Clean code limits | TODO | Post-implementation cleanup |
 | OC13 | Integration/validation | TODO | Final testing before publish |
-| OC14 | Undo unification + gate | PARTIAL — kept, re-scoped 2026-09-23 (Q-AR5) to "Undo gate location" | Mutual exclusion done; semantics tests refactored — blocks ST08/09, OC15-18 (no longer blocks WD01, see ADR 0005/AR04) |
+| OC14 | Undo unification + gate | ✅ PR #64 open — `FileActionGate` owned by MainViewModel (Q-AR5 scope) | Mutual exclusion done; semantics tests refactored — blocks ST08/09, OC15-18 (no longer blocks WD01, see ADR 0005/AR04) |
 | OC15-OC18 | Clean-code wave | TODO | OC14 |
 
 ---
@@ -148,9 +148,9 @@
 |----|------|--------|
 | IO01 | Durability contract | ✅ DECIDED — ADR 0007 (2026-09-24): journal mode setting (Fast default / power-loss safe), session no-fsync, skip+warn unreadable files |
 | IO02 | Benchmark baseline | ✅ done inline (2026-09-24, in ADR 0007): journal record P50 1.79 ms (durable) vs 0.36 ms; session write P50 3.75 ms |
-| IO03 | Journal durability setting | TODO — Settings option (Fast default / Power-loss safe, off-UI-thread writes); tests per ADR 0007 |
-| IO04 | Session write policy | TODO — session no fsync (atomic kept); corrupt/empty session = no session |
-| IO05 | Unreadable files: skip + warn | TODO — enumeration skips with count + visible warning (strings via i18n catalogs) |
+| IO03 | Journal durability setting | PR #65 open — Settings option (Fast default / Power-loss safe, off-UI-thread writes); tests per ADR 0007 |
+| IO04 | Session write policy | PR #66 open — session no fsync (atomic kept); corrupt/empty session = no session |
+| IO05 | Unreadable files: skip + warn | PR #66 open — enumeration skips with count + visible warning (strings via i18n catalogs) |
 | IO06-IO07 | Async boundary; low-risk cleanup | closed 2026-09-23 (Q-AR5) |
 
 ---
