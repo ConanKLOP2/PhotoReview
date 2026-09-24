@@ -56,7 +56,15 @@ public sealed class FileActionGateTests
         var tasks = new Task<bool>[32];
         for (var i = 0; i < tasks.Length; i++)
             tasks[i] = Task.Run(() => gate.RunExclusiveAsync(async () => { System.Threading.Interlocked.Increment(ref runs); await release.Task; }));
-        await Task.Delay(100);
+        // Release the holder only after every other caller has been turned away. The holder cannot finish
+        // before then, so no late starter can slip in after it exits (a fixed Task.Delay was racy on a busy
+        // 2-vCPU runner: callers that started after the release legitimately ran too).
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (tasks.Count(t => t.IsCompleted) < tasks.Length - 1)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "Losing callers were not rejected in time.");
+            await Task.Delay(10);
+        }
         release.SetResult();
         var results = await Task.WhenAll(tasks);
         Assert.Equal(1, runs);
