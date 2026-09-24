@@ -39,13 +39,12 @@ public partial class MainWindow : Window
 
     // AR02d: read-only properties replacing the public mutable fields that used to be kept in
     // sync by WireViewModelEvents/SyncFiles (ST06/Q-ST3 exception, superseded by this change).
-    private int _fileActionInProgress;
 
     public IReadOnlyList<string> Files => _viewModel.Catalog.Paths;
     public int CurrentIndex => _viewModel.CurrentIndex;
     public string? CompareSelectedPath => _viewModel.Compare.SelectedPath;
     public ReviewMetrics Metrics => _viewModel.Metrics;
-    public bool IsFileActionInProgress => Volatile.Read(ref _fileActionInProgress) != 0;
+    public bool IsFileActionInProgress => _viewModel.IsFileActionInProgress;
 
     public MainViewModel ViewModel => _viewModel;
     public AppSettings Settings => _settings;
@@ -108,14 +107,9 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Public test helper: Executes the unified undo operation with proper mutual exclusion guard.
-    /// Used by integration tests via reflection. Routes to MainViewModel.UndoAsync() with Interlocked guard.
+    /// Used by integration tests via reflection. Routes to MainViewModel.UndoAsync() (gate lives in the ViewModel, OC14).
     /// </summary>
-    public async Task UndoLastActionAsync()
-    {
-        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        try { await _viewModel.UndoAsync(); }
-        finally { Volatile.Write(ref _fileActionInProgress, 0); }
-    }
+    public Task UndoLastActionAsync() => _viewModel.UndoAsync();
     public void ResetFitView() => _ = ApplyFitViewAsync();
     public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
     public Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
@@ -360,22 +354,12 @@ public partial class MainWindow : Window
             case ReviewCommandType.NextFolder: await _viewModel.NavigateSiblingFolderAsync(1); break;
             case ReviewCommandType.PreviousFolder: await _viewModel.NavigateSiblingFolderAsync(-1); break;
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
-            case ReviewCommandType.Undo:
-                if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-                try { await _viewModel.UndoAsync(); }
-                finally { Volatile.Write(ref _fileActionInProgress, 0); }
-                break;
+            case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.RunAction:
-                if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-                try { await _viewModel.RunActionAsync(cmd.Value.ActionIndex); }
-                finally { Volatile.Write(ref _fileActionInProgress, 0); }
+                await _viewModel.RunActionAsync(cmd.Value.ActionIndex);
                 break;
-            case ReviewCommandType.Recycle:
-                if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-                try { await _viewModel.RecycleAsync(); }
-                finally { Volatile.Write(ref _fileActionInProgress, 0); }
-                break;
+            case ReviewCommandType.Recycle: await _viewModel.RecycleAsync(); break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
             case ReviewCommandType.ToggleFit: _ = ApplyFitViewAsync(); break;
             case ReviewCommandType.ZoomIn: _viewModel.ZoomIn(); break;
@@ -454,11 +438,6 @@ public partial class MainWindow : Window
     private async void ClearCache_Click(object sender, RoutedEventArgs e) => await _viewModel.ClearCacheAsync();
     private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(true);
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
-    private async void UndoLastAction_Click(object sender, RoutedEventArgs e)
-    {
-        if (Interlocked.Exchange(ref _fileActionInProgress, 1) != 0) return;
-        try { await _viewModel.UndoAsync(); }
-        finally { Volatile.Write(ref _fileActionInProgress, 0); }
-    }
+    private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
 
 }
