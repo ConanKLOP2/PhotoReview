@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Reflection;
 using System.Diagnostics;
 using System.IO;
+using PhotoReview.App.Localization;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
@@ -17,19 +19,23 @@ public partial class SettingsWindow : Window
     // non-ASCII character into an escape sequence (Vietnamese action names became unreadable).
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private readonly SettingsStore? _store;
+    private readonly LocalizationService? _localization;
     public AppSettings Settings { get; }
 
-    public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null) : this(store.Current, decoderFactory)
+    public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null)
+        : this(store.Current, decoderFactory, localization)
     {
         _store = store;
     }
 
-    public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null)
+    public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null)
     {
         InitializeComponent();
+        _localization = localization;
         VersionText.Text = BuildInfo.Describe(typeof(SettingsWindow).Assembly);
         Settings = new AppSettings
         {
+            UiLanguage = current.UiLanguage,
             InitialViewMode = current.InitialViewMode,
             LoadingMode = current.LoadingMode,
             ImageSortMode = current.ImageSortMode,
@@ -63,6 +69,7 @@ public partial class SettingsWindow : Window
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
         LoadFields();
         ApplyDecoderAvailability(decoderFactory);
+        LoadLanguages();
     }
 
     private void ApplyDecoderAvailability(IImageDecoderFactory? decoderFactory)
@@ -70,8 +77,58 @@ public partial class SettingsWindow : Window
         if (decoderFactory is not null && !decoderFactory.IsRegistered(DecoderBackend.TurboJpeg))
         {
             TurboJpegOption.IsEnabled = false;
-            TurboJpegOption.ToolTip = "TurboJPEG không khả dụng trong bản cài đặt này";
+            TurboJpegOption.ToolTip = Tr.SettingsDecoderBackendTurboJpegUnavailable;
         }
+    }
+
+    // ---- I18N L08: language picker, languages folder, reload, export ----
+
+    /// <summary>Fills the picker from the shipped and user folders and selects <see cref="AppSettings.UiLanguage"/>.</summary>
+    private void LoadLanguages()
+    {
+        if (_localization is null)
+        {
+            // No LocalizationService (a window built without DI): there is nothing to switch, so hide the group.
+            LanguageGroup.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var selected = LanguageCombo.SelectedItem is LanguageOption option ? option.Code : Settings.UiLanguage;
+        var options = LanguageOptions.Build(_localization.DiscoverLanguages());
+        LanguageCombo.ItemsSource = options;
+        LanguageCombo.SelectedIndex = LanguageOptions.IndexOf(options, selected);
+    }
+
+    private void OpenLanguagesFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_localization is null) return;
+        Directory.CreateDirectory(_localization.UserLanguagesDir);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_localization.UserLanguagesDir}\"") { UseShellExecute = true });
+    }
+
+    private void ReloadTranslations_Click(object sender, RoutedEventArgs e)
+    {
+        if (_localization is null) return;
+        _localization.Reload();
+        LoadLanguages(); // a translator may have added a language file
+        AppLog.Info("Translations reloaded");
+    }
+
+    private void ExportTranslation_Click(object sender, RoutedEventArgs e)
+    {
+        if (_localization is null) return;
+        var language = LanguageOptions.ToSetting(LanguageCombo.SelectedItem as LanguageOption, Settings.UiLanguage);
+        string path;
+        try
+        {
+            path = _localization.ExportTodo(language);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogExportTranslationFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        AppLog.Info("Translation export written");
+        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
     }
 
     private void OpenLogLocation_Click(object sender, RoutedEventArgs e)
@@ -128,7 +185,7 @@ public partial class SettingsWindow : Window
         var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
         if (values.Any(v => !Enum.TryParse<Key>(v, true, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
-            System.Windows.MessageBox.Show(this, "Folder không được trống; các phím phải hợp lệ và không được trùng nhau.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return;
+            System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidShortcuts, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return;
         }
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
         Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
@@ -148,19 +205,24 @@ public partial class SettingsWindow : Window
             if (Settings.Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) ||
                 !Enum.TryParse<Key>(action.Shortcut, true, out _) ||
                 !Enum.IsDefined(action.Operation)))
-                throw new JsonException("Action thiếu tên/phím tắt hoặc có Operation không hợp lệ.");
+                throw new JsonException("An action has no name, an invalid shortcut or an invalid operation."); // never shown (caught below)
             if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
-                throw new JsonException("Các action không được trùng phím tắt.");
+                throw new JsonException("Two actions use the same shortcut."); // never shown (caught below)
         }
-        catch { System.Windows.MessageBox.Show(this, "Action profiles JSON không hợp lệ.", "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        catch { System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidActionsJson, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         var validator = new PhotoReview.App.Services.WpfKeyNameValidator();
         var shortcutError = new SettingsValidator(validator).ValidateShortcuts(Settings);
-        if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, "Cài đặt không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (_localization is not null)
+            Settings.UiLanguage = LanguageOptions.ToSetting(LanguageCombo.SelectedItem as LanguageOption, Settings.UiLanguage);
         if (_store is not null)
             _store.Save(Settings);
         else
             AppSettings.Save(Settings);
         AppLog.Info("Settings saved");
+        // Q-L8: the new language applies live (UI thread, ADR 0005); every {loc:Tr} text follows the switch.
+        if (_localization is not null && !string.Equals(_localization.RequestedLanguage, Settings.UiLanguage, StringComparison.OrdinalIgnoreCase))
+            _localization.Switch(Settings.UiLanguage);
         DialogResult = true;
     }
 
@@ -182,6 +244,6 @@ public partial class SettingsWindow : Window
             var editor = new ActionProfilesWindow(actions) { Owner = this };
             if (editor.ShowDialog() == true) ActionsText.Text = JsonSerializer.Serialize(editor.Actions, JsonOptions);
         }
-        catch { System.Windows.MessageBox.Show(this, "Action profiles JSON hiện tại không hợp lệ.", "Không thể mở editor", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch { System.Windows.MessageBox.Show(this, Tr.DialogOpenEditorFailedMessage, Tr.DialogOpenEditorFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 }

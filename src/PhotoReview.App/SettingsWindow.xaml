@@ -1,7 +1,8 @@
 <Window x:Class="PhotoReview.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Photo Review · Settings" Width="760" Height="680"
+        xmlns:loc="clr-namespace:PhotoReview.App.Localization"
+        Title="{loc:Tr settings.window.title}" Width="760" Height="680"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="680" MinHeight="560" Background="#171717" Foreground="#F5F5F5" Loaded="SettingsWindow_Loaded">
     <Window.Resources>
         <ResourceDictionary>
@@ -34,68 +35,83 @@
         </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-            <TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA" Margin="0,4,0,0"/>
+            <TextBlock Text="{loc:Tr settings.header}" FontSize="28" FontWeight="SemiBold" Foreground="#FFFFFF"/>
+            <TextBlock Text="{loc:Tr settings.subtitle}" Foreground="#AAAAAA" Margin="0,4,0,0"/>
             <TextBlock x:Name="VersionText" Foreground="#777777" Margin="0,6,0,0"/>
         </StackPanel>
         <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8">
             <StackPanel KeyboardNavigation.TabNavigation="Local" Margin="0,0,12,0">
-                <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
+                <!-- I18N L08: first group, and its header reads "Language / Ngôn ngữ" in every language on purpose
+                     (settings.group.language), so a user who picked a language they cannot read still finds the way back. -->
+                <GroupBox x:Name="LanguageGroup" Header="{loc:Tr settings.group.language}"><Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <TextBlock Text="Chế độ mở ảnh" Grid.Row="0" Style="{StaticResource FormLabel}"/>
-                    <ComboBox x:Name="ViewModeCombo" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="Fit"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
-                    <TextBlock Text="Chế độ tải ảnh" Grid.Row="1" Style="{StaticResource FormLabel}"/>
-                    <ComboBox x:Name="LoadingModeCombo" Grid.Row="1" Grid.Column="1"><ComboBoxItem Content="Fast"/><ComboBoxItem Content="Preview"/><ComboBoxItem Content="Original (chất lượng cao nhất)" Tag="Original"/></ComboBox>
-                    <TextBlock Text="Thứ tự ảnh" Grid.Row="2" Style="{StaticResource FormLabel}"/>
-                    <ComboBox x:Name="SortModeCombo" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="Theo tên kiểu Explorer" Tag="Name"/><ComboBoxItem Content="Theo kích thước tăng dần" Tag="SizeAscending"/><ComboBoxItem Content="Theo kích thước giảm dần" Tag="SizeDescending"/></ComboBox>
-                    <CheckBox x:Name="CompareHashCheck" Grid.Row="3" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" IsChecked="True"/>
-                    <CheckBox x:Name="CompareSizeCheck" Grid.Row="4" Grid.Column="1" Content="Compare kích thước file" IsChecked="True"/>
-                    <TextBlock Text="Backend giải mã" Grid.Row="5" Style="{StaticResource FormLabel}"/>
-                    <ComboBox x:Name="DecoderBackendCombo" Grid.Row="5" Grid.Column="1" AutomationProperties.Name="Backend giải mã ảnh"><ComboBoxItem Content="WPF (mặc định, an toàn)"/><ComboBoxItem Content="WIC Direct (nhanh)"/><ComboBoxItem x:Name="TurboJpegOption" Content="TurboJPEG (JPEG)"/></ComboBox>
-                    <TextBlock Text="Chất lượng thu phóng" Grid.Row="6" Style="{StaticResource FormLabel}"/>
-                    <ComboBox x:Name="ScalingQualityCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Chất lượng thu phóng ảnh" Margin="0"><ComboBoxItem Content="Cao (HighQuality)"/><ComboBoxItem Content="Nhanh (Linear, mượt hơn khi zoom)"/></ComboBox>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="{loc:Tr settings.language.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="LanguageCombo" Grid.Row="0" Grid.Column="1" DisplayMemberPath="DisplayName" AutomationProperties.Name="{loc:Tr settings.language.automationName}"/>
+                    <WrapPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                        <Button Content="{loc:Tr settings.language.openFolder}" Click="OpenLanguagesFolder_Click" Margin="0,0,8,4"/>
+                        <Button Content="{loc:Tr settings.language.reload}" Click="ReloadTranslations_Click" Margin="0,0,8,4"/>
+                        <Button Content="{loc:Tr settings.language.export}" ToolTip="{loc:Tr settings.language.export.toolTip}" Click="ExportTranslation_Click" Margin="0,0,0,4"/>
+                    </WrapPanel>
+                    <TextBlock Text="{loc:Tr settings.language.hint}" Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Foreground="#9A9A9A"/>
                 </Grid></GroupBox>
 
-                <GroupBox Header="Chẩn đoán"><StackPanel>
-                    <CheckBox x:Name="LoggingCheck" Content="Bật ghi log chẩn đoán (mặc định tắt)"/>
-                    <Button Content="Mở vị trí file log" AutomationProperties.Name="Mở vị trí file log" HorizontalAlignment="Left" Click="OpenLogLocation_Click"/>
+                <GroupBox Header="{loc:Tr settings.group.displayPerformance}"><Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="{loc:Tr settings.viewMode.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="ViewModeCombo" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.initialViewMode.fit}"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
+                    <TextBlock Text="{loc:Tr settings.loadingMode.label}" Grid.Row="1" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="LoadingModeCombo" Grid.Row="1" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.loadingMode.fast}"/><ComboBoxItem Content="{loc:Tr enum.loadingMode.preview}"/><ComboBoxItem Content="{loc:Tr settings.loadingMode.originalWithHint}" Tag="Original"/></ComboBox>
+                    <TextBlock Text="{loc:Tr settings.sortMode.label}" Grid.Row="2" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="SortModeCombo" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.imageSortMode.name}" Tag="Name"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.sizeAscending}" Tag="SizeAscending"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.sizeDescending}" Tag="SizeDescending"/></ComboBox>
+                    <CheckBox x:Name="CompareHashCheck" Grid.Row="3" Grid.Column="1" Content="{loc:Tr settings.compareHash.label}" IsChecked="True"/>
+                    <CheckBox x:Name="CompareSizeCheck" Grid.Row="4" Grid.Column="1" Content="{loc:Tr settings.compareSize.label}" IsChecked="True"/>
+                    <TextBlock Text="{loc:Tr settings.decoderBackend.label}" Grid.Row="5" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="DecoderBackendCombo" Grid.Row="5" Grid.Column="1" AutomationProperties.Name="{loc:Tr settings.decoderBackend.automationName}"><ComboBoxItem Content="{loc:Tr enum.decoderBackend.wpf}"/><ComboBoxItem Content="{loc:Tr enum.decoderBackend.wicDirect}"/><ComboBoxItem x:Name="TurboJpegOption" Content="{loc:Tr enum.decoderBackend.turboJpeg}"/></ComboBox>
+                    <TextBlock Text="{loc:Tr settings.scalingQuality.label}" Grid.Row="6" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="ScalingQualityCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="{loc:Tr settings.scalingQuality.automationName}" Margin="0"><ComboBoxItem Content="{loc:Tr enum.scalingQuality.highQuality}"/><ComboBoxItem Content="{loc:Tr enum.scalingQuality.linear}"/></ComboBox>
+                </Grid></GroupBox>
+
+                <GroupBox Header="{loc:Tr settings.group.diagnostics}"><StackPanel>
+                    <CheckBox x:Name="LoggingCheck" Content="{loc:Tr settings.logging.label}"/>
+                    <Button Content="{loc:Tr settings.openLogLocation}" AutomationProperties.Name="{loc:Tr settings.openLogLocation}" HorizontalAlignment="Left" Click="OpenLogLocation_Click"/>
                 </StackPanel></GroupBox>
 
-                <GroupBox><GroupBox.Header><TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF"><Run Text="Phím tắt"/><Run Text="  ·  nhấn phím trực tiếp vào ô để cấu hình" FontWeight="Normal" Foreground="#9A9A9A" FontSize="13"/></TextBlock></GroupBox.Header>
+                <GroupBox><GroupBox.Header><TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF"><Run Text="{loc:Tr settings.group.shortcuts.title}"/><Run Text="  ·  " FontWeight="Normal" Foreground="#9A9A9A" FontSize="13"/><Run Text="{loc:Tr settings.group.shortcuts.hint}" FontWeight="Normal" Foreground="#9A9A9A" FontSize="13"/></TextBlock></GroupBox.Header>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Ảnh tiếp theo" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="1" x:Name="NextText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Ảnh trước" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="PreviousText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Compare" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="1" x:Name="CompareText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Zoom in" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="1" x:Name="ZoomInText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Fit ảnh" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="1" x:Name="ToggleFitText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Bỏ qua ảnh" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="5" Grid.Column="1" x:Name="SkipText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Fullscreen" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="6" Grid.Column="1" x:Name="FullscreenText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="0" Grid.Column="3" Text="Folder tiếp theo" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="4" x:Name="NextFolderText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="1" Grid.Column="3" Text="Folder trước" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="4" x:Name="PreviousFolderText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="2" Grid.Column="3" Text="Ảnh đầu tiên" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="4" x:Name="FirstImageText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="3" Grid.Column="3" Text="Zoom out" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="4" x:Name="ZoomOutText" Style="{StaticResource ShortcutBox}"/>
-                        <TextBlock Grid.Row="4" Grid.Column="3" Text="Undo (Ctrl + phím)" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="4" x:Name="UndoText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Tr settings.shortcut.next}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="1" x:Name="NextText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Tr settings.shortcut.previous}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="PreviousText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Tr settings.shortcut.compare}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="1" x:Name="CompareText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{loc:Tr settings.shortcut.zoomIn}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="1" x:Name="ZoomInText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="{loc:Tr settings.shortcut.toggleFit}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="1" x:Name="ToggleFitText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="{loc:Tr settings.shortcut.skip}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="5" Grid.Column="1" x:Name="SkipText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="{loc:Tr settings.shortcut.fullscreen}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="6" Grid.Column="1" x:Name="FullscreenText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="3" Text="{loc:Tr settings.shortcut.nextFolder}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="4" x:Name="NextFolderText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="3" Text="{loc:Tr settings.shortcut.previousFolder}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="4" x:Name="PreviousFolderText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="3" Text="{loc:Tr settings.shortcut.firstImage}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="4" x:Name="FirstImageText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="3" Text="{loc:Tr settings.shortcut.zoomOut}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="4" x:Name="ZoomOutText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="3" Text="{loc:Tr settings.shortcut.undo}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="4" x:Name="UndoText" Style="{StaticResource ShortcutBox}"/>
                     </Grid>
                 </GroupBox>
 
-                <GroupBox Header="Xử lý file"><Grid>
+                <GroupBox Header="{loc:Tr settings.group.fileHandling}"><Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <TextBlock Text="Phím đưa vào thùng rác" Grid.Row="0" Style="{StaticResource FormLabel}"/>
+                    <TextBlock Text="{loc:Tr settings.shortcut.recycle}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                     <TextBox x:Name="RecycleText" Grid.Row="0" Grid.Column="1" Width="130" HorizontalAlignment="Left"/>
-                    <TextBlock Text="Action profiles (JSON)" Grid.Row="1" VerticalAlignment="Top" Margin="0,6,12,10"/>
+                    <TextBlock Text="{loc:Tr settings.actionsJson.label}" Grid.Row="1" VerticalAlignment="Top" Margin="0,6,12,10"/>
                     <TextBox x:Name="ActionsText" Grid.Row="1" Grid.Column="1" Height="110" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="Consolas"/>
-                    <Button Content="Mở trình chỉnh sửa action" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Click="EditActions_Click"/>
+                    <Button Content="{loc:Tr settings.editActions}" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Click="EditActions_Click"/>
                 </Grid></GroupBox>
             </StackPanel>
         </ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="Khôi phục mặc định" Click="Defaults_Click" Margin="0,0,8,0"/>
-            <Button Content="Hủy" IsCancel="True" MinWidth="80" Margin="0,0,8,0"/>
-            <Button Content="Lưu" IsDefault="True" Click="Save_Click" MinWidth="80"/>
+            <Button Content="{loc:Tr settings.restoreDefaults}" Click="Defaults_Click" Margin="0,0,8,0"/>
+            <Button Content="{loc:Tr common.cancel}" IsCancel="True" MinWidth="80" Margin="0,0,8,0"/>
+            <Button Content="{loc:Tr common.save}" IsDefault="True" Click="Save_Click" MinWidth="80"/>
         </StackPanel>
     </Grid>
 </Window>

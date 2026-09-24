@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Services;
@@ -51,7 +52,7 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
 
     public string? PickFolder(string? initialFolder = null)
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Chọn folder ảnh" };
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = Tr.DialogPickFolderTitle };
         if (!string.IsNullOrEmpty(initialFolder) && Directory.Exists(initialFolder)) dialog.InitialDirectory = initialFolder;
 
         var owner = System.Windows.Application.Current?.MainWindow;
@@ -100,7 +101,7 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         if (store is null) return false;
 
         var decoderFactory = serviceProvider.GetService<IImageDecoderFactory>();
-        var window = new SettingsWindow(store, decoderFactory)
+        var window = new SettingsWindow(store, decoderFactory, serviceProvider.GetService<PhotoReview.App.Localization.LocalizationService>())
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
