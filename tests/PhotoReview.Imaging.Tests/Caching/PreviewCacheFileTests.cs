@@ -150,6 +150,21 @@ public sealed class PreviewCacheFileTests : IDisposable
         Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
     }
 
+    [Fact(DisplayName = "A legacy v5 entry (possibly alpha-flattened) is rejected so it gets re-decoded")]
+    public async Task LegacyVersion5EntryIsRejected()
+    {
+        var source = FixtureGenerator.CreateGradientCheckerboard(32, 32);
+        var path = CachePath();
+        await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
+
+        var bytes = File.ReadAllBytes(path);
+        bytes[4] = 5; // offset 4 = version byte; v5 is what pre-IMG-01 builds wrote
+        File.WriteAllBytes(path, bytes);
+
+        Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+        Assert.True(PreviewCacheFile.CurrentVersion > 5);
+    }
+
     [Fact(DisplayName = "A file with a bad magic is rejected")]
     public async Task BadMagicIsRejected()
     {

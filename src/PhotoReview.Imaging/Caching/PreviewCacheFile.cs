@@ -46,8 +46,11 @@ namespace PhotoReview.Imaging.Caching;
 /// </remarks>
 public static class PreviewCacheFile
 {
-    /// <summary>preview-v5: bumped from v4 (preview-v4) to add the original source dimensions.</summary>
-    public const int CurrentVersion = 5;
+    /// <summary>
+    /// preview-v6: bumped from v5 so entries written by builds that flattened alpha (transparent PNG/WebP baked to
+    /// opaque black, R2-A-02) are treated as stale and re-decoded once. v5 added the original source dimensions.
+    /// </summary>
+    public const int CurrentVersion = 6;
 
     /// <summary>JPEG quality chosen by measurement -- see the format decision in the type doc.</summary>
     public const int DefaultJpegQuality = 95;
