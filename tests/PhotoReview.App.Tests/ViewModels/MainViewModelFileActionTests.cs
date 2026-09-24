@@ -315,6 +315,55 @@ public sealed class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
+    public async Task RunActionAsync_AfterSettingsSaved_UsesSavedProfiles()
+    {
+        var folder = Path.Combine(_tempDir, "saved_settings_album");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        // Simulates Settings > Save: the window saves a NEW AppSettings instance (R2-F-03).
+        _settingsStore.Save(new AppSettings
+        {
+            LoadingMode = LoadingMode.Preview,
+            Actions = [new ReviewAction { Name = "MoveElsewhere", Operation = FileOperationType.Move, Destination = "NewDest", Confirm = true }]
+        });
+        _dialogService.ConfirmationResponse = true;
+
+        await vm.RunActionAsync(0);
+
+        Assert.True(File.Exists(Path.Combine(folder, "NewDest", "1.jpg")));
+        Assert.False(File.Exists(Path.Combine(folder, "Sorted", "1.jpg")));
+        Assert.False(File.Exists(img1));
+    }
+
+    [Fact]
+    public async Task RunActionAsync_AfterSettingsSavedWithConfirm_AsksForConfirmation()
+    {
+        var folder = Path.Combine(_tempDir, "saved_confirm_album");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        _settingsStore.Save(new AppSettings
+        {
+            LoadingMode = LoadingMode.Preview,
+            Actions = [new ReviewAction { Name = "MoveElsewhere", Operation = FileOperationType.Move, Destination = "NewDest", Confirm = true }]
+        });
+        _dialogService.ConfirmationResponse = false;
+
+        await vm.RunActionAsync(0);
+
+        Assert.True(File.Exists(img1));
+        Assert.Equal(1, vm.TotalFiles);
+    }
+
+    [Fact]
     public async Task RunActionAsync_WhenFolderSwitchedDuringIo_IgnoresCompletion()
     {
         var folder1 = Path.Combine(_tempDir, "album_stale1");

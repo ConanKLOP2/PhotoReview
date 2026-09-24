@@ -103,7 +103,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         Metrics = metrics ?? new ReviewMetrics();
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
-            _naturalComparer, Settings, this);
+            _naturalComparer, () => Settings, this);
         _siblingNavigator = new SiblingFolderNavigator(
             _clock, _catalog, _fileSystem, this, () => _currentSession);
         _duplicateController = new DuplicateCleanupController(
