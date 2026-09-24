@@ -1,8 +1,14 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master (#36) | **Branch:** `refactor/ar04-ui-thread-affinity` (#37)
+**Updated:** 2026-09-24 | **Base:** master (`b8fe687`, #48) | **Branch:** none open
 
-## Now: Architecture review AR00–AR07 DONE (2026-09-24)
+## Latest: `LoadingMode.Original` fix — MERGED (#48 `b8fe687`, 2026-09-24)
+
+- `PreviewStateContext.IsOriginalLoadingMode` was never assigned since T46d (`9a5f7b8`), so Settings → "Original" still produced downscaled preview keys/decodes. Wired in `App.ConfigureServices`; composition test `ConfigureServices_PreviewStateContext_IsOriginalLoadingMode_FollowsSettings`.
+- RAM: memory keys and disk hash include `IsOriginal`, so a mode switch never serves stale images; the 16 GB LRU evicts by `EstimatedBytes` (~170 originals at ~96 MB). `MainViewModel.ShowSettings` clears caches only on *backend* change — a mode change cancels preload + re-presents, old-mode entries age out via LRU (intended).
+- Gate on master `b8fe687`: build Release 0 warnings; tests 0 failed (933 passed, 6 skipped).
+
+## Architecture review AR00–AR07 DONE (2026-09-24)
 
 - Merged: #24 AR03 · #25 AR07 · #26 AR06 · #27 AR02a · #28 AR01 · #34 (AR02b/c + #31 decode-width fix) · #35 AR02d · #36 TS05–07/TC04/TC09 · #37 AR04 (this branch). Decisions: `docs/refactoring/OPEN-DECISIONS.md`.
 - Perf: AR02e baseline + AR04 gate (passed, interleaved runs) in `docs/refactoring/PERF-STATUS.md`. #31 fixed full-size Preview decode (since T46d): S3 burst shown 27–47 → 145–175 /200, peak WS 16.9 → 7.0 GB. TurboJpeg slower than WicDirect on the real set — keep WicDirect.
