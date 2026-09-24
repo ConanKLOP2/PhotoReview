@@ -81,6 +81,30 @@ public sealed class LocTemplate
     /// <summary>Template for text that is shown verbatim (e.g. a key used as its own fallback).</summary>
     public static LocTemplate Literal(string text) => new(text, [text], []);
 
+    /// <summary>Same placeholders, literal text rewritten by <paramref name="literal"/> (pseudo-localization).</summary>
+    public LocTemplate TransformLiterals(Func<string, string> literal)
+    {
+        ArgumentNullException.ThrowIfNull(literal);
+        var literals = _literals.Select(literal).ToArray();
+        var text = new StringBuilder(literals[0].Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal));
+        for (var i = 0; i < _names.Length; i++)
+        {
+            text.Append('{').Append(_names[i]).Append('}')
+                .Append(literals[i + 1].Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal));
+        }
+        return new LocTemplate(text.ToString(), literals, _names);
+    }
+
+    /// <summary>Same template with <paramref name="suffix"/> appended as literal text.</summary>
+    public LocTemplate AppendLiteral(string suffix)
+    {
+        ArgumentNullException.ThrowIfNull(suffix);
+        var literals = (string[])_literals.Clone();
+        literals[^1] += suffix;
+        var escaped = suffix.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
+        return new LocTemplate(Text + escaped, literals, _names);
+    }
+
     public string Render(ReadOnlySpan<LocArg> args)
     {
         if (_names.Length == 0) return _literals[0];

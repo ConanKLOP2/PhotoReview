@@ -213,6 +213,7 @@ public partial class App : System.Windows.Application, IDisposable
         // I18N: the UI language (a few small JSON files) is read in the same worker hop and published below,
         // before any window exists.
         var localization = _services.GetRequiredService<PhotoReview.App.Localization.LocalizationService>();
+        localization.Mode = PhotoReview.App.Localization.LocalizationService.ParseMode(e.Args);
         var settingsLoad = Task.Run(() =>
         {
             var loaded = store.Load();

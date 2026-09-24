@@ -33,13 +33,34 @@ public sealed class LocalizationService
 
     public string UserLanguagesDir { get; }
 
+    /// <summary>Translator aid applied on top of the chosen language (command line <c>--i18n-pseudo</c> / <c>--i18n-keys</c>).</summary>
+    public TranslatorMode Mode { get; set; }
+
     /// <summary>The setting value last applied (<c>auto</c> or a code).</summary>
     public string RequestedLanguage { get; private set; } = LanguageLoader.AutoCode;
 
     public IReadOnlyList<LanguageInfo> DiscoverLanguages() => _loader.DiscoverLanguages();
 
     /// <summary>Reads and validates the catalogs for <paramref name="language"/>; no global state is touched.</summary>
-    public Localizer Load(string? language) => _loader.Load(language, CultureInfo.InstalledUICulture);
+    public Localizer Load(string? language)
+    {
+        var localizer = _loader.Load(language, CultureInfo.InstalledUICulture);
+        return Mode switch
+        {
+            TranslatorMode.Pseudo => TranslatorModes.CreatePseudo(localizer),
+            TranslatorMode.Keys => TranslatorModes.CreateShowKeys(localizer),
+            _ => localizer,
+        };
+    }
+
+    /// <summary>Reads <c>--i18n-pseudo</c> / <c>--i18n-keys</c> from the command line.</summary>
+    public static TranslatorMode ParseMode(IEnumerable<string> args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        var list = args.ToList();
+        if (list.Contains("--i18n-keys", StringComparer.OrdinalIgnoreCase)) return TranslatorMode.Keys;
+        return list.Contains("--i18n-pseudo", StringComparer.OrdinalIgnoreCase) ? TranslatorMode.Pseudo : TranslatorMode.None;
+    }
 
     /// <summary>Publishes a localizer built by <see cref="Load"/>; call on the UI thread.</summary>
     public void Apply(string? language, Localizer localizer)
@@ -49,7 +70,7 @@ public sealed class LocalizationService
         foreach (var warning in localizer.Warnings) _log.Warn("i18n: " + warning);
         try
         {
-            var culture = CultureInfo.GetCultureInfo(localizer.Code);
+            var culture = CultureInfo.GetCultureInfo(Mode == TranslatorMode.Pseudo ? "en" : localizer.Code);
             CultureInfo.CurrentUICulture = culture;
             CultureInfo.DefaultThreadCurrentUICulture = culture;
         }
@@ -65,4 +86,16 @@ public sealed class LocalizationService
 
     /// <summary>Re-reads the files of the current language, e.g. after a translator edited them.</summary>
     public void Reload() => Switch(RequestedLanguage);
+}
+
+/// <summary>Translator aids (I18N L09).</summary>
+public enum TranslatorMode
+{
+    None,
+
+    /// <summary>Accented, 35 % longer, bracketed text: finds hard-coded strings and clipped layouts.</summary>
+    Pseudo,
+
+    /// <summary>Each text shows its catalog key.</summary>
+    Keys,
 }

@@ -71,6 +71,14 @@ public sealed class Localizer
         return Format(key, args);
     }
 
+    /// <summary>A copy with every template rewritten (translator modes, <see cref="TranslatorModes"/>).</summary>
+    public Localizer Transform(string code, string nativeName, PluralRule plural, Func<string, LocTemplate, LocTemplate> transform)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+        var templates = _templates.ToFrozenDictionary(p => p.Key, p => transform(p.Key, p.Value), StringComparer.Ordinal);
+        return new Localizer(code, nativeName, plural, templates, Warnings);
+    }
+
     /// <summary>
     /// Builds a localizer from English plus zero or more overlay catalogs of one language, applied in order
     /// (later overlays win, so pass shipped first, user last). Overlay entries are validated against English:
