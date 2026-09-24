@@ -7,6 +7,11 @@
     <ApplicationIcon>Assets\PhotoReview.ico</ApplicationIcon>
     <Platforms>AnyCPU;x64</Platforms>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <!-- perf(startup): precompile the app's own assemblies (and packages) at publish so the first
+         window is not JIT-bound. Measured on the release folder (open a JPEG in an 1841-file folder,
+         median of 7): first image ~400 ms sooner (window Show/Loaded 783 -> 424 ms); +1.35 MB.
+         Publish only; build/test output is unchanged. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

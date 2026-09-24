@@ -72,8 +72,11 @@ public partial class MainWindow : Window
         _settings = _settingsStore.Current;
         _shortcutRouter = new ShortcutRouter(_settings);
         _settingsStore.Changed += (_, s) => { _settings = s; _shortcutRouter.Rebuild(s); };
+        PhotoReviewPerf.StartupMark("mainWindowCtor");
         DataContext = _viewModel;
         InitializeComponent();
+        PhotoReviewPerf.StartupMark("xamlLoaded");
+        ContentRendered += (_, _) => PhotoReviewPerf.StartupMark("contentRendered");
         viewport.Get = GetViewportSize;
         _viewport = viewport;
         DpiChanged += MainWindow_DpiChanged;
@@ -83,7 +86,9 @@ public partial class MainWindow : Window
 
     public void InitializeWithInitialPath(string? initialPath)
     {
-        if (!string.IsNullOrWhiteSpace(initialPath)) _ = _viewModel.OpenPathAsync(initialPath);
+        if (string.IsNullOrWhiteSpace(initialPath)) return;
+        PhotoReviewPerf.StartupMark("openPathBegin");
+        _ = _viewModel.OpenPathAsync(initialPath);
     }
 
     private void WireViewModelEvents()
@@ -156,6 +161,7 @@ public partial class MainWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        PhotoReviewPerf.StartupMark("windowLoaded");
         if (!_placementRestored) { _placementRestored = true; WindowPlacementService.Restore(this); }
         UpdateFitSize();
     }
