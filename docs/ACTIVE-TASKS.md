@@ -215,4 +215,4 @@ DT02 → DT03 → (DT04 ∥ DT05) → DT06-DT10
 
 - **Completed work is archived**, not deleted: `docs/refactoring/archive/` holds resolved ST plans/tasks/decisions and the completed DF plan.
 - **T89**: GUI/STA acceptance (user) before touching `ApplyFitViewAsync` further.
-- **Review 2026-09-25 waves:** all of 1a–1c, 2a, 2b (minus TEST-03, declined), 3, 4, 5a–5c plus round-2 fixes are implemented on `review/2026-09-25-integration` (one PR pending). Round-2 mediums/lows in progress; open decisions Q-R7..Q-R9.
+- **Review 2026-09-25 waves:** all of 1a–1c, 2a, 2b (minus TEST-03, declined), 3, 4, 5a–5c plus round-2 fixes are implemented on `review/2026-09-25-integration` (one PR pending). Round-2 mediums/lows in progress; open decisions Q-R7..Q-R11.
