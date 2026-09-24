@@ -4,7 +4,9 @@ param(
     [switch]$SelfContained
 )
 
-if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) { $ReleaseDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'outputs\release\PhotoReview-framework-dependent' }
+$ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) { $ReleaseDirectory = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\bin\Release\net10.0-windows\publish' }
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolved = [IO.Path]::GetFullPath($ReleaseDirectory)
 $required = @(
@@ -43,7 +45,7 @@ $projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App
 # The version is computed from git by Directory.Build.targets (no <Version> in the csproj). Ask MSBuild
 # for the value the current commit produces, so a stale publish folder from another commit still fails.
 $versionJson = & dotnet msbuild $projectFile -nologo -t:PhotoReviewComputeVersion -getProperty:FileVersion -getProperty:InformationalVersion -p:Configuration=Release
-if ($LASTEXITCODE -ne 0) { Write-Error "Could not compute the expected version (dotnet msbuild exit $LASTEXITCODE)."; exit 1 }
+if ($LASTEXITCODE -ne 0) { throw "Could not compute the expected version (dotnet msbuild exit $LASTEXITCODE)." }
 $expected = ($versionJson -join "`n" | ConvertFrom-Json).Properties
 $expectedFileVersion = [string]$expected.FileVersion
 $expectedCommit = ([string]$expected.InformationalVersion -split '\+', 2)[1] -replace '\.dirty$', ''
