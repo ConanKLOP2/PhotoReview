@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 
@@ -22,6 +23,8 @@ public sealed class SourceSizeTracker
     private int _cachedVersion = -1;
     private long _cachedTotalBytes;
     private int _fsCallCount;
+    private CatalogEntry[]? _observed;
+    private bool _observedDirty;
 
     public SourceSizeTracker(ReviewCatalog catalog, IFileSystem fileSystem)
     {
@@ -32,6 +35,21 @@ public sealed class SourceSizeTracker
     }
 
     /// <summary>
+    /// R2-F-11: called (on the UI thread) with the immutable entry snapshot a preload lifetime works on. From then on
+    /// <see cref="GetTotal"/> sums that snapshot and never touches the live catalog, which the UI thread keeps mutating
+    /// while <see cref="GetTotal"/> runs on the preload thread (ADR 0005).
+    /// </summary>
+    public void Observe(CatalogEntry[] snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        lock (_gate)
+        {
+            _observed = snapshot;
+            _observedDirty = true;
+        }
+    }
+
+    /// <summary>
     /// Returns total byte size of all sources currently in the catalog.
     /// Computes from cached entry metadata when possible, falling back to filesystem stat for uncached paths.
     /// </summary>
@@ -39,10 +57,13 @@ public sealed class SourceSizeTracker
     {
         lock (_gate)
         {
-            var version = _catalog.StructuralVersion;
-            if (_cachedVersion == version) return _cachedTotalBytes;
+            // Once a preload snapshot has been observed, only that snapshot is read (thread-safe); otherwise the live
+            // catalog is read, which is only valid from the thread that owns it.
+            var observed = _observed;
+            var version = observed is null ? _catalog.StructuralVersion : -2;
+            if (observed is not null ? !_observedDirty : _cachedVersion == version) return _cachedTotalBytes;
 
-            var entries = _catalog.Entries;
+            IReadOnlyList<CatalogEntry> entries = observed ?? _catalog.Entries;
             _cachedTotalBytes = 0;
             _fsCallCount = 0;
 
@@ -74,6 +95,7 @@ public sealed class SourceSizeTracker
             }
 
             _cachedVersion = version;
+            if (observed is not null && ReferenceEquals(observed, _observed)) _observedDirty = false;
             return _cachedTotalBytes;
         }
     }
