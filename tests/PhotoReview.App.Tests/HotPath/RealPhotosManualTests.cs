@@ -26,8 +26,14 @@ namespace PhotoReview.App.Tests.HotPath;
 /// To enable: set PHOTOREVIEW_FIXTURE_DIR=/path/to/photos environment variable before running.
 /// </summary>
 [Trait("Category", "Manual")]
-public sealed class RealPhotosManualTests
+[Collection("GlobalState")]
+public sealed class RealPhotosManualTests : IDisposable
 {
+    private DataRootFixture? _dataRoot;
+
+    /// <summary>Restores PHOTOREVIEW_DATA_ROOT and deletes the private root (TEST-01).</summary>
+    public void Dispose() => _dataRoot?.Dispose();
+
     private const string FixtureDirEnvVar = "PHOTOREVIEW_FIXTURE_DIR";
 
     /// <summary>
@@ -47,13 +53,11 @@ public sealed class RealPhotosManualTests
     /// first (when not already set) so these tests never touch the user's real
     /// %LOCALAPPDATA%\PhotoReview state.
     /// </summary>
-    private static (ServiceProvider Services, MainViewModel ViewModel) CreateIsolatedViewModel()
+    private (ServiceProvider Services, MainViewModel ViewModel) CreateIsolatedViewModel()
     {
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppPaths.DataRootEnvironmentVariable)))
         {
-            var root = Path.Combine(Path.GetTempPath(), "PhotoReview-Test-RealPhotos-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
-            Environment.SetEnvironmentVariable(AppPaths.DataRootEnvironmentVariable, root);
+            _dataRoot = new DataRootFixture();
         }
 
         var services = AppHost.BuildServices();
