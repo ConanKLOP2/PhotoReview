@@ -350,6 +350,7 @@ public partial class MainWindow : Window
         var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.Compare.IsVisible, isCompareVisible: _viewModel.Compare.IsVisible);
         if (cmd is null) return;
         e.Handled = true;
+        if (e.IsRepeat && cmd.Value.Type.IgnoresAutoRepeat()) return; // R2-F-06: never repeat file actions
 
         switch (cmd.Value.Type)
         {
