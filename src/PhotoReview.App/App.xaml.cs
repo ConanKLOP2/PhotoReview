@@ -269,9 +269,11 @@ public partial class App : System.Windows.Application, IDisposable
             _perfHooks = PerfDispatcherHooks.Attach(Dispatcher);
             PerfDispatcherHooks.TraceDiagMode();
         }
-        DispatcherUnhandledException += (_, a) => { AppLog.Error("Dispatcher exception", a.Exception); a.Handled = true; };
-        AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
-        TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
+        // R2-F-12: these are crash reports, so they are recorded (and flushed) even while logging is off;
+        // otherwise the swallowed exception, or a fatal one before the process dies, leaves no trace.
+        DispatcherUnhandledException += (_, a) => { LogUnhandledForced("Dispatcher exception", a.Exception); a.Handled = true; };
+        AppDomain.CurrentDomain.UnhandledException += (_, a) => LogUnhandledForced("AppDomain exception", a.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, a) => { LogUnhandledForced("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
         _instanceLock = new InstanceLock(lockFolder, _services.GetRequiredService<ILog>());
         if (!_instanceLock.IsOwner)
@@ -310,6 +312,16 @@ public partial class App : System.Windows.Application, IDisposable
         AppLog.Error(message, ex);
         AppLog.Flush();
         AppLog.Enabled = wasEnabled;
+    }
+
+    /// <summary>R2-F-12: records an unhandled exception even when logging is disabled and flushes before returning.</summary>
+    internal static void LogUnhandledForced(string message, object? exceptionObject)
+    {
+        try
+        {
+            LogStartupErrorForced(message, exceptionObject as Exception ?? new InvalidOperationException(exceptionObject?.ToString() ?? "unknown exception object"));
+        }
+        catch { /* a failing logger must not turn a handled crash into another crash */ }
     }
 
     public void Dispose()
