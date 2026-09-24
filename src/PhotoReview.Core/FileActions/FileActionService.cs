@@ -81,6 +81,13 @@ public sealed class FileActionService
                 if (string.IsNullOrWhiteSpace(request.Destination))
                     throw new IOException(Tr.CoreFileActionNoDestination);
 
+                // Same rule as ActionDestinationPolicy: drive-relative "a:b" is "rooted" to .NET but resolves against that
+                // drive's current directory, i.e. it is neither an explicit absolute path nor inside the photo folder.
+                if (ActionDestinationPolicy.Validate(request.Destination) == ActionDestinationCheck.InvalidChars
+                    && !Path.IsPathFullyQualified(request.Destination)
+                    && request.Destination.Contains(':', StringComparison.Ordinal))
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+
                 var source = request.Source;
                 var destinationFolder = Path.IsPathRooted(request.Destination)
                     ? request.Destination

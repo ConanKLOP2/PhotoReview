@@ -75,6 +75,23 @@ public sealed class FileActionServiceTests
         Assert.Empty(_journal.ReadFailedOperations());
     }
 
+    [Theory]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
+    public async Task ExecuteAsync_DriveRelativeDestination_FailsWithoutJournalOrMove(FileOperationType operation)
+    {
+        var source = @"C:\photos.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, "D:Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionDestinationOutsideSource, result.Error);
+        Assert.True(_fs.FileExists(source));
+        Assert.DoesNotContain(_fs.Events, e => e.Kind is "move" or "copy" or "append");
+        Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
+    }
+
     [Fact]
     public async Task ExecuteAsync_RelativeDestinationInsideSource_Succeeds()
     {
