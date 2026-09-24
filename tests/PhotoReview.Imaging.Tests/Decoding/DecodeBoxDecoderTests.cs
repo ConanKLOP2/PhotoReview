@@ -13,25 +13,45 @@ namespace PhotoReview.Imaging.Tests.Decoding;
 /// with exactly the size <see cref="DecodeBox.Fit"/> predicts.
 /// </summary>
 [Trait("Category", "HotPath")]
-public sealed class DecodeBoxDecoderTests : IDisposable
+public sealed class DecodeBoxDecoderTests(DecodeBoxDecoderTests.SourceImages images)
+    : IClassFixture<DecodeBoxDecoderTests.SourceImages>
 {
     private static readonly DecodeBox Box = new(320, 160);
-    private readonly string _tempDir;
 
-    public DecodeBoxDecoderTests()
+    /// <summary>Source images generated once per class; the tests only read them.</summary>
+    public sealed class SourceImages : IDisposable
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "PhotoReview-DecodeBoxTests-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_tempDir);
-    }
+        private readonly string _dir = Path.Combine(
+            Path.GetTempPath(), "PhotoReview-DecodeBoxTests-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose()
-    {
-        try
+        public SourceImages()
         {
-            if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, recursive: true);
+            Directory.CreateDirectory(_dir);
+            Landscape = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_dir, "landscape.jpg"), 600, 400);
+            Portrait = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_dir, "portrait.jpg"), 400, 600);
+            Panorama = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_dir, "pano.jpg"), 960, 240);
+            Tiny = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_dir, "tiny.jpg"), 120, 80);
+            Rotated6 = FixtureGenerator.GenerateJpegWithOrientation(Path.Combine(_dir, "rotated-6.jpg"), 600, 400, 6);
+            Rotated8 = FixtureGenerator.GenerateJpegWithOrientation(Path.Combine(_dir, "rotated-8.jpg"), 600, 400, 8);
+            LargePng = FixtureGenerator.GeneratePng(Path.Combine(_dir, "large.png"), 400, 600);
+            SmallPng = FixtureGenerator.GeneratePng(Path.Combine(_dir, "small.png"), 100, 60);
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+
+        public string Landscape { get; }
+        public string Portrait { get; }
+        public string Panorama { get; }
+        public string Tiny { get; }
+        public string Rotated6 { get; }
+        public string Rotated8 { get; }
+        public string LargePng { get; }
+        public string SmallPng { get; }
+
+        public void Dispose()
+        {
+            try { Directory.Delete(_dir, recursive: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     public static TheoryData<string> JpegDecoders => ["Wpf", "WicDirect", "TurboJpeg"];
@@ -49,7 +69,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(JpegDecoders))]
     public void Decode_LandscapeJpeg_FitsBoxHeight(string decoder)
     {
-        var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_tempDir, "landscape.jpg"), 600, 400);
+        var path = images.Landscape;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, Box));
 
@@ -62,7 +82,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(JpegDecoders))]
     public void Decode_PortraitJpeg_FitsBoxHeight(string decoder)
     {
-        var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_tempDir, "portrait.jpg"), 400, 600);
+        var path = images.Portrait;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, Box));
 
@@ -80,8 +100,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     public void Decode_ExifRotatedJpeg_BoxAppliedAfterOrientation(string decoder, ushort orientation)
     {
         // Stored 600x400 landscape displayed as a 400x600 portrait.
-        var path = FixtureGenerator.GenerateJpegWithOrientation(
-            Path.Combine(_tempDir, $"rotated-{orientation}.jpg"), 600, 400, orientation);
+        var path = orientation == 6 ? images.Rotated6 : images.Rotated8;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, Box));
 
@@ -93,7 +112,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(JpegDecoders))]
     public void Decode_PanoramaJpeg_FitsBoxWidth(string decoder)
     {
-        var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_tempDir, "pano.jpg"), 960, 240);
+        var path = images.Panorama;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, Box));
 
@@ -104,7 +123,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(JpegDecoders))]
     public void Decode_TinyJpeg_NotUpscaled(string decoder)
     {
-        var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_tempDir, "tiny.jpg"), 120, 80);
+        var path = images.Tiny;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, Box));
 
@@ -116,8 +135,8 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(PngDecoders))]
     public void Decode_Png_FitsBox(string decoder)
     {
-        var large = FixtureGenerator.GeneratePng(Path.Combine(_tempDir, "large.png"), 400, 600);
-        var small = FixtureGenerator.GeneratePng(Path.Combine(_tempDir, "small.png"), 100, 60);
+        var large = images.LargePng;
+        var small = images.SmallPng;
 
         AssertSize(106, 160, Create(decoder).Decode(new DecodeRequest(large, Box)));
         AssertSize(100, 60, Create(decoder).Decode(new DecodeRequest(small, Box)));
@@ -127,7 +146,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(JpegDecoders))]
     public void Decode_FromBytes_FitsBox(string decoder)
     {
-        var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_tempDir, "bytes.jpg"), 400, 600);
+        var path = images.Portrait;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, Box, bytes: File.ReadAllBytes(path)));
 
@@ -138,7 +157,7 @@ public sealed class DecodeBoxDecoderTests : IDisposable
     [MemberData(nameof(JpegDecoders))]
     public void Decode_UnboundedBox_FullSize(string decoder)
     {
-        var path = FixtureGenerator.GenerateGradientJpeg(Path.Combine(_tempDir, "full.jpg"), 400, 600);
+        var path = images.Portrait;
 
         var decoded = Create(decoder).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
 

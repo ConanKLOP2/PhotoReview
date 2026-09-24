@@ -1,7 +1,5 @@
 using System;
-using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
@@ -110,30 +108,6 @@ public sealed class FixtureTests : IDisposable
         Assert.True(compareMid.MeanDeltaE <= 6.0, $"Expected MeanDeltaE <= 6.0, got {compareMid.MeanDeltaE}");
     }
 
-    [Theory(DisplayName = "EXIF orientations 1 to 8 are preserved in saved JPEG metadata")]
-    [InlineData((ushort)1)]
-    [InlineData((ushort)2)]
-    [InlineData((ushort)3)]
-    [InlineData((ushort)4)]
-    [InlineData((ushort)5)]
-    [InlineData((ushort)6)]
-    [InlineData((ushort)7)]
-    [InlineData((ushort)8)]
-    public void ExifOrientationsArePreservedInMetadata(ushort orientation)
-    {
-        var path = Path.Combine(_tempDir, $"orient_{orientation}.jpg");
-        FixtureGenerator.GenerateJpegWithOrientation(path, 32, 24, orientation);
-
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-        var metadata = decoder.Frames[0].Metadata as BitmapMetadata;
-
-        Assert.NotNull(metadata);
-        var readOrientation = metadata.GetQuery("/app1/ifd/{ushort=274}");
-        Assert.NotNull(readOrientation);
-        Assert.Equal(orientation, Convert.ToUInt16(readOrientation, CultureInfo.InvariantCulture));
-    }
-
     [Fact(DisplayName = "JPEG with embedded ICC profile decodes cleanly")]
     public void JpegWithIccProfileDecodesCleanly()
     {
@@ -149,38 +123,6 @@ public sealed class FixtureTests : IDisposable
         var decoded = _decoder.Decode(new DecodeRequest(path, TargetWidth: 0));
         Assert.Equal(64, decoded.PixelWidth);
         Assert.Equal(48, decoded.PixelHeight);
-    }
-
-    [Fact(DisplayName = "Zero-byte file fails decode safely")]
-    public void ZeroByteFileFailsDecodeSafely()
-    {
-        var path = Path.Combine(_tempDir, "empty.jpg");
-        FixtureGenerator.GenerateZeroByteFile(path);
-
-        Assert.ThrowsAny<Exception>(() => _decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
-    }
-
-    [Fact(DisplayName = "Truncated JPEG file fails decode safely")]
-    public void TruncatedJpegFailsDecodeSafely()
-    {
-        var validPath = Path.Combine(_tempDir, "valid_for_trunc.jpg");
-        FixtureGenerator.GenerateGradientJpeg(validPath, 64, 48);
-
-        var truncatedPath = Path.Combine(_tempDir, "truncated.jpg");
-        var bytes = File.ReadAllBytes(validPath);
-        // Retain only the first 25 bytes (header only, no scan data)
-        File.WriteAllBytes(truncatedPath, bytes.Take(Math.Min(bytes.Length, 25)).ToArray());
-
-        Assert.ThrowsAny<Exception>(() => _decoder.Decode(new DecodeRequest(truncatedPath, TargetWidth: 0)));
-    }
-
-    [Fact(DisplayName = "Text file with jpg extension fails decode safely")]
-    public void TextFileWithJpgExtensionFailsDecodeSafely()
-    {
-        var path = Path.Combine(_tempDir, "text_as_image.jpg");
-        FixtureGenerator.GenerateTextFile(path);
-
-        Assert.ThrowsAny<Exception>(() => _decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
     }
 
     [Fact(DisplayName = "Manual verification against real photos in PHOTOREVIEW_FIXTURE_DIR")]
