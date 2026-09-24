@@ -1,11 +1,15 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master `b8fe687` (v2.0.50) | **Branch:** `docs/perf-night-2026-09-24`
+**Updated:** 2026-09-24 | **Base:** master `7f4c90b` | **Branch:** `docs/i18n-plan` (L00)
 
-## Now: perf night 2026-09-24 — #39–#42, #44–#46, #48 merged; zoom decision = A
+## Now: I18N (group L) — EN + VI, community-editable JSON catalogs
+
+- Plan `docs/refactoring/I18N-PLAN.md`, ADR 0006; Q-L1..Q-L8 all = recommendation (user, 2026-09-24).
+- L00 (docs) on `docs/i18n-plan`. Code L01+ goes on a separate branch based on `master` (no stacked PRs).
+
+## Previous: perf night 2026-09-24 — all merged (#39–#49, #53)
 
 - Result (real folder): open folder 489 → 166 ms, burst shown 55 → 200/200, peak WS 5.2 → 1.7 GB, app start → first image 3.2 → 1.8 s. Table: `docs/refactoring/PERF-STATUS.md` ("Perf night").
-- **Remaining merge order:** #43 (decode to viewport box) → #47 (true 100 % zoom + on-demand original; contains #43) → #49 (this doc). Both updated to master and MERGEABLE (2026-09-24).
 - **Decisions taken:** zoom = option A (user, 2026-09-24): "100 %" = 1 source pixel; wheel zoom from Fit steps from the fit size. #46 INV-9 change accepted by merge: opened photo shows before Explorer order; navigation waits for it (≤ ~2 s).
 - Fixed along the way (all lost in T46d): preview decode width (#31), folder trace events (#46), Original loading mode (#48).
 - Left for user (visual): Fit first-frame (T89), TurboJPEG item greyed without dll, AR04 GUI acceptance, #47 zoom feel. CI tags missing for runs cancelled by quick successive merges (e.g. v2.0.44/45/48) — tag job could backfill.
