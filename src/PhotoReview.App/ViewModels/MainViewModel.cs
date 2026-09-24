@@ -219,6 +219,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    /// <summary>Latest folder load, including its Explorer-order apply/ignore; completes when the order is settled (tests await it instead of a wall-clock window).</summary>
+    internal Task FolderLoadTask { get; private set; } = Task.CompletedTask;
+
     /// <summary>
     /// Mở thư mục ảnh và nạp danh mục ảnh.
     /// </summary>
@@ -226,7 +229,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         _statusText = string.Empty;
-        await _folderCoordinator.LoadAsync(folder, initialPath);
+        FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
+        await FolderLoadTask;
         NotifyNavigationStateChanged();
     }
 
