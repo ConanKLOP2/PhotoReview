@@ -316,20 +316,26 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
-    public async Task RunActionAsync(int index)
+    public Task RunActionAsync(int index) => _fileActionGate.RunExclusiveAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
-    }
+    });
 
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
-    public async Task RecycleAsync()
+    public Task RecycleAsync() => _fileActionGate.RunExclusiveAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
-    }
+    });
+
+    /// <summary>OC14: single gate shared by file actions and undo.</summary>
+    private readonly FileActionGate _fileActionGate = new();
+
+    /// <summary>True while a file action or undo is in flight (read-only projection of the gate).</summary>
+    public bool IsFileActionInProgress => _fileActionGate.IsHeld;
 
     /// <summary>
     /// INV-9: a file opened directly is presented before Explorer's view order arrives. Commands that
@@ -348,7 +354,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Replaces both legacy UndoAsync (Move-only) and UndoLastAsync to provide consistent semantics
     /// across all callers (keyboard Ctrl+Z and button click).
     /// </summary>
-    public async Task UndoAsync()
+    public Task UndoAsync() => _fileActionGate.RunExclusiveAsync(UndoCoreAsync);
+
+    private async Task UndoCoreAsync()
     {
         var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path);
 
