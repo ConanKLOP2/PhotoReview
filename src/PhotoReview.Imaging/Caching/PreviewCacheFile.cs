@@ -101,6 +101,8 @@ public static class PreviewCacheFile
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
+        // IMG-01: JPEG cannot carry alpha; refuse so a future caller cannot silently flatten transparency.
+        if (HasAlpha(bitmap)) throw new ArgumentException("Bitmaps with an alpha channel cannot be stored in the JPEG preview cache.", nameof(bitmap));
         if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -203,6 +205,29 @@ public static class PreviewCacheFile
         native.Freeze();
 
         return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight);
+    }
+
+    /// <summary>
+    /// True when <paramref name="bmp"/> can carry transparency (alpha pixel format, or an indexed
+    /// format whose palette has a non-opaque color). Such previews must not go through the JPEG cache.
+    /// </summary>
+    /// <summary>Framework-agnostic form of <see cref="HasAlpha(BitmapSource)"/> for a decoded preview.</summary>
+    public static bool HasAlpha(IDecodedImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return image.PlatformImage is BitmapSource bitmap && HasAlpha(bitmap);
+    }
+
+    internal static bool HasAlpha(BitmapSource bmp)
+    {
+        ArgumentNullException.ThrowIfNull(bmp);
+        var format = bmp.Format;
+        if (format == PixelFormats.Bgra32 || format == PixelFormats.Pbgra32 || format == PixelFormats.Rgba64
+            || format == PixelFormats.Prgba64 || format == PixelFormats.Rgba128Float || format == PixelFormats.Prgba128Float)
+            return true;
+        if (format == PixelFormats.Indexed1 || format == PixelFormats.Indexed2 || format == PixelFormats.Indexed4 || format == PixelFormats.Indexed8)
+            return bmp.Palette?.Colors.Any(c => c.A < 255) == true;
+        return false;
     }
 
     private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height, int originalWidth, int originalHeight)

@@ -441,7 +441,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     {
         var folder = _root.Dir("source");
         _previewPath = Path.Combine(folder, "preview-a.png");
-        File.WriteAllBytes(_previewPath, TestImages.PreviewPng);
+        File.WriteAllBytes(_previewPath, TestImages.OpaquePng); // opaque: alpha previews are (correctly) never disk-cached, see IMG-01
     }
 
     private PreviewImageService Track(PreviewImageService service, string diskDirectory)
@@ -487,6 +487,39 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var files = await WaitForCacheFilesAsync(diskDir);
 
         Assert.True(files.Length == 1 && new FileInfo(files[0]).Length > 0);
+    }
+
+    [Fact(DisplayName = "A transparent PNG preview is never persisted to the disk cache and keeps its alpha")]
+    public async Task TransparentPng_IsNotPersistedToDiskCache()
+    {
+        var transparentPath = Path.Combine(_root.Dir("source-alpha"), "transparent.png");
+        File.WriteAllBytes(transparentPath, TestImages.TransparentPng);
+        var diskDir = _root.Dir("alpha-no-write");
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+
+        var first = await service.GetPreviewAsync(transparentPath);
+        await service.ShutdownPersistWorkersAsync(); // drains every queued persist deterministically
+        var written = Directory.GetFiles(diskDir, "*", SearchOption.AllDirectories);
+
+        service.ClearCache(); // RAM tier only; re-fetching must still yield alpha (from source, since disk is empty)
+        var second = await service.GetPreviewAsync(transparentPath);
+
+        Assert.True(first.Downscaled && second.Downscaled);
+        Assert.True(PreviewCacheFile.HasAlpha(second));
+        Assert.Empty(written.Select(f => Path.GetRelativePath(diskDir, f)));
+    }
+
+    [Fact(DisplayName = "An opaque PNG preview is still persisted to the disk cache")]
+    public async Task OpaquePng_IsStillPersisted()
+    {
+        var diskDir = _root.Dir("opaque-write");
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+
+        var image = await service.GetPreviewAsync(_previewPath);
+        var files = await WaitForCacheFilesAsync(diskDir);
+
+        Assert.True(image.Downscaled);
+        Assert.Single(files);
     }
 
     [Fact(DisplayName = "Original (full-resolution) mode never writes to the disk cache")]

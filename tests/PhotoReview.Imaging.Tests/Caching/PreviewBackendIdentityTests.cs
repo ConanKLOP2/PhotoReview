@@ -190,7 +190,7 @@ public sealed class PreviewBackendIdentityTests : IAsyncLifetime
     {
         var pixels = new byte[4 * 4 * 3];
         Array.Fill(pixels, (byte)127);
-        var bitmap = BitmapSource.Create(4, 3, 96, 96, PixelFormats.Bgra32, null, pixels, 4 * 4);
+        var bitmap = BitmapSource.Create(4, 3, 96, 96, PixelFormats.Bgr32, null, pixels, 4 * 4);
         bitmap.Freeze();
         return bitmap;
     }

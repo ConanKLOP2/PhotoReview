@@ -35,8 +35,18 @@ public sealed class PreviewCacheFileTests : IDisposable
     private string CachePath([System.Runtime.CompilerServices.CallerMemberName] string? name = null) =>
         Path.Combine(_tempDir, name + ".pv4");
 
+    // The cache only accepts opaque bitmaps (IMG-01); the gradient fixture is Bgra32 with every alpha 255,
+    // so convert it to the opaque format real decoders produce for opaque sources.
+    private static BitmapSource AsOpaque(BitmapSource bitmap)
+    {
+        if (!PreviewCacheFile.HasAlpha(new WpfDecodedImage(bitmap))) return bitmap;
+        var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Bgr32, null, 0);
+        converted.Freeze();
+        return converted;
+    }
+
     private static WpfDecodedImage ToDecodedImage(BitmapSource bitmap, DecoderBackend backend, int orientation, int originalWidth = 0, int originalHeight = 0) =>
-        new WpfDecodedImage(bitmap, downscaled: true, orientation: orientation, actualBackend: backend, originalWidth: originalWidth, originalHeight: originalHeight);
+        new WpfDecodedImage(AsOpaque(bitmap), downscaled: true, orientation: orientation, actualBackend: backend, originalWidth: originalWidth, originalHeight: originalHeight);
 
     /// <summary>
     /// A synthetic gradient checkerboard is a torture test for JPEG (hard tile edges at high
@@ -62,7 +72,7 @@ public sealed class PreviewCacheFileTests : IDisposable
             pixels[i + 3] = 255;
         }
 
-        var result = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
+        var result = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr32, null, pixels, stride);
         result.Freeze();
         return result;
     }
@@ -165,6 +175,31 @@ public sealed class PreviewCacheFileTests : IDisposable
         File.WriteAllBytes(path, bytes[..24]); // v5 header only (24 bytes), no JPEG payload
 
         Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
+    }
+
+    [Fact(DisplayName = "Writing a bitmap with an alpha channel is rejected (JPEG cannot carry it)")]
+    public async Task WriteAtomically_RejectsAlphaBitmap()
+    {
+        var pixels = new byte[4 * 4 * 4];
+        var alpha = BitmapSource.Create(4, 4, 96, 96, PixelFormats.Pbgra32, null, pixels, 16);
+        var path = CachePath();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            PreviewCacheFile.WriteAtomicallyAsync(
+                new WpfDecodedImage(alpha, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 4, originalHeight: 4), path));
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact(DisplayName = "HasAlpha is true for alpha formats and translucent palettes, false for opaque formats")]
+    public void HasAlpha_ClassifiesFormats()
+    {
+        var px = new byte[4 * 4 * 4];
+        Assert.True(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgra32, null, px, 16))));
+        Assert.False(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, px, 16))));
+        var translucent = new BitmapPalette([System.Windows.Media.Color.FromArgb(0, 0, 0, 0), System.Windows.Media.Colors.White]);
+        var opaque = new BitmapPalette([System.Windows.Media.Colors.Black, System.Windows.Media.Colors.White]);
+        Assert.True(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1))));
+        Assert.False(PreviewCacheFile.HasAlpha(new WpfDecodedImage(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, opaque, new byte[4], 1))));
     }
 
     [Fact(DisplayName = "Reading an entry yields a render-native, opaque Bgr32 bitmap")]

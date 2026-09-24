@@ -463,7 +463,8 @@ public sealed class PreviewImageService : IPreloadTarget
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
-            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
+            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp &&
+            !PreviewCacheFile.HasAlpha(bmp)) // IMG-01/Q-R1: the JPEG cache would flatten transparency to black
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
