@@ -146,7 +146,7 @@ public sealed class JournalErrorCodeTests : IDisposable
         var result = await service.ExecuteAsync(new FileActionRequest(@"C:\photos\a.jpg", FileOperationType.Move, "picked"));
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.", result.Error);
+        Assert.Equal("Kiểm tra sau thao tác thất bại: kích thước đích đã thay đổi.", result.Error);
         var failed = Assert.Single(_journal.ReadFailedOperations());
         Assert.Equal(JournalErrors.VerifySizeChanged, failed.ErrorCode);
         Assert.Equal("Post-operation check failed: the destination size changed.", failed.Error);

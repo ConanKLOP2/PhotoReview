@@ -262,7 +262,7 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         await vm.RemoveDuplicatesAsync(removeNumbered: true);
 
         Assert.False(_dialogService.BatchReviewCalled);
-        Assert.Equal("Không có duplicate cùng hash phù hợp.", vm.StatusText);
+        Assert.Equal("Không có bản trùng lặp nào cùng hash phù hợp.", vm.StatusText);
         Assert.Equal(2, vm.TotalFiles);
     }
 
@@ -308,7 +308,7 @@ public sealed class MainViewModelAdvancedTests : IDisposable
 
         Assert.True(_preloadController.CancelCalled);
         Assert.True(_preloadController.ClearKeysCalled);
-        Assert.Equal("Đã xóa cache preview.", vm.StatusText);
+        Assert.Equal("Đã xóa cache ảnh xem trước.", vm.StatusText);
     }
 
     [Fact]

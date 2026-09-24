@@ -52,13 +52,13 @@ public sealed class SourcePresenceTests
     [Theory(DisplayName = "Accessible names are present in MainWindow, RecoveryWindow and Settings XAML (as keys, same Vietnamese text)")]
     [InlineData("MainWindow.xaml", TrKeys.MainToolbarOpenFolderAutomationName, "Mở thư mục ảnh")]
     [InlineData("MainWindow.xaml", TrKeys.MainToolbarSettingsAutomationName, "Mở cài đặt")]
-    [InlineData("MainWindow.xaml", TrKeys.MainCompareLeftAutomationName, "Preview ảnh bên trái, nhấn để chọn")]
-    [InlineData("MainWindow.xaml", TrKeys.MainCompareRightAutomationName, "Preview ảnh bên phải, nhấn để chọn")]
+    [InlineData("MainWindow.xaml", TrKeys.MainCompareLeftAutomationName, "Ảnh xem trước bên trái, nhấn để chọn")]
+    [InlineData("MainWindow.xaml", TrKeys.MainCompareRightAutomationName, "Ảnh xem trước bên phải, nhấn để chọn")]
     [InlineData("MainWindow.xaml", TrKeys.MainMenuUndoAutomationName, "Hoàn tác thao tác vừa thực hiện")]
-    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryRetryAutomationName, "Thử lại Move hoặc Copy đã lỗi")]
-    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearSelectedAutomationName, "Xoá các mục đã chọn khỏi danh sách Recovery")]
-    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearAllAutomationName, "Xoá tất cả mục khỏi danh sách Recovery")]
-    [InlineData("SettingsWindow.xaml", TrKeys.SettingsOpenLogLocation, "Mở vị trí file log")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryRetryAutomationName, "Thử lại thao tác Di chuyển hoặc Sao chép bị lỗi")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearSelectedAutomationName, "Xóa các mục đã chọn khỏi danh sách phục hồi")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearAllAutomationName, "Xóa tất cả mục khỏi danh sách phục hồi")]
+    [InlineData("SettingsWindow.xaml", TrKeys.SettingsOpenLogLocation, "Mở vị trí tệp log")]
     public void AccessibleNamesArePresentInXaml(string xamlFile, string key, string vietnamese)
     {
         Assert.Contains(key, AutomationNameKeys(Xaml(ProjectSources.Read(xamlFile))));
@@ -109,10 +109,10 @@ public sealed class SourcePresenceTests
     public void RecoveryAndDiagnosticsXamlExposeDocumentedControls()
     {
         Assert.Contains(TrKeys.RecoveryRetry, AttributeKeys(Xaml(ProjectSources.RecoveryWindowXaml)));
-        Assert.Equal("Retry Move/Copy", TestLocalization.Vietnamese.Get(TrKeys.RecoveryRetry));
+        Assert.Equal("Thử lại Di chuyển/Sao chép", TestLocalization.Vietnamese.Get(TrKeys.RecoveryRetry));
 
         Assert.Contains(TrKeys.DiagnosticsLabelSourceFileReads, AttributeKeys(Xaml(ProjectSources.DiagnosticsWindowXaml)));
-        Assert.Equal("Source file reads", TestLocalization.Vietnamese.Get(TrKeys.DiagnosticsLabelSourceFileReads));
+        Assert.Equal("Số lần đọc tệp nguồn", TestLocalization.Vietnamese.Get(TrKeys.DiagnosticsLabelSourceFileReads));
     }
 
     [Fact(DisplayName = "I18N L08: the Settings language group header is bilingual in every shipped catalog")]

@@ -174,7 +174,7 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.True(_compareViewModel.IsVisible);
         Assert.Equal(f1, _compareViewModel.LeftPath);
         Assert.Equal(f2, _compareViewModel.RightPath);
-        Assert.Contains("Compare", presenter.StatusText);
+        Assert.Contains("So sánh", presenter.StatusText);
     }
 
     [Fact]

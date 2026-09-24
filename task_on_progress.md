@@ -1,14 +1,21 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master `a0c4f6b`+ (v2.0.64) | **Branch:** `docs/status-2026-09-24-batch`
+**Updated:** 2026-09-24 | **Base:** master `cbd24b8` (#64–#71 merged) | **Branch:** `i18n/l12-vi-copy`
 
-## Now: PR batch #64–#70 open (merge in this order)
+## Now: L12 Vietnamese copy polish — PR open, needs user wording review
+
+- `vi.json`: 236 values changed (keys unchanged): one term per concept (thư mục, tệp, Thùng rác, hành động = user action,
+  thao tác = operation, Di chuyển/Sao chép, thử lại, hoàn tác, Phục hồi, ảnh xem trước, Vừa khung), typo "bấp", `Xoá`→`Xóa`,
+  English leftovers (Recovery/Diagnostics/enums). Glossary added to `docs/TRANSLATING.md`. Tests pinning old VI text updated.
+- Validation: i18n-check PASS, build 0 warnings, fast suite 0 failures. Every changed string is listed in the PR body.
+
+## Previous: PR batch #64–#70 (all merged)
 
 - **Chain (each branch contains the previous):** #64 OC14 `FileActionGate` in the ViewModel → #65 IO03 journal durability setting (Fast default / power-loss safe, ADR 0007) → #66 IO04 session no-fsync + IO05 skip unreadable files with a warning → #67 Recovery: source/destination paths, live validity check on open, verdicts.
 - **Test diet (any order):** #68 Imaging 339→305 · #69 App/Integration + TC06 fix · #70 Core/Architecture; removals have mutation evidence.
 - **#69 also fixes a real bug:** Ctrl+Z after Recycle never restored (shell mtime is whole-second UTC, parsed as local ⇒ 7 h off). TC06 really verifies restore now and cleans its own Recycle Bin items.
 - **User:** empty the ~2650 test items (original location `...\Temp\TC06_RecycleBin_*`) from the Recycle Bin; visual checks: Recovery window, Settings (journal option), dark dialogs, language picker, zoom, Fit first frame (T89), AR04.
-- **Next:** L12 copy polish · DT10 · ST08/09, OC15–18 · benchmark `action-delete` leaves ~2 items/run in the real bin.
+- **Next:** DT10 · ST08/09, OC15–18 · benchmark `action-delete` leaves ~2 items/run in the real bin.
 
 ## Previous (merged): i18n · perf night #39-#49 · AR00-AR07 · ADR 0007
 

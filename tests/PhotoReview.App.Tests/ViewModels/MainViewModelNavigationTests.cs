@@ -295,10 +295,10 @@ public sealed class MainViewModelNavigationTests : IDisposable
         await vm.OpenFolderAsync(singleFolder);
 
         await vm.NextFolderAsync();
-        Assert.Equal("Đã ở folder cuối cùng cùng cấp.", vm.StatusText);
+        Assert.Equal("Đã ở thư mục cuối cùng cùng cấp.", vm.StatusText);
 
         await vm.PreviousFolderAsync();
-        Assert.Equal("Đã ở folder đầu tiên cùng cấp.", vm.StatusText);
+        Assert.Equal("Đã ở thư mục đầu tiên cùng cấp.", vm.StatusText);
     }
 
     [Fact]
