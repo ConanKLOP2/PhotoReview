@@ -10,7 +10,7 @@
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-    <!-- Source generator (PhotoReview.Localization.Generator): Roslyn package version must be <= the SDK compiler (`dotnet --version` -> bundled Roslyn), else the generator fails to load. Bump only together with the SDK in global.json / CI. -->
+    <!-- Source generator (PhotoReview.Localization.Generator): Roslyn package version must be <= the SDK compiler (the Roslyn bundled with the SDK in global.json), else the generator fails to load. Bump only together with the SDK in global.json / CI. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0" />
   </ItemGroup>
