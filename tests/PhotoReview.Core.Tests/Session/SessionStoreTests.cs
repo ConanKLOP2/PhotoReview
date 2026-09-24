@@ -134,5 +134,19 @@ public sealed class SessionStoreTests
         Assert.Throws<ArgumentNullException>(() => new SessionStore(null!, _fs));
         Assert.Throws<ArgumentNullException>(() => new SessionStore(paths, null!));
     }
+
+    [Fact(DisplayName = "Session file with null Skipped loads as an empty list (R2-F-25)")]
+    public void Load_NullSkipped_BecomesEmptyList()
+    {
+        var store = CreateStore();
+        var folder = @"C:\photos\nullskip";
+        _fs.WriteAllTextAtomic(store.GetPath(folder), """{"Folder":"C:\\photos\\nullskip","CurrentPath":"C:\\photos\\nullskip\\a.jpg","Skipped":null}""");
+
+        var loaded = store.Load(folder);
+
+        Assert.Equal(@"C:\photos\nullskip\a.jpg", loaded.CurrentPath);
+        Assert.NotNull(loaded.Skipped);
+        Assert.Empty(loaded.Skipped);
+    }
 }
 

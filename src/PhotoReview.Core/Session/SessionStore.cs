@@ -52,6 +52,7 @@ public sealed class SessionStore
                     {
                         state.Folder = folder;
                     }
+                    state.Skipped ??= [];
                     return state;
                 }
             }
