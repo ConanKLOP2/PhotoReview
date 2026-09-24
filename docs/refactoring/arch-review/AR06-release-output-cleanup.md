@@ -8,7 +8,7 @@
 |---|---|---|
 | `src/PhotoReview.App/bin/Release/net10.0-windows/publish/` | Path used by README, CI (`ci.yml` "Publish Release"), `verify-all.ps1`, `verify-release.ps1`. Local copy dated 2026-09-18 (stale). | No (bin) |
 | `outputs/release/PhotoReview-framework-dependent/` | 5 files: App exe/dll/pdb/deps/runtimeconfig — **no `PhotoReview.Core.dll`** → cannot start. | No |
-| `outputs/*.ps1`, `outputs/photo-review-config.example.json` | Association scripts + example config, referenced by README. | Yes |
+| `deploy/*.ps1`, `deploy/photo-review-config.example.json` (moved from `outputs/`, Q-R4) | Association scripts + example config, referenced by README. | Yes |
 | Root `PhotoReview.App/`, `PhotoReview.Tests/`, `PhotoReview.Tests.Unit/` | Only `bin/`, `obj/`, a `.csproj.user`, `Properties/PublishProfiles` — leftovers of the pre-`src/` layout. | No (ignored) |
 | `git worktree list` | `C:/Users/.../.codex/worktrees/6559/PhotoReview` and `.claude/worktrees/agent-addb7cccfe75b70eb` marked **prunable**. | — |
 | Local branch `refactor/T14c-inv5` | Not on origin. | — |

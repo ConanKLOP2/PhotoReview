@@ -57,13 +57,13 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 Register "Open with" for `.jpg`, `.jpeg`, and `.png`:
 
 ```powershell
-.\outputs\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
+.\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
 ```
 
 Unregister:
 
 ```powershell
-.\outputs\uninstall-photo-review-association.ps1
+.\deploy\uninstall-photo-review-association.ps1
 ```
 
 ### Languages
@@ -134,13 +134,13 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 Đăng ký Open With cho `.jpg`, `.jpeg`, `.png`:
 
 ```powershell
-.\outputs\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'
+.\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'
 ```
 
 Gỡ đăng ký:
 
 ```powershell
-.\outputs\uninstall-photo-review-association.ps1
+.\deploy\uninstall-photo-review-association.ps1
 ```
 
 ### Ngôn ngữ

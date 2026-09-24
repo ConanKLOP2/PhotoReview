@@ -144,7 +144,7 @@ public sealed class SourcePresenceTests
     [Fact(DisplayName = "File association command is registered (source presence: registering needs the real Windows registry)")]
     public void FileAssociationCommandIsRegistered()
     {
-        var association = Path.Combine(ProjectSources.ProjectRoot, "outputs", "install-photo-review-association.ps1");
+        var association = Path.Combine(ProjectSources.ProjectRoot, "deploy", "install-photo-review-association.ps1");
         var associationText = File.ReadAllText(association);
         Assert.True(associationText.Contains("$progId\\shell\\open\\command") && associationText.Contains("\"%1\""));
     }
