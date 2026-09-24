@@ -195,5 +195,27 @@ public sealed class SessionWriterTests
         Assert.Equal("a", store.Load(@"C:\photos").CurrentPath); // "b" was skipped, not written
         writer.Dispose(); // double Dispose is a no-op
     }
-}
 
+    [Fact(DisplayName = "Dispose while the timer thread holds a drained batch does not lose that write (R2-A-04)")]
+    public async Task Dispose_WhileTimerHoldsDrainedBatch_StillWritesIt()
+    {
+        using var drained = new ManualResetEventSlim(false);
+        using var proceed = new ManualResetEventSlim(false);
+        var (writer, store) = Create();
+        writer.AfterDrainForTests = () =>
+        {
+            drained.Set();
+            proceed.Wait(TimeSpan.FromSeconds(30));
+        };
+        writer.Update(State(@"C:\photos", "a"));
+        _timer.FireAll();
+        Assert.True(drained.Wait(TimeSpan.FromSeconds(10)), "the timer never drained its batch");
+
+        writer.AfterDrainForTests = null;
+        writer.Dispose(); // nothing pending, no write in flight: previously disposed the semaphore here
+        proceed.Set();
+
+        await writer.WhenIdleAsync(); // faulted with ObjectDisposedException before the fix
+        Assert.Equal("a", store.Load(@"C:\photos").CurrentPath);
+    }
+}

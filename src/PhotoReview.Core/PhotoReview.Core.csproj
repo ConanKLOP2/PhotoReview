@@ -19,4 +19,9 @@
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!-- R2-A-04: SessionWriter exposes an internal seam to make a shutdown race deterministic in tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoReview.Core.Tests" />
+  </ItemGroup>
+
 </Project>

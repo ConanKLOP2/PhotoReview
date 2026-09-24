@@ -93,9 +93,9 @@ public sealed class SessionWriter : IDisposable
             _disposed = true;
         }
         Flush(bounded: true);
-        // A skipped (timed-out) write leaves its holder running; that holder still releases the semaphore, so it is
-        // only disposed when nothing is in flight.
-        if (_writeLock.CurrentCount == 1) _writeLock.Dispose();
+        // _writeLock is intentionally NOT disposed: SemaphoreSlim holds no unmanaged resources unless
+        // AvailableWaitHandle is used, and a timer thread may have drained its batch but not yet reached Wait();
+        // disposing here made that Wait() throw ObjectDisposedException and lose the last write (R2-A-04).
     }
 
     private async Task RunTimerAsync(CancellationTokenSource cts)
@@ -111,6 +111,9 @@ public sealed class SessionWriter : IDisposable
         WritePending(bounded: false);
     }
 
+    /// <summary>Test seam: runs after a non-empty batch was drained and before the write lock is taken.</summary>
+    internal Action? AfterDrainForTests { get; set; }
+
     private void WritePending(bool bounded)
     {
         List<(SessionState State, long Version)> batch;
@@ -123,6 +126,7 @@ public sealed class SessionWriter : IDisposable
             }).ToList();
             _pending.Clear();
         }
+        if (batch.Count > 0) AfterDrainForTests?.Invoke();
         WriteBatch(batch, bounded);
     }
 
