@@ -1,6 +1,6 @@
 # TC — Test Cleanup (Summary)
 
-**Status:** TC01–TC11 DONE (TS10 audit complete 2026-09-22; TC04/TC09 via #36). TC06/TC07 kept in `Integration.Tests` (real Recycle Bin / real photos, Q-AR5 2026-09-23). Decisions Q-T1..Q-T4 finalized:
+**Status:** TC01–TC11 DONE (TS10 audit complete 2026-09-22; TC04/TC09 via #36). TC06/TC07 live in `tests/PhotoReview.App.Tests/HotPath/` (real Recycle Bin / real photos; moved from Integration.Tests in `440527f`). Decisions Q-T1..Q-T4 finalized:
 
 | Q | Decision |
 |---|---|

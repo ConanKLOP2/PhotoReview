@@ -6,17 +6,11 @@
 
 - **Merged:** #64 OC14 `FileActionGate` · #65–#66 IO03–IO05 (ADR 0007) · #67 Recovery paths + live check · #68–#70 test diet (#69 fixed Ctrl+Z after Recycle) · #71 status · #72 DT10 · #73 ST08/09 + OC15–18 · #74 L12 VI copy.
 - **User:** empty ~2650 `...\Temp\TC06_RecycleBin_*` items from the Recycle Bin; visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
-- **Next:** [review 2026-09-25 plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) — answer Q-R1..Q-R6; waves 1a, 1b, 2b ready.
+- **Next:** [review 2026-09-25 plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) — Q-R1..Q-R6 ACCEPTED (2026-09-24, see OPEN-DECISIONS); waves 1a, 1b, 2b in progress on `review/2026-09-25-integration`; wave 3 (docs) on `review/w3`.
 
 ## Status by Group
 
-| Group | Status | Notes |
-|-------|--------|-------|
-| **AR** | ✅ AR00–AR07 | GUI acceptance (T89, AR04) by user. |
-| ST, TS, TC, DF, CQ, DT, IO | ✅ Done | ST08/09 #73; DT10 #72; IO per ADR 0007 (#65, #66). |
-| **T89** | 🔄 GUI acceptance only | Code merged (#15); verify with AR02a Fit viewport. |
-| **OC** | 🔄 GUI check only | OC14 #64; OC15–18 #73 (OC18 Fit check with T89). |
-| **D**, WD02-06, DT04-07 | ❌ Closed (Q-AR5) | |
+Group status: see [`docs/ACTIVE-TASKS.md`](docs/ACTIVE-TASKS.md) (single source; do not copy it here).
 
 ## Critical Process Rules
 

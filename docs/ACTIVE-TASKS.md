@@ -1,7 +1,7 @@
 # Active Tasks — Consolidated Work Remaining
 
 **Updated:** 2026-09-24
-**Status:** AR, ST, TS, TC, DF, CQ, L (i18n L00-L11) DONE on `master` (v2.0.64). **PR batch #64-#70 open (2026-09-24):** OC14 gate (#64), IO03 (#65), IO04+IO05 (#66), Recovery details + live check (#67), test diet (#68-#70, TC06 Ctrl+Z bug fix in #69). Open after merge: L12, ST08/09, OC15-18; T89 GUI acceptance waits on the user. DT10 DONE (2026-09-24).
+**Status:** AR, ST, TS, TC, DF, CQ, L (i18n L00-L11) DONE on `master` (v2.0.77). **PR batch #64-#75 merged (2026-09-24):** OC14 gate (#64), IO03 (#65), IO04+IO05 (#66), Recovery details + live check (#67), test diet (#68-#70, TC06 Ctrl+Z bug fix in #69), DT10 (#72), ST08/09 + OC15-18 (#73), L12 (#74), review plan (#75). Open: T89/OC18 GUI acceptance (user) and the [review 2026-09-25 plan](refactoring/REVIEW-2026-09-25-PLAN.md) waves. **This file is the only per-group status table** (`task_on_progress.md` and the `refactoring/*` summaries link here).
 
 ---
 
@@ -9,17 +9,17 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **L** (I18N: EN + VI, community JSON catalogs) | ✅ L00–L11 DONE (#55, #61, 2026-09-24); L12 (Vietnamese copy polish) open | Q-L1..Q-L8 decided. Plan: `refactoring/I18N-PLAN.md`, ADR 0006, `TRANSLATING.md`. |
+| **L** (I18N: EN + VI, community JSON catalogs) | ✅ L00–L12 DONE (#55, #61, #74; 2026-09-24) | Q-L1..Q-L8 decided. Plan: `refactoring/I18N-PLAN.md`, ADR 0006, `TRANSLATING.md`. |
 | **AR** (Architecture Review 2026-09-23) | ✅ AR00–AR07 all DONE (AR02d #35, AR04 #37); only T89/AR04 GUI acceptance left (user) | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
-| **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
+| **ST** (Structure Optimize) | ✅ DONE | ST01-ST12 merged (ST08/ST09 in #73 after OC14 #64). See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS07, TS10 DONE; TS08/TS09 closed (Q-AR5) | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
-| **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Plan: `refactoring/CQ-WARNINGS-PLAN.md`. |
+| **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Digest: `refactoring/CQ-WARNINGS-PLAN.md`; plan: `archive/historical/CQ-WARNINGS-PLAN-2026-09.md`. |
 | **TC** (Test Cleanup) | ✅ TC04, TC09 DONE (#36); TC06/TC07 live in `App.Tests/HotPath` (real Recycle Bin / real photos) | TS10 audit complete 2026-09-22. Plan: `archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`. |
 | **T89** (Fit Layout — GUI acceptance) | 🔄 GUI acceptance only (kept, Q-AR5) | T89.1-T89.2 (`10ff31f`) **merged to `master` via PR #15**; branch deleted. DF02 Fit tests skipped in `9f880d1`. STA/GUI acceptance still TODO. Plan: `archive/historical/T89-FIT-LAYOUT-PLAN.md`. |
-| **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 gate moved to the ViewModel (#64, open); unblocks ST08/09 and OC15-18. |
+| **OC** (Optimize/Clean) | 🔄 GUI check only | OC14 #64; OC15-17 done, OC18 code done (#73); OC18 Fit GUI check under T89. OC01/OC12/OC13 remain generic TODO. |
 | **WD** (WPF Dialog) | ✅ WD01 unblocked (AR04/ADR 0005); WD02-06 closed 2026-09-23 (Q-AR5) | WD02 low-risk part covered by AR03c; WD03-06 had no known dialog bug to justify keeping open. |
-| **IO** (I/O Durability) | 🔄 IO01 DECIDED (ADR 0007, 2026-09-24); IO03 #65, IO04+IO05 #66 open | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
+| **IO** (I/O Durability) | ✅ DONE (ADR 0007, 2026-09-24): IO03 #65, IO04+IO05 #66 merged | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
 | **DT** (Docs Token Diet) | ✅ DONE | DT00-03, DT08-DT10 DONE; Q-D1..Q-D4 decided. DT04-07 closed 2026-09-23 (Q-AR5, diminishing returns). DT10 final measurement: T0 11.8→10.9 KB, T1 22.7→10.2 KB. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
 | **D** (Perf Diagnosis) | ❌ Closed 2026-09-23 (Q-AR5) | Numbers were from the legacy `--perf-session` graph (no preload). Re-open any item from the AR02e production-graph baseline if a bottleneck shows. |
 
@@ -126,8 +126,9 @@
 | OC11 | Decode/RAM optimization | 🔄 PRs #40–#48 (perf night 2026-09-24) | See PERF-STATUS "Perf night"; #43 waits on zoom decision |
 | OC12 | Clean code limits | TODO | Post-implementation cleanup |
 | OC13 | Integration/validation | TODO | Final testing before publish |
-| OC14 | Undo unification + gate | ✅ PR #64 open — `FileActionGate` owned by MainViewModel (Q-AR5 scope) | Mutual exclusion done; semantics tests refactored — blocks ST08/09, OC15-18 (no longer blocks WD01, see ADR 0005/AR04) |
-| OC15-OC18 | Clean-code wave | TODO | OC14 |
+| OC14 | Undo unification + gate | ✅ DONE (#64) — `FileActionGate` owned by MainViewModel (Q-AR5 scope) | Mutual exclusion done; semantics tests refactored |
+| OC15-OC17 | Clean-code wave | ✅ DONE (#73; OC16 n/a, OC17 already done) | — |
+| OC18 | Viewport unify | ✅ code DONE (#73) | GUI check of Fit under T89 (user) |
 
 ---
 
@@ -148,9 +149,9 @@
 |----|------|--------|
 | IO01 | Durability contract | ✅ DECIDED — ADR 0007 (2026-09-24): journal mode setting (Fast default / power-loss safe), session no-fsync, skip+warn unreadable files |
 | IO02 | Benchmark baseline | ✅ done inline (2026-09-24, in ADR 0007): journal record P50 1.79 ms (durable) vs 0.36 ms; session write P50 3.75 ms |
-| IO03 | Journal durability setting | PR #65 open — Settings option (Fast default / Power-loss safe, off-UI-thread writes); tests per ADR 0007 |
-| IO04 | Session write policy | PR #66 open — session no fsync (atomic kept); corrupt/empty session = no session |
-| IO05 | Unreadable files: skip + warn | PR #66 open — enumeration skips with count + visible warning (strings via i18n catalogs) |
+| IO03 | Journal durability setting | ✅ #65 merged — Settings option (Fast default / Power-loss safe, off-UI-thread writes); tests per ADR 0007 |
+| IO04 | Session write policy | ✅ #66 merged — session no fsync (atomic kept); corrupt/empty session = no session |
+| IO05 | Unreadable files: skip + warn | ✅ #66 merged — enumeration skips with count + visible warning (strings via i18n catalogs) |
 | IO06-IO07 | Async boundary; low-risk cleanup | closed 2026-09-23 (Q-AR5) |
 
 ---
@@ -185,7 +186,7 @@ DT00-DT03, DT08-DT10 DONE; Q-D1..Q-D4 decided (see OPEN-DECISIONS). DT04-DT07 cl
 
 ## CQ Summary — Code Quality / Warnings (COMPLETE)
 
-✅ **DONE & MERGED (PR #18).** 634 → 0 warnings. All analyzer waves (Wave 1: CQ01-03, Wave 2: CQ04/05/08, Wave 3: CQ06/07) complete. See `refactoring/CQ-WARNINGS-PLAN.md` for details and real bugs fixed along the way.
+✅ **DONE & MERGED (PR #18).** 634 → 0 warnings. All analyzer waves (Wave 1: CQ01-03, Wave 2: CQ04/05/08, Wave 3: CQ06/07) complete. See `archive/historical/CQ-WARNINGS-PLAN-2026-09.md` for details and real bugs fixed along the way.
 
 ---
 
@@ -195,9 +196,7 @@ DT00-DT03, DT08-DT10 DONE; Q-D1..Q-D4 decided (see OPEN-DECISIONS). DT04-DT07 cl
 TC01 → TC02 → (TC03 ∥ TC04) → TC05 → TC08 → (TC06, TC07) → TC09-TC11
                                                 (TS10 must re-audit first)
 
-OC14 (Undo) → ST08 → ST09
-           (WD closed)
-           → OC15-OC18
+OC14 (Undo, #64) → ST08 → ST09 → OC15-OC18   (all merged, #73)
 
 AR00 → (AR01 ∥ AR03 ∥ AR06) → AR07
 AR00 → AR02a → AR02b ∥ AR02c → AR02e (user machine) → AR02d
@@ -216,4 +215,4 @@ DT02 → DT03 → (DT04 ∥ DT05) → DT06-DT10
 
 - **Completed work is archived**, not deleted: `docs/refactoring/archive/` holds resolved ST plans/tasks/decisions and the completed DF plan.
 - **T89**: GUI/STA acceptance (user) before touching `ApplyFitViewAsync` further.
-- **OC14** (Undo gate location) is the biggest remaining unblock: it gates ST08/09 and OC15-18.
+- **Review 2026-09-25 waves:** 1a, 1b, 2b in progress on `review/2026-09-25-integration`; 2a, 1c, 4, 5a-5c follow the plan's merge order; wave 3 (this docs pass) is on `review/w3`.
