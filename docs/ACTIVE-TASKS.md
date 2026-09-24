@@ -73,7 +73,7 @@
 > **TS10 Audit Results** (2026-09-22):
 > - d5fc9c8 (TC01-TC03): ✓ Genuine scaffolding. PhotoFolderBuilder, ReadBudgetProbe, WarmNavigationReadBoundsTests.TC03 all exist with real assertions.
 > - fe00f36 (TC08-TC10): ✓ TC08/TC10 real. InterleavedFileActionSequenceTests.TC08a/b/c exist with production-code tests. [Trait] categorization works.
-> - 1c1f728 (TC11): ✓ CI gate real. verify-all.ps1 filter logic implemented, tested with -Stress/-Native/-Integration/-Slow/-All.
+> - 1c1f728 (TC11): ✓ CI gate real. verify-all.ps1 filter logic implemented, tested with -Native/-Integration/-Slow/-All.
 > - 34886ec (TC07): ✗ Real tests exist with assertions, but added to Integration.Tests at the time; later moved to App.Tests/HotPath (`440527f`). RealPhotosManualTests.cs has 2 real methods.
 > - 7cab725 (TC06): ✗ Real tests exist with assertions, but added to Integration.Tests at the time; later moved to App.Tests/HotPath (`440527f`). NativeRecycleBinTests.cs has 2 real methods.
 > **Resolved:** TC06/TC07 tests live in `tests/PhotoReview.App.Tests/HotPath/` (real Recycle Bin / real photos). TC01-TC05 scaffolding is solid.
@@ -215,4 +215,4 @@ DT02 → DT03 → (DT04 ∥ DT05) → DT06-DT10
 
 - **Completed work is archived**, not deleted: `docs/refactoring/archive/` holds resolved ST plans/tasks/decisions and the completed DF plan.
 - **T89**: GUI/STA acceptance (user) before touching `ApplyFitViewAsync` further.
-- **Review 2026-09-25 waves:** 1a, 1b, 2b in progress on `review/2026-09-25-integration`; 2a, 1c, 4, 5a-5c follow the plan's merge order; wave 3 (this docs pass) is on `review/w3`.
+- **Review 2026-09-25 waves:** all of 1a–1c, 2a, 2b (minus TEST-03, declined), 3, 4, 5a–5c plus round-2 fixes are implemented on `review/2026-09-25-integration` (one PR pending). Round-2 mediums/lows in progress; open decisions Q-R7..Q-R9.

@@ -12,9 +12,12 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-R4 | Review | `outputs/` folder (HYG-06) | ✅ ACCEPTED 2026-09-24 — (a) move scripts and example config to `deploy/`, update README | same |
 | Q-R5 | Review | Session write at shutdown on a slow disk (CORE-02) | ✅ ACCEPTED 2026-09-24 — (a) wait up to 2 s, then skip the last write | same |
 | Q-R6 | Review | Accessibility scope (APP-01/02) | ✅ ACCEPTED 2026-09-24 — (a) user-facing windows (Main, Settings, Action Profiles, Recovery, Batch Review); Benchmark/Diagnostics best-effort | same |
+| Q-R7 | Review r2 | Opaque PNG/WebP previews are never disk-cached (`Pbgra32`, R2-A-03) | 🔄 PROPOSED — default (a) scan alpha on the downscaled bitmap, cache only when no pixel has A<255; (b) lossless PNG payload; (c) keep as is | [round2/adversarial.md](../archive/evidence/review-2026-09-25/round2/adversarial.md) |
+| Q-R8 | Review r2 | Recycle on removable/network/UNC drives (R2-F-05): fixed drives unchanged; other drives are now refused (file kept) because Windows deletes there permanently | 🔄 PROPOSED — default: refuse with a message; alternative: ask "delete permanently?" | [round2/fresh.md](../archive/evidence/review-2026-09-25/round2/fresh.md) |
+| Q-R9 | Review r2 | TEST-03 Recycle Bin orphan sweep | ❌ DECLINED 2026-09-25 — a sweep deletes items from the real bin (a subagent mutation run left the bin without `$R` files); tests only clean their own items, the user empties the bin | — |
 
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 
-Q-R1..Q-R6: the user answered "follow the recommendation" on 2026-09-24, so each default is the plan's recommendation. Implementation waves: 1a/1b/2b are in progress on `review/2026-09-25-integration`; the others are not started.
+Q-R1..Q-R6: the user answered "follow the recommendation" on 2026-09-24; all implemented on `review/2026-09-25-integration` (one PR, not yet merged). Q-R7..Q-R9 come from round 2 (2026-09-25); answer when convenient.
 
 **All Q-D1..D4, Q-ST1..4, Q-T1..4, Q-OC14, Q-S3, Q-AR1..5, Q-L1..L8, Q-IO1, Q-Z1 are decided** — full table (30 rows, resolution + rationale link per row) archived in [`archive/OPEN-DECISIONS-detail.md`](archive/OPEN-DECISIONS-detail.md). T89 GUI acceptance stays with the user.
