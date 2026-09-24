@@ -22,7 +22,8 @@ namespace PhotoReview.Imaging.Caching;
 public sealed class PreviewImageService : IPreloadTarget
 {
     private readonly BoundedLruCache<ImageCacheKey, IDecodedImage> _cache;
-    private readonly SemaphoreSlim _originalDecodeGate = new(1, 1);
+    // Single-token channel = async cancellable gate (same non-disposable pattern as _viewerSlots).
+    private readonly Channel<byte> _originalDecodeGate = CreateSlotTokens(1);
     private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Lazy<Task<IDecodedImage>>> _previewLoads = new();
     // IMG-02: bounded (entry-count LRU; each entry is a key plus two ints) so a multi-day session over
     // very large libraries cannot grow this for the life of the process.
@@ -643,13 +644,13 @@ public sealed class PreviewImageService : IPreloadTarget
         // R2-F-13: at most one full-resolution decode (24-100 MP, ~100+ MB each) runs at a time. Paging quickly at
         // 100 % used to start one dedicated thread per image; now superseded requests wait here and are dropped on
         // cancellation before they ever allocate.
-        await _originalDecodeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _originalDecodeGate.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             return await DecodeOriginalOnDedicatedThreadAsync(path, key, cancellationToken).ConfigureAwait(false);
         }
-        finally { _originalDecodeGate.Release(); }
+        finally { _originalDecodeGate.Writer.TryWrite(0); }
     }
 
     private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
