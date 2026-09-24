@@ -435,21 +435,32 @@ public sealed class ImagePresenter
     /// </summary>
     public async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
     {
-        if (!_clock.IsNavigationCurrent(token)) return;
-
-        var nextIndex = _catalog.Remove(path);
-        if (_catalog.Count == 0)
+        // R2-F-07: iterative. Each missing file used to call PresentAsync, which found the next one missing and
+        // recursed; every call completes synchronously, so N consecutive missing files (an ejected card or a dropped
+        // share) meant N nested async frames on the UI thread. Skip the run of missing files here and present once.
+        while (true)
         {
-            _zoomDetail.Reset();
-            UpdateCurrentImage(null);
-            _compareViewModel.Clear();
-            UpdateStatus(StatusFormatter.NoImagesRemaining());
-            return;
-        }
+            if (!_clock.IsNavigationCurrent(token)) return;
 
-        if (nextIndex >= 0)
-        {
-            await PresentAsync(nextIndex);
+            var nextIndex = _catalog.Remove(path);
+            if (_catalog.Count == 0)
+            {
+                _zoomDetail.Reset();
+                UpdateCurrentImage(null);
+                _compareViewModel.Clear();
+                UpdateStatus(StatusFormatter.NoImagesRemaining());
+                return;
+            }
+
+            if (nextIndex < 0 || nextIndex >= _catalog.Count) return;
+
+            var nextPath = _catalog.PathAt(nextIndex);
+            if (TryGetFileInfo(nextPath, out _))
+            {
+                await PresentAsync(nextIndex);
+                return;
+            }
+            path = nextPath;
         }
     }
 

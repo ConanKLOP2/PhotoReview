@@ -141,6 +141,25 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.Equal(0, _catalog.CurrentIndex);
     }
 
+    [Fact(DisplayName = "A run of missing files is skipped iteratively: one extra present, not one nested present per file (R2-F-07)")]
+    public async Task PresentAsync_WhenManyConsecutiveFilesMissing_SkipsThemWithoutNestedPresents()
+    {
+        var paths = new List<string>();
+        for (var i = 0; i < 200; i++) paths.Add(Path.Combine(_tempDir, $"gone{i}.jpg"));
+        var survivor = CreateFakeImageFile("survivor.jpg");
+        paths.Add(survivor);
+        _catalog.Reset(paths);
+
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+
+        Assert.Equal([survivor], _catalog.Paths);
+        Assert.Equal(0, _catalog.CurrentIndex);
+        // The first present plus exactly one for the survivor; a recursive skip would notify once per missing file.
+        Assert.Equal(2, _preloadController.NotifyNavigationCalls.Count);
+    }
+
     [Fact]
     public async Task PresentAsync_WhenAllFilesMissing_EmitsNoImagesRemaining()
     {
