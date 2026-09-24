@@ -68,6 +68,8 @@ jobs:
         run: |
           $v = (Get-Item 'src/PhotoReview.App/bin/Release/net10.0-windows/PhotoReview.App.dll').VersionInfo.ProductVersion
           Write-Host "PhotoReview $v"
+          # R2-F-18: a build without git history is versioned 2.0.0-nogit; never let that reach the tag/artifact steps.
+          if ($v -match '-nogit' -or $v -notmatch '\+[0-9a-fA-F]+') { Write-Error "Build has no git commit identity: $v"; exit 1 }
           "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.

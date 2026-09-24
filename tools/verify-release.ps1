@@ -48,10 +48,22 @@ $versionJson = & dotnet msbuild $projectFile -nologo -t:PhotoReviewComputeVersio
 if ($LASTEXITCODE -ne 0) { throw "Could not compute the expected version (dotnet msbuild exit $LASTEXITCODE)." }
 $expected = ($versionJson -join "`n" | ConvertFrom-Json).Properties
 $expectedFileVersion = [string]$expected.FileVersion
+$expectedInformational = [string]$expected.InformationalVersion
+# R2-F-18: Directory.Build.targets emits '<base>-nogit' when git or the v2.0.0 tag is unavailable (shallow or --no-tags
+# clone, dubious ownership). Both sides would then carry no '+sha' and the commit comparison below would pass on '' == '';
+# a release without a real commit identity must fail instead.
+if ($expectedInformational -match '-nogit' -or $expectedInformational -notmatch '\+[0-9a-fA-F]+') {
+    Write-Error "Expected version '$expectedInformational' has no git commit (nogit build): fetch full history and tags, then rebuild."
+    exit 1
+}
 $expectedCommit = ([string]$expected.InformationalVersion -split '\+', 2)[1] -replace '\.dirty$', ''
 $dllInfo = (Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.dll')).VersionInfo
 $actualFileVersion = $dllInfo.FileVersion
 $actualCommit = ([string]$dllInfo.ProductVersion -split '\+', 2)[1] -replace '\.dirty$', ''
+if ([string]$dllInfo.ProductVersion -match '-nogit' -or [string]::IsNullOrEmpty($actualCommit)) {
+    Write-Error "Release binary version '$($dllInfo.ProductVersion)' has no git commit (nogit build)."
+    exit 1
+}
 if ($actualFileVersion -ne $expectedFileVersion) {
     Write-Error "Release version mismatch: expected $expectedFileVersion, found $actualFileVersion"
     exit 1
