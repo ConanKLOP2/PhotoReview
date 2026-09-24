@@ -341,6 +341,48 @@ public sealed class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
+    public async Task OpenFolder_CancelsRunningPreloadBeforePreloadingNewCatalog()
+    {
+        var folderA = Path.Combine(_tempDir, "preload_a");
+        var folderB = Path.Combine(_tempDir, "preload_b");
+        Directory.CreateDirectory(folderA);
+        Directory.CreateDirectory(folderB);
+        CreateImageFile(folderA, "a1.jpg");
+        CreateImageFile(folderA, "a2.jpg");
+        CreateImageFile(folderB, "b1.jpg");
+        CreateImageFile(folderB, "b2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folderA);
+        _preloadController.Events.Clear();
+
+        await vm.OpenFolderAsync(folderB);
+
+        // A loop started for folder A holds A's entries; it must be stopped before B is preloaded (R2-F-01).
+        var cancelAt = _preloadController.Events.IndexOf("cancel");
+        var preloadAt = _preloadController.Events.FindIndex(e => e.StartsWith("preload:", StringComparison.Ordinal));
+        Assert.True(cancelAt >= 0, "Opening another folder did not cancel the running preload.");
+        Assert.True(preloadAt < 0 || cancelAt < preloadAt, "Preload for the new folder started before the old loop was cancelled.");
+    }
+
+    [Fact]
+    public async Task ExplorerOrderApplied_CancelsPreloadBeforeRecentering()
+    {
+        var folder = Path.Combine(_tempDir, "order_album");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _preloadController.Events.Clear();
+
+        ((IFolderLoadSink)vm).OnOrderApplied(2, 0, currentKept: true);
+
+        Assert.Equal(["cancel", "preload:0"], _preloadController.Events);
+    }
+
+    [Fact]
     public async Task RunActionAsync_AfterSettingsSaved_UsesSavedProfiles()
     {
         var folder = Path.Combine(_tempDir, "saved_settings_album");
@@ -752,9 +794,10 @@ public sealed class MainViewModelFileActionTests : IDisposable
     private sealed class TestPreloadController : IPreloadController
     {
         public int CancelCount { get; private set; }
-        public Task PreloadAroundAsync(int center) => Task.CompletedTask;
+        public List<string> Events { get; } = [];
+        public Task PreloadAroundAsync(int center) { Events.Add("preload:" + center); return Task.CompletedTask; }
         public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
-        public void Cancel() => CancelCount++;
+        public void Cancel() { CancelCount++; Events.Add("cancel"); }
         public void RemovePreloadedKeysForPath(string normalizedPath) { }
         public void ClearPreloadedKeys() { }
     }

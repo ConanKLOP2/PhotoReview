@@ -541,6 +541,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     void IFolderLoadSink.OnCatalogReady(string folder, int count)
     {
+        // The running preload loop holds a snapshot of the PREVIOUS catalog; stop it so the next
+        // PreloadAroundAsync starts a fresh lifetime over the new entries (R2-F-01).
+        _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
         if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
@@ -559,6 +562,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     void IFolderLoadSink.OnEmpty(string folder)
     {
+        _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
         SetFolderText(folder, 0, explorerOrderApplied: false);
@@ -583,6 +587,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // The current image keeps its place but its neighbours are now the Explorer-order ones:
         // re-center preload on its new index (a file opened directly is presented before the
         // order is applied, so preload started around the fallback neighbours).
+        // The loop still walks the pre-order snapshot: cancel it so the fresh lifetime sees the new order (R2-F-01).
+        _preloadController?.Cancel();
         if (currentKept && currentIndex >= 0) _ = _preloadController?.PreloadAroundAsync(currentIndex);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
