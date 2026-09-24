@@ -69,10 +69,10 @@ public sealed class RecoveryRetryService
     private RecoveryRetryResult ExecuteRetry(JournalEntry failed, JournalEntry prepared)
     {
         var destination = failed.Destination!; // validated non-empty by the caller
-        var mutationCompleted = false;
+        var tx = new JournalTransaction(_journal, _clock, prepared, failWithoutPrepared: true);
         try
         {
-            _journal.Append(prepared);
+            tx.Begin();
             var destDir = Path.GetDirectoryName(destination);
             if (!string.IsNullOrEmpty(destDir))
             {
@@ -84,38 +84,21 @@ public sealed class RecoveryRetryService
             else
                 _fileSystem.Move(failed.Source, destination);
 
-            var destinationStat = _fileSystem.GetFileStat(destination);
-            if (destinationStat is null || destinationStat.Length != prepared.Size)
-                throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
-            mutationCompleted = true;
+            tx.VerifyDestination(_fileSystem, destination, JournalErrors.RetryVerifyFailed);
 
-            var committed = prepared with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow };
-            try
-            {
-                _journal.Append(committed);
-                return new(true, Tr.CoreRecoverySucceeded, committed);
-            }
-            catch (Exception journalException)
-            {
-                return new(true, Tr.CoreRecoverySucceededJournalFailed, committed,
-                    JournalPersisted: false, JournalError: journalException.Message);
-            }
+            var committed = tx.Commit(out var commitError);
+            return commitError is null
+                ? new(true, Tr.CoreRecoverySucceeded, committed)
+                : new(true, Tr.CoreRecoverySucceededJournalFailed, committed,
+                    JournalPersisted: false, JournalError: commitError);
         }
         catch (Exception ex)
         {
-            var (errorCode, errorText) = JournalErrors.ForJournal(ex);
-            var error = prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
-            try
-            {
-                _journal.Append(error);
-                return new(false, ex.Message, error);
-            }
-            catch (Exception journalException)
-            {
-                return new(mutationCompleted, mutationCompleted
-                    ? Tr.CoreRecoveryCompletedFailureNotJournaled
-                    : ex.Message, error, JournalPersisted: false, JournalError: journalException.Message);
-            }
+            var error = tx.Fail(ex, out var failError);
+            if (failError is null) return new(false, ex.Message, error);
+            return new(tx.MutationCompleted, tx.MutationCompleted
+                ? Tr.CoreRecoveryCompletedFailureNotJournaled
+                : ex.Message, error, JournalPersisted: false, JournalError: failError);
         }
     }
 }
