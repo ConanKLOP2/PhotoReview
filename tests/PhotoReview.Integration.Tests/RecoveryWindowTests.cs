@@ -85,6 +85,36 @@ public sealed class RecoveryWindowTests
     }
 
     [Fact]
+    public async Task Retry_DoesNotBlockDispatcher()
+    {
+        using var temp = new PhotoReview.TestSupport.TempRoot("recovery-retry-async");
+        var entries = SampleEntries(temp.Path);
+        await StaTestHost.RunAsync(async () =>
+        {
+            var gate = new TaskCompletionSource<RecoveryRetryResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var window = new RecoveryWindow(entries, retry: _ => gate.Task, dismiss: _ => { });
+            await window.RunChecksAsync();
+            window.SelectRow(0);
+            Assert.True(window.RetryButton.IsEnabled);
+
+            var retry = window.ExecuteRetryAsync(entries[0]);
+
+            // The dispatcher must still run queued work while the retry is pending (a blocking wait would hang here).
+            var posted = false;
+            await StaTestHost.Dispatcher.InvokeAsync(() => posted = true);
+            Assert.True(posted);
+            Assert.False(retry.IsCompleted);
+            Assert.False(window.RetryButton.IsEnabled);
+
+            var expected = new RecoveryRetryResult(true, "ok", null);
+            gate.SetResult(expected);
+            Assert.Same(expected, await retry);
+            Assert.True(window.RetryButton.IsEnabled);
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task VerdictFilter_ShowsOnlyMatchingEntries()
     {
         using var temp = new PhotoReview.TestSupport.TempRoot("recovery-filter");

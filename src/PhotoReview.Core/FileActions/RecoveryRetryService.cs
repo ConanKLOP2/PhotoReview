@@ -31,7 +31,12 @@ public sealed class RecoveryRetryService
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
-    public RecoveryRetryResult RetryMoveOrCopy(JournalEntry failed)
+    /// <summary>
+    /// Re-runs a failed Move/Copy. Cheap validation runs on the caller's thread; the journal append, the file
+    /// mutation (possibly a large cross-drive copy), verification and the final journal append run on the thread
+    /// pool so a UI caller stays responsive (CORE-06).
+    /// </summary>
+    public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(failed);
 
@@ -58,22 +63,28 @@ public sealed class RecoveryRetryService
             sourceStat.LastWriteUtc,
             _clock.UtcNow);
 
+        return await Task.Run(() => ExecuteRetry(failed, prepared), ct).ConfigureAwait(false);
+    }
+
+    private RecoveryRetryResult ExecuteRetry(JournalEntry failed, JournalEntry prepared)
+    {
+        var destination = failed.Destination!; // validated non-empty by the caller
         var mutationCompleted = false;
         try
         {
             _journal.Append(prepared);
-            var destDir = Path.GetDirectoryName(failed.Destination);
+            var destDir = Path.GetDirectoryName(destination);
             if (!string.IsNullOrEmpty(destDir))
             {
                 _fileSystem.CreateDirectory(destDir);
             }
 
             if (failed.Type == FileOperationType.Copy)
-                _fileSystem.Copy(failed.Source, failed.Destination);
+                _fileSystem.Copy(failed.Source, destination);
             else
-                _fileSystem.Move(failed.Source, failed.Destination);
+                _fileSystem.Move(failed.Source, destination);
 
-            var destinationStat = _fileSystem.GetFileStat(failed.Destination);
+            var destinationStat = _fileSystem.GetFileStat(destination);
             if (destinationStat is null || destinationStat.Length != prepared.Size)
                 throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
             mutationCompleted = true;
@@ -106,11 +117,5 @@ public sealed class RecoveryRetryService
                     : ex.Message, error, JournalPersisted: false, JournalError: journalException.Message);
             }
         }
-    }
-
-    public static RecoveryRetryResult RetryMoveOrCopy(JournalEntry failed, OperationJournal journal)
-    {
-        var service = new RecoveryRetryService(journal, new PhysicalFileSystem(), new SystemClock());
-        return service.RetryMoveOrCopy(failed);
     }
 }

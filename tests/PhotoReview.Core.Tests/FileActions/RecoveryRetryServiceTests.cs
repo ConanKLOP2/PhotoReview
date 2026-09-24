@@ -38,8 +38,8 @@ public sealed class RecoveryRetryServiceTests
         _service = new RecoveryRetryService(_journal, _fs, _clock);
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy executes Move successfully")]
-    public void RetryMove_Success()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync executes Move successfully")]
+    public async Task RetryMove_Success()
     {
         var source = @"C:\photos\a.jpg";
         var dest = @"C:\photos\sub\a.jpg";
@@ -49,7 +49,7 @@ public sealed class RecoveryRetryServiceTests
         var failed = new JournalEntry("op-1", FileOperationType.Move, JournalState.Failed,
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.True(result.Succeeded);
         Assert.Equal("Thử lại thành công.", result.Message);
@@ -59,8 +59,8 @@ public sealed class RecoveryRetryServiceTests
         Assert.True(_fs.FileExists(dest));
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy executes Copy successfully leaving source")]
-    public void RetryCopy_Success()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync executes Copy successfully leaving source")]
+    public async Task RetryCopy_Success()
     {
         var source = @"C:\photos\a.jpg";
         var dest = @"C:\photos\sub\a.jpg";
@@ -70,7 +70,7 @@ public sealed class RecoveryRetryServiceTests
         var failed = new JournalEntry("op-copy", FileOperationType.Copy, JournalState.Failed,
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.True(result.Succeeded);
         Assert.Equal("Thử lại thành công.", result.Message);
@@ -80,8 +80,8 @@ public sealed class RecoveryRetryServiceTests
         Assert.True(_fs.FileExists(dest));
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy preserves completed move when commit journal fails")]
-    public void RetryMove_CommitJournalFailure_PreservesCompletedOutcome()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync preserves completed move when commit journal fails")]
+    public async Task RetryMove_CommitJournalFailure_PreservesCompletedOutcome()
     {
         var source = @"C:\photos\journal-failure.jpg";
         var dest = @"C:\photos\sub\journal-failure.jpg";
@@ -94,7 +94,7 @@ public sealed class RecoveryRetryServiceTests
         var failed = new JournalEntry("op-journal-failure", FileOperationType.Move, JournalState.Failed,
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.True(result.Succeeded);
         Assert.False(result.JournalPersisted);
@@ -103,8 +103,8 @@ public sealed class RecoveryRetryServiceTests
         Assert.True(_fs.FileExists(dest));
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy preserves mutation failure when failed journal append also fails")]
-    public void RetryMove_MutationAndFailureJournalFailure_PreservesOriginalFailure()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync preserves mutation failure when failed journal append also fails")]
+    public async Task RetryMove_MutationAndFailureJournalFailure_PreservesOriginalFailure()
     {
         var source = @"C:\photos\mutation-failure.jpg";
         var dest = @"C:\photos\sub\mutation-failure.jpg";
@@ -118,7 +118,7 @@ public sealed class RecoveryRetryServiceTests
         var failed = new JournalEntry("op-mutation-journal-failure", FileOperationType.Move, JournalState.Failed,
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.False(result.JournalPersisted);
@@ -128,44 +128,44 @@ public sealed class RecoveryRetryServiceTests
         Assert.False(_fs.FileExists(dest));
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy rejects Recycle operation")]
-    public void Retry_RejectsRecycle()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync rejects Recycle operation")]
+    public async Task Retry_RejectsRecycle()
     {
         var failed = new JournalEntry("op-recycle", FileOperationType.Recycle, JournalState.Failed,
             @"C:\photos\a.jpg", null, 100, _clock.UtcNow, _clock.UtcNow);
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.Contains("Chỉ có thể thử lại Di chuyển/Sao chép", result.Message);
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy rejects missing destination")]
-    public void Retry_RejectsMissingDestination()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync rejects missing destination")]
+    public async Task Retry_RejectsMissingDestination()
     {
         var failed = new JournalEntry("op-nodest", FileOperationType.Move, JournalState.Failed,
             @"C:\photos\a.jpg", null, 100, _clock.UtcNow, _clock.UtcNow);
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.Equal("Thao tác không có đích.", result.Message);
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy rejects when source no longer exists")]
-    public void Retry_RejectsMissingSource()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync rejects when source no longer exists")]
+    public async Task Retry_RejectsMissingSource()
     {
         var failed = new JournalEntry("op-nosrc", FileOperationType.Move, JournalState.Failed,
             @"C:\photos\missing.jpg", @"C:\photos\dest.jpg", 100, _clock.UtcNow, _clock.UtcNow);
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.Equal("Nguồn không còn tồn tại.", result.Message);
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy rejects when source fingerprint has changed")]
-    public void Retry_RejectsChangedSource()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync rejects when source fingerprint has changed")]
+    public async Task Retry_RejectsChangedSource()
     {
         var source = @"C:\photos\a.jpg";
         _fs.WriteAllTextAtomic(source, "new content with different length");
@@ -173,14 +173,14 @@ public sealed class RecoveryRetryServiceTests
         var failed = new JournalEntry("op-changed", FileOperationType.Move, JournalState.Failed,
             source, @"C:\photos\dest.jpg", 5, _clock.UtcNow, _clock.UtcNow);
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.Equal("Nguồn đã thay đổi; từ chối thử lại để bảo vệ dữ liệu.", result.Message);
     }
 
-    [Fact(DisplayName = "RetryMoveOrCopy rejects when destination already exists")]
-    public void Retry_RejectsExistingDestination()
+    [Fact(DisplayName = "RetryMoveOrCopyAsync rejects when destination already exists")]
+    public async Task Retry_RejectsExistingDestination()
     {
         var source = @"C:\photos\a.jpg";
         var dest = @"C:\photos\dest.jpg";
@@ -191,10 +191,47 @@ public sealed class RecoveryRetryServiceTests
         var failed = new JournalEntry("op-destexists", FileOperationType.Move, JournalState.Failed,
             source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow);
 
-        var result = _service.RetryMoveOrCopy(failed);
+        var result = await _service.RetryMoveOrCopyAsync(failed);
 
         Assert.False(result.Succeeded);
         Assert.Equal("Đích đã tồn tại; không ghi đè.", result.Message);
+    }
+
+    [Fact(DisplayName = "RetryMoveOrCopyAsync runs the file mutation off the caller thread")]
+    public async Task RetryMoveOrCopyAsync_RunsMutationOffCallerThread()
+    {
+        var source = @"C:\photos\a.jpg";
+        var dest = @"C:\photos\sub\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var failed = new JournalEntry("op-thread", FileOperationType.Copy, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow);
+
+        var mutationThread = -1;
+        _fs.CopyHook = (_, _) =>
+        {
+            mutationThread = Environment.CurrentManagedThreadId;
+            return null;
+        };
+
+        // A dedicated thread with a single-threaded context stands in for the UI thread: a mutation that runs
+        // synchronously would record this thread's id.
+        var callerThread = -1;
+        var done = new TaskCompletionSource<RecoveryRetryResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            callerThread = Environment.CurrentManagedThreadId;
+            SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
+            try { done.SetResult(_service.RetryMoveOrCopyAsync(failed).GetAwaiter().GetResult()); }
+            catch (Exception ex) { done.SetException(ex); }
+        });
+        thread.Start();
+        var result = await done.Task;
+        thread.Join();
+
+        Assert.True(result.Succeeded);
+        Assert.NotEqual(-1, mutationThread);
+        Assert.NotEqual(callerThread, mutationThread);
     }
 
     [Fact(DisplayName = "Constructor validates null arguments")]

@@ -44,13 +44,14 @@ internal sealed class RecoveryRow(JournalEntry entry) : INotifyPropertyChanged
 public partial class RecoveryWindow : Window
 {
     private readonly List<RecoveryRow> _rows;
-    private readonly Func<JournalEntry, RecoveryRetryResult>? _retry;
+    private readonly Func<JournalEntry, Task<RecoveryRetryResult>>? _retry;
+    private bool _retrying;
     private readonly Action<IReadOnlyList<JournalEntry>>? _dismiss;
     private readonly RecoveryFileCheck _checker;
     private readonly System.Collections.ObjectModel.ObservableCollection<RecoveryRow> _visible = [];
     private Action? _cancelCheck;
 
-    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, RecoveryRetryResult>? retry = null, Action<IReadOnlyList<JournalEntry>>? dismiss = null, IFileSystem? fileSystem = null)
+    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, Task<RecoveryRetryResult>>? retry = null, Action<IReadOnlyList<JournalEntry>>? dismiss = null, IFileSystem? fileSystem = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         InitializeComponent();
@@ -108,9 +109,9 @@ public partial class RecoveryWindow : Window
 
     private void UpdateButtons()
     {
-        RetryButton.IsEnabled = _retry is not null && RecoveryPresenter.AllowsRetry(SelectedRow?.Check);
-        ClearSelectedButton.IsEnabled = _dismiss is not null && EntriesList.SelectedItems.Count > 0;
-        ClearAllButton.IsEnabled = _dismiss is not null && _rows.Count > 0;
+        RetryButton.IsEnabled = !_retrying && _retry is not null && RecoveryPresenter.AllowsRetry(SelectedRow?.Check);
+        ClearSelectedButton.IsEnabled = !_retrying && _dismiss is not null && EntriesList.SelectedItems.Count > 0;
+        ClearAllButton.IsEnabled = !_retrying && _dismiss is not null && _rows.Count > 0;
     }
 
     private void UpdateDetails()
@@ -234,19 +235,39 @@ public partial class RecoveryWindow : Window
         RefreshEntries();
     }
 
-    private void Retry_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Runs the retry delegate while keeping the UI thread free (a retried cross-drive copy can take minutes):
+    /// the Retry/Clear buttons are disabled and the cursor shows Wait until it completes.
+    /// </summary>
+    internal async Task<RecoveryRetryResult> ExecuteRetryAsync(JournalEntry entry)
+    {
+        if (_retry is null) throw new InvalidOperationException("Retry is not available.");
+        _retrying = true;
+        Cursor = System.Windows.Input.Cursors.Wait;
+        UpdateButtons();
+        try { return await _retry(entry); }
+        finally
+        {
+            _retrying = false;
+            Cursor = null;
+            UpdateButtons();
+        }
+    }
+
+    private async void Retry_Click(object sender, RoutedEventArgs e)
     {
         var row = SelectedRow;
-        if (_retry is null || row is null) return;
+        if (_retry is null || row is null || _retrying) return;
         var entry = row.Entry;
         if (System.Windows.MessageBox.Show(this, Tr.DialogConfirmRetryMessage(RecoveryPresenter.OperationText(entry.Type), Path.GetFileName(entry.Source)), Tr.DialogConfirmRetryTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         RecoveryRetryResult result;
-        try { result = _retry(entry); }
+        try { result = await ExecuteRetryAsync(entry); }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogRetryRejectedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (IsLoaded) System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogRetryRejectedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+        if (!IsLoaded) return; // closed while the retry ran
         var journalWarning = result.Succeeded && !result.JournalPersisted;
         var title = result.Succeeded
             ? journalWarning ? Tr.DialogRetryDoneJournalFailedTitle : Tr.DialogRetrySucceededTitle
