@@ -25,6 +25,9 @@ public sealed class WindowsNaturalComparer : INaturalComparer
             var result = StrCmpLogicalW(x, y);
             return result != 0 ? result : StringComparer.OrdinalIgnoreCase.Compare(x, y);
         }
+        // CORE-12: only "shlwapi/StrCmpLogicalW is missing" can be recovered with the managed comparer. The catch stays
+        // narrow on purpose: StrCmpLogicalW has no failure return, and other faults (SEH/access violation) are process-level
+        // and not safely recoverable, so they must surface instead of silently changing the sort order.
         catch (DllNotFoundException)
         {
             return ManagedNaturalComparer.Instance.Compare(x, y);
