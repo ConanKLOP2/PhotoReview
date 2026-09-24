@@ -41,11 +41,12 @@ public sealed class WindowsRecycleBin : IRecycleBin
             if (recycle is null) return false;
             dynamic recycleDynamic = recycle;
             object? items = recycleDynamic.Items();
+            var candidates = new List<(object Item, RecycleCandidate Candidate)>();
             try
             {
-                var candidates = new List<(object Item, RecycleCandidate Candidate)>();
                 foreach (dynamic item in (IEnumerable)items!)
                 {
+                    var kept = false;
                     try
                     {
                         var deletedFrom = (string?)item.ExtendedProperty("System.Recycle.DeletedFrom");
@@ -61,40 +62,57 @@ public sealed class WindowsRecycleBin : IRecycleBin
                         var localReading = DateTime.SpecifyKind(shellTime, DateTimeKind.Local).ToUniversalTime();
                         var candidate = new RecycleCandidate(deletedFrom, name, size, utcReading, localReading);
                         if (RecycleCandidateSelector.IsMatch(candidate, originalPath, expectedSize, expectedLastWriteUtc))
+                        {
                             candidates.Add((item, candidate));
+                            kept = true;
+                        }
                     }
                     catch (Exception ex) when (ex is COMException or InvalidCastException or FormatException)
                     {
                         _log.Error("Recycle Bin item inspection failed", ex);
                     }
+                    finally
+                    {
+                        // Only the selected candidate is needed later; every other shell item wrapper is released now.
+                        if (!kept) Release(item);
+                    }
                 }
 
                 if (candidates.Count != 1) return false;
                 var selected = candidates[0].Item;
+                dynamic selectedItem = selected;
+                var restoredVerb = false;
+                object? verbs = selectedItem.Verbs();
                 try
                 {
-                    dynamic item = selected;
-                        var restoredVerb = false;
-                        foreach (dynamic verb in (IEnumerable)item.Verbs())
-                        {
-                            var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
+                    foreach (dynamic verb in (IEnumerable)verbs!)
+                    {
+                        var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
                             // Matched against the WINDOWS shell's verb name ("Restore" / Vietnamese "Khôi phục" /
                             // German "Wiederherstellen"), which follows the OS display language, not our UI catalogs.
                             // "khôi" must stay Vietnamese (I18N ADR 0006; allowlisted in localization-allowlist.txt).
                             if (!verbName.Contains("restore", StringComparison.OrdinalIgnoreCase) &&
                                 !verbName.Contains("khôi", StringComparison.OrdinalIgnoreCase) &&
-                                !verbName.Contains("wiederher", StringComparison.OrdinalIgnoreCase)) continue;
-                            verb.DoIt();
-                            restoredVerb = true;
-                            Release(verb);
-                            break;
+                                !verbName.Contains("wiederher", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Release(verb); // not the restore verb
+                            continue;
                         }
-                        if (!restoredVerb) item.InvokeVerb("Restore");
-                    return WaitForRestore(originalPath, expectedLastWriteUtc);
+                        try { verb.DoIt(); }
+                        finally { Release(verb); }
+                        restoredVerb = true;
+                        break;
+                    }
                 }
-                finally { foreach (var candidate in candidates) Release(candidate.Item); }
+                finally { Release(verbs); }
+                if (!restoredVerb) selectedItem.InvokeVerb("Restore");
+                return WaitForRestore(originalPath, expectedLastWriteUtc);
             }
-            finally { Release(items); }
+            finally
+            {
+                foreach (var candidate in candidates) Release(candidate.Item);
+                Release(items);
+            }
         }
         catch (Exception ex)
         {
