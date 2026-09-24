@@ -46,5 +46,4 @@ The application must prioritize the following principles when processing and rev
 
 ## Tests
 
-- A new test must fail when the code it guards is broken (mutate once to check). No source-text tests, no fixed-delay timing asserts (use bounded `Wait.UntilAsync`), no `Task.Yield()` polling.
-- Real-OS tests (Recycle Bin, Explorer) are `Native`/`Slow` and clean up what they created. Local default: `--filter "Category!=Manual&Category!=Native&Category!=Slow&Category!=Stress"`.
+- Must fail when the guarded code is broken (mutate to check). No source-text tests, fixed-delay asserts or `Task.Yield()` polling; real-OS tests are `Native`/`Slow` and self-cleaning. Local filter: `Category!=Manual&Category!=Native&Category!=Slow&Category!=Stress`.

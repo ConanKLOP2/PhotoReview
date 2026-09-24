@@ -6,14 +6,14 @@ Quick reference for finding documentation by purpose. Read-tier guides which fil
 |------|---------|------|-----------|
 | **AGENTS.md** | Rules for work mode, process, agent behavior | T0 | Startup, always |
 | **task_on_progress.md** | Current status, blockers, critical rules | T0 | Startup, always |
-| **docs/ACTIVE-TASKS.md** | Consolidated open tasks across all groups | T0 | Startup, for task context |
-| **docs/architecture.md** | System design, code map, component ownership | T1 | When working in any area |
-| **docs/APP-MECHANISMS-VI.md** | Core flow descriptions (Vietnamese) | T1 | When understanding App startup/flow |
+| **docs/ACTIVE-TASKS.md** | Consolidated open tasks across all groups | T0 | Startup |
+| **docs/architecture.md** | System design, code map, component ownership | T1 | Any area |
+| **docs/APP-MECHANISMS-VI.md** | Core flow descriptions (Vietnamese) | T1 | App startup/flow |
 | **docs/adr/*.md** | Architecture decisions 0001-0007 | T1 | When working in relevant area |
-| **docs/refactoring/I18N-PLAN.md** | Multi-language (EN+VI, community JSON catalogs): design, L00–L12 tasks, Q-L decisions | T1 | Before any localization/UI-text change |
+| **docs/refactoring/I18N-PLAN.md** | Multi-language (EN+VI, community JSON catalogs): design, L00–L12 tasks, Q-L decisions | T1 | UI-text changes |
 | **docs/TRANSLATING.md** | Adding or fixing a language (JSON catalogs) | T1 | Before editing translations |
-| **docs/refactoring/ARCH-REVIEW-SUMMARY.md** | Architecture review 2026-09-23: findings F1-F9, AR task table, order | T1 | Before any AR task or boundary change |
-| **docs/refactoring/arch-review/AR0x-*.md** | Step-by-step plan per AR task (files, lines, tests, acceptance) | T1 | Only the file of the AR task you work on |
+| **docs/refactoring/ARCH-REVIEW-SUMMARY.md** | Architecture review 2026-09-23: findings F1-F9, AR task table, order | T1 | AR tasks, boundaries |
+| **docs/refactoring/arch-review/AR0x-*.md** | Step-by-step plan per AR task (files, lines, tests, acceptance) | T1 | The AR task at hand |
 | **docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md** | ST task status & INV (invariants) | T1 | When touching ST scope |
 | **docs/refactoring/REFACTOR-STATUS.md** | OC/ST consolidated status (quick lookup) | T1 | When working on refactoring |
 | **docs/refactoring/PERF-STATUS.md** | Perf baselines (AR02e, perf night) | T1 | When checking perf diagnosis |
