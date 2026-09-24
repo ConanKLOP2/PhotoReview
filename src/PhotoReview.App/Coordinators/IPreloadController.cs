@@ -24,6 +24,14 @@ public interface IPreloadController
 
     /// <summary>Xóa toàn bộ các key đã preload.</summary>
     void ClearPreloadedKeys();
+
+    /// <summary>
+    /// True when no preload work is in flight for the current lifetime. Best-effort diagnostics signal
+    /// (used by the perf harness to know a navigation has settled); default true for implementations
+    /// that don't track preload state (e.g. test fakes), so this member is source- and binary-compatible
+    /// with every existing implementer.
+    /// </summary>
+    bool IsIdle => true;
 }
 
 /// <summary>
@@ -53,4 +61,6 @@ public sealed class PreloadSchedulerAdapter : IPreloadController
     public void RemovePreloadedKeysForPath(string normalizedPath) => _getScheduler()?.RemovePreloadedKeysForPath(normalizedPath);
 
     public void ClearPreloadedKeys() => _getScheduler()?.ClearPreloadedKeys();
+
+    public bool IsIdle => _getScheduler()?.IsIdle ?? true;
 }
