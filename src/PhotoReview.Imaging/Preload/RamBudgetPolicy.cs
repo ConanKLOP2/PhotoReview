@@ -17,6 +17,27 @@ public static class RamBudgetPolicy
     public const double PngExpansionFactor = 3;
     public const double DefaultAverageBytesPerPixel = 4;
 
+    /// <summary>Largest share of physical RAM a single in-memory cache budget may claim (IMG-11).</summary>
+    public const double MaxPhysicalMemoryShare = 0.5;
+
+    /// <summary>
+    /// Physical memory the runtime may use (physical RAM, or the container/GC hard limit when one is
+    /// set); 0 when unknown.
+    /// </summary>
+    public static long GetPhysicalMemoryBytes() => GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+
+    /// <summary>
+    /// Clamps a requested cache budget to <see cref="MaxPhysicalMemoryShare"/> of physical RAM so a
+    /// 16 GiB default (tuned for the 32 GB dev box) cannot over-commit a smaller machine. An unknown
+    /// physical size (&lt;= 0) leaves the request unchanged.
+    /// </summary>
+    public static long ClampToPhysicalMemory(long requestedBytes, long physicalBytes)
+    {
+        if (physicalBytes <= 0) return requestedBytes;
+        var limit = (long)(physicalBytes * MaxPhysicalMemoryShare);
+        return Math.Min(requestedBytes, limit);
+    }
+
     public static long EstimateDecodedBytes(IEnumerable<RamBudgetEntry> entries, int targetWidth,
         double? measuredBytesPerPixel = null)
     {

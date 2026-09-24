@@ -136,6 +136,13 @@ public sealed class PreviewImageService : IPreloadTarget
         _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
         _originalDimensions = new BoundedLruCache<ImageCacheKey, (int Width, int Height)>(
             originalDimensionsCapacity, _ => 1);
+        // IMG-11: clamp to half of physical RAM and log what is actually in effect.
+        var requestedCapacity = capacityBytes;
+        capacityBytes = RamBudgetPolicy.ClampToPhysicalMemory(capacityBytes, RamBudgetPolicy.GetPhysicalMemoryBytes());
+        _log.Info($"Memory budgets: preview cache {capacityBytes / (1024 * 1024)} MiB"
+            + (capacityBytes != requestedCapacity ? $" (clamped from {requestedCapacity / (1024 * 1024)} MiB to 50% of physical RAM)" : "")
+            + (sourceBytesCache is null ? ", source-bytes cache off" : $", source-bytes cache {sourceBytesCache.CapacityBytes / (1024 * 1024)} MiB")
+            + ".");
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
             capacityBytes, image => image.EstimatedBytes);
         // Two workers: enough to keep the disk-cache warm without letting persistence
