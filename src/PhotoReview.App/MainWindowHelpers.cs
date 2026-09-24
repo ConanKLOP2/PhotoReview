@@ -67,6 +67,13 @@ internal static class MainWindowHelpers
             ClampOffset(currentHorizontalOffset - deltaX, extentWidth, viewportWidth),
             ClampOffset(currentVerticalOffset - deltaY, extentHeight, viewportHeight));
 
+    /// <summary>
+    /// True when a pointer displacement from the press point has reached the system drag distance on
+    /// either axis (inclusive), i.e. a press-and-move is a pan rather than a click.
+    /// </summary>
+    internal static bool IsBeyondDragThreshold(double totalDeltaX, double totalDeltaY, double minimumHorizontal, double minimumVertical) =>
+        Math.Abs(totalDeltaX) >= minimumHorizontal || Math.Abs(totalDeltaY) >= minimumVertical;
+
     internal static ZoomViewportOffsets CalculateZoomViewportOffsets(
         double oldZoom,
         double newZoom,
