@@ -1,6 +1,6 @@
 # I18N — Multi-language UI (English + Vietnamese first, community-editable)
 
-**Status:** approved 2026-09-24 (all recommendations, Q-L1..Q-L8 = a) · **ADR:** [0006](../adr/0006-localization-json-catalogs.md)
+**Status:** L00–L11 done 2026-09-24 (L12 later) · approved 2026-09-24 (all recommendations, Q-L1..Q-L8 = a) · **ADR:** [0006](../adr/0006-localization-json-catalogs.md)
 
 ## Goal
 
@@ -40,7 +40,7 @@ per-navigation cost = one dictionary lookup + one pre-parsed template concat. XA
 
 | ID | Task | Tests / evidence | Status |
 |---|---|---|---|
-| L00 | This plan, ADR 0006, decisions Q-L1..Q-L8 | docs only | 🔄 PR open |
+| L00 | This plan, ADR 0006, decisions Q-L1..Q-L8 | docs only | ✅ #55 |
 | L01 | Core: `Localizer`, catalog loader (3 layers), `SafeFormatter` (named args, plurals), validation (size cap, unknown placeholders, bad braces → key rejected + logged), `en.json`/`vi.json` skeleton; source generator | Unit tests: broken JSON, partial catalog, placeholder mismatch, fallback order, plural rules | ⏳ |
 | L02 | App wiring: DI + startup apply, `TrExtension`, `LocalizationSource`, `UiLanguage` + migration, `IAppPaths.UserLanguagesDir`; test assemblies pin `vi` via `ModuleInitializer` | Existing Vietnamese assertions still pass unchanged | ⏳ |
 | L03 | Guard tests: no Vietnamese literals in `src/**/*.cs` outside catalogs (shrinking allowlist); no literal text attributes in XAML (symbol whitelist); every XAML `Tr` key exists in `en.json`; `vi.json` has no unknown keys | Architecture tests | ⏳ |
@@ -75,3 +75,12 @@ PR policy: every PR based on `master` (no stacks); code tasks L01–L11 may shar
 - Changing the *meaning* of an English string → new key name (e.g. `...v2`); stale translations never silently mismatch.
 - Translations may drop a placeholder (warning) but never introduce an unknown one (key rejected).
 - Translator context lives in `en.notes.json` (same keys), not in the catalog.
+
+## L11 evidence (2026-09-24, real machine, synthetic 1600×1000 JPEGs)
+
+- **vi** (user's v2 config, migrated in memory): main window, status, Settings identical to the pre-i18n text; new "Language / Ngôn ngữ" group; instance-lock dialog localized.
+- **en** (temporary config copy, restored byte-identical): every main/Settings text English, no clipping at 760 px.
+- **pseudo** (`--i18n-pseudo`): no un-bracketed text left except the build hash; only the long "Compare hash …" checkbox touches the right edge at +35 %.
+- **Startup → first image status** (5 interleaved runs, median): master build 1662 ms, i18n 1438 ms — no regression (noise-level).
+- Tests: Architecture 34, Core 478, Imaging 339, Integration 69 (+5 skip), App 299 (+1 skip); build 0 warnings; `i18n-check` PASS (en 366, vi 361).
+- Allowlists left: `ReviewAction.cs|4` (Q-L5 default action names), `WindowsRecycleBin.cs|1` (OS shell verb "Khôi phục").
