@@ -13,14 +13,16 @@ using Xunit;
 namespace PhotoReview.Imaging.Tests.Decoding;
 
 [Trait("Category", "HotPath")]
-public sealed class WicDirectTests : IDisposable
+public sealed class WicDirectTests : IClassFixture<OrientationFixture>, IDisposable
 {
     private readonly string _tempDir;
+    private readonly OrientationFixture _files;
     private readonly WicDirectDecoder _wicDecoder = new();
     private readonly WpfBitmapImageDecoder _wpfDecoder = new();
 
-    public WicDirectTests()
+    public WicDirectTests(OrientationFixture files)
     {
+        _files = files;
         _tempDir = Path.Combine(Path.GetTempPath(), "PhotoReview-WicTests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
     }
@@ -81,64 +83,14 @@ public sealed class WicDirectTests : IDisposable
     }
 
     [Theory(DisplayName = "WicDirect ReadInfo detects EXIF orientation 1 to 8")]
-    [InlineData((ushort)1, 64, 48)]
-    [InlineData((ushort)2, 64, 48)]
-    [InlineData((ushort)3, 64, 48)]
-    [InlineData((ushort)4, 64, 48)]
-    [InlineData((ushort)5, 48, 64)]
-    [InlineData((ushort)6, 48, 64)]
-    [InlineData((ushort)7, 48, 64)]
-    [InlineData((ushort)8, 48, 64)]
-    public void ReadInfoDetectsOrientation(ushort orientation, int expectedWidth, int expectedHeight)
-    {
-        var path = Path.Combine(_tempDir, $"info_{orientation}.jpg");
-        FixtureGenerator.GenerateJpegWithOrientation(path, 64, 48, orientation);
-
-        var info = _wicDecoder.ReadInfo(path);
-        Assert.Equal(64, info.PixelWidth);
-        Assert.Equal(48, info.PixelHeight);
-        Assert.Equal(orientation, info.Orientation);
-        Assert.Equal(expectedWidth, info.Width);
-        Assert.Equal(expectedHeight, info.Height);
-    }
+    [MemberData(nameof(OrientationContract.All), MemberType = typeof(OrientationContract))]
+    public void ReadInfoDetectsOrientation(ushort orientation) =>
+        OrientationContract.AssertReadInfo(_wicDecoder, _files.PathFor(orientation), orientation);
 
     [Theory(DisplayName = "WicDirect applies EXIF orientation and maps corners correctly")]
-    [InlineData((ushort)1, 64, 48, "Yellow", "Cyan", "Magenta", "White")]
-    [InlineData((ushort)2, 64, 48, "Cyan", "Yellow", "White", "Magenta")]
-    [InlineData((ushort)3, 64, 48, "White", "Magenta", "Cyan", "Yellow")]
-    [InlineData((ushort)4, 64, 48, "Magenta", "White", "Yellow", "Cyan")]
-    [InlineData((ushort)5, 48, 64, "Yellow", "Magenta", "Cyan", "White")]
-    [InlineData((ushort)6, 48, 64, "Magenta", "Yellow", "White", "Cyan")]
-    [InlineData((ushort)7, 48, 64, "White", "Cyan", "Magenta", "Yellow")]
-    [InlineData((ushort)8, 48, 64, "Cyan", "White", "Yellow", "Magenta")]
-    public void DecodeAppliesOrientationCorners(
-        ushort orientation,
-        int expectedWidth,
-        int expectedHeight,
-        string expectedTopLeft,
-        string expectedTopRight,
-        string expectedBottomLeft,
-        string expectedBottomRight)
-    {
-        var path = Path.Combine(_tempDir, $"orient_{orientation}.jpg");
-        FixtureGenerator.GenerateJpegWithOrientation(path, 64, 48, orientation);
-
-        var decoded = _wicDecoder.Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true));
-        Assert.Equal(expectedWidth, decoded.PixelWidth);
-        Assert.Equal(expectedHeight, decoded.PixelHeight);
-        // perf(dims): an undownscaled decode's OriginalWidth/Height must match its own pixel
-        // dimensions -- including for a transposing orientation (5-8), which swaps both.
-        Assert.Equal(expectedWidth, decoded.OriginalWidth);
-        Assert.Equal(expectedHeight, decoded.OriginalHeight);
-
-        var bmp = (BitmapSource)decoded.PlatformImage;
-        var bgra = ImageCompare.ToBgra32(bmp);
-
-        AssertCornerColor(bgra, expectedWidth, expectedHeight, 1, 1, expectedTopLeft);
-        AssertCornerColor(bgra, expectedWidth, expectedHeight, expectedWidth - 2, 1, expectedTopRight);
-        AssertCornerColor(bgra, expectedWidth, expectedHeight, 1, expectedHeight - 2, expectedBottomLeft);
-        AssertCornerColor(bgra, expectedWidth, expectedHeight, expectedWidth - 2, expectedHeight - 2, expectedBottomRight);
-    }
+    [MemberData(nameof(OrientationContract.All), MemberType = typeof(OrientationContract))]
+    public void DecodeAppliesOrientationCorners(ushort orientation) =>
+        OrientationContract.AssertDecodeCorners(_wicDecoder, _files.PathFor(orientation), orientation);
 
     [Fact(DisplayName = "WicDirect downscales correctly using TargetWidth")]
     public void DownscaleProducesTargetWidth()
@@ -197,32 +149,4 @@ public sealed class WicDirectTests : IDisposable
         FixtureGenerator.GenerateTextFile(textPath);
         Assert.ThrowsAny<Exception>(() => _wicDecoder.Decode(new DecodeRequest(textPath, TargetWidth: 0)));
     }
-
-    private static void AssertCornerColor(byte[] bgra, int width, int height, int x, int y, string expectedColor)
-    {
-        var offset = (y * width + x) * 4;
-        byte b = bgra[offset];
-        byte g = bgra[offset + 1];
-        byte r = bgra[offset + 2];
-
-        switch (expectedColor)
-        {
-            case "Yellow":
-                Assert.True(r > 150 && g > 150 && b < 100, $"Expected Yellow at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            case "Cyan":
-                Assert.True(r < 100 && g > 150 && b > 150, $"Expected Cyan at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            case "Magenta":
-                Assert.True(r > 150 && g < 100 && b > 150, $"Expected Magenta at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            case "White":
-                Assert.True(r > 180 && g > 180 && b > 180, $"Expected White at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            default:
-                throw new ArgumentException($"Unknown color: {expectedColor}", nameof(expectedColor));
-        }
-    }
 }
-
-
