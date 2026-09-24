@@ -105,10 +105,17 @@ public sealed class LocTemplate
         return new LocTemplate(Text + escaped, literals, _names);
     }
 
+    [ThreadStatic]
+    private static StringBuilder? t_builder;
+
     public string Render(ReadOnlySpan<LocArg> args)
     {
         if (_names.Length == 0) return _literals[0];
-        var sb = new StringBuilder(Text.Length + 16);
+        // perf: status text is rendered on every photo switch; reuse one builder per thread instead of allocating.
+        // Taken out of the slot while in use, so a nested render (an argument's ToString) gets its own builder.
+        var sb = t_builder ?? new StringBuilder(256);
+        t_builder = null;
+        sb.Clear();
         for (var i = 0; i < _names.Length; i++)
         {
             sb.Append(_literals[i]);
@@ -123,7 +130,9 @@ public sealed class LocTemplate
             if (!found) sb.Append('{').Append(_names[i]).Append('}');
         }
         sb.Append(_literals[^1]);
-        return sb.ToString();
+        var result = sb.ToString();
+        if (sb.Capacity <= 1024) t_builder = sb;
+        return result;
     }
 
     // UI text: numbers follow the user's regional format (AGENTS.md rule 4 allows CurrentCulture for display).

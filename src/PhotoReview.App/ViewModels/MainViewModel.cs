@@ -486,6 +486,17 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             : Tr.MainFolderTextImageCount(count, folder);
     }
 
+    /// <summary>
+    /// Re-renders text built in code after a live language switch (ADR 0006): XAML follows by binding,
+    /// but the title and folder line are rendered here from state.
+    /// </summary>
+    public void RefreshLocalizedText()
+    {
+        UpdateFolderTitle();
+        if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
+        // StatusText is event text (last action); it switches language with the next update.
+    }
+
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
 
     private void NotifyNavigationStateChanged()

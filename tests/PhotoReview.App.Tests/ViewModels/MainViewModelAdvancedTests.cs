@@ -142,7 +142,7 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         return filePath;
     }
 
-    private (MainViewModel ViewModel, FileActionService FileActions) CreateViewModel(IFileSystem? fs = null)
+    internal (MainViewModel ViewModel, FileActionService FileActions) CreateViewModel(IFileSystem? fs = null)
     {
         var activeFs = fs ?? _fileSystem;
         var clock = new SystemClock();
