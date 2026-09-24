@@ -50,7 +50,7 @@ per-navigation cost = one dictionary lookup + one pre-parsed template concat. XA
 | L07 | Dialogs, folder picker title, enum combo items, BenchmarkWindow UI; Benchmarking/PerfAnalysis reports → fixed English | | ⏳ |
 | L08 | Settings: language picker (bilingual label, native names), live switch, "Open languages folder", "Reload translations", "Export strings to translate" | ViewModel + settings round-trip | ⏳ |
 | L09 | Translator mode: `--i18n-keys` (show keys) and pseudo-locale `qps-ploc` (+35 % length, accents) | Unit test for pseudo transform | ⏳ |
-| L10 | `tools/i18n-check.ps1` in CI (JSON valid, no unknown keys, placeholder parity, completeness %), `docs/TRANSLATING.md` (EN+VI), PR template, README table; `verify-release.ps1` checks `Languages\` | CI green | ⏳ |
+| L10 | `tools/i18n-check.ps1` in CI (JSON valid, no unknown keys, placeholder parity, completeness %), a translator guide `TRANSLATING.md` in `docs/` (EN+VI, created in L10), PR template, README table; `verify-release.ps1` checks `Languages\` | CI green | ⏳ |
 | L11 | Real-machine check: GUI in `en`, `vi`, pseudo (screenshots, overflow), startup perf vs 1.8 s | Evidence in this file | ⏳ |
 | L12 | Vietnamese copy polish (folder/thư mục, Action/thao tác…) — separate PR, user reviews wording | | ⏳ (Q-L6 = later) |
 
