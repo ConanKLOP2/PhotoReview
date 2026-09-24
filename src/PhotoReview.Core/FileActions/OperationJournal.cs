@@ -1,12 +1,20 @@
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
 
+/// <summary>
+/// One journal line (JSON). <see cref="Error"/> is invariant machine text: English for coded errors, the OS message
+/// otherwise; files written before ADR 0006 may hold Vietnamese. <see cref="ErrorCode"/> (Q-L3) is a stable
+/// <see cref="JournalErrors"/> code the UI localizes by (<see cref="JournalErrors.Describe(JournalEntry)"/>). It is
+/// omitted from the JSON when null, so records without a code keep their previous shape, and older builds (which
+/// skip unknown members) still read new files.
+/// </summary>
 public sealed record JournalEntry(
     string Id,
     FileOperationType Type,
@@ -16,7 +24,8 @@ public sealed record JournalEntry(
     long Size,
     DateTime LastWriteUtc,
     DateTime TimestampUtc,
-    string? Error = null);
+    string? Error = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null);
 
 public sealed class OperationJournal
 {
@@ -189,8 +198,7 @@ public sealed class OperationJournal
             if (pending.Type == FileOperationType.Recycle)
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
-                var error = state == JournalState.Failed ? "Nguồn vẫn tồn tại sau khi khôi phục phiên." : null;
-                var entry = pending with { State = state, TimestampUtc = _clock.UtcNow, Error = error };
+                var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
                 Append(entry);
                 reconciled.Add(entry);
             }
@@ -205,12 +213,24 @@ public sealed class OperationJournal
                 var state = pending.Type == FileOperationType.Move
                     ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
                     : (destinationMatches ? JournalState.Committed : JournalState.Failed);
-                var error = state == JournalState.Failed ? "Không thể xác nhận operation pending; không tự động replay." : null;
-                var entry = pending with { State = state, TimestampUtc = _clock.UtcNow, Error = error };
+                var entry = WithOutcome(pending, state, JournalErrors.PendingUnconfirmed);
                 Append(entry);
                 reconciled.Add(entry);
             }
         }
         return reconciled;
+    }
+
+    // Journal text is invariant (AGENTS.md rule 4): a failure stores its code plus English, never the UI language.
+    private JournalEntry WithOutcome(JournalEntry pending, JournalState state, string failureCode)
+    {
+        var failed = state == JournalState.Failed;
+        return pending with
+        {
+            State = state,
+            TimestampUtc = _clock.UtcNow,
+            Error = failed ? JournalErrors.EnglishText(failureCode) : null,
+            ErrorCode = failed ? failureCode : null,
+        };
     }
 }

@@ -73,6 +73,9 @@ public sealed class WindowsRecycleBin : IRecycleBin
                         foreach (dynamic verb in (IEnumerable)item.Verbs())
                         {
                             var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
+                            // Matched against the WINDOWS shell's verb name ("Restore" / Vietnamese "Khôi phục" /
+                            // German "Wiederherstellen"), which follows the OS display language, not our UI catalogs.
+                            // "khôi" must stay Vietnamese (I18N ADR 0006; allowlisted in localization-allowlist.txt).
                             if (!verbName.Contains("restore", StringComparison.OrdinalIgnoreCase) &&
                                 !verbName.Contains("khôi", StringComparison.OrdinalIgnoreCase) &&
                                 !verbName.Contains("wiederher", StringComparison.OrdinalIgnoreCase)) continue;

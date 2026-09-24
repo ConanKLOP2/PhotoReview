@@ -9,6 +9,12 @@ public sealed record BenchmarkProgress(string ProfileId, BenchmarkWorkload Workl
 /// <summary>Runs measurable workloads through injected operations so the UI and CLI share one contract.</summary>
 public sealed class BenchmarkEngine
 {
+    // Fixed English (Q-L4): these also go to the report JSON and the CLI. The BenchmarkWindow maps them to
+    // benchmark.progress.* / benchmark.result.* catalog keys for display.
+    public const string ProgressOk = "OK";
+    public const string ProgressCorrectnessFailed = "Correctness failed";
+    public const string ResultCorrectnessFailed = "One or more samples failed correctness";
+
     public static async Task<BenchmarkReport> RunAsync(string folder, BenchmarkProfile profile,
         BenchmarkWorkloadExecutor operation,
         IProgress<BenchmarkProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -67,12 +73,12 @@ public sealed class BenchmarkEngine
             metrics = result.Metrics ?? metrics;
             allCorrect &= result.Correct;
             FileLog.Default.Info($"Benchmark sample runId={runId} profile={profile.Id} phase={profile.Workload} iteration={i + 1}/{total} elapsedMs={sw.Elapsed.TotalMilliseconds:F1} correct={result.Correct}");
-            progress?.Report(new(profile.Id, profile.Workload, i + 1, total, result.Correct ? "OK" : "Correctness failed"));
+            progress?.Report(new(profile.Id, profile.Workload, i + 1, total, result.Correct ? ProgressOk : ProgressCorrectnessFailed));
         }
         var correct = samples.Count > 0 && allCorrect;
         var phase = new BenchmarkPhaseResult(profile.Id, profile.Workload, samples,
             samples.Count == 0 ? BenchmarkResultStatus.InsufficientData : correct ? BenchmarkResultStatus.Pass : BenchmarkResultStatus.Fail,
-            correct ? null : "One or more samples failed correctness");
+            correct ? null : ResultCorrectnessFailed);
         FileLog.Default.Info($"Benchmark complete runId={runId} profile={profile.Id} phase={profile.Workload} status={phase.Status} p50Ms={phase.P50:F1} p95Ms={phase.P95:F1} maxMs={phase.Max:F1}");
         return new BenchmarkReport(runId, started, Path.GetFullPath(folder), [phase], metrics, Environment.MachineName);
     }

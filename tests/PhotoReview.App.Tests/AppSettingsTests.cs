@@ -88,7 +88,8 @@ public sealed class AppSettingsTests
         var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "config-v2.json");
         Assert.True(File.Exists(fixturePath), $"Fixture not found at {fixturePath}");
         var settings = AppSettings.Load(fixturePath);
-        Assert.Equal(2, settings.ConfigVersion);
+        Assert.Equal(AppSettings.CurrentConfigVersion, settings.ConfigVersion);
+        Assert.Equal("vi", settings.UiLanguage); // Q-L1: pre-i18n configs keep Vietnamese
         Assert.Equal(LoadingMode.Original, settings.LoadingMode);
         Assert.Equal(ImageSortMode.SizeAscending, settings.ImageSortMode);
         Assert.Equal(InitialViewMode.Percent200, settings.InitialViewMode);

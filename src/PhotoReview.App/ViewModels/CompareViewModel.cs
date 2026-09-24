@@ -19,7 +19,7 @@ public sealed partial class CompareViewModel : ObservableObject
     private string? _selectedPath;
     private string _leftSizeText = string.Empty;
     private string _rightSizeText = string.Empty;
-    private string _hashText = " | hash tắt";
+    private string _hashText = StatusFormatter.CompareHashText(null);
     private string _statusText = string.Empty;
 
     public bool IsVisible
@@ -141,7 +141,7 @@ public sealed partial class CompareViewModel : ObservableObject
         _selectedPath = null;
         _leftSizeText = string.Empty;
         _rightSizeText = string.Empty;
-        _hashText = " | hash tắt";
+        _hashText = StatusFormatter.CompareHashText(null);
         _statusText = string.Empty;
 
         OnPropertyChanged(nameof(IsVisible));
@@ -207,14 +207,14 @@ public sealed partial class CompareViewModel : ObservableObject
             var leftBytes = getFileSize != null ? getFileSize(pair.Left) : TryGetFileSize(pair.Left);
             var rightBytes = getFileSize != null ? getFileSize(pair.Right) : TryGetFileSize(pair.Right);
 
-            if (leftBytes.HasValue) leftSize = $" ({leftBytes.Value:N0} B)";
-            if (rightBytes.HasValue) rightSize = $" ({rightBytes.Value:N0} B)";
+            if (leftBytes.HasValue) leftSize = StatusFormatter.CompareSizeSuffix(leftBytes.Value);
+            if (rightBytes.HasValue) rightSize = StatusFormatter.CompareSizeSuffix(rightBytes.Value);
         }
         LeftSizeText = leftSize;
         RightSizeText = rightSize;
 
         // 3. Tính mã hash song song nếu được bật
-        var hashResult = " | hash tắt";
+        var hashResult = StatusFormatter.CompareHashText(null);
         if (compareHashEnabled && getHashAsync != null)
         {
             var leftHashTask = getHashAsync(pair.Left);
@@ -225,7 +225,7 @@ public sealed partial class CompareViewModel : ObservableObject
             if (!isTokenCurrent(token)) return false;
 
             var match = string.Equals(hashes[0], hashes[1], StringComparison.OrdinalIgnoreCase);
-            hashResult = $" | hash {(match ? "TRÙNG" : "KHÁC")}";
+            hashResult = StatusFormatter.CompareHashText(match);
         }
         HashText = hashResult;
 

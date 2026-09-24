@@ -1,6 +1,8 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using PhotoReview.App;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App.Tests;
 
@@ -24,28 +26,43 @@ public sealed class SourcePresenceTests
 
     private static XDocument Xaml(string text) => XDocument.Parse(text);
 
-    private static IEnumerable<string> AutomationNames(XDocument doc) =>
-        doc.Descendants().Select(e => (string?)e.Attribute("AutomationProperties.Name")).OfType<string>();
+    // I18N L05: XAML text is "{loc:Tr key}"; these helpers return the catalog keys instead of literal text.
+    private static readonly Regex TrMarkup = new(@"^\{\s*loc:Tr\s+(?:Key\s*=\s*)?(?<key>[A-Za-z0-9_.\-]+)\s*\}$", RegexOptions.CultureInvariant);
+
+    private static string? TrKey(string? attributeValue)
+    {
+        var match = attributeValue is null ? null : TrMarkup.Match(attributeValue.Trim());
+        return match is { Success: true } ? match.Groups["key"].Value : null;
+    }
+
+    private static IEnumerable<string> AutomationNameKeys(XDocument doc) =>
+        doc.Descendants().Select(e => TrKey((string?)e.Attribute("AutomationProperties.Name"))).OfType<string>();
+
+    private static IEnumerable<string> AttributeKeys(XDocument doc) =>
+        doc.Descendants().SelectMany(e => e.Attributes()).Select(a => TrKey(a.Value)).OfType<string>();
 
     private static string Attr(XElement element, string name) => (string?)element.Attribute(name) ?? string.Empty;
 
     // ---- XAML structure (KEEP-XAML from the T10 matrix, merged per its proposal) ----
 
-    [Fact(DisplayName = "Accessible names are present in MainWindow, RecoveryWindow and Settings XAML")]
-    public void AccessibleNamesArePresentInXaml()
+    /// <summary>
+    /// The accessible names now come from the catalogs. Each case pins the key in the XAML and the Vietnamese text
+    /// that key resolves to, which is exactly the literal the XAML held before L05 (so screen readers hear the same).
+    /// </summary>
+    [Theory(DisplayName = "Accessible names are present in MainWindow, RecoveryWindow and Settings XAML (as keys, same Vietnamese text)")]
+    [InlineData("MainWindow.xaml", TrKeys.MainToolbarOpenFolderAutomationName, "Mở thư mục ảnh")]
+    [InlineData("MainWindow.xaml", TrKeys.MainToolbarSettingsAutomationName, "Mở cài đặt")]
+    [InlineData("MainWindow.xaml", TrKeys.MainCompareLeftAutomationName, "Preview ảnh bên trái, nhấn để chọn")]
+    [InlineData("MainWindow.xaml", TrKeys.MainCompareRightAutomationName, "Preview ảnh bên phải, nhấn để chọn")]
+    [InlineData("MainWindow.xaml", TrKeys.MainMenuUndoAutomationName, "Hoàn tác thao tác vừa thực hiện")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryRetryAutomationName, "Thử lại Move hoặc Copy đã lỗi")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearSelectedAutomationName, "Xoá các mục đã chọn khỏi danh sách Recovery")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearAllAutomationName, "Xoá tất cả mục khỏi danh sách Recovery")]
+    [InlineData("SettingsWindow.xaml", TrKeys.SettingsOpenLogLocation, "Mở vị trí file log")]
+    public void AccessibleNamesArePresentInXaml(string xamlFile, string key, string vietnamese)
     {
-        var main = AutomationNames(Xaml(ProjectSources.MainWindowXaml)).ToList();
-        Assert.Contains("Mở thư mục ảnh", main);
-        Assert.Contains("Mở cài đặt", main);
-        Assert.Contains("Preview ảnh bên trái, nhấn để chọn", main);
-        Assert.Contains("Preview ảnh bên phải, nhấn để chọn", main);
-        Assert.Contains("Hoàn tác thao tác vừa thực hiện", main);
-
-        var recovery = AutomationNames(Xaml(ProjectSources.RecoveryWindowXaml)).ToList();
-        Assert.Contains("Thử lại Move hoặc Copy đã lỗi", recovery);
-        Assert.Contains("Xoá các mục đã chọn khỏi danh sách Recovery", recovery);
-        Assert.Contains("Xoá tất cả mục khỏi danh sách Recovery", recovery);
-        Assert.Contains("Mở vị trí file log", AutomationNames(Xaml(ProjectSources.SettingsWindowXaml)));
+        Assert.Contains(key, AutomationNameKeys(Xaml(ProjectSources.Read(xamlFile))));
+        Assert.Equal(vietnamese, TestLocalization.Vietnamese.Get(key));
     }
 
     [Fact(DisplayName = "MainWindow XAML wires lifecycle, drag-drop, compare selection and toolbar overlay")]
@@ -91,11 +108,20 @@ public sealed class SourcePresenceTests
     [Fact(DisplayName = "Recovery and Diagnostics XAML expose their documented controls")]
     public void RecoveryAndDiagnosticsXamlExposeDocumentedControls()
     {
-        var recovery = Xaml(ProjectSources.RecoveryWindowXaml);
-        Assert.Contains(recovery.Descendants().SelectMany(e => e.Attributes()), a => a.Value.Contains("Retry Move/Copy", StringComparison.Ordinal));
+        Assert.Contains(TrKeys.RecoveryRetry, AttributeKeys(Xaml(ProjectSources.RecoveryWindowXaml)));
+        Assert.Equal("Retry Move/Copy", TestLocalization.Vietnamese.Get(TrKeys.RecoveryRetry));
 
-        var diagnostics = Xaml(ProjectSources.DiagnosticsWindowXaml);
-        Assert.Contains(diagnostics.Descendants().SelectMany(e => e.Attributes()), a => a.Value.Contains("Source file reads", StringComparison.Ordinal));
+        Assert.Contains(TrKeys.DiagnosticsLabelSourceFileReads, AttributeKeys(Xaml(ProjectSources.DiagnosticsWindowXaml)));
+        Assert.Equal("Source file reads", TestLocalization.Vietnamese.Get(TrKeys.DiagnosticsLabelSourceFileReads));
+    }
+
+    [Fact(DisplayName = "I18N L08: the Settings language group header is bilingual in every shipped catalog")]
+    public void SettingsLanguageGroupHeaderIsBilingual()
+    {
+        var header = Attr(Named(Xaml(ProjectSources.SettingsWindowXaml), "LanguageGroup"), "Header");
+        Assert.Equal(TrKeys.SettingsGroupLanguage, TrKey(header));
+        Assert.Equal("Language / Ngôn ngữ", TestLocalization.Vietnamese.Get(TrKeys.SettingsGroupLanguage));
+        Assert.Equal("Language / Ngôn ngữ", TestLocalization.English.Get(TrKeys.SettingsGroupLanguage));
     }
 
     // ---- Kept source-presence checks with no behavioral replacement yet ----

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -80,7 +81,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             folder = Path.GetFullPath(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             if (!_fileSystem.DirectoryExists(folder))
             {
-                throw new DirectoryNotFoundException($"Không tìm thấy folder: {folder}");
+                throw new DirectoryNotFoundException(Tr.StatusFolderNotFound(folder));
             }
 
             // perf(startup): the Explorer query needs only the folder, so it starts before the scan

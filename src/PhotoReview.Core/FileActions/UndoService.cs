@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
@@ -136,14 +137,14 @@ public sealed class UndoService
     {
         if (!TryBegin())
         {
-            return new UndoResult(false, FileOperationType.Move, string.Empty, null, "Hệ thống đang bận thao tác khác.", Rejected: true);
+            return new UndoResult(false, FileOperationType.Move, string.Empty, null, Tr.CoreUndoBusy, Rejected: true);
         }
 
         try
         {
             if (_moveHistory.Count == 0)
             {
-                return new UndoResult(false, FileOperationType.Move, string.Empty, null, "Không có Move nào để hoàn tác.");
+                return new UndoResult(false, FileOperationType.Move, string.Empty, null, Tr.CoreUndoNoMoveToUndo);
             }
 
             var move = _moveHistory.Pop();
@@ -151,7 +152,7 @@ public sealed class UndoService
             {
                 if (!_fileSystem.FileExists(move.Destination) || _fileSystem.FileExists(move.Source))
                 {
-                    throw new IOException("Nguồn hoặc đích đã thay đổi.");
+                    throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
                 }
 
                 var destinationStat = _fileSystem.GetFileStat(move.Destination);
@@ -163,7 +164,7 @@ public sealed class UndoService
                     var committed = _journal.ReadCommittedMoves()
                         .LastOrDefault(x => string.Equals(x.Destination, move.Destination, StringComparison.OrdinalIgnoreCase));
                     if (committed is null)
-                        throw new IOException("Không tìm thấy fingerprint Move trong journal.");
+                        throw new IOException(Tr.CoreUndoFingerprintMissing);
                     fingerprint = (committed.Size, committed.LastWriteUtc);
                     _moveFingerprints[move.Destination] = fingerprint;
                 }
@@ -172,7 +173,7 @@ public sealed class UndoService
                     destinationStat.Length != fingerprint.Size ||
                     destinationStat.LastWriteUtc != fingerprint.LastWriteUtc)
                 {
-                    throw new IOException("File đích đã thay đổi sau Move; không tự động Undo.");
+                    throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
                 }
 
                 if (_moveOverride is not null)
@@ -189,7 +190,7 @@ public sealed class UndoService
             catch (Exception ex)
             {
                 _moveHistory.Push(move);
-                return new UndoResult(false, FileOperationType.Move, move.Source, move.Destination, $"Không thể Undo: {ex.Message}");
+                return new UndoResult(false, FileOperationType.Move, move.Source, move.Destination, Tr.CoreUndoFailed(ex.Message));
             }
         }
         finally
@@ -205,7 +206,7 @@ public sealed class UndoService
     {
         if (_lastUndoAction is null)
         {
-            return new UndoResult(false, null, string.Empty, null, "Không có Move/Delete vừa thực hiện để hoàn tác.");
+            return new UndoResult(false, null, string.Empty, null, Tr.CoreUndoNothingToUndo);
         }
 
         var action = _lastUndoAction;
@@ -218,7 +219,7 @@ public sealed class UndoService
         {
             if (!TryBegin())
             {
-                return new UndoResult(false, FileOperationType.Recycle, action.Source, null, "Hệ thống đang bận thao tác khác.", Rejected: true);
+                return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoBusy, Rejected: true);
             }
 
             try
@@ -226,7 +227,7 @@ public sealed class UndoService
                 var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc));
                 if (!restored)
                 {
-                    return new UndoResult(false, FileOperationType.Recycle, action.Source, null, $"Không thể khôi phục Recycle Bin: {Path.GetFileName(action.Source)}");
+                    return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(action.Source)));
                 }
 
                 _lastUndoAction = null;
@@ -238,6 +239,6 @@ public sealed class UndoService
             }
         }
 
-        return new UndoResult(false, action.Operation, action.Source, null, "Không hỗ trợ hoàn tác thao tác này.");
+        return new UndoResult(false, action.Operation, action.Source, null, Tr.CoreUndoUnsupported);
     }
 }

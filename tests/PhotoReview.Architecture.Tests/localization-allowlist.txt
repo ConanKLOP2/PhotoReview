@@ -1,0 +1,6 @@
+﻿# L03 guard (LocalizationGuardTests.NoVietnameseLiteralsOutsideCatalogs): C# files that still contain
+# string literals with Vietnamese text, and how many. Format: relative/path.cs|count
+# This list may only shrink: when you move text into the catalogs, lower the count (or delete the line).
+# A new file or a higher count fails the test. Comments/XML docs are not counted.
+src/PhotoReview.Core/Settings/ReviewAction.cs|4
+src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs|1

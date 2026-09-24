@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.App;
@@ -24,13 +25,13 @@ public partial class RecoveryWindow : Window
     // Items wrap the entry so multi-selection maps back unambiguously even when two rows read the same.
     private sealed record Row(JournalEntry Entry)
     {
-        public override string ToString() => $"{Entry.State} · {Entry.Type} · {Path.GetFileName(Entry.Source)} · {Entry.Source}{(Entry.Error is null ? string.Empty : $" · {Entry.Error}")}";
+        public override string ToString() => FormatEntry(Entry);
     }
 
     private void RefreshEntries()
     {
         EntriesList.ItemsSource = _entries.Select(entry => new Row(entry)).ToList();
-        SummaryText.Text = _entries.Count == 0 ? "Không có operation pending/failed cần xem." : $"Có {_entries.Count} operation pending/failed. Chọn Move/Copy để retry thủ công có kiểm tra an toàn.";
+        SummaryText.Text = _entries.Count == 0 ? Tr.RecoverySummaryEmpty : Tr.RecoverySummaryCount(_entries.Count);
         UpdateButtons();
     }
 
@@ -48,34 +49,63 @@ public partial class RecoveryWindow : Window
     private void Dismiss(List<JournalEntry> entries)
     {
         if (_dismiss is null || entries.Count == 0) return;
-        var prompt = $"Xoá {entries.Count} mục khỏi danh sách Recovery?\n\nChỉ xoá khỏi danh sách, không di chuyển/xoá file nào. Sau khi xoá sẽ không thể retry các mục này.";
-        if (System.Windows.MessageBox.Show(this, prompt, "Xác nhận xoá", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        var prompt = Tr.RecoveryDismissConfirmMessage(entries.Count);
+        if (System.Windows.MessageBox.Show(this, prompt, Tr.RecoveryDismissConfirmTitle, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         try { _dismiss(entries); }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, "Không thể xoá", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, ex.Message, Tr.RecoveryDismissFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         _entries.RemoveAll(entries.Contains);
         RefreshEntries();
     }
 
+    // Journal errors are localized by their stable code; old entries without a code show the stored text (Q-L3).
+    internal static string FormatEntry(JournalEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        var state = StateText(entry.State);
+        var operation = OperationText(entry.Type);
+        var fileName = Path.GetFileName(entry.Source);
+        var error = JournalErrors.Describe(entry);
+        return error is null
+            ? Tr.RecoveryEntry(state, operation, fileName, entry.Source)
+            : Tr.RecoveryEntryWithError(state, operation, fileName, entry.Source, error);
+    }
+
+    internal static string OperationText(FileOperationType type) => type switch
+    {
+        FileOperationType.Move => Tr.EnumFileOperationMove,
+        FileOperationType.Copy => Tr.EnumFileOperationCopy,
+        FileOperationType.Recycle => Tr.EnumFileOperationRecycle,
+        _ => type.ToString(),
+    };
+
+    internal static string StateText(JournalState state) => state switch
+    {
+        JournalState.Prepared => Tr.EnumJournalStatePrepared,
+        JournalState.Committed => Tr.EnumJournalStateCommitted,
+        JournalState.Failed => Tr.EnumJournalStateFailed,
+        _ => state.ToString(),
+    };
+
     private void Retry_Click(object sender, RoutedEventArgs e)
     {
         if (_retry is null || EntriesList.SelectedIndex < 0) return;
         var entry = _entries[EntriesList.SelectedIndex];
-        if (System.Windows.MessageBox.Show(this, $"Retry {entry.Type} cho {Path.GetFileName(entry.Source)}?", "Xác nhận retry", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (System.Windows.MessageBox.Show(this, Tr.DialogConfirmRetryMessage(OperationText(entry.Type), Path.GetFileName(entry.Source)), Tr.DialogConfirmRetryTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         RecoveryRetryResult result;
         try { result = _retry(entry); }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, "Retry bị từ chối", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogRetryRejectedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var journalWarning = result.Succeeded && !result.JournalPersisted;
         var title = result.Succeeded
-            ? journalWarning ? "Retry hoàn tất nhưng nhật ký lỗi" : "Retry thành công"
-            : "Retry bị từ chối";
+            ? journalWarning ? Tr.DialogRetryDoneJournalFailedTitle : Tr.DialogRetrySucceededTitle
+            : Tr.DialogRetryRejectedTitle;
         var icon = result.Succeeded && !journalWarning ? MessageBoxImage.Information : MessageBoxImage.Warning;
         System.Windows.MessageBox.Show(this, result.Message, title, MessageBoxButton.OK, icon);
         if (result.Succeeded) Close();

@@ -51,6 +51,12 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<ReviewMetrics>()));
         services.AddSingleton<SessionWriter>(sp => new SessionWriter(sp.GetRequiredService<SessionStore>(), sp.GetRequiredService<ILog>()));
 
+        // I18N (ADR 0006): a plain file system on purpose -- catalog reads must not count in ReviewMetrics read budgets.
+        services.AddSingleton<PhotoReview.App.Localization.LocalizationService>(sp => new PhotoReview.App.Localization.LocalizationService(
+            sp.GetRequiredService<IAppPaths>(),
+            new PhysicalFileSystem(),
+            sp.GetRequiredService<ILog>()));
+
         // 3. Journal & File Actions
         services.AddSingleton<OperationJournal>(sp => new OperationJournal(
             sp.GetRequiredService<IAppPaths>(),
@@ -204,10 +210,19 @@ public partial class App : System.Windows.Application, IDisposable
         // UI thread is blocked connecting to WPF's render thread (~350 ms, it would otherwise happen
         // inside MainWindow's InitializeComponent). Nothing reads the settings in between; the await
         // normally finds the load finished and continues synchronously, without a dispatcher yield.
-        var settingsLoad = Task.Run(() => store.Load());
+        // I18N: the UI language (a few small JSON files) is read in the same worker hop and published below,
+        // before any window exists.
+        var localization = _services.GetRequiredService<PhotoReview.App.Localization.LocalizationService>();
+        localization.Mode = PhotoReview.App.Localization.LocalizationService.ParseMode(e.Args);
+        var settingsLoad = Task.Run(() =>
+        {
+            var loaded = store.Load();
+            return (Settings: loaded, Localizer: localization.Load(loaded.UiLanguage));
+        });
         PhotoReview.App.Services.StartupWarmup.ConnectRenderThread();
         PhotoReviewPerf.StartupMark("renderThreadConnected");
-        var appSettings = await settingsLoad;
+        var (appSettings, localizer) = await settingsLoad;
+        localization.Apply(appSettings.UiLanguage, localizer);
         PhotoReviewPerf.StartupMark("settingsLoaded");
         AppLog.Enabled = appSettings.LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
@@ -229,7 +244,7 @@ public partial class App : System.Windows.Application, IDisposable
         _instanceLock = new InstanceLock(lockFolder);
         if (!_instanceLock.IsOwner)
         {
-            _services.GetRequiredService<IDialogService>().ShowMessage("Photo Review", "Folder này đang được mở trong một Photo Review khác.");
+            _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
             _instanceLock.Dispose();
             _instanceLock = null;
             Shutdown();

@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
@@ -63,7 +64,7 @@ public sealed class FileActionService
                 DestinationPath: null,
                 Size: 0,
                 LastWriteUtc: DateTime.MinValue,
-                Error: "Thao tác trước đó đang thực hiện.",
+                Error: Tr.CoreFileActionBusy,
                 Rejected: true);
         }
 
@@ -79,7 +80,7 @@ public sealed class FileActionService
             if (request.Operation is FileOperationType.Move or FileOperationType.Copy)
             {
                 if (string.IsNullOrWhiteSpace(request.Destination))
-                    throw new IOException("Action chưa có thư mục đích.");
+                    throw new IOException(Tr.CoreFileActionNoDestination);
 
                 var source = request.Source;
                 var destinationFolder = Path.IsPathRooted(request.Destination)
@@ -90,16 +91,16 @@ public sealed class FileActionService
                 var sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source) ?? string.Empty);
 
                 if (IsSamePath(destinationFolder, sourceFolder))
-                    throw new IOException("Không thể Move/Copy vào chính folder nguồn.");
+                    throw new IOException(Tr.CoreFileActionSameFolder);
 
                 _fileSystem.CreateDirectory(destinationFolder);
                 destinationPath = Path.Combine(destinationFolder, Path.GetFileName(source));
 
                 if (_fileSystem.FileExists(destinationPath))
-                    throw new IOException($"Đích đã tồn tại: {destinationPath}");
+                    throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
 
                 var sourceStat = _fileSystem.GetFileStat(source)
-                    ?? throw new FileNotFoundException($"Nguồn không tồn tại: {source}", source);
+                    ?? throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(source), source);
 
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
@@ -134,7 +135,8 @@ public sealed class FileActionService
                 var destStat = _fileSystem.GetFileStat(destinationPath);
                 if (destStat is null || destStat.Length != sourceSize)
                 {
-                    throw new IOException("Kiểm tra sau thao tác thất bại: kích thước đích thay đổi.");
+                    // Journaled after `prepared`: persisted as a code + English, shown via ex.Message (UI language).
+                    throw new JournalCodedException(JournalErrors.VerifySizeChanged);
                 }
                 mutationCompleted = true;
 
@@ -171,7 +173,7 @@ public sealed class FileActionService
             {
                 var source = request.Source;
                 var sourceStat = _fileSystem.GetFileStat(source)
-                    ?? throw new FileNotFoundException($"Nguồn không tồn tại: {source}", source);
+                    ?? throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(source), source);
 
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
@@ -221,7 +223,7 @@ public sealed class FileActionService
             }
             else
             {
-                throw new NotSupportedException($"Operation không được hỗ trợ: {request.Operation}");
+                throw new NotSupportedException(Tr.CoreFileActionUnsupportedOperation(request.Operation));
             }
         }
         catch (Exception ex)
@@ -231,6 +233,7 @@ public sealed class FileActionService
             {
                 try
                 {
+                    var (errorCode, errorText) = JournalErrors.ForJournal(ex);
                     _journal.Append(new JournalEntry(
                     operationId,
                     request.Operation,
@@ -240,7 +243,8 @@ public sealed class FileActionService
                     sourceSize,
                     sourceLastWriteUtc,
                     _clock.UtcNow,
-                        ex.Message));
+                        errorText,
+                        errorCode));
                 }
                 catch (Exception journalException)
                 {

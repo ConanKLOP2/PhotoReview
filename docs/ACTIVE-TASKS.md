@@ -9,7 +9,7 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **L** (I18N: EN + VI, community JSON catalogs) | 🔄 L00 PR open; L01–L12 planned | Q-L1..Q-L8 decided 2026-09-24. Plan: `refactoring/I18N-PLAN.md`, ADR 0006. |
+| **L** (I18N: EN + VI, community JSON catalogs) | 🔄 L00 ✅ #55; L01–L11 done, PR #61 open; L12 later | Q-L1..Q-L8 decided 2026-09-24. Plan: `refactoring/I18N-PLAN.md`, ADR 0006. |
 | **AR** (Architecture Review 2026-09-23) | ✅ AR00–AR07 all DONE (AR02d #35, AR04 #37); only T89/AR04 GUI acceptance left (user) | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS07, TS10 DONE; TS08/TS09 closed (Q-AR5) | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |

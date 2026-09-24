@@ -1,6 +1,7 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.IO;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
@@ -35,17 +36,17 @@ public sealed class RecoveryRetryService
         ArgumentNullException.ThrowIfNull(failed);
 
         if (failed.Type is not (FileOperationType.Move or FileOperationType.Copy))
-            return new(false, "Chỉ cho phép retry Move/Copy; Recycle Bin không được retry tự động.", null);
+            return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
         if (string.IsNullOrWhiteSpace(failed.Destination))
-            return new(false, "Operation không có đích.", null);
+            return new(false, Tr.CoreRecoveryNoDestination, null);
         if (!_fileSystem.FileExists(failed.Source))
-            return new(false, "Nguồn không còn tồn tại.", null);
+            return new(false, Tr.CoreRecoverySourceMissing, null);
 
         var sourceStat = _fileSystem.GetFileStat(failed.Source);
         if (sourceStat is null || sourceStat.Length != failed.Size || sourceStat.LastWriteUtc != failed.LastWriteUtc)
-            return new(false, "Nguồn đã thay đổi; từ chối retry để bảo vệ dữ liệu.", null);
+            return new(false, Tr.CoreRecoverySourceChanged, null);
         if (_fileSystem.FileExists(failed.Destination))
-            return new(false, "Đích đã tồn tại; không ghi đè.", null);
+            return new(false, Tr.CoreRecoveryDestinationExists, null);
 
         var prepared = new JournalEntry(
             failed.Id,
@@ -74,24 +75,25 @@ public sealed class RecoveryRetryService
 
             var destinationStat = _fileSystem.GetFileStat(failed.Destination);
             if (destinationStat is null || destinationStat.Length != prepared.Size)
-                throw new IOException("Kiểm tra đích sau retry thất bại.");
+                throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
             mutationCompleted = true;
 
             var committed = prepared with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow };
             try
             {
                 _journal.Append(committed);
-                return new(true, "Retry thành công.", committed);
+                return new(true, Tr.CoreRecoverySucceeded, committed);
             }
             catch (Exception journalException)
             {
-                return new(true, "Retry đã hoàn tất nhưng không ghi được nhật ký.", committed,
+                return new(true, Tr.CoreRecoverySucceededJournalFailed, committed,
                     JournalPersisted: false, JournalError: journalException.Message);
             }
         }
         catch (Exception ex)
         {
-            var error = prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = ex.Message };
+            var (errorCode, errorText) = JournalErrors.ForJournal(ex);
+            var error = prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
             try
             {
                 _journal.Append(error);
@@ -100,7 +102,7 @@ public sealed class RecoveryRetryService
             catch (Exception journalException)
             {
                 return new(mutationCompleted, mutationCompleted
-                    ? "Thao tác đã hoàn tất nhưng không ghi được nhật ký thất bại."
+                    ? Tr.CoreRecoveryCompletedFailureNotJournaled
                     : ex.Message, error, JournalPersisted: false, JournalError: journalException.Message);
             }
         }

@@ -41,7 +41,11 @@ public sealed class MainWindowExplorerOrderTests
     /// <summary>INV-9b: the fallback frame precedes the snapshot, the reordered frame follows it.</summary>
     private static readonly bool[] FallbackBeforeSnapshotThenAfter = [false, true];
 
-    /// <summary>The suffix MainWindow appends to FolderText once Explorer order is applied.</summary>
+    /// <summary>
+    /// The suffix FolderText shows (Vietnamese catalog, pinned for this assembly) once Explorer order is
+    /// applied. Tests detect the order through <c>MainViewModel.IsExplorerOrderApplied</c>; the text is
+    /// only checked to prove the rendered UI is unchanged by I18N L04.
+    /// </summary>
     private const string ExplorerApplied = "· Explorer";
 
     // ------------------------------------------------------------------ INV-7
@@ -75,7 +79,7 @@ public sealed class MainWindowExplorerOrderTests
                 fake.Release();
                 Assert.True(await StaTestHost.WaitForAsync(() => fake.HasReturned, Settle), "The fake snapshot never completed.");
                 Assert.False(
-                    await StaTestHost.WaitForAsync(() => opened.FolderText.Text.Contains(ExplorerApplied, StringComparison.Ordinal), NeverWindow),
+                    await StaTestHost.WaitForAsync(() => opened.ViewModel.IsExplorerOrderApplied, NeverWindow),
                     $"The late snapshot reordered a catalog the user had already interacted with. {Diagnose(opened, presented)}");
 
                 // Behavioural proof that the catalog order is untouched: after b.png the next image
@@ -124,7 +128,7 @@ public sealed class MainWindowExplorerOrderTests
                 // opened file no longer waits for the snapshot (it used to, for up to 2 s).
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 1, Settle), Diagnose(opened, presented));
                 Assert.False(fake.HasReturned);
-                Assert.DoesNotContain(ExplorerApplied, opened.FolderText.Text, StringComparison.Ordinal);
+                Assert.False(opened.ViewModel.IsExplorerOrderApplied);
 
                 // Next before the order is known must not step through the fallback order (and, via
                 // INV-7, throw the Explorer order away): it waits for the snapshot.
@@ -136,7 +140,7 @@ public sealed class MainWindowExplorerOrderTests
                 fake.Release();
                 // The snapshot really was usable: it reindexed the catalog...
                 Assert.True(
-                    await StaTestHost.WaitForAsync(() => opened.FolderText.Text.Contains(ExplorerApplied, StringComparison.Ordinal), Settle),
+                    await StaTestHost.WaitForAsync(() => opened.ViewModel.IsExplorerOrderApplied, Settle),
                     Diagnose(opened, presented));
                 // ...and the pending Next then went to the Explorer-order neighbour.
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 2, Settle), Diagnose(opened, presented));
@@ -187,12 +191,16 @@ public sealed class MainWindowExplorerOrderTests
                 // folder path presents a natural-order fallback without waiting for the snapshot.
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 1, Settle), Diagnose(opened, presented));
                 Assert.False(fake.HasReturned);
-                Assert.DoesNotContain(ExplorerApplied, opened.FolderText.Text, StringComparison.Ordinal);
+                Assert.False(opened.ViewModel.IsExplorerOrderApplied);
 
                 fake.Release();
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 2, Settle), Diagnose(opened, presented));
                 Assert.True(
-                    await StaTestHost.WaitForAsync(() => opened.FolderText.Text.Contains(ExplorerApplied, StringComparison.Ordinal), Settle),
+                    await StaTestHost.WaitForAsync(() => opened.ViewModel.IsExplorerOrderApplied, Settle),
+                    Diagnose(opened, presented));
+                Assert.True(
+                    await StaTestHost.WaitForAsync(
+                        () => opened.FolderText.Text.EndsWith($"  ({Names.Length} ảnh) {ExplorerApplied}", StringComparison.Ordinal), Settle),
                     Diagnose(opened, presented));
                 Assert.False(
                     await StaTestHost.WaitForAsync(() => presented.Count > 2, NeverWindow),

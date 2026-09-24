@@ -2,6 +2,7 @@ using System.IO;
 using System.Globalization;
 using System.Text.Json;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Core.Settings;
 
@@ -115,8 +116,17 @@ public sealed class SettingsStore
         if (settings.ConfigVersion < 2)
         {
             settings.Actions ??= ReviewAction.Defaults();
+        }
+        if (settings.ConfigVersion < 3)
+        {
+            // Q-L1 (ADR 0006): the UI was Vietnamese-only before version 3; existing users keep it.
+            settings.UiLanguage = "vi";
+        }
+        if (settings.ConfigVersion < AppSettings.CurrentConfigVersion)
+        {
             settings.ConfigVersion = AppSettings.CurrentConfigVersion;
         }
+        if (string.IsNullOrWhiteSpace(settings.UiLanguage)) settings.UiLanguage = LanguageLoader.AutoCode;
         settings.Actions ??= ReviewAction.Defaults();
         settings.Shortcuts ??= ShortcutMappings.Default();
     }
