@@ -461,5 +461,7 @@
   "actionProfiles.error.destinationEscapes": "Action \"{name}\": a relative destination must stay inside the photo folder (no \"..\"). Use an absolute path to save elsewhere.",
   "actionProfiles.error.destinationInvalid": "Action \"{name}\": the destination folder is empty or contains invalid characters.",
   "settings.load.repaired": "config.json contained invalid values. These settings were reset to their defaults: {items}.",
-  "app.startupFailed": "Photo Review could not start and will close. Details: {message}"
+  "app.startupFailed": "Photo Review could not start and will close. Details: {message}",
+  "core.recycle.unsupportedDrive": "\"{name}\" is on a removable or network drive that has no Recycle Bin, so it was NOT deleted (it would be removed permanently). Delete it in Explorer if you really want it gone.",
+  "core.recycle.notDeleted": "\"{name}\" was not moved to the Recycle Bin."
 }

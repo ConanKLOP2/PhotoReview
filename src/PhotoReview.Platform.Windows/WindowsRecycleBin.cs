@@ -24,7 +24,16 @@ public sealed class WindowsRecycleBin : IRecycleBin
     public void SendToRecycleBin(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        // R2-F-05: removable drives and network shares have no Recycle Bin. FileSystem.DeleteFile with
+        // OnlyErrorDialogs maps to SHFileOperation FOF_ALLOWUNDO | FOF_NOCONFIRMATION, which then deletes such a file
+        // PERMANENTLY without the usual prompt, while the journal would record a successful "recycle". Refuse instead;
+        // fixed drives take exactly the same call as before.
+        if (!RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType))
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(path)));
         FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        // A cancelled/aborted shell operation returns without an exception; never report success for a file still in place.
+        if (File.Exists(path))
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
     }
 
     public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
@@ -142,6 +151,39 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private static void Release(object? value)
     {
         if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
+    }
+}
+
+/// <summary>
+/// Decides whether the shell can really recycle a path (R2-F-05). Only local fixed drives have a Recycle Bin that
+/// <c>SHFileOperation</c> uses without warning; removable, network, optical, RAM and unknown volumes delete permanently.
+/// </summary>
+internal static class RecycleEligibility
+{
+    private const string ExtendedPrefix = @"\\?\";
+    private const string UncPrefix = @"\\";
+
+    /// <summary>True only when <paramref name="driveTypeOf"/> reports <see cref="DriveType.Fixed"/> for the path's drive root; UNC paths and unknown roots are refused.</summary>
+    internal static bool CanRecycle(string path, Func<string, DriveType?> driveTypeOf)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(driveTypeOf);
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+
+        // \\?\C:\dir\file -> C:\dir\file; \\server\share and \\?\UNC\... stay UNC and are refused.
+        if (full.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && full.Length >= 6 && full[5] == ':') full = full[4..];
+        if (full.StartsWith(UncPrefix, StringComparison.Ordinal)) return false;
+        var root = Path.GetPathRoot(full);
+        if (string.IsNullOrEmpty(root)) return false;
+        return driveTypeOf(root) == DriveType.Fixed;
+    }
+
+    internal static DriveType? QueryDriveType(string root)
+    {
+        try { return new DriveInfo(root).DriveType; }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return null; }
     }
 }
 

@@ -385,5 +385,7 @@
   "actionProfiles.error.destinationEscapes": "MessageBox text on Apply; {name} = action name. Keep the literal '..' (parent-folder segment).",
   "actionProfiles.error.destinationInvalid": "MessageBox text on Apply; {name} = action name.",
   "settings.load.repaired": "MessageBox shown once after start-up; {items} = comma-separated setting names (keep them in English, they are the JSON property names).",,
-  "app.startupFailed": "MessageBox shown when start-up throws; {message} = technical exception message."
+  "app.startupFailed": "MessageBox shown when start-up throws; {message} = technical exception message.",
+  "core.recycle.unsupportedDrive": "Error shown when Delete/Recycle is refused on a removable or network drive; {name} = file name.",
+  "core.recycle.notDeleted": "Error shown when the shell reported no failure but the file is still there; {name} = file name."
 }
