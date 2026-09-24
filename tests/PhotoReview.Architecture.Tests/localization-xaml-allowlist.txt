@@ -8,4 +8,4 @@ src/PhotoReview.App/BenchmarkWindow.xaml|19
 src/PhotoReview.App/DiagnosticsWindow.xaml|19
 src/PhotoReview.App/MainWindow.xaml|27
 src/PhotoReview.App/RecoveryWindow.xaml|5
-src/PhotoReview.App/SettingsWindow.xaml|49
+src/PhotoReview.App/SettingsWindow.xaml|50
