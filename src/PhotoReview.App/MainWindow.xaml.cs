@@ -159,6 +159,8 @@ public partial class MainWindow : Window
         if (_viewport is null) return;
         var (w, h) = GetViewportSize();
         var dpi = _cachedDpiScale ??= System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+        // feat(zoom): the same device-pixel scale makes non-Fit zoom 100 % = 1 source px per device px.
+        _viewModel.Viewer.DpiScale = dpi;
         _viewport.TargetDecodeBox = PhotoReview.Imaging.AdaptivePreviewPolicy.CalculateTargetDecodeBox(
             w > 1 ? w : FallbackViewportWidth, h > 1 ? h : FallbackViewportHeight, dpi, PreviewQualityMultiplier);
     }
@@ -203,7 +205,9 @@ public partial class MainWindow : Window
         var mouse = e.GetPosition(ImageScroll);
         var elementPoint = ImageScroll.TranslatePoint(mouse, MainImage);
         var anchorBefore = MainImage.TranslatePoint(elementPoint, ImageScroll);
-        var pointInImage = elementPoint;
+        // feat(zoom): the element is sized from original dims x zoom (no LayoutTransform), so the
+        // anchor is carried across the zoom step as a fraction of the displayed image.
+        MainWindowHelpers.ZoomImagePoint anchorFraction;
         if (_viewModel.Viewer.IsFit && MainImage.Source is { Width: > 0, Height: > 0 } source)
         {
             var sourcePoint = MainWindowHelpers.CalculateUniformImagePoint(
@@ -211,9 +215,13 @@ public partial class MainWindow : Window
                 MainImage.ActualHeight,
                 source.Width,
                 source.Height,
-                pointInImage.X,
-                pointInImage.Y);
-            pointInImage = new Point(sourcePoint.X, sourcePoint.Y);
+                elementPoint.X,
+                elementPoint.Y);
+            anchorFraction = MainWindowHelpers.NormalizeImagePoint(sourcePoint.X, sourcePoint.Y, source.Width, source.Height);
+        }
+        else
+        {
+            anchorFraction = MainWindowHelpers.NormalizeImagePoint(elementPoint.X, elementPoint.Y, MainImage.ActualWidth, MainImage.ActualHeight);
         }
         var version = ++_viewportOperationVersion;
         _viewModel.Viewer.WheelZoom(e.Delta);
@@ -221,6 +229,7 @@ public partial class MainWindow : Window
         if (version != _viewportOperationVersion || !IsLoaded) return;
         ImageScroll.UpdateLayout();
 
+        var pointInImage = new Point(anchorFraction.X * MainImage.ActualWidth, anchorFraction.Y * MainImage.ActualHeight);
         var anchorAfter = MainImage.TranslatePoint(pointInImage, ImageScroll);
         var offsets = MainWindowHelpers.CalculateOffsetsFromAnchorDelta(
             ImageScroll.HorizontalOffset,

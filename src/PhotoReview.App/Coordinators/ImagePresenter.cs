@@ -91,18 +91,41 @@ public sealed class ImagePresenter
         _onPresentedHook = onPresentedHook;
         _uiScheduler = uiScheduler;
         _sessionWriter = sessionWriter;
+        _zoomDetail = new ZoomDetailLoader(_previewService, _clock, UpdateCurrentImage);
     }
+
+    private readonly ZoomDetailLoader _zoomDetail;
 
     public ReviewCatalog Catalog => _catalog;
     public GenerationClock Clock => _clock;
     public CompareViewModel Compare => _compareViewModel;
     public object? CurrentImage { get; private set; }
+
+    /// <summary>
+    /// Full-resolution (post-orientation) size of the source behind <see cref="CurrentImage"/>, whatever
+    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown.
+    /// </summary>
+    public int CurrentOriginalWidth { get; private set; }
+
+    /// <summary>See <see cref="CurrentOriginalWidth"/>.</summary>
+    public int CurrentOriginalHeight { get; private set; }
+
     public string StatusText { get; private set; } = string.Empty;
     public bool IsCompareVisible => _compareViewModel.IsVisible;
+
+    /// <summary>feat(zoom): on-demand full-resolution decode of the current image while zoomed.</summary>
+    public ZoomDetailLoader ZoomDetail => _zoomDetail;
+
+    /// <summary>
+    /// feat(zoom): the viewer's zoom changed -- <paramref name="zoom"/> is original-relative, or null
+    /// for Fit. Outside Fit the current image's original is decoded on demand and swapped in.
+    /// </summary>
+    public void SetViewerZoom(double? zoom) => _zoomDetail.SetZoom(zoom);
 
     /// <summary>Clears the displayed frame when the catalog has no images.</summary>
     public void ClearPresentation()
     {
+        _zoomDetail.Reset();
         UpdateCurrentImage(null);
         _compareViewModel.Clear();
     }
@@ -140,6 +163,10 @@ public sealed class ImagePresenter
             supersededCts.Cancel();
             supersededCts.Dispose();
         }
+        // feat(zoom): drop the previous image's zoom-detail decode and release its original (~96 MB
+        // for 24 MP) now; this navigation's preview is shown at the same original-relative zoom and
+        // its own original is fetched once that preview is up.
+        _zoomDetail.Reset();
         _preloadController.NotifyNavigation(index);
 
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
@@ -234,7 +261,12 @@ public sealed class ImagePresenter
 
                     if (thumbnail is not null)
                     {
-                        UpdateCurrentImage(thumbnail.PlatformImage);
+                        // Size the placeholder like the source (if any earlier decode already told us
+                        // its dimensions) so a non-Fit zoom doesn't jump when the preview replaces it.
+                        var (thumbWidth, thumbHeight) = _previewService.TryGetKnownOriginalDimensions(currentKey, out var known)
+                            ? known
+                            : (thumbnail.OriginalWidth, thumbnail.OriginalHeight);
+                        UpdateCurrentImage(thumbnail.PlatformImage, thumbWidth, thumbHeight);
                         if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
 
                         if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
@@ -269,7 +301,7 @@ public sealed class ImagePresenter
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
             var uiAssign = Stopwatch.StartNew();
 
-            UpdateCurrentImage(image.PlatformImage);
+            UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
 
             long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
             _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
@@ -324,6 +356,9 @@ public sealed class ImagePresenter
             {
                 _compareViewModel.Clear();
                 _sink.ApplyInitialViewMode();
+                // feat(zoom): if the viewer is (still) zoomed after the initial view mode, start this
+                // image's full-resolution decode; the preview stays up until it is ready.
+                _zoomDetail.OnPreviewPresented(token, path, currentKey, image);
 
                 // Let the frame containing the new image render before the status/session bookkeeping
                 // below. Original dimensions are usually known already (seeded by the decode), so the
@@ -405,6 +440,7 @@ public sealed class ImagePresenter
         var nextIndex = _catalog.Remove(path);
         if (_catalog.Count == 0)
         {
+            _zoomDetail.Reset();
             UpdateCurrentImage(null);
             _compareViewModel.Clear();
             UpdateStatus(StatusFormatter.NoImagesRemaining());
@@ -430,8 +466,12 @@ public sealed class ImagePresenter
         }
     }
 
-    private void UpdateCurrentImage(object? image)
+    private void UpdateCurrentImage(object? image, int originalWidth = 0, int originalHeight = 0)
     {
+        // Dimensions first: the sink's image-changed callback reads them to size the element
+        // (feat(zoom): original-relative zoom), in the same UI pass as the new Source.
+        CurrentOriginalWidth = image is null ? 0 : originalWidth;
+        CurrentOriginalHeight = image is null ? 0 : originalHeight;
         CurrentImage = image;
         _sink.SetCurrentImage(image);
     }

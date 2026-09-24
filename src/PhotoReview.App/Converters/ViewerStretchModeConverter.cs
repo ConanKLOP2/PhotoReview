@@ -12,6 +12,13 @@ namespace PhotoReview.App.Converters;
 /// <summary>
 /// Chuyển đổi ViewerStretchMode sang System.Windows.Media.Stretch trong WPF.
 /// </summary>
+/// <remarks>
+/// feat(zoom): outside Fit (<see cref="ViewerStretchMode.None"/> = "no viewport fitting") the image
+/// element gets an explicit original-relative size (<see cref="ViewerState.ImageWidth"/>), and the
+/// bitmap -- preview or full-resolution decode -- is stretched to fill exactly that size, so swapping
+/// one for the other never changes layout. While the size is unknown (NaN), Fill with an unbounded
+/// ScrollViewer slot measures to the bitmap's natural size, i.e. the old Stretch.None behaviour.
+/// </remarks>
 public sealed class ViewerStretchModeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -20,10 +27,10 @@ public sealed class ViewerStretchModeConverter : IValueConverter
         {
             return mode == ViewerStretchMode.Uniform
                 ? System.Windows.Media.Stretch.Uniform
-                : System.Windows.Media.Stretch.None;
+                : System.Windows.Media.Stretch.Fill;
         }
 
-        return System.Windows.Media.Stretch.None;
+        return System.Windows.Media.Stretch.Fill;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>

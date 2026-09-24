@@ -31,6 +31,16 @@ internal static class MainWindowHelpers
             Math.Clamp((pointerY - top) / scale, 0, sourceHeight));
     }
 
+    /// <summary>
+    /// feat(zoom): expresses a point on the image as a fraction of the image's size, so the wheel
+    /// anchor survives a zoom step even though the element's own size (not a LayoutTransform) changes.
+    /// Not clamped: a pointer beside a centered, smaller-than-viewport image keeps its old behaviour.
+    /// </summary>
+    internal static ZoomImagePoint NormalizeImagePoint(double x, double y, double width, double height) =>
+        width > 0 && height > 0 && double.IsFinite(width) && double.IsFinite(height)
+            ? new(x / width, y / height)
+            : new(0.5, 0.5);
+
     internal static ZoomViewportOffsets CalculateOffsetsFromAnchorDelta(
         double currentHorizontalOffset,
         double currentVerticalOffset,

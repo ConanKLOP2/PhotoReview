@@ -586,6 +586,51 @@ public sealed class PreviewImageService : IPreloadTarget
         return decoded;
     }
 
+    /// <summary>
+    /// Original (post-orientation) dimensions already known for <paramref name="currentKey"/>'s source
+    /// -- seeded by any earlier decode, viewer or preload -- without touching the file.
+    /// </summary>
+    public bool TryGetKnownOriginalDimensions(ImageCacheKey currentKey, out (int Width, int Height) dimensions) =>
+        _originalDimensions.TryGetValue(ImageCacheKey.CreateOriginal(currentKey), out dimensions);
+
+    /// <summary>
+    /// feat(zoom) (option A for #43): full-resolution decode of one source for the zoomed viewer.
+    /// Unlike <see cref="GetPreviewAsync(string, ImageCacheKey)"/> with an original key, the result is
+    /// neither put in the RAM LRU nor the disk cache: a 24 MP original is ~96 MB, so the caller holds at
+    /// most the current image's original and drops it on navigation (it must not displace dozens of
+    /// preloaded previews from the LRU). The decode runs on a dedicated above-normal-priority thread
+    /// (not a pool thread, not a viewer slot -- the next navigation's preview must never wait for it)
+    /// and is dropped before it starts once <paramref name="cancellationToken"/> is cancelled; a started
+    /// decode cannot be interrupted and simply completes unobserved. An original already in the RAM
+    /// cache (Original loading mode) is returned as is.
+    /// </summary>
+    /// <param name="sourceKey">Any key for the source (typically the displayed preview's); its
+    /// original-mode twin is derived without re-stating the file.</param>
+    public Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = ImageCacheKey.CreateOriginal(sourceKey);
+        if (_cache.TryGet(key, out var cached)) return Task.FromResult(cached);
+        return Task.Factory.StartNew(() =>
+        {
+            // Last point where a superseded request can be dropped (see summary).
+            cancellationToken.ThrowIfCancellationRequested();
+            Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+            var perf = PhotoReviewPerf.Log.IsEnabled();
+            var stopwatch = Stopwatch.StartNew();
+            var decoded = DecodeFromSource(path, key.Backend, DecodeBox.Unbounded, perf,
+                perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
+            if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
+            _originalDimensions[key] = (decoded.OriginalWidth, decoded.OriginalHeight);
+            _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
+            return decoded;
+            // RunContinuationsAsynchronously: the dedicated thread exits right after the decode
+            // instead of running the awaiting caller's continuation on its own (above-normal) stack.
+        }, CancellationToken.None,
+            TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach | TaskCreationOptions.RunContinuationsAsynchronously,
+            TaskScheduler.Default);
+    }
+
     public Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path) =>
         GetOriginalDimensionsAsync(path, ImageCacheKey.Create(path, true, 0, orientationApplied: true, backend: _currentBackend()));
 
