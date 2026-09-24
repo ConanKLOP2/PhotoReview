@@ -254,6 +254,17 @@ public partial class RecoveryWindow : Window
         }
     }
 
+    /// <summary>
+    /// A retried move/copy runs on a pool thread with no cancellation token, so closing the window would lose its result
+    /// (including the "journal could not be written" warning) and re-enable the main window while the file is still being
+    /// moved (R2-A-01). The window therefore refuses to close until the retry completes.
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (_retrying) e.Cancel = true;
+        base.OnClosing(e);
+    }
+
     private async void Retry_Click(object sender, RoutedEventArgs e)
     {
         var row = SelectedRow;
@@ -267,7 +278,7 @@ public partial class RecoveryWindow : Window
             if (IsLoaded) System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogRetryRejectedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        if (!IsLoaded) return; // closed while the retry ran
+        if (!IsLoaded) return; // defensive: OnClosing normally keeps the window open while a retry runs
         var journalWarning = result.Succeeded && !result.JournalPersisted;
         var title = result.Succeeded
             ? journalWarning ? Tr.DialogRetryDoneJournalFailedTitle : Tr.DialogRetrySucceededTitle
