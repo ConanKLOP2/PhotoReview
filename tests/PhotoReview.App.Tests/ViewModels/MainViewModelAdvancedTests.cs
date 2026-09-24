@@ -353,6 +353,31 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         Assert.Equal(0, vm.CurrentIndex);
     }
 
+    [Fact]
+    public void FolderText_ExplorerOrder_IsTrackedByStateFlagNotByText()
+    {
+        var folder = Path.Combine(_tempDir, "explorer_flag");
+        var (vm, _) = CreateViewModel();
+        IFolderLoadSink sink = vm;
+
+        sink.OnCatalogReady(folder, 3);
+        Assert.False(vm.IsExplorerOrderApplied);
+        Assert.Equal($"{folder}  (3 ảnh)", vm.FolderText);
+
+        sink.OnOrderApplied(3, 0, currentKept: false);
+        Assert.True(vm.IsExplorerOrderApplied);
+        Assert.Equal($"{folder}  (3 ảnh) · Explorer", vm.FolderText);
+
+        // Applying again does not stack the suffix.
+        sink.OnOrderApplied(3, 0, currentKept: false);
+        Assert.Equal($"{folder}  (3 ảnh) · Explorer", vm.FolderText);
+
+        // A new catalog starts in natural order again.
+        sink.OnEmpty(folder);
+        Assert.False(vm.IsExplorerOrderApplied);
+        Assert.Equal($"{folder}  (0 ảnh)", vm.FolderText);
+    }
+
     // --- Test Doubles ---
 
     private sealed class ForwardingFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink

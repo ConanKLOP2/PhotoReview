@@ -9,6 +9,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -46,8 +47,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     private readonly SiblingFolderNavigator _siblingNavigator;
     private readonly DuplicateCleanupController _duplicateController;
 
-    private string _folderTitle = "Photo Review";
+    private string _folderTitle = Tr.AppTitle;
     private string _folderText = string.Empty;
+    // FolderText is rendered from this state (never parsed back): the folder and image count of the
+    // loaded catalog, and whether Explorer's view order has been applied to it.
+    private string? _folderTextFolder;
+    private int _folderTextCount;
+    private bool _isExplorerOrderApplied;
     private string _statusText = string.Empty;
     private SessionState? _currentSession;
 
@@ -150,6 +156,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         private set => SetProperty(ref _folderText, value);
     }
 
+    /// <summary>True once Explorer's view order has been applied to the current folder's catalog.</summary>
+    public bool IsExplorerOrderApplied
+    {
+        get => _isExplorerOrderApplied;
+        private set => SetProperty(ref _isExplorerOrderApplied, value);
+    }
+
     public string StatusText
     {
         get => string.IsNullOrEmpty(_statusText) ? _presenter.StatusText : _statusText;
@@ -209,7 +222,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var input = DragDropInputService.Parse([path]);
         if (!input.IsValid)
         {
-            StatusText = input.Warning ?? "Không có input hợp lệ.";
+            StatusText = input.Warning ?? Tr.StatusNoValidInput;
             return;
         }
 
@@ -458,8 +471,19 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         folder ??= _currentSession?.Folder ?? "";
         var settings = Settings;
         FolderTitle = string.IsNullOrWhiteSpace(folder)
-            ? "Photo Review"
-            : $"Photo Review — {folder}{(settings.LoggingEnabled ? " · LOG" : "")}";
+            ? Tr.AppTitle
+            : settings.LoggingEnabled ? Tr.MainTitleWithFolderLogging(folder) : Tr.MainTitleWithFolder(folder);
+    }
+
+    /// <summary>Sets the folder/count/Explorer state and renders <see cref="FolderText"/> from it.</summary>
+    private void SetFolderText(string folder, int count, bool explorerOrderApplied)
+    {
+        _folderTextFolder = folder;
+        _folderTextCount = count;
+        IsExplorerOrderApplied = explorerOrderApplied;
+        FolderText = explorerOrderApplied
+            ? Tr.MainFolderTextImageCountExplorer(count, folder)
+            : Tr.MainFolderTextImageCount(count, folder);
     }
 
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
@@ -486,7 +510,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
-        FolderText = $"{folder}  ({count} ảnh)";
+        SetFolderText(folder, count, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
         _statusText = StatusFormatter.IndexOnly(0, count);
         CatalogChanged?.Invoke();
@@ -503,7 +527,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
-        FolderText = $"{folder}  (0 ảnh)";
+        SetFolderText(folder, 0, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
         StatusText = StatusFormatter.NoSupportedImages();
         _presenter.ClearPresentation();
@@ -515,11 +539,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         if (_currentSession?.Folder is { } f)
         {
-            FolderText = $"{f}  ({count} ảnh) · Explorer";
+            SetFolderText(f, count, explorerOrderApplied: true);
         }
-        else if (!string.IsNullOrEmpty(FolderText) && !FolderText.Contains("· Explorer"))
+        else if (_folderTextFolder is { } shown && !IsExplorerOrderApplied)
         {
-            FolderText = $"{FolderText} · Explorer";
+            // No session folder: keep the folder and count already shown, just mark the order.
+            SetFolderText(shown, _folderTextCount, explorerOrderApplied: true);
         }
         // The current image keeps its place but its neighbours are now the Explorer-order ones:
         // re-center preload on its new index (a file opened directly is presented before the

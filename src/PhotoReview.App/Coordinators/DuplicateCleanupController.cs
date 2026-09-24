@@ -7,6 +7,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
@@ -78,7 +79,7 @@ public sealed class DuplicateCleanupController
         }
         catch (Exception ex)
         {
-            _sink.SetStatusText($"Lỗi kiểm tra trùng lặp: {ex.Message}");
+            _sink.SetStatusText(StatusFormatter.DuplicateCheckFailed(ex.Message));
             return;
         }
 
@@ -138,7 +139,7 @@ public sealed class DuplicateCleanupController
         _sink.SetStatusText(StatusFormatter.BatchDone(succeeded, failures.Count));
         if (failures.Count > 0 && _dialogService is not null)
         {
-            _dialogService.ShowError("Báo cáo lỗi batch", string.Join(Environment.NewLine, failures));
+            _dialogService.ShowError(Tr.DialogBatchErrorsTitle,string.Join(Environment.NewLine, failures));
         }
 
         if (succeeded > 0 && remove.Count > 0)
@@ -155,7 +156,7 @@ public sealed class DuplicateCleanupController
     {
         if (_dialogService is not null)
         {
-            var confirmed = _dialogService.ShowConfirmation("Xác nhận xóa cache", "Xóa toàn bộ cache preview? Ảnh nguồn không bị thay đổi.");
+            var confirmed = _dialogService.ShowConfirmation(Tr.DialogClearCacheTitle, Tr.DialogClearCacheMessage);
             if (!confirmed) return;
         }
 
