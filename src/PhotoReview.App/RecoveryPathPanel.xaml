@@ -2,7 +2,7 @@
     <Border Background="{DynamicResource Dark.Panel}" BorderBrush="{DynamicResource Dark.Border}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,10">
         <StackPanel>
             <TextBlock x:Name="TitleText" FontWeight="SemiBold" FontSize="14"/>
-            <TextBox x:Name="PathBox" IsReadOnly="True" TextWrapping="Wrap" Margin="0,6,0,6" Padding="6,4" BorderThickness="1"/>
+            <TextBox x:Name="PathBox" AutomationProperties.LabeledBy="{Binding ElementName=TitleText}" IsReadOnly="True" TextWrapping="Wrap" Margin="0,6,0,6" Padding="6,4" BorderThickness="1"/>
             <TextBlock x:Name="StatusText" FontWeight="SemiBold"/>
             <TextBlock x:Name="NowText" Foreground="{DynamicResource Dark.TextSoft}" Margin="0,2,0,0" TextWrapping="Wrap"/>
             <TextBlock x:Name="JournalText" Foreground="{DynamicResource Dark.TextMuted}" TextWrapping="Wrap"/>
