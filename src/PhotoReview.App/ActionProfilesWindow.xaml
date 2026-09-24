@@ -1,13 +1,13 @@
 <Window x:Class="PhotoReview.App.ActionProfilesWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="clr-namespace:PhotoReview.App.Localization" Title="{loc:Tr actionProfiles.title}" Width="820" Height="520" MinWidth="700" MinHeight="420" WindowStartupLocation="CenterOwner" Background="#171717" Foreground="#F5F5F5">
-    <Window.Resources>
-        <!-- Same look as SettingsWindow: dark inputs, spacing between fields. -->
-        <Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,5"/><Setter Property="Foreground" Value="#E5E5E5"/></Style>
-        <Style TargetType="TextBox"><Setter Property="Padding" Value="9,7"/><Setter Property="Margin" Value="0,0,0,12"/><Setter Property="Background" Value="#252525"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#505050"/><Setter Property="CaretBrush" Value="#FFFFFF"/></Style>
-        <Style TargetType="ComboBox"><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="0,0,0,12"/></Style>
-        <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#E5E5E5"/><Setter Property="Margin" Value="0,4,0,8"/></Style>
-        <Style TargetType="Button"><Setter Property="Padding" Value="12,6"/></Style>
-    </Window.Resources>
+    <Window.Resources><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/></Window.Resources>
     <Grid Margin="20">
+        <Grid.Resources>
+            <!-- Spacing on top of the shared dark theme (Grid-level so BasedOn resolves to the theme styles). -->
+            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="Margin" Value="0,0,0,5"/></Style>
+            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="Margin" Value="0,0,0,12"/></Style>
+            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="Margin" Value="0,0,0,12"/></Style>
+            <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}"><Setter Property="Margin" Value="0,4,0,8"/></Style>
+        </Grid.Resources>
         <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <!-- DockPanel fills with its LAST child: title and buttons are docked first, the list fills the rest.

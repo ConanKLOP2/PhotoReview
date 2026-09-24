@@ -56,6 +56,8 @@ public sealed class SourcePresenceTests
     [InlineData("MainWindow.xaml", TrKeys.MainCompareRightAutomationName, "Preview ảnh bên phải, nhấn để chọn")]
     [InlineData("MainWindow.xaml", TrKeys.MainMenuUndoAutomationName, "Hoàn tác thao tác vừa thực hiện")]
     [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryRetryAutomationName, "Thử lại Move hoặc Copy đã lỗi")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearSelectedAutomationName, "Xoá các mục đã chọn khỏi danh sách Recovery")]
+    [InlineData("RecoveryWindow.xaml", TrKeys.RecoveryClearAllAutomationName, "Xoá tất cả mục khỏi danh sách Recovery")]
     [InlineData("SettingsWindow.xaml", TrKeys.SettingsOpenLogLocation, "Mở vị trí file log")]
     public void AccessibleNamesArePresentInXaml(string xamlFile, string key, string vietnamese)
     {

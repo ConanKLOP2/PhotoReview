@@ -7,18 +7,58 @@ namespace PhotoReview.App;
 
 public partial class RecoveryWindow : Window
 {
-    private readonly IReadOnlyList<JournalEntry> _entries;
+    private readonly List<JournalEntry> _entries;
     private readonly Func<JournalEntry, RecoveryRetryResult>? _retry;
+    private readonly Action<IReadOnlyList<JournalEntry>>? _dismiss;
 
-    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, RecoveryRetryResult>? retry = null)
+    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, RecoveryRetryResult>? retry = null, Action<IReadOnlyList<JournalEntry>>? dismiss = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         InitializeComponent();
-        _entries = entries;
+        _entries = entries.ToList();
         _retry = retry;
-        EntriesList.ItemsSource = entries.Select(FormatEntry).ToList();
-        EntriesList.SelectionChanged += (_, _) => RetryButton.IsEnabled = _retry is not null && EntriesList.SelectedIndex >= 0 && _entries[EntriesList.SelectedIndex].Type is FileOperationType.Move or FileOperationType.Copy;
-        SummaryText.Text = entries.Count == 0 ? Tr.RecoverySummaryEmpty : Tr.RecoverySummaryCount(entries.Count);
+        _dismiss = dismiss;
+        EntriesList.SelectionChanged += (_, _) => UpdateButtons();
+        RefreshEntries();
+    }
+
+    // Items wrap the entry so multi-selection maps back unambiguously even when two rows read the same.
+    private sealed record Row(JournalEntry Entry)
+    {
+        public override string ToString() => FormatEntry(Entry);
+    }
+
+    private void RefreshEntries()
+    {
+        EntriesList.ItemsSource = _entries.Select(entry => new Row(entry)).ToList();
+        SummaryText.Text = _entries.Count == 0 ? Tr.RecoverySummaryEmpty : Tr.RecoverySummaryCount(_entries.Count);
+        UpdateButtons();
+    }
+
+    private void UpdateButtons()
+    {
+        RetryButton.IsEnabled = _retry is not null && EntriesList.SelectedItems.Count == 1 && _entries[EntriesList.SelectedIndex].Type is FileOperationType.Move or FileOperationType.Copy;
+        ClearSelectedButton.IsEnabled = _dismiss is not null && EntriesList.SelectedItems.Count > 0;
+        ClearAllButton.IsEnabled = _dismiss is not null && _entries.Count > 0;
+    }
+
+    private void ClearSelected_Click(object sender, RoutedEventArgs e) => Dismiss(EntriesList.SelectedItems.Cast<Row>().Select(row => row.Entry).ToList());
+
+    private void ClearAll_Click(object sender, RoutedEventArgs e) => Dismiss(_entries.ToList());
+
+    private void Dismiss(List<JournalEntry> entries)
+    {
+        if (_dismiss is null || entries.Count == 0) return;
+        var prompt = Tr.RecoveryDismissConfirmMessage(entries.Count);
+        if (System.Windows.MessageBox.Show(this, prompt, Tr.RecoveryDismissConfirmTitle, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        try { _dismiss(entries); }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, Tr.RecoveryDismissFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        _entries.RemoveAll(entries.Contains);
+        RefreshEntries();
     }
 
     // Journal errors are localized by their stable code; old entries without a code show the stored text (Q-L3).
