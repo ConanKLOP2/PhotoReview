@@ -137,6 +137,18 @@ public sealed class HotPathHonestyRuleTests
         return false;
     }
 
+    [Fact(DisplayName = "Rule OC14: MainWindow code-behind holds no file-action/undo gate logic")]
+    [Trait("Category", "Architecture")]
+    public void MainWindowCodeBehindHasNoFileActionGateLogic()
+    {
+        var repoRoot = FindRepoRoot();
+        var file = Path.Combine(repoRoot, "src", "PhotoReview.App", "MainWindow.xaml.cs");
+        var text = File.ReadAllText(file);
+        Assert.DoesNotContain("Interlocked", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("_fileActionInProgress", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Volatile.", text, StringComparison.Ordinal);
+    }
+
     private static string FindRepoRoot()
     {
         var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
