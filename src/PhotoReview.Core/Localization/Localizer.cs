@@ -75,7 +75,7 @@ public sealed class Localizer
     /// Builds a localizer from English plus zero or more overlay catalogs of one language, applied in order
     /// (later overlays win, so pass shipped first, user last). Overlay entries are validated against English:
     /// unknown keys are ignored, a template with bad braces or a placeholder English does not have is rejected
-    /// (English is used), a missing placeholder only warns.
+    /// (the value from an earlier overlay, else English, stays), a missing placeholder only warns.
     /// </summary>
     public static Localizer Create(LanguageCatalog english, IReadOnlyList<LanguageCatalog> overlays, IEnumerable<string>? priorWarnings = null)
     {

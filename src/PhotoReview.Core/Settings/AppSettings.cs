@@ -7,7 +7,7 @@ namespace PhotoReview.Core.Settings;
 
 public class AppSettings
 {
-    public const int CurrentConfigVersion = 2;
+    public const int CurrentConfigVersion = 3;
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
     public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
@@ -26,6 +26,12 @@ public class AppSettings
     public long SourceBytesCapacityBytes { get; set; } = PerformanceOptions.SourceBytesCapacityBytes;
     public List<ReviewAction> Actions { get; set; } = ReviewAction.Defaults();
     public ShortcutMappings Shortcuts { get; set; } = ShortcutMappings.Default();
+
+    /// <summary>
+    /// UI language code (<c>en</c>, <c>vi</c>, ...) or <c>auto</c> = follow the Windows UI language (ADR 0006).
+    /// Configs written before version 3 are migrated to <c>vi</c> so existing users keep the Vietnamese UI (Q-L1).
+    /// </summary>
+    public string UiLanguage { get; set; } = PhotoReview.Core.Localization.LanguageLoader.AutoCode;
 
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }

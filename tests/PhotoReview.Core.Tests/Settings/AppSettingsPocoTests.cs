@@ -11,7 +11,8 @@ public sealed class AppSettingsPocoTests
     public void AppSettingsDefaults()
     {
         var s = new AppSettings();
-        Assert.Equal(2, s.ConfigVersion);
+        Assert.Equal(3, s.ConfigVersion);
+        Assert.Equal("auto", s.UiLanguage);
         Assert.Equal(InitialViewMode.Fit, s.InitialViewMode);
         Assert.Equal(LoadingMode.Preview, s.LoadingMode);
         Assert.False(s.LoggingEnabled);

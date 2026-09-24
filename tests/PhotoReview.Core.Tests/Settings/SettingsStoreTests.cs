@@ -40,7 +40,7 @@ public sealed class SettingsStoreTests
         Assert.Equal(LoadingMode.Preview, loaded.LoadingMode);
         Assert.True(_fileSystem.FileExists(_appPaths.ConfigFile));
         var savedJson = _fileSystem.ReadAllText(_appPaths.ConfigFile);
-        Assert.Contains("\"ConfigVersion\": 2", savedJson);
+        Assert.Contains("\"ConfigVersion\": 3", savedJson);
     }
 
     [Fact(DisplayName = "Load ignores the retired Folder2Name property from an old config")]
@@ -179,8 +179,8 @@ public sealed class SettingsStoreTests
         Assert.Contains("\"LoadingMode\": \"Original\"", diskJson);
     }
 
-    [Fact(DisplayName = "Migrate upgrades version 1 config to version 2")]
-    public void Migrate_UpgradesV1ToV2()
+    [Fact(DisplayName = "Migrate upgrades version 1 config to the current version")]
+    public void Migrate_UpgradesV1ToCurrent()
     {
         var v1Settings = new AppSettings
         {
@@ -190,7 +190,7 @@ public sealed class SettingsStoreTests
 
         SettingsStore.Migrate(v1Settings);
 
-        Assert.Equal(2, v1Settings.ConfigVersion);
+        Assert.Equal(AppSettings.CurrentConfigVersion, v1Settings.ConfigVersion);
         Assert.NotNull(v1Settings.Actions);
         Assert.NotEmpty(v1Settings.Actions);
         Assert.NotNull(v1Settings.Shortcuts);
@@ -235,6 +235,7 @@ public sealed class SettingsStoreTests
 
         var loaded = _store.Load();
         var expected = JsonSerializer.Deserialize<AppSettings>(json)!;
+        SettingsStore.Migrate(expected); // Load migrates v2 -> current (UiLanguage, ADR 0006); compare deserializers only
 
         Assert.Equal(JsonSerializer.Serialize(expected, ReflectionIndented), JsonSerializer.Serialize(loaded, ReflectionIndented));
         Assert.Equal("D", loaded.Shortcuts.Next);
