@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="System.IO" />
     <Using Include="NetArchTest.Rules" />
   </ItemGroup>
 

@@ -37,56 +37,32 @@ public sealed class SettingsValidatorTests
         Assert.Null(error);
     }
 
-    [Fact(DisplayName = "Invalid shortcut key reports property error")]
-    public void InvalidShortcutKey_ReturnsError()
+    [Theory(DisplayName = "Invalid or blank shortcut key reports property error")]
+    [InlineData("Next", "InvalidKey")]
+    [InlineData("Previous", "   ")]
+    public void InvalidShortcutKey_ReturnsError(string property, string key)
     {
         var validator = new SettingsValidator(new FakeKeyNameValidator());
         var settings = new AppSettings();
-        settings.Shortcuts.Next = "InvalidKey";
+        if (property == "Next") settings.Shortcuts.Next = key;
+        else settings.Shortcuts.Previous = key;
 
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal("Shortcut Next không hợp lệ.", error);
+        Assert.Equal($"Shortcut {property} không hợp lệ.", error);
     }
 
-    [Fact(DisplayName = "Whitespace or empty shortcut key reports property error")]
-    public void EmptyShortcutKey_ReturnsError()
-    {
-        var validator = new SettingsValidator(new FakeKeyNameValidator());
-        var settings = new AppSettings();
-        settings.Shortcuts.Previous = "   ";
-
-        var error = validator.ValidateShortcuts(settings);
-
-        Assert.NotNull(error);
-        Assert.Equal("Shortcut Previous không hợp lệ.", error);
-    }
-
-    [Fact(DisplayName = "Action with missing name or invalid shortcut reports action error")]
-    public void InvalidAction_ReturnsError()
+    [Theory(DisplayName = "Action with missing name or invalid key name reports action error")]
+    [InlineData("", "Enter")]
+    [InlineData("TestAction", "UnknownKey123")]
+    public void InvalidAction_ReturnsError(string name, string shortcut)
     {
         var validator = new SettingsValidator(new FakeKeyNameValidator());
         var settings = new AppSettings();
         settings.Actions = new List<ReviewAction>
         {
-            new ReviewAction { Name = "", Shortcut = "Enter" }
-        };
-
-        var error = validator.ValidateShortcuts(settings);
-
-        Assert.NotNull(error);
-        Assert.Equal("Action phải có tên và phím tắt hợp lệ.", error);
-    }
-
-    [Fact(DisplayName = "Action with invalid key name reports action error")]
-    public void ActionWithInvalidKey_ReturnsError()
-    {
-        var validator = new SettingsValidator(new FakeKeyNameValidator());
-        var settings = new AppSettings();
-        settings.Actions = new List<ReviewAction>
-        {
-            new ReviewAction { Name = "TestAction", Shortcut = "UnknownKey123" }
+            new ReviewAction { Name = name, Shortcut = shortcut }
         };
 
         var error = validator.ValidateShortcuts(settings);
