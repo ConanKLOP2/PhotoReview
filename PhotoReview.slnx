@@ -1,21 +1,24 @@
 <Solution>
-  <Folder Name="/src/" />
+  <Folder Name="/src/">
+    <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
+    <Project Path="src/PhotoReview.Benchmarking/PhotoReview.Benchmarking.csproj" />
+    <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
+    <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
+    <Project Path="src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj" />
+    <Project Path="src/PhotoReview.Localization.Generator/PhotoReview.Localization.Generator.csproj" />
+    <Project Path="src/PhotoReview.PerfAnalysis/PhotoReview.PerfAnalysis.csproj" />
+    <Project Path="src/PhotoReview.Platform.Windows/PhotoReview.Platform.Windows.csproj" />
+  </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj" />
+    <Project Path="tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj" />
+    <Project Path="tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />
+    <Project Path="tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj" />
+    <Project Path="tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj" />
+    <Project Path="tests/PhotoReview.TestSupport/PhotoReview.TestSupport.csproj" />
     <Project Path="tests/PhotoReview.TestSupport.Windows/PhotoReview.TestSupport.Windows.csproj" />
   </Folder>
-  <Project Path="src/PhotoReview.App/PhotoReview.App.csproj" />
-  <Project Path="src/PhotoReview.Benchmarking/PhotoReview.Benchmarking.csproj" />
-  <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
-  <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
-  <Project Path="src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj" />
-  <Project Path="src/PhotoReview.Localization.Generator/PhotoReview.Localization.Generator.csproj" />
-  <Project Path="src/PhotoReview.PerfAnalysis/PhotoReview.PerfAnalysis.csproj" />
-  <Project Path="src/PhotoReview.Platform.Windows/PhotoReview.Platform.Windows.csproj" />
-  <Project Path="tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj" />
-  <Project Path="tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj" />
-  <Project Path="tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj" />
-  <Project Path="tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj" />
-  <Project Path="tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj" />
-  <Project Path="tests/PhotoReview.TestSupport/PhotoReview.TestSupport.csproj" />
-  <Project Path="tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj" />
+  <Folder Name="/tools/">
+    <Project Path="tools/PhotoReview.Benchmark.Cli/PhotoReview.Benchmark.Cli.csproj" />
+  </Folder>
 </Solution>
