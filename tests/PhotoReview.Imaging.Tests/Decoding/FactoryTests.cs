@@ -51,20 +51,27 @@ public sealed class FactoryTests : IDisposable
         Assert.IsType<WpfBitmapImageDecoder>(decoder);
     }
 
-    [Fact(DisplayName = "ImageDecoderFactory wraps registered non-Wpf backend in FallbackImageDecoder")]
-    public void FactoryWrapsRegisteredBackendInFallbackDecoder()
+    [Theory(DisplayName = "ImageDecoderFactory wraps a registered non-Wpf backend in FallbackImageDecoder that falls back to Wpf")]
+    [InlineData(DecoderBackend.WicDirect)]
+    [InlineData(DecoderBackend.TurboJpeg)]
+    public void FactoryWrapsRegisteredBackendInFallbackDecoder(DecoderBackend backend)
     {
         var mockDecoder = new MockFailingDecoder(new NotSupportedException());
         var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
         {
-            (DecoderBackend.WicDirect, () => mockDecoder),
+            (backend, () => mockDecoder),
             (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder())
         });
 
-        var decoder = factory.Create(DecoderBackend.WicDirect);
+        var decoder = factory.Create(backend);
         var fallbackDecoder = Assert.IsType<FallbackImageDecoder>(decoder);
-        Assert.Equal(DecoderBackend.WicDirect, fallbackDecoder.PrimaryBackend);
+        Assert.Equal(backend, fallbackDecoder.PrimaryBackend);
         Assert.Equal(DecoderBackend.Wpf, fallbackDecoder.FallbackBackend);
+
+        // The primary throws NotSupportedException, so the decode is served by the Wpf fallback.
+        var decoded = decoder.Decode(new DecodeRequest(_validImagePath, TargetWidth: 0));
+        Assert.Equal(64, decoded.PixelWidth);
+        Assert.Equal(48, decoded.PixelHeight);
     }
 
     [Fact(DisplayName = "FallbackImageDecoder returns primary result when primary succeeds")]
@@ -182,25 +189,6 @@ public sealed class FactoryTests : IDisposable
         Assert.NotNull(preview);
         Assert.Equal(64, preview.PixelWidth);
         Assert.Equal(48, preview.PixelHeight);
-    }
-
-    [Fact(DisplayName = "ImageDecoderFactory with an explicit TurboJpeg provider wraps it in FallbackImageDecoder")]
-    public void FactoryWithExplicitTurboJpegProviderWrapsItInFallbackDecoder()
-    {
-        var mockDecoder = new MockFailingDecoder(new NotSupportedException());
-        var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
-        {
-            (DecoderBackend.TurboJpeg, () => mockDecoder),
-            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder())
-        });
-
-        var decoder = factory.Create(DecoderBackend.TurboJpeg);
-
-        Assert.IsType<FallbackImageDecoder>(decoder);
-        var decoded = decoder.Decode(new DecodeRequest(_validImagePath, TargetWidth: 0));
-        Assert.NotNull(decoded);
-        Assert.Equal(64, decoded.PixelWidth);
-        Assert.Equal(48, decoded.PixelHeight);
     }
 
     [Fact(DisplayName = "ImageDecoderFactory falls back to Wpf decoder for an unregistered backend (AR01)")]

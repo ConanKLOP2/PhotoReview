@@ -28,6 +28,7 @@ public sealed class ImageCacheKeyTests : IDisposable
         var resized = ImageCacheKey.Create(_path, false, 3200);
         var original = ImageCacheKey.Create(_path, true, 0);
         Assert.True(preview != resized && preview != original);
+        Assert.True(preview.MatchesCurrentSource());
     }
 
     [Fact(DisplayName = "Cache key rejects a replacement at the same path")]
@@ -46,24 +47,6 @@ public sealed class ImageCacheKeyTests : IDisposable
         var replacement = ImageCacheKey.Create(_path, false, 2400);
         File.Delete(_path);
         Assert.False(replacement.MatchesCurrentSource());
-    }
-
-    [Fact(DisplayName = "Decoded cache identity separates resize and Original quality")]
-    public void DecodedCacheIdentitySeparatesResizeAndOriginalQuality()
-    {
-        var previewKey = ImageCacheKey.Create(_path, isOriginal: false, targetWidth: 2048);
-        var resizedKey = ImageCacheKey.Create(_path, isOriginal: false, targetWidth: 1024);
-        var originalKey = ImageCacheKey.Create(_path, isOriginal: true, targetWidth: 2048);
-        Assert.True(previewKey != resizedKey && previewKey != originalKey && previewKey.MatchesCurrentSource());
-    }
-
-    [Fact(DisplayName = "Replacing a source at the same path invalidates its decoded bitmap")]
-    public void ReplacingSourceAtSamePathInvalidatesDecodedBitmap()
-    {
-        var previewKey = ImageCacheKey.Create(_path, isOriginal: false, targetWidth: 2048);
-        File.WriteAllBytes(_path, [1, 2, 3, 4]);
-        var changedKey = ImageCacheKey.Create(_path, isOriginal: false, targetWidth: 2048);
-        Assert.True(changedKey != previewKey && !previewKey.MatchesCurrentSource());
     }
 
     [Fact(DisplayName = "Cache key carries the decode box: height is part of the identity")]
