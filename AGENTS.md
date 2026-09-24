@@ -43,3 +43,8 @@ The application must prioritize the following principles when processing and rev
 - After each completed change: commit, and push to an appropriate branch for me to review and merge.
 - Version is automatic (`Directory.Build.targets`): `2.0.N`, +1 per merge to master, CI tags `v2.0.N`; never hand-edit `<Version>`.
 - Base every PR on `master` (no stacked PRs).
+
+## Tests
+
+- A new test must fail when the code it guards is broken (mutate once to check). No source-text tests, no fixed-delay timing asserts (use bounded `Wait.UntilAsync`), no `Task.Yield()` polling.
+- Real-OS tests (Recycle Bin, Explorer) are `Native`/`Slow` and clean up what they created. Local default: `--filter "Category!=Manual&Category!=Native&Category!=Slow&Category!=Stress"`.

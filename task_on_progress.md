@@ -1,16 +1,16 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master `67f5aae` (v2.0.64) | **Branch:** `chore/post-i18n-cleanup`
+**Updated:** 2026-09-24 | **Base:** master `a0c4f6b`+ (v2.0.64) | **Branch:** `docs/status-2026-09-24-batch`
 
-## Now: i18n merged (#61, #55); IO01 decided (ADR 0007, PR #62)
+## Now: PR batch #64–#70 open (merge in this order)
 
-- **i18n (group L) done L00–L11:** EN + VI, community JSON catalogs, `Tr`/`{loc:Tr}`, `tools/i18n-check.ps1` in CI, `docs/TRANSLATING.md`, ADR 0006, plan `docs/refactoring/I18N-PLAN.md`. Open: **L12** Vietnamese copy polish (user reviews wording).
-- **IO01 decided (user, 2026-09-24) — ADR 0007:** journal durability = setting, **Fast (no fsync, default)** or **Power-loss safe** (WriteThrough+Flush, written off the UI thread); session no fsync (atomic kept, corrupt = no session), settings unchanged; unreadable files skipped **with a visible warning**. Implement **IO03/IO04/IO05** next (i18n no longer blocks; new UI strings go through catalogs).
-- Cleanup after i18n: removed obsolete `MainViewModel.UndoLastAsync` / `FileActionController.UndoAsync`; status docs refreshed.
-- **Next:** IO03–IO05 → OC14 (Undo gate → MainViewModel; unblocks ST08/09, OC15–18) → DT10.
-- Left for user (visual): Fit first-frame (T89), TurboJPEG item greyed without dll, AR04 GUI acceptance, zoom feel (#47), new dark dialogs + language picker.
+- **Chain (each branch contains the previous):** #64 OC14 `FileActionGate` in the ViewModel → #65 IO03 journal durability setting (Fast default / power-loss safe, ADR 0007) → #66 IO04 session no-fsync + IO05 skip unreadable files with a warning → #67 Recovery: source/destination paths, live validity check on open, verdicts.
+- **Test diet (any order):** #68 Imaging 339→305 · #69 App/Integration + TC06 fix · #70 Core/Architecture; removals have mutation evidence.
+- **#69 also fixes a real bug:** Ctrl+Z after Recycle never restored (shell mtime is whole-second UTC, parsed as local ⇒ 7 h off). TC06 really verifies restore now and cleans its own Recycle Bin items.
+- **User:** empty the ~2650 test items (original location `...\Temp\TC06_RecycleBin_*`) from the Recycle Bin; visual checks: Recovery window, Settings (journal option), dark dialogs, language picker, zoom, Fit first frame (T89), AR04.
+- **Next:** L12 copy polish · DT10 · ST08/09, OC15–18 · benchmark `action-delete` leaves ~2 items/run in the real bin.
 
-## Previous (all merged): perf night #39-#49 (see `docs/refactoring/PERF-STATUS.md`) · AR00-AR07 · Recovery clear #57 · dark dialogs #53-#59
+## Previous (merged): i18n · perf night #39-#49 · AR00-AR07 · ADR 0007
 
 ## Status by Group
 
@@ -22,9 +22,9 @@
 | DF, CQ | ✅ Done | |
 | **T89** | 🔄 GUI acceptance only (kept, Q-AR5) | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
 | **TC** | ✅ TC01-TC11 | TC04, TC09 done (#36); TC06/07 live in App.Tests/HotPath (real Recycle Bin / real photos). |
-| **OC** | 🔄 ~65% | OC14 kept, re-scoped to "Undo gate location" (Q-AR5) — blocks ST08/09, OC15-18; no longer blocks WD (Q-AR2=yes). |
+| **OC** | 🔄 ~65% | OC14 gate moved to the ViewModel (#64); ST08/09, OC15-18 unblocked. |
 | **WD** | ✅ WD01 done (AR04, #37) | WD02-06 closed 2026-09-23 (Q-AR5, no known dialog bug). |
-| **IO** | 🔄 IO01 decided: ADR 0007 (2026-09-24) | Implement IO03 journal setting, IO04 session, IO05 skip+warn; IO02/06/07 stay closed. |
+| **IO** | 🔄 IO01 ADR 0007 | IO03 #65, IO04+IO05 #66 open; IO02/06/07 closed. |
 | **D** | ❌ Closed (Q-AR5) | Legacy `--perf-session` numbers; re-open from AR02e baseline if needed. |
 | **DT** | 🔄 | DT00-03, 08, 09 done; DT04-07 closed (Q-AR5); DT10 kept. |
 
@@ -46,6 +46,6 @@
 ```powershell
 tools/docs-budget.ps1 -Check
 dotnet build PhotoReview.slnx -c Release
-dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual"
+dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual&Category!=Native&Category!=Slow&Category!=Stress"
 tools/verify-all.ps1
 ```
