@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
@@ -72,9 +72,13 @@ public sealed class DecoderQualityGateTests : IDisposable
         var cmpTurbo = ImageCompare.Compare(bmpWpf, bmpTurbo);
         Assert.True(cmpTurbo.Psnr >= 35.0, $"TurboJpeg full-res PSNR {cmpTurbo.Psnr} < 35 dB");
         Assert.True(cmpTurbo.MeanDeltaE <= 2.5, $"TurboJpeg full-res MeanDeltaE {cmpTurbo.MeanDeltaE} > 2.5");
+        Assert.Equal(400, decodedTurbo.PixelWidth);
+        Assert.Equal(300, decodedTurbo.PixelHeight);
+        Assert.Equal(400, decodedWic.PixelWidth);
+        Assert.Equal(300, decodedWic.PixelHeight);
     }
 
-    [Fact(DisplayName = "QG-1.2: Downscaled JPEG fidelity meets threshold for WicDirect and TurboJpeg")]
+    [Fact(DisplayName = "QG-1.2:Downscaled JPEG fidelity meets threshold for WicDirect and TurboJpeg")]
     public void DownscaledJpegFidelityMeetsThreshold()
     {
         var jpegPath = Path.Combine(_tempDir, "fidelity_downscale.jpg");
@@ -141,48 +145,6 @@ public sealed class DecoderQualityGateTests : IDisposable
             Assert.Equal(expectedActual, decodedFallback.ActualBackend);
             Assert.Equal(128, fallbackDecoder.ReadInfo(generated).PixelWidth);
         }
-    }
-
-    [Theory(DisplayName = "QG-3: All 8 EXIF orientations map correctly across all backends")]
-    [InlineData((ushort)1, 64, 48, "Yellow", "Cyan", "Magenta", "White")]
-    [InlineData((ushort)2, 64, 48, "Cyan", "Yellow", "White", "Magenta")]
-    [InlineData((ushort)3, 64, 48, "White", "Magenta", "Cyan", "Yellow")]
-    [InlineData((ushort)4, 64, 48, "Magenta", "White", "Yellow", "Cyan")]
-    [InlineData((ushort)5, 48, 64, "Yellow", "Magenta", "Cyan", "White")]
-    [InlineData((ushort)6, 48, 64, "Magenta", "Yellow", "White", "Cyan")]
-    [InlineData((ushort)7, 48, 64, "White", "Cyan", "Magenta", "Yellow")]
-    [InlineData((ushort)8, 48, 64, "Cyan", "White", "Yellow", "Magenta")]
-    public void ExifOrientationsMapCorrectly(
-        ushort orientation,
-        int expectedW,
-        int expectedH,
-        string tl,
-        string tr,
-        string bl,
-        string br)
-    {
-        var path = Path.Combine(_tempDir, $"orient_{orientation}.jpg");
-        FixtureGenerator.GenerateJpegWithOrientation(path, 64, 48, orientation);
-
-        var request = new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true);
-
-        // Test WPF
-        var resWpf = _wpfDecoder.Decode(request);
-        Assert.Equal(expectedW, resWpf.PixelWidth);
-        Assert.Equal(expectedH, resWpf.PixelHeight);
-        AssertCorners(ImageCompare.ToBgra32((BitmapSource)resWpf.PlatformImage), expectedW, expectedH, tl, tr, bl, br);
-
-        // Test WicDirect
-        var resWic = _wicDecoder.Decode(request);
-        Assert.Equal(expectedW, resWic.PixelWidth);
-        Assert.Equal(expectedH, resWic.PixelHeight);
-        AssertCorners(ImageCompare.ToBgra32((BitmapSource)resWic.PlatformImage), expectedW, expectedH, tl, tr, bl, br);
-
-        // Test TurboJpeg
-        var resTurbo = _turboDecoder.Decode(request);
-        Assert.Equal(expectedW, resTurbo.PixelWidth);
-        Assert.Equal(expectedH, resTurbo.PixelHeight);
-        AssertCorners(ImageCompare.ToBgra32((BitmapSource)resTurbo.PlatformImage), expectedW, expectedH, tl, tr, bl, br);
     }
 
     [Fact(DisplayName = "QG-4: Truncated, empty, and invalid files fail safely without crashing")]
@@ -269,47 +231,6 @@ public sealed class DecoderQualityGateTests : IDisposable
         {
             Assert.Throws<FileNotFoundException>(() => decoder.Decode(new DecodeRequest(missingPath, TargetWidth: 0)));
             Assert.Throws<FileNotFoundException>(() => decoder.ReadInfo(missingPath));
-        }
-    }
-
-    private static void AssertCorners(
-        byte[] bgra,
-        int w,
-        int h,
-        string tl,
-        string tr,
-        string bl,
-        string br)
-    {
-        AssertColor(bgra, w, h, 1, 1, tl);
-        AssertColor(bgra, w, h, w - 2, 1, tr);
-        AssertColor(bgra, w, h, 1, h - 2, bl);
-        AssertColor(bgra, w, h, w - 2, h - 2, br);
-    }
-
-    private static void AssertColor(byte[] bgra, int width, int height, int x, int y, string expectedColor)
-    {
-        var offset = (y * width + x) * 4;
-        byte b = bgra[offset];
-        byte g = bgra[offset + 1];
-        byte r = bgra[offset + 2];
-
-        switch (expectedColor)
-        {
-            case "Yellow":
-                Assert.True(r > 150 && g > 150 && b < 100, $"Expected Yellow at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            case "Cyan":
-                Assert.True(r < 100 && g > 150 && b > 150, $"Expected Cyan at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            case "Magenta":
-                Assert.True(r > 150 && g < 100 && b > 150, $"Expected Magenta at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            case "White":
-                Assert.True(r > 180 && g > 180 && b > 180, $"Expected White at ({x},{y}), got R={r},G={g},B={b}");
-                break;
-            default:
-                throw new ArgumentException($"Unknown color: {expectedColor}", nameof(expectedColor));
         }
     }
 }

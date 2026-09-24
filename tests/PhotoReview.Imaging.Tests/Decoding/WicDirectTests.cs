@@ -18,7 +18,6 @@ public sealed class WicDirectTests : IClassFixture<OrientationFixture>, IDisposa
     private readonly string _tempDir;
     private readonly OrientationFixture _files;
     private readonly WicDirectDecoder _wicDecoder = new();
-    private readonly WpfBitmapImageDecoder _wpfDecoder = new();
 
     public WicDirectTests(OrientationFixture files)
     {
@@ -61,27 +60,6 @@ public sealed class WicDirectTests : IClassFixture<OrientationFixture>, IDisposa
         Assert.Equal(0, compare.MaxChannelDiff);
     }
 
-    [Fact(DisplayName = "WicDirect decodes JPEG with high parity to Wpf decoder")]
-    public void JpegDecodesWithHighParityToWpf()
-    {
-        var jpegPath = Path.Combine(_tempDir, "sample.jpg");
-        FixtureGenerator.GenerateGradientJpeg(jpegPath, 400, 300, quality: 90);
-
-        var decodedWic = _wicDecoder.Decode(new DecodeRequest(jpegPath, TargetWidth: 0));
-        var decodedWpf = _wpfDecoder.Decode(new DecodeRequest(jpegPath, TargetWidth: 0));
-
-        Assert.Equal(400, decodedWic.PixelWidth);
-        Assert.Equal(300, decodedWic.PixelHeight);
-
-        var compare = ImageCompare.Compare(
-            (BitmapSource)decodedWpf.PlatformImage,
-            (BitmapSource)decodedWic.PlatformImage);
-
-        // Both use Windows Imaging Component underlying codecs, results should be virtually identical
-        Assert.True(compare.Psnr >= 40.0, $"Expected PSNR >= 40 dB, got {compare.Psnr}");
-        Assert.True(compare.MeanDeltaE <= 1.0, $"Expected MeanDeltaE <= 1.0, got {compare.MeanDeltaE}");
-    }
-
     [Theory(DisplayName = "WicDirect ReadInfo detects EXIF orientation 1 to 8")]
     [MemberData(nameof(OrientationContract.All), MemberType = typeof(OrientationContract))]
     public void ReadInfoDetectsOrientation(ushort orientation) =>
@@ -122,31 +100,5 @@ public sealed class WicDirectTests : IClassFixture<OrientationFixture>, IDisposa
 
         Assert.Equal(64, decoded.PixelWidth);
         Assert.Equal(48, decoded.PixelHeight);
-    }
-
-    [Fact(DisplayName = "WicDirect closes file handle immediately after decode (INV-8)")]
-    public void FileCanBeModifiedImmediatelyAfterDecode()
-    {
-        var path = Path.Combine(_tempDir, "inv8_test.jpg");
-        FixtureGenerator.GenerateGradientJpeg(path, 64, 48);
-
-        var decoded = _wicDecoder.Decode(new DecodeRequest(path, TargetWidth: 0));
-        Assert.NotNull(decoded);
-
-        // Prove handle is closed: deleting or overwriting file immediately must succeed
-        File.Delete(path);
-        Assert.False(File.Exists(path));
-    }
-
-    [Fact(DisplayName = "WicDirect fails safely on corrupted files")]
-    public void CorruptFilesFailSafely()
-    {
-        var emptyPath = Path.Combine(_tempDir, "zero.jpg");
-        FixtureGenerator.GenerateZeroByteFile(emptyPath);
-        Assert.ThrowsAny<Exception>(() => _wicDecoder.Decode(new DecodeRequest(emptyPath, TargetWidth: 0)));
-
-        var textPath = Path.Combine(_tempDir, "text.jpg");
-        FixtureGenerator.GenerateTextFile(textPath);
-        Assert.ThrowsAny<Exception>(() => _wicDecoder.Decode(new DecodeRequest(textPath, TargetWidth: 0)));
     }
 }

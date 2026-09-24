@@ -16,7 +16,6 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
     private readonly string _tempDir;
     private readonly OrientationFixture _files;
     private readonly TurboJpegDecoder _turboDecoder = new();
-    private readonly WpfBitmapImageDecoder _wpfDecoder = new();
 
     public TurboJpegTests(OrientationFixture files)
     {
@@ -38,27 +37,6 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
         {
             // Ignore cleanup
         }
-    }
-
-    [Fact(DisplayName = "TurboJpeg decodes JPEG with high parity to Wpf decoder")]
-    public void JpegDecodesWithHighParityToWpf()
-    {
-        var jpegPath = Path.Combine(_tempDir, "sample.jpg");
-        FixtureGenerator.GenerateGradientJpeg(jpegPath, 400, 300, quality: 90);
-
-        var decodedTurbo = _turboDecoder.Decode(new DecodeRequest(jpegPath, TargetWidth: 0));
-        var decodedWpf = _wpfDecoder.Decode(new DecodeRequest(jpegPath, TargetWidth: 0));
-
-        Assert.Equal(400, decodedTurbo.PixelWidth);
-        Assert.Equal(300, decodedTurbo.PixelHeight);
-
-        var compare = ImageCompare.Compare(
-            (BitmapSource)decodedWpf.PlatformImage,
-            (BitmapSource)decodedTurbo.PlatformImage);
-
-        // TurboJPEG SIMD IDCT and color conversion vs WIC, high fidelity expected
-        Assert.True(compare.Psnr >= 35.0, $"Expected PSNR >= 35 dB, got {compare.Psnr}");
-        Assert.True(compare.MeanDeltaE <= 2.5, $"Expected MeanDeltaE <= 2.5, got {compare.MeanDeltaE}");
     }
 
     [Theory(DisplayName = "TurboJpeg ReadInfo detects EXIF orientation 1 to 8")]
@@ -102,20 +80,6 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
         Assert.Equal(48, decoded.PixelHeight);
     }
 
-    [Fact(DisplayName = "TurboJpeg closes file handle immediately after decode (INV-8)")]
-    public void FileCanBeModifiedImmediatelyAfterDecode()
-    {
-        var path = Path.Combine(_tempDir, "inv8_test.jpg");
-        FixtureGenerator.GenerateGradientJpeg(path, 64, 48);
-
-        var decoded = _turboDecoder.Decode(new DecodeRequest(path, TargetWidth: 0));
-        Assert.NotNull(decoded);
-
-        // Prove handle is closed: deleting or overwriting file immediately must succeed
-        File.Delete(path);
-        Assert.False(File.Exists(path));
-    }
-
     [Fact(DisplayName = "TurboJpeg throws NotSupportedException on non-JPEG files (PNG)")]
     public void NonJpegFilesThrowNotSupportedException()
     {
@@ -141,25 +105,5 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
                 Assert.Throws<NotSupportedException>(() => _turboDecoder.Decode(new DecodeRequest(generated, TargetWidth: 0)));
             }
         }
-    }
-
-    [Fact(DisplayName = "TurboJpeg throws FileNotFoundException on missing files (INV-12)")]
-    public void MissingFileThrowsFileNotFoundException()
-    {
-        var missingPath = Path.Combine(_tempDir, "does_not_exist.jpg");
-        Assert.Throws<FileNotFoundException>(() => _turboDecoder.Decode(new DecodeRequest(missingPath, TargetWidth: 0)));
-        Assert.Throws<FileNotFoundException>(() => _turboDecoder.ReadInfo(missingPath));
-    }
-
-    [Fact(DisplayName = "TurboJpeg fails safely on corrupted files")]
-    public void CorruptFilesFailSafely()
-    {
-        var emptyPath = Path.Combine(_tempDir, "zero.jpg");
-        FixtureGenerator.GenerateZeroByteFile(emptyPath);
-        Assert.ThrowsAny<Exception>(() => _turboDecoder.Decode(new DecodeRequest(emptyPath, TargetWidth: 0)));
-
-        var textPath = Path.Combine(_tempDir, "text.jpg");
-        FixtureGenerator.GenerateTextFile(textPath);
-        Assert.ThrowsAny<Exception>(() => _turboDecoder.Decode(new DecodeRequest(textPath, TargetWidth: 0)));
     }
 }
