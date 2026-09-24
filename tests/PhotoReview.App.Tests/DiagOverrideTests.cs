@@ -3,6 +3,7 @@ using PhotoReview.Core.Catalog;
 using System.Reflection;
 using PhotoReview.App;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.TestSupport;
 
 namespace PhotoReview.App.Tests;
 
@@ -169,15 +170,9 @@ public sealed class DiagOverrideTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory), diskDirectory);
         await writer.GetPreviewAsync(previewPath);
         await writer.ShutdownPersistWorkersAsync();
-        // TC09: poll a condition with a deadline instead of asserting after a fixed delay.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        string[] seededFiles;
-        do
-        {
-            seededFiles = Directory.GetFiles(diskDirectory, "*.pv4");
-            if (seededFiles.Length > 0) break;
-            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
-        } while (DateTime.UtcNow < deadline);
+        try { await Wait.UntilAsync(() => Directory.GetFiles(diskDirectory, "*.pv4").Length > 0, "the writer to persist a disk cache entry", TimeSpan.FromSeconds(5)); }
+        catch (TimeoutException) { /* the assertion below reports the missing entry */ }
+        var seededFiles = Directory.GetFiles(diskDirectory, "*.pv4");
         Assert.True(seededFiles.Length == 1, "Expected the writer service to have persisted exactly one disk cache entry.");
 
         // A fresh service (its own RAM cache is empty) reads the same path/key with the disk

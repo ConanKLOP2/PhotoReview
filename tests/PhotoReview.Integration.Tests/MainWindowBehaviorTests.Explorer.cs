@@ -219,6 +219,39 @@ public sealed class MainWindowExplorerOrderTests
         Assert.Equal(1, fake.CallCount);
     }
 
+    // ---------------------------------------------------------------- shutdown
+
+    /// <summary>
+    /// Behavior replacement for the former "Window shutdown disposes ..." source-presence check (the
+    /// preload scheduler half lives in CompositionRootTests.MainWindowClosed_DisposesProductionPreloadScheduler).
+    /// </summary>
+    [Fact(DisplayName = "Closing the main window disposes its Explorer-order provider exactly once")]
+    public async Task ClosingTheWindowDisposesTheExplorerOrderProvider()
+    {
+        using var root = new TempRoot("explorer-dispose");
+        using var dataRoot = new DataRootFixture();
+        var folder = root.Dir("images");
+        var fake = new FakeExplorerOrderProvider(CreateImages(folder), TimeSpan.Zero);
+        var presented = new List<string>();
+        MainWindow? window = null;
+        try
+        {
+            await StaTestHost.RunAsync(async () =>
+            {
+                window = Open(folder, fake, presented);
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 1, Settle), Diagnose(window, presented));
+                Assert.Equal(0, fake.DisposeCount);
+            });
+        }
+        finally
+        {
+            fake.Release();
+            await CloseAsync(window);
+        }
+
+        Assert.Equal(1, fake.DisposeCount);
+    }
+
     // --------------------------------------------------------------- helpers
 
     private static MainWindow Open(string folder, FakeExplorerOrderProvider fake, List<string> presented)

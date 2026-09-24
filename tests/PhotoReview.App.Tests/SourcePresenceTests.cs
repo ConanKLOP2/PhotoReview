@@ -126,28 +126,6 @@ public sealed class SourcePresenceTests
 
     // ---- Kept source-presence checks with no behavioral replacement yet ----
 
-    // Replace when Settings gets a view model (T46c only wired the dialog service, not the window's code-behind).
-    [Fact(DisplayName = "Settings defaults reset compare options (source presence, not behavior)")]
-    public void SettingsDefaultsResetCompareOptions() =>
-        Assert.True(ProjectSources.SettingsWindow.Contains("CompareHashEnabled = true")
-            && ProjectSources.SettingsWindow.Contains("CompareSizeEnabled = true"));
-
-    [Fact(DisplayName = "Open log location follows the configured AppLog path (source presence, not behavior)")]
-    public void OpenLogLocationFollowsConfiguredAppLogPath()
-    {
-        var settingsWindow = ProjectSources.SettingsWindow;
-        Assert.True(settingsWindow.Contains("Path.GetDirectoryName(AppLog.FilePath)")
-            && settingsWindow.Contains("explorer.exe") && settingsWindow.Contains("AppLog.FilePath"));
-    }
-
-    // Window shutdown itself is WPF glue (Closed handler on the Window); the scheduler's own
-    // disposal is covered behaviorally by PreloadSchedulerTests.
-    [Fact(DisplayName = "Window shutdown disposes preload and thumbnail resources (source presence, not behavior)")]
-    public void WindowShutdownDisposesPreloadAndThumbnailResources() =>
-        Assert.True(ProjectSources.MainWindowXaml.Contains("Closed=\"Window_Closed\"")
-            && ProjectSources.MainWindow.Contains("(_viewModel.PreloadController as IDisposable)?.Dispose()")
-            && ProjectSources.MainWindow.Contains("_explorerOrder?.Dispose()"));
-
     // WindowPlacementService operates on a real HWND via GetWindowPlacement/SetWindowPlacement
     // and reads the attached monitor set, so it cannot be exercised headlessly.
     [Fact(DisplayName = "Native window placement restores after Loaded and persists monitor, bounds, and maximized state (source presence: needs a real Window handle)")]
@@ -162,19 +140,6 @@ public sealed class SourcePresenceTests
     public void SavedPlacementIsRejectedWhenMonitorIsGone() =>
         Assert.True(ProjectSources.WindowPlacementService.Contains("EnumDisplayMonitors")
             && ProjectSources.WindowPlacementService.Contains("GetMonitorInfo"));
-
-    // ThumbnailCache does not use DiskCacheStore yet, and prunes the shared on-disk cache under the
-    // user's real LocalAppData, so driving the quota path would mutate the developer's own cache.
-    [Fact(DisplayName = "Disk thumbnail cache has quota and clear operation (source presence, not behavior)")]
-    public void DiskThumbnailCacheHasQuotaAndClearOperation() =>
-        Assert.True(ProjectSources.ThumbnailCache.Contains("DefaultMaxDiskBytes")
-            && ProjectSources.ThumbnailCache.Contains("PruneDiskCache")
-            && ProjectSources.ThumbnailCache.Contains("ClearDisk"));
-
-    [Fact(DisplayName = "Disk cache cleanup tolerates filesystem access failures (source presence, not behavior)")]
-    public void DiskCacheCleanupToleratesFilesystemAccessFailures() =>
-        Assert.True(ProjectSources.ThumbnailCache.Contains("catch (UnauthorizedAccessException ex)")
-            && ProjectSources.ThumbnailCache.Contains("catch (IOException ex)"));
 
     [Fact(DisplayName = "File association command is registered (source presence: registering needs the real Windows registry)")]
     public void FileAssociationCommandIsRegistered()

@@ -10,6 +10,7 @@ using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
+using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;
@@ -223,18 +224,8 @@ public sealed class FolderLoadCoordinatorTests
         using var coordinator = CreateCoordinator();
         var loadTask = coordinator.LoadAsync(folder);
 
-        // TC09: Replace Task.Delay polling with barrier. Monitor for catalog ready state change.
         var prevCatalogCount = _sink.CatalogReadyCount;
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (_sink.CatalogReadyCount == prevCatalogCount && DateTime.UtcNow < deadline)
-        {
-            // Pump with minimal delay to avoid busy-waiting
-            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
-        }
-        if (_sink.CatalogReadyCount == prevCatalogCount)
-        {
-            throw new TimeoutException("Catalog ready event was not signaled within timeout.");
-        }
+        await Wait.UntilAsync(() => _sink.CatalogReadyCount != prevCatalogCount, "catalog ready event");
 
         // Người dùng tương tác (INV-7): chuyển ảnh -> tăng InteractionGeneration
         _genClock.NextInteraction();
@@ -288,15 +279,7 @@ public sealed class FolderLoadCoordinatorTests
         Assert.Equal(f2, _catalog.Paths[0]);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition, string what)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
-        {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException($"Timed out waiting for: {what}");
-            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> condition, string what) => Wait.UntilAsync(condition, what);
 
     private (string A, string B, string C) CreateThreeImages(string folder)
     {
