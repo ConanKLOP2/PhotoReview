@@ -49,7 +49,7 @@ public sealed class FolderLoadCoordinatorTests
             new MemoryStream(Files[Path.GetFullPath(path)], writable: false);
         public Stream OpenAppendDurable(string path) =>
             throw new NotImplementedException();
-        public void WriteAllTextAtomic(string path, string text) =>
+        public void WriteAllTextAtomic(string path, string text, bool durable = true) =>
             Files[Path.GetFullPath(path)] = System.Text.Encoding.UTF8.GetBytes(text);
         public string ReadAllText(string path) =>
             System.Text.Encoding.UTF8.GetString(Files[Path.GetFullPath(path)]);

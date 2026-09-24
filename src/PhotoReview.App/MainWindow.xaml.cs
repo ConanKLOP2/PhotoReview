@@ -432,6 +432,7 @@ public partial class MainWindow : Window
             VerticalScrollbarVisibility: ImageScroll.ComputedVerticalScrollBarVisibility);
     }
     private void Recovery_Click(object sender, RoutedEventArgs e) => _viewModel.ShowRecovery();
+    private void SkippedFiles_Click(object sender, RoutedEventArgs e) => new SkippedFilesWindow(_viewModel.SkippedEntries) { Owner = this }.ShowDialog();
     private void Diagnostics_Click(object sender, RoutedEventArgs e) => _viewModel.ShowDiagnostics();
     private void Benchmark_Click(object sender, RoutedEventArgs e) => _viewModel.ShowBenchmark();
     private async void ClearCache_Click(object sender, RoutedEventArgs e) => await _viewModel.ClearCacheAsync();

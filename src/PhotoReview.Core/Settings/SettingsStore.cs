@@ -92,7 +92,7 @@ public sealed class SettingsStore
 
         settings.ConfigVersion = AppSettings.CurrentConfigVersion;
         var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
-        _fileSystem.WriteAllTextAtomic(filePath, json);
+        _fileSystem.WriteAllTextAtomic(filePath, json, durable: true);
 
         _current = settings;
         Changed?.Invoke(this, _current);

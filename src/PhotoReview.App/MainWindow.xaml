@@ -98,6 +98,10 @@
         <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding HasSkippedEntries, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding SkippedWarningText}" Foreground="#FFC857" FontSize="13" VerticalAlignment="Center" />
+                    <Button Content="{loc:Tr main.skipped.viewList}" AutomationProperties.Name="{loc:Tr main.skipped.viewList.automationName}" Padding="8,2" Margin="8,0,0,0" Click="SkippedFiles_Click" />
+                </StackPanel>
                 <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="{loc:Tr main.shortcutHint}" Visibility="Collapsed" />
             </StackPanel>
         </Border>
