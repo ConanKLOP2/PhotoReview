@@ -1,9 +1,11 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -57,13 +59,13 @@ public sealed class FileActionController
         var action = actions[index];
         if (!Enum.IsDefined(action.Operation))
         {
-            _sink.SetStatusText($"Không thực hiện được {action.Name}: Operation không hợp lệ.");
+            _sink.SetStatusText(StatusFormatter.ActionInvalidOperation(action.Name));
             return;
         }
 
         if (action.Confirm && _dialogService is not null)
         {
-            var ok = _dialogService.ShowConfirmation("Xác nhận action", $"Thực hiện action '{action.Name}' trên ảnh hiện tại?");
+            var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(action.Name));
             if (!ok) return;
         }
 
@@ -78,7 +80,7 @@ public sealed class FileActionController
 
         if (string.IsNullOrWhiteSpace(action.Destination))
         {
-            _sink.SetStatusText($"Không thực hiện được {action.Name}: Action chưa có thư mục đích.");
+            _sink.SetStatusText(StatusFormatter.ActionNoDestination(action.Name));
             return;
         }
 
@@ -87,7 +89,7 @@ public sealed class FileActionController
 
     public async Task RecycleAsync(string? compareSelectedPath, string? currentPath)
     {
-        await ExecuteFileActionCoreAsync("Recycle", FileOperationType.Recycle, null, compareSelectedPath, currentPath);
+        await ExecuteFileActionCoreAsync(Tr.ActionRecycleName, FileOperationType.Recycle, null, compareSelectedPath, currentPath);
     }
 
     private async Task ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
@@ -121,7 +123,7 @@ public sealed class FileActionController
             }
             else
             {
-                _sink.SetStatusText("Đã xử lý hết ảnh trong folder.");
+                _sink.SetStatusText(StatusFormatter.AllImagesProcessed());
             }
         }
 
@@ -143,11 +145,11 @@ public sealed class FileActionController
 
                 if (_catalog.Count == 0)
                 {
-                    _sink.SetStatusText(isRemove ? "Đã xử lý hết ảnh trong folder." : $"Đã thực hiện: {actionName}");
+                    _sink.SetStatusText(isRemove ? StatusFormatter.AllImagesProcessed() : StatusFormatter.ActionCompleted(actionName));
                 }
                 else if (operation == FileOperationType.Copy)
                 {
-                    _sink.SetStatusText($"Đã copy sang {Path.GetFileName(result.DestinationPath)}");
+                    _sink.SetStatusText(StatusFormatter.CopiedTo(Path.GetFileName(result.DestinationPath)));
                 }
             }
             else
@@ -158,7 +160,7 @@ public sealed class FileActionController
                     _catalog.Restore(source, sourceIndex);
                 }
 
-                _sink.SetStatusText($"Không thực hiện được {actionName}: {result.Error}");
+                _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, result.Error));
             }
         }
         finally
@@ -181,7 +183,7 @@ public sealed class FileActionController
 
         if (!result.Succeeded)
         {
-            _sink.SetStatusText(result.ErrorMessage ?? "Không thể Undo.");
+            _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.UndoFailedGeneric());
             return;
         }
 
@@ -212,7 +214,7 @@ public sealed class FileActionController
 
         if (!result.Succeeded)
         {
-            _sink.SetStatusText(result.ErrorMessage ?? "Không có thao tác nào để hoàn tác.");
+            _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.NothingToUndo());
             return result;
         }
 

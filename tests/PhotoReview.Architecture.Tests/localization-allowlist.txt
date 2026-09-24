@@ -7,16 +7,10 @@ src/PhotoReview.App/App.xaml.cs|1
 src/PhotoReview.App/BatchReviewWindow.xaml.cs|2
 src/PhotoReview.App/BenchmarkWindow.xaml.cs|11
 src/PhotoReview.App/BuildInfo.cs|2
-src/PhotoReview.App/Coordinators/DuplicateCleanupController.cs|4
-src/PhotoReview.App/Coordinators/FileActionController.cs|11
-src/PhotoReview.App/Coordinators/FolderLoadCoordinator.cs|1
 src/PhotoReview.App/DiagnosticsWindow.xaml.cs|2
 src/PhotoReview.App/RecoveryWindow.xaml.cs|7
 src/PhotoReview.App/Services/WpfDialogService.cs|1
 src/PhotoReview.App/SettingsWindow.xaml.cs|10
-src/PhotoReview.App/ViewModels/CompareViewModel.cs|5
-src/PhotoReview.App/ViewModels/MainViewModel.cs|4
-src/PhotoReview.App/ViewModels/StatusFormatter.cs|24
 src/PhotoReview.Benchmarking/BenchmarkProfiles.cs|29
 src/PhotoReview.Core/Settings/ReviewAction.cs|4
 src/PhotoReview.PerfAnalysis/PerfAnalyze.cs|1
