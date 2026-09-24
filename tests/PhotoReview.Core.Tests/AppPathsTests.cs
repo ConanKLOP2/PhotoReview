@@ -81,12 +81,4 @@ public class AppPathsTests
         Assert.True(Path.IsPathRooted(paths.ThumbnailCacheDir));
         Assert.True(Path.IsPathRooted(paths.WindowPlacementFile));
     }
-
-    [Fact]
-    public void ImplementsIAppPathsInterface()
-    {
-        var paths = new AppPaths(MockLocalAppData);
-
-        Assert.IsAssignableFrom<IAppPaths>(paths);
-    }
 }

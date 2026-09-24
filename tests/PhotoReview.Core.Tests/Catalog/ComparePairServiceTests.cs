@@ -115,43 +115,22 @@ public class ComparePairServiceTests
         Assert.Empty(index);
     }
 
-    [Fact(DisplayName = "BuildIndex matches Find when the numbered variant's extension case differs")]
-    public void BuildIndexMatchesFindWithMixedExtensionCase()
+    // Find compares extensions and folders with OrdinalIgnoreCase; BuildIndex's folder+extension
+    // grouping must agree, or a pair like these silently stops being detected once BuildIndex
+    // replaces Find on the hot path.
+    [Theory(DisplayName = "BuildIndex matches Find when extension or folder case differs across entries")]
+    [InlineData(@"C:\Photos\DSC0001.JPG", @"C:\Photos\DSC0001 (1).jpg")]
+    [InlineData(@"C:\Photos\DSC0001.JPG", @"c:\photos\DSC0001 (1).JPG")]
+    public void BuildIndexMatchesFindWithMixedCase(string original, string variant)
     {
-        // Find compares extensions with OrdinalIgnoreCase; BuildIndex's folder+extension
-        // grouping must agree, or a pair like this (original .JPG, duplicate .jpg) silently
-        // stops being detected once BuildIndex replaces Find on the hot path.
-        var files = new List<string>
-        {
-            @"C:\Photos\DSC0001.JPG",
-            @"C:\Photos\DSC0001 (1).jpg"
-        };
+        var files = new List<string> { original, variant };
 
-        var expected = ComparePairService.Find(files, @"C:\Photos\DSC0001.JPG");
+        var expected = ComparePairService.Find(files, original);
         Assert.NotNull(expected);
 
         var index = ComparePairService.BuildIndex(files);
-        Assert.True(index.TryGetValue(@"C:\Photos\DSC0001.JPG", out var pair));
-        Assert.Equal(expected.Value.Left, pair.Left);
-        Assert.Equal(expected.Value.Right, pair.Right);
-    }
-
-    [Fact(DisplayName = "BuildIndex matches Find when the folder's case differs across entries")]
-    public void BuildIndexMatchesFindWithMixedFolderCase()
-    {
-        var files = new List<string>
-        {
-            @"C:\Photos\DSC0001.JPG",
-            @"c:\photos\DSC0001 (1).JPG"
-        };
-
-        var expected = ComparePairService.Find(files, @"C:\Photos\DSC0001.JPG");
-        Assert.NotNull(expected);
-
-        var index = ComparePairService.BuildIndex(files);
-        Assert.True(index.TryGetValue(@"C:\Photos\DSC0001.JPG", out var pair));
+        Assert.True(index.TryGetValue(original, out var pair));
         Assert.Equal(expected.Value.Left, pair.Left);
         Assert.Equal(expected.Value.Right, pair.Right);
     }
 }
-

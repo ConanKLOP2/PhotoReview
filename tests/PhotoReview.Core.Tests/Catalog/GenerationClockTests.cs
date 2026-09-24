@@ -7,85 +7,64 @@ namespace PhotoReview.Core.Tests.Catalog;
 [Trait("Category", "HotPath")]
 public sealed class GenerationClockTests
 {
-    [Fact]
-    public void DefaultConstructor_InitializesAllGenerationsToZero()
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(12, 34, 56)]
+    public void Constructor_InitializesGenerationsToSpecifiedValues(long navigation, long folder, long interaction)
+    {
+        var clock = new GenerationClock(initialNavigation: navigation, initialFolder: folder, initialInteraction: interaction);
+
+        Assert.Equal(navigation, clock.CurrentNavigation);
+        Assert.Equal(folder, clock.CurrentFolder);
+        Assert.Equal(interaction, clock.CurrentInteraction);
+        Assert.True(clock.IsNavigationCurrent(navigation));
+        Assert.True(clock.IsFolderCurrent(folder));
+        Assert.True(clock.IsInteractionCurrent(interaction));
+    }
+
+    public enum Generation { Navigation, Folder, Interaction }
+
+    [Theory]
+    [InlineData(Generation.Navigation)]
+    [InlineData(Generation.Folder)]
+    [InlineData(Generation.Interaction)]
+    public void Next_IncrementsMonotonicallyAndUpdatesCurrent(Generation generation)
     {
         var clock = new GenerationClock();
 
-        Assert.Equal(0, clock.CurrentNavigation);
-        Assert.Equal(0, clock.CurrentFolder);
-        Assert.Equal(0, clock.CurrentInteraction);
-        Assert.True(clock.IsNavigationCurrent(0));
-        Assert.True(clock.IsFolderCurrent(0));
-        Assert.True(clock.IsInteractionCurrent(0));
-    }
-
-    [Fact]
-    public void ParameterizedConstructor_InitializesWithSpecifiedValues()
-    {
-        var clock = new GenerationClock(initialNavigation: 12, initialFolder: 34, initialInteraction: 56);
-
-        Assert.Equal(12, clock.CurrentNavigation);
-        Assert.Equal(34, clock.CurrentFolder);
-        Assert.Equal(56, clock.CurrentInteraction);
-        Assert.True(clock.IsNavigationCurrent(12));
-        Assert.True(clock.IsFolderCurrent(34));
-        Assert.True(clock.IsInteractionCurrent(56));
-    }
-
-    [Fact]
-    public void NextNavigation_IncrementsMonotonicallyAndUpdatesCurrent()
-    {
-        var clock = new GenerationClock();
-
-        var t1 = clock.NextNavigation();
+        var t1 = Next(clock, generation);
         Assert.Equal(1, t1);
-        Assert.Equal(1, clock.CurrentNavigation);
-        Assert.True(clock.IsNavigationCurrent(1));
-        Assert.False(clock.IsNavigationCurrent(0));
+        Assert.Equal(1, Current(clock, generation));
+        Assert.True(IsCurrent(clock, generation, 1));
+        Assert.False(IsCurrent(clock, generation, 0));
 
-        var t2 = clock.NextNavigation();
+        var t2 = Next(clock, generation);
         Assert.Equal(2, t2);
-        Assert.Equal(2, clock.CurrentNavigation);
-        Assert.True(clock.IsNavigationCurrent(2));
-        Assert.False(clock.IsNavigationCurrent(1));
+        Assert.Equal(2, Current(clock, generation));
+        Assert.True(IsCurrent(clock, generation, 2));
+        Assert.False(IsCurrent(clock, generation, 1));
     }
 
-    [Fact]
-    public void NextFolder_IncrementsMonotonicallyAndUpdatesCurrent()
+    private static long Next(GenerationClock clock, Generation generation) => generation switch
     {
-        var clock = new GenerationClock();
+        Generation.Navigation => clock.NextNavigation(),
+        Generation.Folder => clock.NextFolder(),
+        _ => clock.NextInteraction(),
+    };
 
-        var t1 = clock.NextFolder();
-        Assert.Equal(1, t1);
-        Assert.Equal(1, clock.CurrentFolder);
-        Assert.True(clock.IsFolderCurrent(1));
-        Assert.False(clock.IsFolderCurrent(0));
-
-        var t2 = clock.NextFolder();
-        Assert.Equal(2, t2);
-        Assert.Equal(2, clock.CurrentFolder);
-        Assert.True(clock.IsFolderCurrent(2));
-        Assert.False(clock.IsFolderCurrent(1));
-    }
-
-    [Fact]
-    public void NextInteraction_IncrementsMonotonicallyAndUpdatesCurrent()
+    private static long Current(GenerationClock clock, Generation generation) => generation switch
     {
-        var clock = new GenerationClock();
+        Generation.Navigation => clock.CurrentNavigation,
+        Generation.Folder => clock.CurrentFolder,
+        _ => clock.CurrentInteraction,
+    };
 
-        var t1 = clock.NextInteraction();
-        Assert.Equal(1, t1);
-        Assert.Equal(1, clock.CurrentInteraction);
-        Assert.True(clock.IsInteractionCurrent(1));
-        Assert.False(clock.IsInteractionCurrent(0));
-
-        var t2 = clock.NextInteraction();
-        Assert.Equal(2, t2);
-        Assert.Equal(2, clock.CurrentInteraction);
-        Assert.True(clock.IsInteractionCurrent(2));
-        Assert.False(clock.IsInteractionCurrent(1));
-    }
+    private static bool IsCurrent(GenerationClock clock, Generation generation, long value) => generation switch
+    {
+        Generation.Navigation => clock.IsNavigationCurrent(value),
+        Generation.Folder => clock.IsFolderCurrent(value),
+        _ => clock.IsInteractionCurrent(value),
+    };
 
     [Fact]
     public void StopForAction_IncrementsAllThreeCountersSimultaneously()

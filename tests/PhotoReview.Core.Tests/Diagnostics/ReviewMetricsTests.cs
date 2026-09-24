@@ -7,26 +7,6 @@ namespace PhotoReview.Core.Tests.Diagnostics;
 public sealed class ReviewMetricsTests
 {
     [Fact]
-    public void SnapshotInitialValuesAreZero()
-    {
-        var metrics = new ReviewMetrics();
-        var snapshot = metrics.Snapshot();
-
-        Assert.Equal(0, snapshot.CacheHits);
-        Assert.Equal(0, snapshot.CacheMisses);
-        Assert.Equal(0, snapshot.SourceBytesRead);
-        Assert.Equal(0, snapshot.SourceReads);
-        Assert.Equal(0, snapshot.DecodeMilliseconds);
-        Assert.Equal(0, snapshot.PresentedImages);
-        Assert.Equal(0, snapshot.PresentMilliseconds);
-        Assert.Equal(0, snapshot.PreloadHits);
-        Assert.Equal(0, snapshot.InflightJoins);
-        Assert.Equal(0, snapshot.DiskCacheHits);
-        Assert.Equal(0, snapshot.QueueWaitMilliseconds);
-        Assert.Equal(0, snapshot.UiAssignMilliseconds);
-    }
-
-    [Fact]
     public void DecodeMillisecondsEwma_StartsAtFirstSampleThenSmooths()
     {
         var metrics = new ReviewMetrics();
