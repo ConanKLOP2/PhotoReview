@@ -243,13 +243,14 @@ foreach ($testProject in $testProjects) {
     }
 }
 
-# Q-R3: same guarantee as CI's "Run Integration-category tests" step, so Integration-trait tests
-# whose class is also Slow are never silently skipped by the default gate.
+# Q-R3: same guarantee as CI's "Run Integration-category tests that the main filter skips" step, so
+# Integration-trait tests whose class is also Slow are never silently skipped by the default gate.
+# Only Integration+Slow is run here (the rest already ran above), in every test project (R2-A-12).
 if (-not $All -and -not $Slow) {
-    foreach ($testProject in @('PhotoReview.Core.Tests', 'PhotoReview.Integration.Tests')) {
-        Invoke-Gate "Run xUnit (Category=Integration): $testProject" {
+    foreach ($testProject in $testProjects) {
+        Invoke-Gate "Run xUnit (Category=Integration&Slow): $testProject" {
             dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo `
-                --filter 'Category=Integration&Category!=Manual&Category!=Native' `
+                --filter 'Category=Integration&Category=Slow&Category!=Manual&Category!=Native' `
                 --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
         }
     }
