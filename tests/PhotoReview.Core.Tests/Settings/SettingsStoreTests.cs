@@ -242,6 +242,9 @@ public sealed class SettingsStoreTests
         Assert.Equal(FileOperationType.Copy, Assert.Single(loaded.Actions).Operation);
     }
 
+    private static readonly string[] ExpectedRepairs =
+        ["ImageCacheCapacityBytes", "SourceBytesCapacityBytes", "PreloadWorkerCount", "PreloadMemoryLoadLimit", "Actions"];
+
     [Fact(DisplayName = "Load resets unusable numeric values and null actions to safe defaults and reports them (R2-F-04)")]
     public void Load_WhenConfigHoldsUnusableValues_ResetsThemAndReportsRepairs()
     {
@@ -264,9 +267,7 @@ public sealed class SettingsStoreTests
         Assert.Equal(PerformanceOptions.PreloadMemoryLoadLimit, loaded.PreloadMemoryLoadLimit);
         var action = Assert.Single(loaded.Actions);
         Assert.Equal("Keep", action.Name);
-        Assert.Equal(
-            new[] { "ImageCacheCapacityBytes", "SourceBytesCapacityBytes", "PreloadWorkerCount", "PreloadMemoryLoadLimit", "Actions" }.Order(),
-            _store.LastLoadRepairs.Order());
+        Assert.Equal(ExpectedRepairs.Order(), _store.LastLoadRepairs.Order());
     }
 
     [Fact(DisplayName = "Load of a valid config reports no repairs")]
