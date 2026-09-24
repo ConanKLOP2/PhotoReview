@@ -69,6 +69,23 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         Assert.Equal(profileId == "action-delete" ? 1 : 0, _bin.Sent.Count);
     }
 
+    [Fact(DisplayName = "PrepareIterationAsync does the file-action setup but defers the action itself to the timed measure step (R2-F-14)")]
+    public async Task PrepareIterationAsync_FileAction_ActionRunsOnlyInMeasureStep()
+    {
+        var profile = BenchmarkProfiles.Find("action-delete")!;
+        var files = new[] { _root.File("prepare-source.png", TestImages.PreviewPng) };
+        var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
+
+        var measure = await BenchmarkWorkloadRunner.PrepareIterationAsync(
+            executor, files, profile, BenchmarkWorkload.FileAction, iteration: 0,
+            BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id), _bin, CancellationToken.None);
+
+        Assert.Empty(_bin.Sent); // setup only: the timed action has not run
+        var (correct, _) = await measure();
+        Assert.True(correct);
+        Assert.Single(_bin.Sent);
+    }
+
     [Fact(DisplayName = "The interleaved action profile cycles move, delete, copy across iterations and matches each op's expected source state")]
     [Trait("Category", "Integration")]
     public async Task InterleavedActionProfileCyclesThroughAllThreeOperations()

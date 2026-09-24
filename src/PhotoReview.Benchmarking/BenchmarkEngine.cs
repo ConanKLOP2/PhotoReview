@@ -15,10 +15,28 @@ public sealed class BenchmarkEngine
     public const string ProgressCorrectnessFailed = "Correctness failed";
     public const string ResultCorrectnessFailed = "One or more samples failed correctness";
 
-    public static async Task<BenchmarkReport> RunAsync(string folder, BenchmarkProfile profile,
+    public static Task<BenchmarkReport> RunAsync(string folder, BenchmarkProfile profile,
         BenchmarkWorkloadExecutor operation,
         IProgress<BenchmarkProgress>? progress = null, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(operation);
+        // Legacy one-step executor: nothing to prepare, so the whole call is the measured region.
+        return RunPreparedAsync(folder, profile,
+            (p, w, i, ct) => Task.FromResult<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>>(() => operation(p, w, i, ct)),
+            progress, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// R2-F-14: each iteration is prepared first (untimed: temp-file copies, cache eviction) and only the returned
+    /// measure step is timed, so samples no longer contain their own setup I/O. <paramref name="timeProvider"/> exists
+    /// for tests; production uses <see cref="TimeProvider.System"/>.
+    /// </summary>
+    public static async Task<BenchmarkReport> RunPreparedAsync(string folder, BenchmarkProfile profile,
+        BenchmarkPreparedWorkloadExecutor operation,
+        IProgress<BenchmarkProgress>? progress = null, TimeProvider? timeProvider = null,
+        CancellationToken cancellationToken = default)
+    {
+        timeProvider ??= TimeProvider.System;
         if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("Folder is required", nameof(folder));
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         BenchmarkProfileValidation.Validate(profile);
@@ -35,7 +53,8 @@ public sealed class BenchmarkEngine
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                await operation(profile, profile.Workload, w, cancellationToken).ConfigureAwait(false);
+                var warmup = await operation(profile, profile.Workload, w, cancellationToken).ConfigureAwait(false);
+                await warmup().ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -52,11 +71,14 @@ public sealed class BenchmarkEngine
         for (var i = 0; i < total; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var sw = Stopwatch.StartNew();
             (bool Correct, ReviewMetricsSnapshot? Metrics) result;
+            TimeSpan elapsed;
             try
             {
-                result = await operation(profile, profile.Workload, i, cancellationToken).ConfigureAwait(false);
+                var measure = await operation(profile, profile.Workload, i, cancellationToken).ConfigureAwait(false);
+                var started0 = timeProvider.GetTimestamp();
+                result = await measure().ConfigureAwait(false);
+                elapsed = timeProvider.GetElapsedTime(started0);
             }
             catch (OperationCanceledException)
             {
@@ -68,11 +90,10 @@ public sealed class BenchmarkEngine
                 FileLog.Default.Error($"Benchmark phase failed runId={runId} profile={profile.Id} iteration={i}", ex);
                 throw;
             }
-            sw.Stop();
-            samples.Add(sw.Elapsed.TotalMilliseconds);
+            samples.Add(elapsed.TotalMilliseconds);
             metrics = result.Metrics ?? metrics;
             allCorrect &= result.Correct;
-            FileLog.Default.Info($"Benchmark sample runId={runId} profile={profile.Id} phase={profile.Workload} iteration={i + 1}/{total} elapsedMs={sw.Elapsed.TotalMilliseconds:F1} correct={result.Correct}");
+            FileLog.Default.Info($"Benchmark sample runId={runId} profile={profile.Id} phase={profile.Workload} iteration={i + 1}/{total} elapsedMs={elapsed.TotalMilliseconds:F1} correct={result.Correct}");
             progress?.Report(new(profile.Id, profile.Workload, i + 1, total, result.Correct ? ProgressOk : ProgressCorrectnessFailed));
         }
         var correct = samples.Count > 0 && allCorrect;
