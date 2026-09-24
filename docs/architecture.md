@@ -116,3 +116,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 ```
 
 `verify-all.ps1` build solution, chạy năm project xUnit (loại `Category=Manual`), smoke file operation, fault injection, publish framework-dependent và verify artifact. Benchmark và T73 GUI acceptance vẫn là gate riêng vì test tự động không chứng minh hình ảnh đã render đúng trên desktop.
+
+## Chính sách ghi session và file không đọc được (ADR 0007)
+
+- **Session** (`SessionStore.Save`) ghi nguyên tử (file tạm + rename) nhưng **không fsync** (`WriteAllTextAtomic(..., durable: false)`); Settings giữ `durable: true`. `SessionStore.Load` coi file session rỗng/hỏng là "không có session" (chỉ ghi log).
+- **Quét folder**: `IFileSystem.EnumerateReadableFilesWithStat` thử mở đọc từng ảnh; file không đọc được (quyền, bị khóa, lỗi I/O) bị **bỏ qua có báo cáo** qua `IFolderLoadSink.OnFilesSkipped` (log + cảnh báo "Bỏ qua N file không đọc được" và cửa sổ danh sách), không dùng `IgnoreInaccessible` im lặng. Chính folder không liệt kê được vẫn là lỗi (`OnFailed`).

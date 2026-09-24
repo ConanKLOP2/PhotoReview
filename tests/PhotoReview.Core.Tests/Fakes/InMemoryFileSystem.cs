@@ -227,7 +227,7 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
-    public void WriteAllTextAtomic(string path, string text)
+    public void WriteAllTextAtomic(string path, string text, bool durable = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(text);

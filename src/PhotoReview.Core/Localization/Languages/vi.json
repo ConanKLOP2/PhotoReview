@@ -376,5 +376,11 @@
   "status.zoom": "{position}/{count} · {size} · Zoom {zoom}x",
   "test.greeting": "Xin chào {name}",
   "test.items.other": "{count} mục",
-  "test.sample": "Mẫu"
+  "test.sample": "Mẫu",
+  "main.skipped.warning.other": "Bỏ qua {count} file không đọc được",
+  "main.skipped.viewList": "Xem danh sách",
+  "main.skipped.viewList.automationName": "Xem danh sách file bị bỏ qua",
+  "main.skipped.window.title": "File bị bỏ qua",
+  "main.skipped.window.intro": "Các file này không đọc được (bị từ chối quyền, đang bị khóa hoặc lỗi I/O) nên không có trong danh sách ảnh. Danh sách ảnh có thể chưa đầy đủ.",
+  "main.skipped.window.close": "Đóng"
 }

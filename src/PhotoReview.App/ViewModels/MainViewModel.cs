@@ -175,6 +175,24 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    private IReadOnlyList<SkippedEntry> _skippedEntries = [];
+
+    /// <summary>IO05: files of the current folder that could not be read and are not in the catalog.</summary>
+    public IReadOnlyList<SkippedEntry> SkippedEntries => _skippedEntries;
+
+    public bool HasSkippedEntries => _skippedEntries.Count > 0;
+
+    /// <summary>Persistent warning ("Skipped N unreadable files"); empty when nothing was skipped.</summary>
+    public string SkippedWarningText => _skippedEntries.Count == 0 ? string.Empty : Tr.MainSkippedWarning(_skippedEntries.Count);
+
+    private void SetSkippedEntries(IReadOnlyList<SkippedEntry> entries)
+    {
+        _skippedEntries = entries;
+        OnPropertyChanged(nameof(SkippedEntries));
+        OnPropertyChanged(nameof(HasSkippedEntries));
+        OnPropertyChanged(nameof(SkippedWarningText));
+    }
+
     public object? CurrentImage => _presenter.CurrentImage;
     public ViewerState Viewer => _viewerState;
     public CompareViewModel Compare => _compare;
@@ -485,6 +503,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         UpdateFolderTitle();
         if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
+        OnPropertyChanged(nameof(SkippedWarningText));
         // StatusText is event text (last action); it switches language with the next update.
     }
 
@@ -512,6 +531,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
+        if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
         SetFolderText(folder, count, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
         _statusText = StatusFormatter.IndexOnly(0, count);
@@ -554,6 +574,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (currentKept && currentIndex >= 0) _ = _preloadController?.PreloadAroundAsync(currentIndex);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
+    }
+
+    void IFolderLoadSink.OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped)
+    {
+        SetSkippedEntries(skipped.ToArray());
     }
 
     void IFolderLoadSink.OnFailed(string folder, Exception exception)

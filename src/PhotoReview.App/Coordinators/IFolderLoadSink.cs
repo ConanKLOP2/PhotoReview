@@ -26,6 +26,12 @@ public interface IFolderLoadSink
     /// </summary>
     void OnOrderApplied(int count, int currentIndex, bool currentKept);
 
+    /// <summary>
+    /// IO05: một số tệp/mục không đọc được đã bị bỏ qua khi quét (gọi ngay sau <see cref="OnCatalogReady"/>,
+    /// chỉ khi có mục bị bỏ qua). Mặc định không làm gì để các sink thử nghiệm không phải cài đặt.
+    /// </summary>
+    void OnFilesSkipped(string folder, IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> skipped) { }
+
     /// <summary>Thông báo nạp thư mục thất bại.</summary>
     void OnFailed(string folder, Exception exception);
 }
