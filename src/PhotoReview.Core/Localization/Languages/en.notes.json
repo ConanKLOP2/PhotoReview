@@ -376,5 +376,11 @@
   "main.skipped.viewList.automationName": "Screen-reader name of the View list button.",
   "main.skipped.window.title": "Title of the window listing skipped files.",
   "main.skipped.window.intro": "Explanation at the top of the skipped files window; must say the image list may be incomplete.",
-  "main.skipped.window.close": "Close button of the skipped files window."
+  "main.skipped.window.close": "Close button of the skipped files window.",
+  "settings.group.journalDurability": "GroupBox.Header (ADR 0007). The journal records file actions (move/copy/recycle) so Undo and Recovery work.",
+  "settings.journalDurability.label": "Label / automation name of the two radio options below.",
+  "settings.journalDurability.fast": "RadioButton.Content; the default mode.",
+  "settings.journalDurability.fast.hint": "TextBlock under the radio, one wrapped line; describes the risk (records can be lost on power loss / OS crash, not on app crash).",
+  "settings.journalDurability.safe": "RadioButton.Content.",
+  "settings.journalDurability.safe.hint": "TextBlock under the radio; 'forced to disk' = fsync / write-through."
 }

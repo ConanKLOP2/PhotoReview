@@ -388,5 +388,11 @@
   "main.skipped.viewList.automationName": "View the list of skipped files",
   "main.skipped.window.title": "Skipped files",
   "main.skipped.window.intro": "These files could not be read (access denied, locked or I/O error), so they are not in the image list. The list may be incomplete.",
-  "main.skipped.window.close": "Close"
+  "main.skipped.window.close": "Close",
+  "settings.group.journalDurability": "Operation journal",
+  "settings.journalDurability.label": "Operation journal durability",
+  "settings.journalDurability.fast": "Fast (default)",
+  "settings.journalDurability.fast.hint": "Records reach the OS cache before each file operation. Survives an app crash; after a power loss or OS crash the last few records may be lost, so Undo/Recovery may not know about a very recent move.",
+  "settings.journalDurability.safe": "Power-loss safe",
+  "settings.journalDurability.safe.hint": "Every record is forced to disk before the file operation starts. Safest, but about 4x slower per record (still off the UI thread, so the app stays responsive)."
 }
