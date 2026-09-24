@@ -150,7 +150,7 @@ public sealed class CompareViewModelTests
         Assert.True(vm.IsLeftSelected);
         Assert.False(vm.IsRightSelected);
         Assert.Equal(" | hash tắt", vm.HashText);
-        Assert.Equal("1/10 | Compare | img1.jpg ↔ img2.jpg | hash tắt | click để chọn", vm.StatusText);
+        Assert.Equal("1/10 | So sánh | img1.jpg ↔ img2.jpg | hash tắt | nhấn để chọn", vm.StatusText);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class CompareViewModelTests
         Assert.Equal(" (1,048,576 B)", vm.LeftSizeText);
         Assert.Equal(" (2,097,152 B)", vm.RightSizeText);
         Assert.Equal(" (1,048,576 B) ↔  (2,097,152 B)", vm.SizeText);
-        Assert.Equal("3/5 | Compare | img1.jpg (1,048,576 B) ↔ img2.jpg (2,097,152 B) | hash tắt | click để chọn", vm.StatusText);
+        Assert.Equal("3/5 | So sánh | img1.jpg (1,048,576 B) ↔ img2.jpg (2,097,152 B) | hash tắt | nhấn để chọn", vm.StatusText);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class CompareViewModelTests
 
         Assert.True(success);
         Assert.Equal(" | hash TRÙNG", vm.HashText);
-        Assert.Equal("1/1 | Compare | img1.jpg ↔ img2.jpg | hash TRÙNG | click để chọn", vm.StatusText);
+        Assert.Equal("1/1 | So sánh | img1.jpg ↔ img2.jpg | hash TRÙNG | nhấn để chọn", vm.StatusText);
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public sealed class CompareViewModelTests
 
         Assert.True(success);
         Assert.Equal(" | hash KHÁC", vm.HashText);
-        Assert.Equal("1/1 | Compare | img1.jpg ↔ img2.jpg | hash KHÁC | click để chọn", vm.StatusText);
+        Assert.Equal("1/1 | So sánh | img1.jpg ↔ img2.jpg | hash KHÁC | nhấn để chọn", vm.StatusText);
     }
 
     [Fact]

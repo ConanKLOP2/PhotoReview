@@ -38,37 +38,37 @@ public sealed class WindowLocalizationTests
                 var batch = new BatchReviewWindow([Path.Combine(temp.Path, "gone.jpg")]);
                 var actions = new ActionProfilesWindow(ReviewAction.Defaults());
 
-                // Vietnamese (pinned by LocalizationModuleInit): the pre-L05 literals.
-                Assert.Equal("Photo Review · Settings", settings.Title);
+                // Vietnamese (pinned by LocalizationModuleInit): the shipped vi.json text (L12 copy).
+                Assert.Equal("Photo Review · Cài đặt", settings.Title);
                 var settingsTexts = Texts(settings);
                 Assert.Contains("Cài đặt", settingsTexts);
                 Assert.Contains("Hiển thị & hiệu năng", settingsTexts);
-                Assert.Contains("Theo tên kiểu Explorer", settingsTexts);
-                Assert.Contains("Nhanh (Linear, mượt hơn khi zoom)", settingsTexts);
-                Assert.Contains("Mở vị trí file log", settingsTexts);
+                Assert.Contains("Theo tên (kiểu Explorer)", settingsTexts);
+                Assert.Contains("Nhanh (Linear, mượt hơn khi thu phóng)", settingsTexts);
+                Assert.Contains("Mở vị trí tệp log", settingsTexts);
                 Assert.Contains("Phím tắt", settingsTexts);
                 Assert.Contains("nhấn phím trực tiếp vào ô để cấu hình", settingsTexts);
-                Assert.Contains("Undo (Ctrl + phím)", settingsTexts);
+                Assert.Contains("Hoàn tác (Ctrl + phím)", settingsTexts);
                 Assert.Contains("Lưu", settingsTexts);
                 Assert.Contains("Language / Ngôn ngữ", settingsTexts);
                 Assert.Equal("Tự động (theo Windows)", Assert.IsType<LanguageOption>(settings.LanguageCombo.SelectedItem).DisplayName);
                 Assert.Contains(settings.LanguageCombo.Items.Cast<LanguageOption>(), o => o.Code == "vi" && o.DisplayName == "Tiếng Việt");
 
-                Assert.Equal("Recovery", recovery.Title);
-                Assert.Equal("Không có operation pending/failed cần xem.", recovery.SummaryText.Text);
-                Assert.Equal("Thử lại Move hoặc Copy đã lỗi", AutomationProperties.GetName(recovery.RetryButton));
+                Assert.Equal("Phục hồi", recovery.Title);
+                Assert.Equal("Không có thao tác đang chờ hoặc thất bại cần xem.", recovery.SummaryText.Text);
+                Assert.Equal("Thử lại thao tác Di chuyển hoặc Sao chép bị lỗi", AutomationProperties.GetName(recovery.RetryButton));
                 Assert.Contains("Đóng", Texts(recovery));
 
                 Assert.Equal("Chưa truy vấn", diagnostics.ExplorerOrderText.Text);
-                Assert.Equal("N/A", diagnostics.HitRateText.Text);
-                Assert.Contains("Source file reads", Texts(diagnostics));
+                Assert.Equal("Không có", diagnostics.HitRateText.Text);
+                Assert.Contains("Số lần đọc tệp nguồn", Texts(diagnostics));
 
                 Assert.Equal("Xem trước xử lý hàng loạt", batch.Title);
-                Assert.Equal("1 file sẽ bị đưa vào Recycle Bin. Hãy kiểm tra danh sách trước khi xác nhận.", batch.SummaryText.Text);
+                Assert.Equal("1 tệp sẽ được đưa vào Thùng rác. Hãy kiểm tra danh sách trước khi xác nhận.", batch.SummaryText.Text);
                 Assert.Equal($"gone.jpg    (không còn tồn tại)    {Path.Combine(temp.Path, "gone.jpg")}", batch.FilesList.Items[0]);
 
                 // Operation combo: order is load-bearing (SelectedIndex mapping).
-                Assert.Equal(["Move", "Copy", "Recycle", "Delete"],
+                Assert.Equal(["Di chuyển", "Sao chép", "Đưa vào Thùng rác", "Xóa (vào Thùng rác)"],
                     actions.OperationCombo.Items.Cast<ComboBoxItem>().Select(i => (string)i.Content));
                 Assert.Contains("+ Thêm", Texts(actions));
 
@@ -87,7 +87,7 @@ public sealed class WindowLocalizationTests
                     Assert.Contains("+ Add", Texts(actions));
                 }
                 await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.DataBind);
-                Assert.Equal("Thử lại Move hoặc Copy đã lỗi", AutomationProperties.GetName(recovery.RetryButton));
+                Assert.Equal("Thử lại thao tác Di chuyển hoặc Sao chép bị lỗi", AutomationProperties.GetName(recovery.RetryButton));
 
                 foreach (var window in new Window[] { settings, recovery, diagnostics, batch, actions }) window.Close();
             });
@@ -110,13 +110,13 @@ public sealed class WindowLocalizationTests
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
                 var undo = Assert.IsType<MenuItem>(Assert.Single(root.ContextMenu.Items));
-                Assert.Equal("Undo thao tác vừa thực hiện", undo.Header);
+                Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
-                Assert.Equal("Preview ảnh bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
+                Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
 
                 var texts = Texts(window);
-                Assert.Contains("Mở thư mục ảnh", texts);   // automation name of the folder button
-                Assert.Contains("Mở folder ảnh", texts);    // its tooltip
+                Assert.Contains("Mở thư mục ảnh", texts);   // automation name of the folder button and its tooltip
+                Assert.Contains("Vừa khung", texts);        // Fit toolbar button
                 Assert.Contains("Bỏ bản (1) trùng hash", texts); // inside the tools Popup
                 Assert.Contains("Mở chẩn đoán hiệu năng", texts);
                 return Task.CompletedTask;

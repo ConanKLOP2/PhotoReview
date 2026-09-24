@@ -123,7 +123,7 @@ public sealed class UndoServiceTests
         var result = await _service.UndoMoveAsync();
 
         Assert.False(result.Succeeded);
-        Assert.Contains("File đích đã thay đổi sau Move", result.ErrorMessage);
+        Assert.Contains("Tệp đích đã thay đổi sau khi Di chuyển", result.ErrorMessage);
         Assert.True(_service.CanUndoMove);
         Assert.False(_fs.FileExists(source));
         Assert.True(_fs.FileExists(destination));
@@ -171,7 +171,7 @@ public sealed class UndoServiceTests
         var result = await _service.UndoMoveAsync();
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Không có Move nào để hoàn tác.", result.ErrorMessage);
+        Assert.Equal("Không có thao tác Di chuyển nào để hoàn tác.", result.ErrorMessage);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class UndoServiceTests
         var result = await _service.UndoLastAsync();
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Không thể khôi phục Recycle Bin", result.ErrorMessage);
+        Assert.Contains("Không thể khôi phục từ Thùng rác", result.ErrorMessage);
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public sealed class UndoServiceTests
         var result = await _service.UndoLastAsync();
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Không có Move/Delete vừa thực hiện để hoàn tác.", result.ErrorMessage);
+        Assert.Equal("Không có thao tác Di chuyển/Xóa nào vừa thực hiện để hoàn tác.", result.ErrorMessage);
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public sealed class UndoServiceTests
 
         Assert.False(result.Succeeded);
         Assert.True(result.Rejected);
-        Assert.Contains("đang bận", result.ErrorMessage);
+        Assert.Contains("Đang bận", result.ErrorMessage);
 
         _fileActionService.End();
         Assert.False(_service.IsBusy);

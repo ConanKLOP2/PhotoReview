@@ -52,7 +52,7 @@ per-navigation cost = one dictionary lookup + one pre-parsed template concat. XA
 | L09 | Translator mode: `--i18n-keys` (show keys) and pseudo-locale `qps-ploc` (+35 % length, accents) | Unit test for pseudo transform | ⏳ |
 | L10 | `tools/i18n-check.ps1` in CI (JSON valid, no unknown keys, placeholder parity, completeness %), a translator guide `TRANSLATING.md` in `docs/` (EN+VI, created in L10), PR template, README table; `verify-release.ps1` checks `Languages\` | CI green | ⏳ |
 | L11 | Real-machine check: GUI in `en`, `vi`, pseudo (screenshots, overflow), startup perf vs 1.8 s | Evidence in this file | ⏳ |
-| L12 | Vietnamese copy polish (folder/thư mục, Action/thao tác…) — separate PR, user reviews wording | | ⏳ (Q-L6 = later) |
+| L12 | Vietnamese copy polish (folder/thư mục, Action/thao tác…) — separate PR, user reviews wording | | 🔍 PR open, wording review (236 values + glossary in TRANSLATING.md) |
 
 Order: L00 → L01 → L02 → L03 → L04–L07 → L08–L10 → L11 → L12.
 PR policy: every PR based on `master` (no stacks); code tasks L01–L11 may share one branch with one commit per task.
