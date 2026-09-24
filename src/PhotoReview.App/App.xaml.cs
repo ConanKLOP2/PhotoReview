@@ -242,7 +242,7 @@ public partial class App : System.Windows.Application, IDisposable
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
-        _instanceLock = new InstanceLock(lockFolder);
+        _instanceLock = new InstanceLock(lockFolder, _services.GetRequiredService<ILog>());
         if (!_instanceLock.IsOwner)
         {
             _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
