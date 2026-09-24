@@ -5,11 +5,8 @@
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="820" MinHeight="560"
         Background="#171717" Foreground="#F5F5F5">
     <Window.Resources>
-        <Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,5"/><Setter Property="Foreground" Value="#E5E5E5"/></Style>
-        <Style TargetType="TextBox"><Setter Property="Padding" Value="9,7"/><Setter Property="Background" Value="#252525"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#505050"/></Style>
-        <Style TargetType="ListBox"><Setter Property="Background" Value="#252525"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#505050"/></Style>
-        <Style TargetType="Button"><Setter Property="Padding" Value="12,7"/></Style>
-        <Style TargetType="ProgressBar"><Setter Property="Background" Value="#2A2A2A"/><Setter Property="Foreground" Value="#4E8CFF"/><Setter Property="BorderBrush" Value="#3A3A3A"/></Style>
+      <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/></ResourceDictionary.MergedDictionaries>
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="#171717"/>
             <Setter Property="Foreground" Value="#F5F5F5"/>
@@ -49,12 +46,17 @@
                 <DataTrigger Binding="{Binding Status}" Value="Fail"><Setter Property="Background" Value="#3B1E1E"/></DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="NumericCell" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-            <Setter Property="HorizontalAlignment" Value="Right"/>
-            <Setter Property="Margin" Value="0,0,10,0"/>
-        </Style>
+      </ResourceDictionary>
     </Window.Resources>
     <Grid Margin="24">
+        <Grid.Resources>
+            <!-- Grid-level so BasedOn resolves to the shared dark theme merged into Window.Resources. -->
+            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="Margin" Value="0,0,0,5"/></Style>
+            <Style x:Key="NumericCell" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="Margin" Value="0,0,10,0"/>
+            </Style>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -83,7 +85,7 @@
             <ListBox x:Name="ProfilesList" Height="120" SelectionMode="Multiple" DisplayMemberPath="Name"
                      VirtualizingPanel.IsVirtualizing="False">
                 <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                         <Setter Property="ToolTip" Value="{Binding Description}"/>
                         <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
                     </Style>
