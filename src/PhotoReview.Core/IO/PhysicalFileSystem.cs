@@ -60,7 +60,9 @@ public sealed class PhysicalFileSystem : IFileSystem
             FileOptions.SequentialScan);
     }
 
-    public Stream OpenAppendDurable(string path)
+    public Stream OpenAppendDurable(string path) => OpenAppend(path, durable: true);
+
+    public Stream OpenAppend(string path, bool durable)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         return new FileStream(
@@ -69,7 +71,7 @@ public sealed class PhysicalFileSystem : IFileSystem
             FileAccess.Write,
             FileShare.Read,
             4096,
-            FileOptions.WriteThrough);
+            durable ? FileOptions.WriteThrough : FileOptions.None);
     }
 
     public void WriteAllTextAtomic(string path, string text)

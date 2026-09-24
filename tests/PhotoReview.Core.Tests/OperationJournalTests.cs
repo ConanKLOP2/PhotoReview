@@ -497,6 +497,7 @@ public sealed class OperationJournalUnitTests
         public void Copy(string source, string destination) => inner.Copy(source, destination);
         public void Delete(string path) => inner.Delete(path);
         public Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
+        public Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
         public void WriteAllTextAtomic(string path, string text) => inner.WriteAllTextAtomic(path, text);
         public string ReadAllText(string path) => inner.ReadAllText(path);
         public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);

@@ -44,6 +44,7 @@ public partial class SettingsWindow : Window
             CompareHashEnabled = current.CompareHashEnabled,
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
+            JournalDurability = current.JournalDurability,
             ImageCacheCapacityBytes = current.ImageCacheCapacityBytes,
             MemoryReserveBytes = current.MemoryReserveBytes,
             PreloadWorkerCount = current.PreloadWorkerCount,
@@ -164,11 +165,14 @@ public partial class SettingsWindow : Window
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
+        JournalSafeRadio.IsChecked = Settings.JournalDurability == JournalDurability.PowerLossSafe;
+        JournalFastRadio.IsChecked = !JournalSafeRadio.IsChecked;
     }
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
         Settings.LoggingEnabled = false;
+        Settings.JournalDurability = JournalDurability.Fast;
         Settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
         Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
         Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
@@ -195,6 +199,7 @@ public partial class SettingsWindow : Window
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
+        Settings.JournalDurability = JournalSafeRadio.IsChecked == true ? JournalDurability.PowerLossSafe : JournalDurability.Fast;
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();

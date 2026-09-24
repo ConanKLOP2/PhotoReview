@@ -381,5 +381,11 @@
   "test.greeting": "Hello {name}",
   "test.items.one": "{count} item",
   "test.items.other": "{count} items",
-  "test.sample": "Sample"
+  "test.sample": "Sample",
+  "settings.group.journalDurability": "Operation journal",
+  "settings.journalDurability.label": "Operation journal durability",
+  "settings.journalDurability.fast": "Fast (default)",
+  "settings.journalDurability.fast.hint": "Records reach the OS cache before each file operation. Survives an app crash; after a power loss or OS crash the last few records may be lost, so Undo/Recovery may not know about a very recent move.",
+  "settings.journalDurability.safe": "Power-loss safe",
+  "settings.journalDurability.safe.hint": "Every record is forced to disk before the file operation starts. Safest, but about 4x slower per record (still off the UI thread, so the app stays responsive)."
 }

@@ -370,5 +370,11 @@
   "status.siblingFolder.last": "direction > 0 arm; called from SiblingFolderNavigator.cs:56.",
   "status.undoFailedGeneric": "Fallback when UndoResult.ErrorMessage is null (obsolete UndoAsync path).",
   "status.withDimensions": "Layout-only; hot path (ImagePresenter.cs:390).",
-  "status.zoom": "Not called in src today (tests only)."
+  "status.zoom": "Not called in src today (tests only).",
+  "settings.group.journalDurability": "GroupBox.Header (ADR 0007). The journal records file actions (move/copy/recycle) so Undo and Recovery work.",
+  "settings.journalDurability.label": "Label / automation name of the two radio options below.",
+  "settings.journalDurability.fast": "RadioButton.Content; the default mode.",
+  "settings.journalDurability.fast.hint": "TextBlock under the radio, one wrapped line; describes the risk (records can be lost on power loss / OS crash, not on app crash).",
+  "settings.journalDurability.safe": "RadioButton.Content.",
+  "settings.journalDurability.safe.hint": "TextBlock under the radio; 'forced to disk' = fsync / write-through."
 }
