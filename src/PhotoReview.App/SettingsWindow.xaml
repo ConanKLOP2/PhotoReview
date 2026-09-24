@@ -4,66 +4,98 @@
         Title="Photo Review · Settings" Width="760" Height="680"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="680" MinHeight="560" Background="#171717" Foreground="#F5F5F5" Loaded="SettingsWindow_Loaded">
     <Window.Resources>
-        <Style TargetType="TextBlock"><Setter Property="Margin" Value="0,0,0,5"/><Setter Property="Foreground" Value="#E5E5E5"/></Style>
-        <Style TargetType="TextBox"><Setter Property="Padding" Value="9,7"/><Setter Property="Margin" Value="0,0,0,10"/><Setter Property="Background" Value="#252525"/><Setter Property="Foreground" Value="#FFFFFF"/><Setter Property="BorderBrush" Value="#505050"/></Style>
-        <Style TargetType="ComboBox"><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="0,0,0,10"/></Style>
-        <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#E5E5E5"/><Setter Property="Margin" Value="0,4,0,8"/></Style>
-        <Style TargetType="GroupBox"><Setter Property="Margin" Value="0,0,0,14"/><Setter Property="Padding" Value="14"/><Setter Property="Foreground" Value="#FFFFFF"/></Style>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Window.Resources>
     <Grid Margin="24">
+        <Grid.Resources>
+            <!-- Local tweaks live one level below the Window so BasedOn={StaticResource {x:Type ...}} resolves to the
+                 dark theme styles merged into Window.Resources (inside the same dictionary it resolved to the system style). -->
+            <!-- Form spacing: label column vertically centred on its input. -->
+            <Style x:Key="FormLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Margin" Value="0,0,12,10"/>
+            </Style>
+            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="Margin" Value="0,0,0,10"/></Style>
+            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="Margin" Value="0,0,0,10"/></Style>
+            <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}"><Setter Property="Margin" Value="0,2,0,10"/></Style>
+            <Style x:Key="ShortcutBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="Width" Value="130"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
+            <Style x:Key="ShortcutLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Margin" Value="0,0,12,8"/>
+            </Style>
+        </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <StackPanel><TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA"/><TextBlock x:Name="VersionText" Foreground="#777777" Margin="0,6,0,0"/></StackPanel>
-        <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8"><StackPanel KeyboardNavigation.TabNavigation="Local">
-            <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <TextBlock Text="Chế độ mở ảnh" Grid.Row="1" Margin="0,7,10,7"/>
-            <ComboBox x:Name="ViewModeCombo" Grid.Row="1" Grid.Column="1"><ComboBoxItem Content="Fit"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
-            <TextBlock Text="Chế độ tải ảnh" Grid.Row="2" Margin="0,7,10,7"/>
-            <ComboBox x:Name="LoadingModeCombo" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="Fast"/><ComboBoxItem Content="Preview"/><ComboBoxItem Content="Original (chất lượng cao nhất)" Tag="Original"/></ComboBox>
-            <TextBlock Text="Thứ tự ảnh" Grid.Row="3" Margin="0,7,10,7"/>
-            <ComboBox x:Name="SortModeCombo" Grid.Row="3" Grid.Column="1"><ComboBoxItem Content="Theo tên kiểu Explorer" Tag="Name"/><ComboBoxItem Content="Theo kích thước tăng dần" Tag="SizeAscending"/><ComboBoxItem Content="Theo kích thước giảm dần" Tag="SizeDescending"/></ComboBox>
-            <CheckBox x:Name="CompareHashCheck" Grid.Row="4" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" Margin="0,4,0,8" IsChecked="True"/>
-            <CheckBox x:Name="CompareSizeCheck" Grid.Row="5" Grid.Column="1" Content="Compare kích thước file" Margin="0,4,0,8" IsChecked="True"/>
-            <TextBlock Text="Backend giải mã" Grid.Row="6" Margin="0,7,10,7"/>
-            <ComboBox x:Name="DecoderBackendCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Backend giải mã ảnh"><ComboBoxItem Content="WPF (mặc định, an toàn)"/><ComboBoxItem Content="WIC Direct (nhanh)"/><ComboBoxItem x:Name="TurboJpegOption" Content="TurboJPEG (JPEG)"/></ComboBox>
-            <TextBlock Text="Chất lượng thu phóng" Grid.Row="7" Margin="0,7,10,7"/>
-            <ComboBox x:Name="ScalingQualityCombo" Grid.Row="7" Grid.Column="1" AutomationProperties.Name="Chất lượng thu phóng ảnh"><ComboBoxItem Content="Cao (HighQuality)"/><ComboBoxItem Content="Nhanh (Linear, mượt hơn khi zoom)"/></ComboBox>
-            </Grid></GroupBox>
-            <GroupBox Header="Chẩn đoán"><StackPanel><CheckBox x:Name="LoggingCheck" Content="Bật ghi log chẩn đoán (mặc định tắt)"/><Button Content="Mở vị trí file log" AutomationProperties.Name="Mở vị trí file log" HorizontalAlignment="Left" Padding="12,7" Click="OpenLogLocation_Click"/></StackPanel></GroupBox>
-            <GroupBox Header="Phím tắt · nhấn phím trực tiếp vào ô để cấu hình"><Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Ảnh tiếp theo" Width="210" VerticalAlignment="Center"/><TextBox x:Name="NextText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Ảnh trước" Width="210" VerticalAlignment="Center"/><TextBox x:Name="PreviousText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Compare" Width="210" VerticalAlignment="Center"/><TextBox x:Name="CompareText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Zoom in" Width="210" VerticalAlignment="Center"/><TextBox x:Name="ZoomInText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Fit ảnh" Width="210" VerticalAlignment="Center"/><TextBox x:Name="ToggleFitText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Bỏ qua ảnh" Width="210" VerticalAlignment="Center"/><TextBox x:Name="SkipText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Fullscreen" Width="210" VerticalAlignment="Center"/><TextBox x:Name="FullscreenText" Width="110"/></StackPanel>
+        <StackPanel>
+            <TextBlock Text="Cài đặt" FontSize="28" FontWeight="SemiBold" Foreground="#FFFFFF"/>
+            <TextBlock Text="Tùy chỉnh PhotoReview theo quy trình review của bạn" Foreground="#AAAAAA" Margin="0,4,0,0"/>
+            <TextBlock x:Name="VersionText" Foreground="#777777" Margin="0,6,0,0"/>
+        </StackPanel>
+        <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8">
+            <StackPanel KeyboardNavigation.TabNavigation="Local" Margin="0,0,12,0">
+                <GroupBox Header="Hiển thị &amp; hiệu năng"><Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="Chế độ mở ảnh" Grid.Row="0" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="ViewModeCombo" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="Fit"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
+                    <TextBlock Text="Chế độ tải ảnh" Grid.Row="1" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="LoadingModeCombo" Grid.Row="1" Grid.Column="1"><ComboBoxItem Content="Fast"/><ComboBoxItem Content="Preview"/><ComboBoxItem Content="Original (chất lượng cao nhất)" Tag="Original"/></ComboBox>
+                    <TextBlock Text="Thứ tự ảnh" Grid.Row="2" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="SortModeCombo" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="Theo tên kiểu Explorer" Tag="Name"/><ComboBoxItem Content="Theo kích thước tăng dần" Tag="SizeAscending"/><ComboBoxItem Content="Theo kích thước giảm dần" Tag="SizeDescending"/></ComboBox>
+                    <CheckBox x:Name="CompareHashCheck" Grid.Row="3" Grid.Column="1" Content="Compare hash (đọc file để xác nhận bytes giống nhau)" IsChecked="True"/>
+                    <CheckBox x:Name="CompareSizeCheck" Grid.Row="4" Grid.Column="1" Content="Compare kích thước file" IsChecked="True"/>
+                    <TextBlock Text="Backend giải mã" Grid.Row="5" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="DecoderBackendCombo" Grid.Row="5" Grid.Column="1" AutomationProperties.Name="Backend giải mã ảnh"><ComboBoxItem Content="WPF (mặc định, an toàn)"/><ComboBoxItem Content="WIC Direct (nhanh)"/><ComboBoxItem x:Name="TurboJpegOption" Content="TurboJPEG (JPEG)"/></ComboBox>
+                    <TextBlock Text="Chất lượng thu phóng" Grid.Row="6" Style="{StaticResource FormLabel}"/>
+                    <ComboBox x:Name="ScalingQualityCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Chất lượng thu phóng ảnh" Margin="0"><ComboBoxItem Content="Cao (HighQuality)"/><ComboBoxItem Content="Nhanh (Linear, mượt hơn khi zoom)"/></ComboBox>
+                </Grid></GroupBox>
+
+                <GroupBox Header="Chẩn đoán"><StackPanel>
+                    <CheckBox x:Name="LoggingCheck" Content="Bật ghi log chẩn đoán (mặc định tắt)"/>
+                    <Button Content="Mở vị trí file log" AutomationProperties.Name="Mở vị trí file log" HorizontalAlignment="Left" Click="OpenLogLocation_Click"/>
+                </StackPanel></GroupBox>
+
+                <GroupBox><GroupBox.Header><TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF"><Run Text="Phím tắt"/><Run Text="  ·  nhấn phím trực tiếp vào ô để cấu hình" FontWeight="Normal" Foreground="#9A9A9A" FontSize="13"/></TextBlock></GroupBox.Header>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Ảnh tiếp theo" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="1" x:Name="NextText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Ảnh trước" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="PreviousText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Compare" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="1" x:Name="CompareText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Zoom in" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="1" x:Name="ZoomInText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Fit ảnh" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="1" x:Name="ToggleFitText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Bỏ qua ảnh" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="5" Grid.Column="1" x:Name="SkipText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Fullscreen" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="6" Grid.Column="1" x:Name="FullscreenText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="3" Text="Folder tiếp theo" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="4" x:Name="NextFolderText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="3" Text="Folder trước" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="4" x:Name="PreviousFolderText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="3" Text="Ảnh đầu tiên" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="4" x:Name="FirstImageText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="3" Text="Zoom out" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="4" x:Name="ZoomOutText" Style="{StaticResource ShortcutBox}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="3" Text="Undo (Ctrl + phím)" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="4" x:Name="UndoText" Style="{StaticResource ShortcutBox}"/>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Xử lý file"><Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="Phím đưa vào thùng rác" Grid.Row="0" Style="{StaticResource FormLabel}"/>
+                    <TextBox x:Name="RecycleText" Grid.Row="0" Grid.Column="1" Width="130" HorizontalAlignment="Left"/>
+                    <TextBlock Text="Action profiles (JSON)" Grid.Row="1" VerticalAlignment="Top" Margin="0,6,12,10"/>
+                    <TextBox x:Name="ActionsText" Grid.Row="1" Grid.Column="1" Height="110" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontFamily="Consolas"/>
+                    <Button Content="Mở trình chỉnh sửa action" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Click="EditActions_Click"/>
+                </Grid></GroupBox>
             </StackPanel>
-            <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Folder tiếp theo" Width="210" VerticalAlignment="Center"/><TextBox x:Name="NextFolderText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Folder trước" Width="210" VerticalAlignment="Center"/><TextBox x:Name="PreviousFolderText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Ảnh đầu tiên" Width="210" VerticalAlignment="Center"/><TextBox x:Name="FirstImageText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Zoom out" Width="210" VerticalAlignment="Center"/><TextBox x:Name="ZoomOutText" Width="110"/></StackPanel>
-                <StackPanel Orientation="Horizontal"><TextBlock Text="Undo (Ctrl + phím)" Width="210" VerticalAlignment="Center"/><TextBox x:Name="UndoText" Width="110"/></StackPanel>
-            </StackPanel>
-            </Grid></GroupBox>
-            <GroupBox Header="Xử lý file"><Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="230"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <TextBlock Text="Phím đưa vào thùng rác" Grid.Row="0" Margin="0,7,10,7"/>
-            <TextBox x:Name="RecycleText" Grid.Row="0" Grid.Column="1" Padding="6" Margin="0,3,0,5"/>
-            <TextBlock Text="Action profiles (JSON)" Grid.Row="1" Margin="0,7,10,7"/>
-            <TextBox x:Name="ActionsText" Grid.Row="1" Grid.Column="1" Height="100" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
-            <Button Content="Mở trình chỉnh sửa action" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Padding="12,7" Click="EditActions_Click"/>
-            </Grid></GroupBox>
-        </StackPanel></ScrollViewer>
+        </ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="Khôi phục mặc định" Click="Defaults_Click" Padding="12,7" Margin="0,0,8,0"/>
-            <Button Content="Hủy" IsCancel="True" Padding="16,7" Margin="0,0,8,0"/>
-            <Button Content="Lưu" IsDefault="True" Click="Save_Click" Padding="18,7"/>
+            <Button Content="Khôi phục mặc định" Click="Defaults_Click" Margin="0,0,8,0"/>
+            <Button Content="Hủy" IsCancel="True" MinWidth="80" Margin="0,0,8,0"/>
+            <Button Content="Lưu" IsDefault="True" Click="Save_Click" MinWidth="80"/>
         </StackPanel>
     </Grid>
 </Window>
