@@ -235,7 +235,8 @@ public sealed class OperationJournal
                 try
                 {
                     var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                    if (entry is not null) handle(entry);
+                    // Valid JSON can still lack required members (records do not enforce them); skip such lines.
+                    if (entry is not null && !string.IsNullOrEmpty(entry.Id) && entry.Source is not null) handle(entry);
                 }
                 catch (JsonException) { }
             }

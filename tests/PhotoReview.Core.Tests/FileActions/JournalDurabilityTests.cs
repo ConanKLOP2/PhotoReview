@@ -193,4 +193,22 @@ public sealed class JournalDurabilityTests
         }
         finally { Directory.Delete(dir, recursive: true); }
     }
+
+    [Fact]
+    public void ReadPending_SkipsLinesWithoutIdOrSource_AndKeepsValidOnes()
+    {
+        const string noId = """{"Type":"Move","State":"Prepared","Source":"C:\p\b.jpg","Size":1}""";
+        const string noSource = """{"Id":"noSource","Type":"Move","State":"Prepared","Size":1}""";
+        using (var stream = _fs.OpenAppend(_paths.JournalFile, durable: false))
+        {
+            var bytes = Encoding.UTF8.GetBytes(noId + "\n" + noSource + "\n");
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush();
+        }
+        _journal.Append(new JournalEntry("ok", FileOperationType.Move, JournalState.Prepared, @"C:\a.jpg", @"C:\b\a.jpg", 1, DateTime.UtcNow, DateTime.UtcNow));
+
+        var pending = _journal.ReadPendingOperations();
+
+        Assert.Equal("ok", Assert.Single(pending).Id);
+    }
 }
