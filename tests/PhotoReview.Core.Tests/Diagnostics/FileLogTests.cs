@@ -22,6 +22,41 @@ public sealed class FileLogTests : IDisposable
         catch { }
     }
 
+    // A log path whose parent is an existing regular file can never be created: every drain fails.
+    private string UnwritableLogPath()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var blocker = Path.Combine(_tempDir, "blocker");
+        File.WriteAllText(blocker, "x");
+        return Path.Combine(blocker, "logs", "test.log");
+    }
+
+    [Fact(DisplayName = "R2-F-23: queue is bounded when the log file cannot be written")]
+    public void QueueIsBoundedWhenLogFileCannotBeWritten()
+    {
+        using var log = new FileLog(UnwritableLogPath()) { Enabled = true };
+
+        for (var i = 0; i < FileLog.MaxQueuedEntries * 3; i++) log.Info("entry " + i);
+
+        Assert.True(log.PendingCount <= FileLog.MaxQueuedEntries, $"pending={log.PendingCount}");
+        Assert.True(log.DroppedCount >= FileLog.MaxQueuedEntries * 2);
+    }
+
+    [Fact(DisplayName = "R2-F-23: Shutdown does not stall on an unwritable log file")]
+    public void ShutdownDoesNotStallOnUnwritableLogFile()
+    {
+        var log = new FileLog(UnwritableLogPath()) { Enabled = true };
+        log.Info("lost");
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        log.Shutdown();
+        stopwatch.Stop();
+        log.Dispose();
+
+        // Before the fix Flush waited its whole 2 s budget (Join + Flush up to 4 s) for a queue that could never drain.
+        Assert.True(stopwatch.ElapsedMilliseconds < 1500, $"Shutdown took {stopwatch.ElapsedMilliseconds} ms");
+    }
+
     [Fact(DisplayName = "INV-10: Disabled logging creates no directory or file")]
     public void DisabledLoggingCreatesNoDirectoryOrFile()
     {

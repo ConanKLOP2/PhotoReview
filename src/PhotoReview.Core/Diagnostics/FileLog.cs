@@ -24,6 +24,9 @@ public sealed class FileLog : ILog, IDisposable
     private volatile bool _enabled;
     private volatile bool _stopping;
     private volatile bool _writing;
+    private volatile bool _lastDrainFailed;
+    private int _queuedCount;
+    private long _dropped;
     private Thread? _writer;
     private bool _disposed;
 
@@ -41,6 +44,13 @@ public sealed class FileLog : ILog, IDisposable
         _filePath = Path.GetFullPath(filePath);
         _maxLogBytes = Math.Max(1024, maxLogBytes);
     }
+
+    /// <summary>R2-F-23: hard cap on queued entries; when the log file cannot be written the oldest entries are dropped.</summary>
+    internal const int MaxQueuedEntries = 10_000;
+
+    internal int PendingCount => Volatile.Read(ref _queuedCount);
+
+    internal long DroppedCount => Interlocked.Read(ref _dropped);
 
     public string FilePath => _filePath;
 
@@ -72,10 +82,14 @@ public sealed class FileLog : ILog, IDisposable
     /// Blocks (without spinning) until the writer thread reports the queue drained,
     /// or until the 2000ms bounded timeout elapses.
     /// </summary>
-    public void Flush()
+    public void Flush() => Flush(2000);
+
+    // Returns early when the last drain attempt failed (log file unavailable): waiting cannot help, and the UI thread
+    // (Shutdown / Enabled = false) must not stall for the whole timeout on an unwritable log.
+    private void Flush(int timeoutMs)
     {
-        var remaining = 2000;
-        while ((!_queue.IsEmpty || _writing) && remaining > 0)
+        var remaining = timeoutMs;
+        while (((!_queue.IsEmpty && !_lastDrainFailed) || _writing) && remaining > 0)
         {
             _signal.Set();
             var start = Environment.TickCount64;
@@ -89,8 +103,10 @@ public sealed class FileLog : ILog, IDisposable
         _stopping = true;
         _enabled = false;
         _signal.Set();
+        // One shared 2 s budget for join + flush (was up to 4 s on the UI thread).
+        var start = Environment.TickCount64;
         _writer?.Join(2000);
-        Flush();
+        Flush((int)Math.Max(0, 2000 - (Environment.TickCount64 - start)));
     }
 
     public void Dispose()
@@ -124,7 +140,13 @@ public sealed class FileLog : ILog, IDisposable
     {
         if (!_enabled || _stopping) return;
         _drained.Reset();
+        _lastDrainFailed = false;
         _queue.Enqueue(new Entry(level, message, exception, DateTime.Now, Environment.CurrentManagedThreadId));
+        if (Interlocked.Increment(ref _queuedCount) > MaxQueuedEntries && _queue.TryDequeue(out _))
+        {
+            Interlocked.Decrement(ref _queuedCount);
+            Interlocked.Increment(ref _dropped);
+        }
         _signal.Set();
     }
 
@@ -160,16 +182,21 @@ public sealed class FileLog : ILog, IDisposable
             using var writer = new StreamWriter(stream, new UTF8Encoding(false));
             while (_queue.TryDequeue(out var e))
             {
+                Interlocked.Decrement(ref _queuedCount);
+                _lastDrainFailed = false;
                 writer.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}" + (e.Exception is null ? "" : $"\n{e.Exception}"));
             }
         }
         catch
         {
+            // Log file unavailable (locked, read-only, bad path): entries stay queued (bounded by MaxQueuedEntries) and are
+            // retried on the next signal, but waiters must not block for the full flush timeout.
+            _lastDrainFailed = true;
         }
         finally
         {
             _writing = false;
-            if (_queue.IsEmpty)
+            if (_queue.IsEmpty || _lastDrainFailed)
             {
                 _drained.Set();
             }
