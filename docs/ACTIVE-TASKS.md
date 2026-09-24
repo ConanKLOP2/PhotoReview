@@ -1,7 +1,7 @@
 # Active Tasks — Consolidated Work Remaining
 
-**Updated:** 2026-09-23
-**Status:** ST, TS00-04, DF, CQ all DONE and merged to `master`. New group **AR** (architecture review, plan only). TC/OC/WD/IO/DT/T89(GUI)/D still open.
+**Updated:** 2026-09-24
+**Status:** AR00-AR07, ST, TS, TC, DF, CQ, L (i18n L00-L11) all DONE and merged to `master` (v2.0.64). IO01 decided (ADR 0007); IO03-IO05, OC14, DT10 open. T89 (GUI acceptance) waits on the user.
 
 ---
 
@@ -9,17 +9,17 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **L** (I18N: EN + VI, community JSON catalogs) | 🔄 L00 ✅ #55; L01–L11 done, PR #61 open; L12 later | Q-L1..Q-L8 decided 2026-09-24. Plan: `refactoring/I18N-PLAN.md`, ADR 0006. |
+| **L** (I18N: EN + VI, community JSON catalogs) | ✅ L00–L11 DONE (#55, #61, 2026-09-24); L12 (Vietnamese copy polish) open | Q-L1..Q-L8 decided. Plan: `refactoring/I18N-PLAN.md`, ADR 0006, `TRANSLATING.md`. |
 | **AR** (Architecture Review 2026-09-23) | ✅ AR00–AR07 all DONE (AR02d #35, AR04 #37); only T89/AR04 GUI acceptance left (user) | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE (ST08/ST09 blocked) | ST01-ST07, ST10-ST12 merged. ST08/ST09 wait on OC14. See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS07, TS10 DONE; TS08/TS09 closed (Q-AR5) | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
 | **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Plan: `refactoring/CQ-WARNINGS-PLAN.md`. |
-| **TC** (Test Cleanup) | ✅ TC04, TC09 DONE (#36); TC06/TC07 kept in `Integration.Tests` (documented, Q-AR5) | TS10 audit complete 2026-09-22. Plan: `archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`. |
+| **TC** (Test Cleanup) | ✅ TC04, TC09 DONE (#36); TC06/TC07 live in `App.Tests/HotPath` (real Recycle Bin / real photos) | TS10 audit complete 2026-09-22. Plan: `archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`. |
 | **T89** (Fit Layout — GUI acceptance) | 🔄 GUI acceptance only (kept, Q-AR5) | T89.1-T89.2 (`10ff31f`) **merged to `master` via PR #15**; branch deleted. DF02 Fit tests skipped in `9f880d1`. STA/GUI acceptance still TODO. Plan: `archive/historical/T89-FIT-LAYOUT-PLAN.md`. |
 | **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 kept, re-scoped to "Undo gate location" (Q-AR5) — blocks ST08/09, OC15-18 (no longer WD, see ADR 0005). Plan: `archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`. |
 | **WD** (WPF Dialog) | ✅ WD01 unblocked (AR04/ADR 0005); WD02-06 closed 2026-09-23 (Q-AR5) | WD02 low-risk part covered by AR03c; WD03-06 had no known dialog bug to justify keeping open. |
-| **IO** (I/O Durability) | 🔄 IO01 kept (Q-AR5); IO02-07 closed 2026-09-23 (Q-AR5) | IO02-07 were speculative until IO01's contract exists. |
+| **IO** (I/O Durability) | 🔄 IO01 DECIDED (ADR 0007, 2026-09-24); IO03–IO05 TODO | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
 | **DT** (Docs Token Diet) | 🔄 Partial | DT00-03, DT08, DT09 DONE; Q-D1..Q-D4 decided. DT04-07 closed 2026-09-23 (Q-AR5, diminishing returns); DT10 kept. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
 | **D** (Perf Diagnosis) | ❌ Closed 2026-09-23 (Q-AR5) | Numbers were from the legacy `--perf-session` graph (no preload). Re-open any item from the AR02e production-graph baseline if a bottleneck shows. |
 
@@ -74,9 +74,9 @@
 > - d5fc9c8 (TC01-TC03): ✓ Genuine scaffolding. PhotoFolderBuilder, ReadBudgetProbe, WarmNavigationReadBoundsTests.TC03 all exist with real assertions.
 > - fe00f36 (TC08-TC10): ✓ TC08/TC10 real. InterleavedFileActionSequenceTests.TC08a/b/c exist with production-code tests. [Trait] categorization works.
 > - 1c1f728 (TC11): ✓ CI gate real. verify-all.ps1 filter logic implemented, tested with -Stress/-Native/-Integration/-Slow/-All.
-> - 34886ec (TC07): ✗ Real tests exist with assertions, but **added to Integration.Tests (wrong project**). RealPhotosManualTests.cs has 2 real methods.
-> - 7cab725 (TC06): ✗ Real tests exist with assertions, but **added to Integration.Tests (wrong project)**. NativeRecycleBinTests.cs has 2 real methods.
-> **Action (Q-AR5, 2026-09-23):** TC06/TC07 stay in `Integration.Tests` — they need a real Recycle Bin / real photos, which fits that project's purpose; documenting the reason here instead of moving them. TC01-TC05 scaffolding is solid.
+> - 34886ec (TC07): ✗ Real tests exist with assertions, but added to Integration.Tests at the time; later moved to App.Tests/HotPath (`440527f`). RealPhotosManualTests.cs has 2 real methods.
+> - 7cab725 (TC06): ✗ Real tests exist with assertions, but added to Integration.Tests at the time; later moved to App.Tests/HotPath (`440527f`). NativeRecycleBinTests.cs has 2 real methods.
+> **Resolved:** TC06/TC07 tests live in `tests/PhotoReview.App.Tests/HotPath/` (real Recycle Bin / real photos). TC01-TC05 scaffolding is solid.
 
 | ID | Name | Status | Blocker | Notes |
 |----|------|--------|---------|-------|
@@ -85,21 +85,20 @@
 | TC03 | Disk-read invariants | ✅ EXISTS | TC01, TC02 | WarmNavigationReadBoundsTests.TC03: real assertions with ReadBudgetProbe |
 | TC04 | Rapid Next (key-repeat) | ✅ DONE (#36) | TC01 | Real rapid-Next test in WarmNavigationReadBoundsTests |
 | TC05 | Rapid Move/Delete | ✅ EXISTS | TC01, TC02 | WarmNavigationReadBoundsTests.TC05: tests rapid Next without await, real assertions |
-| TC06 | Native Recycle Bin | ✅ EXISTS* | Q-T4 done | **Integration.Tests/HotPath/NativeRecycleBinTests.cs.** Kept in `Integration.Tests` (Q-AR5, 2026-09-23) — needs real Recycle Bin. 2 real methods: DeleteMultiple/DeleteRapidly with 52 assertions |
-| TC07 | Real photos manual | ✅ EXISTS* | Q-T3 done | **Integration.Tests/HotPath/RealPhotosManualTests.cs.** Kept in `Integration.Tests` (Q-AR5, 2026-09-23) — needs real photos. 2 real methods: WarmNext/FileActions with ReadBudgetProbe assertions |
+| TC06 | Native Recycle Bin | ✅ EXISTS* | Q-T4 done | **App.Tests/HotPath/NativeRecycleBinTests.cs.** — needs real Recycle Bin. 2 real methods: DeleteMultiple/DeleteRapidly with 52 assertions |
+| TC07 | Real photos manual | ✅ EXISTS* | Q-T3 done | **App.Tests/HotPath/RealPhotosManualTests.cs.** — needs real photos. 2 real methods: WarmNext/FileActions with ReadBudgetProbe assertions |
 | TC08 | Replace G1 tests | ✅ EXISTS | TC05 | InterleavedFileActionSequenceTests.TC08a/b/c: production-code replacement tests (183 lines added) |
 | TC09 | Flake audit | ✅ DONE | — | TS02 `FixturePerfTest` fixed (PR #32 merged): gate asserts count/composition/size only; cost budget → `Category=Slow` test on thread CPU time (≤10 s, ~1.5 s cold). Full suite 3× 0 failures. LargeJournal → bounded-work assertion (TS05, #36). |
 | TC10 | Test categorization | ✅ EXISTS | — | [Trait("Category", ...)] added to 46+ test classes, filter works in verify-all.ps1 |
 | TC11 | CI gate integration | ✅ EXISTS | TC05 | verify-all.ps1 gate filter logic working; CI workflow updated |
 
-**Known issue:** Flaky test `OperationJournalTests.LargeJournal_ReadCommittedMoves_IsBoundedAndFast` (100ms assert; 112-166ms in parallel). Fix in TC09.
 
 ---
 
 ## T89 — Fit Layout (code on master, GUI acceptance open)
 
 **Plan:** [`archive/historical/T89-FIT-LAYOUT-PLAN.md`](archive/historical/T89-FIT-LAYOUT-PLAN.md)
-**Branch:** `feature/Fit-Layout-Status` (commit `10ff31f`, T89.1-T89.2) — **merged to `master` via PR #15** (verified 2026-09-23: `git branch --contains 10ff31f` → master; branch no longer on origin).
+**Code:** commit `10ff31f` (T89.1-T89.2) — **merged to `master` via PR #15** (verified 2026-09-23: `git branch --contains 10ff31f` → master; branch no longer on origin).
 
 | Aspect | Status |
 |--------|--------|
@@ -147,12 +146,12 @@
 
 | ID | Name | Status |
 |----|------|--------|
-| IO01 | Durability contract | 🔄 TODO — kept (Q-AR5), only IO item still open |
-| IO02 | Benchmark baseline | closed 2026-09-23 (Q-AR5) — speculative until IO01 exists |
-| IO03-IO04 | Async FileSystem | closed 2026-09-23 (Q-AR5) — speculative until IO01 exists |
-| IO05 | Permission reproduction | closed 2026-09-23 (Q-AR5) — speculative until IO01 exists |
-| IO06 | Buffer optimization | closed 2026-09-23 (Q-AR5) — speculative until IO01 exists |
-| IO07 | Temp-name optimization | closed 2026-09-23 (Q-AR5) — speculative until IO01 exists |
+| IO01 | Durability contract | ✅ DECIDED — ADR 0007 (2026-09-24): journal mode setting (Fast default / power-loss safe), session no-fsync, skip+warn unreadable files |
+| IO02 | Benchmark baseline | ✅ done inline (2026-09-24, in ADR 0007): journal record P50 1.79 ms (durable) vs 0.36 ms; session write P50 3.75 ms |
+| IO03 | Journal durability setting | TODO — Settings option (Fast default / Power-loss safe, off-UI-thread writes); tests per ADR 0007 |
+| IO04 | Session write policy | TODO — session no fsync (atomic kept); corrupt/empty session = no session |
+| IO05 | Unreadable files: skip + warn | TODO — enumeration skips with count + visible warning (strings via i18n catalogs) |
+| IO06-IO07 | Async boundary; low-risk cleanup | closed 2026-09-23 (Q-AR5) |
 
 ---
 
@@ -195,14 +194,14 @@ TC01 → TC02 → (TC03 ∥ TC04) → TC05 → TC08 → (TC06, TC07) → TC09-TC
                                                 (TS10 must re-audit first)
 
 OC14 (Undo) → ST08 → ST09
-           → WD03 → WD04-WD06
+           (WD closed)
            → OC15-OC18
 
 AR00 → (AR01 ∥ AR03 ∥ AR06) → AR07
 AR00 → AR02a → AR02b ∥ AR02c → AR02e (user machine) → AR02d
                                AR02e → AR04 (= WD01) → WD02 rest
 
-IO01-IO02 → (IO03-IO07)
+IO01 (ADR 0007) → IO03 ∥ IO04 ∥ IO05
 
 T89 GUI/STA acceptance (code already on master) ↔ AR02a step 3 (viewport)
 
@@ -214,6 +213,5 @@ DT02 → DT03 → (DT04 ∥ DT05) → DT06-DT10
 ## Notes
 
 - **Completed work is archived**, not deleted: `docs/refactoring/archive/` holds resolved ST plans/tasks/decisions and the completed DF plan.
-- **TC tasks** are high-priority but must wait on TS10 (re-audit) before any status is trusted.
-- **T89** must have GUI/STA acceptance before merging `feature/Fit-Layout-Status` or touching `ApplyFitViewAsync` further.
-- **OC14** is the single biggest unblock: it gates ST08/09, all of WD, and OC15-18.
+- **T89**: GUI/STA acceptance (user) before touching `ApplyFitViewAsync` further.
+- **OC14** (Undo gate location) is the biggest remaining unblock: it gates ST08/09 and OC15-18.
