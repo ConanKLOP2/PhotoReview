@@ -12,4 +12,11 @@
     <None Include="Localization\Languages\*.json" Link="Languages\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- I18N (L01): en.json → compile-time checked Tr / TrKeys (PhotoReview.Localization.Generator). -->
+  <ItemGroup>
+    <AdditionalFiles Include="Localization\Languages\en.json" />
+    <ProjectReference Include="..\PhotoReview.Localization.Generator\PhotoReview.Localization.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

@@ -8,6 +8,7 @@
   <Project Path="src/PhotoReview.Core/PhotoReview.Core.csproj" />
   <Project Path="src/PhotoReview.Imaging/PhotoReview.Imaging.csproj" />
   <Project Path="src/PhotoReview.Imaging.TurboJpeg/PhotoReview.Imaging.TurboJpeg.csproj" />
+  <Project Path="src/PhotoReview.Localization.Generator/PhotoReview.Localization.Generator.csproj" />
   <Project Path="src/PhotoReview.PerfAnalysis/PhotoReview.PerfAnalysis.csproj" />
   <Project Path="src/PhotoReview.Platform.Windows/PhotoReview.Platform.Windows.csproj" />
   <Project Path="tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj" />

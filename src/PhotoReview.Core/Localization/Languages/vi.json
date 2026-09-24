@@ -1,4 +1,7 @@
 {
   "_meta": { "code": "vi", "name": "Vietnamese", "nativeName": "Tiếng Việt", "plural": "none", "authors": ["PhotoReview"], "formatVersion": 1 },
-  "app.title": "Photo Review"
+  "app.title": "Photo Review",
+  "test.sample": "Mẫu",
+  "test.greeting": "Xin chào {name}",
+  "test.items.other": "{count} mục"
 }

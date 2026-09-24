@@ -1,4 +1,8 @@
 {
   "_meta": { "code": "en", "name": "English", "nativeName": "English", "plural": "one-other", "authors": ["PhotoReview"], "formatVersion": 1 },
-  "app.title": "Photo Review"
+  "app.title": "Photo Review",
+  "test.sample": "Sample",
+  "test.greeting": "Hello {name}",
+  "test.items.one": "{count} item",
+  "test.items.other": "{count} items"
 }
