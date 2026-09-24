@@ -16,12 +16,12 @@
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** | ✅ AR00–AR07 all DONE | GUI acceptance (T89, AR04) by user. |
+| **AR** | ✅ AR00–AR07 DONE | GUI acceptance (T89, AR04) by user. |
 | ST | ✅ (ST08/09 wait OC14) | ST06 public fields replaced by AR02d (#35). |
 | TS | ✅ TS00-07, TS10 | TS08/09 closed (Q-AR5). |
 | DF, CQ | ✅ Done | |
 | **T89** | 🔄 GUI acceptance only (kept, Q-AR5) | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
-| **TC** | ✅ TC01-TC11 | TC04, TC09 done (#36); TC06/07 live in App.Tests/HotPath (real Recycle Bin / real photos). |
+| **TC** | ✅ TC01-TC11 | TC04, TC09 done (#36); TC06/07 live in App.Tests/HotPath (real Recycle Bin / photos). |
 | **OC** | 🔄 ~65% | OC14 gate moved to the ViewModel (#64); ST08/09, OC15-18 unblocked. |
 | **WD** | ✅ WD01 done (AR04, #37) | WD02-06 closed 2026-09-23 (Q-AR5, no known dialog bug). |
 | **IO** | 🔄 IO01 ADR 0007 | IO03 #65, IO04+IO05 #66 open; IO02/06/07 closed. |
@@ -30,12 +30,12 @@
 
 ## Critical Process Rules
 
-- ❌ No direct `master` commits: branch → PR → review
-- ❌ No `ApplyFitViewAsync` single-pass without T89 evidence
-- ❌ No broad `Dispatcher.Invoke` / `GetRequiredService` before WD01 (→ replaced by ADR 0005 rule once AR04 is DONE)
-- ❌ No silent `IgnoreInaccessible`; durability changes only as decided in ADR 0007 (journal mode setting, session no-fsync)
-- ❌ No OS SendInput/SetForegroundWindow in test harnesses
-- ❌ Do not compare perf numbers across the AR02c boundary (legacy vs production graph)
+- No direct `master` commits: branch → PR → review
+- No `ApplyFitViewAsync` single-pass without T89 evidence
+- No broad `Dispatcher.Invoke` / `GetRequiredService` (ADR 0005 rule, AR04 DONE)
+- No silent `IgnoreInaccessible`; durability changes only per ADR 0007 (journal mode setting, session no-fsync)
+- No OS SendInput/SetForegroundWindow in test harnesses
+- Don't compare perf numbers across the AR02c boundary (legacy vs production graph)
 
 ## Key Links
 

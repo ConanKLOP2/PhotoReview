@@ -34,4 +34,13 @@ WD tasks no longer depend on OC14 (see ADR 0005 / AR04, #37): WD01 done, WD02–
 
 ## Key Concerns Resolved
 
-F01–F11 (survivor policy, stride overflow, preload lifetime, STA boundary, cache invalidation, undo history size, benchmark propagation, PerfAnalyze grouping) are all resolved — full list with remediation notes archived in [`archive/OPTIMIZE-CLEAN-SUMMARY-detail.md`](archive/OPTIMIZE-CLEAN-SUMMARY-detail.md). Full findings: [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md) section 2.
+- **F01:** DuplicateFinder survivor policy deterministic
+- **F02:** TurboJPEG stride overflow guarded (checked long)
+- **F03:** PreloadScheduler lifetime ownership clarified
+- **F04:** STA/async dialog boundary (IUiScheduler abstraction done)
+- **F08:** Cache invalidation atomic (epoch/lock added)
+- **F09:** Undo history in-memory, <1MB journal
+- **F10:** Benchmark profile propagation complete
+- **F11:** PerfAnalyze grouping by worker/condition
+
+See full findings and remediation details in [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md) section 2.
