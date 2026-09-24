@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:PhotoReview.App.Localization"
         Title="{loc:Tr settings.window.title}" Width="760" Height="680"
-        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="680" MinHeight="560" Background="#171717" Foreground="#F5F5F5" Loaded="SettingsWindow_Loaded">
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="680" MinHeight="560" Background="{DynamicResource Dark.Window}" Foreground="{DynamicResource Dark.WindowText}" Loaded="SettingsWindow_Loaded">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -35,9 +35,9 @@
         </Grid.Resources>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Text="{loc:Tr settings.header}" FontSize="28" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-            <TextBlock Text="{loc:Tr settings.subtitle}" Foreground="#AAAAAA" Margin="0,4,0,0"/>
-            <TextBlock x:Name="VersionText" Foreground="#777777" Margin="0,6,0,0"/>
+            <TextBlock Text="{loc:Tr settings.header}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource Dark.TextStrong}"/>
+            <TextBlock Text="{loc:Tr settings.subtitle}" Foreground="{DynamicResource Dark.TextSubtle}" Margin="0,4,0,0"/>
+            <TextBlock x:Name="VersionText" Foreground="{DynamicResource Dark.TextFaint}" Margin="0,6,0,0"/>
         </StackPanel>
         <ScrollViewer x:Name="SettingsScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Margin="0,18,0,8">
             <StackPanel KeyboardNavigation.TabNavigation="Local" Margin="0,0,12,0">
@@ -53,7 +53,7 @@
                         <Button Content="{loc:Tr settings.language.reload}" Click="ReloadTranslations_Click" Margin="0,0,8,4"/>
                         <Button Content="{loc:Tr settings.language.export}" ToolTip="{loc:Tr settings.language.export.toolTip}" Click="ExportTranslation_Click" Margin="0,0,0,4"/>
                     </WrapPanel>
-                    <TextBlock Text="{loc:Tr settings.language.hint}" Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Foreground="#9A9A9A"/>
+                    <TextBlock Text="{loc:Tr settings.language.hint}" Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource Dark.TextMuted}"/>
                 </Grid></GroupBox>
 
                 <GroupBox Header="{loc:Tr settings.group.displayPerformance}"><Grid>
@@ -78,7 +78,7 @@
                     <Button Content="{loc:Tr settings.openLogLocation}" AutomationProperties.Name="{loc:Tr settings.openLogLocation}" HorizontalAlignment="Left" Click="OpenLogLocation_Click"/>
                 </StackPanel></GroupBox>
 
-                <GroupBox><GroupBox.Header><TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#FFFFFF"><Run Text="{loc:Tr settings.group.shortcuts.title}"/><Run Text="  ·  " FontWeight="Normal" Foreground="#9A9A9A" FontSize="13"/><Run Text="{loc:Tr settings.group.shortcuts.hint}" FontWeight="Normal" Foreground="#9A9A9A" FontSize="13"/></TextBlock></GroupBox.Header>
+                <GroupBox><GroupBox.Header><TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Dark.TextStrong}"><Run Text="{loc:Tr settings.group.shortcuts.title}"/><Run Text="  ·  " FontWeight="Normal" Foreground="{DynamicResource Dark.TextMuted}" FontSize="13"/><Run Text="{loc:Tr settings.group.shortcuts.hint}" FontWeight="Normal" Foreground="{DynamicResource Dark.TextMuted}" FontSize="13"/></TextBlock></GroupBox.Header>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -110,9 +110,9 @@
                 <GroupBox Header="{loc:Tr settings.group.journalDurability}"><StackPanel AutomationProperties.Name="{loc:Tr settings.journalDurability.label}">
                     <TextBlock Text="{loc:Tr settings.journalDurability.label}" Margin="0,0,0,8"/>
                     <RadioButton x:Name="JournalFastRadio" GroupName="JournalDurability" Content="{loc:Tr settings.journalDurability.fast}" IsChecked="True"/>
-                    <TextBlock Text="{loc:Tr settings.journalDurability.fast.hint}" TextWrapping="Wrap" Foreground="#9A9A9A" Margin="20,2,0,10"/>
+                    <TextBlock Text="{loc:Tr settings.journalDurability.fast.hint}" TextWrapping="Wrap" Foreground="{DynamicResource Dark.TextMuted}" Margin="20,2,0,10"/>
                     <RadioButton x:Name="JournalSafeRadio" GroupName="JournalDurability" Content="{loc:Tr settings.journalDurability.safe}"/>
-                    <TextBlock Text="{loc:Tr settings.journalDurability.safe.hint}" TextWrapping="Wrap" Foreground="#9A9A9A" Margin="20,2,0,0"/>
+                    <TextBlock Text="{loc:Tr settings.journalDurability.safe.hint}" TextWrapping="Wrap" Foreground="{DynamicResource Dark.TextMuted}" Margin="20,2,0,0"/>
                 </StackPanel></GroupBox>
             </StackPanel>
         </ScrollViewer>

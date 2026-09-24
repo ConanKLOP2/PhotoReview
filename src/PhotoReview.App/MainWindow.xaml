@@ -8,37 +8,40 @@
         xmlns:loc="clr-namespace:PhotoReview.App.Localization"
         mc:Ignorable="d"
         Icon="pack://application:,,,/Assets/PhotoReview.ico"
-        Title="{Binding FolderTitle, FallbackValue='Photo Review'}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="#181818" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed">
+        Title="{Binding FolderTitle, FallbackValue='Photo Review'}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="{DynamicResource Dark.Backdrop}" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed">
     <Window.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/></ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <converters:ViewerStretchModeConverter x:Key="StretchConverter" />
         <converters:CompareBorderBrushConverter x:Key="CompareBorderBrush" />
         <converters:ScalingQualityConverter x:Key="ScalingConverter" />
         <Style TargetType="Button">
-            <Setter Property="Background" Value="#252525"/>
-            <Setter Property="Foreground" Value="#EEEEEE"/>
-            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="Background" Value="{DynamicResource Dark.Input}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Dark.TextBright}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Dark.BorderToolbar}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,4"/>
         </Style>
         <Style TargetType="ToggleButton">
-            <Setter Property="Background" Value="#252525"/>
-            <Setter Property="Foreground" Value="#EEEEEE"/>
-            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="Background" Value="{DynamicResource Dark.Input}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Dark.TextBright}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Dark.BorderToolbar}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="Width" Value="34"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="Padding" Value="0"/>
         </Style>
+            </ResourceDictionary>
     </Window.Resources>
-    <Grid Background="#101010" ClipToBounds="True">
+    <Grid Background="{DynamicResource Dark.Canvas}" ClipToBounds="True">
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
             </ContextMenu>
         </Grid.ContextMenu>
-        <Border Background="#101010" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Border Background="{DynamicResource Dark.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <ScrollViewer x:Name="ImageScroll" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" SizeChanged="ImageScroll_SizeChanged" PreviewMouseWheel="ImageScroll_PreviewMouseWheel">
                 <Image x:Name="MainImage"
                        Source="{Binding CurrentImage}"
@@ -58,7 +61,7 @@
         </Border>
         <Border x:Name="ComparePanel"
                 Visibility="{Binding Compare.IsVisible, Converter={StaticResource BoolToVis}}"
-                Background="#101010"
+                Background="{DynamicResource Dark.Canvas}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 Margin="8">
@@ -72,7 +75,7 @@
                 </Border>
             </Grid>
         </Border>
-        <Border Panel.ZIndex="100" Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
+        <Border Panel.ZIndex="100" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="📂" AutomationProperties.Name="{loc:Tr main.toolbar.openFolder.automationName}" ToolTip="{loc:Tr main.toolbar.openFolder.toolTip}" FontSize="16" Padding="8,2" Click="OpenFolder_Click" />
@@ -80,7 +83,7 @@
                     <Button Content="{loc:Tr main.toolbar.fit}" AutomationProperties.Name="{loc:Tr main.toolbar.fit.automationName}" ToolTip="{loc:Tr main.toolbar.fit.toolTip}" Padding="8,4" Margin="5,0,0,0" Click="FitImage_Click" />
                     <ToggleButton x:Name="ToolsButton" Content="⋮" AutomationProperties.Name="{loc:Tr main.toolbar.tools.automationName}" ToolTip="{loc:Tr main.toolbar.tools.toolTip}" Margin="5,0,0,0" />
                     <Popup PlacementTarget="{Binding ElementName=ToolsButton}" Placement="Bottom" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=ToolsButton, Mode=TwoWay}" AllowsTransparency="True">
-                        <Border Background="#202020" BorderBrush="#505050" BorderThickness="1" Padding="8" CornerRadius="4">
+                        <Border Background="{DynamicResource Dark.Tooltip}" BorderBrush="{DynamicResource Dark.BorderStrong}" BorderThickness="1" Padding="8" CornerRadius="4">
                         <StackPanel>
                             <Button Content="{loc:Tr main.tools.recovery}" AutomationProperties.Name="{loc:Tr main.tools.recovery.automationName}" Margin="0,0,0,5" Click="Recovery_Click" />
                             <Button Content="{loc:Tr main.tools.diagnostics}" AutomationProperties.Name="{loc:Tr main.tools.diagnostics.automationName}" Margin="0,0,0,5" Click="Diagnostics_Click" />
@@ -95,14 +98,14 @@
                 </StackPanel>
             </StackPanel>
         </Border>
-        <Border Background="#B0181818" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
+        <Border Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
-                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="#EEEEEE" FontSize="13" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="13" TextTrimming="CharacterEllipsis" />
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding HasSkippedEntries, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="{Binding SkippedWarningText}" Foreground="#FFC857" FontSize="13" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SkippedWarningText}" Foreground="{DynamicResource Dark.Warning}" FontSize="13" VerticalAlignment="Center" />
                     <Button Content="{loc:Tr main.skipped.viewList}" AutomationProperties.Name="{loc:Tr main.skipped.viewList.automationName}" Padding="8,2" Margin="8,0,0,0" Click="SkippedFiles_Click" />
                 </StackPanel>
-                <TextBlock Foreground="#BBBBBB" FontSize="11" Margin="0,2,0,0" Text="{loc:Tr main.shortcutHint}" Visibility="Collapsed" />
+                <TextBlock Foreground="{DynamicResource Dark.TextSecondary}" FontSize="11" Margin="0,2,0,0" Text="{loc:Tr main.shortcutHint}" Visibility="Collapsed" />
             </StackPanel>
         </Border>
     </Grid>
