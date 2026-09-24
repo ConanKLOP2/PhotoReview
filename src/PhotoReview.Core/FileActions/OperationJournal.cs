@@ -43,6 +43,22 @@ public sealed class OperationJournal
     public void Append(JournalEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        AppendLines([entry]);
+    }
+
+    // Clearing a Recovery item appends a Dismissed entry under the same Id (the journal is
+    // append-only); latest-entry resolution then drops it from pending/failed. No file is touched.
+    public IReadOnlyList<JournalEntry> Dismiss(IEnumerable<JournalEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var now = _clock.UtcNow;
+        var dismissed = entries.Select(entry => entry with { State = JournalState.Dismissed, TimestampUtc = now, Error = null }).ToList();
+        if (dismissed.Count > 0) AppendLines(dismissed);
+        return dismissed;
+    }
+
+    private void AppendLines(IReadOnlyList<JournalEntry> entries)
+    {
         lock (_gate)
         {
             var dir = Path.GetDirectoryName(_path);
@@ -50,9 +66,11 @@ public sealed class OperationJournal
             {
                 _fileSystem.CreateDirectory(dir);
             }
-            var line = JsonSerializer.Serialize(entry) + Environment.NewLine;
+            var text = new StringBuilder();
+            foreach (var entry in entries)
+                text.Append(JsonSerializer.Serialize(entry)).Append(Environment.NewLine);
             using var stream = _fileSystem.OpenAppendDurable(_path);
-            var bytes = Encoding.UTF8.GetBytes(line);
+            var bytes = Encoding.UTF8.GetBytes(text.ToString());
             stream.Write(bytes, 0, bytes.Length);
             if (stream is FileStream fs)
             {

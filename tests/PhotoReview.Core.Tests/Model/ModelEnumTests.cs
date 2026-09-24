@@ -51,10 +51,11 @@ public class ModelEnumTests
     public void JournalStateValuesAndNamesMatchSpecification()
     {
         var values = Enum.GetValues<JournalState>();
-        Assert.Equal(3, values.Length);
+        Assert.Equal(4, values.Length);
         Assert.Equal(JournalState.Prepared, values[0]);
         Assert.Equal(JournalState.Committed, values[1]);
         Assert.Equal(JournalState.Failed, values[2]);
+        Assert.Equal(JournalState.Dismissed, values[3]);
     }
 
     [Fact]
