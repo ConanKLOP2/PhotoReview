@@ -12,6 +12,10 @@ on:
       - refactor/**
   workflow_dispatch:
 
+# Least privilege: build/test/publish only reads; tag-version below overrides with contents: write.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.ref }}
   # Never cancel master runs: each merge is a version (2.0.N) that must be built and tagged.
