@@ -201,6 +201,22 @@ public sealed class FactoryTests : IDisposable
         Assert.IsType<WpfBitmapImageDecoder>(decoder);
     }
 
+    [Fact(DisplayName = "ImageDecoderFactory.Create caches one decoder per backend and builds each provider once (IMG-08)")]
+    public void Create_SameBackendTwice_ReturnsSameInstanceAndBuildsOnce()
+    {
+        var wicBuilds = 0;
+        var factory = new ImageDecoderFactory(new (DecoderBackend, Func<IImageDecoder>)[]
+        {
+            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
+            (DecoderBackend.WicDirect, () => { wicBuilds++; return new WicDirectDecoder(); })
+        });
+
+        Assert.Same(factory.Create(DecoderBackend.WicDirect), factory.Create(DecoderBackend.WicDirect));
+        Assert.Same(factory.Create(DecoderBackend.Wpf), factory.Create(DecoderBackend.Wpf));
+        Assert.NotSame(factory.Create(DecoderBackend.Wpf), factory.Create(DecoderBackend.WicDirect));
+        Assert.Equal(1, wicBuilds);
+    }
+
     [Fact(DisplayName = "ImageDecoderFactory.IsRegistered reflects the providers passed to it (AR01)")]
     public void IsRegistered_ReflectsProviders()
     {
