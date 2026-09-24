@@ -1,11 +1,11 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master `b6e5dae` (#38) | **Branch:** `docs/perf-night-2026-09-24`
+**Updated:** 2026-09-24 | **Base:** master `b8c89d0` (#42, v2.0.43) | **Branch:** `docs/perf-night-2026-09-24`
 
-## Now: perf night 2026-09-24 — PRs #39–#48 open (none merged yet)
+## Now: perf night 2026-09-24 — #39–#42 merged (v2.0.43); #43–#48 open
 
 - Result (real folder): open folder 489 → 166 ms, burst shown 55 → 200/200, peak WS 5.2 → 1.7 GB, app start → first image 3.2 → 1.8 s. Table: `docs/refactoring/PERF-STATUS.md` ("Perf night").
-- **Merge order:** #39 (harness) → #40, #41, #42 → #44, #45 → #46, #48 → then #43 + #47 together (after the zoom decision). Branches after #39 contain earlier PRs' commits (no stacked bases) — merging out of order is safe but brings those commits along.
+- **Merge order (remaining):** #44 → #45 → #46 → #48 → #47 (contains #43; only after the zoom decision) → #49. Branches merged #40–#42 via their own merge commits, so vs master they have several merge bases (criss-cross): GitHub picks one and shows false conflicts (#44 did; a real 3-way merge is clean). Fix before each merge: merge current `origin/master` into the PR branch and push (needed now for #44 — done as `98ce4af`, tree unchanged — then again for #46 and #47 after the previous merges).
 - **User decisions:** (1) zoom semantics — #43 (decode to viewport box, big win) makes zoom soft unless #47 (option A: "100 %" = 1 source pixel, on-demand original) is merged; #47 also makes wheel zoom from Fit step from the fit size. (2) #46 changes INV-9 timing: the opened photo shows before Explorer order arrives; navigation waits for the order (≤ ~2 s).
 - Found + fixed along the way (all lost in T46d): preview decode width (#31), folder trace events (#46), Original loading mode (#48).
 - Left for user (visual): Fit first-frame (T89), Settings TurboJPEG greyed without dll, AR04 GUI acceptance, #47 zoom feel. Note: #46 measurement overwrote `%LOCALAPPDATA%\PhotoReview\window-placement.json`.
