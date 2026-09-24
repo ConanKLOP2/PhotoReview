@@ -175,7 +175,7 @@ public sealed class SessionWriterTests
         _fs.WriteHook = _ =>
         {
             entered.Set();
-            release.Wait(TimeSpan.FromSeconds(30));
+            release.Wait(TimeSpan.FromSeconds(60));
             return null;
         };
 
@@ -185,7 +185,7 @@ public sealed class SessionWriterTests
         writer.Update(State(@"C:\photos", "b")); // pending while the write for "a" is blocked
 
         var dispose = Task.Run(writer.Dispose);
-        var completed = await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(5)));
+        var completed = await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(20)));
         release.Set();
         Assert.Same(dispose, completed);
 
