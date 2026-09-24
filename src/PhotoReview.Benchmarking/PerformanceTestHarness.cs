@@ -40,6 +40,9 @@ public static class PerformanceTestHarness
         return folder;
     }
 
+    /// <summary>R2-F-31: default report location; the user's photo folder must not receive files from a measurement run.</summary>
+    public static string DefaultReportPath { get; } = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark", "photoreview-performance-report.json");
+
     public static async Task<PerformanceReport> RunAsync(string folder, int take = 30, int workers = 8,
         string? reportPath = null, CancellationToken cancellationToken = default)
     {
@@ -53,7 +56,7 @@ public static class PerformanceTestHarness
             await MeasureColdAsync(files, cancellationToken),
             await MeasureParallelAsync(files, Math.Clamp(workers, 1, 16), cancellationToken)
         };
-        if (reportPath is null) reportPath = Path.Combine(folder, "photoreview-performance-report.json");
+        reportPath ??= DefaultReportPath;
         var report = new PerformanceReport(started, folder, files.Length, totalBytes, samples);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(report, DefaultOptions), cancellationToken);

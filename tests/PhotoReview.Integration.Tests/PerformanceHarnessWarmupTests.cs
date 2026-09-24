@@ -30,4 +30,20 @@ public sealed class PerformanceHarnessWarmupTests : IDisposable
         Assert.Equal(Directory.EnumerateFiles(fixture).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray(),
             events.Skip(1).Select(e => e.Path).ToArray());
     }
+
+    [Fact(DisplayName = "Default report goes to the temp folder, never into the measured photo folder (R2-F-31)")]
+    public async Task DefaultReportIsNotWrittenIntoThePhotoFolder()
+    {
+        var fixture = PerformanceTestHarness.CreateFixture(_root.Path, 2);
+        var filesBefore = Directory.EnumerateFileSystemEntries(fixture).Order().ToArray();
+        try
+        {
+            await PerformanceTestHarness.RunAsync(fixture, 2, workers: 1);
+
+            Assert.Equal(filesBefore, Directory.EnumerateFileSystemEntries(fixture).Order().ToArray());
+            Assert.True(File.Exists(PerformanceTestHarness.DefaultReportPath));
+            Assert.False(PerformanceTestHarness.DefaultReportPath.StartsWith(fixture, StringComparison.OrdinalIgnoreCase));
+        }
+        finally { File.Delete(PerformanceTestHarness.DefaultReportPath); }
+    }
 }
