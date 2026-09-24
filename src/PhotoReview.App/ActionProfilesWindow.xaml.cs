@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 
@@ -48,11 +49,11 @@ public partial class ActionProfilesWindow : Window
         ActionList.Items.Refresh();
     }
 
-    private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = "Action mới", Shortcut = "F6", Operation = FileOperationType.Move, Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
+    private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = Tr.ActionProfilesNewActionName, Shortcut = "F6", Operation = FileOperationType.Move, Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
     private void Remove_Click(object sender, RoutedEventArgs e) { if (ActionList.SelectedItem is ReviewAction action) { Actions.Remove(action); ActionList.Items.Refresh(); if (Actions.Count > 0) ActionList.SelectedIndex = 0; } }
     private void Import_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "JSON (*.json)|*.json|All files (*.*)|*.*" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = Tr.DialogFileFilterJsonOrAll };
         if (dialog.ShowDialog(this) != true) return;
         try
         {
@@ -60,20 +61,20 @@ public partial class ActionProfilesWindow : Window
             if (imported is null || imported.Count == 0) throw new JsonException();
             Actions.Clear(); Actions.AddRange(imported.Select(Clone)); ActionList.Items.Refresh(); ActionList.SelectedIndex = 0;
         }
-        catch { System.Windows.MessageBox.Show(this, "File action profile không hợp lệ.", "Import thất bại", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch { System.Windows.MessageBox.Show(this, Tr.DialogImportActionsInvalidMessage, Tr.DialogImportActionsFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void Export_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
-        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "JSON (*.json)|*.json", FileName = "photoreview-actions.json" };
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = Tr.DialogFileFilterJson, FileName = "photoreview-actions.json" };
         if (dialog.ShowDialog(this) == true)System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, JsonOptions));
     }
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
         if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !Enum.TryParse<Key>(action.Shortcut, true, out _) || !Enum.IsDefined(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
-        { System.Windows.MessageBox.Show(this, "Action phải có tên, phím hợp lệ và không được trùng phím.", "Cấu hình không hợp lệ", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        { System.Windows.MessageBox.Show(this, Tr.DialogActionProfilesInvalidMessage, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         DialogResult = true;
     }
 

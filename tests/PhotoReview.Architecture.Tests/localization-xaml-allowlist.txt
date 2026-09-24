@@ -1,11 +1,7 @@
-﻿# L03 guard (LocalizationGuardTests.NoLiteralTextInXaml): XAML files that still have literal UI text in
+# L03 guard (LocalizationGuardTests.NoLiteralTextInXaml): XAML files that still have literal UI text in
 # Title/Text/Content/Header/ToolTip/AutomationProperties.Name or as element text, and how many.
 # Format: relative/path.xaml|count. Use {loc:Tr key} instead. This list may only shrink: lower the count
 # (or delete the line) when you convert text; a new file or a higher count fails the test.
-src/PhotoReview.App/ActionProfilesWindow.xaml|18
-src/PhotoReview.App/BatchReviewWindow.xaml|4
 src/PhotoReview.App/BenchmarkWindow.xaml|19
-src/PhotoReview.App/DiagnosticsWindow.xaml|19
-src/PhotoReview.App/MainWindow.xaml|27
-src/PhotoReview.App/RecoveryWindow.xaml|5
-src/PhotoReview.App/SettingsWindow.xaml|50
+# MainWindow: the remaining 1 is the folder icon Content (U+1F4C2, a surrogate pair that the symbol-only regex does not treat as neutral).
+src/PhotoReview.App/MainWindow.xaml|1

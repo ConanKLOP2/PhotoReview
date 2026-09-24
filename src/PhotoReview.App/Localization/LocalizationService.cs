@@ -86,6 +86,17 @@ public sealed class LocalizationService
 
     /// <summary>Re-reads the files of the current language, e.g. after a translator edited them.</summary>
     public void Reload() => Switch(RequestedLanguage);
+
+    /// <summary>The language code a setting value loads (<c>auto</c> follows the Windows UI language; unknown codes give English).</summary>
+    public string ResolveCode(string? language) => _loader.Resolve(language, CultureInfo.InstalledUICulture);
+
+    /// <summary>
+    /// Writes <c>&lt;UserLanguagesDir&gt;\&lt;code&gt;.todo.json</c> with every English text <paramref name="language"/>
+    /// is missing (I18N L08 "Export strings to translate") and returns its path. Reads and writes files: call it from
+    /// a user action, not on a hot path.
+    /// </summary>
+    public string ExportTodo(string? language) =>
+        TranslationExport.Export(ResolveCode(language), ShippedLanguagesDir, UserLanguagesDir);
 }
 
 /// <summary>Translator aids (I18N L09).</summary>
