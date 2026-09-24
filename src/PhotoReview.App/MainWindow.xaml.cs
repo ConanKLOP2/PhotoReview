@@ -280,8 +280,13 @@ public partial class MainWindow : Window
         var deltaX = point.X - _panLastPoint.X;
         var deltaY = point.Y - _panLastPoint.Y;
         _panLastPoint = point;
-        if (Math.Abs(point.X - _panStartPoint.X) >= SystemParameters.MinimumHorizontalDragDistance ||
-            Math.Abs(point.Y - _panStartPoint.Y) >= SystemParameters.MinimumVerticalDragDistance)
+        // OC15: once the drag threshold is crossed it stays crossed until the pan ends, so only
+        // test it while still below; delta/scroll below always run.
+        if (!_panMoved && MainWindowHelpers.IsBeyondDragThreshold(
+                point.X - _panStartPoint.X,
+                point.Y - _panStartPoint.Y,
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance))
         {
             _panMoved = true;
         }
