@@ -1,4 +1,5 @@
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Core.Settings;
 
@@ -20,16 +21,16 @@ public sealed class SettingsValidator
             if (property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue; // Legacy alias; Enter is owned by ReviewAction.
             var value = property.GetValue(settings.Shortcuts)?.ToString()?.Trim();
             if (string.IsNullOrWhiteSpace(value) || !_keyValidator.IsValidKeyName(value))
-                return $"Shortcut {property.Name} không hợp lệ.";
+                return Tr.CoreSettingsShortcutInvalid(property.Name);
             bindings.Add((property.Name, value));
         }
         foreach (var action in settings.Actions ?? [])
         {
             if (string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) || !_keyValidator.IsValidKeyName(action.Shortcut.Trim()))
-                return "Action phải có tên và phím tắt hợp lệ.";
-            bindings.Add(($"Action: {action.Name}", action.Shortcut.Trim()));
+                return Tr.CoreSettingsActionInvalid;
+            bindings.Add((Tr.CoreSettingsActionBindingName(action.Name), action.Shortcut.Trim()));
         }
         var duplicate = bindings.GroupBy(item => item.Value, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
-        return duplicate is null ? null : $"Phím {duplicate.Key} bị dùng trùng bởi: {string.Join(", ", duplicate.Select(item => item.Name))}.";
+        return duplicate is null ? null : Tr.CoreSettingsShortcutDuplicate(duplicate.Key, string.Join(", ", duplicate.Select(item => item.Name)));
     }
 }
