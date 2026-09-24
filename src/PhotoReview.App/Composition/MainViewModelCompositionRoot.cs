@@ -76,7 +76,7 @@ internal static class MainViewModelCompositionRoot
             catalog, clock, preview, thumbs, preloadController, compare, hash,
             sp.GetRequiredService<ReviewMetrics>(),
             () => settingsStore.Current, sessionStore, sink, fs, getSession: () => vm?.Session,
-            sessionWriter: sessionWriter);
+            sessionWriter: sessionWriter, uiScheduler: sp.GetRequiredService<IUiScheduler>());
 
         var coordinator = new FolderLoadCoordinator(
             catalog, clock, explorerOrder, fs, sessionStore, settingsStore,

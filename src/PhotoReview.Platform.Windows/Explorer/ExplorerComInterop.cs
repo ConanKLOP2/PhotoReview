@@ -9,8 +9,20 @@ internal static class ExplorerComInterop
     internal static Guid IidShellBrowser = new("000214E2-0000-0000-C000-000000000046");
     internal static Guid IidFolderView2 = new("1AF3A467-214F-4298-908E-06B03E0B39F9");
     internal static Guid IidShellItem = new("43826D1E-E718-42EE-BC55-A1E261C37BFE");
+    internal static Guid IidEnumIdList = new("000214F2-0000-0000-C000-000000000046");
     internal const uint SvgioAllView = 2;
+    internal const uint SvgioFlagViewOrder = 0x80000000;
     internal const uint SigdnFileSystemPath = 0x80058000;
+    internal const int SFalse = 1;
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    internal static extern int SHParseDisplayName(string name, IntPtr bindContext, out IntPtr pidl, uint sfgaoIn, out uint sfgaoOut);
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    internal static extern IntPtr ILCombine(IntPtr parent, IntPtr child);
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    internal static extern int SHGetNameFromIDList(IntPtr pidl, uint sigdn, out IntPtr name);
 }
 
 internal static class ExplorerNativeVtable
@@ -23,6 +35,14 @@ internal static class ExplorerNativeVtable
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetSortColumnCountDelegate(IntPtr self, out int count);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetSortColumnsDelegate(IntPtr self, [Out] SORTCOLUMN[] columns, int count);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int GetGroupByDelegate(IntPtr self, out PROPERTYKEY key, [MarshalAs(UnmanagedType.Bool)] out bool ascending);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int ItemsDelegate(IntPtr self, uint flags, ref Guid iid, out IntPtr result);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int EnumNextDelegate(IntPtr self, uint count, [Out] IntPtr[] items, out uint fetched);
+
+    /// <summary>IFolderView::Items (slot 8): the view's items as one object (here an IEnumIDList).</summary>
+    internal static int Items(IntPtr self, uint flags, ref Guid iid, out IntPtr result) => Get<ItemsDelegate>(self, 8)(self, flags, ref iid, out result);
+
+    /// <summary>IEnumIDList::Next (slot 3): up to <paramref name="count"/> child PIDLs per (cross-process) call.</summary>
+    internal static int EnumNext(IntPtr self, uint count, IntPtr[] items, out uint fetched) => Get<EnumNextDelegate>(self, 3)(self, count, items, out fetched);
 
     internal static int QueryService(IntPtr self, ref Guid service, ref Guid iid, out IntPtr result) => Get<QueryServiceDelegate>(self, 3)(self, ref service, ref iid, out result);
     internal static int QueryActiveShellView(IntPtr self, out IntPtr view) => Get<QueryActiveShellViewDelegate>(self, 15)(self, out view);

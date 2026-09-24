@@ -20,4 +20,12 @@ public interface IExplorerOrderProvider : IDisposable
         IProgress<ExplorerQueryProgress>? progress = null,
         int batchSize = 16,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// perf(startup): starts the snapshot query for <paramref name="folder"/> now, before anyone asks
+    /// for it (App_Startup knows the folder long before the folder load starts). The next
+    /// <see cref="TryGetSnapshotProgressiveAsync"/> for the same folder joins this query instead of
+    /// queueing a second one; any other request cancels it. Default: no-op (test fakes).
+    /// </summary>
+    void Prefetch(string folder, TimeSpan timeout) { }
 }

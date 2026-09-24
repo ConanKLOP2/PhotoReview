@@ -36,7 +36,7 @@ public class PerfAnalyzeTests
 
         Assert.Equal(10000000, file.QpcFrequency);
         Assert.Equal(0, file.DroppedRows);
-        Assert.Equal(75, file.Rows.Count);
+        Assert.Equal(82, file.Rows.Count);
         Assert.DoesNotContain(file.Rows, r => r.Event.StartsWith('#'));
         Assert.DoesNotContain(file.Rows, r => r.Event == "utcTicks");
     }
@@ -120,6 +120,25 @@ public class PerfAnalyzeTests
     }
 
     [Fact]
+    public void CapturesRenderedFrameAsTheFrameAccurateRenderProxyAlongsideRendered()
+    {
+        // perf(render-metric): RenderedFrame (second CompositionTarget.Rendering tick after the
+        // assign) is emitted after Presented in the real event stream, so it must still land on
+        // the right nav without needing to be gated behind a later Presented row like Rendered is.
+        var file = PerfCsvReader.Read(SampleCsvPath());
+        var analysis = PerfAnalyzeNavBuilder.Build(file);
+        var byNav = analysis.Navs.ToDictionary(n => n.Nav);
+
+        Assert.Equal(4.0, byNav[1].TRenderMs);
+        Assert.Equal(20.0, byNav[1].TRenderFrameMs);
+        Assert.Equal(19.5, byNav[2].TRenderFrameMs);
+        Assert.Equal(21.0, byNav[3].TRenderFrameMs);
+
+        // nav 8 is superseded before it ever renders: no RenderedFrame event exists for it.
+        Assert.Null(byNav[8].TRenderFrameMs);
+    }
+
+    [Fact]
     public void BuildsFolderT0ToT2FromTheEarliestPresentedAfterFolderStart()
     {
         var file = PerfCsvReader.Read(SampleCsvPath());
@@ -130,6 +149,41 @@ public class PerfAnalyzeTests
         Assert.Equal("explorerApplied", gen1.T3Phase);
         Assert.Equal(180.0, gen1.T3Ms);
         Assert.Equal(210.1, gen1.T2Ms!.Value, 3);
+    }
+
+    [Fact]
+    public void BuildsStartupMilestonesAndMapsFirstPresentedOntoTheProcessStartTimeline()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PhotoReview-PerfAnalyze-Tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        try
+        {
+            var csv = Path.Combine(path, "perf-2-x.csv");
+            // qpcFrequency 10 MHz: 10000 ticks = 1 ms. appStartup at 250 ms since process start.
+            File.WriteAllText(csv,
+                "# commit=test diag= qpcFrequency=10000000\n" +
+                "utcTicks,qpcTicks,thread,event,nav,pathId,a,b,c,d,text\n" +
+                "1,2500000,1,Startup,,,250,,,,appStartup\n" +
+                "1,3000000,1,Startup,,,300,,,,servicesBuilt\n" +
+                "1,9000000,1,Startup,,,900,,,,openPathBegin\n" +
+                "1,9000000,1,Folder,1,,0,,,,start\n" +
+                "1,9100000,4,FolderInfo,1,,1841,,,,scanned;\n" +
+                "1,14000000,1,Folder,1,,500,,,,catalogReady\n" +
+                "1,15000000,1,Presented,1,,,,,,final\n" +
+                "1,16000000,1,Presented,2,,,,,,final\n");
+
+            var analysis = PerfAnalyzeNavBuilder.Build(PerfCsvReader.Read(csv));
+
+            Assert.Equal(250.0, analysis.Startup["appStartup"]);
+            Assert.Equal(900.0, analysis.Startup["openPathBegin"]);
+            // First Presented is 1250 ms after the appStartup row, which itself is 250 ms in.
+            Assert.Equal(1500.0, analysis.Startup["firstPresented"], 3);
+            Assert.Equal(500.0, Assert.Single(analysis.FolderGens).T1CatalogReadyMs);
+        }
+        finally
+        {
+            Directory.Delete(path, recursive: true);
+        }
     }
 
     [Fact]
@@ -411,8 +465,14 @@ public class PerfAnalyzeTests
         var md = File.ReadAllText(result.SummaryMdPath);
         Assert.Contains("Perf analyze summary", md);
         Assert.Contains("R-DEC", md);
+        Assert.Contains("renderedFrame P50", md);
         var json = File.ReadAllText(result.SummaryJsonPath);
         Assert.Contains("\"csvFileCount\": 1", json);
+        Assert.Contains("\"renderedFrameMs\"", json);
+
+        var summary = result.Groups.Single().Summary;
+        Assert.False(double.IsNaN(summary.RenderedFrameP50));
+        Assert.False(double.IsNaN(summary.RenderedFrameP95));
     }
 
     [Fact]

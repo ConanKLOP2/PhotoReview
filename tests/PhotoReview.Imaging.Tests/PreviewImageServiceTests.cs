@@ -179,6 +179,38 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         var dimensions = await _service.GetOriginalDimensionsAsync(_previewPath);
         Assert.True(dimensions.Width == 1 && dimensions.Height == 1);
     }
+
+    [Fact(DisplayName = "After a preview decode, GetOriginalDimensionsAsync for the same source needs no extra source open")]
+    public async Task GetOriginalDimensionsAsyncAfterDecodeNeedsNoExtraSourceOpen()
+    {
+        // perf(dims): the decode below already learns the source's original (post-orientation)
+        // dimensions for free (IDecodedImage.OriginalWidth/Height, seeded into
+        // PreviewImageService's _originalDimensions cache by DecodeAndCacheAsync). A later
+        // GetOriginalDimensionsAsync for the same source must be served from that seed instead of
+        // opening the file again via decoder.ReadInfo -- SourceOpenCount must not increase.
+        var key = _service.GetCurrentCacheKey(_previewPath);
+        var decoded = await _service.GetPreviewAsync(_previewPath, key);
+        var opensAfterDecode = _metrics.Snapshot().SourceOpenCount;
+
+        var dimensions = await _service.GetOriginalDimensionsAsync(_previewPath, key);
+
+        Assert.Equal(opensAfterDecode, _metrics.Snapshot().SourceOpenCount);
+        Assert.Equal(decoded.OriginalWidth, dimensions.Width);
+        Assert.Equal(decoded.OriginalHeight, dimensions.Height);
+    }
+
+    [Fact(DisplayName = "ClearCache also drops seeded original dimensions (next query reads the source again)")]
+    public async Task ClearCacheDropsSeededOriginalDimensions()
+    {
+        var key = _service.GetCurrentCacheKey(_previewPath);
+        await _service.GetPreviewAsync(_previewPath, key);
+
+        _service.ClearCache();
+        var opensBefore = _metrics.Snapshot().SourceOpenCount;
+        await _service.GetOriginalDimensionsAsync(_previewPath, key);
+
+        Assert.Equal(opensBefore + 1, _metrics.Snapshot().SourceOpenCount);
+    }
 }
 
 /// <summary>
@@ -280,6 +312,31 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         {
             await scheduler.PreloadAroundAsync(0);
             Assert.True(service.TryGetCachedPreview(_preloadFiles[1], out _));
+        }
+    }
+
+    [Fact(DisplayName = "Navigating to a preloaded image needs 0 extra source opens to learn its original dimensions")]
+    public async Task NavigatingToPreloadedImageNeedsNoExtraSourceOpenForOriginalDimensions()
+    {
+        // perf(dims): reproduces ImagePresenter's real sequence -- a background preload decodes
+        // the next image (via IPreloadTarget.PreloadAsync -> the same DecodeAndCacheAsync a live
+        // navigation uses), then "navigating" to it asks for its original dimensions (as
+        // PresentAsync does for the status bar). That must be served from the seed
+        // DecodeAndCacheAsync already recorded, with zero additional decoder.ReadInfo opens.
+        var (metrics, service, scheduler) = NewWarmScheduler();
+        using (scheduler)
+        {
+            await scheduler.PreloadAroundAsync(0);
+            var preloadedPath = _preloadFiles[1];
+            Assert.True(service.TryGetCachedPreview(preloadedPath, out var preloaded));
+            var opensAfterPreload = metrics.Snapshot().SourceOpenCount;
+
+            var key = service.GetCurrentCacheKey(preloadedPath);
+            var dimensions = await service.GetOriginalDimensionsAsync(preloadedPath, key);
+
+            Assert.Equal(opensAfterPreload, metrics.Snapshot().SourceOpenCount);
+            Assert.Equal(preloaded.OriginalWidth, dimensions.Width);
+            Assert.Equal(preloaded.OriginalHeight, dimensions.Height);
         }
     }
 
@@ -413,7 +470,7 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits
         do
         {
-            files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.png") : [];
+            files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.pv4") : [];
             if (files.Length >= expectedCount) return files;
             await Task.Yield();
         } while (DateTime.UtcNow < deadline);
@@ -477,16 +534,19 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
     }
 
-    [Fact(DisplayName = "A disk cache entry without its metadata companion is a miss and is re-decoded from source")]
-    public async Task DiskCacheEntryWithoutMetadataIsMiss()
+    [Fact(DisplayName = "A disk cache entry with a mismatched format version is a miss and is re-decoded from source")]
+    public async Task DiskCacheEntryWithMismatchedVersionIsMiss()
     {
-        var diskDir = _root.Dir("cache-meta");
+        // perf(cache) v4: the whole point of the header's version byte is that bumping the cache
+        // key/file version (e.g. a future v5) never needs to parse or migrate an older layout --
+        // every entry stamped with a different version is simply ignored as if it didn't exist.
+        var diskDir = _root.Dir("cache-version");
         var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
-        var metaPath = files[0] + ".meta";
-        Assert.True(File.Exists(metaPath));
-        File.Delete(metaPath);
+        var bytes = File.ReadAllBytes(files[0]);
+        bytes[4] = unchecked((byte)(PreviewCacheFile.CurrentVersion + 1)); // offset 4 = version byte
+        File.WriteAllBytes(files[0], bytes);
 
         var readerMetrics = new ReviewMetrics();
         var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
@@ -525,14 +585,14 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         var remainingBytes = DirectoryBytes(diskDir);
         Assert.True(remainingBytes <= quotaBytes,
             $"Expected the {quotaBytes}-byte quota to be enforced; " +
-            $"{Directory.GetFiles(diskDir, "*.png").Length} file(s) totaling {remainingBytes} bytes remained.");
+            $"{Directory.GetFiles(diskDir, "*.pv4").Length} file(s) totaling {remainingBytes} bytes remained.");
     }
 
     // Runs concurrently with the real fire-and-forget prune worker, which can delete a file
     // between GetFiles listing it and FileInfo reading its length -- treat a file that
     // vanished mid-count as already pruned (0 bytes) instead of letting the test fail.
     private static long DirectoryBytes(string directory) =>
-        Directory.Exists(directory) ? Directory.GetFiles(directory, "*.png").Sum(FileLengthOrZero) : 0;
+        Directory.Exists(directory) ? Directory.GetFiles(directory, "*.pv4").Sum(FileLengthOrZero) : 0;
 
     private static long FileLengthOrZero(string path)
     {

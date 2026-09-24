@@ -137,6 +137,7 @@ public static class PerfStats
         yield return ("t_verify", n => n.TVerifyMs);
         yield return ("t_assign", n => n.TAssignMs);
         yield return ("t_render", n => n.TRenderMs);
+        yield return ("t_renderFrame", n => n.TRenderFrameMs);
         // t_post (preload kick, compare, hash, dims, session) runs after the frame is presented
         // (plan mục 3), so it is not a share of key→present. Post-work cost stays available on
         // NavRecord.PostMs for a separate report section (not yet in summary.md).
@@ -164,6 +165,16 @@ public sealed class GroupSummary
     public double FinalP95 { get; set; } = double.NaN;
     public double FinalMax { get; set; } = double.NaN;
 
+    /// <summary>
+    /// perf(render-metric): P50/P95/max of t_renderFrame (assign -> second Rendering tick) across
+    /// complete navs that recorded one -- the frame-accurate proxy for "time to see the new
+    /// image", alongside (not instead of) FirstP50/FinalP50 above. NaN when no nav in this group
+    /// carries a RenderedFrame event (e.g. an older perf-*.csv).
+    /// </summary>
+    public double RenderedFrameP50 { get; set; } = double.NaN;
+    public double RenderedFrameP95 { get; set; } = double.NaN;
+    public double RenderedFrameMax { get; set; } = double.NaN;
+
     public Dictionary<string, int> KindCounts { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, double> SlowestPhaseShare { get; } = new(StringComparer.Ordinal);
     public double HitRate { get; set; } = double.NaN;
@@ -178,6 +189,9 @@ public sealed class GroupSummary
     public List<DispatcherLongOpRow> DispatcherLongOps { get; } = [];
     public int DispatcherLongOpsBeforeStartCount { get; set; }
     public List<FolderGenSummary> FolderGens { get; } = [];
+
+    /// <summary>perf(startup): one entry per perf-*.csv that has Startup rows (phase -> ms since process start).</summary>
+    public List<Dictionary<string, double>> StartupRuns { get; } = [];
 
     public List<NavRecord> Navs { get; } = [];
 
@@ -203,6 +217,14 @@ public sealed class GroupSummary
             summary.FinalP50 = PerfStats.NearestRank(finals, 50);
             summary.FinalP95 = PerfStats.NearestRank(finals, 95);
             summary.FinalMax = finals[^1];
+        }
+
+        var renderedFrames = complete.Where(n => n.TRenderFrameMs is not null).Select(n => n.TRenderFrameMs!.Value).OrderBy(v => v).ToList();
+        if (renderedFrames.Count > 0)
+        {
+            summary.RenderedFrameP50 = PerfStats.NearestRank(renderedFrames, 50);
+            summary.RenderedFrameP95 = PerfStats.NearestRank(renderedFrames, 95);
+            summary.RenderedFrameMax = renderedFrames[^1];
         }
 
         foreach (var kind in complete.Select(n => n.Kind))

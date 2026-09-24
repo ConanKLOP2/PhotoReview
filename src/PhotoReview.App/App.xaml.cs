@@ -112,6 +112,8 @@ public partial class App : System.Windows.Application, IDisposable
         {
             var ctx = sp.GetRequiredService<PreviewStateContext>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
+            // Also lost in T46d: without this the "Original" loading mode still decoded previews.
+            ctx.IsOriginalLoadingMode = () => settingsStore.Current.LoadingMode == PhotoReview.Core.Model.LoadingMode.Original;
             ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
             // T46d dropped the viewport-based decode width, so Preview decoded every image at full size.
             var viewport = sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
@@ -174,22 +176,44 @@ public partial class App : System.Windows.Application, IDisposable
         return moveOverride is null ? null : moveOverride.MoveAsync;
     }
 
-    private void App_Startup(object sender, StartupEventArgs e)
+    private async void App_Startup(object sender, StartupEventArgs e)
     {
+        // perf(startup): the CSV listener depends on nothing but the environment, so it starts first
+        // and the Startup milestones below (msSinceProcessStart) cover services/settings/window too.
+        _perfListener = PerfCsvListener.TryStartFromEnvironment();
+        PhotoReviewPerf.StartupMark("appStartup");
         PhotoReview.App.Services.WpfKeyNameValidator.WireUp();
 
         _services = Composition.AppHost.BuildServices();
+        PhotoReviewPerf.StartupMark("servicesBuilt");
+
+        var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
+        var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
+        var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
+        // perf(startup): Explorer's view order is the slowest part of opening a photo (~1-2 s of
+        // cross-process COM for a large folder). Start it now, in parallel with settings, window
+        // construction and Show(); the folder load joins this query instead of starting its own.
+        var explorerFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder;
+        if (!string.IsNullOrEmpty(explorerFolder))
+            _services.GetRequiredService<IExplorerOrderProvider>().Prefetch(explorerFolder, ExplorerPrefetchTimeout);
 
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
-        var appSettings = store.Load();
+        // perf(startup): config.json (IO + JSON metadata, ~100 ms) is read on the thread pool while the
+        // UI thread is blocked connecting to WPF's render thread (~350 ms, it would otherwise happen
+        // inside MainWindow's InitializeComponent). Nothing reads the settings in between; the await
+        // normally finds the load finished and continues synchronously, without a dispatcher yield.
+        var settingsLoad = Task.Run(() => store.Load());
+        PhotoReview.App.Services.StartupWarmup.ConnectRenderThread();
+        PhotoReviewPerf.StartupMark("renderThreadConnected");
+        var appSettings = await settingsLoad;
+        PhotoReviewPerf.StartupMark("settingsLoaded");
         AppLog.Enabled = appSettings.LoggingEnabled;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
         // D05: PHOTOREVIEW_DIAG_* variables change app behavior for measurement purposes, so their
         // presence must be visible in the log even when logging is otherwise disabled -- same reasoning
         // as AppSettings.LogStartupErrorForced.
         if (DiagOptions.AnyEnabled) LogDiagModeForced();
-        _perfListener = PerfCsvListener.TryStartFromEnvironment();
         if (_perfListener is not null) AppLog.Info("Perf trace enabled (PHOTOREVIEW_PERF_TRACE)");
         if (_perfListener is not null)
         {
@@ -201,9 +225,6 @@ public partial class App : System.Windows.Application, IDisposable
         AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
-        var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
-        var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
-        var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
         _instanceLock = new InstanceLock(lockFolder);
         if (!_instanceLock.IsOwner)
         {
@@ -213,11 +234,20 @@ public partial class App : System.Windows.Application, IDisposable
             Shutdown();
             return;
         }
+        PhotoReviewPerf.StartupMark("instanceLock");
         var window = _services.GetRequiredService<MainWindow>();
+        PhotoReviewPerf.StartupMark("mainWindowConstructed");
         window.InitializeWithInitialPath(initial ?? initialFolder);
         MainWindow = window;
         window.Show();
+        PhotoReviewPerf.StartupMark("windowShown");
     }
+
+    /// <summary>
+    /// Budget of the startup Explorer prefetch. It starts ~1 s before the folder load asks for it, and
+    /// the load still bounds its own wait by its 2 s timeout, so this is 2 s plus that head start.
+    /// </summary>
+    private static readonly TimeSpan ExplorerPrefetchTimeout = TimeSpan.FromSeconds(3);
 
     internal static void LogStartupErrorForced(string message, Exception ex)
     {

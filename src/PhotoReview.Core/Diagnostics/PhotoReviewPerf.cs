@@ -203,4 +203,62 @@ public sealed class PhotoReviewPerf : EventSource
     {
         if (IsEnabled()) WriteEvent(24, flags);
     }
+
+    /// <summary>
+    /// perf(render-metric): time from the Source assign to the SECOND CompositionTarget.Rendering
+    /// tick after it -- i.e. the frame containing the new image has actually been rendered, not
+    /// just the dispatcher/vsync phase <see cref="Rendered"/> alone measures (that event fires at
+    /// the start of the frame, before layout/render run). Emitted alongside (never instead of)
+    /// <see cref="Rendered"/> for continuity; see WpfPresentationSink.TracePresented.
+    /// </summary>
+    [Event(25, Level = EventLevel.Informational)]
+    public void RenderedFrame(long nav, double msSinceAssign)
+    {
+        if (IsEnabled()) WriteEvent(25, nav, msSinceAssign);
+    }
+
+    /// <summary>
+    /// perf(startup): one process-startup milestone (App_Startup entry, settings loaded, services
+    /// built, MainWindow constructed, window shown/loaded, open-path begin, ...). The timestamp is
+    /// milliseconds since the OS process start time (<see cref="MsSinceProcessStart"/>), so the
+    /// first row also covers runtime/assembly load before any managed app code ran. The CSV row's
+    /// qpcTicks of any Startup row maps every other event onto the same process-start timeline.
+    /// </summary>
+    [Event(26, Level = EventLevel.Informational)]
+    public void Startup(string phase, double msSinceProcessStart)
+    {
+        if (IsEnabled()) WriteEvent(26, phase, msSinceProcessStart);
+    }
+
+    /// <summary>
+    /// perf(startup): extra detail for a <see cref="Folder"/> phase that the 3-field Folder event
+    /// cannot carry (it is a fixed wire contract): e.g. <c>scanned</c> with the file count, or
+    /// <c>explorer</c> with the snapshot status and its ordered-path count.
+    /// </summary>
+    [Event(27, Level = EventLevel.Informational)]
+    public void FolderInfo(long gen, string phase, long value, string detail)
+    {
+        if (IsEnabled()) WriteEvent(27, gen, phase, value, detail);
+    }
+
+    private static DateTime? _processStartUtc;
+
+    /// <summary>Milliseconds elapsed since the OS started this process (wall clock, ~1 ms resolution).</summary>
+    public static double MsSinceProcessStart()
+    {
+        var start = _processStartUtc ??= ReadProcessStartUtc();
+        return (DateTime.UtcNow - start).TotalMilliseconds;
+    }
+
+    private static DateTime ReadProcessStartUtc()
+    {
+        using var process = Process.GetCurrentProcess();
+        return process.StartTime.ToUniversalTime();
+    }
+
+    /// <summary>Emits <see cref="Startup"/> for <paramref name="phase"/> when a listener is attached.</summary>
+    public static void StartupMark(string phase)
+    {
+        if (Log.IsEnabled()) Log.Startup(phase, MsSinceProcessStart());
+    }
 }

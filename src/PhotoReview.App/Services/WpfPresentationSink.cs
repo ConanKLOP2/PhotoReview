@@ -80,12 +80,26 @@ public sealed class WpfPresentationSink : IPresentationSink
         {
             if (PhotoReviewPerf.Log.IsEnabled())
             {
+                // perf(render-metric): CompositionTarget.Rendering fires at the START of a frame
+                // (before layout/render run), so the FIRST tick after the assign only measures the
+                // dispatcher/vsync wait, not the actual pixel work -- that is still reported as
+                // Rendered/Presented below, unchanged, for continuity with existing consumers. The
+                // SECOND tick means the frame that actually contains the new image has finished
+                // rendering, which is the more accurate "time to see the new image" proxy; it is
+                // reported as a separate RenderedFrame event instead of replacing the first.
+                var tickCount = 0;
                 EventHandler? handler = null;
                 handler = (_, _) =>
                 {
+                    tickCount++;
+                    if (tickCount == 1)
+                    {
+                        PhotoReviewPerf.Log.Rendered(token, PhotoReviewPerf.Ms(assignedTimestamp));
+                        PhotoReviewPerf.Log.Presented(token, kind);
+                        return;
+                    }
                     CompositionTarget.Rendering -= handler;
-                    PhotoReviewPerf.Log.Rendered(token, PhotoReviewPerf.Ms(assignedTimestamp));
-                    PhotoReviewPerf.Log.Presented(token, kind);
+                    PhotoReviewPerf.Log.RenderedFrame(token, PhotoReviewPerf.Ms(assignedTimestamp));
                 };
                 CompositionTarget.Rendering += handler;
             }

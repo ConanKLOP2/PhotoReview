@@ -322,6 +322,192 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.NotEqual(1, _clock.CurrentNavigation);
     }
 
+    // perf(open) task 1: ImagePresenter races the thumbnail against the preview instead of
+    // awaiting the thumbnail first. These two tests use fake/controllable services (a gated
+    // decoder for the preview, a directly-controllable reader for the thumbnail) instead of real
+    // file decodes, so the race outcome is deterministic rather than timing-dependent.
+
+    [Fact(DisplayName = "When the preview finishes before the thumbnail, PresentAsync shows the preview directly and never shows a thumbnail")]
+    public async Task PresentAsync_WhenPreviewFasterThanThumbnail_ShowsPreviewDirectlyAndSkipsThumbnail()
+    {
+        var f1 = CreateFakeImageFile("preview-wins.jpg");
+        _catalog.Reset([f1]);
+
+        var previewImage = new FakeDecodedImage { PixelWidth = 1920 };
+        // A fast, un-gated decoder: GetPreviewAsync resolves almost immediately.
+        var previewService = CreatePreviewService(new ImmediateDecoder(previewImage));
+
+        // A thumbnail reader whose task never completes during this test: it cannot possibly
+        // win the race against the preview, so if the preview is ever shown it's because the
+        // race logic picked it, not because the thumbnail was slow "by luck".
+        var neverCompletes = new TaskCompletionSource<IDecodedImage?>();
+        using var thumbnailCache = new ThumbnailCache(
+            diskDirectory: Path.Combine(_tempDir, "never-thumbs"),
+            persistNewThumbnails: false,
+            embeddedThumbnailReader: (_, _) => neverCompletes.Task);
+
+        var presenter = CreatePresenterWithServices(previewService, thumbnailCache);
+
+        // The thumbnail task never completes (see neverCompletes above), so this can only
+        // finish -- inside the timeout -- if PresentAsync truly never awaits it before the
+        // preview; under the old "always await the thumbnail first" behavior this would hang.
+        await presenter.PresentAsync(0).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
+    }
+
+    [Fact(DisplayName = "When the thumbnail finishes before the preview, it is shown first and then replaced once the preview completes")]
+    public async Task PresentAsync_WhenThumbnailFasterThanPreview_ShowsThumbnailThenReplacesWithPreview()
+    {
+        var f1 = CreateFakeImageFile("thumbnail-wins.jpg");
+        _catalog.Reset([f1]);
+
+        var thumbnailImage = new FakeDecodedImage { PixelWidth = 160 };
+        var previewImage = new FakeDecodedImage { PixelWidth = 1920 };
+
+        // Gated: GetPreviewAsync's decode blocks on a worker thread until the test releases it,
+        // so the thumbnail (which resolves immediately below) is guaranteed to win the race.
+        using var gatedDecoder = new GatedDecoder(previewImage);
+        var previewService = CreatePreviewService(gatedDecoder);
+
+        using var thumbnailCache = new ThumbnailCache(
+            diskDirectory: Path.Combine(_tempDir, "fast-thumbs"),
+            persistNewThumbnails: false,
+            embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
+
+        var thumbnailShown = new TaskCompletionSource<bool>();
+        _sink.OnSetCurrentImage = img =>
+        {
+            if (ReferenceEquals(img, thumbnailImage.PlatformImage)) thumbnailShown.TrySetResult(true);
+        };
+
+        var presenter = CreatePresenterWithServices(previewService, thumbnailCache);
+
+        var presentTask = presenter.PresentAsync(0);
+
+        await thumbnailShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Same(thumbnailImage.PlatformImage, presenter.CurrentImage);
+
+        // Now let the preview finish; PresentAsync must replace the thumbnail with it.
+        gatedDecoder.Release();
+        await presentTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
+    }
+
+    [Fact(DisplayName = "perf(preload): every navigation notifies preload before its own decode, and preload is still kicked after present")]
+    public async Task PresentAsync_NotifiesPreloadOfEachNavigation()
+    {
+        var f1 = CreateFakeImageFile("nav1.jpg");
+        var f2 = CreateFakeImageFile("nav2.jpg");
+        _catalog.Reset([f1, f2]);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+        await presenter.PresentAsync(1);
+
+        Assert.Equal([0, 1], _preloadController.NotifyNavigationCalls);
+        Assert.Equal([0, 1], _preloadController.PreloadAroundCalls);
+    }
+
+    [Fact(DisplayName = "perf(preload): a superseded navigation's not-yet-started viewer decode is dropped, not decoded, and reports no error")]
+    public async Task PresentAsync_SupersededNavigation_DropsPendingViewerDecode()
+    {
+        var f1 = CreateFakeImageFile("superseded.jpg");
+        var f2 = CreateFakeImageFile("current.jpg");
+        _catalog.Reset([f1, f2]);
+        var decoder = new RecordingDecoder();
+        var previewService = CreatePreviewService(decoder);
+        var presenter = CreatePresenterWithServices(previewService, _thumbnailCache);
+
+        _preloadController.ViewerDecodeDelay = TimeSpan.FromSeconds(30); // burst: first nav waits before decoding
+        var first = presenter.PresentAsync(0);
+        _preloadController.ViewerDecodeDelay = TimeSpan.Zero;
+        var second = presenter.PresentAsync(1);
+
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal([f2], decoder.Paths);
+        Assert.Contains(f2, _sink.PresentedPaths);
+        Assert.DoesNotContain(f1, _sink.PresentedPaths);
+        Assert.DoesNotContain(_sink.Statuses, s => s.Contains(Path.GetFileName(f1), StringComparison.Ordinal));
+        Assert.False(previewService.HasInflightPreview(previewService.GetCurrentCacheKey(f1)));
+    }
+
+    private PreviewImageService CreatePreviewService(IImageDecoder decoder) => new(
+        _metrics,
+        () => _previewContext.IsOriginalLoadingMode(),
+        () => _previewContext.TargetDecodeWidth(),
+        capacityBytes: 64 * 1024 * 1024,
+        decoder: decoder,
+        currentBackend: () => _previewContext.CurrentBackend(),
+        disableDiskCacheOverride: true);
+
+    private ImagePresenter CreatePresenterWithServices(PreviewImageService previewService, ThumbnailCache thumbnailCache) => new(
+        _catalog,
+        _clock,
+        previewService,
+        thumbnailCache,
+        _preloadController,
+        _compareViewModel,
+        _hashService,
+        _metrics,
+        () => _settings,
+        _sessionStore,
+        _sink,
+        fileSystem: null);
+
+    /// <summary>Decoder that returns a canned image immediately (used for the "preview wins" race test).</summary>
+    private sealed class ImmediateDecoder(IDecodedImage image) : IImageDecoder
+    {
+        public IDecodedImage Decode(DecodeRequest request) => image;
+        public ImageInfo ReadInfo(string path) => new(image.PixelWidth, image.PixelHeight, image.Orientation);
+    }
+
+    /// <summary>Decoder that records every path it decodes.</summary>
+    private sealed class RecordingDecoder : IImageDecoder
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _paths = new();
+        public IReadOnlyCollection<string> Paths => _paths;
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            _paths.Enqueue(request.Path);
+            return new FakeDecodedImage();
+        }
+
+        public ImageInfo ReadInfo(string path) => new(1, 1);
+    }
+
+    /// <summary>Decoder whose Decode() blocks until the test calls Release() (used for the "thumbnail wins" race test).</summary>
+    private sealed class GatedDecoder(IDecodedImage image) : IImageDecoder, IDisposable
+    {
+        private readonly SemaphoreSlim _gate = new(0, 1);
+
+        public void Release() => _gate.Release();
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            _gate.Wait();
+            return image;
+        }
+
+        public ImageInfo ReadInfo(string path) => new(image.PixelWidth, image.PixelHeight, image.Orientation);
+
+        public void Dispose() => _gate.Dispose();
+    }
+
+    /// <summary>Minimal fake <see cref="IDecodedImage"/> for tests that only care about identity/ordering, not real pixels.</summary>
+    private sealed class FakeDecodedImage : IDecodedImage
+    {
+        public int PixelWidth { get; init; } = 1;
+        public int PixelHeight { get; init; } = 1;
+        public bool Downscaled { get; init; }
+        public int Orientation { get; init; } = 1;
+        public long EstimatedBytes { get; init; } = 1;
+        public object PlatformImage { get; } = new();
+    }
+
     private sealed class TestPresentationSink : IPresentationSink
     {
         public List<object?> Images { get; } = [];
@@ -329,22 +515,31 @@ public sealed class ImagePresenterTests : IDisposable
         public List<string> Statuses { get; } = [];
         public int InitialViewModeAppliedCount { get; private set; }
         public List<string> PresentedPaths { get; } = [];
+        public List<string> TracedKinds { get; } = [];
+        public Action<object?>? OnSetCurrentImage { get; set; }
 
         public void SetCurrentImage(object? image)
         {
             CurrentImage = image;
             Images.Add(image);
+            OnSetCurrentImage?.Invoke(image);
         }
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() => InitialViewModeAppliedCount++;
         public void OnPresented(string path) => PresentedPaths.Add(path);
-        public void TracePresented(long token, string kind, long assignedTimestamp) { }
+        public void TracePresented(long token, string kind, long assignedTimestamp) => TracedKinds.Add(kind);
     }
 
     private sealed class TestPreloadController : IPreloadController
     {
         public List<int> PreloadAroundCalls { get; } = [];
+        public List<int> NotifyNavigationCalls { get; } = [];
         public HashSet<ImageCacheKey> WarmedKeys { get; } = [];
+        public TimeSpan ViewerDecodeDelay { get; set; }
+
+        public void NotifyNavigation(int index) => NotifyNavigationCalls.Add(index);
+
+        public TimeSpan GetViewerDecodeDelay() => ViewerDecodeDelay;
 
         public Task PreloadAroundAsync(int center)
         {

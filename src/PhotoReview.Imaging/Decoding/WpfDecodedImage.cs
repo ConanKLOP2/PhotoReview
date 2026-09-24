@@ -18,7 +18,15 @@ public sealed class WpfDecodedImage : IDecodedImage
     public object PlatformImage => Source;
     public DecoderBackend ActualBackend { get; }
 
-    public WpfDecodedImage(BitmapSource source, bool downscaled = false, int orientation = 1, DecoderBackend actualBackend = DecoderBackend.Wpf)
+    /// <summary>See <see cref="IDecodedImage.OriginalWidth"/>. Defaults to <see cref="PixelWidth"/>
+    /// when the caller doesn't know a different (larger, pre-downscale) source size.</summary>
+    public int OriginalWidth { get; }
+
+    /// <summary>See <see cref="IDecodedImage.OriginalHeight"/>.</summary>
+    public int OriginalHeight { get; }
+
+    public WpfDecodedImage(BitmapSource source, bool downscaled = false, int orientation = 1,
+        DecoderBackend actualBackend = DecoderBackend.Wpf, int originalWidth = 0, int originalHeight = 0)
     {
         ArgumentNullException.ThrowIfNull(source);
         if (!source.IsFrozen && source.CanFreeze)
@@ -29,5 +37,7 @@ public sealed class WpfDecodedImage : IDecodedImage
         Downscaled = downscaled;
         Orientation = orientation;
         ActualBackend = actualBackend;
+        OriginalWidth = originalWidth > 0 ? originalWidth : source.PixelWidth;
+        OriginalHeight = originalHeight > 0 ? originalHeight : source.PixelHeight;
     }
 }

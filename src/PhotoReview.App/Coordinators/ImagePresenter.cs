@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
@@ -48,8 +49,13 @@ public sealed class ImagePresenter
     // version check, race to build the same generation's index twice, and interleave writes to
     // these two fields.
     private readonly object _compareIndexGate = new();
+    // perf(preload): cancels the current navigation's viewer decode when the next navigation starts.
+    // A superseded source is cancelled, then disposed; none ever uses a timer or WaitHandle.
+    private CancellationTokenSource? _viewerDecodeCts;
     private int _compareIndexVersion = -1;
     private Dictionary<string, (string Left, string Right)>? _compareIndex;
+
+    private readonly IUiScheduler? _uiScheduler;
 
     public ImagePresenter(
         ReviewCatalog catalog,
@@ -66,7 +72,8 @@ public sealed class ImagePresenter
         IFileSystem? fileSystem = null,
         Func<SessionState?>? getSession = null,
         Action<string>? onPresentedHook = null,
-        SessionWriter? sessionWriter = null)
+        SessionWriter? sessionWriter = null,
+        IUiScheduler? uiScheduler = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -82,6 +89,7 @@ public sealed class ImagePresenter
         _fileSystem = fileSystem;
         _getSession = getSession;
         _onPresentedHook = onPresentedHook;
+        _uiScheduler = uiScheduler;
         _sessionWriter = sessionWriter;
     }
 
@@ -121,6 +129,18 @@ public sealed class ImagePresenter
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
         var path = _catalog.PathAt(index);
+
+        // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
+        // has not started yet (a started one finishes and stays cached), and let preload re-center and
+        // track direction/key rate now rather than only after this image is presented.
+        var viewerDecodeCts = new CancellationTokenSource();
+        var supersededCts = Interlocked.Exchange(ref _viewerDecodeCts, viewerDecodeCts);
+        if (supersededCts is not null)
+        {
+            supersededCts.Cancel();
+            supersededCts.Dispose();
+        }
+        _preloadController.NotifyNavigation(index);
 
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
         if (perf)
@@ -180,28 +200,63 @@ public sealed class ImagePresenter
             // the two run concurrently. GetPreviewAsync's in-flight dedup means calling it here just
             // starts (or joins) the same decode that step 5 used to start only after the thumbnail
             // finished, which serialized two independent pieces of I/O + decode work.
-            var previewTask = ramReady ? null : _previewService.GetPreviewAsync(path, currentKey);
+            // perf(preload): the viewer's decode gets its own priority lane and is dropped (before it
+            // starts) when a newer navigation supersedes this one; see GetViewerPreviewAsync.
+            var previewTask = ramReady ? null : _previewService.GetViewerPreviewAsync(path, currentKey,
+                viewerDecodeCts.Token, _preloadController.GetViewerDecodeDelay());
 
-            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: hiển thị thumbnail trong lúc preview decode chạy song song
+            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: chạy song song thumbnail và
+            // preview, hiển thị bất kỳ cái nào xong trước. Nếu preview thắng, bỏ qua thumbnail hoàn
+            // toàn (không chờ, không hiển thị) -- nó đã lỗi thời trước khi kịp lên màn hình.
             if (settings.LoadingMode == LoadingMode.Preview && !ramReady && !hasInflight)
             {
                 long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
 
-                var thumbnail = await _thumbnailCache.GetAsync(path);
+                var thumbnailTask = _thumbnailCache.GetAsync(path);
+                // Cast to the non-generic Task overload: thumbnailTask (IDecodedImage?) and
+                // previewTask (IDecodedImage) have different nullability of the same reference
+                // type, and Task.WhenAny<T> can't unify those without a nullability warning.
+                var firstDone = await Task.WhenAny((Task)thumbnailTask, previewTask!);
 
-                if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
+                if (ReferenceEquals(firstDone, thumbnailTask))
+                {
+                    // The thumbnail task itself never throws (ThumbnailCache/EmbeddedThumbnailReader
+                    // treat every read/decode failure as "no thumbnail"), so no try/catch is needed
+                    // here; a genuine fault would still be handled the same way as before by
+                    // PresentAsync's own catch clauses below.
+                    var thumbnail = await thumbnailTask;
 
-                // INV-1: kiểm tra token sau await
-                if (!_clock.IsNavigationCurrent(token)) return;
+                    if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
 
-                UpdateCurrentImage(thumbnail.PlatformImage);
-                if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
+                    // INV-1: kiểm tra token sau await
+                    if (!_clock.IsNavigationCurrent(token)) return;
 
-                if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
+                    if (thumbnail is not null)
+                    {
+                        UpdateCurrentImage(thumbnail.PlatformImage);
+                        if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
 
-                _sink.ApplyInitialViewMode();
-                UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize));
+                        if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
+
+                        _sink.ApplyInitialViewMode();
+                        UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize));
+                    }
+                    // else: source has no embedded thumbnail (or isn't a JPEG) -- nothing to show
+                    // yet; fall through to step 5, which is already awaiting the same preview task.
+                }
+                else
+                {
+                    // The preview finished first: let thumbnailTask keep running in the background
+                    // (it just warms ThumbnailCache's RAM/disk cache for a later visit) and go
+                    // straight to presenting the preview below. Observe any fault so a background
+                    // ThumbnailCache failure never surfaces as an unobserved task exception.
+                    _ = thumbnailTask.ContinueWith(
+                        t => _ = t.Exception,
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
             }
 
             // 5. Decode rồi present (đo UiAssign), kích preload
@@ -270,6 +325,16 @@ public sealed class ImagePresenter
                 _compareViewModel.Clear();
                 _sink.ApplyInitialViewMode();
 
+                // Let the frame containing the new image render before the status/session bookkeeping
+                // below. Original dimensions are usually known already (seeded by the decode), so the
+                // await further down completes synchronously; without this yield the stat + status +
+                // session work ran before the first frame (+~20 ms to first visual on folder open).
+                if (_uiScheduler is not null)
+                {
+                    await _uiScheduler.YieldAsync();
+                    if (!_clock.IsNavigationCurrent(token)) return;
+                }
+
                 long perfDims = perf && settings.LoadingMode != LoadingMode.Original ? Stopwatch.GetTimestamp() : 0;
                 if (perfDims != 0) PhotoReviewPerf.Log.PostStart(token, "dims");
 
@@ -308,6 +373,11 @@ public sealed class ImagePresenter
 
             presentStopwatch.Stop();
             _metrics.RecordPresented(presentStopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (!_clock.IsNavigationCurrent(token))
+        {
+            // perf(preload): a newer navigation cancelled this one's not-yet-started viewer decode.
+            if (AppLog.Enabled) AppLog.Info($"ShowImage superseded token={token} path={path}");
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token) && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {

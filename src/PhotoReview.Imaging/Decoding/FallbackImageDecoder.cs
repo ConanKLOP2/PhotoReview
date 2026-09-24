@@ -105,6 +105,8 @@ public sealed class FallbackImageDecoder : IImageDecoder
         public long EstimatedBytes => _inner.EstimatedBytes;
         public object PlatformImage => _inner.PlatformImage;
         public DecoderBackend ActualBackend { get; }
+        public int OriginalWidth => _inner.OriginalWidth;
+        public int OriginalHeight => _inner.OriginalHeight;
 
         public DecodedImageWithBackend(IDecodedImage inner, DecoderBackend actualBackend)
         {

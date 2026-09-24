@@ -76,12 +76,16 @@ public sealed class DiskCacheStore
         {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
+            // perf(cache): this is a disposable cache, not a durability-critical journal -- the
+            // temp-file-then-atomic-rename below is the only guarantee that matters (a crash never
+            // leaves a half-written file at cachePath). WriteThrough/Flush(true) forced every write
+            // through to physical disk before the rename, which only slows down cache writes for a
+            // durability guarantee this data doesn't need (a lost write is just a future cache miss).
             await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan | FileOptions.WriteThrough))
+                64 * 1024, FileOptions.SequentialScan))
             {
                 encoder.Save(stream);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                stream.Flush(flushToDisk: true);
             }
             File.Move(temporaryPath, cachePath, overwrite: true);
         }

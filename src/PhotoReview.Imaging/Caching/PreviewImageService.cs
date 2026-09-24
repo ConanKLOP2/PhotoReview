@@ -62,8 +62,8 @@ public sealed class PreviewImageService : IPreloadTarget
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
     private const int PersistQueueCapacity = 32;
-    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation)> _persistQueue =
-        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int)>(
+    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight)> _persistQueue =
+        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly Task[] _persistWorkers;
 
@@ -89,7 +89,8 @@ public sealed class PreviewImageService : IPreloadTarget
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _log = log ?? NullLog.Instance;
-        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log, companionSuffix: ".meta");
+        // perf(cache) v4: single-file entries (see PreviewCacheFile), no ".meta" companion.
+        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", _diskCacheCapacityBytes, _log, companionSuffix: null);
         _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
         _sourceBytesCache = sourceBytesCache;
@@ -104,6 +105,37 @@ public sealed class PreviewImageService : IPreloadTarget
         // instead of leaking these tasks and everything their closures hold alive.
         _persistWorkers = new Task[PersistWorkerCount];
         for (var i = 0; i < PersistWorkerCount; i++) _persistWorkers[i] = RunPersistWorkerAsync();
+        ScheduleLegacyCacheCleanup();
+    }
+
+    // perf(cache): bumping the cache key/file version (preview-v3 -> v4, ".png"+".meta" ->
+    // ".pv4") leaves any old-version files behind as dead weight instead of naturally aging out
+    // through DiskCacheStore's own quota prune (which only ever scans "*.pv4" now). This sweeps
+    // them once, lazily (fire-and-forget from the constructor, never blocks startup) and bounded
+    // (a single non-recursive directory listing, capped at LegacyCleanupMaxFiles per extension)
+    // so a huge leftover pile from a very old install can't turn this into an unbounded scan.
+    private const int LegacyCleanupMaxFiles = 5000;
+
+    private void ScheduleLegacyCacheCleanup()
+    {
+        if (_disableDiskCache) return;
+        var directory = _diskCacheDirectory;
+        var log = _log;
+        _ = Task.Run(() => CleanupLegacyCacheFiles(directory, log));
+    }
+
+    private static void CleanupLegacyCacheFiles(string directory, ILog log)
+    {
+        try
+        {
+            if (!Directory.Exists(directory)) return;
+            foreach (var path in Directory.EnumerateFiles(directory, "*.png").Take(LegacyCleanupMaxFiles))
+                DiskCacheStore.TryDelete(path, log);
+            foreach (var path in Directory.EnumerateFiles(directory, "*.png.meta").Take(LegacyCleanupMaxFiles))
+                DiskCacheStore.TryDelete(path, log);
+        }
+        catch (IOException ex) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
+        catch (UnauthorizedAccessException ex) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
     }
 
     /// <summary>
@@ -127,14 +159,14 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
-                WriteCacheMetadataAtomically(request.CachePath, request.Backend, request.Orientation);
-                await _diskStore.WriteAtomicallyAsync(request.Bitmap, request.CachePath).ConfigureAwait(false);
+                await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
+                        request.OriginalWidth, request.OriginalHeight, request.CachePath)
+                    .ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
                     // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
                     // a freshly-written file for a cache generation that was just cleared.
                     DiskCacheStore.TryDelete(request.CachePath);
-                    DiskCacheStore.TryDelete(GetCacheMetadataPath(request.CachePath));
                     continue;
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
@@ -177,7 +209,56 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
 
-    public async Task<IDecodedImage> GetPreviewAsync(string path, ImageCacheKey key)
+    public Task<IDecodedImage> GetPreviewAsync(string path, ImageCacheKey key) =>
+        GetPreviewCoreAsync(path, key, viewer: false, TimeSpan.Zero, CancellationToken.None);
+
+    /// <summary>
+    /// perf(preload): the viewer's decode of the image currently being navigated to. Unlike
+    /// <see cref="GetPreviewAsync(string, ImageCacheKey)"/> (preload / compare), a new decode started
+    /// here (a) never waits for thread-pool threads or preload workers -- it runs on a dedicated,
+    /// above-normal-priority thread in one of <see cref="ViewerDecodeSlots"/> viewer slots -- and
+    /// (b) is dropped, before it starts, once <paramref name="cancellationToken"/> is cancelled
+    /// (the navigation was superseded). <paramref name="startDelay"/> (a key-held burst, see
+    /// NavigationPace) waits a little first, so a decode the very next key supersedes is never started.
+    /// A decode that has already started can't be interrupted inside the decoder: it runs to completion
+    /// and its result is kept in the cache like a preloaded image. Joining an in-flight or cached
+    /// preview behaves exactly as <see cref="GetPreviewAsync(string, ImageCacheKey)"/>.
+    /// </summary>
+    public Task<IDecodedImage> GetViewerPreviewAsync(string path, ImageCacheKey key, CancellationToken cancellationToken, TimeSpan startDelay = default) =>
+        GetPreviewCoreAsync(path, key, viewer: true, startDelay, cancellationToken);
+
+    /// <summary>Concurrent viewer decodes: one for the current image plus one spare, so a superseded
+    /// viewer decode that is already inside the decoder never blocks the next image's decode.</summary>
+    public const int ViewerDecodeSlots = 2;
+    // A channel pre-filled with one token per slot is an async, cancellable counting gate (read =
+    // acquire, write = release) that, unlike SemaphoreSlim, owns nothing disposable -- this service is
+    // a process-lifetime singleton that is not IDisposable.
+    private readonly Channel<byte> _viewerSlots = CreateSlotTokens(ViewerDecodeSlots);
+    private int _activeViewerDecodes;
+
+    /// <inheritdoc cref="IPreloadTarget.ActiveViewerDecodes"/>
+    public int ActiveViewerDecodes => Volatile.Read(ref _activeViewerDecodes);
+
+    private static Channel<byte> CreateSlotTokens(int count)
+    {
+        var channel = Channel.CreateBounded<byte>(count);
+        for (var i = 0; i < count; i++) channel.Writer.TryWrite(0);
+        return channel;
+    }
+
+    private async Task<IDecodedImage> GetPreviewCoreAsync(string path, ImageCacheKey key, bool viewer, TimeSpan startDelay, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // null: the in-flight decode this call joined belonged to a superseded viewer navigation
+            // and was dropped before it started; this caller still wants the image, so start its own.
+            var image = await GetPreviewOnceAsync(path, key, viewer, startDelay, cancellationToken).ConfigureAwait(false);
+            if (image is not null) return image;
+        }
+    }
+
+    private async Task<IDecodedImage?> GetPreviewOnceAsync(string path, ImageCacheKey key, bool viewer, TimeSpan startDelay, CancellationToken cancellationToken)
     {
         // Read WPF layout/DPI only on the UI thread. The decode below runs on a worker thread.
         var targetWidth = key.TargetWidth;
@@ -196,7 +277,9 @@ public sealed class PreviewImageService : IPreloadTarget
         // lost the race and joined someone else's in-flight decode. Constructing the
         // candidate up front and comparing it by reference to what GetOrAdd returns
         // identifies the true winner instead.
-        var candidate = new Lazy<Task<IDecodedImage>>(() => DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
+        var candidate = new Lazy<Task<IDecodedImage>>(() => viewer
+                ? DecodeForViewerAsync(path, key, targetWidth, cacheEpoch, startDelay, cancellationToken)
+                : DecodeAndCacheAsync(path, key, targetWidth, cacheEpoch),
             LazyThreadSafetyMode.ExecutionAndPublication);
         var lazy = _previewLoads.GetOrAdd(loadKey, candidate);
         if (ReferenceEquals(lazy, candidate)) _metrics.RecordCacheMiss(); else _metrics.RecordInflightJoin();
@@ -210,6 +293,10 @@ public sealed class PreviewImageService : IPreloadTarget
             perfJoin = Stopwatch.GetTimestamp();
         }
         try { return await lazy.Value.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (!ReferenceEquals(lazy, candidate) && !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
         finally
         {
             _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<IDecodedImage>>>(loadKey, lazy));
@@ -219,7 +306,47 @@ public sealed class PreviewImageService : IPreloadTarget
 
     // D04 perf: Task.Run captures the ExecutionContext, so PhotoReviewPerf.NavContext read inside
     // the lambda is the nav of the caller that created the Lazy (viewer token or -1 for preload).
-    private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) => Task.Run(() =>
+    private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch) =>
+        Task.Run(() => DecodeAndCache(path, key, targetWidth, cacheEpoch));
+
+    // perf(preload): see GetViewerPreviewAsync. The 1.3 s "thumbnail shown, preview late" outlier at
+    // the end of a key-held burst was every superseded navigation's decode still running: each nav
+    // Task.Run-ed its own decode with no bound and no cancellation, so ~30 of them (plus 8 preload
+    // workers) shared 12 cores, the thread pool had to grow to fit them, and the image the burst
+    // stopped on decoded ~5x slower than alone. Here a superseded navigation's decode is dropped
+    // unless it already started, at most ViewerDecodeSlots run at once, and they run on dedicated
+    // threads so neither preload workers nor thread-pool growth delays them.
+    private async Task<IDecodedImage> DecodeForViewerAsync(string path, ImageCacheKey key, int targetWidth, long cacheEpoch,
+        TimeSpan startDelay, CancellationToken cancellationToken)
+    {
+        if (startDelay > TimeSpan.Zero) await Task.Delay(startDelay, cancellationToken).ConfigureAwait(false);
+        await _viewerSlots.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        var decoding = false;
+        try
+        {
+            // Last point where superseded work can be dropped: once DecodeAndCache starts it runs to
+            // completion (the decoder can't be interrupted) and its result is cached for a later visit.
+            cancellationToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _activeViewerDecodes);
+            decoding = true;
+            return await Task.Factory.StartNew(() =>
+            {
+                // LongRunning = a dedicated thread (not a pool thread), so raising its priority is
+                // safe; it lets the current image win the CPU against the (normal-priority) preload
+                // decodes without slowing the UI thread, which stays idle while this runs.
+                Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+                return DecodeAndCache(path, key, targetWidth, cacheEpoch);
+            }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            if (decoding) Interlocked.Decrement(ref _activeViewerDecodes);
+            _viewerSlots.Writer.TryWrite(0);
+        }
+    }
+
+    private IDecodedImage DecodeAndCache(string path, ImageCacheKey key, int targetWidth, long cacheEpoch)
     {
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
@@ -237,24 +364,30 @@ public sealed class PreviewImageService : IPreloadTarget
         {
             try
             {
-                int orientation = ReadCacheOrientation(cachePath, key.Backend);
                 if (perf) perfT0 = Stopwatch.GetTimestamp();
-                using var cacheStream = File.OpenRead(cachePath);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
-                decodedImage = new WpfDecodedImage(bitmap, downscaled: true, orientation: orientation, actualBackend: key.Backend);
+                // perf(cache) v4: one file open, one header read, one decode -- no separate
+                // ".meta" companion (see PreviewCacheFile). ActualBackend comes from the header,
+                // not key.Backend: a fallback-decoded preview (see the persist condition below)
+                // is stored under the requested backend's path but its header truthfully records
+                // whichever backend actually produced the pixels.
+                var cacheEntry = PreviewCacheFile.Read(cachePath);
+                decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend,
+                    originalWidth: cacheEntry.OriginalWidth, originalHeight: cacheEntry.OriginalHeight);
                 _metrics.RecordDiskCacheHit();
-                if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), PerfStreamLength(cacheStream));
+                if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), cacheEntry.FileBytes);
             }
             // A background prune can delete cachePath between the Exists check above and
             // here; re-checking filesystem state in the catch filter (as this used to do)
             // lets that race turn a plain cache miss into an escaping FileNotFoundException
             // instead of the source fallback below. Catch the actual expected read/decode
             // failure types instead of re-querying state that can change mid-catch.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
+            // InvalidDataException covers PreviewCacheFile.Read's own header validation (bad
+            // magic, a version other than PreviewCacheFile.CurrentVersion, or any other
+            // structurally invalid header) -- a version bump makes every older entry take this
+            // same "corrupt: delete and re-decode" path instead of needing a migration.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException)
             {
                 try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
-                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { /* best-effort: a stray .meta only affects an entry that is already a miss */ }
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
             }
@@ -274,27 +407,37 @@ public sealed class PreviewImageService : IPreloadTarget
         lock (_cacheLifecycleGate)
             if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
 
+        // Perf: every decode through this method (viewer-triggered or preload-triggered -- both
+        // share this same path, see IPreloadTarget.PreloadAsync) already knows the source's
+        // original (post-orientation) dimensions for free, whether that came from a fresh decode
+        // header or a disk-cache hit's stored header. Seeding _originalDimensions here means a
+        // later GetOriginalDimensionsAsync for the same source (e.g. ImagePresenter showing
+        // "WxH" in the status bar) never needs its own decoder ReadInfo call/file open, as long
+        // as the image was already decoded once -- including by a background preload.
+        _originalDimensions[ImageCacheKey.CreateOriginal(key)] = (decodedImage.OriginalWidth, decodedImage.OriginalHeight);
+
         // Only cache previews that actually decoded at the downscaled target width: a
-        // fallback to full-resolution (see DecodeWithFallback) must never be PNG-encoded
-        // under the downscaled cache key, and Original-mode's full-resolution decode is
-        // slower to persist than just re-decoding the source JPEG, so it would cost more
-        // than it saves.
-        if (!_disableDiskCache && sourceRead && decodedImage.ActualBackend == key.Backend &&
+        // fallback to full-resolution (see DecodeWithFallback) must never be persisted under the
+        // downscaled cache key, and Original-mode's full-resolution decode is slower to persist
+        // than just re-decoding the source JPEG, so it would cost more than it saves.
+        //
+        // perf(cache): this used to also require decodedImage.ActualBackend == key.Backend,
+        // which meant a preview whose *backend-level* decode fell back (e.g. an ICC JPEG the
+        // configured TurboJpeg backend can't handle, decoded via FallbackImageDecoder's inner
+        // Wpf/WicDirect decoder instead) was never disk-cached at all -- every future open re-ran
+        // the same fallback chain from source. GetDiskCachePath already hashes key.Backend (the
+        // *requested* backend), so this path is still per-requested-backend; the header just
+        // records which backend actually produced the pixels (PreviewCacheFile.ReadResult.ActualBackend
+        // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
+        // decode would have.
+        if (!_disableDiskCache && sourceRead &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
-            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
+            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
         if (sourceRead) _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
         return decodedImage;
-    });
-
-    // D04 perf (tracing only): must never throw into the disk-cache catch above, which would turn a
-    // successful cache read into a delete + source decode.
-    private static long PerfStreamLength(Stream stream)
-    {
-        try { return stream.Length; }
-        catch { return -1; }
     }
 
     public bool TryGetCachedPreview(string path, out IDecodedImage image)
@@ -349,6 +492,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public void ClearCache()
     {
         lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
+        _originalDimensions.Clear();
     }
 
     /// <summary>
@@ -362,9 +506,10 @@ public sealed class PreviewImageService : IPreloadTarget
         try
         {
             _diskStore.ClearDirectory();
-            if (Directory.Exists(_diskCacheDirectory))
-                foreach (var metadataPath in Directory.EnumerateFiles(_diskCacheDirectory, "*.meta"))
-                    DiskCacheStore.TryDelete(metadataPath, _log);
+            // An explicit user action ("Clear Cache"), not a background pass: also sweep any
+            // leftover pre-v4 files (".png" + ".png.meta") right away instead of waiting for
+            // ScheduleLegacyCacheCleanup's bounded, once-per-process pass.
+            CleanupLegacyCacheFiles(_diskCacheDirectory, _log);
         }
         catch (IOException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
@@ -417,6 +562,10 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var key = ImageCacheKey.CreateOriginal(currentKey);
         if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
+        // Only reached when nothing decoded so far (viewer or preload) has told us this source's
+        // original dimensions -- see the seeding in DecodeAndCacheAsync. ReadInfo below genuinely
+        // opens the file (a header-only read), so it counts as a source open like any other.
+        _metrics.RecordSourceOpen(path);
         var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path)).ConfigureAwait(false);
         dimensions = (info.Width, info.Height);
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
@@ -457,43 +606,21 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private string GetDiskCachePath(ImageCacheKey key)
     {
-        // v3 requires an atomic metadata companion carrying backend and source orientation.
-        // Older PNGs intentionally become misses because their provenance is incomplete.
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v3|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
-        return Path.Combine(_diskCacheDirectory, hash + ".png");
-    }
-
-    private static string GetCacheMetadataPath(string cachePath) => cachePath + ".meta";
-
-    private static int ReadCacheOrientation(string cachePath, DecoderBackend expectedBackend)
-    {
-        var parts = File.ReadAllText(GetCacheMetadataPath(cachePath)).Split('|');
-        if (parts.Length != 2 || !Enum.TryParse(parts[0], out DecoderBackend backend) ||
-            backend != expectedBackend || !int.TryParse(parts[1], out int orientation) || orientation is < 1 or > 8)
-            throw new InvalidDataException("Preview cache metadata is missing or invalid.");
-        return orientation;
-    }
-
-    private static void WriteCacheMetadataAtomically(string cachePath, DecoderBackend backend, int orientation)
-    {
-        var metadataPath = GetCacheMetadataPath(cachePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(metadataPath)!);
-        var temporaryPath = metadataPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            File.WriteAllText(temporaryPath, $"{backend}|{orientation}");
-            File.Move(temporaryPath, metadataPath, overwrite: true);
-        }
-        finally { DiskCacheStore.TryDelete(temporaryPath); }
+        // v4 (PreviewCacheFile): a single file carries its own header (backend, orientation,
+        // size, version) -- no atomic metadata companion. Bumping "preview-v3" to "preview-v4"
+        // here means every old-version file misses on lookup by construction (this hash never
+        // matches one); ScheduleLegacyCacheCleanup/ClearDisk sweep the orphaned files themselves.
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v4|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
+        return Path.Combine(_diskCacheDirectory, hash + ".pv4");
     }
 
     /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
-    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation)
+    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation, int originalWidth, int originalHeight)
     {
         if (cacheEpoch != Volatile.Read(ref _cacheEpoch)) return;
         // Best-effort: a full queue means persistence is falling behind decode, so this
         // preview is dropped rather than growing the backlog or blocking the caller.
-        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation));
+        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight));
     }
 
     bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);

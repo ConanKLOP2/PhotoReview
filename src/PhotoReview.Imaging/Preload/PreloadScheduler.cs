@@ -26,6 +26,10 @@ public sealed class PreloadScheduler : IDisposable
     private readonly IUiScheduler _ui;
     private readonly ILog _log;
     private readonly Func<string, CancellationToken, Task>? _prefetchSourceBytes;
+    // perf(preload): direction + key-rate tracking; see NotifyNavigation and PreloadOrderService.Build.
+    private readonly NavigationPace _pace;
+    // Concurrent preload decodes allowed to start while a viewer decode is running.
+    private readonly int _viewerBusyWorkerLimit = Math.Max(2, Environment.ProcessorCount / 3);
 
     private readonly int _workerCount;
     private CancellationTokenSource _preloadCts = new();
@@ -60,9 +64,11 @@ public sealed class PreloadScheduler : IDisposable
         IMemoryProbe? memoryProbe = null,
         IUiScheduler? uiScheduler = null,
         ILog? log = null,
-        Func<string, CancellationToken, Task>? prefetchSourceBytes = null)
+        Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
+        NavigationPace? pace = null)
     {
         _target = target ?? throw new ArgumentNullException(nameof(target));
+        _pace = pace ?? new NavigationPace();
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _snapshotEntries = snapshotEntries ?? throw new ArgumentNullException(nameof(snapshotEntries));
         _totalSourceBytes = totalSourceBytes ?? throw new ArgumentNullException(nameof(totalSourceBytes));
@@ -128,6 +134,7 @@ public sealed class PreloadScheduler : IDisposable
             if (_disposed) return;
             _preloadCts.Cancel();
         }
+        WakeScheduler();
         if (PhotoReviewPerf.Log.IsEnabled()) PhotoReviewPerf.Log.PreloadCancel("cancel");
     }
 
@@ -141,8 +148,64 @@ public sealed class PreloadScheduler : IDisposable
             _preloadedKeys.RemoveWhere(key => string.Equals(key.Path, normalizedPath, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// True when the current preload lifetime has no decode work in flight or queued (the scheduler
+    /// loop only returns when its running set is empty; see <see cref="RunPreloadSchedulerAsync"/>).
+    /// Best-effort: used by diagnostics/the perf harness to know a navigation has fully settled, not
+    /// for correctness. A fresh scheduler (or one paused for memory headroom) reports idle too.
+    /// </summary>
+    public bool IsIdle
+    {
+        get
+        {
+            lock (_preloadCtsGate)
+                return _preloadSchedulerTask is null || _preloadSchedulerTask.IsCompleted;
+        }
+    }
+
     /// <summary>True when this key was warmed by preload; consumes the entry.</summary>
     public bool TryConsumePreloadedKey(ImageCacheKey key) { lock (_preloadedKeysGate) return _preloadedKeys.Remove(key); }
+
+    /// <summary>
+    /// perf(preload): called at the START of every navigation (before its own decode), unlike
+    /// <see cref="PreloadAroundAsync"/> which runs after the image is presented. Records the key
+    /// timing/direction and moves the preload center immediately, so a running scheduler re-prioritizes
+    /// on its next pass instead of preloading around a position the user already left. During a burst
+    /// (lead &gt; 0) navigations are rarely presented, so this also (re)starts the scheduler itself.
+    /// </summary>
+    public void NotifyNavigation(int index)
+    {
+        if (_workerCount == 0) return;
+        _pace.Record(index);
+        lock (_preloadCtsGate)
+        {
+            if (_disposed) return;
+            Volatile.Write(ref _preloadCenter, index);
+            Interlocked.Increment(ref _preloadPriorityVersion);
+        }
+        WakeScheduler();
+        if (CurrentShape().Lead > 0) _ = PreloadAroundAsync(index);
+    }
+
+    /// <summary>
+    /// perf(preload): how long the viewer should wait before starting its own decode of a
+    /// not-yet-cached image (zero outside a burst); see <see cref="NavigationPace.GetViewerStartDelay"/>.
+    /// </summary>
+    public TimeSpan GetViewerDecodeDelay() => _workerCount == 0
+        ? TimeSpan.Zero
+        : _pace.GetViewerStartDelay(_metrics.DecodeMillisecondsEwma);
+
+    // perf(preload): completed (and replaced) whenever the priority version changes, so a scheduler
+    // loop waiting for a worker to finish also wakes up to re-prioritize and fill idle slots at once.
+    // Before, a loop with one long decode in flight ignored every navigation until that decode ended,
+    // leaving the other workers idle for a whole decode time at the start of a burst.
+    private TaskCompletionSource _wake = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private void WakeScheduler() =>
+        Interlocked.Exchange(ref _wake, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
+
+    // Direction of travel and burst lead (images to skip ahead) as of now.
+    private (int Direction, int Lead) CurrentShape() => (_pace.Direction, _pace.GetLead(_metrics.DecodeMillisecondsEwma));
 
     public Task PreloadAroundAsync(int center)
     {
@@ -152,6 +215,9 @@ public sealed class PreloadScheduler : IDisposable
         // (before touching _preloadCts/_preloadCenter/_preloadPriorityVersion) keeps this a
         // true no-op: no scheduler task is created and _preloadSlots is never waited on.
         if (_workerCount == 0) return Task.CompletedTask;
+        // No-op when NotifyNavigation already recorded this index (the normal App path); keeps
+        // direction tracking working for callers that only ever call PreloadAroundAsync.
+        _pace.Record(center);
         // Navigation changes priority, but an already running decode is useful
         // and must remain available to ShowImageAsync through the in-flight map.
         CancellationTokenSource cts;
@@ -167,7 +233,11 @@ public sealed class PreloadScheduler : IDisposable
             Volatile.Write(ref _preloadCenter, center);
             Interlocked.Increment(ref _preloadPriorityVersion);
             if (_preloadSchedulerTask is { IsCompleted: false } &&
-                ReferenceEquals(_preloadSchedulerCts, cts)) return _preloadSchedulerTask;
+                ReferenceEquals(_preloadSchedulerCts, cts))
+            {
+                WakeScheduler();
+                return _preloadSchedulerTask;
+            }
             _preloadSchedulerCts = cts;
             // ADR 0005: callers (ImagePresenter) are on the UI thread, so the loop's synchronous
             // prefix (order build + at most one worker batch of candidate starts, each a cache
@@ -184,28 +254,46 @@ public sealed class PreloadScheduler : IDisposable
     private async Task RunPreloadSchedulerAsync(CatalogEntry[] entries, CancellationToken cancellationToken)
     {
         var workers = _workerCount;
-        var running = new Dictionary<Task, string>();
+        var running = new Dictionary<Task<bool>, string>();
         var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenVersion = -1L;
+        var seenShape = (Direction: 1, Lead: 0);
         IEnumerator<int>? order = null;
         var examinedSinceYield = 0;
+        var paused = false;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
+                // Captured before the version is read: a navigation after this point completes this
+                // very task, so the wait below can never miss it.
+                var wake = Volatile.Read(ref _wake).Task;
                 var currentVersion = Interlocked.Read(ref _preloadPriorityVersion);
-                if (seenVersion != currentVersion)
+                // perf(preload): the shape (direction, burst lead) is re-read on every pass, not only on
+                // navigation: when a burst ends no further key arrives to bump the version, but the lead
+                // must still drop back to 0 so the images right next to the stop position come first.
+                var shape = CurrentShape();
+                if (seenVersion != currentVersion || shape != seenShape)
                 {
                     order?.Dispose();
                     var sourceBytes = _totalSourceBytes();
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolder(sourceBytes,
                         _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
-                    _log.Info($"Preload policy: sourceBytes={sourceBytes} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder}");
-                    order = PreloadOrderService.Build(Volatile.Read(ref _preloadCenter), entries.Length,
-                        wholeFolder).GetEnumerator();
+                    var center = Volatile.Read(ref _preloadCenter);
+                    if (_log.Enabled)
+                        _log.Info($"Preload policy: sourceBytes={sourceBytes} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
+                    order = PreloadOrderService.Build(center, entries.Length,
+                        wholeFolder, shape.Direction, shape.Lead).GetEnumerator();
                     seenVersion = currentVersion;
+                    seenShape = shape;
                 }
-                while (running.Count < workers && order!.MoveNext())
+                // perf(preload): viewer priority -- while the viewer is decoding the image on screen, preload
+                // does not ramp up to its full worker count against it (e.g. right after a burst stops on a
+                // not-yet-decoded image). Decodes already running are left alone: they can't be interrupted
+                // and their results are kept. (Capping preload during the whole burst was measured too: it
+                // showed fewer images and did not make the stop image faster, so bursts use every worker.)
+                var limit = _target.ActiveViewerDecodes > 0 ? Math.Min(workers, _viewerBusyWorkerLimit) : workers;
+                while (running.Count < limit && order!.MoveNext())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     // GlobalMemoryStatusEx is a syscall; only re-check on the same
@@ -223,7 +311,8 @@ public sealed class PreloadScheduler : IDisposable
                             PhotoReviewPerf.Log.PreloadPaused(memory is { } m ? (int)m.LoadPercent : -1,
                                 memory is { } a ? (long)(a.AvailableBytes / (1024 * 1024)) : -1);
                         }
-                        return;
+                        paused = true;
+                        break;
                     }
                     var entry = entries[order.Current];
                     var path = entry.Path;
@@ -233,7 +322,7 @@ public sealed class PreloadScheduler : IDisposable
                     var key = _target.GetCurrentCacheKey(entry);
                     if (_target.TryGetCachedPreview(key)) continue;
                     queued.Add(path);
-                    running.Add(PreloadOneAsync(path, key, cancellationToken), path);
+                    running.Add(PreloadOneAsync(order.Current, path, key, cancellationToken), path);
                     // Yield only after actual queue work; give input/rendering a
                     // chance without limiting every batch to two decodes.
                     if (++examinedSinceYield >= workers)
@@ -253,11 +342,19 @@ public sealed class PreloadScheduler : IDisposable
                         await Task.Delay(1, cancellationToken).ConfigureAwait(false);
                     }
                 }
-                if (running.Count == 0) return;
-                var finished = await Task.WhenAny(running.Keys).ConfigureAwait(false);
-                running.Remove(finished);
-                await finished.ConfigureAwait(false);
+                if (paused || running.Count == 0) break;
+                var signalled = await Task.WhenAny(running.Keys.Append<Task>(wake)).ConfigureAwait(false);
+                if (ReferenceEquals(signalled, wake)) continue; // woken by a navigation: re-prioritize
+                var finished = (Task<bool>)signalled;
+                running.Remove(finished, out var finishedPath);
+                // false = dropped before decoding because the user already moved past it: forget it,
+                // so a later order (e.g. the user turning back) can queue it again.
+                if (!await finished.ConfigureAwait(false)) queued.Remove(finishedPath!);
             }
+            // Cancelled (the wake signal can end the wait before any worker finished) or paused for
+            // memory: still report completion only once every started worker has unwound, so IsIdle
+            // and Dispose never see this lifetime as finished while a worker still holds a slot.
+            await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -288,7 +385,23 @@ public sealed class PreloadScheduler : IDisposable
 
     private bool HasPreloadHeadroom() => _memoryProbe.HasHeadroom(_options.MemoryLoadLimit, _options.ReserveBytes);
 
-    private async Task PreloadOneAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
+    /// <summary>
+    /// perf(preload): false when <paramref name="index"/> no longer deserves a preload slot as of now --
+    /// it is the current image (the viewer's own, priority decode handles it), or a burst already
+    /// carried the user past it. Checked when a queued item finally gets its slot, i.e. the last point
+    /// before its decode starts (a decode already inside the decoder cannot be interrupted).
+    /// </summary>
+    private bool IsStillWanted(int index)
+    {
+        var center = Volatile.Read(ref _preloadCenter);
+        var (direction, lead) = CurrentShape();
+        var ahead = direction * (index - center);
+        if (ahead == 0) return false;
+        return lead == 0 || ahead > 0;
+    }
+
+    /// <returns>false when the item was dropped as superseded (see <see cref="IsStillWanted"/>).</returns>
+    private async Task<bool> PreloadOneAsync(int index, string path, ImageCacheKey key, CancellationToken cancellationToken)
     {
         // D04 perf: preload work is not tied to a navigation. Setting the AsyncLocal here only
         // affects calls made downstream from this method (DecodeAndCacheAsync), not the caller
@@ -310,13 +423,20 @@ public sealed class PreloadScheduler : IDisposable
             {
                 stopwatch.Stop();
                 if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "skipped", stopwatch.Elapsed.TotalMilliseconds);
-                return;
+                return true;
+            }
+            if (!IsStillWanted(index))
+            {
+                stopwatch.Stop();
+                if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "superseded", stopwatch.Elapsed.TotalMilliseconds);
+                return false;
             }
             try
             {
                 if (_prefetchSourceBytes is not null)
                     await _prefetchSourceBytes(path, cancellationToken).ConfigureAwait(false);
-                var beforeReads = _metrics.Snapshot().SourceReads;
+                // Snapshot() copies/sorts the per-path open table: only pay for it when tracing.
+                var beforeReads = perf ? _metrics.Snapshot().SourceReads : 0;
                 await _target.PreloadAsync(path, cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
                 // Must re-stat: the identity actually stored by PreloadAsync's decode is
@@ -340,6 +460,7 @@ public sealed class PreloadScheduler : IDisposable
             {
                 _log.Error($"Preload failed: {path}", ex);
             }
+            return true;
         }
         finally
         {
@@ -359,6 +480,7 @@ public sealed class PreloadScheduler : IDisposable
             lifetimeTasks = _preloadLifetimeTasks.ToArray();
             lifetimeCts = _preloadLifetimes.ToArray();
         }
+        WakeScheduler();
 
         // The scheduler and workers use ConfigureAwait(false), so draining cannot require the
         // caller's UI context. Keep synchronization primitives alive until every waiter/holder

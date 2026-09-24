@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Tests.Fixtures;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
@@ -66,6 +67,24 @@ public sealed class WpfBitmapImageDecoderTests : IDisposable
         Assert.IsType<WpfDecodedImage>(decoded);
         var wpfImage = (WpfDecodedImage)decoded;
         Assert.True(wpfImage.Source.IsFrozen);
+    }
+
+    [Fact(DisplayName = "Decode with target width reports OriginalWidth/Height separately from the downscaled pixel dimensions")]
+    public void DecodeWithTargetWidthReportsOriginalDimensions()
+    {
+        var path = Path.Combine(_tempDir, "downscale.jpg");
+        FixtureGenerator.GenerateGradientJpeg(path, 400, 300);
+
+        const int targetWidth = 100;
+        var decoded = _decoder.Decode(new DecodeRequest(path, TargetWidth: targetWidth));
+
+        Assert.Equal(targetWidth, decoded.PixelWidth);
+        Assert.True(decoded.Downscaled);
+        // perf(dims): the header decoder that reads the orientation tag also gives
+        // OriginalWidth/Height for free -- must report the full source size (400x300), not the
+        // downscaled decode result.
+        Assert.Equal(400, decoded.OriginalWidth);
+        Assert.Equal(300, decoded.OriginalHeight);
     }
 
     [Fact(DisplayName = "Decode with in-memory bytes decodes from memory stream")]

@@ -14,7 +14,8 @@ namespace PhotoReview.Integration.Tests;
 /// <list type="bullet">
 /// <item>INV-7: an Explorer snapshot that lands after the user has already navigated must not
 /// reorder the catalog.</item>
-/// <item>INV-9a: opening a <b>file</b> waits for the snapshot before the first frame.</item>
+/// <item>INV-9a: opening a <b>file</b> presents it at once (perf/startup: it used to wait for the
+/// snapshot), while navigation waits for the snapshot so it still follows the Explorer order.</item>
 /// <item>INV-9b: opening a <b>folder</b> presents a natural-order fallback first, then applies the
 /// Explorer order and presents the first image of that order.</item>
 /// </list>
@@ -95,15 +96,16 @@ public sealed class MainWindowExplorerOrderTests
 
     // ----------------------------------------------------------------- INV-9a
 
-    [Fact(DisplayName = "Opening a file waits for the Explorer snapshot before the first frame")]
-    public async Task OpeningAFileWaitsForTheSnapshot()
+    [Fact(DisplayName = "Opening a file presents it before the Explorer snapshot; Next waits for and follows the Explorer order")]
+    public async Task OpeningAFilePresentsItImmediatelyAndNavigationFollowsExplorerOrder()
     {
         using var root = new TempRoot("inv9a");
         using var dataRoot = new DataRootFixture();
         var folder = root.Dir("images");
         var natural = CreateImages(folder);
+        var reversed = Reverse(natural);
         var requested = natural[2];
-        var fake = new FakeExplorerOrderProvider(Reverse(natural));
+        var fake = new FakeExplorerOrderProvider(reversed);
         var presented = new List<string>();
         var snapshotHadReturned = new List<bool>();
         MainWindow? window = null;
@@ -118,29 +120,29 @@ public sealed class MainWindowExplorerOrderTests
                 });
                 window = opened;
 
-                // FolderText receives the file count as the last statement of catalog setup; on the
-                // file-open path the very next yield is `await explorerTask`. Seeing the count here
-                // therefore means the load is parked on the snapshot, with nothing presented yet —
-                // a state the test can observe deterministically instead of guessing with a sleep.
-                Assert.True(
-                    await StaTestHost.WaitForAsync(() => opened.FolderText.Text.Contains($"({natural.Length} ảnh)", StringComparison.Ordinal), Settle),
-                    Diagnose(opened, presented));
+                // perf(startup): the gate is still shut, so reaching a presentation at all proves the
+                // opened file no longer waits for the snapshot (it used to, for up to 2 s).
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 1, Settle), Diagnose(opened, presented));
                 Assert.False(fake.HasReturned);
-                Assert.Empty(presented);
+                Assert.DoesNotContain(ExplorerApplied, opened.FolderText.Text, StringComparison.Ordinal);
+
+                // Next before the order is known must not step through the fallback order (and, via
+                // INV-7, throw the Explorer order away): it waits for the snapshot.
+                PressNext(opened);
                 Assert.False(
-                    await StaTestHost.WaitForAsync(() => presented.Count > 0, NeverWindow),
-                    $"Opening a file presented a frame before the Explorer snapshot arrived. {Diagnose(opened, presented)}");
+                    await StaTestHost.WaitForAsync(() => presented.Count > 1, NeverWindow),
+                    $"Next navigated before the Explorer order was known. {Diagnose(opened, presented)}");
 
                 fake.Release();
-                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 1, Settle), Diagnose(opened, presented));
-                // The snapshot really was usable: it reindexed the catalog. Without this the test
-                // could pass on a snapshot that MainWindow rejected outright.
+                // The snapshot really was usable: it reindexed the catalog...
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => opened.FolderText.Text.Contains(ExplorerApplied, StringComparison.Ordinal), Settle),
                     Diagnose(opened, presented));
+                // ...and the pending Next then went to the Explorer-order neighbour.
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 2, Settle), Diagnose(opened, presented));
                 Assert.False(
-                    await StaTestHost.WaitForAsync(() => presented.Count > 1, NeverWindow),
-                    $"The requested file was presented more than once. {Diagnose(opened, presented)}");
+                    await StaTestHost.WaitForAsync(() => presented.Count > 2, NeverWindow),
+                    $"Applying the Explorer order re-presented the opened file. {Diagnose(opened, presented)}");
             });
         }
         finally
@@ -149,8 +151,10 @@ public sealed class MainWindowExplorerOrderTests
             await CloseAsync(window);
         }
 
-        Assert.Equal(requested, Assert.Single(presented), ignoreCase: true);
-        Assert.True(Assert.Single(snapshotHadReturned), "The first frame was presented before the snapshot returned.");
+        // reversed = (d, c, b, a): after the opened c comes b. The fallback order (c, a, b, d)
+        // would have gone to a.
+        Assert.Equal(new[] { requested, reversed[2] }, presented, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(FallbackBeforeSnapshotThenAfter, snapshotHadReturned);
         Assert.Equal(1, fake.CallCount);
     }
 

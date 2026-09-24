@@ -32,6 +32,15 @@ public sealed class NavRecord
     public double? TAssignMs { get; set; }
     public double? TRenderFirstMs { get; set; }
     public double? TRenderMs { get; set; }
+
+    /// <summary>
+    /// perf(render-metric): time from the Source assign to the SECOND CompositionTarget.Rendering
+    /// tick after it (the RenderedFrame event) -- i.e. the frame containing the new image has
+    /// actually finished rendering, unlike <see cref="TRenderMs"/> which only measures the
+    /// dispatcher/vsync phase before layout/render run. Null for navs from an older perf-*.csv
+    /// that predates this event, or when the token was superseded before the second tick arrived.
+    /// </summary>
+    public double? TRenderFrameMs { get; set; }
     public Dictionary<string, double> PostMs { get; } = new(StringComparer.Ordinal);
 
     public double? FirstVisualMs { get; set; }
@@ -80,6 +89,13 @@ public sealed class PerfFileAnalysis
     /// creating the WPF Window, ~700ms, per D06) rather than app UI-thread contention during the
     /// scenario itself (D11 coordinator note, 2026-09-17).</summary>
     public int DispatcherLongOpsBeforeStartCount { get; set; }
+
+    /// <summary>
+    /// perf(startup): Startup(phase, msSinceProcessStart) milestones of this process (first row per
+    /// phase), plus the derived <c>firstPresented</c>: the first Presented event mapped onto the same
+    /// process-start timeline through a Startup row's qpcTicks. Empty for files without Startup rows.
+    /// </summary>
+    public Dictionary<string, double> Startup { get; } = new(StringComparer.Ordinal);
 }
 
 public static class PerfAnalyzeNavBuilder
@@ -96,6 +112,7 @@ public static class PerfAnalyzeNavBuilder
         var keyInputs = new List<PerfRow>();
         var folderRows = new List<PerfRow>();
         var presentedGlobal = new List<PerfRow>();
+        PerfRow? startupAnchor = null;
 
         // D06 driver note (2026-09-17): --perf-session's own STA harness logs a DispatcherLongOp
         // for creating the WPF Window (~700ms) before any scenario step runs. That is driver
@@ -142,6 +159,13 @@ public static class PerfAnalyzeNavBuilder
                 case "Folder":
                     folderRows.Add(row);
                     continue;
+                case "Startup":
+                    if (row.ANum is { } sinceStart && !result.Startup.ContainsKey(row.Text))
+                    {
+                        result.Startup[row.Text] = sinceStart;
+                        startupAnchor ??= row;
+                    }
+                    continue;
             }
 
             if (row.Event == "Presented") presentedGlobal.Add(row);
@@ -156,6 +180,12 @@ public static class PerfAnalyzeNavBuilder
         }
 
         BuildFolderSummaries(file, folderRows, presentedGlobal, result.FolderGens);
+
+        if (startupAnchor?.ANum is { } anchorMs && presentedGlobal.Count > 0)
+        {
+            var firstPresented = presentedGlobal.MinBy(p => p.QpcTicks)!;
+            result.Startup["firstPresented"] = anchorMs + file.QpcToMs(firstPresented.QpcTicks - startupAnchor.QpcTicks);
+        }
 
         foreach (var (navId, rows) in byNav)
         {
@@ -234,14 +264,15 @@ public static class PerfAnalyzeNavBuilder
                 case "Lookup":
                     rec.LookupResult = row.Text;
                     break;
-                case "ThumbStart":
-                    rec.HasThumbnail = true;
-                    break;
                 case "ThumbEnd":
-                    rec.HasThumbnail = true;
                     // MainWindow emits its own call-site total as source="unknown"; ThumbnailCache
-                    // emits a second ThumbEnd with the real source (ram|disk|decode) for the same nav.
-                    // D11: prefer the specific one; fall back to "unknown" if that's all there is.
+                    // emits a second ThumbEnd with the real source (ram|disk|embedded|none) for the
+                    // same nav. D11: prefer the specific one; fall back to "unknown" if that's all
+                    // there is. Since ImagePresenter races the thumbnail against the preview (perf:
+                    // never block the preview on the thumbnail), ThumbStart/ThumbEnd alone no longer
+                    // mean a thumbnail was actually shown -- only a fetch was attempted, and it may
+                    // have lost the race or found nothing embedded. HasThumbnail is set below, from
+                    // Presented(kind=thumbnail), which fires only when one was really shown first.
                     if (row.Text != "unknown" || rec.TThumbMs is null)
                     {
                         rec.TThumbMs = row.ANum;
@@ -275,6 +306,7 @@ public static class PerfAnalyzeNavBuilder
                     pendingRenderMs = row.ANum;
                     break;
                 case "Presented":
+                    if (row.Text == "thumbnail") rec.HasThumbnail = true;
                     if (!firstPresentedSeen)
                     {
                         firstPresentedSeen = true;
@@ -292,6 +324,12 @@ public static class PerfAnalyzeNavBuilder
                     break;
                 case "PostEnd":
                     rec.PostMs[row.Text] = row.ANum ?? 0;
+                    break;
+                case "RenderedFrame":
+                    // Unlike Rendered/Presented above, RenderedFrame is emitted after Presented
+                    // (it waits for a second Rendering tick), so it is assigned directly rather
+                    // than gated behind a later Presented row -- see WpfPresentationSink.
+                    rec.TRenderFrameMs = row.ANum;
                     break;
             }
         }

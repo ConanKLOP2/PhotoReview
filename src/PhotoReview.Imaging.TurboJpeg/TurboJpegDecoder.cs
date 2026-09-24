@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
@@ -15,6 +16,12 @@ namespace PhotoReview.Imaging.TurboJpeg;
 /// </summary>
 public sealed class TurboJpegDecoder : IImageDecoder
 {
+    /// <summary>
+    /// DCT scaling factors used for downscaled decodes, smallest first. All eighths are kept on
+    /// purpose: restricting to the power-of-two factors (whose IDCTs are SIMD-accelerated) was
+    /// measured slower (24 MP -> 2190 px: 1/2 decodes 3000 px wide at ~310-610 ms vs 3/8 at
+    /// ~210-330 ms), because upsampling/color conversion scale with output pixel count.
+    /// </summary>
     private static readonly TjScalingFactor[] SupportedScalingFactors =
     [
         new(1, 8),
@@ -100,48 +107,71 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 (int scaledW, int scaledH, int stride, int bufferLength) =
                     CalculateOutputBuffer(origW, origH, factor);
-                byte[] dstBuffer = new byte[bufferLength];
 
-                fixed (byte* pDst = dstBuffer)
+                // BGRX -> Bgr32: the opaque format WPF renders natively (JPEG has no alpha).
+                // Decode into native scratch memory: BitmapSource.Create copies it anyway, so a
+                // managed array would only add a large LOH allocation per decode.
+                BitmapSource bitmap;
+                IntPtr dstBuffer = Marshal.AllocHGlobal(bufferLength);
+                try
                 {
                     int decRes = TurboJpegNative.tj3Decompress8(
                         decompressor,
                         pJpeg,
                         (nuint)bytes.Length,
-                        pDst,
+                        (byte*)dstBuffer,
                         stride,
-                        (int)TjPixelFormat.Bgra);
+                        (int)TjPixelFormat.Bgrx);
 
                     if (decRes != 0)
                     {
                         string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Decompression error";
                         throw new InvalidDataException($"TurboJPEG decompression failed: {err}");
                     }
+
+                    bitmap = BitmapSource.Create(
+                        scaledW, scaledH, 96, 96, PixelFormats.Bgr32, null, dstBuffer, bufferLength, stride);
+                    bitmap.Freeze();
                 }
-
-                BitmapSource bitmap = WpfImageAdapter.FromBgra32(dstBuffer, scaledW, scaledH, stride);
-
-                // Fine scale if DCT intermediate size is larger than requested target
-                if (request.TargetWidth > 0 && (scaledW > targetW || scaledH > targetH))
+                finally
                 {
-                    double scaleX = (double)targetW / scaledW;
-                    double scaleY = (double)targetH / scaledH;
-                    var fineScaled = new TransformedBitmap(bitmap, new ScaleTransform(scaleX, scaleY));
-                    fineScaled.Freeze();
-                    bitmap = fineScaled;
+                    Marshal.FreeHGlobal(dstBuffer);
                 }
 
-                // Apply EXIF orientation
-                if (request.ApplyOrientation && orientation > 1)
+                // Fine scale (DCT intermediate is >= target) and EXIF orientation in one WIC pass,
+                // materialized here on the worker so the UI thread never runs the lazy pipeline.
+                bool needsFineScale = request.TargetWidth > 0 && (scaledW > targetW || scaledH > targetH);
+                bool needsOrientation = request.ApplyOrientation && orientation > 1;
+                if (needsFineScale || needsOrientation)
                 {
-                    bitmap = ExifOrientation.Apply(bitmap, orientation);
+                    var transform = new TransformGroup();
+                    if (needsFineScale)
+                    {
+                        transform.Children.Add(new ScaleTransform((double)targetW / scaledW, (double)targetH / scaledH));
+                    }
+
+                    if (needsOrientation)
+                    {
+                        transform.Children.Add(ExifOrientation.CreateTransform(orientation));
+                    }
+
+                    bitmap = WpfImageAdapter.Materialize(new TransformedBitmap(bitmap, transform));
                 }
+
+                // Perf: origW/origH (tj3Get JpegWidth/JpegHeight from the header already parsed
+                // above) are free; a transposing orientation (5-8) swaps them, mirroring what
+                // happened to the final bitmap's own pixel dimensions -- see
+                // IDecodedImage.OriginalWidth/Height.
+                int originalWidth = isTransposed ? origH : origW;
+                int originalHeight = isTransposed ? origW : origH;
 
                 return new WpfDecodedImage(
                     bitmap,
                     downscaled: request.TargetWidth > 0 && (scaledW < origW || targetW < origW),
                     orientation: orientation,
-                    actualBackend: DecoderBackend.TurboJpeg);
+                    actualBackend: DecoderBackend.TurboJpeg,
+                    originalWidth: originalWidth,
+                    originalHeight: originalHeight);
             }
         }
     }
@@ -237,7 +267,12 @@ public sealed class TurboJpegDecoder : IImageDecoder
         return buffer;
     }
 
-    private static TjScalingFactor SelectScalingFactor(int origW, int origH, int targetW, int targetH)
+    /// <summary>
+    /// Returns the smallest DCT scaling factor (in eighths) whose output is still at least
+    /// <paramref name="targetW"/> x <paramref name="targetH"/>, so the final resample only ever
+    /// shrinks (never upscales) the decoded image.
+    /// </summary>
+    public static TjScalingFactor SelectScalingFactor(int origW, int origH, int targetW, int targetH)
     {
         foreach (var factor in SupportedScalingFactors)
         {
