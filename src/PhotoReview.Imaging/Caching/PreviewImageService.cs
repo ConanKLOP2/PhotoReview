@@ -22,6 +22,7 @@ namespace PhotoReview.Imaging.Caching;
 public sealed class PreviewImageService : IPreloadTarget
 {
     private readonly BoundedLruCache<ImageCacheKey, IDecodedImage> _cache;
+    private readonly SemaphoreSlim _originalDecodeGate = new(1, 1);
     private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Lazy<Task<IDecodedImage>>> _previewLoads = new();
     // IMG-02: bounded (entry-count LRU; each entry is a key plus two ints) so a multi-day session over
     // very large libraries cannot grow this for the life of the process.
@@ -634,11 +635,25 @@ public sealed class PreviewImageService : IPreloadTarget
     /// </summary>
     /// <param name="sourceKey">Any key for the source (typically the displayed preview's); its
     /// original-mode twin is derived without re-stating the file.</param>
-    public Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
+    public async Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = ImageCacheKey.CreateOriginal(sourceKey);
-        if (_cache.TryGet(key, out var cached)) return Task.FromResult(cached);
+        if (_cache.TryGet(key, out var cached)) return cached;
+        // R2-F-13: at most one full-resolution decode (24-100 MP, ~100+ MB each) runs at a time. Paging quickly at
+        // 100 % used to start one dedicated thread per image; now superseded requests wait here and are dropped on
+        // cancellation before they ever allocate.
+        await _originalDecodeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return await DecodeOriginalOnDedicatedThreadAsync(path, key, cancellationToken).ConfigureAwait(false);
+        }
+        finally { _originalDecodeGate.Release(); }
+    }
+
+    private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
+    {
         return Task.Factory.StartNew(() =>
         {
             // Last point where a superseded request can be dropped (see summary).
