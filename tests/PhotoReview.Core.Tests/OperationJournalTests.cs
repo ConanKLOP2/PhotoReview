@@ -524,6 +524,38 @@ public sealed class OperationJournalUnitTests
         }
     }
 
+    [Fact(DisplayName = "Recovery list (pending + failed) parses the journal once, not once per state (R2-F-17)")]
+    public void ReadPendingAndFailedOperations_ParsesJournalOnce()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview-F17-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "operations.jsonl");
+        try
+        {
+            var seed = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+            JournalEntry Entry(string id, JournalState state) => new(id, FileOperationType.Move, state, "C:\\a\\" + id + ".jpg", "C:\\b\\" + id + ".jpg",
+                4, _clock.UtcNow, _clock.UtcNow);
+            seed.Append(Entry("done", JournalState.Prepared));
+            seed.Append(Entry("done", JournalState.Committed));
+            seed.Append(Entry("stuck", JournalState.Prepared));
+            seed.Append(Entry("broken", JournalState.Prepared));
+            seed.Append(Entry("broken", JournalState.Failed));
+            var fileLength = new FileInfo(path).Length;
+
+            var counting = new BoundedReadFileSystem(new PhysicalFileSystem());
+            var journal = new OperationJournal(new FakeAppPaths(path), counting, _clock);
+            var list = journal.ReadPendingAndFailedOperations();
+
+            Assert.Equal(["stuck", "broken"], list.Select(e => e.Id));
+            Assert.True(counting.TotalBytesRead <= fileLength,
+                $"Read {counting.TotalBytesRead} bytes of a {fileLength}-byte journal (one pass expected).");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>
     /// TS05: wraps <see cref="IFileSystem.OpenReadShared"/> to count bytes actually read and an
     /// approximate line count (newline bytes seen), so the bounded-tail-read contract can be

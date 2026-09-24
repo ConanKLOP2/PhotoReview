@@ -199,6 +199,18 @@ public sealed class OperationJournal
     public IReadOnlyList<JournalEntry> ReadFailedOperations() =>
         ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Failed).ToList();
 
+    /// <summary>
+    /// R2-F-17: the Recovery window's list (pending first, then failed) from ONE pass over the journal,
+    /// instead of one full parse for <see cref="ReadPendingOperations"/> and another for <see cref="ReadFailedOperations"/>.
+    /// </summary>
+    public IReadOnlyList<JournalEntry> ReadPendingAndFailedOperations()
+    {
+        var latest = ComputeLatestEntries().Values;
+        return latest.Where(entry => entry.State == JournalState.Prepared)
+            .Concat(latest.Where(entry => entry.State == JournalState.Failed))
+            .ToList();
+    }
+
     // Retries append a new Prepared/Committed/Failed entry under the SAME Id as the
     // attempt they're retrying (RecoveryRetryService.RetryMoveOrCopy), so an Id's
     // state must be resolved from its most recent entry, not from "was any terminal
