@@ -195,4 +195,49 @@ public sealed class SettingsStoreTests
         Assert.NotEmpty(v1Settings.Actions);
         Assert.NotNull(v1Settings.Shortcuts);
     }
+
+    // Reference: the reflection-based serializer config.json used before perf(startup).
+    private static readonly JsonSerializerOptions ReflectionIndented = new() { WriteIndented = true };
+
+    [Fact(DisplayName = "perf(startup): Save writes byte-for-byte what the reflection serializer wrote")]
+    public void Save_SourceGeneratedJson_MatchesReflectionFormat()
+    {
+        var settings = new AppSettings
+        {
+            LoggingEnabled = true,
+            DecoderBackend = DecoderBackend.WicDirect,
+            ImageSortMode = ImageSortMode.SizeDescending,
+            PreloadMemoryLoadLimit = 0.75,
+            Actions = [new ReviewAction { Name = "Loại 2", Shortcut = "Enter", Destination = @"C:\Xiuren\[[WALLPAPER]" }],
+        };
+
+        _store.Save(settings);
+
+        Assert.Equal(JsonSerializer.Serialize(settings, ReflectionIndented), _fileSystem.ReadAllText(_appPaths.ConfigFile));
+    }
+
+    [Fact(DisplayName = "perf(startup): Load reads config.json exactly like the reflection serializer, incl. lenient enums")]
+    public void Load_SourceGeneratedJson_MatchesReflectionRead()
+    {
+        var json = """
+        {
+            "ConfigVersion": 2,
+            "LoadingMode": "NoSuchMode",
+            "DecoderBackend": "WicDirect",
+            "ImageSortMode": 3,
+            "ImageCacheCapacityBytes": 17179869184,
+            "PreloadWorkerCount": 8,
+            "Shortcuts": { "Next": "D", "Previous": "A" },
+            "Actions": [ { "Name": "Keep", "Shortcut": "K", "Operation": "Copy", "Destination": "Keep" } ]
+        }
+        """;
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, json);
+
+        var loaded = _store.Load();
+        var expected = JsonSerializer.Deserialize<AppSettings>(json)!;
+
+        Assert.Equal(JsonSerializer.Serialize(expected, ReflectionIndented), JsonSerializer.Serialize(loaded, ReflectionIndented));
+        Assert.Equal("D", loaded.Shortcuts.Next);
+        Assert.Equal(FileOperationType.Copy, Assert.Single(loaded.Actions).Operation);
+    }
 }

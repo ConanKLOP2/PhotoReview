@@ -89,6 +89,13 @@ public sealed class PerfFileAnalysis
     /// creating the WPF Window, ~700ms, per D06) rather than app UI-thread contention during the
     /// scenario itself (D11 coordinator note, 2026-09-17).</summary>
     public int DispatcherLongOpsBeforeStartCount { get; set; }
+
+    /// <summary>
+    /// perf(startup): Startup(phase, msSinceProcessStart) milestones of this process (first row per
+    /// phase), plus the derived <c>firstPresented</c>: the first Presented event mapped onto the same
+    /// process-start timeline through a Startup row's qpcTicks. Empty for files without Startup rows.
+    /// </summary>
+    public Dictionary<string, double> Startup { get; } = new(StringComparer.Ordinal);
 }
 
 public static class PerfAnalyzeNavBuilder
@@ -105,6 +112,7 @@ public static class PerfAnalyzeNavBuilder
         var keyInputs = new List<PerfRow>();
         var folderRows = new List<PerfRow>();
         var presentedGlobal = new List<PerfRow>();
+        PerfRow? startupAnchor = null;
 
         // D06 driver note (2026-09-17): --perf-session's own STA harness logs a DispatcherLongOp
         // for creating the WPF Window (~700ms) before any scenario step runs. That is driver
@@ -151,6 +159,13 @@ public static class PerfAnalyzeNavBuilder
                 case "Folder":
                     folderRows.Add(row);
                     continue;
+                case "Startup":
+                    if (row.ANum is { } sinceStart && !result.Startup.ContainsKey(row.Text))
+                    {
+                        result.Startup[row.Text] = sinceStart;
+                        startupAnchor ??= row;
+                    }
+                    continue;
             }
 
             if (row.Event == "Presented") presentedGlobal.Add(row);
@@ -165,6 +180,12 @@ public static class PerfAnalyzeNavBuilder
         }
 
         BuildFolderSummaries(file, folderRows, presentedGlobal, result.FolderGens);
+
+        if (startupAnchor?.ANum is { } anchorMs && presentedGlobal.Count > 0)
+        {
+            var firstPresented = presentedGlobal.MinBy(p => p.QpcTicks)!;
+            result.Startup["firstPresented"] = anchorMs + file.QpcToMs(firstPresented.QpcTicks - startupAnchor.QpcTicks);
+        }
 
         foreach (var (navId, rows) in byNav)
         {

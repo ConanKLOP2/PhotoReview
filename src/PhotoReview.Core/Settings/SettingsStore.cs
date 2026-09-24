@@ -11,7 +11,6 @@ public sealed class SettingsStore
     private readonly IFileSystem _fileSystem;
     private readonly ILog _log;
     private readonly Action<string, Exception>? _onStartupError;
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private AppSettings _current;
 
     public AppSettings Current => _current;
@@ -38,7 +37,7 @@ public sealed class SettingsStore
             if (_fileSystem.FileExists(filePath))
             {
                 var json = _fileSystem.ReadAllText(filePath);
-                var loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? new();
+                var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new();
                 Migrate(loaded);
                 loaded.Shortcuts ??= ShortcutMappings.Default();
                 loaded.Actions ??= ReviewAction.Defaults();
@@ -91,7 +90,7 @@ public sealed class SettingsStore
         }
 
         settings.ConfigVersion = AppSettings.CurrentConfigVersion;
-        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
         _fileSystem.WriteAllTextAtomic(filePath, json);
 
         _current = settings;
