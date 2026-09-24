@@ -15,9 +15,20 @@ public sealed class InstanceLock : IDisposable
     public InstanceLock(string? path, ILog? log = null)
     {
         _log = log ?? NullLog.Instance;
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path ?? "PhotoReview"))));
-        _mutex = new Mutex(true, "Local\\PhotoReview_" + key, out var created);
+        _mutex = new Mutex(true, MutexNameFor(path), out var created);
         IsOwner = created;
+    }
+
+    /// <summary>
+    /// R2-F-08: one mutex per folder regardless of spelling (<c>C:\Photos</c>, <c>c:\photos\</c>, a relative path), and one
+    /// constant mutex for the no-folder launch instead of one that depends on the current directory.
+    /// </summary>
+    internal static string MutexNameFor(string? path)
+    {
+        var canonical = string.IsNullOrWhiteSpace(path)
+            ? "PhotoReview"
+            : Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)).ToUpperInvariant();
+        return "Local\\PhotoReview_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
     public void Dispose()

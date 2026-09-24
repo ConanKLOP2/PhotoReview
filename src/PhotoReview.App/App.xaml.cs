@@ -229,7 +229,7 @@ public partial class App : System.Windows.Application, IDisposable
 
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
-        var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
+        var lockFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder; // R2-F-08: a relative file argument has an empty directory name
         // perf(startup): Explorer's view order is the slowest part of opening a photo (~1-2 s of
         // cross-process COM for a large folder). Start it now, in parallel with settings, window
         // construction and Show(); the folder load joins this query instead of starting its own.
