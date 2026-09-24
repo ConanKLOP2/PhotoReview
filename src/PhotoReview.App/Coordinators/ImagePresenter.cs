@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
@@ -182,26 +183,58 @@ public sealed class ImagePresenter
             // finished, which serialized two independent pieces of I/O + decode work.
             var previewTask = ramReady ? null : _previewService.GetPreviewAsync(path, currentKey);
 
-            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: hiển thị thumbnail trong lúc preview decode chạy song song
+            // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: chạy song song thumbnail và
+            // preview, hiển thị bất kỳ cái nào xong trước. Nếu preview thắng, bỏ qua thumbnail hoàn
+            // toàn (không chờ, không hiển thị) -- nó đã lỗi thời trước khi kịp lên màn hình.
             if (settings.LoadingMode == LoadingMode.Preview && !ramReady && !hasInflight)
             {
                 long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
 
-                var thumbnail = await _thumbnailCache.GetAsync(path);
+                var thumbnailTask = _thumbnailCache.GetAsync(path);
+                // Cast to the non-generic Task overload: thumbnailTask (IDecodedImage?) and
+                // previewTask (IDecodedImage) have different nullability of the same reference
+                // type, and Task.WhenAny<T> can't unify those without a nullability warning.
+                var firstDone = await Task.WhenAny((Task)thumbnailTask, previewTask!);
 
-                if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
+                if (ReferenceEquals(firstDone, thumbnailTask))
+                {
+                    // The thumbnail task itself never throws (ThumbnailCache/EmbeddedThumbnailReader
+                    // treat every read/decode failure as "no thumbnail"), so no try/catch is needed
+                    // here; a genuine fault would still be handled the same way as before by
+                    // PresentAsync's own catch clauses below.
+                    var thumbnail = await thumbnailTask;
 
-                // INV-1: kiểm tra token sau await
-                if (!_clock.IsNavigationCurrent(token)) return;
+                    if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
 
-                UpdateCurrentImage(thumbnail.PlatformImage);
-                if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
+                    // INV-1: kiểm tra token sau await
+                    if (!_clock.IsNavigationCurrent(token)) return;
 
-                if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
+                    if (thumbnail is not null)
+                    {
+                        UpdateCurrentImage(thumbnail.PlatformImage);
+                        if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
 
-                _sink.ApplyInitialViewMode();
-                UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize));
+                        if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
+
+                        _sink.ApplyInitialViewMode();
+                        UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize));
+                    }
+                    // else: source has no embedded thumbnail (or isn't a JPEG) -- nothing to show
+                    // yet; fall through to step 5, which is already awaiting the same preview task.
+                }
+                else
+                {
+                    // The preview finished first: let thumbnailTask keep running in the background
+                    // (it just warms ThumbnailCache's RAM/disk cache for a later visit) and go
+                    // straight to presenting the preview below. Observe any fault so a background
+                    // ThumbnailCache failure never surfaces as an unobserved task exception.
+                    _ = thumbnailTask.ContinueWith(
+                        t => _ = t.Exception,
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
             }
 
             // 5. Decode rồi present (đo UiAssign), kích preload
