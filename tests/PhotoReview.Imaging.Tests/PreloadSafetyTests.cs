@@ -48,6 +48,20 @@ public sealed class PreloadSafetyTests : IDisposable
     }
 
     [Fact]
+    public async Task HeadroomLost_MidBatch_StopsNewStarts()
+    {
+        using var target = new RecordingTarget();
+        // Headroom disappears as soon as the first decode has started; with 8 workers a per-batch
+        // check would still start up to 7 more decodes on the stale answer (IMG-03).
+        var probe = new DelegateMemoryProbe(() => target.StartedCount < 1);
+        using var scheduler = Create(target, probe, workerCount: 8);
+
+        await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.InRange(target.StartedCount, 1, 2);
+    }
+
+    [Fact]
     public async Task Dispose_CancelsAndDrainsActiveWorkersBeforeReturning()
     {
         using var target = new RecordingTarget(blockUntilCancellation: true);
@@ -113,6 +127,14 @@ public sealed class PreloadSafetyTests : IDisposable
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    private sealed class DelegateMemoryProbe(Func<bool> hasHeadroom) : IMemoryProbe
+    {
+        public bool HasHeadroom(double maximumLoad, long reserveBytes) => hasHeadroom();
+        public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
+        public bool IsMemoryPressureHigh() => !hasHeadroom();
+        public long GetAvailableMemoryBytes() => hasHeadroom() ? 16L * 1024 * 1024 * 1024 : 0;
     }
 
     private sealed class RecordingTarget(bool blockUntilCancellation = false) : IPreloadTarget, IDisposable
