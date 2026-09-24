@@ -283,6 +283,26 @@ public sealed class MainViewModelNavigationTests : IDisposable
         Assert.Contains(f1, saved.Skipped);
     }
 
+    [Fact(DisplayName = "Skipping the same image twice records it once in the session (R2-F-10)")]
+    public async Task SkipAsync_SameImageTwice_IsRecordedOnce()
+    {
+        var folder = Path.Combine(_tempDir, "album_skip_twice");
+        Directory.CreateDirectory(folder);
+        var f1 = CreateImageFile(folder, "skip1.jpg");
+        CreateImageFile(folder, "skip2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        await vm.SkipAsync();
+        await vm.FirstAsync();
+        await vm.SkipAsync();
+
+        Assert.NotNull(vm.Session);
+        Assert.Single(vm.Session.Skipped, f1);
+        Assert.Single(_sessionStore.Load(folder).Skipped);
+    }
+
     [Fact]
     public async Task NavigateSiblingFolderAsync_Boundary_DisplaysStatus()
     {

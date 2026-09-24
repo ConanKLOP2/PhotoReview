@@ -309,7 +309,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var currentPath = _catalog.PathAt(_catalog.CurrentIndex);
         if (_currentSession != null)
         {
-            _currentSession.Skipped.Add(currentPath);
+            // R2-F-10: no duplicates -- skipping the same image again must not grow the persisted session file.
+            if (!_currentSession.Skipped.Contains(currentPath, StringComparer.OrdinalIgnoreCase))
+                _currentSession.Skipped.Add(currentPath);
             _currentSession.UpdatedUtc = DateTime.UtcNow;
             PersistSession(_currentSession);
         }
