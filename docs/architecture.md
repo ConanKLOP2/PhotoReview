@@ -67,6 +67,20 @@ Input/action profile
 
 Ảnh kế tiếp được advance đúng một lần trước I/O. Nếu action thất bại, vị trí catalog được khôi phục. Nếu người dùng đã đổi folder, kết quả action cũ không được ghi undo hoặc sửa catalog mới. Delete dùng Recycle Bin; journal và fingerprint bảo vệ recovery/undo.
 
+**Recovery check.** Khi `RecoveryWindow` mở (và khi bấm Re-check), `RecoveryFileCheck` (Core, chỉ `GetFileStat`/`DirectoryExists`, không sửa file, journal vẫn append-only) chạy nền cho từng entry và đưa ra verdict. Path: Missing / Changed (size khác journal; nguồn thêm last-write) / Unreadable / Exists. Verdict cho Move/Copy Prepared/Failed (S = nguồn, D = đích):
+
+| S | D | Verdict |
+|---|---|---|
+| exists | missing | `CanRetry` (chỉ verdict này bật nút Retry; `RecoveryRetryService` vẫn tự kiểm tra lại) |
+| changed | missing | `SourceChanged` |
+| missing | exists | `AlreadyDone` (đề nghị dismiss) |
+| missing | changed | `DestinationChanged` |
+| missing | missing | `Lost` |
+| exists | exists | Copy: `AlreadyDone`; Move: `Conflict` (mọi tổ hợp cả hai còn: `Conflict`) |
+| unreadable | any | `Unknown` (cũng khi entry không có đích) |
+
+Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unknown`. Recycle: S missing = `RecycleUnverifiable`, S present = `NotRecycled`. Chi tiết trong comment của `RecoveryFileCheck`.
+
 **Chế độ journal (ADR 0007, IO03, `AppSettings.JournalDurability`, đọc live cho mỗi lần ghi):** *Fast* (mặc định) mở stream không `WriteThrough`, `Flush()` thường sau mỗi bản ghi; *PowerLossSafe* giữ `WriteThrough` + `Flush(true)` và `FileActionService` ghi Prepared trên pool thread (`Task.Run`) rồi mới mutation/Committed — UI không bị chặn. Cả hai: Prepared → mutation → Committed, một bản ghi = một dòng JSON, đọc bỏ qua dòng hỏng.
 
 ## Threading (ADR 0005)
