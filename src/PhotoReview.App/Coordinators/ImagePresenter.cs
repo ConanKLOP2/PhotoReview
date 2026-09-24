@@ -231,6 +231,14 @@ public sealed class ImagePresenter
             // starts) when a newer navigation supersedes this one; see GetViewerPreviewAsync.
             var previewTask = ramReady ? null : _previewService.GetViewerPreviewAsync(path, currentKey,
                 viewerDecodeCts.Token, _preloadController.GetViewerDecodeDelay());
+            // R2-F-29: a superseded navigation returns without awaiting previewTask; observe a later fault here so it
+            // is not reported context-free by TaskScheduler.UnobservedTaskException at GC time. Awaiting it below
+            // still throws as before (a continuation does not consume the exception).
+            _ = previewTask?.ContinueWith(
+                t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
 
             // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: chạy song song thumbnail và
             // preview, hiển thị bất kỳ cái nào xong trước. Nếu preview thắng, bỏ qua thumbnail hoàn

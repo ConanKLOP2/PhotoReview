@@ -453,6 +453,77 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.False(previewService.HasInflightPreview(previewService.GetCurrentCacheKey(f1)));
     }
 
+    [Fact(DisplayName = "A superseded navigation whose preview decode later fails leaves no unobserved task exception (R2-F-29)")]
+    public async Task PresentAsync_SupersededNavigation_ObservesLaterPreviewFault()
+    {
+        var f1 = CreateFakeImageFile("fault-after-supersede.jpg");
+        _catalog.Reset([f1]);
+
+        using var decoder = new FaultingGatedDecoder("marker-r2-f29");
+        var previewService = CreatePreviewService(decoder);
+        // The thumbnail wins the race and, while it is being read, a newer navigation supersedes this one.
+        using var thumbnailCache = new ThumbnailCache(
+            diskDirectory: Path.Combine(_tempDir, "supersede-thumbs"),
+            persistNewThumbnails: false,
+            embeddedThumbnailReader: (_, _) =>
+            {
+                _clock.NextNavigation();
+                return Task.FromResult<IDecodedImage?>(new FakeDecodedImage { PixelWidth = 160 });
+            });
+        var presenter = CreatePresenterWithServices(previewService, thumbnailCache);
+
+        var unobserved = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+        void OnUnobserved(object? _, UnobservedTaskExceptionEventArgs e)
+        {
+            if (e.Exception.Flatten().InnerExceptions.Any(x => x.Message.Contains(decoder.Marker, StringComparison.Ordinal)))
+                unobserved.Enqueue(e.Exception);
+        }
+        TaskScheduler.UnobservedTaskException += OnUnobserved;
+        try
+        {
+            await presenter.PresentAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.DoesNotContain(f1, _sink.PresentedPaths); // it really was superseded
+
+            decoder.ReleaseAndThrow();
+            await decoder.Threw.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(SpinWait.SpinUntil(
+                () => !previewService.HasInflightPreview(previewService.GetCurrentCacheKey(f1)), TimeSpan.FromSeconds(10)));
+
+            // Unobserved-exception reporting happens when the faulted task is finalized.
+            for (var i = 0; i < 20 && unobserved.IsEmpty; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+            Assert.Empty(unobserved);
+        }
+        finally
+        {
+            TaskScheduler.UnobservedTaskException -= OnUnobserved;
+        }
+    }
+
+    /// <summary>Decoder that blocks until released and then throws, signalling <see cref="Threw"/> just before it does.</summary>
+    private sealed class FaultingGatedDecoder(string marker) : IImageDecoder, IDisposable
+    {
+        private readonly SemaphoreSlim _gate = new(0, 1);
+        private readonly TaskCompletionSource _threw = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Marker { get; } = marker;
+        public Task Threw => _threw.Task;
+        public void ReleaseAndThrow() => _gate.Release();
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            _gate.Wait();
+            _threw.TrySetResult();
+            throw new InvalidOperationException(Marker);
+        }
+
+        public ImageInfo ReadInfo(string path) => new(1, 1);
+        public void Dispose() => _gate.Dispose();
+    }
+
     private PreviewImageService CreatePreviewService(IImageDecoder decoder) => new(
         _metrics,
         () => _previewContext.IsOriginalLoadingMode(),
