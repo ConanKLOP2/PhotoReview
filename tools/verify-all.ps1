@@ -4,9 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$RequireSelfContained,
     [string]$ReleaseDirectory = '',
-    [switch]$Stress,
     [switch]$Native,
-    [switch]$Integration,
     [switch]$Slow,
     [switch]$All,
     [switch]$TestReport,
@@ -16,9 +14,8 @@ param(
 
 # Usage examples:
 # ./verify-all.ps1                    # Default: HotPath only (~2-3 min)
-# ./verify-all.ps1 -Stress             # Include race-condition tests
 # ./verify-all.ps1 -Slow               # Include 10+ second tests
-# ./verify-all.ps1 -Stress -Slow       # Extended local run
+# ./verify-all.ps1 -Native             # Include real-OS tests (Recycle Bin, shell)
 # ./verify-all.ps1 -All                # Everything (CI+local exhaustive)
 # ./verify-all.ps1 -TestReport         # Print test timing report (requires running tests)
 
@@ -28,14 +25,13 @@ $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
 
 # Build filter string dynamically
-# NOTE: This filter is verified to match .github/workflows/ci.yml (TS09 verification)
+# NOTE: This filter is verified to match TEST_FILTER in .github/workflows/ci.yml and AGENTS.md > Tests.
+# Category=Integration tests are not excluded (Q-R3); an extra pass below runs them even when their class is Slow.
 # xUnit uses & (not AND) to join filter conditions
 $filter = "Category!=Manual"  # Always exclude Manual
 if (-not $All) {
-    if (-not $Stress) { $filter += "&Category!=Stress" }
     if (-not $Native) { $filter += "&Category!=Native" }
     if (-not $Slow) { $filter += "&Category!=Slow" }
-    if (-not $Integration) { $filter += "&Category!=Integration" }
 }
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
@@ -244,6 +240,18 @@ foreach ($testProject in $testProjects) {
             $testArgs += @('--logger', "trx;LogFileName=$testProject.trx")
         }
         dotnet test @testArgs
+    }
+}
+
+# Q-R3: same guarantee as CI's "Run Integration-category tests" step, so Integration-trait tests
+# whose class is also Slow are never silently skipped by the default gate.
+if (-not $All -and -not $Slow) {
+    foreach ($testProject in @('PhotoReview.Core.Tests', 'PhotoReview.Integration.Tests')) {
+        Invoke-Gate "Run xUnit (Category=Integration): $testProject" {
+            dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo `
+                --filter 'Category=Integration&Category!=Manual&Category!=Native' `
+                --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        }
     }
 }
 
