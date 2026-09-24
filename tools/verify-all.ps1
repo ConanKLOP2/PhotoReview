@@ -46,6 +46,12 @@ function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
     # Wiping first stops verify-release.ps1 from confirming a stale artifact left
     # over from an earlier publish (different code, coincidentally matching
     # FileVersion) as if it were this run's build.
+    # Guard: only ever wipe a directory that is unmistakably a publish output (a stray -ReleaseDirectory such
+    # as '.' or the repo root must never be deleted recursively).
+    $leaf = Split-Path -Leaf ([System.IO.Path]::GetFullPath($Directory).TrimEnd([char]92, [char]47))
+    if ($leaf -notin @('publish', 'PhotoReview-self-contained')) {
+        throw "Refusing to wipe '$Directory': the release directory name must be 'publish' or 'PhotoReview-self-contained'."
+    }
     if (Test-Path -LiteralPath $Directory) { Remove-Item -LiteralPath $Directory -Recurse -Force }
     $publishArgs = @($appProject, '-c', $Configuration, '-o', $Directory, '--nologo')
     if ($SelfContained) { $publishArgs += @('--self-contained', 'true', '-r', 'win-x64') }
@@ -58,10 +64,10 @@ function Find-TrxFiles {
 
     $trxFiles = @()
     foreach ($testProject in $TestProjects) {
-        $projectPath = Join-Path $root "tests\$testProject"
-        $objPath = Join-Path $projectPath "obj\$Configuration"
-        if (Test-Path -LiteralPath $objPath) {
-            $trxFiles += @(Get-ChildItem -LiteralPath $objPath -Filter "*.trx" -Recurse -ErrorAction SilentlyContinue)
+        # dotnet test is invoked with --results-directory (see the test loop below), so .trx files land here.
+        $resultsPath = Join-Path $root "TestResults\$testProject"
+        if (Test-Path -LiteralPath $resultsPath) {
+            $trxFiles += @(Get-ChildItem -LiteralPath $resultsPath -Filter "*.trx" -Recurse -ErrorAction SilentlyContinue)
         }
     }
     return $trxFiles
@@ -162,10 +168,10 @@ function Generate-TestReport {
         $status = if ($duration -le 60) { "PASS" } else { "WARN" }
         $color = if ($status -eq "PASS") { "Green" } else { "Yellow" }
 
-        Write-Host "  $project`: ${duration:F2}s [$status]" -ForegroundColor $color
+        Write-Host "  $project`: $("{0:F2}" -f $duration)s [$status]" -ForegroundColor $color
 
         if ($status -eq "WARN") {
-            $projectWarnings += "$project exceeds 60s threshold (${duration:F2}s)"
+            $projectWarnings += "$project exceeds 60s threshold ($("{0:F2}" -f $duration)s)"
         }
     }
 
@@ -237,7 +243,7 @@ foreach ($testProject in $testProjects) {
             '--blame-hang-dump-type', 'none'
         )
         if ($TestReport) {
-            $testArgs += @('--logger', "trx;LogFileName=$testProject.trx")
+            $testArgs += @('--logger', "trx;LogFileName=$testProject.trx", '--results-directory', (Join-Path $root "TestResults\$testProject"))
         }
         dotnet test @testArgs
     }
