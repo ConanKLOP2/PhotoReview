@@ -165,5 +165,35 @@ public sealed class SessionWriterTests
 
         Assert.Equal("x", store.Load(@"C:\photos").CurrentPath);
     }
+
+    [Fact(DisplayName = "Dispose returns within its bound while a write is in flight and skips the last write")]
+    public async Task Dispose_ReturnsWithinBound_WhenWriteInFlight()
+    {
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var (writer, store) = Create();
+        _fs.WriteHook = _ =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+            return null;
+        };
+
+        writer.Update(State(@"C:\photos", "a"));
+        _timer.FireAll();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "the debounced write never started");
+        writer.Update(State(@"C:\photos", "b")); // pending while the write for "a" is blocked
+
+        var dispose = Task.Run(writer.Dispose);
+        var completed = await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(5)));
+        release.Set();
+        Assert.Same(dispose, completed);
+
+        await dispose;
+        await writer.WhenIdleAsync();
+        _fs.WriteHook = null;
+        Assert.Equal("a", store.Load(@"C:\photos").CurrentPath); // "b" was skipped, not written
+        writer.Dispose(); // double Dispose is a no-op
+    }
 }
 

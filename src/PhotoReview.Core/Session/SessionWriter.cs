@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core.Session;
@@ -11,6 +11,9 @@ namespace PhotoReview.Core.Session;
 public sealed class SessionWriter : IDisposable
 {
     public static readonly TimeSpan DefaultDebounce = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Upper bound <see cref="Dispose"/> waits for an in-flight write (Q-R5): the last write is skipped rather than hanging shutdown.</summary>
+    private static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(2);
 
     private readonly SessionStore _store;
     private readonly ILog? _log;
@@ -60,7 +63,9 @@ public sealed class SessionWriter : IDisposable
     }
 
     /// <summary>Writes every pending state now and cancels the scheduled write.</summary>
-    public void Flush()
+    public void Flush() => Flush(bounded: false);
+
+    private void Flush(bool bounded)
     {
         CancellationTokenSource? cts;
         lock (_gate)
@@ -69,7 +74,7 @@ public sealed class SessionWriter : IDisposable
             _timerCts = null;
         }
         cts?.Cancel();
-        WritePending();
+        WritePending(bounded);
     }
 
     public Task FlushAsync() => Task.Run(Flush);
@@ -82,8 +87,15 @@ public sealed class SessionWriter : IDisposable
 
     public void Dispose()
     {
-        lock (_gate) _disposed = true;
-        Flush();
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+        Flush(bounded: true);
+        // A skipped (timed-out) write leaves its holder running; that holder still releases the semaphore, so it is
+        // only disposed when nothing is in flight.
+        if (_writeLock.CurrentCount == 1) _writeLock.Dispose();
     }
 
     private async Task RunTimerAsync(CancellationTokenSource cts)
@@ -96,10 +108,10 @@ public sealed class SessionWriter : IDisposable
             if (!ReferenceEquals(_timerCts, cts)) return; // flushed while we were waiting
             _timerCts = null;
         }
-        WritePending();
+        WritePending(bounded: false);
     }
 
-    private void WritePending()
+    private void WritePending(bool bounded)
     {
         List<(SessionState State, long Version)> batch;
         lock (_gate)
@@ -111,13 +123,24 @@ public sealed class SessionWriter : IDisposable
             }).ToList();
             _pending.Clear();
         }
-        WriteBatch(batch);
+        WriteBatch(batch, bounded);
     }
 
-    private void WriteBatch(List<(SessionState State, long Version)> batch)
+    private void WriteBatch(List<(SessionState State, long Version)> batch, bool bounded)
     {
         if (batch.Count == 0) return;
-        _writeLock.Wait();
+        if (bounded)
+        {
+            if (!_writeLock.Wait(ShutdownWait))
+            {
+                _log?.Error("Session write skipped at shutdown: writer busy", null);
+                return;
+            }
+        }
+        else
+        {
+            _writeLock.Wait();
+        }
         try
         {
             foreach (var (state, version) in batch)
