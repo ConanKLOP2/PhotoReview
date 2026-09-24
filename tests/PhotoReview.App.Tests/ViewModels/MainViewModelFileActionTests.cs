@@ -494,6 +494,31 @@ public sealed class MainViewModelFileActionTests : IDisposable
         Assert.Equal(1, vm.TotalFiles);
     }
 
+    [Fact]
+    public async Task UndoAsync_WithNoHistory_ReportsNothingToUndo_LeavesCatalog_AndReleasesGate()
+    {
+        var folder = Path.Combine(_tempDir, "undo_no_history");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, undo) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        var currentBefore = vm.Catalog.Current?.Path;
+
+        await vm.UndoAsync();
+
+        Assert.Equal(PhotoReview.Core.Localization.Tr.CoreUndoNothingToUndo, vm.StatusText);
+        Assert.Equal(2, vm.TotalFiles);
+        Assert.Equal(currentBefore, vm.Catalog.Current?.Path);
+        Assert.False(vm.IsFileActionInProgress);
+
+        // The gate was released: the next file action runs and registers an undo entry.
+        await vm.RunActionAsync(0);
+        Assert.False(File.Exists(img1));
+        Assert.Equal(1, undo.MoveHistoryCount);
+    }
+
     // --- Test Doubles ---
 
     private sealed class ForwardingFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink
