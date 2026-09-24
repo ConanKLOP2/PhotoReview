@@ -1,27 +1,16 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master `d8c6d01` | **Branch:** `feat/i18n` (L01–L11)
+**Updated:** 2026-09-24 | **Base:** master `67f5aae` (v2.0.64) | **Branch:** `chore/post-i18n-cleanup`
 
-## Now: I18N (group L) — EN + VI, community-editable JSON catalogs
+## Now: i18n merged (#61, #55); IO01 decided (ADR 0007, PR #62)
 
-- Plan `docs/refactoring/I18N-PLAN.md`, ADR 0006; Q-L1..Q-L8 all = recommendation (user, 2026-09-24).
-- L00 docs = PR #55 ✅ merged. L01–L11 code = PR #61 (`feat/i18n`, up to date with master d8c6d01 incl. #57 Recovery clear + #59 dark dialogs): Localizer + source generator (`Tr`), `UiLanguage` (v3 migration keeps vi), `{loc:Tr}` live switch, all windows/status/Core messages via catalogs, journal error codes, translator modes, guards + `tools/i18n-check.ps1` in CI, `docs/TRANSLATING.md`. Evidence: I18N-PLAN "L11 evidence".
-- Next: L12 Vietnamese copy polish (user reviews wording; inventory flags e.g. typo "bấp", mixed folder/thư mục). After merge: Release build in main checkout (CLAUDE.local.md).
+- **i18n (group L) done L00–L11:** EN + VI, community JSON catalogs, `Tr`/`{loc:Tr}`, `tools/i18n-check.ps1` in CI, `docs/TRANSLATING.md`, ADR 0006, plan `docs/refactoring/I18N-PLAN.md`. Open: **L12** Vietnamese copy polish (user reviews wording).
+- **IO01 decided (user, 2026-09-24) — ADR 0007:** journal durability = setting, **Fast (no fsync, default)** or **Power-loss safe** (WriteThrough+Flush, written off the UI thread); session no fsync (atomic kept, corrupt = no session), settings unchanged; unreadable files skipped **with a visible warning**. Implement **IO03/IO04/IO05** next (i18n no longer blocks; new UI strings go through catalogs).
+- Cleanup after i18n: removed obsolete `MainViewModel.UndoLastAsync` / `FileActionController.UndoAsync`; status docs refreshed.
+- **Next:** IO03–IO05 → OC14 (Undo gate → MainViewModel; unblocks ST08/09, OC15–18) → DT10.
+- Left for user (visual): Fit first-frame (T89), TurboJPEG item greyed without dll, AR04 GUI acceptance, zoom feel (#47), new dark dialogs + language picker.
 
-## Previous: perf night 2026-09-24 — all merged (#39–#49, #53)
-
-- Result (real folder): open folder 489 → 166 ms, burst shown 55 → 200/200, peak WS 5.2 → 1.7 GB, app start → first image 3.2 → 1.8 s. Table: `docs/refactoring/PERF-STATUS.md` ("Perf night").
-- **Decisions taken:** zoom = option A (user, 2026-09-24): "100 %" = 1 source pixel; wheel zoom from Fit steps from the fit size. #46 INV-9 change accepted by merge: opened photo shows before Explorer order; navigation waits for it (≤ ~2 s).
-- Fixed along the way (all lost in T46d): preview decode width (#31), folder trace events (#46), Original loading mode (#48).
-- Left for user (visual): Fit first-frame (T89), TurboJPEG item greyed without dll, AR04 GUI acceptance, #47 zoom feel. CI tags missing for runs cancelled by quick successive merges (e.g. v2.0.44/45/48) — tag job could backfill.
-- **Next:** OC14 (Undo gate → MainViewModel), IO01 (needs decision), DT10.
-
-## Also 2026-09-24: Recovery clear — #57 merged (v2.0.59, `3be2644`)
-
-- Recovery window: "Xoá mục đã chọn" (multi-select) + "Xoá tất cả", with confirm. Appends `JournalState.Dismissed` under the same Id (journal stays append-only; latest entry wins) — no file is touched. `OperationJournal.Dismiss`.
-- Build 0/0, all tests pass. GUI click-through not done (needs a journal with failed entries).
-
-## Previous: AR00–AR07 done (#23–#37); nav perf pass #20/#21 — details `docs/archive/progress-log-2026-09.md`.
+## Previous (all merged): perf night #39-#49 (see `docs/refactoring/PERF-STATUS.md`) · AR00-AR07 · Recovery clear #57 · dark dialogs #53-#59
 
 ## Status by Group
 
@@ -32,10 +21,10 @@
 | TS | ✅ TS00-07, TS10 | TS08/09 closed (Q-AR5). |
 | DF, CQ | ✅ Done | |
 | **T89** | 🔄 GUI acceptance only (kept, Q-AR5) | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
-| **TC** | ✅ TC01-TC11 | TC04, TC09 done (#36); TC06/07 kept in Integration.Tests (documented, Q-AR5). |
+| **TC** | ✅ TC01-TC11 | TC04, TC09 done (#36); TC06/07 live in App.Tests/HotPath (real Recycle Bin / real photos). |
 | **OC** | 🔄 ~65% | OC14 kept, re-scoped to "Undo gate location" (Q-AR5) — blocks ST08/09, OC15-18; no longer blocks WD (Q-AR2=yes). |
 | **WD** | ✅ WD01 done (AR04, #37) | WD02-06 closed 2026-09-23 (Q-AR5, no known dialog bug). |
-| **IO** | 🔄 IO01 only (kept) | IO02-07 closed 2026-09-23 (Q-AR5, speculative). |
+| **IO** | 🔄 IO01 decided: ADR 0007 (2026-09-24) | Implement IO03 journal setting, IO04 session, IO05 skip+warn; IO02/06/07 stay closed. |
 | **D** | ❌ Closed (Q-AR5) | Legacy `--perf-session` numbers; re-open from AR02e baseline if needed. |
 | **DT** | 🔄 | DT00-03, 08, 09 done; DT04-07 closed (Q-AR5); DT10 kept. |
 
@@ -44,13 +33,13 @@
 - ❌ No direct `master` commits: branch → PR → review
 - ❌ No `ApplyFitViewAsync` single-pass without T89 evidence
 - ❌ No broad `Dispatcher.Invoke` / `GetRequiredService` before WD01 (→ replaced by ADR 0005 rule once AR04 is DONE)
-- ❌ No journal durability reduction / `IgnoreInaccessible` before IO01/02
+- ❌ No silent `IgnoreInaccessible`; durability changes only as decided in ADR 0007 (journal mode setting, session no-fsync)
 - ❌ No OS SendInput/SetForegroundWindow in test harnesses
 - ❌ Do not compare perf numbers across the AR02c boundary (legacy vs production graph)
 
 ## Key Links
 
-[ACTIVE-TASKS](docs/ACTIVE-TASKS.md) · [AR summary](docs/refactoring/ARCH-REVIEW-SUMMARY.md) · [Open decisions](docs/refactoring/OPEN-DECISIONS.md) · [Structure status](docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md) · [T89 summary](docs/refactoring/T89-FIT-SUMMARY.md) · [INDEX](docs/INDEX.md) · [History](docs/archive/progress-log-2026-09.md)
+[ACTIVE-TASKS](docs/ACTIVE-TASKS.md) · [Open decisions](docs/refactoring/OPEN-DECISIONS.md) · [INDEX](docs/INDEX.md) · [History](docs/archive/progress-log-2026-09.md)
 
 ## Quick Checks
 

@@ -24,10 +24,14 @@ public sealed class CountingFileSystem(IFileSystem inner, ReviewMetrics metrics)
     public void Delete(string path) => _inner.Delete(path);
     public Stream OpenReadShared(string path, int bufferSize = 65536) => _inner.OpenReadShared(path, bufferSize);
     public Stream OpenAppendDurable(string path) => _inner.OpenAppendDurable(path);
-    public void WriteAllTextAtomic(string path, string text) => _inner.WriteAllTextAtomic(path, text);
+    public Stream OpenAppend(string path, bool durable) => _inner.OpenAppend(path, durable);
+    public void WriteAllTextAtomic(string path, string text, bool durable = true) => _inner.WriteAllTextAtomic(path, text, durable);
     public string ReadAllText(string path) => _inner.ReadAllText(path);
     public IEnumerable<string> ReadLines(string path) => _inner.ReadLines(path);
     public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => _inner.EnumerateFiles(directory, pattern);
+    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => _inner.EnumerateFilesWithStat(directory, pattern);
+    public IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+        _inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
     public IEnumerable<string> EnumerateDirectories(string directory) => _inner.EnumerateDirectories(directory);
     public void CreateDirectory(string path) => _inner.CreateDirectory(path);
 }

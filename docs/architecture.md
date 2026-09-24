@@ -81,6 +81,8 @@ Input/action profile
 
 Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unknown`. Recycle: S missing = `RecycleUnverifiable`, S present = `NotRecycled`. Chi tiết trong comment của `RecoveryFileCheck`.
 
+**Chế độ journal (ADR 0007, IO03, `AppSettings.JournalDurability`, đọc live cho mỗi lần ghi):** *Fast* (mặc định) mở stream không `WriteThrough`, `Flush()` thường sau mỗi bản ghi; *PowerLossSafe* giữ `WriteThrough` + `Flush(true)` và `FileActionService` ghi Prepared trên pool thread (`Task.Run`) rồi mới mutation/Committed — UI không bị chặn. Cả hai: Prepared → mutation → Committed, một bản ghi = một dòng JSON, đọc bỏ qua dòng hỏng.
+
 ## Threading (ADR 0005)
 
 Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **không bao giờ** `ConfigureAwait(false)` và không chặn đồng bộ trên Task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), nên mọi continuation quay về `SynchronizationContext` của WPF và `ReviewCatalog`, `ViewerState`, `CompareViewModel`, `MainViewModel` chỉ bị sửa trên UI thread. Core, Imaging và Platform.Windows thì ngược lại: luôn `ConfigureAwait(false)` và đặt việc CPU/I-O nặng trong `Task.Run` (hoặc I/O async thật) — phần đồng bộ trước `await` đầu tiên của một method mà App gọi phải nhẹ, vì nó chạy trên UI thread. Khi một callee có phần đầu đồng bộ nặng, sửa ở callee (hoặc App bọc lời gọi trong `Task.Run`), không thêm `ConfigureAwait(false)` vào App. Khoá bằng: `AppThreadAffinityTests` (quét source `src/PhotoReview.App`), guard Debug `ReviewCatalog.AssertOwnerThread` (composition root gọi `BindToCurrentThread()`; unit test không bind thì không kiểm tra), và metric `CrossThreadPresentCount` (số lần `WpfPresentationSink` phải `Dispatcher.Invoke` vì nhận cập nhật ngoài UI thread; kỳ vọng 0, hiện trong cửa sổ Diagnostics và `metrics.json` của perf session).
@@ -130,3 +132,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 ```
 
 `verify-all.ps1` build solution, chạy năm project xUnit (loại `Category=Manual`), smoke file operation, fault injection, publish framework-dependent và verify artifact. Benchmark và T73 GUI acceptance vẫn là gate riêng vì test tự động không chứng minh hình ảnh đã render đúng trên desktop.
+
+## Chính sách ghi session và file không đọc được (ADR 0007)
+
+- **Session** (`SessionStore.Save`) ghi nguyên tử (file tạm + rename) nhưng **không fsync** (`WriteAllTextAtomic(..., durable: false)`); Settings giữ `durable: true`. `SessionStore.Load` coi file session rỗng/hỏng là "không có session" (chỉ ghi log).
+- **Quét folder**: `IFileSystem.EnumerateReadableFilesWithStat` thử mở đọc từng ảnh; file không đọc được (quyền, bị khóa, lỗi I/O) bị **bỏ qua có báo cáo** qua `IFolderLoadSink.OnFilesSkipped` (log + cảnh báo "Bỏ qua N file không đọc được" và cửa sổ danh sách), không dùng `IgnoreInaccessible` im lặng. Chính folder không liệt kê được vẫn là lỗi (`OnFailed`).

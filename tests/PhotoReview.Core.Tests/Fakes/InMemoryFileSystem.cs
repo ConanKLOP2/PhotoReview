@@ -25,6 +25,15 @@ public sealed class InMemoryFileSystem : IFileSystem
     public Func<string, string, Exception?>? MoveHook { get; set; }
     public Func<string, string, Exception?>? CopyHook { get; set; }
 
+    /// <summary>Ordered trace of journal stream opens and file mutations (IO03 ordering/thread tests).</summary>
+    public sealed record FsEvent(string Kind, bool Durable, int ThreadId, string Path);
+    private readonly List<FsEvent> _events = [];
+    public IReadOnlyList<FsEvent> Events { get { lock (_events) return _events.ToList(); } }
+    private void Record(string kind, string path, bool durable = false)
+    {
+        lock (_events) _events.Add(new FsEvent(kind, durable, Environment.CurrentManagedThreadId, path));
+    }
+
     public InMemoryFileSystem()
     {
     }
@@ -84,6 +93,7 @@ public sealed class InMemoryFileSystem : IFileSystem
 
     public void Move(string source, string destination)
     {
+        Record("move", source);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
 
@@ -197,9 +207,12 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
-    public Stream OpenAppendDurable(string path)
+    public Stream OpenAppendDurable(string path) => OpenAppend(path, durable: true);
+
+    public Stream OpenAppend(string path, bool durable)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        Record("append", path, durable);
 
         if (OpenAppendHook?.Invoke(path) is { } ex)
         {
@@ -227,7 +240,7 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
-    public void WriteAllTextAtomic(string path, string text)
+    public void WriteAllTextAtomic(string path, string text, bool durable = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(text);

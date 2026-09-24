@@ -382,6 +382,100 @@ public sealed class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
+    public async Task OC14_UndoDuringFileAction_IsNoOp_AndGateReleasedAfter()
+    {
+        var folder = Path.Combine(_tempDir, "oc14_undo_during_action");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+        CreateImageFile(folder, "3.jpg");
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fs = new SwitchableBlockingMoveFileSystem(_fileSystem);
+        var (vm, _, undo) = CreateViewModel(fs);
+        await vm.OpenFolderAsync(folder);
+
+        await vm.RunActionAsync(0); // move 1.jpg, registers undo
+        Assert.Equal(1, undo.MoveHistoryCount);
+
+        fs.Block = gate.Task;
+        var action = vm.RunActionAsync(0); // move 2.jpg, blocked
+        Assert.True(vm.IsFileActionInProgress);
+
+        await vm.UndoAsync(); // must be a no-op while the action holds the gate
+        Assert.Equal(1, undo.MoveHistoryCount);
+
+        gate.SetResult();
+        await action;
+        Assert.False(vm.IsFileActionInProgress);
+        Assert.Equal(2, undo.MoveHistoryCount);
+    }
+
+    [Fact]
+    public async Task OC14_FileActionDuringUndo_IsNoOp_AndConcurrentUndoDoesNotDoubleRestore()
+    {
+        var folder = Path.Combine(_tempDir, "oc14_action_during_undo");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+        CreateImageFile(folder, "3.jpg");
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fs = new SwitchableBlockingMoveFileSystem(_fileSystem);
+        var (vm, _, undo) = CreateViewModel(fs);
+        await vm.OpenFolderAsync(folder);
+
+        await vm.RunActionAsync(0);
+        await vm.RunActionAsync(0);
+        Assert.Equal(2, undo.MoveHistoryCount);
+        var total = vm.TotalFiles;
+
+        fs.Block = gate.Task;
+        var firstUndo = vm.UndoAsync();
+        Assert.True(vm.IsFileActionInProgress);
+
+        await vm.RunActionAsync(0); // no-op: gate held by undo
+        await vm.UndoAsync();       // second undo: no-op
+        Assert.Equal(total, vm.TotalFiles);
+
+        gate.SetResult();
+        await firstUndo;
+
+        Assert.False(vm.IsFileActionInProgress);
+        Assert.Equal(total + 1, vm.TotalFiles);
+        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Single(vm.Catalog.Paths, p => p == img1 || Path.GetFileName(p) == "2.jpg");
+    }
+
+    [Fact]
+    public async Task OC14_FolderSwitchMidUndo_ReleasesGate_AndDoesNotTouchNewCatalog()
+    {
+        var folder1 = Path.Combine(_tempDir, "oc14_switch1");
+        var folder2 = Path.Combine(_tempDir, "oc14_switch2");
+        Directory.CreateDirectory(folder1);
+        Directory.CreateDirectory(folder2);
+        CreateImageFile(folder1, "1.jpg");
+        CreateImageFile(folder1, "2.jpg");
+        CreateImageFile(folder2, "x.jpg");
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fs = new SwitchableBlockingMoveFileSystem(_fileSystem);
+        var (vm, _, _) = CreateViewModel(fs);
+        await vm.OpenFolderAsync(folder1);
+        await vm.RunActionAsync(0);
+
+        fs.Block = gate.Task;
+        var undoTask = vm.UndoAsync();
+        await vm.OpenFolderAsync(folder2);
+        gate.SetResult();
+        await undoTask;
+
+        Assert.False(vm.IsFileActionInProgress);
+        Assert.Single(vm.Catalog.Paths);
+        Assert.Equal("x.jpg", Path.GetFileName(vm.Catalog.Paths[0]));
+    }
+
+    [Fact]
     public async Task UndoLastAsync_WhenLastWasRecycle_RestoresAndReloadsFolder()
     {
         var folder = Path.Combine(_tempDir, "undolast_album");
@@ -453,7 +547,8 @@ public sealed class MainViewModelFileActionTests : IDisposable
         public virtual void Delete(string path) => inner.Delete(path);
         public virtual Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
         public virtual Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
-        public virtual void WriteAllTextAtomic(string path, string text) => inner.WriteAllTextAtomic(path, text);
+        public virtual Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
+        public virtual void WriteAllTextAtomic(string path, string text, bool durable = true) => inner.WriteAllTextAtomic(path, text, durable);
         public virtual string ReadAllText(string path) => inner.ReadAllText(path);
         public virtual IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
         public virtual IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
@@ -466,6 +561,18 @@ public sealed class MainViewModelFileActionTests : IDisposable
         public override void Move(string source, string destination)
         {
             blockTask.GetAwaiter().GetResult();
+            base.Move(source, destination);
+        }
+    }
+
+    private sealed class SwitchableBlockingMoveFileSystem(IFileSystem inner) : DelegatingFileSystem(inner)
+    {
+        private Task? _block;
+        public Task? Block { set => Volatile.Write(ref _block, value); }
+
+        public override void Move(string source, string destination)
+        {
+            Volatile.Read(ref _block)?.GetAwaiter().GetResult();
             base.Move(source, destination);
         }
     }

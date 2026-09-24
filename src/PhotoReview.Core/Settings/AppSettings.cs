@@ -33,6 +33,12 @@ public class AppSettings
     /// </summary>
     public string UiLanguage { get; set; } = PhotoReview.Core.Localization.LanguageLoader.AutoCode;
 
+    /// <summary>
+    /// Operation journal durability (ADR 0007, IO03). Absent in older configs, so they load as <see cref="JournalDurability.Fast"/>
+    /// (no migration step needed); applies to the next journal write without a restart.
+    /// </summary>
+    public JournalDurability JournalDurability { get; set; } = JournalDurability.Fast;
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }

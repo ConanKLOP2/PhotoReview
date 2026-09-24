@@ -175,6 +175,24 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    private IReadOnlyList<SkippedEntry> _skippedEntries = [];
+
+    /// <summary>IO05: files of the current folder that could not be read and are not in the catalog.</summary>
+    public IReadOnlyList<SkippedEntry> SkippedEntries => _skippedEntries;
+
+    public bool HasSkippedEntries => _skippedEntries.Count > 0;
+
+    /// <summary>Persistent warning ("Skipped N unreadable files"); empty when nothing was skipped.</summary>
+    public string SkippedWarningText => _skippedEntries.Count == 0 ? string.Empty : Tr.MainSkippedWarning(_skippedEntries.Count);
+
+    private void SetSkippedEntries(IReadOnlyList<SkippedEntry> entries)
+    {
+        _skippedEntries = entries;
+        OnPropertyChanged(nameof(SkippedEntries));
+        OnPropertyChanged(nameof(HasSkippedEntries));
+        OnPropertyChanged(nameof(SkippedWarningText));
+    }
+
     public object? CurrentImage => _presenter.CurrentImage;
     public ViewerState Viewer => _viewerState;
     public CompareViewModel Compare => _compare;
@@ -316,20 +334,26 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
-    public async Task RunActionAsync(int index)
+    public Task RunActionAsync(int index) => _fileActionGate.RunExclusiveAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
-    }
+    });
 
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
-    public async Task RecycleAsync()
+    public Task RecycleAsync() => _fileActionGate.RunExclusiveAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
-    }
+    });
+
+    /// <summary>OC14: single gate shared by file actions and undo.</summary>
+    private readonly FileActionGate _fileActionGate = new();
+
+    /// <summary>True while a file action or undo is in flight (read-only projection of the gate).</summary>
+    public bool IsFileActionInProgress => _fileActionGate.IsHeld;
 
     /// <summary>
     /// INV-9: a file opened directly is presented before Explorer's view order arrives. Commands that
@@ -348,7 +372,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Replaces both legacy UndoAsync (Move-only) and UndoLastAsync to provide consistent semantics
     /// across all callers (keyboard Ctrl+Z and button click).
     /// </summary>
-    public async Task UndoAsync()
+    public Task UndoAsync() => _fileActionGate.RunExclusiveAsync(UndoCoreAsync);
+
+    private async Task UndoCoreAsync()
     {
         var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path);
 
@@ -361,15 +387,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 await OpenFolderAsync(folder, result.Source);
             }
         }
-    }
-
-    /// <summary>
-    /// Deprecated: Use UndoAsync() instead. This method is kept for backward compatibility but redirects to UndoAsync().
-    /// </summary>
-    [Obsolete("Use UndoAsync() instead. This method provides the same behavior as UndoAsync() now.")]
-    public async Task UndoLastAsync()
-    {
-        await UndoAsync();
     }
 
     public void ToggleFit() => _viewerState.ResetFit();
@@ -494,6 +511,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         UpdateFolderTitle();
         if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
+        OnPropertyChanged(nameof(SkippedWarningText));
         // StatusText is event text (last action); it switches language with the next update.
     }
 
@@ -521,6 +539,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
+        if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
         SetFolderText(folder, count, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
         _statusText = StatusFormatter.IndexOnly(0, count);
@@ -563,6 +582,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (currentKept && currentIndex >= 0) _ = _preloadController?.PreloadAroundAsync(currentIndex);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
+    }
+
+    void IFolderLoadSink.OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped)
+    {
+        SetSkippedEntries(skipped.ToArray());
     }
 
     void IFolderLoadSink.OnFailed(string folder, Exception exception)

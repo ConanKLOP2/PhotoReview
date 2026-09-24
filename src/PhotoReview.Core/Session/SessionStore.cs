@@ -56,7 +56,12 @@ public sealed class SessionStore
                 }
             }
         }
-        catch (JsonException) { }
+        catch (JsonException)
+        {
+            // ADR 0007 section 2: without fsync a power loss can leave an empty/partial session file.
+            // That is "no session", not an error for the user.
+            FileLog.Default.Warn($"Session file '{path}' is empty or corrupt; starting without a session.");
+        }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
         return new SessionState { Folder = folder };
@@ -69,7 +74,7 @@ public sealed class SessionStore
         _fileSystem.CreateDirectory(_sessionsDir);
         var path = GetPath(state.Folder);
         var json = JsonSerializer.Serialize(state, Options);
-        _fileSystem.WriteAllTextAtomic(path, json);
+        _fileSystem.WriteAllTextAtomic(path, json, durable: false); // ADR 0007 section 2: atomic, no fsync
         _metrics?.RecordSessionWrite();
     }
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
@@ -98,13 +99,15 @@ public sealed class FolderLoadCoordinator : IDisposable
             var sortMode = _settingsStore.Current.ImageSortMode;
             // perf(startup): scan and sort in ONE background task. Two separate Task.Run hops made the
             // sort wait for the UI thread in between -- at startup that is the whole of Window.Show().
+            // IO05 (ADR 0007 s3): unreadable files are skipped and counted, never dropped silently.
+            var skipped = new List<SkippedEntry>();
             var (scannedFiles, entries) = await Task.Run(() =>
             {
-                // EnumerateFilesWithStat gets Length/LastWriteUtc from the same directory entry
-                // used to list the file (see PhysicalFileSystem), so this needs no separate
-                // GetFileStat() syscall per file the way EnumerateFiles + GetFileStat did.
-                var scanned = _fileSystem.EnumerateFilesWithStat(folder, "*")
-                    .Where(f => ImageFileTypes.IsSupported(f.Path))
+                // The scan gets Length/LastWriteUtc from the same directory entry used to list the
+                // file (see PhysicalFileSystem), so this needs no separate GetFileStat() syscall per
+                // file. Files that cannot be opened for reading go to `skipped` (this delegate runs
+                // on this one background task, so the list needs no lock).
+                var scanned = _fileSystem.EnumerateReadableFilesWithStat(folder, ImageFileTypes.IsSupported, skipped.Add)
                     .Select(f => f.Stat is null
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
@@ -150,6 +153,12 @@ public sealed class FolderLoadCoordinator : IDisposable
             var session = _sessionStore.Load(folder);
             _catalog.Reset(entries);
             _sink.OnCatalogReady(folder, _catalog.Count);
+            if (skipped.Count > 0)
+            {
+                AppLog.Warn($"Folder scan skipped {skipped.Count.ToString(CultureInfo.InvariantCulture)} unreadable entr(y/ies) in '{folder}': "
+                    + string.Join("; ", skipped.Take(20).Select(s => $"{s.Path} ({s.Reason})")));
+                _sink.OnFilesSkipped(folder, skipped);
+            }
             perf.Mark("catalogReady");
 
             var interactionGeneration = _clock.CurrentInteraction;

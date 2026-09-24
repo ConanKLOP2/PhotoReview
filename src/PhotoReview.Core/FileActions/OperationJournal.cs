@@ -35,19 +35,24 @@ public sealed class OperationJournal
     private readonly IFileSystem _fileSystem;
     private readonly IClock _clock;
     private readonly object _gate = new();
+    private readonly Func<JournalDurability> _durability;
 
     public OperationJournal()
         : this(PhotoReview.Core.AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock())
     {
     }
 
-    public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock)
+    public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock, Func<JournalDurability>? durability = null)
     {
+        _durability = durability ?? (() => JournalDurability.Fast);
         ArgumentNullException.ThrowIfNull(paths);
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _path = paths.JournalFile;
     }
+
+    /// <summary>Mode applied to the next write (re-read from the provider every time, so a Settings change needs no restart).</summary>
+    public JournalDurability Durability => _durability();
 
     public void Append(JournalEntry entry)
     {
@@ -78,10 +83,12 @@ public sealed class OperationJournal
             var text = new StringBuilder();
             foreach (var entry in entries)
                 text.Append(JsonSerializer.Serialize(entry)).Append(Environment.NewLine);
-            using var stream = _fileSystem.OpenAppendDurable(_path);
+            var durable = _durability() == JournalDurability.PowerLossSafe;
+            using var stream = _fileSystem.OpenAppend(_path, durable);
             var bytes = Encoding.UTF8.GetBytes(text.ToString());
             stream.Write(bytes, 0, bytes.Length);
-            if (stream is FileStream fs)
+            // Fast: plain Flush() hands the bytes to the OS before the file operation starts (survives a process crash).
+            if (durable && stream is FileStream fs)
             {
                 fs.Flush(flushToDisk: true);
             }

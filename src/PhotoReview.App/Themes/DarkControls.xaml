@@ -39,6 +39,12 @@
         <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
 
+    <!-- Without this the label keeps the system foreground (dark) and disappears on the dark panel. -->
+    <Style TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
     <!-- Header above a rounded panel, instead of the Aero etched frame the header text overlapped. -->
     <Style TargetType="GroupBox">
         <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>

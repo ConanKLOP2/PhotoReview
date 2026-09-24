@@ -39,9 +39,19 @@ public interface IFileSystem
     Stream OpenAppendDurable(string path);
 
     /// <summary>
+    /// Mở luồng ghi nối tiếp; <paramref name="durable"/> = true giống <see cref="OpenAppendDurable"/>, false = không WriteThrough
+    /// (dữ liệu chỉ tới cache của OS sau Flush thường; ADR 0007 chế độ Nhanh). Mặc định chuyển tiếp sang OpenAppendDurable.
+    /// </summary>
+    Stream OpenAppend(string path, bool durable) => OpenAppendDurable(path);
+
+    /// <summary>
     /// Ghi nội dung văn bản ra tệp tin nguyên tử (ghi ra file tạm trước rồi đổi tên đè).
     /// </summary>
-    void WriteAllTextAtomic(string path, string text);
+    /// <remarks>
+    /// durable=true: WriteThrough + Flush(true) (an toàn khi mất điện; Settings).
+    /// durable=false: vẫn nguyên tử nhưng không fsync (Session, ADR 0007 mục 2).
+    /// </remarks>
+    void WriteAllTextAtomic(string path, string text, bool durable = true);
 
     /// <summary>Đọc toàn bộ nội dung văn bản trong tệp tin.</summary>
     string ReadAllText(string path);
@@ -60,6 +70,16 @@ public interface IFileSystem
     /// </summary>
     IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") =>
         EnumerateFiles(directory, pattern).Select(path => (path, GetFileStat(path)));
+
+    /// <summary>
+    /// Như <see cref="EnumerateFilesWithStat"/> nhưng chỉ trả các tệp thỏa <paramref name="include"/> mà
+    /// đọc được: tệp không mở được (quyền, bị khóa, lỗi I/O) hoặc lỗi giữa chừng khi liệt kê được BỎ QUA
+    /// và báo qua <paramref name="onSkipped"/> thay vì làm hỏng cả lần quét (ADR 0007 mục 3). Mặc định
+    /// không dò khả năng đọc (fake trong bộ nhớ); <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè.
+    /// </summary>
+    IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(
+        string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+        EnumerateFilesWithStat(directory, "*").Where(f => include(f.Path));
 
     /// <summary>Liệt kê các thư mục con trong thư mục chỉ định.</summary>
     IEnumerable<string> EnumerateDirectories(string directory);
