@@ -14,6 +14,8 @@ using PhotoReview.App;
 using PhotoReview.App.Composition;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Services;
+using PhotoReview.Core;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
@@ -121,6 +123,13 @@ internal static class PerfSession
         public int Repeat { get; set; } = 1;
         public string? Alias { get; set; }
         public string? Commit { get; set; }
+        /// <summary>
+        /// perf(harness): when set, preview+thumbnail disk caches live under
+        /// <c>&lt;CacheDir&gt;\{cache,thumbnails}</c> (see <see cref="CacheDirOverrideAppPaths"/>)
+        /// instead of the real %LOCALAPPDATA%\PhotoReview\{cache,thumbnails}. Null preserves the
+        /// original behavior (shared with the real app) for a caller that doesn't pass it.
+        /// </summary>
+        public string? CacheDir { get; set; }
     }
 
     // ---- Entry point -----------------------------------------------------------------------------
@@ -143,7 +152,7 @@ internal static class PerfSession
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or IOException or InvalidOperationException)
         {
             Console.Error.WriteLine($"perf-session: {ex.Message}");
-            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA]");
+            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR]");
             return 2;
         }
 
@@ -230,7 +239,16 @@ internal static class PerfSession
         // singletons created while the MainViewModel dependency chain resolves (i.e. before MainWindow's
         // own constructor body runs), and they capture SettingsStore.Current by value at that point --
         // exactly the order App.App_Startup uses (store.Load() before GetRequiredService<MainWindow>()).
-        using var services = AppHost.BuildServices();
+        //
+        // perf(harness): the one deliberate override. AppPaths.FromEnvironment() (what
+        // App.ConfigureServices registers) keeps PreviewCacheDir/ThumbnailCacheDir fixed at
+        // %LOCALAPPDATA%\PhotoReview\{cache,thumbnails} regardless of PHOTOREVIEW_DATA_ROOT (see
+        // CacheDirOverrideAppPaths's doc), so a benchmark run reads/writes/prunes the same disk
+        // cache the real app on this machine uses -- and one run's warm cache silently changes
+        // another's numbers. --cache-dir points both caches at a directory this driver owns
+        // instead; a later AddSingleton<IAppPaths> registration wins over ConfigureServices' own.
+        using var services = AppHost.BuildServices(options.CacheDir is null ? null : overrides =>
+            overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(AppPaths.FromEnvironment(), options.CacheDir)));
         var settingsStore = services.GetRequiredService<SettingsStore>();
         settingsStore.Load();
         var window = services.GetRequiredService<MainWindow>();
@@ -430,6 +448,13 @@ internal static class PerfSession
             diskCacheEnabled = true, // AR02a: PreviewImageService/ThumbnailCache always get IAppPaths cache dirs
             targetDecodeWidth = services.GetRequiredService<PreviewStateContext>().TargetDecodeWidth(),
             dataRoot = "<outDir>\\data",
+            // perf(harness): "shared" means this run used the fixed %LOCALAPPDATA%\PhotoReview
+            // caches (same as the real app on this machine); "isolated" means --cache-dir pointed
+            // preview+thumbnail caches at a directory this run/batch owns instead (see
+            // CacheDirOverrideAppPaths). Comparing a "shared" run's numbers against an "isolated"
+            // one is comparing different starting cache states, not just different code.
+            cacheIsolation = options.CacheDir is null ? "shared" : "isolated",
+            cacheDir = options.CacheDir is null ? null : "<cache-dir>",
         };
         window.Close();
         var endQpc = Stopwatch.GetTimestamp();
@@ -498,7 +523,8 @@ internal static class PerfSession
         Console.WriteLine($"  [{iteration}] config: graph={effectiveConfig.graph} cacheBytes={effectiveConfig.imageCacheCapacityBytes} " +
             $"preloadWorkers={effectiveConfig.preloadWorkerCount} decoder={effectiveConfig.decoderBackend} " +
             $"sourceBytesCache={effectiveConfig.useSourceBytesCache} loadingMode={effectiveConfig.loadingMode} " +
-            $"preload={effectiveConfig.preloadEnabled} diskCache={effectiveConfig.diskCacheEnabled} targetDecodeWidth={effectiveConfig.targetDecodeWidth}");
+            $"preload={effectiveConfig.preloadEnabled} diskCache={effectiveConfig.diskCacheEnabled} targetDecodeWidth={effectiveConfig.targetDecodeWidth} " +
+            $"cacheIsolation={effectiveConfig.cacheIsolation}");
         Console.WriteLine($"  [{iteration}] done keys={keysHandled}/{keysSent} presented={metrics.PresentedImages} hits={metrics.CacheHits} misses={metrics.CacheMisses} " +
             $"crossThreadPresents={metrics.CrossThreadPresentCount} peakWS={processInfo.peakWorkingSetBytes / (1024 * 1024)}MB errors={errors.Count}");
         return errors.Count == 0;
@@ -793,6 +819,7 @@ internal static class PerfSession
                     break;
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
+                case "--cache-dir": options.CacheDir = Path.GetFullPath(Next()); break;
                 default: throw new ArgumentException($"unknown option {args[i]}");
             }
         }

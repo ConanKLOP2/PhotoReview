@@ -150,7 +150,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         await service.GetPreviewAsync(previewPath);
         await service.ShutdownPersistWorkersAsync();
 
-        var files = Directory.Exists(diskDirectory) ? Directory.GetFiles(diskDirectory, "*.png") : [];
+        var files = Directory.Exists(diskDirectory) ? Directory.GetFiles(diskDirectory, "*.pv4") : [];
         Assert.Empty(files);
     }
 
@@ -174,7 +174,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         string[] seededFiles;
         do
         {
-            seededFiles = Directory.GetFiles(diskDirectory, "*.png");
+            seededFiles = Directory.GetFiles(diskDirectory, "*.pv4");
             if (seededFiles.Length > 0) break;
             await Task.Yield();
         } while (DateTime.UtcNow < deadline);
@@ -197,7 +197,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         // cache có sẵn" constraint): the corrupt-entry fallback path deletes on read failure,
         // but disableDiskCacheOverride must skip that whole branch, existing file untouched.
         await reader.ShutdownPersistWorkersAsync();
-        var filesAfter = Directory.GetFiles(diskDirectory, "*.png");
+        var filesAfter = Directory.GetFiles(diskDirectory, "*.pv4");
         Assert.Single(filesAfter);
         Assert.Equal(seededFiles[0], filesAfter[0]);
     }

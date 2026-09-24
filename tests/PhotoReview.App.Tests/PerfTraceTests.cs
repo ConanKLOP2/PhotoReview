@@ -242,7 +242,7 @@ public sealed class PerfTraceTests : IDisposable
             // is still queued at that point is (correctly) dropped instead of written.
             await RetireAsync(service, diskCache);
             service.ClearCache();
-            Assert.NotEmpty(Directory.GetFiles(diskCache, "*.png"));
+            Assert.NotEmpty(Directory.GetFiles(diskCache, "*.pv4"));
 
             PhotoReviewPerf.NavContext = 4_242_003;
             await service.GetPreviewAsync(image);

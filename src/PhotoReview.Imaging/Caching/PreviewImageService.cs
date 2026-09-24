@@ -89,7 +89,8 @@ public sealed class PreviewImageService : IPreloadTarget
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "cache");
         _diskCacheCapacityBytes = diskCacheCapacityBytes;
         _log = log ?? NullLog.Instance;
-        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.png", _diskCacheCapacityBytes, _log, companionSuffix: ".meta");
+        // perf(cache) v4: single-file entries (see PreviewCacheFile), no ".meta" companion.
+        _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", _diskCacheCapacityBytes, _log, companionSuffix: null);
         _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
         _sourceBytesCache = sourceBytesCache;
@@ -104,6 +105,37 @@ public sealed class PreviewImageService : IPreloadTarget
         // instead of leaking these tasks and everything their closures hold alive.
         _persistWorkers = new Task[PersistWorkerCount];
         for (var i = 0; i < PersistWorkerCount; i++) _persistWorkers[i] = RunPersistWorkerAsync();
+        ScheduleLegacyCacheCleanup();
+    }
+
+    // perf(cache): bumping the cache key/file version (preview-v3 -> v4, ".png"+".meta" ->
+    // ".pv4") leaves any old-version files behind as dead weight instead of naturally aging out
+    // through DiskCacheStore's own quota prune (which only ever scans "*.pv4" now). This sweeps
+    // them once, lazily (fire-and-forget from the constructor, never blocks startup) and bounded
+    // (a single non-recursive directory listing, capped at LegacyCleanupMaxFiles per extension)
+    // so a huge leftover pile from a very old install can't turn this into an unbounded scan.
+    private const int LegacyCleanupMaxFiles = 5000;
+
+    private void ScheduleLegacyCacheCleanup()
+    {
+        if (_disableDiskCache) return;
+        var directory = _diskCacheDirectory;
+        var log = _log;
+        _ = Task.Run(() => CleanupLegacyCacheFiles(directory, log));
+    }
+
+    private static void CleanupLegacyCacheFiles(string directory, ILog log)
+    {
+        try
+        {
+            if (!Directory.Exists(directory)) return;
+            foreach (var path in Directory.EnumerateFiles(directory, "*.png").Take(LegacyCleanupMaxFiles))
+                DiskCacheStore.TryDelete(path, log);
+            foreach (var path in Directory.EnumerateFiles(directory, "*.png.meta").Take(LegacyCleanupMaxFiles))
+                DiskCacheStore.TryDelete(path, log);
+        }
+        catch (IOException ex) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
+        catch (UnauthorizedAccessException ex) { log.Error($"Legacy preview cache cleanup failed: {directory}", ex); }
     }
 
     /// <summary>
@@ -127,14 +159,13 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
-                WriteCacheMetadataAtomically(request.CachePath, request.Backend, request.Orientation);
-                await _diskStore.WriteAtomicallyAsync(request.Bitmap, request.CachePath).ConfigureAwait(false);
+                await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation, request.CachePath)
+                    .ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
                     // Went stale mid-write (e.g. Clear Cache ran concurrently): don't leave
                     // a freshly-written file for a cache generation that was just cleared.
                     DiskCacheStore.TryDelete(request.CachePath);
-                    DiskCacheStore.TryDelete(GetCacheMetadataPath(request.CachePath));
                     continue;
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
@@ -237,24 +268,29 @@ public sealed class PreviewImageService : IPreloadTarget
         {
             try
             {
-                int orientation = ReadCacheOrientation(cachePath, key.Backend);
                 if (perf) perfT0 = Stopwatch.GetTimestamp();
-                using var cacheStream = File.OpenRead(cachePath);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = cacheStream; bitmap.EndInit(); bitmap.Freeze();
-                decodedImage = new WpfDecodedImage(bitmap, downscaled: true, orientation: orientation, actualBackend: key.Backend);
+                // perf(cache) v4: one file open, one header read, one decode -- no separate
+                // ".meta" companion (see PreviewCacheFile). ActualBackend comes from the header,
+                // not key.Backend: a fallback-decoded preview (see the persist condition below)
+                // is stored under the requested backend's path but its header truthfully records
+                // whichever backend actually produced the pixels.
+                var cacheEntry = PreviewCacheFile.Read(cachePath);
+                decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend);
                 _metrics.RecordDiskCacheHit();
-                if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), PerfStreamLength(cacheStream));
+                if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), cacheEntry.FileBytes);
             }
             // A background prune can delete cachePath between the Exists check above and
             // here; re-checking filesystem state in the catch filter (as this used to do)
             // lets that race turn a plain cache miss into an escaping FileNotFoundException
             // instead of the source fallback below. Catch the actual expected read/decode
             // failure types instead of re-querying state that can change mid-catch.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException)
+            // InvalidDataException covers PreviewCacheFile.Read's own header validation (bad
+            // magic, a version other than PreviewCacheFile.CurrentVersion, or any other
+            // structurally invalid header) -- a version bump makes every older entry take this
+            // same "corrupt: delete and re-decode" path instead of needing a migration.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException)
             {
                 try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
-                try { File.Delete(GetCacheMetadataPath(cachePath)); } catch { /* best-effort: a stray .meta only affects an entry that is already a miss */ }
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Backend, targetWidth, perf, perfNav, perfPathId);
             }
@@ -275,11 +311,20 @@ public sealed class PreviewImageService : IPreloadTarget
             if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
 
         // Only cache previews that actually decoded at the downscaled target width: a
-        // fallback to full-resolution (see DecodeWithFallback) must never be PNG-encoded
-        // under the downscaled cache key, and Original-mode's full-resolution decode is
-        // slower to persist than just re-decoding the source JPEG, so it would cost more
-        // than it saves.
-        if (!_disableDiskCache && sourceRead && decodedImage.ActualBackend == key.Backend &&
+        // fallback to full-resolution (see DecodeWithFallback) must never be persisted under the
+        // downscaled cache key, and Original-mode's full-resolution decode is slower to persist
+        // than just re-decoding the source JPEG, so it would cost more than it saves.
+        //
+        // perf(cache): this used to also require decodedImage.ActualBackend == key.Backend,
+        // which meant a preview whose *backend-level* decode fell back (e.g. an ICC JPEG the
+        // configured TurboJpeg backend can't handle, decoded via FallbackImageDecoder's inner
+        // Wpf/WicDirect decoder instead) was never disk-cached at all -- every future open re-ran
+        // the same fallback chain from source. GetDiskCachePath already hashes key.Backend (the
+        // *requested* backend), so this path is still per-requested-backend; the header just
+        // records which backend actually produced the pixels (PreviewCacheFile.ReadResult.ActualBackend
+        // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
+        // decode would have.
+        if (!_disableDiskCache && sourceRead &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
         stopwatch.Stop();
@@ -288,14 +333,6 @@ public sealed class PreviewImageService : IPreloadTarget
         if (sourceRead) _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
         return decodedImage;
     });
-
-    // D04 perf (tracing only): must never throw into the disk-cache catch above, which would turn a
-    // successful cache read into a delete + source decode.
-    private static long PerfStreamLength(Stream stream)
-    {
-        try { return stream.Length; }
-        catch { return -1; }
-    }
 
     public bool TryGetCachedPreview(string path, out IDecodedImage image)
     {
@@ -362,9 +399,10 @@ public sealed class PreviewImageService : IPreloadTarget
         try
         {
             _diskStore.ClearDirectory();
-            if (Directory.Exists(_diskCacheDirectory))
-                foreach (var metadataPath in Directory.EnumerateFiles(_diskCacheDirectory, "*.meta"))
-                    DiskCacheStore.TryDelete(metadataPath, _log);
+            // An explicit user action ("Clear Cache"), not a background pass: also sweep any
+            // leftover pre-v4 files (".png" + ".png.meta") right away instead of waiting for
+            // ScheduleLegacyCacheCleanup's bounded, once-per-process pass.
+            CleanupLegacyCacheFiles(_diskCacheDirectory, _log);
         }
         catch (IOException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
         catch (UnauthorizedAccessException ex) { _log.Error($"Preview disk cache clear failed: {_diskCacheDirectory}", ex); }
@@ -457,34 +495,12 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private string GetDiskCachePath(ImageCacheKey key)
     {
-        // v3 requires an atomic metadata companion carrying backend and source orientation.
-        // Older PNGs intentionally become misses because their provenance is incomplete.
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v3|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
-        return Path.Combine(_diskCacheDirectory, hash + ".png");
-    }
-
-    private static string GetCacheMetadataPath(string cachePath) => cachePath + ".meta";
-
-    private static int ReadCacheOrientation(string cachePath, DecoderBackend expectedBackend)
-    {
-        var parts = File.ReadAllText(GetCacheMetadataPath(cachePath)).Split('|');
-        if (parts.Length != 2 || !Enum.TryParse(parts[0], out DecoderBackend backend) ||
-            backend != expectedBackend || !int.TryParse(parts[1], out int orientation) || orientation is < 1 or > 8)
-            throw new InvalidDataException("Preview cache metadata is missing or invalid.");
-        return orientation;
-    }
-
-    private static void WriteCacheMetadataAtomically(string cachePath, DecoderBackend backend, int orientation)
-    {
-        var metadataPath = GetCacheMetadataPath(cachePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(metadataPath)!);
-        var temporaryPath = metadataPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            File.WriteAllText(temporaryPath, $"{backend}|{orientation}");
-            File.Move(temporaryPath, metadataPath, overwrite: true);
-        }
-        finally { DiskCacheStore.TryDelete(temporaryPath); }
+        // v4 (PreviewCacheFile): a single file carries its own header (backend, orientation,
+        // size, version) -- no atomic metadata companion. Bumping "preview-v3" to "preview-v4"
+        // here means every old-version file misses on lookup by construction (this hash never
+        // matches one); ScheduleLegacyCacheCleanup/ClearDisk sweep the orphaned files themselves.
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"preview-v4|{key.Path}|{key.Length}|{key.LastWriteUtcTicks}|{key.IsOriginal}|{key.TargetWidth}|{key.OrientationApplied}|{key.Backend}")));
+        return Path.Combine(_diskCacheDirectory, hash + ".pv4");
     }
 
     /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
