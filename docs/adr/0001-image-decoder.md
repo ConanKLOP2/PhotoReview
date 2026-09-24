@@ -134,4 +134,6 @@ Quyết định này sẽ được xem xét lại nếu:
 
 ## 9. Cập nhật (Addendum)
 
+- **2026-09-24 (perf night, PR #40, merge `dba2c15`):** `WicDirect` nay áp embedded ICC bằng WIC color transform (`IWICColorTransform`) và chỉ fallback sang WPF khi transform thất bại. Điều này thay thế giới hạn "ảnh có ICC luôn đi qua fallback" trong phần Quyết định và tuyên bố "chưa có `IWICColorTransform`" ở QG-3 bên trên (các đoạn đó là lịch sử, không còn đúng).
+
 - **2026-09-23:** TurboJpeg giờ được đăng ký tường minh trong `App.Composition.DecoderProviders` (AR01) thay vì `ImageDecoderFactory` dò tìm bằng `Type.GetType`/`Activator.CreateInstance`. `App.csproj` tham chiếu trực tiếp `PhotoReview.Imaging.TurboJpeg`, và một probe (`TurboJpegAvailability.Probe`) xác nhận `turbojpeg.dll` nạp và khởi tạo được trước khi đăng ký backend; nếu probe thất bại, TurboJpeg không được đăng ký và lý do được ghi log bắt buộc một lần. Quyết định chọn `WicDirect` làm mặc định ở Mục 6 không đổi.
