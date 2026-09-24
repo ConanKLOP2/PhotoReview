@@ -5,4 +5,11 @@
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
+  <!-- I18N (ADR 0006): English is embedded as the always-complete fallback; every catalog is also copied to
+       <app>\Languages so users and translators can read and edit it without rebuilding. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\Languages\en.json" LogicalName="PhotoReview.Core.Localization.en.json" />
+    <None Include="Localization\Languages\*.json" Link="Languages\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
