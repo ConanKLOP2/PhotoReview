@@ -118,12 +118,12 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 
         // WarmPreloadAround is fire-and-forget by design (matches production), so poll for
         // the background warm-up to land instead of asserting on a fixed delay.
-        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits.
+        // TC09: poll a condition with a deadline instead of asserting after a fixed delay.
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (executor.Metrics.PreloadHits == 0 && DateTime.UtcNow < deadline)
         {
             await executor.DecodeAsync(files[1]);
-            await Task.Yield();
+            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
         }
 
         Assert.True(executor.Metrics.PreloadHits > 0);

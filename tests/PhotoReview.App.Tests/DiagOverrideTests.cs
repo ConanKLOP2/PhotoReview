@@ -169,14 +169,14 @@ public sealed class DiagOverrideTests : IAsyncLifetime
             diskCacheDirectory: diskDirectory), diskDirectory);
         await writer.GetPreviewAsync(previewPath);
         await writer.ShutdownPersistWorkersAsync();
-        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits.
+        // TC09: poll a condition with a deadline instead of asserting after a fixed delay.
         var deadline = DateTime.UtcNow.AddSeconds(5);
         string[] seededFiles;
         do
         {
             seededFiles = Directory.GetFiles(diskDirectory, "*.pv4");
             if (seededFiles.Length > 0) break;
-            await Task.Yield();
+            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
         } while (DateTime.UtcNow < deadline);
         Assert.True(seededFiles.Length == 1, "Expected the writer service to have persisted exactly one disk cache entry.");
 
