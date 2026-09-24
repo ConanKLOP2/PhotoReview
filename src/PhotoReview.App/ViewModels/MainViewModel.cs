@@ -466,7 +466,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 if (previousBackend != newBackend)
                 {
                     _previewService?.ClearCache();
-                    _previewService?.ClearDisk();
+                    // R2-F-16: the directory delete must not run on the UI thread (the RAM cache above is already cleared).
+                    var previewService = _previewService;
+                    if (previewService is not null) _ = Task.Run(previewService.ClearDisk);
                     _preloadController?.ClearPreloadedKeys();
                 }
                 if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
