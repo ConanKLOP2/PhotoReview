@@ -22,8 +22,9 @@ function Get-DocTier {
 $Docs = @()
 $Totals = @{ 'T0' = 0; 'T1' = 0; 'T2' = 0; 'Other' = 0 }
 
-git ls-files | Where-Object { $_ -match '\.(md|txt)$' } | ForEach-Object {
-    $Content = & git show "HEAD:$_" 2>$null
+# Measure the working tree (not HEAD) so staged-new and uncommitted growth count; quotepath=off keeps non-ASCII names intact.
+& git -c core.quotepath=off ls-files | Where-Object { $_ -match '\.(md|txt)$' -and (Test-Path -LiteralPath $_ -PathType Leaf) } | ForEach-Object {
+    $Content = [System.IO.File]::ReadAllText((Join-Path (Get-Location).Path $_), [System.Text.Encoding]::UTF8)
     $Bytes = [System.Text.Encoding]::UTF8.GetByteCount($Content)
     $Lines = @($Content -split "`n").Count
     $Tier = Get-DocTier $_
