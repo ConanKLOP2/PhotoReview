@@ -1,5 +1,6 @@
 using System;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging;
 
 namespace PhotoReview.App.Services;
 
@@ -10,6 +11,8 @@ namespace PhotoReview.App.Services;
 public sealed class PreviewStateContext
 {
     public Func<bool> IsOriginalLoadingMode { get; set; } = () => false;
-    public Func<int> TargetDecodeWidth { get; set; } = () => 0;
+
+    /// <summary>Preview decode box (device pixels); <see cref="DecodeBox.Unbounded"/> = full size.</summary>
+    public Func<DecodeBox> TargetDecodeBox { get; set; } = () => DecodeBox.Unbounded;
     public Func<DecoderBackend> CurrentBackend { get; set; } = () => DecoderBackend.Wpf;
 }

@@ -116,12 +116,13 @@ public partial class App : System.Windows.Application, IDisposable
             ctx.IsOriginalLoadingMode = () => settingsStore.Current.LoadingMode == PhotoReview.Core.Model.LoadingMode.Original;
             ctx.CurrentBackend = () => settingsStore.Current.DecoderBackend;
             // T46d dropped the viewport-based decode width, so Preview decoded every image at full size.
+            // perf(decode): the target is now a width x height box (see AdaptivePreviewPolicy).
             var viewport = sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>();
-            ctx.TargetDecodeWidth = () => viewport.TargetDecodeWidth;
+            ctx.TargetDecodeBox = () => viewport.TargetDecodeBox;
             return new PreviewImageService(
                 sp.GetRequiredService<ReviewMetrics>(),
                 () => ctx.IsOriginalLoadingMode(),
-                () => ctx.TargetDecodeWidth(),
+                () => ctx.TargetDecodeBox(),
                 capacityBytes: settingsStore.Current.ImageCacheCapacityBytes,
                 diskCacheDirectory: sp.GetRequiredService<IAppPaths>().PreviewCacheDir,
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),

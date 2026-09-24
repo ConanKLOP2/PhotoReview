@@ -55,14 +55,14 @@ public sealed class ImagePresenterTests : IDisposable
         _previewContext = new PreviewStateContext
         {
             IsOriginalLoadingMode = () => _settings.LoadingMode == LoadingMode.Original,
-            TargetDecodeWidth = () => 1920,
+            TargetDecodeBox = () => new PhotoReview.Imaging.DecodeBox(1920, 0),
             CurrentBackend = () => DecoderBackend.Wpf
         };
 
         _previewService = new PreviewImageService(
             _metrics,
             () => _previewContext.IsOriginalLoadingMode(),
-            () => _previewContext.TargetDecodeWidth(),
+            () => _previewContext.TargetDecodeBox(),
             capacityBytes: 64 * 1024 * 1024,
             currentBackend: () => _previewContext.CurrentBackend(),
             disableDiskCacheOverride: true);
@@ -437,7 +437,7 @@ public sealed class ImagePresenterTests : IDisposable
     private PreviewImageService CreatePreviewService(IImageDecoder decoder) => new(
         _metrics,
         () => _previewContext.IsOriginalLoadingMode(),
-        () => _previewContext.TargetDecodeWidth(),
+        () => _previewContext.TargetDecodeBox(),
         capacityBytes: 64 * 1024 * 1024,
         decoder: decoder,
         currentBackend: () => _previewContext.CurrentBackend(),

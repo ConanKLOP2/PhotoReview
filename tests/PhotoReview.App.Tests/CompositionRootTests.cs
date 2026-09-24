@@ -208,11 +208,15 @@ public class CompositionRootTests
                 Assert.Equal(getViewportSizeMethod, viewport.Get.Method);
                 Assert.Same(window, viewport.Get.Target);
 
-                // The window also publishes the preview decode width (lost in T46d, so Preview
-                // decoded at full size); PreviewImageService reads it through PreviewStateContext.
-                Assert.InRange(viewport.TargetDecodeWidth, PhotoReview.Imaging.AdaptivePreviewPolicy.MinimumDecodeWidth, PhotoReview.Imaging.AdaptivePreviewPolicy.MaximumDecodeWidth);
+                // The window also publishes the preview decode box (width lost in T46d, so Preview
+                // decoded at full size; height added by perf(decode)); PreviewImageService reads it
+                // through PreviewStateContext.
+                var box = viewport.TargetDecodeBox;
+                Assert.InRange(box.Width, PhotoReview.Imaging.AdaptivePreviewPolicy.BoxQuantum, PhotoReview.Imaging.AdaptivePreviewPolicy.MaximumBoxSide);
+                Assert.InRange(box.Height, PhotoReview.Imaging.AdaptivePreviewPolicy.BoxQuantum, PhotoReview.Imaging.AdaptivePreviewPolicy.MaximumBoxSide);
+                Assert.True(Math.Max(box.Width, box.Height) >= PhotoReview.Imaging.AdaptivePreviewPolicy.MinimumBoxLongSide);
                 _ = provider.GetRequiredService<PhotoReview.Imaging.Caching.PreviewImageService>();
-                Assert.Equal(viewport.TargetDecodeWidth, provider.GetRequiredService<PreviewStateContext>().TargetDecodeWidth());
+                Assert.Equal(box, provider.GetRequiredService<PreviewStateContext>().TargetDecodeBox());
             }
             catch (Exception ex) { threadException = ex; }
         });
