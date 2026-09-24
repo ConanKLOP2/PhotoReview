@@ -278,7 +278,10 @@ public sealed class OperationJournalUnitTests
 
         var recFail = reconciled.First(x => x.Id == "rec-fail");
         Assert.Equal(JournalState.Failed, recFail.State);
-        Assert.Equal("Nguồn vẫn tồn tại sau khi khôi phục phiên.", recFail.Error);
+        // Q-L3: the journal stores a stable code + invariant English; the UI shows the localized text by code.
+        Assert.Equal(JournalErrors.SourceStillExistsAfterRecovery, recFail.ErrorCode);
+        Assert.Equal("The source still exists after session recovery.", recFail.Error);
+        Assert.Equal("Nguồn vẫn tồn tại sau khi khôi phục phiên.", JournalErrors.Describe(recFail));
     }
 
     [Fact(DisplayName = "ReconcilePendingOperations for Move: committed if source absent and destination size matches")]

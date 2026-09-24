@@ -615,9 +615,27 @@ public sealed class LocalizerCurrentTests
     [Fact]
     public void Current_NotReplaced_IsBuiltInEnglish()
     {
-        // Every test that swaps Current restores it, so the ambient value is still the default here.
-        Assert.Same(BuiltInCatalog.EnglishLocalizer, Localizer.Current);
-        Assert.Equal("en", Localizer.Current.Code);
+        // The assembly pins Vietnamese (LocalizationModuleInit), so clear the ambient field to observe the default.
+        var field = typeof(Localizer).GetField("s_current",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var previous = Localizer.Current;
+        field.SetValue(null, null);
+        try
+        {
+            Assert.Same(BuiltInCatalog.EnglishLocalizer, Localizer.Current);
+            Assert.Equal("en", Localizer.Current.Code);
+        }
+        finally
+        {
+            Localizer.SetCurrent(previous);
+        }
+    }
+
+    [Fact]
+    public void Current_InThisAssembly_IsPinnedVietnamese()
+    {
+        // Every test that swaps Current restores it, so the module initializer's value is still in place here.
+        Assert.Equal("vi", Localizer.Current.Code);
     }
 
     [Fact]

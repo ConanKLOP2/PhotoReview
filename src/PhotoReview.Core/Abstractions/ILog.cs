@@ -12,6 +12,6 @@ public interface ILog
     void Info(string message);
     void Warn(string message);
 
-    [SuppressMessage("Naming", "CA1716:Identifiers should not match keywords", Justification = "Khớp với quy ước phương thức log Error trong PhotoReview và các logger chuẩn.")]
+    [SuppressMessage("Naming", "CA1716:Identifiers should not match keywords", Justification = "Matches the Error log method convention used across PhotoReview and standard loggers.")]
     void Error(string message, Exception? ex = null);
 }
