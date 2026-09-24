@@ -57,13 +57,13 @@ public sealed class LocalizationGuardTests
     [Fact(DisplayName = "L03: no Vietnamese string literals in src/**/*.cs outside the catalogs (shrinking allowlist)")]
     public void NoVietnameseLiteralsOutsideCatalogs()
     {
-        var root = FindRepoRoot();
+        var root = RepoScan.Root;
         var actual = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        foreach (var file in SourceFiles(root, "src", "*.cs"))
+        foreach (var file in RepoScan.CsFiles("src"))
         {
-            var relative = Relative(root, file);
+            var relative = RepoScan.Relative(file);
             if (relative.StartsWith(LanguagesDir + "/", StringComparison.OrdinalIgnoreCase)) continue;
-            var count = CSharpStringLiterals.Scan(File.ReadAllText(file)).Count(ContainsVietnamese);
+            var count = CSharpStringLiterals.Scan(RepoScan.Text(file)).Count(ContainsVietnamese);
             if (count > 0) actual[relative] = count;
         }
 
@@ -73,7 +73,7 @@ public sealed class LocalizationGuardTests
     [Fact(DisplayName = "L03: no literal text in XAML attributes/content (shrinking allowlist)")]
     public void NoLiteralTextInXaml()
     {
-        var root = FindRepoRoot();
+        var root = RepoScan.Root;
         var actual = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var file in SourceFiles(root, "src/PhotoReview.App", "*.xaml"))
         {
@@ -87,7 +87,7 @@ public sealed class LocalizationGuardTests
     [Fact(DisplayName = "L03: every {loc:Tr key} used in XAML exists in en.json")]
     public void XamlTrKeysExistInEnglishCatalog()
     {
-        var root = FindRepoRoot();
+        var root = RepoScan.Root;
         var english = ParseCatalog(Path.Combine(root, LanguagesDir, "en.json"));
         var missing = new List<string>();
         foreach (var file in SourceFiles(root, "src/PhotoReview.App", "*.xaml"))
@@ -178,7 +178,7 @@ public sealed class LocalizationGuardTests
     [Fact(DisplayName = "L03: shipped catalogs parse and have no unknown keys or placeholders")]
     public void ShippedCatalogsHaveNoUnknownKeysOrPlaceholders()
     {
-        var root = FindRepoRoot();
+        var root = RepoScan.Root;
         var dir = Path.Combine(root, LanguagesDir);
         var english = ParseCatalog(Path.Combine(dir, "en.json"));
         Assert.Equal(
@@ -332,16 +332,6 @@ public sealed class LocalizationGuardTests
 
     private static string Relative(string root, string file) => Path.GetRelativePath(root, file).Replace('\\', '/');
 
-    private static string FindRepoRoot()
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "PhotoReview.slnx"))) return current.FullName;
-            current = current.Parent;
-        }
-        throw new DirectoryNotFoundException("Could not locate repository root (looking for PhotoReview.slnx)");
-    }
 }
 
 /// <summary>

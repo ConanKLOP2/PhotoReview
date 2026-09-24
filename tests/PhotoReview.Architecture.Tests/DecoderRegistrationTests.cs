@@ -38,42 +38,14 @@ public sealed class DecoderRegistrationTests
     [Fact(DisplayName = "AR01: ImageDecoderFactory no longer resolves backends via reflection")]
     public void ImageDecoderFactory_HasNoReflectionLoading()
     {
-        var repoRoot = FindRepoRoot();
-        var imagingDir = Path.Combine(repoRoot, "src", "PhotoReview.Imaging");
-        var violations = new List<string>();
-
-        foreach (var file in Directory.GetFiles(imagingDir, "*.cs", SearchOption.AllDirectories))
-        {
-            var relativePath = Path.GetRelativePath(repoRoot, file).Replace('\\', '/');
-            var lines = File.ReadAllLines(file);
-            for (var i = 0; i < lines.Length; i++)
-            {
-                if (lines[i].Contains("Type.GetType(", StringComparison.Ordinal) ||
-                    lines[i].Contains("Activator.CreateInstance(", StringComparison.Ordinal))
-                {
-                    violations.Add($"{relativePath}:{i + 1}: {lines[i].Trim()}");
-                }
-            }
-        }
+        var violations = RepoScan.FindLineViolations(
+            line => line.Contains("Type.GetType(", StringComparison.Ordinal)
+                || line.Contains("Activator.CreateInstance(", StringComparison.Ordinal),
+            null,
+            "src/PhotoReview.Imaging");
 
         Assert.True(
             violations.Count == 0,
             $"PhotoReview.Imaging must not resolve decoder backends via reflection:\n{string.Join("\n", violations)}");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "PhotoReview.slnx")) ||
-                Directory.Exists(Path.Combine(current.FullName, ".git")))
-            {
-                return current.FullName;
-            }
-            current = current.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root (looking for PhotoReview.slnx or .git)");
     }
 }

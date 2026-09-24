@@ -17,20 +17,13 @@ public sealed class StructureOptimizeRulesTests
     [Fact(DisplayName = "Rule ST01: IProgressiveExplorerOrderProvider marker interface is completely eliminated")]
     public void MarkerInterface_IProgressiveExplorerOrderProvider_IsEliminated()
     {
-        var repoRoot = FindRepoRoot();
-        var srcDir = Path.Combine(repoRoot, "src");
-        var csFiles = Directory.GetFiles(srcDir, "*.cs", SearchOption.AllDirectories);
-
         var violations = new List<string>();
-        foreach (var file in csFiles)
+        foreach (var file in RepoScan.CsFiles("src"))
         {
-            var relativePath = Path.GetRelativePath(repoRoot, file).Replace('\\', '/');
-            var text = File.ReadAllText(file);
-
             // Check for interface definition or usage
-            if (text.Contains("IProgressiveExplorerOrderProvider", StringComparison.Ordinal))
+            if (RepoScan.Text(file).Contains("IProgressiveExplorerOrderProvider", StringComparison.Ordinal))
             {
-                violations.Add(relativePath);
+                violations.Add(RepoScan.Relative(file));
             }
         }
 
@@ -125,7 +118,6 @@ public sealed class StructureOptimizeRulesTests
     [Trait("Category", "Architecture")]
     public void BenchmarkCli_DoesNotReflectIntoAppTypes()
     {
-        var repoRoot = FindRepoRoot();
         var appTypeNames = typeof(PhotoReview.App.App).Assembly.GetTypes()
             .Select(t => t.Name)
             .ToHashSet(StringComparer.Ordinal);
@@ -133,78 +125,15 @@ public sealed class StructureOptimizeRulesTests
             @"typeof\((?<type>\w+)\)\s*\.\s*Get(Field|Fields|Method|Methods|Property|Properties|NestedType|NestedTypes)\s*\(",
             RegexOptions.CultureInvariant);
 
-        var violations = new List<string>();
-        var cliDir = Path.Combine(repoRoot, "tools", "PhotoReview.Benchmark.Cli");
-        foreach (var file in Directory.GetFiles(cliDir, "*.cs", SearchOption.AllDirectories))
-        {
-            if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
-            var lines = File.ReadAllLines(file);
-            for (var i = 0; i < lines.Length; i++)
-            {
-                foreach (Match match in reflectionOnType.Matches(lines[i]))
-                {
-                    if (appTypeNames.Contains(match.Groups["type"].Value))
-                        violations.Add($"{Path.GetRelativePath(repoRoot, file).Replace('\\', '/')}:{i + 1}: {lines[i].Trim()}");
-                }
-            }
-        }
+        const string cliDir = "tools/PhotoReview.Benchmark.Cli";
+        Assert.NotEmpty(RepoScan.CsFiles(cliDir));
+
+        var violations = RepoScan.FindLineViolations(
+            line => reflectionOnType.Matches(line).Any(m => appTypeNames.Contains(m.Groups["type"].Value)),
+            null,
+            cliDir);
 
         Assert.True(violations.Count == 0,
             $"Benchmark.Cli reflects into App types; expose a public member instead:\n{string.Join("\n", violations)}");
-    }
-
-    [Fact(DisplayName = "Rule TS06: No [Fact] with TODO in body without [Skip]")]
-    [Trait("Category", "Architecture")]
-    public void FactWithTodoMustHaveSkip()
-    {
-        var repoRoot = FindRepoRoot();
-        var violations = new List<string>();
-        var todoRegex = new Regex(@"\bTODO\b", RegexOptions.CultureInvariant);
-        var skipRegex = new Regex(@"\[Fact.*Skip\s*=", RegexOptions.CultureInvariant);
-
-        foreach (var file in Directory.GetFiles(Path.Combine(repoRoot, "tests"), "*.cs", SearchOption.AllDirectories))
-        {
-            if (file.Contains("obj")) continue;
-            var lines = File.ReadAllLines(file);
-            for (var i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                if (!line.Contains("[Fact")) continue;
-
-                // Check if this [Fact] line has Skip
-                bool hasSkip = skipRegex.IsMatch(line);
-
-                // Scan method body for todo markers
-                for (var j = i + 1; j < lines.Length && j < i + 50; j++)
-                {
-                    if (lines[j].Contains('{')) continue;
-                    if (lines[j].Contains('}')) break;
-                    if (todoRegex.IsMatch(lines[j]) && !hasSkip)
-                    {
-                        violations.Add($"{Path.GetRelativePath(repoRoot, file).Replace('\\', '/')}:{i + 1}: [Fact] at line {i + 1} has TODO at line {j + 1} but no [Skip]");
-                        break;
-                    }
-                }
-            }
-        }
-
-        Assert.True(violations.Count == 0,
-            $"Test facts with TODO in body must have [Skip] attribute:\n{string.Join("\n", violations)}");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "PhotoReview.slnx")) ||
-                Directory.Exists(Path.Combine(current.FullName, ".git")))
-            {
-                return current.FullName;
-            }
-            current = current.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root (looking for PhotoReview.slnx or .git)");
     }
 }

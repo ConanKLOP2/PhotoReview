@@ -23,22 +23,18 @@ public sealed class HotPathHonestyRuleTests
     [Trait("Category", "Architecture")]
     public void FactOrTheoryWithTodoMustHaveSkip()
     {
-        var repoRoot = FindRepoRoot();
-        var testsDir = Path.Combine(repoRoot, "tests");
         var violations = new List<string>();
 
-        foreach (var file in Directory.GetFiles(testsDir, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in RepoScan.CsFiles("tests"))
         {
-            if (file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
-            if (file.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
 
-            var text = File.ReadAllText(file);
+            var text = RepoScan.Text(file);
             foreach (var method in EnumerateTestMethods(text))
             {
                 if (!ContainsTodoMarker(method.Body)) continue;
                 if (method.HasSkip) continue;
 
-                var relative = Path.GetRelativePath(repoRoot, file).Replace('\\', '/');
+                var relative = RepoScan.Relative(file);
                 violations.Add($"{relative}:{method.LineNumber}: test method has a TODO marker in its body but no [Skip = \"reason\"]");
             }
         }
@@ -137,18 +133,4 @@ public sealed class HotPathHonestyRuleTests
         return false;
     }
 
-    private static string FindRepoRoot()
-    {
-        var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "PhotoReview.slnx")) ||
-                Directory.Exists(Path.Combine(current.FullName, ".git")))
-            {
-                return current.FullName;
-            }
-            current = current.Parent;
-        }
-        throw new InvalidOperationException("Could not locate repo root (PhotoReview.slnx not found).");
-    }
 }

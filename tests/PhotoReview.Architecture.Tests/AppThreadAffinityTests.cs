@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.RegularExpressions;
-using Xunit;
 
 namespace PhotoReview.Architecture.Tests;
 
@@ -49,33 +45,11 @@ public sealed class AppThreadAffinityTests
 
     private static List<string> FindViolations(Regex pattern)
     {
-        var repoRoot = FindRepoRoot();
-        var appDir = Path.Combine(repoRoot, "src", "PhotoReview.App");
-        Assert.True(Directory.Exists(appDir), $"App source directory not found: {appDir}");
+        const string appDir = "src/PhotoReview.App";
+        Assert.NotEmpty(RepoScan.CsFiles(appDir));
 
-        var violations = new List<string>();
-        foreach (var file in Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories))
-        {
-            if (IsBuildOutput(file)) continue;
-
-            var relativePath = Path.GetRelativePath(repoRoot, file).Replace('\\', '/');
-            var lines = File.ReadAllLines(file);
-            for (var i = 0; i < lines.Length; i++)
-            {
-                var code = StripLineComment(lines[i]);
-                if (pattern.IsMatch(code))
-                {
-                    violations.Add($"{relativePath}:{i + 1}: {lines[i].Trim()}");
-                }
-            }
-        }
-
-        return violations;
+        return RepoScan.FindLineViolations(line => pattern.IsMatch(StripLineComment(line)), null, appDir);
     }
-
-    private static bool IsBuildOutput(string file) =>
-        file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
-        file.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
     private static string StripLineComment(string line)
     {
@@ -83,21 +57,5 @@ public sealed class AppThreadAffinityTests
         if (trimmed.StartsWith("//", StringComparison.Ordinal)) return string.Empty;
         var index = line.IndexOf(" // ", StringComparison.Ordinal);
         return index >= 0 ? line[..index] : line;
-    }
-
-    private static string FindRepoRoot()
-    {
-        var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "PhotoReview.slnx")) ||
-                Directory.Exists(Path.Combine(current.FullName, ".git")))
-            {
-                return current.FullName;
-            }
-            current = current.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root (looking for PhotoReview.slnx or .git)");
     }
 }
