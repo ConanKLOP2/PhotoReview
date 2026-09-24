@@ -416,8 +416,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Tìm kiếm và xử lý các ảnh trùng lặp theo hash nội dung.
     /// </summary>
-    public async Task RemoveDuplicatesAsync(bool removeNumbered) =>
-        await _duplicateController.RemoveDuplicatesAsync(removeNumbered);
+    public Task RemoveDuplicatesAsync(bool removeNumbered) =>
+        // R2-F-20: same gate as Recycle/Move/Undo, so a second click during hashing/review and interleaved file actions are no-ops.
+        _fileActionGate.RunExclusiveAsync(() => _duplicateController.RemoveDuplicatesAsync(removeNumbered));
 
     /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.

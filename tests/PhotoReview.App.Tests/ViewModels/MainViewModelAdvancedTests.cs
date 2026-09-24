@@ -223,6 +223,38 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         Assert.Equal(1, _uiScheduler.InvokeCount);
     }
 
+    [Fact(DisplayName = "Duplicate cleanup holds the file-action gate: a second cleanup or a recycle started during the review is a no-op (R2-F-20)")]
+    public async Task RemoveDuplicatesAsync_HoldsFileActionGate_WhileReviewIsOpen()
+    {
+        var folder = Path.Combine(_tempDir, "dup_gate");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png", ValidPngBytes);
+        var numbered = CreateImageFile(folder, "photo (1).png", ValidPngBytes);
+
+        var (vm, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        _dialogService.BatchReviewResponse = true;
+        var gateHeldDuringReview = false;
+        Task? secondCleanup = null;
+        Task? recycleDuringReview = null;
+        _dialogService.OnBatchReview = () =>
+        {
+            gateHeldDuringReview = vm.IsFileActionInProgress;
+            secondCleanup = vm.RemoveDuplicatesAsync(removeNumbered: true);
+            recycleDuringReview = vm.RecycleAsync();
+        };
+
+        await vm.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.True(gateHeldDuringReview);
+        Assert.True(secondCleanup!.IsCompletedSuccessfully); // rejected synchronously by the gate
+        Assert.True(recycleDuringReview!.IsCompletedSuccessfully);
+        Assert.Equal(1, _dialogService.BatchReviewCount);
+        Assert.Equal([numbered], _recycleBin.RecycledPaths); // only the reviewed duplicate, the current image was not recycled
+        Assert.False(vm.IsFileActionInProgress);
+    }
+
     [Fact]
     public async Task RemoveDuplicatesAsync_OriginalDuplicates_RecyclesOriginalAndReloads()
     {
@@ -425,6 +457,8 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         public bool ConfirmationResponse { get; set; } = true;
         public bool BatchReviewResponse { get; set; } = true;
         public bool BatchReviewCalled { get; set; }
+        public int BatchReviewCount { get; set; }
+        public Action? OnBatchReview { get; set; }
         public bool SettingsResponse { get; set; } = true;
         public Action? OnShowSettings { get; set; }
         public string? PickedFolderResponse { get; set; }
@@ -436,6 +470,8 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         public bool ShowBatchReview(IReadOnlyList<string> paths)
         {
             BatchReviewCalled = true;
+            BatchReviewCount++;
+            OnBatchReview?.Invoke();
             return BatchReviewResponse;
         }
         public void ShowRecovery() { }
