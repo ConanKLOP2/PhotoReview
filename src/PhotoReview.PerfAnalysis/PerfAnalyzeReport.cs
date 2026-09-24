@@ -19,13 +19,13 @@ public static class PerfAnalyzeReport
         var sb = new StringBuilder();
         sb.AppendLine("# Perf analyze summary");
         sb.AppendLine();
-        sb.AppendLine(FormattableString.Invariant($"- Số file perf-*.csv: {result.CsvFileCount}"));
-        sb.AppendLine(FormattableString.Invariant($"- Số nhóm (scenario/mode/cond/workers): {result.Groups.Count}"));
+        sb.AppendLine(FormattableString.Invariant($"- perf-*.csv files: {result.CsvFileCount}"));
+        sb.AppendLine(FormattableString.Invariant($"- Groups (scenario/mode/cond/workers): {result.Groups.Count}"));
         sb.AppendLine();
 
-        sb.AppendLine("## Nhóm điều hướng (scenario/mode/cond/workers)");
+        sb.AppendLine("## Navigation groups (scenario/mode/cond/workers)");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | renderedFrame P50 | renderedFrame P95 | renderedFrame max | hit rate | ghi chú |");
+        sb.AppendLine("| Group | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | renderedFrame P50 | renderedFrame P95 | renderedFrame max | hit rate | notes |");
         sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
         foreach (var g in result.Groups)
         {
@@ -35,18 +35,18 @@ public static class PerfAnalyzeReport
         }
         sb.AppendLine();
 
-        sb.AppendLine("## Phân loại theo kind");
+        sb.AppendLine("## Breakdown by kind");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | kind | count |");
+        sb.AppendLine("| Group | kind | count |");
         sb.AppendLine("|---|---|---:|");
         foreach (var g in result.Groups)
         foreach (var (kind, count) in g.Summary.KindCounts.OrderByDescending(kv => kv.Value))
             sb.AppendLine(FormattableString.Invariant($"| {g.Summary.Key} | {kind} | {count} |"));
         sb.AppendLine();
 
-        sb.AppendLine("## Tỷ trọng giai đoạn ở nhóm 10% điều hướng chậm nhất (trung bình t_x/finalVisual)");
+        sb.AppendLine("## Phase share in the slowest 10% of navigations (mean t_x/finalVisual)");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | giai đoạn | tỷ trọng |");
+        sb.AppendLine("| Group | phase | share |");
         sb.AppendLine("|---|---|---:|");
         foreach (var g in result.Groups)
         foreach (var (phase, share) in g.Summary.SlowestPhaseShare.OrderByDescending(kv => kv.Value))
@@ -55,7 +55,7 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Preload");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | worker | items | paused | cancel | queueWait P50 | queueWait P95 | decode P50 | decode P95 |");
+        sb.AppendLine("| Group | worker | items | paused | cancel | queueWait P50 | queueWait P95 | decode P50 | decode P95 |");
         sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach (var g in result.Groups)
         {
@@ -69,10 +69,10 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Dispatcher (>16ms)");
         sb.AppendLine();
-        sb.AppendLine("Loại trừ DispatcherLongOp xảy ra trước ShowStart/Folder(start) đầu tiên của mỗi file " +
-                       "(vd. --perf-session dựng cửa sổ WPF ~700ms trước khi kịch bản bắt đầu — D06).");
+        sb.AppendLine("DispatcherLongOp before the first ShowStart/Folder(start) of each file is excluded " +
+                       "(e.g. --perf-session builds the WPF window ~700 ms before the scenario starts — D06).");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | count | (đã loại trừ trước start) | tổng ms | top 5 tên |");
+        sb.AppendLine("| Group | count | (excluded before start) | total ms | top 5 names |");
         sb.AppendLine("|---|---:|---:|---:|---|");
         foreach (var g in result.Groups)
         {
@@ -88,7 +88,7 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Folder (T0..T3)");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | gen | T1 catalogReady | T2 (T0->present đầu) | T3 phase | T3 |");
+        sb.AppendLine("| Group | gen | T1 catalogReady | T2 (T0->first present) | T3 phase | T3 |");
         sb.AppendLine("|---|---:|---:|---:|---|---:|");
         foreach (var g in result.Groups)
         foreach (var f in g.Summary.FolderGens.OrderBy(f => f.Gen))
@@ -96,9 +96,9 @@ public static class PerfAnalyzeReport
                 $"| {g.Summary.Key} | {f.Gen} | {Ms(f.T1CatalogReadyMs)} | {Ms(f.T2Ms)} | {f.T3Phase} | {Ms(f.T3Ms)} |"));
         sb.AppendLine();
 
-        sb.AppendLine("## Startup (ms kể từ lúc process start, median qua các run)");
+        sb.AppendLine("## Startup (ms since process start, median across runs)");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | phase | median | min | max | N |");
+        sb.AppendLine("| Group | phase | median | min | max | N |");
         sb.AppendLine("|---|---|---:|---:|---:|---:|");
         foreach (var g in result.Groups)
         foreach (var phase in StartupPhases(g.Summary))
@@ -106,14 +106,14 @@ public static class PerfAnalyzeReport
                 $"| {g.Summary.Key} | {phase.Phase} | {phase.Median:F1} | {phase.Min:F1} | {phase.Max:F1} | {phase.Count} |"));
         sb.AppendLine();
 
-        sb.AppendLine("## Quy tắc quyết định (rules.json)");
+        sb.AppendLine("## Decision rules (rules.json)");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | Quy tắc | Kích hoạt | Bằng chứng | Ghi chú |");
+        sb.AppendLine("| Group | Rule | Triggered | Evidence | Notes |");
         sb.AppendLine("|---|---|---|---|---|");
         foreach (var g in result.Groups)
         foreach (var r in g.Rules)
             sb.AppendLine(FormattableString.Invariant(
-                $"| {g.Summary.Key} | {r.Rule} | {(r.Triggered is null ? "N/A" : r.Triggered.Value ? "CÓ" : "không")} | {Escape(r.Evidence)} | {Escape(r.Note ?? "")} |"));
+                $"| {g.Summary.Key} | {r.Rule} | {(r.Triggered is null ? "N/A" : r.Triggered.Value ? "yes" : "no")} | {Escape(r.Evidence)} | {Escape(r.Note ?? "")} |"));
 
         File.WriteAllText(path, sb.ToString());
     }
