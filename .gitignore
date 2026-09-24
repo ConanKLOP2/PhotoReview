@@ -94,6 +94,7 @@ StyleCopReport.xml
 *.tmp
 *.tmp_proj
 *_wpftmp.csproj
+# Ignore all logs except the one committed diagnostic sample (tools/diag/samples) used by docs/tests.
 *.log
 !tools/diag/samples/applog-sample.log
 *.vspscc
