@@ -182,7 +182,7 @@ public sealed class UndoService
                 }
                 else
                 {
-                    await Task.Run(() => _fileSystem.Move(move.Destination, move.Source));
+                    await Task.Run(() => _fileSystem.Move(move.Destination, move.Source)).ConfigureAwait(false);
                 }
                 _lastUndoAction = null;
                 return new UndoResult(true, FileOperationType.Move, move.Source, move.Destination, null);
@@ -212,7 +212,7 @@ public sealed class UndoService
         var action = _lastUndoAction;
         if (action.Operation == FileOperationType.Move)
         {
-            return await UndoMoveAsync();
+            return await UndoMoveAsync().ConfigureAwait(false);
         }
 
         if (action.Operation == FileOperationType.Recycle)
@@ -224,7 +224,7 @@ public sealed class UndoService
 
             try
             {
-                var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc));
+                var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
                 if (!restored)
                 {
                     return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(action.Source)));

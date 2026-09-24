@@ -233,5 +233,42 @@ public sealed class UndoServiceTests
         _fileActionService.End();
         Assert.False(_service.IsBusy);
     }
+
+    private sealed class CountingSynchronizationContext : SynchronizationContext
+    {
+        private int _posts;
+        public int Posts => Volatile.Read(ref _posts);
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            ThreadPool.QueueUserWorkItem(_ => d(state));
+        }
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_DoesNotResumeOnCapturedContext()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"C:\photos\sorted\photo1.jpg";
+        var recycled = @"C:\photos\deleted.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+
+        var context = new CountingSynchronizationContext();
+        var results = await Task.Run(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+            var move = _service.UndoLastAsync().GetAwaiter().GetResult();
+            _service.Register(new FileActionResult(true, FileOperationType.Recycle, recycled, null, 100, writeTime, null));
+            var recycle = _service.UndoLastAsync().GetAwaiter().GetResult();
+            return (move, recycle);
+        });
+
+        Assert.True(results.move.Succeeded);
+        Assert.True(results.recycle.Succeeded);
+        Assert.Equal(0, context.Posts);
+    }
 }
 
