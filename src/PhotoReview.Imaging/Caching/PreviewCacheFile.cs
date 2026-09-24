@@ -10,10 +10,11 @@ using PhotoReview.Imaging.Decoding;
 namespace PhotoReview.Imaging.Caching;
 
 /// <summary>
-/// perf(cache) v4 preview disk-cache entry: a single file (no separate ".meta" companion) whose
-/// fixed 16-byte header carries everything <see cref="PreviewImageService"/> used to store in a
-/// companion file (source orientation, decode backend, pixel dimensions) plus an explicit format
-/// version, followed immediately by the encoded payload (JPEG bytes, to end of file).
+/// perf(cache) v5 preview disk-cache entry: a single file (no separate ".meta" companion) whose
+/// fixed 24-byte header carries everything <see cref="PreviewImageService"/> used to store in a
+/// companion file (source orientation, decode backend, pixel dimensions, original source
+/// dimensions) plus an explicit format version, followed immediately by the encoded payload
+/// (JPEG bytes, to end of file).
 /// </summary>
 /// <remarks>
 /// Format chosen by measurement (see <c>PreviewCacheFormatBenchmarkTests</c>, Manual category):
@@ -35,28 +36,33 @@ namespace PhotoReview.Imaging.Caching;
 ///                     another version bump)
 /// offset 8  (4 bytes) pixel width
 /// offset 12 (4 bytes) pixel height
-/// offset 16 ...       payload bytes (currently always a JPEG-encoded frame) to end of file
+/// offset 16 (4 bytes) original (full source, post-orientation) pixel width -- perf: lets a later
+///                     "original dimensions" lookup for this source be served from this disk-cache
+///                     entry without a decoder ReadInfo call/extra file open (see
+///                     PreviewImageService.GetOriginalDimensionsAsync)
+/// offset 20 (4 bytes) original (full source, post-orientation) pixel height
+/// offset 24 ...       payload bytes (currently always a JPEG-encoded frame) to end of file
 /// </code>
 /// </remarks>
 public static class PreviewCacheFile
 {
-    /// <summary>preview-v4: bumped from the old PNG+".meta" companion format (preview-v3).</summary>
-    public const int CurrentVersion = 4;
+    /// <summary>preview-v5: bumped from v4 (preview-v4) to add the original source dimensions.</summary>
+    public const int CurrentVersion = 5;
 
     /// <summary>JPEG quality chosen by measurement -- see the format decision in the type doc.</summary>
     public const int DefaultJpegQuality = 95;
 
-    private const int HeaderSize = 16;
+    private const int HeaderSize = 24;
     private static ReadOnlySpan<byte> MagicBytes => "PRVC"u8;
 
-    /// <summary>Decoded contents of a v4 preview cache entry, ready to hand to <see cref="WpfDecodedImage"/>.</summary>
+    /// <summary>Decoded contents of a v5 preview cache entry, ready to hand to <see cref="WpfDecodedImage"/>.</summary>
     // Internal, not public: architecture rule K-1 forbids public types in PhotoReview.Imaging.Caching
     // from exposing System.Windows.Media.* on their public surface (see
     // ImagingPublicSurfaceTests.Imaging_CachingAndPreload_PublicMembers_DoNotExpose_SystemWindowsMediaTypes).
     // PreviewImageService (same assembly) uses this directly; a caller outside the assembly goes
     // through the IDecodedImage-based WriteAtomicallyAsync/ReadAsDecodedImage overloads below,
     // exactly like DiskCacheStore's public IDecodedImage overload vs. its internal BitmapSource one.
-    internal readonly record struct ReadResult(BitmapSource Bitmap, DecoderBackend ActualBackend, int Orientation, long FileBytes);
+    internal readonly record struct ReadResult(BitmapSource Bitmap, DecoderBackend ActualBackend, int Orientation, long FileBytes, int OriginalWidth, int OriginalHeight);
 
     /// <summary>Public, framework-agnostic entry point: encodes an already-decoded preview.</summary>
     public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, int jpegQuality = DefaultJpegQuality, CancellationToken cancellationToken = default)
@@ -64,14 +70,15 @@ public static class PreviewCacheFile
         ArgumentNullException.ThrowIfNull(image);
         if (image.PlatformImage is not BitmapSource bitmap)
             throw new ArgumentException("PlatformImage must be a BitmapSource for the preview cache.", nameof(image));
-        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, cachePath, jpegQuality, cancellationToken);
+        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, jpegQuality, cancellationToken);
     }
 
-    /// <summary>Public, framework-agnostic entry point: reads a v4 entry back as an <see cref="IDecodedImage"/>.</summary>
+    /// <summary>Public, framework-agnostic entry point: reads a v5 entry back as an <see cref="IDecodedImage"/>.</summary>
     public static IDecodedImage ReadAsDecodedImage(string cachePath)
     {
         var result = Read(cachePath);
-        return new WpfDecodedImage(result.Bitmap, downscaled: true, orientation: result.Orientation, actualBackend: result.ActualBackend);
+        return new WpfDecodedImage(result.Bitmap, downscaled: true, orientation: result.Orientation, actualBackend: result.ActualBackend,
+            originalWidth: result.OriginalWidth, originalHeight: result.OriginalHeight);
     }
 
     /// <summary>
@@ -86,6 +93,8 @@ public static class PreviewCacheFile
         BitmapSource bitmap,
         DecoderBackend actualBackend,
         int orientation,
+        int originalWidth,
+        int originalHeight,
         string cachePath,
         int jpegQuality = DefaultJpegQuality,
         CancellationToken cancellationToken = default)
@@ -98,7 +107,13 @@ public static class PreviewCacheFile
         var temporaryPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight);
+            // A caller that doesn't know the original (pre-downscale) source size yet reports 0/0
+            // here; fall back to this entry's own pixel dimensions rather than persisting a
+            // header that claims "no original size known" (0 would round-trip as "unknown" and
+            // force a real ReadInfo later, defeating the point of storing it at all).
+            var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
+            var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
+            var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
             await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 64 * 1024, FileOptions.SequentialScan))
             {
@@ -151,6 +166,11 @@ public static class PreviewCacheFile
         if (width <= 0 || height <= 0)
             throw new InvalidDataException("Preview cache entry has invalid pixel dimensions.");
 
+        var originalWidth = BinaryPrimitives.ReadInt32LittleEndian(header[16..20]);
+        var originalHeight = BinaryPrimitives.ReadInt32LittleEndian(header[20..24]);
+        if (originalWidth <= 0 || originalHeight <= 0)
+            throw new InvalidDataException("Preview cache entry has invalid original dimensions.");
+
         var fileBytes = stream.Length;
         var payloadLength = fileBytes - HeaderSize;
         if (payloadLength <= 0)
@@ -182,10 +202,10 @@ public static class PreviewCacheFile
         BitmapSource native = bitmap.Format == targetFormat ? bitmap : new FormatConvertedBitmap(bitmap, targetFormat, null, 0);
         native.Freeze();
 
-        return new ReadResult(native, backendValue, orientation, fileBytes);
+        return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight);
     }
 
-    private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height)
+    private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height, int originalWidth, int originalHeight)
     {
         var header = new byte[HeaderSize];
         MagicBytes.CopyTo(header);
@@ -195,6 +215,8 @@ public static class PreviewCacheFile
         header[7] = 0; // JPEG payload never carries alpha -- see the type doc.
         BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(8, 4), width);
         BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(12, 4), height);
+        BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(16, 4), originalWidth);
+        BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(20, 4), originalHeight);
         return header;
     }
 }

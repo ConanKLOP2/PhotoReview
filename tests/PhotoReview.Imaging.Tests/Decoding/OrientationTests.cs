@@ -106,6 +106,10 @@ public sealed class OrientationTests : IDisposable
         var decoded = _decoder.Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true));
         Assert.Equal(expectedWidth, decoded.PixelWidth);
         Assert.Equal(expectedHeight, decoded.PixelHeight);
+        // perf(dims): an undownscaled decode's OriginalWidth/Height must match its own pixel
+        // dimensions -- including for a transposing orientation (5-8), which swaps both.
+        Assert.Equal(expectedWidth, decoded.OriginalWidth);
+        Assert.Equal(expectedHeight, decoded.OriginalHeight);
 
         var bmp = (BitmapSource)decoded.PlatformImage;
         var bgra = ImageCompare.ToBgra32(bmp);
@@ -135,6 +139,13 @@ public sealed class OrientationTests : IDisposable
 
         Assert.Equal(targetWidth, decoded.PixelWidth);
         Assert.True(decoded.Downscaled);
+
+        // perf(dims): OriginalWidth/Height must report the full (post-orientation) source size
+        // -- 64x48 for non-transposing orientations, swapped to 48x64 for a transposing one (5-8)
+        // -- not the downscaled decode result (targetWidth=32).
+        var transposed = orientation is >= 5 and <= 8;
+        Assert.Equal(transposed ? 48 : 64, decoded.OriginalWidth);
+        Assert.Equal(transposed ? 64 : 48, decoded.OriginalHeight);
     }
 
     [Fact(DisplayName = "Decode with ApplyOrientation=false ignores EXIF orientation tag")]
@@ -147,6 +158,10 @@ public sealed class OrientationTests : IDisposable
         // Without orientation, original raw dimensions are preserved
         Assert.Equal(64, decoded.PixelWidth);
         Assert.Equal(48, decoded.PixelHeight);
+        // OriginalWidth/Height fall back to PixelWidth/Height here (no header re-read without
+        // ApplyOrientation) -- correct anyway since this decode is undownscaled.
+        Assert.Equal(64, decoded.OriginalWidth);
+        Assert.Equal(48, decoded.OriginalHeight);
     }
 
     private static void AssertCornerColor(byte[] bgra, int width, int height, int x, int y, string expectedColor)

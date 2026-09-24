@@ -25,13 +25,13 @@ public static class PerfAnalyzeReport
 
         sb.AppendLine("## Nhóm điều hướng (scenario/mode/cond/workers)");
         sb.AppendLine();
-        sb.AppendLine("| Nhóm | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | hit rate | ghi chú |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
+        sb.AppendLine("| Nhóm | count | incomplete | first P50 | first P95 | first max | final P50 | final P95 | final max | renderedFrame P50 | renderedFrame P95 | renderedFrame max | hit rate | ghi chú |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
         foreach (var g in result.Groups)
         {
             var s = g.Summary;
             sb.AppendLine(FormattableString.Invariant(
-                $"| {s.Key} | {s.Count} | {s.Incomplete} | {Ms(s.FirstP50)} | {Ms(s.FirstP95)} | {Ms(s.FirstMax)} | {Ms(s.FinalP50)} | {Ms(s.FinalP95)} | {Ms(s.FinalMax)} | {Pct(s.HitRate)} | {(s.LowSampleWarning ? "N<20" : "")} |"));
+                $"| {s.Key} | {s.Count} | {s.Incomplete} | {Ms(s.FirstP50)} | {Ms(s.FirstP95)} | {Ms(s.FirstMax)} | {Ms(s.FinalP50)} | {Ms(s.FinalP95)} | {Ms(s.FinalMax)} | {Ms(s.RenderedFrameP50)} | {Ms(s.RenderedFrameP95)} | {Ms(s.RenderedFrameMax)} | {Pct(s.HitRate)} | {(s.LowSampleWarning ? "N<20" : "")} |"));
         }
         sb.AppendLine();
 
@@ -124,6 +124,7 @@ public static class PerfAnalyzeReport
                 lowSampleWarning = g.Summary.LowSampleWarning,
                 firstVisualMs = new { p50 = g.Summary.FirstP50, p95 = g.Summary.FirstP95, max = g.Summary.FirstMax },
                 finalVisualMs = new { p50 = g.Summary.FinalP50, p95 = g.Summary.FinalP95, max = g.Summary.FinalMax },
+                renderedFrameMs = new { p50 = g.Summary.RenderedFrameP50, p95 = g.Summary.RenderedFrameP95, max = g.Summary.RenderedFrameMax },
                 hitRate = g.Summary.HitRate,
                 kindCounts = g.Summary.KindCounts,
                 slowestDecilePhaseShare = g.Summary.SlowestPhaseShare,

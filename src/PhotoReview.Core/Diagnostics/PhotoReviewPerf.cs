@@ -203,4 +203,17 @@ public sealed class PhotoReviewPerf : EventSource
     {
         if (IsEnabled()) WriteEvent(24, flags);
     }
+
+    /// <summary>
+    /// perf(render-metric): time from the Source assign to the SECOND CompositionTarget.Rendering
+    /// tick after it -- i.e. the frame containing the new image has actually been rendered, not
+    /// just the dispatcher/vsync phase <see cref="Rendered"/> alone measures (that event fires at
+    /// the start of the frame, before layout/render run). Emitted alongside (never instead of)
+    /// <see cref="Rendered"/> for continuity; see WpfPresentationSink.TracePresented.
+    /// </summary>
+    [Event(25, Level = EventLevel.Informational)]
+    public void RenderedFrame(long nav, double msSinceAssign)
+    {
+        if (IsEnabled()) WriteEvent(25, nav, msSinceAssign);
+    }
 }

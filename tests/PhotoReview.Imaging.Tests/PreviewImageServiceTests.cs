@@ -179,6 +179,38 @@ public sealed class PreviewImageServiceTests : IAsyncLifetime
         var dimensions = await _service.GetOriginalDimensionsAsync(_previewPath);
         Assert.True(dimensions.Width == 1 && dimensions.Height == 1);
     }
+
+    [Fact(DisplayName = "After a preview decode, GetOriginalDimensionsAsync for the same source needs no extra source open")]
+    public async Task GetOriginalDimensionsAsyncAfterDecodeNeedsNoExtraSourceOpen()
+    {
+        // perf(dims): the decode below already learns the source's original (post-orientation)
+        // dimensions for free (IDecodedImage.OriginalWidth/Height, seeded into
+        // PreviewImageService's _originalDimensions cache by DecodeAndCacheAsync). A later
+        // GetOriginalDimensionsAsync for the same source must be served from that seed instead of
+        // opening the file again via decoder.ReadInfo -- SourceOpenCount must not increase.
+        var key = _service.GetCurrentCacheKey(_previewPath);
+        var decoded = await _service.GetPreviewAsync(_previewPath, key);
+        var opensAfterDecode = _metrics.Snapshot().SourceOpenCount;
+
+        var dimensions = await _service.GetOriginalDimensionsAsync(_previewPath, key);
+
+        Assert.Equal(opensAfterDecode, _metrics.Snapshot().SourceOpenCount);
+        Assert.Equal(decoded.OriginalWidth, dimensions.Width);
+        Assert.Equal(decoded.OriginalHeight, dimensions.Height);
+    }
+
+    [Fact(DisplayName = "ClearCache also drops seeded original dimensions (next query reads the source again)")]
+    public async Task ClearCacheDropsSeededOriginalDimensions()
+    {
+        var key = _service.GetCurrentCacheKey(_previewPath);
+        await _service.GetPreviewAsync(_previewPath, key);
+
+        _service.ClearCache();
+        var opensBefore = _metrics.Snapshot().SourceOpenCount;
+        await _service.GetOriginalDimensionsAsync(_previewPath, key);
+
+        Assert.Equal(opensBefore + 1, _metrics.Snapshot().SourceOpenCount);
+    }
 }
 
 /// <summary>
@@ -280,6 +312,31 @@ public sealed class PreloadSchedulerTests : IAsyncLifetime
         {
             await scheduler.PreloadAroundAsync(0);
             Assert.True(service.TryGetCachedPreview(_preloadFiles[1], out _));
+        }
+    }
+
+    [Fact(DisplayName = "Navigating to a preloaded image needs 0 extra source opens to learn its original dimensions")]
+    public async Task NavigatingToPreloadedImageNeedsNoExtraSourceOpenForOriginalDimensions()
+    {
+        // perf(dims): reproduces ImagePresenter's real sequence -- a background preload decodes
+        // the next image (via IPreloadTarget.PreloadAsync -> the same DecodeAndCacheAsync a live
+        // navigation uses), then "navigating" to it asks for its original dimensions (as
+        // PresentAsync does for the status bar). That must be served from the seed
+        // DecodeAndCacheAsync already recorded, with zero additional decoder.ReadInfo opens.
+        var (metrics, service, scheduler) = NewWarmScheduler();
+        using (scheduler)
+        {
+            await scheduler.PreloadAroundAsync(0);
+            var preloadedPath = _preloadFiles[1];
+            Assert.True(service.TryGetCachedPreview(preloadedPath, out var preloaded));
+            var opensAfterPreload = metrics.Snapshot().SourceOpenCount;
+
+            var key = service.GetCurrentCacheKey(preloadedPath);
+            var dimensions = await service.GetOriginalDimensionsAsync(preloadedPath, key);
+
+            Assert.Equal(opensAfterPreload, metrics.Snapshot().SourceOpenCount);
+            Assert.Equal(preloaded.OriginalWidth, dimensions.Width);
+            Assert.Equal(preloaded.OriginalHeight, dimensions.Height);
         }
     }
 

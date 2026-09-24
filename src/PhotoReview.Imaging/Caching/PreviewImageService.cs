@@ -62,8 +62,8 @@ public sealed class PreviewImageService : IPreloadTarget
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
     private const int PersistQueueCapacity = 32;
-    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation)> _persistQueue =
-        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int)>(
+    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight)> _persistQueue =
+        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly Task[] _persistWorkers;
 
@@ -159,7 +159,8 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
-                await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation, request.CachePath)
+                await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
+                        request.OriginalWidth, request.OriginalHeight, request.CachePath)
                     .ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
@@ -275,7 +276,8 @@ public sealed class PreviewImageService : IPreloadTarget
                 // is stored under the requested backend's path but its header truthfully records
                 // whichever backend actually produced the pixels.
                 var cacheEntry = PreviewCacheFile.Read(cachePath);
-                decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend);
+                decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend,
+                    originalWidth: cacheEntry.OriginalWidth, originalHeight: cacheEntry.OriginalHeight);
                 _metrics.RecordDiskCacheHit();
                 if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), cacheEntry.FileBytes);
             }
@@ -310,6 +312,15 @@ public sealed class PreviewImageService : IPreloadTarget
         lock (_cacheLifecycleGate)
             if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
 
+        // Perf: every decode through this method (viewer-triggered or preload-triggered -- both
+        // share this same path, see IPreloadTarget.PreloadAsync) already knows the source's
+        // original (post-orientation) dimensions for free, whether that came from a fresh decode
+        // header or a disk-cache hit's stored header. Seeding _originalDimensions here means a
+        // later GetOriginalDimensionsAsync for the same source (e.g. ImagePresenter showing
+        // "WxH" in the status bar) never needs its own decoder ReadInfo call/file open, as long
+        // as the image was already decoded once -- including by a background preload.
+        _originalDimensions[ImageCacheKey.CreateOriginal(key)] = (decodedImage.OriginalWidth, decodedImage.OriginalHeight);
+
         // Only cache previews that actually decoded at the downscaled target width: a
         // fallback to full-resolution (see DecodeWithFallback) must never be persisted under the
         // downscaled cache key, and Original-mode's full-resolution decode is slower to persist
@@ -326,7 +337,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
-            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation);
+            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
@@ -386,6 +397,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public void ClearCache()
     {
         lock (_cacheLifecycleGate) { _cacheEpoch++; _cache.Clear(); }
+        _originalDimensions.Clear();
     }
 
     /// <summary>
@@ -455,6 +467,10 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var key = ImageCacheKey.CreateOriginal(currentKey);
         if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
+        // Only reached when nothing decoded so far (viewer or preload) has told us this source's
+        // original dimensions -- see the seeding in DecodeAndCacheAsync. ReadInfo below genuinely
+        // opens the file (a header-only read), so it counts as a source open like any other.
+        _metrics.RecordSourceOpen(path);
         var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path)).ConfigureAwait(false);
         dimensions = (info.Width, info.Height);
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
@@ -504,12 +520,12 @@ public sealed class PreviewImageService : IPreloadTarget
     }
 
     /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
-    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation)
+    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation, int originalWidth, int originalHeight)
     {
         if (cacheEpoch != Volatile.Read(ref _cacheEpoch)) return;
         // Best-effort: a full queue means persistence is falling behind decode, so this
         // preview is dropped rather than growing the backlog or blocking the caller.
-        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation));
+        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight));
     }
 
     bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);

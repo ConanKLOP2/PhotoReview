@@ -52,6 +52,8 @@ public sealed class ImagePresenter
     private int _compareIndexVersion = -1;
     private Dictionary<string, (string Left, string Right)>? _compareIndex;
 
+    private readonly IUiScheduler? _uiScheduler;
+
     public ImagePresenter(
         ReviewCatalog catalog,
         GenerationClock clock,
@@ -67,7 +69,8 @@ public sealed class ImagePresenter
         IFileSystem? fileSystem = null,
         Func<SessionState?>? getSession = null,
         Action<string>? onPresentedHook = null,
-        SessionWriter? sessionWriter = null)
+        SessionWriter? sessionWriter = null,
+        IUiScheduler? uiScheduler = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -83,6 +86,7 @@ public sealed class ImagePresenter
         _fileSystem = fileSystem;
         _getSession = getSession;
         _onPresentedHook = onPresentedHook;
+        _uiScheduler = uiScheduler;
         _sessionWriter = sessionWriter;
     }
 
@@ -302,6 +306,16 @@ public sealed class ImagePresenter
             {
                 _compareViewModel.Clear();
                 _sink.ApplyInitialViewMode();
+
+                // Let the frame containing the new image render before the status/session bookkeeping
+                // below. Original dimensions are usually known already (seeded by the decode), so the
+                // await further down completes synchronously; without this yield the stat + status +
+                // session work ran before the first frame (+~20 ms to first visual on folder open).
+                if (_uiScheduler is not null)
+                {
+                    await _uiScheduler.YieldAsync();
+                    if (!_clock.IsNavigationCurrent(token)) return;
+                }
 
                 long perfDims = perf && settings.LoadingMode != LoadingMode.Original ? Stopwatch.GetTimestamp() : 0;
                 if (perfDims != 0) PhotoReviewPerf.Log.PostStart(token, "dims");

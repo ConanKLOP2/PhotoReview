@@ -35,8 +35,8 @@ public sealed class PreviewCacheFileTests : IDisposable
     private string CachePath([System.Runtime.CompilerServices.CallerMemberName] string? name = null) =>
         Path.Combine(_tempDir, name + ".pv4");
 
-    private static WpfDecodedImage ToDecodedImage(BitmapSource bitmap, DecoderBackend backend, int orientation) =>
-        new WpfDecodedImage(bitmap, downscaled: true, orientation: orientation, actualBackend: backend);
+    private static WpfDecodedImage ToDecodedImage(BitmapSource bitmap, DecoderBackend backend, int orientation, int originalWidth = 0, int originalHeight = 0) =>
+        new WpfDecodedImage(bitmap, downscaled: true, orientation: orientation, actualBackend: backend, originalWidth: originalWidth, originalHeight: originalHeight);
 
     /// <summary>
     /// A synthetic gradient checkerboard is a torture test for JPEG (hard tile edges at high
@@ -93,6 +93,24 @@ public sealed class PreviewCacheFileTests : IDisposable
         Assert.True(compare.Psnr > 20, $"Expected PSNR > 20 dB, got {compare.Psnr:F2}.");
     }
 
+    [Fact(DisplayName = "A written entry round-trips original (pre-downscale) dimensions separately from its own pixel dimensions")]
+    public async Task WriteThenReadRoundTripsOriginalDimensions()
+    {
+        // Simulates a downscaled preview: the persisted bitmap is smaller than the source photo
+        // it was decoded from, so OriginalWidth/Height must differ from PixelWidth/Height.
+        var source = CreatePhotoLikeBitmap(220, 160);
+        var path = CachePath();
+
+        await PreviewCacheFile.WriteAtomicallyAsync(
+            ToDecodedImage(source, DecoderBackend.WicDirect, orientation: 1, originalWidth: 4400, originalHeight: 3200), path);
+        var result = PreviewCacheFile.ReadAsDecodedImage(path);
+
+        Assert.Equal(source.PixelWidth, result.PixelWidth);
+        Assert.Equal(source.PixelHeight, result.PixelHeight);
+        Assert.Equal(4400, result.OriginalWidth);
+        Assert.Equal(3200, result.OriginalHeight);
+    }
+
     [Fact(DisplayName = "The encoded entry is smaller than an equivalent 32-bit PNG of the same source")]
     public async Task EncodedEntryIsSmallerThanEquivalentPng()
     {
@@ -144,7 +162,7 @@ public sealed class PreviewCacheFileTests : IDisposable
         await PreviewCacheFile.WriteAtomicallyAsync(ToDecodedImage(source, DecoderBackend.Wpf, orientation: 1), path);
 
         var bytes = File.ReadAllBytes(path);
-        File.WriteAllBytes(path, bytes[..16]); // header only, no JPEG payload
+        File.WriteAllBytes(path, bytes[..24]); // v5 header only (24 bytes), no JPEG payload
 
         Assert.Throws<InvalidDataException>(() => PreviewCacheFile.ReadAsDecodedImage(path));
     }

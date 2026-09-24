@@ -105,6 +105,10 @@ public sealed class TurboJpegTests : IDisposable
         var decoded = _turboDecoder.Decode(new DecodeRequest(path, TargetWidth: 0, ApplyOrientation: true));
         Assert.Equal(expectedWidth, decoded.PixelWidth);
         Assert.Equal(expectedHeight, decoded.PixelHeight);
+        // perf(dims): an undownscaled decode's OriginalWidth/Height must match its own pixel
+        // dimensions -- including for a transposing orientation (5-8), which swaps both.
+        Assert.Equal(expectedWidth, decoded.OriginalWidth);
+        Assert.Equal(expectedHeight, decoded.OriginalHeight);
 
         var bmp = (BitmapSource)decoded.PlatformImage;
         var bgra = ImageCompare.ToBgra32(bmp);
@@ -127,6 +131,10 @@ public sealed class TurboJpegTests : IDisposable
         Assert.Equal(targetWidth, decoded.PixelWidth);
         Assert.Equal(75, decoded.PixelHeight);
         Assert.True(decoded.Downscaled);
+        // perf(dims): OriginalWidth/Height must report the full source size, not the
+        // downscaled decode result.
+        Assert.Equal(400, decoded.OriginalWidth);
+        Assert.Equal(300, decoded.OriginalHeight);
     }
 
     [Fact(DisplayName = "TurboJpeg decodes from memory buffer")]
