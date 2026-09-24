@@ -1,6 +1,6 @@
 # OC — Optimize & Clean (Summary)
 
-**Status:** OC01–OC10 mostly complete; OC11–OC18 pending. OC14 is critical blocker for ST08/09/WD/OC15-18.
+**Status:** OC01–OC11 DONE (OC11 via the perf series #39–#48). OC14 PARTIAL, re-scoped to "Undo gate location" (Q-AR5) — critical blocker for ST08/09/OC15-18 (no longer WD, see ADR 0005/AR04). OC12/OC13, OC15-18 pending.
 
 Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`](../archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md) · [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
 
@@ -18,18 +18,19 @@ Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-202
 | OC08 | Folder/Catalog I/O | ✅ DONE | FolderLoadCoordinator, ReviewCatalog | No O(n²) remapping; metadata consistency |
 | OC09 | Benchmark semantics | ✅ PARTIAL | BenchmarkModels, CLI/GUI parity | Action races decode; failed profiles recorded; image-based testing TODO |
 | OC10 | Perf analysis grouping | ✅ DONE | PerfAnalyze | Group by worker/condition; R-CONT sane |
-| OC11 | Decode/RAM optimization | 🔄 TODO | SourceBytesCache, decoder adapters | Measure sync-over-Task, cache write contention |
+| OC11 | Decode/RAM optimization | ✅ DONE | SourceBytesCache, decoder adapters | Done via the perf series #39–#48 |
 | OC12-OC13 | TBD | 🔄 TODO | — | — |
-| **OC14** | **Undo unification (Ctrl+Z)** | **🔄 IN PROGRESS** | **UndoService, file-action sources** | **Move+Recycle both; unifies entry point** |
+| **OC14** | **Undo unification (Ctrl+Z)** | **🔄 PARTIAL, re-scoped (Q-AR5)** | **UndoService, file-action sources** | **Re-scoped to "Undo gate location"; mutual exclusion done, semantics tests refactored** |
 | OC15-OC18 | UI cleanup, viewport unify | 🔄 BLOCKED | — | Blocked on OC14 |
 
 ## Critical Path
 
-**OC14 (Undo unification)** blocks:
+**OC14 (Undo gate location)** blocks:
 - ST08 (FileActionController extraction)
 - ST09 (DuplicateCleanupController extraction)
-- All WD tasks (WPF dialog work)
 - OC15–OC18 (dependent on resolved Ctrl+Z semantics)
+
+WD tasks no longer depend on OC14 (see ADR 0005 / AR04, #37): WD01 done, WD02–06 closed 2026-09-23 (Q-AR5).
 
 ## Key Concerns Resolved
 

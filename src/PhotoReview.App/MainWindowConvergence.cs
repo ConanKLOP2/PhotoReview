@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using PhotoReview.App.ViewModels;
@@ -92,37 +91,4 @@ internal record ValidationResult(bool IsValid, string? Reason)
 {
     public static ValidationResult Valid() => new(true, null);
     public static ValidationResult InvalidDimensions(string reason) => new(false, reason);
-}
-
-/// <summary>Diagnostic probe for Fit layout convergence (captures state snapshots for debugging).</summary>
-internal sealed class FitLayoutProbe
-{
-    private readonly List<(string Label, ViewportSnapshot Snapshot, int PassNumber)> _trace = [];
-    public bool IsEnabled { get; set; } // Set via environment or debug code
-
-    /// <summary>Record a snapshot with a label for debugging.</summary>
-    internal void RecordSnapshot(string label, ViewportSnapshot snapshot, int passNumber = 0)
-    {
-        if (!IsEnabled) return;
-        _trace.Add((label, snapshot, passNumber));
-    }
-
-    /// <summary>Get formatted trace output for diagnostics.</summary>
-    internal string GetTrace()
-    {
-        if (_trace.Count == 0) return "[No trace recorded]";
-
-        var lines = new List<string> { "=== Fit Layout Convergence Trace ===" };
-        foreach (var (label, snapshot, pass) in _trace)
-        {
-            if (pass > 0)
-                lines.Add($"  [{pass}] {label}: {snapshot}");
-            else
-                lines.Add($"  {label}: {snapshot}");
-        }
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    /// <summary>Clear trace for next operation.</summary>
-    internal void Clear() => _trace.Clear();
 }

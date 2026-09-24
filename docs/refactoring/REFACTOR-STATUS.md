@@ -1,7 +1,7 @@
 # Refactoring Status Summary
 
-**Last updated:** 2026-09-22  
-**Current phase:** ST mostly complete (ST08/ST09 blocked on OC14); OC/WD/IO open
+**Last updated:** 2026-09-24  
+**Current phase:** ST mostly complete (ST08/ST09 blocked on OC14); WD01 done, WD02-06 closed; OC/IO open
 
 ## ST (Structure) — Status
 
@@ -20,13 +20,13 @@ Plan: [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/his
 
 | ID | Status | Notes |
 |---|---|---|
-| OC14 | 🔄 IN PROGRESS | Undo entry-point unification (Ctrl+Z semantics) — **critical path** for ST08/ST09, WD, OC15-18 |
+| OC14 | 🔄 PARTIAL, re-scoped (Q-AR5) | Re-scoped to "Undo gate location" — **critical path** for ST08/ST09, OC15-18 (no longer blocks WD, see ADR 0005/AR04) |
 | OC15-OC18 | 🔄 TODO | Depend on OC14 |
 
 ## WD / IO / D — Status
 
-- **WD:** All blocked on OC14 (Undo unification)
-- **IO:** All blocked on IO01/IO02 contract lock-down
-- **D:** D01/D02 blocked on D06 Procmon data; D08/D09 pending profiler analysis
+- **WD:** WD01 unblocked via AR04 (#37, ADR 0005); WD02-06 closed 2026-09-23 (Q-AR5) — WD02 low-risk part covered by AR03c, WD03-06 had no known dialog bug to justify keeping open
+- **IO:** IO01 kept (Q-AR5); IO02-07 closed 2026-09-23 (Q-AR5) — speculative until IO01's contract exists
+- **D:** Closed 2026-09-23 (Q-AR5) — see `PERF-STATUS.md`
 
 Full tracking: [`docs/ACTIVE-TASKS.md`](../ACTIVE-TASKS.md)

@@ -1,6 +1,6 @@
 # TC — Test Cleanup (Summary)
 
-**Status:** Baseline (TC00) not started; TC01–TC11 blocked on TS10 re-audit. Decisions Q-T1..Q-T4 finalized.
+**Status:** TC01–TC11 DONE (TS10 audit complete 2026-09-22; TC04/TC09 via #36). TC06/TC07 kept in `Integration.Tests` (real Recycle Bin / real photos, Q-AR5 2026-09-23). Decisions Q-T1..Q-T4 finalized.
 
 Full plan: [`../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`](../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md)
 
