@@ -271,12 +271,10 @@ Invoke-Gate 'Check documentation links' {
     & (Join-Path $PSScriptRoot 'check-doc-links.ps1')
 }
 
-Invoke-Gate 'Run file-operation smoke test' {
-    & (Join-Path $PSScriptRoot 'smoke-test.ps1')
-}
-Invoke-Gate 'Run fault-injection safety test' {
-    & (Join-Path $PSScriptRoot 'fault-injection-test.ps1')
-}
+# R2-F-15: the former smoke-test.ps1 / fault-injection-test.ps1 gates only exercised .NET file primitives (no
+# PhotoReview code could make them fail) and put an item in the real Recycle Bin on every run, so they were removed.
+# File-action safety (move/copy/recycle, destination conflict, IO failure, journal states, recovery) is covered by
+# FileActionServiceTests / UndoServiceTests / journal tests in the test step above.
 Invoke-Gate 'Publish framework-dependent release' {
     Publish-ReleaseDirectory -Directory $ReleaseDirectory -SelfContained $false
 }
