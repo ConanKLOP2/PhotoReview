@@ -32,9 +32,17 @@ public sealed class WindowsMemoryProbe : IMemoryProbe
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref Status status);
 
-    public bool HasHeadroom(double maximumLoad, long reserveBytes)
+    public bool HasHeadroom(double maximumLoad, long reserveBytes) =>
+        EvaluateHeadroom(GetSnapshot(), maximumLoad, reserveBytes);
+
+    /// <summary>
+    /// Pure headroom rule (unit-testable without the P/Invoke). Fails closed on purpose (CORE-11): if the snapshot is
+    /// unavailable (GlobalMemoryStatusEx failed, logged by <see cref="GetSnapshot"/>) it reports "no headroom", so
+    /// preload/cache growth backs off to the conservative low-RAM behaviour instead of risking an OOM on a machine whose
+    /// memory state is unknown. Load must be strictly below the limit; available bytes must reach the reserve.
+    /// </summary>
+    public static bool EvaluateHeadroom(MemorySnapshot? snapshot, double maximumLoad, long reserveBytes)
     {
-        var snapshot = GetSnapshot();
         if (snapshot is null) return false;
         return snapshot.Value.LoadPercent < maximumLoad * 100 && snapshot.Value.AvailableBytes >= (ulong)reserveBytes;
     }
