@@ -128,7 +128,12 @@ public sealed class FolderLoadCoordinatorTests
             return Task.CompletedTask;
         }
         public void OnEmpty(string folder) => EmptyCount++;
-        public void OnOrderApplied(int count, int currentIndex) => OrderAppliedCount++;
+        public bool? LastOrderCurrentKept { get; private set; }
+        public void OnOrderApplied(int count, int currentIndex, bool currentKept)
+        {
+            OrderAppliedCount++;
+            LastOrderCurrentKept = currentKept;
+        }
         public void OnFailed(string folder, Exception exception) => Failures.Add((folder, exception));
     }
 
@@ -281,6 +286,193 @@ public sealed class FolderLoadCoordinatorTests
 
         // b.jpg được đưa lên đầu catalog
         Assert.Equal(f2, _catalog.Paths[0]);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, string what)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException($"Timed out waiting for: {what}");
+            await Task.Yield();
+        }
+    }
+
+    private (string A, string B, string C) CreateThreeImages(string folder)
+    {
+        _fs.CreateDirectory(folder);
+        var a = Path.Combine(folder, "a.jpg");
+        var b = Path.Combine(folder, "b.jpg");
+        var c = Path.Combine(folder, "c.jpg");
+        _fs.WriteAllTextAtomic(a, "1");
+        _fs.WriteAllTextAtomic(b, "2");
+        _fs.WriteAllTextAtomic(c, "3");
+        return (a, b, c);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DirectFileOpen_PresentsRequestedFileBeforeSnapshot_ThenAppliesOrderKeepingIt()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        var snapshotTcs = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _explorerOrder.SnapshotHook = _ => snapshotTcs.Task;
+
+        using var coordinator = CreateCoordinator();
+        var loadTask = coordinator.LoadAsync(folder, initialPath: b);
+
+        // INV-9 (perf/startup): the opened file is presented while the snapshot is still pending...
+        await WaitUntilAsync(() => _sink.Presented.Count == 1, "first presentation");
+        Assert.False(snapshotTcs.Task.IsCompleted);
+        Assert.Equal(b, _catalog.Current?.Path);
+        // ...and navigation is gated until the order is settled.
+        var pendingOrder = coordinator.PendingOrder;
+        Assert.False(pendingOrder.IsCompleted);
+        Assert.False(loadTask.IsCompleted);
+
+        snapshotTcs.SetResult(MakeSnapshot(folder, [c, b, a]));
+        await loadTask;
+
+        Assert.True(pendingOrder.IsCompleted);
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+        Assert.Equal(1, _sink.OrderAppliedCount);
+        Assert.True(_sink.LastOrderCurrentKept);
+        Assert.Equal(new[] { c, b, a }, _catalog.Paths);
+        // Same image, new index; nothing re-presented.
+        Assert.Equal(b, _catalog.Current?.Path);
+        Assert.Equal(1, _catalog.CurrentIndex);
+        Assert.Single(_sink.Presented);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DirectFileOpen_UnavailableSnapshot_ReleasesGateAndKeepsFallback()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        var snapshotTcs = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _explorerOrder.SnapshotHook = _ => snapshotTcs.Task;
+
+        using var coordinator = CreateCoordinator();
+        var loadTask = coordinator.LoadAsync(folder, initialPath: c);
+        await WaitUntilAsync(() => _sink.Presented.Count == 1, "first presentation");
+        var pendingOrder = coordinator.PendingOrder;
+        Assert.False(pendingOrder.IsCompleted);
+
+        snapshotTcs.SetResult(MakeSnapshot(folder, [], ExplorerOrderStatus.TimedOut));
+        await loadTask;
+
+        Assert.True(pendingOrder.IsCompleted);
+        Assert.Equal(0, _sink.OrderAppliedCount);
+        // Fallback order is unchanged: opened file first, then the natural sort.
+        Assert.Equal(new[] { c, a, b }, _catalog.Paths);
+        Assert.Equal(c, _catalog.Current?.Path);
+    }
+
+    [Fact]
+    public async Task LoadAsync_SupersedingLoad_ReleasesPendingOrderGate()
+    {
+        var folder = @"C:\photos";
+        var (_, b, _) = CreateThreeImages(folder);
+        var other = @"C:\other";
+        _fs.CreateDirectory(other);
+        _fs.WriteAllTextAtomic(@"C:\other\x.jpg", "x");
+        var snapshotTcs = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _explorerOrder.SnapshotHook = f => f.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+            ? snapshotTcs.Task
+            : Task.FromResult(MakeSnapshot(f, [], ExplorerOrderStatus.NoMatchingWindow));
+
+        using var coordinator = CreateCoordinator();
+        var firstLoad = coordinator.LoadAsync(folder, initialPath: b);
+        await WaitUntilAsync(() => _sink.Presented.Count == 1, "first presentation");
+        var pendingOrder = coordinator.PendingOrder;
+        Assert.False(pendingOrder.IsCompleted);
+
+        await coordinator.LoadAsync(other);
+        Assert.True(pendingOrder.IsCompleted, "A superseded file-open load must not keep navigation gated.");
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+
+        snapshotTcs.SetResult(MakeSnapshot(folder, []));
+        await firstLoad;
+        Assert.Equal(0, _sink.OrderAppliedCount);
+    }
+
+    [Fact]
+    public async Task LoadAsync_FolderOpen_NeverGatesNavigation_AndReportsCurrentReplaced()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        var snapshotTcs = new TaskCompletionSource<ExplorerViewSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _explorerOrder.SnapshotHook = _ => snapshotTcs.Task;
+
+        using var coordinator = CreateCoordinator();
+        var loadTask = coordinator.LoadAsync(folder);
+        await WaitUntilAsync(() => _sink.Presented.Count == 1, "fallback presentation");
+        // INV-9b unchanged: a folder open presents the fallback and does not gate navigation.
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+
+        snapshotTcs.SetResult(MakeSnapshot(folder, [c, b, a]));
+        await loadTask;
+
+        Assert.Equal(1, _sink.OrderAppliedCount);
+        Assert.False(_sink.LastOrderCurrentKept);
+        Assert.Equal(2, _sink.Presented.Count);
+        Assert.Equal(c, _catalog.Current?.Path);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DirectFileOpen_SnapshotAlreadyIn_AppliesOrderBeforeTheOnlyFrame()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        _explorerOrder.SnapshotHook = f => Task.FromResult(MakeSnapshot(f, [c, b, a]));
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder, initialPath: b);
+
+        // Same end state as when the order arrives after the frame, minus the transient fallback
+        // index: the opened file is presented once, already at its Explorer position.
+        Assert.Equal(new[] { c, b, a }, _catalog.Paths);
+        Assert.Equal(1, Assert.Single(_sink.Presented).Index);
+        Assert.Equal(b, _catalog.Current?.Path);
+        Assert.Equal(1, _sink.OrderAppliedCount);
+        Assert.False(_sink.LastOrderCurrentKept);
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+    }
+
+    [Fact]
+    public async Task LoadAsync_FolderOpen_SnapshotAlreadyIn_PresentsExplorerFirstImageOnly()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateThreeImages(folder);
+        _explorerOrder.SnapshotHook = f => Task.FromResult(MakeSnapshot(f, [c, b, a]));
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        // INV-9b end state (first image of the Explorer order) without the fallback frame first.
+        Assert.Equal(0, Assert.Single(_sink.Presented).Index);
+        Assert.Equal(c, _catalog.Current?.Path);
+        Assert.Equal(1, _sink.OrderAppliedCount);
+    }
+
+    [Fact]
+    public async Task LoadAsync_StartsExplorerQueryBeforeScanning()
+    {
+        var folder = @"C:\photos";
+        CreateThreeImages(folder);
+        var statCountAtQuery = -1;
+        _explorerOrder.SnapshotHook = f =>
+        {
+            statCountAtQuery = _fs.StatCount;
+            return Task.FromResult(MakeSnapshot(f, [], ExplorerOrderStatus.NoMatchingWindow));
+        };
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        // perf(startup): the query (the slowest part of a load) runs in parallel with the scan.
+        Assert.Equal(0, statCountAtQuery);
+        Assert.Equal(3, _fs.StatCount);
     }
 
     [Fact]

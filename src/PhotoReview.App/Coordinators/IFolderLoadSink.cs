@@ -19,8 +19,12 @@ public interface IFolderLoadSink
     /// <summary>Thông báo thư mục rỗng không có ảnh hỗ trợ.</summary>
     void OnEmpty(string folder);
 
-    /// <summary>Thông báo thứ tự Explorer tự nhiên đã được áp dụng vào danh mục.</summary>
-    void OnOrderApplied(int count, int currentIndex);
+    /// <summary>
+    /// Thông báo thứ tự Explorer tự nhiên đã được áp dụng vào danh mục. <paramref name="currentKept"/>:
+    /// the current image stays on screen at its new <paramref name="currentIndex"/> (no re-present
+    /// follows), so anything positioned around the old index (preload) must re-center.
+    /// </summary>
+    void OnOrderApplied(int count, int currentIndex, bool currentKept);
 
     /// <summary>Thông báo nạp thư mục thất bại.</summary>
     void OnFailed(string folder, Exception exception);

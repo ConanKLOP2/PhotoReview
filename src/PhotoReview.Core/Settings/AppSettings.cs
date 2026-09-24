@@ -37,7 +37,7 @@ public class AppSettings
         if (path is not null && File.Exists(path))
         {
             var json = File.ReadAllText(path);
-            var loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? new();
+            var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new();
             SettingsStore.Migrate(loaded);
             loaded.Shortcuts ??= ShortcutMappings.Default();
             loaded.Actions ??= ReviewAction.Defaults();

@@ -331,7 +331,7 @@ public sealed class MainViewModelNavigationTests : IDisposable
         public void OnCatalogReady(string folder, int count) => _getSink().OnCatalogReady(folder, count);
         public Task PresentAsync(int index, long presentationGeneration) => _getSink().PresentAsync(index, presentationGeneration);
         public void OnEmpty(string folder) => _getSink().OnEmpty(folder);
-        public void OnOrderApplied(int count, int currentIndex) => _getSink().OnOrderApplied(count, currentIndex);
+        public void OnOrderApplied(int count, int currentIndex, bool currentKept) => _getSink().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => _getSink().OnFailed(folder, exception);
     }
 

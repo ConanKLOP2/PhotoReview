@@ -226,6 +226,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public async Task NextAsync()
     {
+        await WaitForPendingExplorerOrderAsync();
         if (_catalog.Count == 0) return;
         _clock.NextInteraction();
         var nextIdx = Math.Min(_catalog.CurrentIndex + 1, _catalog.Count - 1);
@@ -239,6 +240,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public async Task PreviousAsync()
     {
+        await WaitForPendingExplorerOrderAsync();
         if (_catalog.Count == 0) return;
         _clock.NextInteraction();
         var prevIdx = Math.Max(_catalog.CurrentIndex - 1, 0);
@@ -252,6 +254,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public async Task FirstAsync()
     {
+        await WaitForPendingExplorerOrderAsync();
         if (_catalog.Count == 0) return;
         _clock.NextInteraction();
         _statusText = string.Empty;
@@ -264,6 +267,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public async Task SkipAsync()
     {
+        await WaitForPendingExplorerOrderAsync();
         if (_catalog.CurrentIndex < 0 || _catalog.CurrentIndex >= _catalog.Count) return;
         _clock.NextInteraction();
 
@@ -299,14 +303,32 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
-    public async Task RunActionAsync(int index) =>
+    public async Task RunActionAsync(int index)
+    {
+        await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
+    }
 
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
-    public async Task RecycleAsync() =>
+    public async Task RecycleAsync()
+    {
+        await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
+    }
+
+    /// <summary>
+    /// INV-9: a file opened directly is presented before Explorer's view order arrives. Commands that
+    /// move away from it (navigation, file actions that advance) wait for that order to be applied or
+    /// given up on first, so they step through the Explorer order and do not trip INV-7. Completes
+    /// synchronously -- no extra dispatcher hop on the navigation hot path -- when nothing is pending.
+    /// </summary>
+    private async Task WaitForPendingExplorerOrderAsync()
+    {
+        var pending = _folderCoordinator.PendingOrder;
+        if (!pending.IsCompleted) await pending;
+    }
 
     /// <summary>
     /// Unified entry point for Undo: reverses the last file action (Move or Recycle).
@@ -489,7 +511,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         NotifyNavigationStateChanged();
     }
 
-    void IFolderLoadSink.OnOrderApplied(int count, int currentIndex)
+    void IFolderLoadSink.OnOrderApplied(int count, int currentIndex, bool currentKept)
     {
         if (_currentSession?.Folder is { } f)
         {
@@ -499,6 +521,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         {
             FolderText = $"{FolderText} · Explorer";
         }
+        // The current image keeps its place but its neighbours are now the Explorer-order ones:
+        // re-center preload on its new index (a file opened directly is presented before the
+        // order is applied, so preload started around the fallback neighbours).
+        if (currentKept && currentIndex >= 0) _ = _preloadController?.PreloadAroundAsync(currentIndex);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
     }

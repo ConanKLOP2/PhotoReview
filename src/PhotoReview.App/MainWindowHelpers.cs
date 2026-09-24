@@ -102,6 +102,6 @@ internal sealed class ForwardingFolderSink(Func<IFolderLoadSink> target) : IFold
     public void OnCatalogReady(string folder, int count) => target().OnCatalogReady(folder, count);
     public Task PresentAsync(int index, long presentationGeneration) => target().PresentAsync(index, presentationGeneration);
     public void OnEmpty(string folder) => target().OnEmpty(folder);
-    public void OnOrderApplied(int count, int currentIndex) => target().OnOrderApplied(count, currentIndex);
+    public void OnOrderApplied(int count, int currentIndex, bool currentKept) => target().OnOrderApplied(count, currentIndex, currentKept);
     public void OnFailed(string folder, Exception exception) => target().OnFailed(folder, exception);
 }

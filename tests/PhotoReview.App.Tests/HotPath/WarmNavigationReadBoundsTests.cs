@@ -500,7 +500,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         public void OnCatalogReady(string folder, int count) => targetProvider().OnCatalogReady(folder, count);
         public Task PresentAsync(int index, long presentationGeneration) => targetProvider().PresentAsync(index, presentationGeneration);
         public void OnEmpty(string folder) => targetProvider().OnEmpty(folder);
-        public void OnOrderApplied(int count, int currentIndex) => targetProvider().OnOrderApplied(count, currentIndex);
+        public void OnOrderApplied(int count, int currentIndex, bool currentKept) => targetProvider().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => targetProvider().OnFailed(folder, exception);
     }
 
