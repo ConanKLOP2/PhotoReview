@@ -135,6 +135,21 @@ public sealed class SessionStoreTests
         Assert.Throws<ArgumentNullException>(() => new SessionStore(paths, null!));
     }
 
+    [Fact(DisplayName = "Constructor sweeps day-old orphan temp files but keeps fresh ones and real sessions (R2-F-34)")]
+    public void Constructor_SweepsStaleTempFiles()
+    {
+        var old = DateTime.UtcNow.AddDays(-3);
+        _fs.AddFile(_sessionsDir + @"\abc.json.1111.tmp", "x", old);
+        _fs.AddFile(_sessionsDir + @"\abc.json.2222.tmp", "x");
+        _fs.AddFile(_sessionsDir + @"\abc.json", "{}", old);
+
+        _ = CreateStore();
+
+        Assert.False(_fs.FileExists(_sessionsDir + @"\abc.json.1111.tmp"));
+        Assert.True(_fs.FileExists(_sessionsDir + @"\abc.json.2222.tmp"));
+        Assert.True(_fs.FileExists(_sessionsDir + @"\abc.json"));
+    }
+
     [Fact(DisplayName = "Session file with null Skipped loads as an empty list (R2-F-25)")]
     public void Load_NullSkipped_BecomesEmptyList()
     {
