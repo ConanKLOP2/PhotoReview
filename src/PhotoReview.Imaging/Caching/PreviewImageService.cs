@@ -212,6 +212,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
                 // persisting several previews at once must not each scan the whole directory.
+                _diskStore.NoteWritten(request.CachePath);
                 _diskStore.SchedulePrune();
             }
             catch (Exception ex)

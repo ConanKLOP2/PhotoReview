@@ -116,6 +116,49 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(!File.Exists(oldest) && File.Exists(newest));
     }
 
+    [Fact(DisplayName = "IMG-10: passes under quota reuse tracked size instead of re-enumerating the directory")]
+    public async Task PrunePassUnderQuotaSkipsFullScan()
+    {
+        var dir = _root.Dir("incremental-under");
+        WriteFile(dir, "a.png", 100, accessedAgo: TimeSpan.FromMinutes(30));
+        var store = new DiskCacheStore(dir, "*.png", maxBytes: 1_000);
+
+        store.SchedulePrune(); // size unknown: one full scan establishes the tracked total
+        Assert.True(await store.WaitForPruneAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, store.FullScanCount);
+
+        for (var i = 0; i < 5; i++)
+        {
+            var path = WriteFile(dir, $"n{i}.png", 100, accessedAgo: TimeSpan.Zero);
+            store.NoteWritten(path);
+            store.SchedulePrune();
+            Assert.True(await store.WaitForPruneAsync(TimeSpan.FromSeconds(5)));
+        }
+
+        Assert.Equal(1, store.FullScanCount); // 600 bytes tracked <= 1000: no re-enumeration
+    }
+
+    [Fact(DisplayName = "IMG-10: noted writes that exceed quota trigger a scan that evicts the oldest files")]
+    public async Task NotedWritesOverQuotaEvictOldest()
+    {
+        var dir = _root.Dir("incremental-over");
+        var oldest = WriteFile(dir, "oldest.png", 100, accessedAgo: TimeSpan.FromMinutes(30));
+        var store = new DiskCacheStore(dir, "*.png", maxBytes: 250);
+        store.SchedulePrune();
+        Assert.True(await store.WaitForPruneAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(File.Exists(oldest));
+
+        var mid = WriteFile(dir, "mid.png", 100, accessedAgo: TimeSpan.FromMinutes(20));
+        store.NoteWritten(mid);
+        var newest = WriteFile(dir, "newest.png", 100, accessedAgo: TimeSpan.FromMinutes(10));
+        store.NoteWritten(newest); // 300 tracked > 250
+        store.SchedulePrune();
+        Assert.True(await store.WaitForPruneAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.True(!File.Exists(oldest) && File.Exists(mid) && File.Exists(newest));
+        Assert.Equal(2, store.FullScanCount);
+    }
+
     [Fact(DisplayName = "DiskCacheStore instance ClearDirectory empties its directory")]
     public void InstanceClearDirectoryRemovesFiles()
     {
