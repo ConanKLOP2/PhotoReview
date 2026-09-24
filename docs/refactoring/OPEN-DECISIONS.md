@@ -16,7 +16,7 @@ Consolidation of all pending decisions (Q-*) across active task groups. See link
 | Q-T2 | TC | Read-count seam approach? | ✅ Real-file-in-temp | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
 | Q-T3 | TC | Real photos via env var? | ✅ YES | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
 | Q-T4 | TC | Use real Recycle Bin? | ✅ YES (via fixture) | ../archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md |
-| Q-OC14 | OC | Undo unification approach? | 🔄 IN PROGRESS | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
+| Q-OC14 | OC | Undo unification approach? | 🔄 OPEN — Undo gate location → MainViewModel (next after IO03–IO05) | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
 | Q-OC15 | OC | UI pattern cleanup scope? | 🔄 WAITING OC14 | ../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md |
 | Q-S3 | TS | Journal test determinism? | ✅ YES (recommendation applied in #36, 2026-09-24) | ../archive/historical/TEST-SPEED-PLAN-2026-09-20.md |
 | Q-AR1 | AR | Ship TurboJpeg in the release (A) or remove it from Settings (B)? | ✅ **A** (ship TurboJpeg) — 2026-09-23 | arch-review/AR01-turbojpeg-release.md |
@@ -25,11 +25,13 @@ Consolidation of all pending decisions (Q-*) across active task groups. See link
 | Q-AR4 | AR | Single release location = CI path `src/PhotoReview.App/bin/Release/net10.0-windows/publish`; delete `outputs/release/`? | ✅ **YES** (CI path only) — 2026-09-23 | arch-review/AR06-release-output-cleanup.md |
 | Q-AR5 | AR | Task-group triage: keep/close per group (proposal table in AR07 §5) | ✅ **Per AR07 §5 proposal table** — 2026-09-23 | arch-review/AR07-docs-and-triage.md |
 | Q-L1..Q-L8 | I18N | Default language, journal error codes, dev tools, default actions, copy polish, community channel, live switch | ✅ **All = recommendation (a)** — 2026-09-24 | I18N-PLAN.md, ../adr/0006-localization-json-catalogs.md |
+| Q-IO1 | IO | Journal durability, session/settings durability, unreadable files policy | ✅ **Journal = user setting: Fast (no fsync, default) or Power-loss safe (off UI thread); session no fsync (atomic kept), settings unchanged; skip unreadable files with a visible warning** — 2026-09-24 | ../adr/0007-io-durability-contract.md |
+| Q-Z1 | Zoom | "100 %" = preview pixels or source pixels; decode previews to the viewport box? | ✅ **Option A: 100 % = 1 source pixel, original decoded on demand (#43 + #47)** — 2026-09-24 | PERF-STATUS.md |
 
 **Legend:** ✅ Decided · 🔄 Pending · ⏸ Blocked
 
 **Most critical blocker:** OC14 (kept, re-scoped to "Undo gate location") — still blocks ST08/ST09 and OC15-18. WD01 is unblocked (Q-AR2 = yes, AR04 implements it); WD03-06 closed 2026-09-23 (Q-AR5, no known dialog bug).
 
-**All Q-AR1..Q-AR5 decided 2026-09-23.** Unblocked work: AR01 (Q-AR1), AR02→AR04 (Q-AR3), AR06 (Q-AR4). Next: run AR01, AR02a (stacked on AR03), AR06 on separate branches; AR02e needs the user's machine.
+**All Q-AR1..Q-AR5, Q-L1..Q-L8, Q-IO1, Q-Z1 decided.** Open work: IO03–IO05 (ADR 0007), OC14, DT10; T89 GUI acceptance by the user.
 
 See [`docs/ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) for current task status.

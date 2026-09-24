@@ -169,42 +169,6 @@ public sealed class FileActionController
         }
     }
 
-    /// <summary>
-    /// Deprecated: Use UndoLastAsync() instead. This method only handles Move operations.
-    /// For unified undo semantics that handle both Move and Recycle, use UndoLastAsync().
-    /// </summary>
-    [Obsolete("Use UndoLastAsync() instead. This method is Move-only; use UndoLastAsync() for full undo semantics.")]
-    public async Task UndoAsync(string? currentPath)
-    {
-        if (_undoService is null) return;
-
-        var folderGen = _clock.CurrentFolder;
-        var result = await _undoService.UndoMoveAsync();
-
-        if (!result.Succeeded)
-        {
-            _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.UndoFailedGeneric());
-            return;
-        }
-
-        if (!_clock.IsFolderCurrent(folderGen)) return;
-
-        if (!string.IsNullOrEmpty(result.Source))
-        {
-            _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
-            _sink.OnCatalogChanged();
-            var idx = _catalog.IndexOf(result.Source);
-            if (idx >= 0)
-            {
-                await _sink.PresentAsync(idx);
-            }
-
-            _sink.UpdateSessionPath(result.Source);
-        }
-
-        _sink.NotifyNavigationStateChanged();
-    }
-
     public async Task<UndoResult?> UndoLastAsync(string? currentPath)
     {
         if (_undoService is null) return null;

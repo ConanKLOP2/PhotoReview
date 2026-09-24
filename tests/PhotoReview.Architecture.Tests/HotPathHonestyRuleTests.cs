@@ -133,4 +133,13 @@ public sealed class HotPathHonestyRuleTests
         return false;
     }
 
+    [Fact(DisplayName = "Rule OC14: MainWindow code-behind holds no file-action/undo gate logic")]
+    [Trait("Category", "Architecture")]
+    public void MainWindowCodeBehindHasNoFileActionGateLogic()
+    {
+        var text = RepoScan.Text(Path.Combine(RepoScan.Root, "src", "PhotoReview.App", "MainWindow.xaml.cs"));
+        Assert.DoesNotContain("Interlocked", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("_fileActionInProgress", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Volatile.", text, StringComparison.Ordinal);
+    }
 }
