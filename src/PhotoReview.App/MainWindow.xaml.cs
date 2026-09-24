@@ -71,7 +71,9 @@ public partial class MainWindow : Window
         // one fewer disk read at startup.
         _settings = _settingsStore.Current;
         _shortcutRouter = new ShortcutRouter(_settings);
-        _settingsStore.Changed += (_, s) => { _settings = s; _shortcutRouter.Rebuild(s); };
+        // R2-F-27: the router/VM are refreshed here (settings change), not on every key press.
+        _viewModel.Settings = _settings;
+        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); };
         PhotoReviewPerf.StartupMark("mainWindowCtor");
         // I18N: a live language switch re-renders the texts the ViewModel builds in code (ADR 0006).
         Localizer.CurrentChanged += OnLanguageChanged;
@@ -341,8 +343,6 @@ public partial class MainWindow : Window
 
     private async void Window_KeyDown(object sender, KeyEventArgs e)
     {
-        _viewModel.Settings = _settings;
-        _shortcutRouter.Rebuild(_settings);
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
