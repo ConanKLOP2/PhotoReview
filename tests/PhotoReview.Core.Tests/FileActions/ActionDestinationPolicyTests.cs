@@ -1,0 +1,24 @@
+using PhotoReview.Core.FileActions;
+using Xunit;
+
+namespace PhotoReview.Core.Tests.FileActions;
+
+public sealed class ActionDestinationPolicyTests
+{
+    [Theory]
+    [InlineData("Loai-2", ActionDestinationCheck.Ok)]
+    [InlineData("sub\\deeper", ActionDestinationCheck.Ok)]
+    [InlineData("..\\x", ActionDestinationCheck.EscapesSourceFolder)]
+    [InlineData("a\\..\\..\\x", ActionDestinationCheck.EscapesSourceFolder)]
+    [InlineData("a/../../x", ActionDestinationCheck.EscapesSourceFolder)]
+    [InlineData("D:\\Backup", ActionDestinationCheck.Ok)]
+    [InlineData("\\\\server\\share\\x", ActionDestinationCheck.Ok)]
+    [InlineData("a|b", ActionDestinationCheck.InvalidChars)]
+    [InlineData("a:b", ActionDestinationCheck.InvalidChars)]
+    [InlineData("", ActionDestinationCheck.Empty)]
+    [InlineData("  ", ActionDestinationCheck.Empty)]
+    public void Validate_ClassifiesDestinations(string destination, ActionDestinationCheck expected)
+    {
+        Assert.Equal(expected, ActionDestinationPolicy.Validate(destination));
+    }
+}

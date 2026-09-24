@@ -380,5 +380,8 @@
   "settings.journalDurability.fast": "RadioButton.Content; the default mode.",
   "settings.journalDurability.fast.hint": "TextBlock under the radio, one wrapped line; describes the risk (records can be lost on power loss / OS crash, not on app crash).",
   "settings.journalDurability.safe": "RadioButton.Content.",
-  "settings.journalDurability.safe.hint": "TextBlock under the radio; 'forced to disk' = fsync / write-through."
+  "settings.journalDurability.safe.hint": "TextBlock under the radio; 'forced to disk' = fsync / write-through.",
+  "core.fileAction.destinationOutsideSource": "JournalCodedException (DestinationOutsideSource) -> result.Error. Thrown before Prepared, so never journaled.",
+  "actionProfiles.error.destinationEscapes": "MessageBox text on Apply; {name} = action name. Keep the literal '..' (parent-folder segment).",
+  "actionProfiles.error.destinationInvalid": "MessageBox text on Apply; {name} = action name."
 }

@@ -450,5 +450,8 @@
   "settings.journalDurability.fast": "Nhanh (mặc định)",
   "settings.journalDurability.fast.hint": "Bản ghi vào bộ nhớ đệm của hệ điều hành trước mỗi thao tác tệp. An toàn khi ứng dụng gặp sự cố; nếu mất điện hoặc hệ điều hành gặp sự cố, vài bản ghi cuối có thể mất nên Hoàn tác/Phục hồi có thể không biết một thao tác vừa xảy ra.",
   "settings.journalDurability.safe": "An toàn khi mất điện",
-  "settings.journalDurability.safe.hint": "Mỗi bản ghi được ghi xuống đĩa trước khi thao tác tệp bắt đầu. An toàn nhất nhưng mỗi bản ghi chậm hơn khoảng 4 lần (vẫn chạy ngoài luồng giao diện nên ứng dụng không bị đơ)."
+  "settings.journalDurability.safe.hint": "Mỗi bản ghi được ghi xuống đĩa trước khi thao tác tệp bắt đầu. An toàn nhất nhưng mỗi bản ghi chậm hơn khoảng 4 lần (vẫn chạy ngoài luồng giao diện nên ứng dụng không bị đơ).",
+  "core.fileAction.destinationOutsideSource": "Thư mục đích không được nằm ngoài thư mục ảnh đang duyệt.",
+  "actionProfiles.error.destinationEscapes": "Hành động \"{name}\": thư mục đích tương đối phải nằm trong thư mục ảnh (không dùng \"..\"). Hãy dùng đường dẫn tuyệt đối nếu muốn lưu ở nơi khác.",
+  "actionProfiles.error.destinationInvalid": "Hành động \"{name}\": thư mục đích đang trống hoặc chứa ký tự không hợp lệ."
 }

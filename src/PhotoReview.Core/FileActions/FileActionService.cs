@@ -93,6 +93,10 @@ public sealed class FileActionService
                 if (IsSamePath(destinationFolder, sourceFolder))
                     throw new IOException(Tr.CoreFileActionSameFolder);
 
+                if (!Path.IsPathRooted(request.Destination)
+                    && !destinationFolder.StartsWith(sourceFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+
                 _fileSystem.CreateDirectory(destinationFolder);
                 destinationPath = Path.Combine(destinationFolder, Path.GetFileName(source));
 

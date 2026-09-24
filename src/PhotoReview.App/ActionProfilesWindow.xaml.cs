@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
+using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
@@ -75,7 +76,29 @@ public partial class ActionProfilesWindow : Window
         SaveCurrent();
         if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !Enum.TryParse<Key>(action.Shortcut, true, out _) || !Enum.IsDefined(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
         { System.Windows.MessageBox.Show(this, Tr.DialogActionProfilesInvalidMessage, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (FindDestinationProblem(Actions) is { } problem)
+        { System.Windows.MessageBox.Show(this, problem, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         DialogResult = true;
+    }
+
+    /// <summary>
+    /// CORE-03 / Q-R2: the localized reason the first Move/Copy action has an unusable destination, or null when all are fine.
+    /// Recycle actions have no destination, so theirs is ignored.
+    /// </summary>
+    internal static string? FindDestinationProblem(IEnumerable<ReviewAction> actions)
+    {
+        foreach (var action in actions)
+        {
+            if (action.Operation == FileOperationType.Recycle) continue;
+            switch (ActionDestinationPolicy.Validate(action.Destination))
+            {
+                case ActionDestinationCheck.Ok: break;
+                case ActionDestinationCheck.EscapesSourceFolder: return Tr.ActionProfilesErrorDestinationEscapes(action.Name);
+                default: return Tr.ActionProfilesErrorDestinationInvalid(action.Name);
+            }
+        }
+
+        return null;
     }
 
     private static ReviewAction Clone(ReviewAction action) => new() { Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation, Destination = action.Destination, Confirm = action.Confirm };
