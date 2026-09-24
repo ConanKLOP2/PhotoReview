@@ -1,39 +1,22 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master `cbd24b8` (#64–#71 merged) | **Branch:** `i18n/l12-vi-copy`
+**Updated:** 2026-09-24 | **Base:** master `725b44d` (#64–#74 merged) | **Branch:** `docs/review-plan-2026-09-25`
 
-## Now: L12 Vietnamese copy polish — PR open, needs user wording review
+## Now: review 2026-09-25 plan (PR #75)
 
-- `vi.json`: 236 values changed (keys unchanged): one term per concept (thư mục, tệp, Thùng rác, hành động = user action,
-  thao tác = operation, Di chuyển/Sao chép, thử lại, hoàn tác, Phục hồi, ảnh xem trước, Vừa khung), typo "bấp", `Xoá`→`Xóa`,
-  English leftovers (Recovery/Diagnostics/enums). Glossary added to `docs/TRANSLATING.md`. Tests pinning old VI text updated.
-- Validation: i18n-check PASS, build 0 warnings, fast suite 0 failures. Every changed string is listed in the PR body.
-
-## Previous: PR batch #64–#70 (all merged)
-
-- **Chain (each branch contains the previous):** #64 OC14 `FileActionGate` in the ViewModel → #65 IO03 journal durability setting (Fast default / power-loss safe, ADR 0007) → #66 IO04 session no-fsync + IO05 skip unreadable files with a warning → #67 Recovery: source/destination paths, live validity check on open, verdicts.
-- **Test diet (any order):** #68 Imaging 339→305 · #69 App/Integration + TC06 fix · #70 Core/Architecture; removals have mutation evidence.
-- **#69 also fixes a real bug:** Ctrl+Z after Recycle never restored (shell mtime is whole-second UTC, parsed as local ⇒ 7 h off). TC06 really verifies restore now and cleans its own Recycle Bin items.
-- **User:** empty the ~2650 test items (original location `...\Temp\TC06_RecycleBin_*`) from the Recycle Bin; visual checks: Recovery window, Settings (journal option), dark dialogs, language picker, zoom, Fit first frame (T89), AR04.
-- **Next:** DT10 · ST08/09, OC15–18 · benchmark `action-delete` leaves ~2 items/run in the real bin.
-
-## Previous (merged): i18n · perf night #39-#49 · AR00-AR07 · ADR 0007
+- **Merged:** #64 OC14 `FileActionGate` · #65–#66 IO03–IO05 (ADR 0007) · #67 Recovery paths + live check · #68–#70 test diet (#69 fixed Ctrl+Z after Recycle) · #71 status · #72 DT10 · #73 ST08/09 + OC15–18 · #74 L12 VI copy.
+- **User:** empty ~2650 `...\Temp\TC06_RecycleBin_*` items from the Recycle Bin; visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
+- **Next:** [review 2026-09-25 plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) — answer Q-R1..Q-R6; waves 1a, 1b, 2b ready.
 
 ## Status by Group
 
 | Group | Status | Notes |
 |-------|--------|-------|
-| **AR** | ✅ AR00–AR07 DONE | GUI acceptance (T89, AR04) by user. |
-| ST | ✅ (ST08/09 wait OC14) | ST06 public fields replaced by AR02d (#35). |
-| TS | ✅ TS00-07, TS10 | TS08/09 closed (Q-AR5). |
-| DF, CQ | ✅ Done | |
-| **T89** | 🔄 GUI acceptance only (kept, Q-AR5) | Code merged (#15). DF02 Fit tests skipped in `9f880d1`. AR02a touches Fit viewport — verify together. |
-| **TC** | ✅ TC01-TC11 | TC04, TC09 done (#36); TC06/07 live in App.Tests/HotPath (real Recycle Bin / photos). |
-| **OC** | 🔄 ~65% | OC14 gate moved to the ViewModel (#64); ST08/09, OC15-18 unblocked. |
-| **WD** | ✅ WD01 done (AR04, #37) | WD02-06 closed 2026-09-23 (Q-AR5, no known dialog bug). |
-| **IO** | 🔄 IO01 ADR 0007 | IO03 #65, IO04+IO05 #66 open; IO02/06/07 closed. |
-| **D** | ❌ Closed (Q-AR5) | Legacy `--perf-session` numbers; re-open from AR02e baseline if needed. |
-| **DT** | 🔄 | DT00-03, 08, 09 done; DT04-07 closed (Q-AR5); DT10 kept. |
+| **AR** | ✅ AR00–AR07 | GUI acceptance (T89, AR04) by user. |
+| ST, TS, TC, DF, CQ, DT, IO | ✅ Done | ST08/09 #73; DT10 #72; IO per ADR 0007 (#65, #66). |
+| **T89** | 🔄 GUI acceptance only | Code merged (#15); verify with AR02a Fit viewport. |
+| **OC** | 🔄 GUI check only | OC14 #64; OC15–18 #73 (OC18 Fit check with T89). |
+| **D**, WD02-06, DT04-07 | ❌ Closed (Q-AR5) | |
 
 ## Critical Process Rules
 
