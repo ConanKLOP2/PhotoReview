@@ -229,7 +229,7 @@ public sealed class FolderLoadCoordinatorTests
         while (_sink.CatalogReadyCount == prevCatalogCount && DateTime.UtcNow < deadline)
         {
             // Pump with minimal delay to avoid busy-waiting
-            await Task.Yield();
+            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
         }
         if (_sink.CatalogReadyCount == prevCatalogCount)
         {
@@ -294,7 +294,7 @@ public sealed class FolderLoadCoordinatorTests
         while (!condition())
         {
             if (DateTime.UtcNow > deadline) throw new TimeoutException($"Timed out waiting for: {what}");
-            await Task.Yield();
+            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
         }
     }
 

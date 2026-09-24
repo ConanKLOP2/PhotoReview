@@ -467,12 +467,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         string[] files;
-        // TC09: Replace Task.Delay with Task.Yield for efficient polling without explicit waits
+        // TC09: poll a condition with a deadline instead of asserting after a fixed delay.
         do
         {
             files = Directory.Exists(diskDir) ? Directory.GetFiles(diskDir, "*.pv4") : [];
             if (files.Length >= expectedCount) return files;
-            await Task.Yield();
+            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
         } while (DateTime.UtcNow < deadline);
         return files;
     }
