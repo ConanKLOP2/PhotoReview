@@ -315,6 +315,32 @@ public sealed class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
+    public async Task RunActionAsync_Move_KeepsNextImageCachedAndEvictsOnlyRemovedOne()
+    {
+        var folder = Path.Combine(_tempDir, "evict_album");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        var img2 = CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        // The next image is already warm (as after a preload) before the action key is pressed.
+        await _previewService.GetPreviewAsync(img2);
+        Assert.True(_previewService.TryGetCachedPreview(img2, out _));
+        Assert.True(_previewService.TryGetCachedPreview(img1, out _));
+        var sourceReadsBefore = _metrics.Snapshot().SourceReads;
+
+        await vm.RunActionAsync(0); // Move img1 -> Sorted; img2 becomes current
+        await _sink.WaitForPresentationCountAsync(2, TimeSpan.FromSeconds(5));
+
+        Assert.False(_previewService.TryGetCachedPreview(img1, out _));
+        Assert.True(_previewService.TryGetCachedPreview(img2, out _));
+        // Presenting the next image must be served from RAM: no new source read (R2-F-02).
+        Assert.Equal(sourceReadsBefore, _metrics.Snapshot().SourceReads);
+    }
+
+    [Fact]
     public async Task RunActionAsync_AfterSettingsSaved_UsesSavedProfiles()
     {
         var folder = Path.Combine(_tempDir, "saved_settings_album");

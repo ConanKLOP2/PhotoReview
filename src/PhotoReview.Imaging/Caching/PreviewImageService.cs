@@ -538,9 +538,11 @@ public sealed class PreviewImageService : IPreloadTarget
     public void EvictCachedPath(string path, Action<string>? alsoInvalidate = null)
     {
         var normalized = Path.GetFullPath(path).ToUpperInvariant();
+        // No epoch bump: this drops one path only. Bumping would also discard every in-flight
+        // preload/viewer decode of OTHER paths (R2-F-02). A decode of this path that is still in flight
+        // may publish one stale entry; keys include length+mtime so it is never served for a new file.
         lock (_cacheLifecycleGate)
         {
-            _cacheEpoch++;
             _cache.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
             alsoInvalidate?.Invoke(normalized);
         }

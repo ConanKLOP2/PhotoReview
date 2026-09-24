@@ -115,7 +115,7 @@ public sealed class FileActionController
         if (isRemove)
         {
             nextIndex = _catalog.Remove(source);
-            _sink.OnCatalogChanged();
+            _sink.OnCatalogChanged(source);
 
             // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
             if (nextIndex >= 0)
@@ -188,7 +188,7 @@ public sealed class FileActionController
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
         {
             _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
-            _sink.OnCatalogChanged();
+            _sink.OnCatalogChanged(null);
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
             {

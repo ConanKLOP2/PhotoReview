@@ -605,12 +605,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         StatusText = status;
     }
 
-    void IFileActionSink.OnCatalogChanged()
+    void IFileActionSink.OnCatalogChanged(string? removedPath)
     {
         CatalogChanged?.Invoke();
-        if (_catalog.Current?.Path is { } path)
+        // Only the removed file leaves the cache; the new Current is the next image the user is about
+        // to see and is usually already preloaded (R2-F-02).
+        if (removedPath is not null)
         {
-            _presenter.EvictCachedPath(path);
+            _presenter.EvictCachedPath(removedPath);
         }
         _compare.Clear();
     }

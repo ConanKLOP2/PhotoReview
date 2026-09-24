@@ -11,8 +11,11 @@ public interface IFileActionSink
     /// <summary>Cập nhật thông báo trạng thái cho người dùng.</summary>
     void SetStatusText(string status);
 
-    /// <summary>Thông báo danh mục đã thay đổi (item bị xóa/khôi phục).</summary>
-    void OnCatalogChanged();
+    /// <summary>
+    /// Thông báo danh mục đã thay đổi (item bị xóa/khôi phục). <paramref name="removedPath"/> là ảnh vừa bị gỡ
+    /// (chỉ ảnh này bị loại khỏi cache; ảnh kế tiếp phải giữ nguyên trong RAM), hoặc null nếu không có ảnh bị gỡ.
+    /// </summary>
+    void OnCatalogChanged(string? removedPath);
 
     /// <summary>Yêu cầu hiển thị ảnh tại vị trí chỉ định.</summary>
     Task PresentAsync(int index);
