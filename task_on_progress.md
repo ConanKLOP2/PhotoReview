@@ -1,17 +1,17 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-24 | **Base:** master (#36) | **Branch:** `refactor/ar04-ui-thread-affinity` (#37)
+**Updated:** 2026-09-24 | **Base:** master `b8fe687` (v2.0.50) | **Branch:** `docs/perf-night-2026-09-24`
 
-## Now: Architecture review AR00–AR07 DONE (2026-09-24)
+## Now: perf night 2026-09-24 — #39–#42, #44–#46, #48 merged; zoom decision = A
 
-- Merged: #24 AR03 · #25 AR07 · #26 AR06 · #27 AR02a · #28 AR01 · #34 (AR02b/c + #31 decode-width fix) · #35 AR02d · #36 TS05–07/TC04/TC09 · #37 AR04 (this branch). Decisions: `docs/refactoring/OPEN-DECISIONS.md`.
-- Perf: AR02e baseline + AR04 gate (passed, interleaved runs) in `docs/refactoring/PERF-STATUS.md`. #31 fixed full-size Preview decode (since T46d): S3 burst shown 27–47 → 145–175 /200, peak WS 16.9 → 7.0 GB. TurboJpeg slower than WicDirect on the real set — keep WicDirect.
-- Left for user (visual): Fit first-frame (T89), Settings TurboJPEG item greyed without dll, AR04 GUI acceptance (hold →, delete while navigating).
-- **Next:** OC14 (Undo gate location → MainViewModel, unblocked by AR02d/AR04) → ST08/09, OC15–18. IO01 needs a user decision (durability contract). DT10 final measurement. Open: S3 decoder fallbacks 14 → 85 (PNG counted), RAM-hit P50 +1.5 ms.
+- Result (real folder): open folder 489 → 166 ms, burst shown 55 → 200/200, peak WS 5.2 → 1.7 GB, app start → first image 3.2 → 1.8 s. Table: `docs/refactoring/PERF-STATUS.md` ("Perf night").
+- **Remaining merge order:** #43 (decode to viewport box) → #47 (true 100 % zoom + on-demand original; contains #43) → #49 (this doc). Both updated to master and MERGEABLE (2026-09-24).
+- **Decisions taken:** zoom = option A (user, 2026-09-24): "100 %" = 1 source pixel; wheel zoom from Fit steps from the fit size. #46 INV-9 change accepted by merge: opened photo shows before Explorer order; navigation waits for it (≤ ~2 s).
+- Fixed along the way (all lost in T46d): preview decode width (#31), folder trace events (#46), Original loading mode (#48).
+- Left for user (visual): Fit first-frame (T89), TurboJPEG item greyed without dll, AR04 GUI acceptance, #47 zoom feel. CI tags missing for runs cancelled by quick successive merges (e.g. v2.0.44/45/48) — tag job could backfill.
+- **Next:** OC14 (Undo gate → MainViewModel), IO01 (needs decision), DT10.
 
-## Previous: nav hot-path perf pass — DONE (#20 `94c5aeb..20300b4`, fix #21 `9161c35`)
-
-Details: `docs/archive/progress-log-2026-09.md`. Deferred: App `ConfigureAwait(false)` → AR04; RAM budget / disk-cache value / lazy EXIF → tune from AR02e numbers; `GetOriginalDimensionsAsync` key reuse stays reverted.
+## Previous: AR00–AR07 done (#23–#37); nav perf pass #20/#21 — details `docs/archive/progress-log-2026-09.md`.
 
 ## Status by Group
 

@@ -55,3 +55,23 @@ Same fixture/config as AR02e. A first batch (master e1375cc vs AR04, 3 runs/cell
 
 - **Passed** (<= 1 ms): same-build run-to-run P95 noise is ~5 ms, larger than the difference. Hit rate 99.0 % / 98.4 % both; peak WS equal; `CrossThreadPresentCount = 0` in every AR04 run. All values < 1 frame (16.7 ms).
 - Interleaved rounds all ran on a stable folder (1841 files). The earlier "master lost preload" was the folder changing, not evidence of the catalog race. Note: AR02e baseline used 1625 files — compare only within the same folder state.
+
+## Perf night 2026-09-24 — PR series #39–#48
+
+Real folder F4 (1841 files ≈ 14 GB, mostly portrait 20–30 MP JPEG), production graph, Preview, harness from #39 (event-driven pacing, short warm-up) + batch-isolated caches (#42). Interleaved baseline/new, 2 rounds × 2 runs, fixture unchanged. Baseline = master `b6e5dae` + #39 + cache isolation; "all" = + #40–#48.
+
+| Metric | baseline | all |
+|---|---:|---:|
+| Open folder, first visual (median, n=4) | 489 ms | **166 ms** |
+| Burst 30 keys/s: images shown /200 | 50–60 | **197–201** |
+| Burst incomplete navigations | 275–292 / ~400 | **0–1 / 402** |
+| Burst key→present P95 | 10.5 ms | **2.8–3.5 ms** |
+| Jump P95 / max | 7.6–8.4 / 474–489 ms | **3.8–4.0 / 164–165 ms** |
+| Slow-next P95 / max | 3.1–3.4 / 503–523 ms | 3.1–3.2 / 156–174 ms |
+| Peak WS open / slow-next / burst | 1.6 / 4.2 / 5.2 GB | **0.33 / 1.1–1.3 / 1.7 GB** |
+| App start → first image from Explorer (#46, 11 runs) | 3169 ms | **1817 ms** |
+
+Per PR (measured as it landed): #40 ICC via WIC color transform + Bgr32/Pbgra32 + worker-side materialization; #41 preview races the thumbnail, embedded EXIF thumbnails; #42 JPEG single-file disk cache (fallback previews cached); together open 453→180 ms, burst incomplete 250→57. #44 original dims from the decode (first made open +20 ms → fixed by yielding before bookkeeping); #45 direction-aware burst preload, viewer-priority decode (worst burst final 1.9–3.9 s → 0.36–1.1 s). #43 decode to the viewport box (portraits −85 % pixels): burst incomplete 22–40 → 0–2, peak WS −70 % — blocked on the zoom decision (#47 = option A). #46 startup: Explorer order batched (1.1 s → ~0.1 s), first image before Explorer order (INV-9 behaviour change). #48 Original mode wiring (lost in T46d).
+
+- New harness: `run-matrix.ps1 -Profile quick|gate|full` (gate ≈ 7 min vs ~30 min), `-ColdDiskCache`, fixture-change guard; `--perf-analyze` reports `renderedFrame` (2nd Rendering tick) and Startup/Folder phases again.
+- Not shipped: SIMD-only TurboJpeg scale factors (measured slower). TurboJpeg remains slower than WicDirect on this set.
