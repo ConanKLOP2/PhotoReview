@@ -67,6 +67,11 @@ jobs:
           Write-Host "PhotoReview $v"
           "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
+      # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.
+      - name: Check translation catalogs
+        shell: powershell
+        run: ./tools/i18n-check.ps1
+
       # CI runs HotPath tests only (fast, mocked deps)
       # Stress/Native/Slow/Integration tests run locally only (optional via -Stress, -Native, -Slow, -Integration)
       # NOTE: Filter below is verified to match tools/verify-all.ps1 (TS09 verification)
