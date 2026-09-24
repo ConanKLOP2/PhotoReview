@@ -123,7 +123,7 @@ public sealed class FileActionServiceTests
         var result = await _service.ExecuteAsync(request);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Action chưa có thư mục đích.", result.Error);
+        Assert.Equal("Hành động chưa có thư mục đích.", result.Error);
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class FileActionServiceTests
         var result = await _service.ExecuteAsync(request);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Không thể Move/Copy vào chính folder nguồn.", result.Error);
+        Assert.Equal("Không thể Di chuyển/Sao chép vào chính thư mục nguồn.", result.Error);
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public sealed class FileActionServiceTests
 
         Assert.True(result2.Rejected);
         Assert.False(result2.Succeeded);
-        Assert.Equal("Thao tác trước đó đang thực hiện.", result2.Error);
+        Assert.Equal("Thao tác trước đó vẫn đang chạy.", result2.Error);
 
         tcs.SetResult(true);
         var result1 = await task1;

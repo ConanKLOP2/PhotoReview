@@ -23,7 +23,7 @@ public sealed class LanguageOptionsTests
         Assert.True(options[0].IsAuto);
         Assert.Equal("English", options[1].DisplayName);
         Assert.Equal("Tiếng Việt", options[2].DisplayName);
-        Assert.Equal("Français (file người dùng)", options[3].DisplayName);
+        Assert.Equal("Français (tệp người dùng)", options[3].DisplayName);
     }
 
     [Fact]

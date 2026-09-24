@@ -93,9 +93,8 @@ Mức: L1 cơ học, L2 vừa. Mọi task doc/comment là **thay đổi không h
 - **Làm:** thêm vào `tools/verify-all.ps1` bước cảnh báo `docs-budget -Check` (bắt đầu ở mức **cảnh báo**, chuyển lỗi sau khi ổn định), kiểm link tương đối giữa file markdown, và kiểm `INDEX.md` liệt kê mọi file `docs/*.md` không nằm trong archive; cập nhật `tools/test-verify-gates.ps1` theo hợp đồng gate hiện có. `AGENTS.md` (Q-D1) nêu quy tắc: task xong → gấp thành một dòng + SHA, tài liệu mới phải có dòng trong `INDEX.md`.
 - **Xong khi:** thêm một doc vượt ngân sách hoặc link gãy tạm thời làm gate báo (kiểm bằng lỗi cố ý, không commit).
 
-### DT10 — Đo lại và bàn giao — TODO (L1)
-- **Làm:** bảng trước/sau (byte doc theo tầng, cold-start điển hình, byte comment src/tests, số dòng test). Mô phỏng cold start bằng cách cộng byte các file T0 + một plan mở; ghi trung thực nếu chưa đạt ngân sách. Cập nhật `INDEX.md`, `task_on_progress.md`.
-- **Xong khi:** số liệu được ghi; không tuyên bố tiết kiệm token bằng ước lượng khi chưa nêu phương pháp.
+### DT10 — Đo lại và bàn giao — ✓ DONE (2026-09-24, PR docs/dt10)
+- **Kết quả:** T0 (`AGENTS.md`+`task_on_progress.md`+`docs/INDEX.md`, đo bằng `tools/docs-budget.ps1` trên HEAD) 12044→11128 B (11.8→10.9 KB, ngân sách 12 KB). T1 (5 file `docs/refactoring/*` script tính vào tier này) 23211→10419 B (22.7→10.2 KB, ngân sách 15 KB): `STRUCTURE-OPTIMIZE-STATUS.md` 8926→4187, `TEST-CLEANUP-SUMMARY.md` 4435→1097, `OPEN-DECISIONS.md` 4070→964, `OPTIMIZE-CLEAN-SUMMARY.md` 3299→3172, `T89-FIT-SUMMARY.md` 2481→999 (byte). Phần lịch sử cắt sang `docs/refactoring/archive/*-detail.md` (cut+paste + dòng pointer, không dùng `git mv` vì file gốc vẫn còn phần đang mở). `tools/check-doc-links.ps1` 0 broken sau khi sửa. Cập nhật `docs/ACTIVE-TASKS.md` (dòng DT), không sửa `task_on_progress.md` phần "Now".
 
 ## 5. Thứ tự và đụng độ
 

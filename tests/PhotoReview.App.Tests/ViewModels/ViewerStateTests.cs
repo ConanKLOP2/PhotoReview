@@ -167,6 +167,17 @@ public sealed class ViewerStateTests
         Assert.Equal(expectedVertical, result.Vertical, 6);
     }
 
+    [Theory]
+    [InlineData(0, 0, false)]      // click without drag
+    [InlineData(3.9, -3.9, false)] // below threshold on both axes
+    [InlineData(4, 0, true)]       // horizontal threshold is inclusive
+    [InlineData(0, -4, true)]      // vertical threshold, negative direction
+    [InlineData(-10, 2, true)]     // beyond on one axis only
+    public void DragThreshold_IsPerAxisAbsoluteAndInclusive(double totalDeltaX, double totalDeltaY, bool expected)
+    {
+        Assert.Equal(expected, MainWindowHelpers.IsBeyondDragThreshold(totalDeltaX, totalDeltaY, 4, 4));
+    }
+
     [Fact]
     public void ResetFit_RestoresUniformAndCalculatesViewport()
     {

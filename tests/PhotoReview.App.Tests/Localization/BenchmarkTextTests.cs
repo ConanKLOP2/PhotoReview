@@ -39,7 +39,7 @@ public sealed class BenchmarkTextTests : IDisposable
         var profile = BenchmarkProfiles.Find("fast-sequential")!;
 
         TestLocalization.UseVietnamese();
-        Assert.Equal("Next liên tục", BenchmarkText.ProfileDescription(profile));
+        Assert.Equal("Liên tục chuyển sang ảnh tiếp theo", BenchmarkText.ProfileDescription(profile));
         Assert.Equal("Fast Sequential", BenchmarkText.ProfileName(profile));
 
         using (TestLocalization.Use(TestLocalization.English))

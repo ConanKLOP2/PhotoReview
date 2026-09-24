@@ -72,7 +72,7 @@ Thứ tự tìm mỗi chữ: file của bạn → file đi kèm → English có 
 
 ### Dịch hoặc thêm ngôn ngữ
 
-1. Cài đặt → chọn ngôn ngữ → **Xuất file cần dịch**: tạo `<mã>.todo.json` gồm các key còn thiếu, câu English và ghi chú.
+1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm các key còn thiếu, câu English và ghi chú.
 2. Tạo `<mã>.json` có khối `_meta` (mã, tên, tên bản địa, `plural`, tác giả) và bản dịch.
 3. Đặt vào thư mục người dùng, **Tải lại bản dịch**, chọn trong **Ngôn ngữ**.
 4. Chạy PhotoReview với `--i18n-keys` để thấy key của từng chữ, hoặc `--i18n-pseudo` để phát hiện chữ bị cắt.
@@ -85,3 +85,46 @@ Thứ tự tìm mỗi chữ: file của bạn → file đi kèm → English có 
   (key đó bị bỏ qua, hiện English). Dấu ngoặc nhọn thường viết `{{` / `}}`.
 - Số nhiều: `key.one` / `key.other`; tiếng Việt dùng `"plural": "none"` nên chỉ cần `.other`.
 - File hỏng không làm app crash: file bị bỏ qua và lỗi được ghi vào log.
+
+## Vietnamese glossary / Thuật ngữ tiếng Việt
+
+`vi.json` uses exactly one Vietnamese term per concept, following Windows' Vietnamese UI where it has one
+(L12). Use these terms when you add or change a Vietnamese string. / `vi.json` dùng đúng một thuật ngữ cho mỗi
+khái niệm, theo giao diện Windows tiếng Việt khi có. Hãy dùng các từ dưới đây khi thêm hoặc sửa chuỗi tiếng Việt.
+
+| English | Tiếng Việt | Note / Ghi chú |
+|---|---|---|
+| folder | thư mục | never "folder" |
+| file | tệp | never "file" |
+| Recycle Bin; recycle | Thùng rác (capital T); đưa vào Thùng rác | "Delete" operation = `Xóa (vào Thùng rác)`: must not sound permanent |
+| action (user-defined, with a shortcut) | hành động | Action profiles = Thiết lập hành động |
+| operation (Move/Copy/Recycle that was performed and journaled) | thao tác | pending = đang chờ, failed = thất bại |
+| Move / Copy | Di chuyển / Sao chép | capitalized when naming the operation |
+| delete, remove, clear, dismiss | xóa | spelling `xóa`, never `xoá` |
+| undo | hoàn tác | |
+| retry | thử lại | |
+| Recovery (window/feature) | Phục hồi | "restore" (defaults, Recycle Bin, session) = khôi phục |
+| preview (image) | ảnh xem trước | loading mode Preview = Xem trước; Original = Gốc; Fast = Nhanh |
+| Fit | Vừa khung | |
+| zoom; zoom in / out | thu phóng; phóng to / thu nhỏ | |
+| fullscreen | toàn màn hình | |
+| compare | so sánh | |
+| settings | cài đặt | |
+| shortcut | phím tắt | |
+| import / export | nhập / xuất | |
+| journal | nhật ký | log (diagnostic log file) stays "log" |
+| batch | xử lý hàng loạt | |
+| source / destination | nguồn / đích | |
+| duplicate | bản trùng lặp | |
+| decoder | bộ giải mã | decode = giải mã |
+| preload | tải trước | |
+| clipboard | bảng tạm | |
+| click; press (a key) | nhấn; nhấn phím | double-click = bấm đúp |
+| bytes | byte | Vietnamese has no plural form |
+
+Kept in English (technical words Vietnamese users already use / Giữ tiếng Anh): cache, hash, log, benchmark,
+JSON, RAM, SSD/HDD, metadata, Explorer, key names (Ctrl, Home, PgUp…), decoder backend names (WPF, WIC Direct,
+TurboJPEG), and benchmark profile / workload names (identifiers that also appear in English reports).
+
+Style: sentence case; no trailing period on buttons, labels and titles; full sentences in messages end with a
+period; `…` (U+2026) for "choose…" buttons, `...` for progress text, matching `en.json`.

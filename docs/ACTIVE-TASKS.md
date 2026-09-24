@@ -1,7 +1,7 @@
 # Active Tasks — Consolidated Work Remaining
 
 **Updated:** 2026-09-24
-**Status:** AR, ST, TS, TC, DF, CQ, L (i18n L00-L11) DONE on `master` (v2.0.64). **PR batch #64-#70 open (2026-09-24):** OC14 gate (#64), IO03 (#65), IO04+IO05 (#66), Recovery details + live check (#67), test diet (#68-#70, TC06 Ctrl+Z bug fix in #69). Open after merge: L12, DT10, ST08/09, OC15-18; T89 GUI acceptance waits on the user.
+**Status:** AR, ST, TS, TC, DF, CQ, L (i18n L00-L11) DONE on `master` (v2.0.64). **PR batch #64-#70 open (2026-09-24):** OC14 gate (#64), IO03 (#65), IO04+IO05 (#66), Recovery details + live check (#67), test diet (#68-#70, TC06 Ctrl+Z bug fix in #69). Open after merge: L12, ST08/09, OC15-18; T89 GUI acceptance waits on the user. DT10 DONE (2026-09-24).
 
 ---
 
@@ -20,7 +20,7 @@
 | **OC** (Optimize/Clean) | 🔄 ~65% done | OC14 gate moved to the ViewModel (#64, open); unblocks ST08/09 and OC15-18. |
 | **WD** (WPF Dialog) | ✅ WD01 unblocked (AR04/ADR 0005); WD02-06 closed 2026-09-23 (Q-AR5) | WD02 low-risk part covered by AR03c; WD03-06 had no known dialog bug to justify keeping open. |
 | **IO** (I/O Durability) | 🔄 IO01 DECIDED (ADR 0007, 2026-09-24); IO03 #65, IO04+IO05 #66 open | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
-| **DT** (Docs Token Diet) | 🔄 Partial | DT00-03, DT08, DT09 DONE; Q-D1..Q-D4 decided. DT04-07 closed 2026-09-23 (Q-AR5, diminishing returns); DT10 kept. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
+| **DT** (Docs Token Diet) | ✅ DONE | DT00-03, DT08-DT10 DONE; Q-D1..Q-D4 decided. DT04-07 closed 2026-09-23 (Q-AR5, diminishing returns). DT10 final measurement: T0 11.8→10.9 KB, T1 22.7→10.2 KB. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
 | **D** (Perf Diagnosis) | ❌ Closed 2026-09-23 (Q-AR5) | Numbers were from the legacy `--perf-session` graph (no preload). Re-open any item from the AR02e production-graph baseline if a bottleneck shows. |
 
 ---
@@ -155,11 +155,13 @@
 
 ---
 
-## DT Tasks — Docs Token Diet (Partial)
+## DT Tasks — Docs Token Diet (DONE)
 
 **Plan:** [`archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`](archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md)
 
-DT00-DT03, DT08, DT09 DONE; Q-D1..Q-D4 decided (see OPEN-DECISIONS). DT04-DT07 closed 2026-09-23 (Q-AR5) — diminishing returns; plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. DT10 (final measurement) kept (Q-AR5). Known gap: `docs-budget.ps1` did not count `docs/INDEX.md` as T0 → fixed in AR07 §4.
+DT00-DT03, DT08-DT10 DONE; Q-D1..Q-D4 decided (see OPEN-DECISIONS). DT04-DT07 closed 2026-09-23 (Q-AR5) — diminishing returns. Known gap (fixed in AR07 §4): `docs-budget.ps1` did not count `docs/INDEX.md` as T0.
+
+**DT10 (2026-09-24, final measurement):** T0 (`AGENTS.md`+`task_on_progress.md`+`docs/INDEX.md`) 12044→11128 B (11.8→10.9 KB, budget 12 KB). T1 (5 `docs/refactoring/*` files the script tracks) 23211→10419 B (22.7→10.2 KB, budget 15 KB) via cut+paste to `docs/refactoring/archive/*-detail.md` (STRUCTURE-OPTIMIZE-STATUS, TEST-CLEANUP-SUMMARY, OPEN-DECISIONS, OPTIMIZE-CLEAN-SUMMARY, T89-FIT-SUMMARY), pointer lines kept. `tools/check-doc-links.ps1` 0 broken after the move. See PR for the per-file before/after table.
 
 ---
 

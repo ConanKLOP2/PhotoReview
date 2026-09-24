@@ -52,7 +52,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("Retry thành công.", result.Message);
+        Assert.Equal("Thử lại thành công.", result.Message);
         Assert.NotNull(result.Entry);
         Assert.Equal(JournalState.Committed, result.Entry.State);
         Assert.False(_fs.FileExists(source));
@@ -73,7 +73,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("Retry thành công.", result.Message);
+        Assert.Equal("Thử lại thành công.", result.Message);
         Assert.NotNull(result.Entry);
         Assert.Equal(JournalState.Committed, result.Entry.State);
         Assert.True(_fs.FileExists(source));
@@ -137,7 +137,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Contains("Chỉ cho phép retry Move/Copy", result.Message);
+        Assert.Contains("Chỉ có thể thử lại Di chuyển/Sao chép", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects missing destination")]
@@ -149,7 +149,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Operation không có đích.", result.Message);
+        Assert.Equal("Thao tác không có đích.", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects when source no longer exists")]
@@ -176,7 +176,7 @@ public sealed class RecoveryRetryServiceTests
         var result = _service.RetryMoveOrCopy(failed);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("Nguồn đã thay đổi; từ chối retry để bảo vệ dữ liệu.", result.Message);
+        Assert.Equal("Nguồn đã thay đổi; từ chối thử lại để bảo vệ dữ liệu.", result.Message);
     }
 
     [Fact(DisplayName = "RetryMoveOrCopy rejects when destination already exists")]

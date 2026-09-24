@@ -50,7 +50,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal($"Shortcut {property} không hợp lệ.", error);
+        Assert.Equal($"Phím tắt {property} không hợp lệ.", error);
     }
 
     [Theory(DisplayName = "Action with missing name or invalid key name reports action error")]
@@ -68,7 +68,7 @@ public sealed class SettingsValidatorTests
         var error = validator.ValidateShortcuts(settings);
 
         Assert.NotNull(error);
-        Assert.Equal("Action phải có tên và phím tắt hợp lệ.", error);
+        Assert.Equal("Mỗi hành động cần có tên và phím tắt hợp lệ.", error);
     }
 
     [Fact(DisplayName = "Duplicate shortcut keys report conflict message")]
@@ -102,7 +102,7 @@ public sealed class SettingsValidatorTests
         Assert.NotNull(error);
         Assert.Contains("Phím Right bị dùng trùng bởi:", error);
         Assert.Contains("Next", error);
-        Assert.Contains("Action: DuplicateAction", error);
+        Assert.Contains("Hành động: DuplicateAction", error);
     }
 
     [Fact(DisplayName = "Throws ArgumentNullException when settings is null")]
