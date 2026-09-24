@@ -5,7 +5,7 @@
 ## Now: I18N (group L) — EN + VI, community-editable JSON catalogs
 
 - Plan `docs/refactoring/I18N-PLAN.md`, ADR 0006; Q-L1..Q-L8 all = recommendation (user, 2026-09-24).
-- L00 docs = PR #55 (also merged into `feat/i18n`, so merging either first is fine). L01–L11 code = one PR from `feat/i18n`: Localizer + source generator (`Tr`), `UiLanguage` (v3 migration keeps vi), `{loc:Tr}` live switch, all windows/status/Core messages via catalogs, journal error codes, translator modes, guards + `tools/i18n-check.ps1` in CI, `docs/TRANSLATING.md`. Evidence: I18N-PLAN "L11 evidence".
+- L00 docs = PR #55 (also merged into `feat/i18n`, so merging either first is fine). L01–L11 code = PR #61 (`feat/i18n`, merged master 199bd63 incl. #57 Recovery clear + #59 dark dialogs): Localizer + source generator (`Tr`), `UiLanguage` (v3 migration keeps vi), `{loc:Tr}` live switch, all windows/status/Core messages via catalogs, journal error codes, translator modes, guards + `tools/i18n-check.ps1` in CI, `docs/TRANSLATING.md`. Evidence: I18N-PLAN "L11 evidence".
 - Next: L12 Vietnamese copy polish (user reviews wording; inventory flags e.g. typo "bấp", mixed folder/thư mục). After merge: Release build in main checkout (CLAUDE.local.md).
 
 ## Previous: perf night 2026-09-24 — all merged (#39–#49, #53)
