@@ -205,11 +205,10 @@ public partial class App : System.Windows.Application, IDisposable
         try { LogStartupErrorForced("Startup failed", ex); } catch { /* logging must not block the shutdown */ }
         try
         {
-            System.Windows.MessageBox.Show(
-                PhotoReview.Core.Localization.Tr.AppStartupFailed(ex.Message),
+            // The service provider may itself be the thing that failed, so fall back to a fresh dialog service.
+            (_services?.GetService<IDialogService>() ?? new PhotoReview.App.Services.WpfDialogService(_services!)).ShowError(
                 PhotoReview.Core.Localization.Tr.AppTitle,
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
+                PhotoReview.Core.Localization.Tr.AppStartupFailed(ex.Message));
         }
         catch { /* no UI available: still shut down below */ }
         try { Dispose(); } catch { /* release what we can; the process exits next */ }
