@@ -97,7 +97,7 @@ public sealed class SourcePresenceTests
         var rootGrid = window.Elements(Presentation + "Grid").Single();
         Assert.Null(rootGrid.Element(Presentation + "Grid.RowDefinitions"));
         Assert.Contains(rootGrid.Elements(Presentation + "Border"),
-            b => Attr(b, "Panel.ZIndex") == "100" && Attr(b, "Background") == "#B0181818");
+            b => Attr(b, "Panel.ZIndex") == "100" && Attr(b, "Background") == "{DynamicResource Dark.Overlay}");
 
         // The folder text is kept in the tree but hidden; the folder is shown in the native title bar.
         var folderText = Named(doc, "FolderText");
