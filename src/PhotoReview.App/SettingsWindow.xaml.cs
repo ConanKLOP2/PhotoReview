@@ -13,7 +13,9 @@ namespace PhotoReview.App;
 
 public partial class SettingsWindow : Window
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    // Relaxed escaping: the JSON is only shown in a local text box, and the default encoder turns every
+    // non-ASCII character into an escape sequence (Vietnamese action names became unreadable).
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private readonly SettingsStore? _store;
     public AppSettings Settings { get; }
 
