@@ -1,5 +1,5 @@
 using System.IO;
-using Microsoft.VisualBasic.FileIO;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Benchmarking;
@@ -15,7 +15,7 @@ public static class BenchmarkWorkloadRunner
 {
     public static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunIterationAsync(
         BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,
-        int iteration, Random random, CancellationToken ct)
+        int iteration, Random random, IRecycleBin recycleBin, CancellationToken ct)
     {
         if (workload == BenchmarkWorkload.Correctness && profile.Id is "explorer-reindex" or "cache-recovery")
         {
@@ -30,7 +30,7 @@ public static class BenchmarkWorkloadRunner
         }
 
         if (workload == BenchmarkWorkload.FileAction)
-            return await RunFileActionAsync(executor, files, profile, iteration, ct).ConfigureAwait(false);
+            return await RunFileActionAsync(executor, files, profile, iteration, recycleBin, ct).ConfigureAwait(false);
 
         if (workload == BenchmarkWorkload.FirstFrame)
         {
@@ -67,7 +67,7 @@ public static class BenchmarkWorkloadRunner
     }
 
     private static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunFileActionAsync(
-        BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, int iteration, CancellationToken ct)
+        BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, int iteration, IRecycleBin recycleBin, CancellationToken ct)
     {
         var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
         var moved = temp + ".moved";
@@ -94,10 +94,9 @@ public static class BenchmarkWorkloadRunner
             switch (op)
             {
                 case "move": File.Move(temp, moved); File.Delete(moved); break;
-                // Disposable per-iteration benchmark fixtures: permanent delete instead of
-                // Recycle Bin, which would otherwise accumulate one item per iteration in the
-                // user's real Recycle Bin every time this runs.
-                case "delete": FileSystem.DeleteFile(temp, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin); break;
+                // The bin is injected: production passes WindowsRecycleBin (the real "Delete" action
+                // path); tests pass a fake so the gate never touches the user's real Recycle Bin.
+                case "delete": recycleBin.SendToRecycleBin(temp); break;
                 case "copy": File.Copy(temp, copied, overwrite: true); break;
             }
             // A delete or move can legitimately win the race before the decoder opens
