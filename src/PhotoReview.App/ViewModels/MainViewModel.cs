@@ -363,15 +363,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
-    /// <summary>
-    /// Deprecated: Use UndoAsync() instead. This method is kept for backward compatibility but redirects to UndoAsync().
-    /// </summary>
-    [Obsolete("Use UndoAsync() instead. This method provides the same behavior as UndoAsync() now.")]
-    public async Task UndoLastAsync()
-    {
-        await UndoAsync();
-    }
-
     public void ToggleFit() => _viewerState.ResetFit();
     public void ZoomIn() => _viewerState.ZoomIn();
     public void ZoomOut() => _viewerState.ZoomOut();
