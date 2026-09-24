@@ -64,6 +64,15 @@ Unregister:
 .\outputs\uninstall-photo-review-association.ps1
 ```
 
+### Languages
+
+The UI ships in English and Vietnamese (Settings → Language; `auto` follows Windows). Texts live in plain JSON files that anyone can edit or extend without rebuilding — see [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
+| Language | Status |
+|---|---|
+| English (`en`) | built in, complete |
+| Tiếng Việt (`vi`) | complete |
+
 ### Known Limitations
 
 Explorer ordering depends on open folder windows and valid Shell snapshots; fallback ordering is used if Explorer is not ready or if the snapshot encounters an error or timeout. Contract tests do not guarantee GUI behavior, perceived first-image latency, or P95 timings; these conclusions require controlled runtime measurements.
@@ -129,6 +138,10 @@ Gỡ đăng ký:
 ```powershell
 .\outputs\uninstall-photo-review-association.ps1
 ```
+
+### Ngôn ngữ
+
+Giao diện có English và Tiếng Việt (Cài đặt → Ngôn ngữ; `auto` theo Windows). Chữ nằm trong các file JSON thường, ai cũng sửa hoặc thêm ngôn ngữ được mà không cần build — xem [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ### Giới hạn cần biết
 
