@@ -19,6 +19,12 @@ public sealed class SourceBytesCache
     public long CurrentSize => _cache.CurrentSize;
     public int Count => _cache.Count;
 
+    /// <summary>
+    /// Returns the source bytes, reading the file if it is not cached yet.
+    /// WARNING: this blocks the calling thread until the read completes (it waits on a thread-pool
+    /// task). Call it only from a worker or dedicated decode thread -- never from a UI or other
+    /// <c>SynchronizationContext</c>-bound thread (IMG-09).
+    /// </summary>
     public byte[] GetOrRead(string path)
     {
         var key = CreateKey(path);
