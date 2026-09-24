@@ -181,7 +181,9 @@ public sealed class WicDirectDecoder : IImageDecoder
             IntPtr buffer = Marshal.AllocHGlobal(bufferSize);
             try
             {
-                currentSource.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, buffer);
+                CopyPixelsGuarded(
+                    () => currentSource.CopyPixels(IntPtr.Zero, (uint)stride, (uint)bufferSize, buffer),
+                    colorChain.IsActive);
                 bitmap = BitmapSource.Create(
                     (int)finalW,
                     (int)finalH,
@@ -207,13 +209,6 @@ public sealed class WicDirectDecoder : IImageDecoder
             int originalHeight = isTransposed ? (int)origW : (int)origH;
 
             return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect, originalWidth, originalHeight);
-        }
-        catch (COMException ex) when (colorChain.IsActive)
-        {
-            // The transform is evaluated lazily inside CopyPixels; a failure there must still route
-            // the file to the color-managed WPF fallback instead of surfacing as a hard error.
-            throw new NotSupportedException(
-                "WicDirect could not transform the embedded ICC profile to sRGB: " + ex.Message, ex);
         }
         finally
         {
@@ -261,6 +256,25 @@ public sealed class WicDirectDecoder : IImageDecoder
     /// True when the WIC pixel format cannot carry transparency. Unknown and indexed formats
     /// (palettes may contain transparent entries) are conservatively treated as having alpha.
     /// </summary>
+    /// <summary>
+    /// The colour transform is evaluated lazily inside CopyPixels, so a COM failure there on an
+    /// ICC-bearing image must still route the file to the colour-managed WPF fallback. Only this
+    /// call is treated as an ICC failure (IMG-04): converter/rotator failures elsewhere propagate
+    /// with their own accurate message instead of being reported as an ICC problem.
+    /// </summary>
+    internal static void CopyPixelsGuarded(Action copyPixels, bool colorTransformActive)
+    {
+        try
+        {
+            copyPixels();
+        }
+        catch (COMException ex) when (colorTransformActive)
+        {
+            throw new NotSupportedException(
+                "WicDirect could not transform the embedded ICC profile to sRGB: " + ex.Message, ex);
+        }
+    }
+
     internal static bool IsOpaqueFormat(Guid pixelFormat) => OpaquePixelFormats.Contains(pixelFormat);
 
     private static bool TryGetNativeReducedSize(
