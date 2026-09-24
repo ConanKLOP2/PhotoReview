@@ -53,8 +53,13 @@ public sealed class WindowsRecycleBin : IRecycleBin
                         var sizeText = Convert.ToString(item.Size, CultureInfo.InvariantCulture);
                         var modified = item.ExtendedProperty("System.DateModified");
                         if (!long.TryParse(sizeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out long size)) continue;
-                        if (!DateTime.TryParse(Convert.ToString(modified, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out DateTime lastWrite)) continue;
-                        var candidate = new RecycleCandidate(deletedFrom, name, size, lastWrite.ToUniversalTime());
+                        if (!DateTime.TryParse(Convert.ToString(modified, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime shellTime)) continue;
+                        // The shell hands FILETIME properties over as an unzoned DATE that holds UTC digits, not
+                        // local time (observed at UTC+7: 14:58:16 for a file written at 14:58:16Z). The local
+                        // reading stays as an alternative so a Windows build that converts still matches.
+                        var utcReading = DateTime.SpecifyKind(shellTime, DateTimeKind.Utc);
+                        var localReading = DateTime.SpecifyKind(shellTime, DateTimeKind.Local).ToUniversalTime();
+                        var candidate = new RecycleCandidate(deletedFrom, name, size, utcReading, localReading);
                         if (RecycleCandidateSelector.IsMatch(candidate, originalPath, expectedSize, expectedLastWriteUtc))
                             candidates.Add((item, candidate));
                     }
@@ -122,14 +127,23 @@ public sealed class WindowsRecycleBin : IRecycleBin
     }
 }
 
-internal readonly record struct RecycleCandidate(string? DeletedFrom, string? Name, long Size, DateTime LastWriteUtc);
+internal readonly record struct RecycleCandidate(string? DeletedFrom, string? Name, long Size, DateTime LastWriteUtc, DateTime? AlternateLastWriteUtc = null);
 
 internal static class RecycleCandidateSelector
 {
+    /// <summary>
+    /// The shell reports System.DateModified with whole-second resolution, while NTFS write times carry 100 ns
+    /// ticks, so exact equality never matched a real Recycle Bin item (Ctrl+Z after delete could not restore).
+    /// A difference under one second covers both truncation and rounding by the shell.
+    /// </summary>
+    private static bool TimestampMatches(DateTime shellValueUtc, DateTime expectedUtc)
+        => (shellValueUtc - expectedUtc).Duration() < TimeSpan.FromSeconds(1);
+
     internal static bool IsMatch(RecycleCandidate candidate, string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
     {
         var pathMatches = string.Equals(candidate.DeletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
             || string.Equals(Path.Combine(candidate.DeletedFrom ?? string.Empty, candidate.Name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase);
-        return pathMatches && candidate.Size == expectedSize && candidate.LastWriteUtc == expectedLastWriteUtc;
+        return pathMatches && candidate.Size == expectedSize && (TimestampMatches(candidate.LastWriteUtc, expectedLastWriteUtc)
+                || (candidate.AlternateLastWriteUtc is { } alternate && TimestampMatches(alternate, expectedLastWriteUtc)));
     }
 }

@@ -53,7 +53,15 @@ public sealed class PlatformPrimitivesTests
         Assert.Throws<ArgumentException>(() => bin.SendToRecycleBin(""));
         Assert.Throws<ArgumentNullException>(() => bin.TryRestore(null!, 0, DateTime.UtcNow));
         Assert.Throws<ArgumentException>(() => bin.TryRestore("", 0, DateTime.UtcNow));
+    }
 
+    // Split from the argument checks: a miss makes TryRestore enumerate the user's real Recycle Bin through
+    // Shell COM, so its cost scales with the bin (measured 5-10 s) and it belongs with the Native tests.
+    [Trait("Category", "Native")]
+    [Fact(DisplayName = "WindowsRecycleBin.TryRestore returns false when nothing in the real bin matches")]
+    public void WindowsRecycleBinTryRestoreReturnsFalseWhenNothingMatches()
+    {
+        var bin = WindowsRecycleBin.Instance;
         var fakePath = "C:\\nonexistent-folder-xyz\\nonexistent-file-123.jpg";
         var restored = bin.TryRestore(fakePath, 1234, DateTime.UtcNow);
         Assert.False(restored);

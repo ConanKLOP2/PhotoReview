@@ -42,37 +42,25 @@ public sealed class ShortcutRouterTests
         _router = new ShortcutRouter(_settings);
     }
 
-    [Fact]
-    public void Fullscreen_NormalKey_ResolvesToFullscreen()
+    // Alt+F11 reaches WPF as Key.System with SystemKey = F11, so both spellings must resolve.
+    [Theory]
+    [InlineData(Key.F11, Key.None, ModifierKeys.None)]
+    [InlineData(Key.System, Key.F11, ModifierKeys.Alt)]
+    public void Fullscreen_ResolvesToFullscreen(Key key, Key systemKey, ModifierKeys modifiers)
     {
-        var cmd = _router.TryResolve(Key.F11, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
+        var cmd = _router.TryResolve(key, systemKey, modifiers, isFullscreen: false, hasImage: false);
         Assert.NotNull(cmd);
         Assert.Equal(ReviewCommandType.Fullscreen, cmd.Value.Type);
     }
 
-    [Fact]
-    public void Fullscreen_SystemKey_ResolvesToFullscreen()
+    [Theory]
+    [InlineData(true, ReviewCommandType.ExitFullscreen)]
+    [InlineData(false, ReviewCommandType.Close)]
+    public void Escape_ResolvesByFullscreenState(bool isFullscreen, ReviewCommandType expected)
     {
-        // Khi bấm Alt+F11, WPF Key là Key.System và SystemKey là Key.F11
-        var cmd = _router.TryResolve(Key.System, Key.F11, ModifierKeys.Alt, isFullscreen: false, hasImage: false);
+        var cmd = _router.TryResolve(Key.Escape, Key.None, ModifierKeys.None, isFullscreen: isFullscreen, hasImage: true);
         Assert.NotNull(cmd);
-        Assert.Equal(ReviewCommandType.Fullscreen, cmd.Value.Type);
-    }
-
-    [Fact]
-    public void Escape_WhenFullscreen_ResolvesToExitFullscreen()
-    {
-        var cmd = _router.TryResolve(Key.Escape, Key.None, ModifierKeys.None, isFullscreen: true, hasImage: true);
-        Assert.NotNull(cmd);
-        Assert.Equal(ReviewCommandType.ExitFullscreen, cmd.Value.Type);
-    }
-
-    [Fact]
-    public void Escape_WhenNotFullscreen_ResolvesToClose()
-    {
-        var cmd = _router.TryResolve(Key.Escape, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
-        Assert.NotNull(cmd);
-        Assert.Equal(ReviewCommandType.Close, cmd.Value.Type);
+        Assert.Equal(expected, cmd.Value.Type);
     }
 
     [Fact]
@@ -119,25 +107,14 @@ public sealed class ShortcutRouterTests
         Assert.Null(_router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: false));
     }
 
-    [Fact]
-    public void Compare_WhenInvisibleAndNoPair_ReturnsNull()
+    [Theory]
+    [InlineData(false, false, false)] // not visible, no pair: nothing to compare
+    [InlineData(true, false, true)]   // not visible, has pair: open compare
+    [InlineData(false, true, true)]   // visible: always closable, even without a pair
+    public void Compare_ResolvesToToggleOnlyWhenThereIsSomethingToToggle(bool hasComparePair, bool isCompareVisible, bool resolves)
     {
-        var cmd = _router.TryResolve(Key.C, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: false, isCompareVisible: false);
-        Assert.Null(cmd);
-    }
-
-    [Fact]
-    public void Compare_WhenInvisibleAndHasPair_ResolvesToToggleCompare()
-    {
-        var cmd = _router.TryResolve(Key.C, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: true, isCompareVisible: false);
-        Assert.Equal(ReviewCommandType.ToggleCompare, cmd?.Type);
-    }
-
-    [Fact]
-    public void Compare_WhenVisible_ResolvesToToggleCompareEvenWithoutPair()
-    {
-        var cmd = _router.TryResolve(Key.C, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: false, isCompareVisible: true);
-        Assert.Equal(ReviewCommandType.ToggleCompare, cmd?.Type);
+        var cmd = _router.TryResolve(Key.C, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: hasComparePair, isCompareVisible: isCompareVisible);
+        Assert.Equal(resolves ? ReviewCommandType.ToggleCompare : null, cmd?.Type);
     }
 
     [Fact]
