@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using PhotoReview.App;
 using PhotoReview.Integration.Tests.Infrastructure;
 
@@ -36,13 +37,14 @@ public sealed class AccessibilityNamesTests
                 var seen = 0;
                 Walk(window, control =>
                 {
-                    if (control is not (TextBox or ComboBox or CheckBox or RadioButton or Button)) return;
+                    if (control is not (TextBox or ComboBox or ToggleButton or Button)) return; // ToggleButton covers CheckBox, RadioButton and the tools "⋮" toggle
                     seen++;
                     var peer = UIElementAutomationPeer.CreatePeerForElement(control);
                     // UIA clients (Narrator) announce the Name property, or the LabeledBy element's name when Name is empty.
                     var name = peer?.GetName();
                     if (string.IsNullOrWhiteSpace(name)) name = LabelName(control);
-                    if (string.IsNullOrWhiteSpace(name))
+                    // An icon-only button's peer name is its glyph text (e.g. an emoji); that is not an accessible name.
+                    if (string.IsNullOrWhiteSpace(name) || !name.Any(char.IsLetterOrDigit))
                         unnamed.Add($"{control.GetType().Name} '{(control as FrameworkElement)?.Name}'");
                 });
 
