@@ -46,4 +46,4 @@ The application must prioritize the following principles when processing and rev
 
 ## Tests
 
-- Must fail when the guarded code is broken (mutate to check). No source-text tests, fixed-delay asserts or `Task.Yield()` polling; real-OS tests are `Native`/`Slow` and self-cleaning. Local filter: `Category!=Manual&Category!=Native&Category!=Slow&Category!=Stress`.
+- Must fail when the guarded code is broken (mutate to check). No source-text tests, fixed-delay asserts or `Task.Yield()` polling; real-OS tests are `Native`/`Slow` and self-cleaning. Local filter: `Category!=Manual&Category!=Native&Category!=Slow`.
