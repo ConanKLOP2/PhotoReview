@@ -18,7 +18,10 @@ $required = @(
     'PhotoReview.Benchmarking.dll',
     'PhotoReview.PerfAnalysis.dll',
     'PhotoReview.Imaging.TurboJpeg.dll',
-    'turbojpeg.dll')
+    'turbojpeg.dll',
+    # Translation catalogs (ADR 0006): English is also embedded, but shipped files let users read/edit them.
+    'Languages\en.json',
+    'Languages\vi.json')
 $required += if ($SelfContained) { @('coreclr.dll', 'hostfxr.dll') } else { @() }
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $resolved $_) -PathType Leaf) })
 if ($missing.Count -gt 0) {
