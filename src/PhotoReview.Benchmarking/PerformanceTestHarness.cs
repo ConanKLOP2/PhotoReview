@@ -20,15 +20,18 @@ public static class PerformanceTestHarness
         { ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff" };
     private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
 
-    /// <summary>Test seam: called once per cold-read decode; the argument is true when the decode is timed.</summary>
-    internal static Action<bool>? DecodeObserver { get; set; }
+    // A valid, tiny PNG keeps the fixture portable while exercising WPF's real decoder; also the in-memory warm-up image.
+    private static readonly byte[] TinyPng = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+    /// <summary>Test seam: called once per cold-read decode with (timed, source file path); the path is null for the
+    /// untimed warm-up, which decodes an in-memory image and never touches a measured file.</summary>
+    internal static Action<bool, string?>? DecodeObserver { get; set; }
 
     public static string CreateFixture(string root, int count = 30)
     {
         var folder = Path.Combine(root, "performance-fixture");
         Directory.CreateDirectory(folder);
-        // A valid, tiny PNG keeps the fixture portable while exercising WPF's real decoder.
-        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var png = TinyPng;
         for (var i = 0; i < count; i++)
         {
             var path = Path.Combine(folder, $"fixture-{i:000}.png");
@@ -61,15 +64,16 @@ public static class PerformanceTestHarness
 
     private static async Task<PerformanceSample> MeasureColdAsync(string[] files, CancellationToken ct)
     {
-        var before = Process.GetCurrentProcess().WorkingSet64;
         var times = new List<long>(files.Length); long reads = 0;
-        // One untimed decode so first-call WPF/codec JIT and native init do not inflate the first timed sample (TOOL-02).
-        await Task.Run(() => { DecodeObserver?.Invoke(false); using var stream = new FileStream(files[0], FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); GC.KeepAlive(Decode(stream, 2200)); }, ct);
+        // One untimed decode of an in-memory image so first-call WPF/codec JIT and native init do not inflate the first
+        // timed sample (TOOL-02). It must not read a measured file, or the first "cold" read would hit the OS file cache (R2-A-09).
+        await Task.Run(() => { DecodeObserver?.Invoke(false, null); using var stream = new MemoryStream(TinyPng, writable: false); GC.KeepAlive(Decode(stream, 2200)); }, ct);
+        var before = Process.GetCurrentProcess().WorkingSet64; // after warm-up so JIT/native init is not part of the delta
         foreach (var path in files)
         {
             ct.ThrowIfCancellationRequested();
             var sw = Stopwatch.StartNew();
-            await Task.Run(() => { DecodeObserver?.Invoke(true); using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
+            await Task.Run(() => { DecodeObserver?.Invoke(true, path); using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
             sw.Stop(); times.Add(sw.ElapsedMilliseconds); reads++;
         }
         return Sample("cold-read", times, before, Process.GetCurrentProcess().WorkingSet64, reads, 0, 0, 0);

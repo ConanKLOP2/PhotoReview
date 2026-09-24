@@ -15,8 +15,8 @@ public sealed class PerformanceHarnessWarmupTests : IDisposable
     public async Task ColdReadRunsExactlyOneUntimedWarmupDecodeBeforeFirstTimedSample()
     {
         var fixture = PerformanceTestHarness.CreateFixture(_root.Path, 3);
-        var events = new List<bool>();
-        PerformanceTestHarness.DecodeObserver = timed => { lock (events) events.Add(timed); };
+        var events = new List<(bool Timed, string? Path)>();
+        PerformanceTestHarness.DecodeObserver = (timed, path) => { lock (events) events.Add((timed, path)); };
         try
         {
             await PerformanceTestHarness.RunAsync(fixture, 3, workers: 1,
@@ -24,6 +24,10 @@ public sealed class PerformanceHarnessWarmupTests : IDisposable
         }
         finally { PerformanceTestHarness.DecodeObserver = null; }
 
-        Assert.Equal([false, true, true, true], events);
+        Assert.Equal([false, true, true, true], events.Select(e => e.Timed).ToArray());
+        // R2-A-09: the warm-up must not read a measured file (it would pre-warm the first "cold" sample).
+        Assert.Null(events[0].Path);
+        Assert.Equal(Directory.EnumerateFiles(fixture).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToArray(),
+            events.Skip(1).Select(e => e.Path).ToArray());
     }
 }
