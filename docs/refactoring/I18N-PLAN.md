@@ -40,7 +40,7 @@ per-navigation cost = one dictionary lookup + one pre-parsed template concat. XA
 
 | ID | Task | Tests / evidence | Status |
 |---|---|---|---|
-| L00 | This plan, ADR 0006, decisions Q-L1..Q-L8 | docs only | ✅ #55 |
+| L00 | This plan, ADR 0006, decisions Q-L1..Q-L8 | docs only | ✅ #55 merged |
 | L01 | Core: `Localizer`, catalog loader (3 layers), `SafeFormatter` (named args, plurals), validation (size cap, unknown placeholders, bad braces → key rejected + logged), `en.json`/`vi.json` skeleton; source generator | Unit tests: broken JSON, partial catalog, placeholder mismatch, fallback order, plural rules | ⏳ |
 | L02 | App wiring: DI + startup apply, `TrExtension`, `LocalizationSource`, `UiLanguage` + migration, `IAppPaths.UserLanguagesDir`; test assemblies pin `vi` via `ModuleInitializer` | Existing Vietnamese assertions still pass unchanged | ⏳ |
 | L03 | Guard tests: no Vietnamese literals in `src/**/*.cs` outside catalogs (shrinking allowlist); no literal text attributes in XAML (symbol whitelist); every XAML `Tr` key exists in `en.json`; `vi.json` has no unknown keys | Architecture tests | ⏳ |
