@@ -24,7 +24,7 @@ namespace PhotoReview.App.Tests.HotPath;
 public sealed class NativeRecycleBinTests : IAsyncLifetime
 {
     private string? _testFolder;
-    private readonly int _photoCount = 20;
+    private readonly int _photoCount = 3; // every restore scans the real bin through Shell COM (seconds each)
 
     public Task InitializeAsync()
     {
@@ -36,8 +36,12 @@ public sealed class NativeRecycleBinTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        // Cleanup at session end
-        if (_testFolder != null && Directory.Exists(_testFolder))
+        if (_testFolder is null) return Task.CompletedTask;
+
+        // Take this test's own items out of the user's real Recycle Bin (exact folder match only), and fail
+        // loudly if any survive: these tests must leave the bin exactly as they found it.
+        var leftovers = TestRecycleBinCleanup.RemoveItemsDeletedFrom(_testFolder);
+        if (Directory.Exists(_testFolder))
         {
             try
             {
@@ -45,7 +49,35 @@ public sealed class NativeRecycleBinTests : IAsyncLifetime
             }
             catch { }
         }
+        Assert.True(leftovers.Count == 0, "Recycle Bin items created by this test could not be removed: " + string.Join(", ", leftovers));
         return Task.CompletedTask;
+    }
+
+    [Fact(DisplayName = "TC06 hygiene: cleanup removes only the items deleted from the given folder")]
+    public async Task Cleanup_RemovesOnlyItemsFromTheGivenFolder()
+    {
+        Assert.NotNull(_testFolder);
+        var otherFolder = Path.Combine(Path.GetTempPath(), "TC06_RecycleBin_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(otherFolder);
+        try
+        {
+            var mine = CreateTestFile(_testFolder, "mine.png", GetValidPngBytes());
+            var other = CreateTestFile(otherFolder, "other.png", GetValidPngBytes());
+            var bin = new WindowsRecycleBin();
+            bin.SendToRecycleBin(mine);
+            bin.SendToRecycleBin(other);
+            Assert.Equal(1, TestRecycleBinCleanup.CountItemsDeletedFrom(_testFolder));
+
+            Assert.Empty(TestRecycleBinCleanup.RemoveItemsDeletedFrom(_testFolder));
+
+            Assert.Equal(0, TestRecycleBinCleanup.CountItemsDeletedFrom(_testFolder));
+            Assert.Equal(1, TestRecycleBinCleanup.CountItemsDeletedFrom(otherFolder));
+        }
+        finally
+        {
+            Assert.Empty(TestRecycleBinCleanup.RemoveItemsDeletedFrom(otherFolder));
+            try { Directory.Delete(otherFolder, true); } catch { }
+        }
     }
 
     private static string CreateTestFile(string folder, string name, byte[] content)
@@ -73,7 +105,7 @@ public sealed class NativeRecycleBinTests : IAsyncLifetime
     {
         Assert.NotNull(_testFolder);
 
-        // Step 1: Create M=20 test files in folder
+        // Step 1: Create M test files in folder
         var fileList = new List<string>();
         var pngBytes = GetValidPngBytes();
         for (var i = 0; i < _photoCount; i++)
@@ -97,6 +129,8 @@ public sealed class NativeRecycleBinTests : IAsyncLifetime
             var fileActions = new FileActionService(journal, fileSystem, new SystemClock(), recycleBin);
             var undoService = new UndoService(journal, fileSystem, recycleBin, fileActions);
 
+            var lastWriteBeforeDelete = File.GetLastWriteTimeUtc(fileList[^1]);
+
             // Step 3: Delete all M files via FileActionService
             var deleteResults = new List<FileActionResult>();
             foreach (var filePath in fileList)
@@ -117,40 +151,21 @@ public sealed class NativeRecycleBinTests : IAsyncLifetime
             Assert.All(fileList, path => Assert.False(File.Exists(path),
                 $"File should be in Recycle Bin, not on disk: {path}"));
 
-            // Step 5: Undo all deletions via UndoService (LIFO - most recent first)
-            var undoResults = new List<UndoResult>();
-            var recycleBinHealthy = true;
-            for (var i = 0; i < _photoCount; i++)
-            {
-                var undoResult = await undoService.UndoLastAsync();
-                undoResults.Add(undoResult);
-                if (!undoResult.Succeeded)
-                {
-                    // If Recycle Bin is unhealthy, skip this test gracefully
-                    if (undoResult.ErrorMessage?.Contains("khôi phục") == true ||
-                        undoResult.ErrorMessage?.Contains("restore") == true)
-                    {
-                        recycleBinHealthy = false;
-                        break;
-                    }
-                    Assert.True(undoResult.Succeeded,
-                        $"Undo failed for iteration {i}: {undoResult.ErrorMessage}");
-                }
-            }
+            // Step 5: Undo is single-level by design (UndoService keeps only the last action), so one undo
+            // restores the most recent delete. A failed restore is a failure, never a silent pass.
+            var last = fileList[^1];
+            var undoResult = await undoService.UndoLastAsync();
+            Assert.True(undoResult.Succeeded, $"Undo of the last delete failed: {undoResult.ErrorMessage}");
 
-            // If Recycle Bin appears unhealthy, skip the rest of the test
-            if (!recycleBinHealthy)
-            {
-                return; // Test skipped - Recycle Bin restore failed (may not be available in this environment)
-            }
+            // Step 6: The last file is back at its original path with its original content...
+            Assert.True(File.Exists(last), $"File should be restored to original location: {last}");
+            Assert.Equal(pngBytes, File.ReadAllBytes(last));
+            Assert.Equal(lastWriteBeforeDelete, File.GetLastWriteTimeUtc(last));
 
-            // Step 6: Verify files restored to original folder
-            Assert.All(fileList, path => Assert.True(File.Exists(path),
-                $"File should be restored to original location: {path}"));
-
-            // Verify Recycle Bin is now empty (proof: all files restored to original location)
-            var restoredCount = fileList.Count(f => File.Exists(f));
-            Assert.Equal(_photoCount, restoredCount);
+            // ...the earlier deletes stay in the bin, and a second undo has nothing to undo.
+            Assert.All(fileList.Take(_photoCount - 1), path => Assert.False(File.Exists(path), $"Earlier delete must stay deleted: {path}"));
+            Assert.False((await undoService.UndoLastAsync()).Succeeded);
+            Assert.Equal(_photoCount - 1, TestRecycleBinCleanup.CountItemsDeletedFrom(_testFolder));
         }
         finally
         {
