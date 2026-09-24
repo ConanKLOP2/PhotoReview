@@ -41,7 +41,10 @@ public sealed class SourcePresenceTests
         Assert.Contains("Preview ảnh bên phải, nhấn để chọn", main);
         Assert.Contains("Hoàn tác thao tác vừa thực hiện", main);
 
-        Assert.Contains("Thử lại Move hoặc Copy đã lỗi", AutomationNames(Xaml(ProjectSources.RecoveryWindowXaml)));
+        var recovery = AutomationNames(Xaml(ProjectSources.RecoveryWindowXaml)).ToList();
+        Assert.Contains("Thử lại Move hoặc Copy đã lỗi", recovery);
+        Assert.Contains("Xoá các mục đã chọn khỏi danh sách Recovery", recovery);
+        Assert.Contains("Xoá tất cả mục khỏi danh sách Recovery", recovery);
         Assert.Contains("Mở vị trí file log", AutomationNames(Xaml(ProjectSources.SettingsWindowXaml)));
     }
 

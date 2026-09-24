@@ -232,6 +232,26 @@ public sealed class OperationJournalUnitTests
         Assert.Single(journal.ReadCommittedMoves());
     }
 
+    [Fact(DisplayName = "Dismiss removes failed and pending entries from Recovery without touching others")]
+    public void Dismiss_FailedAndPending_RemovedFromRecoveryLists()
+    {
+        var journal = CreateJournal();
+        journal.Append(new JournalEntry("failed", FileOperationType.Move, JournalState.Failed,
+            @"C:\photos\a.jpg", @"C:\photos\b.jpg", 1024, _clock.UtcNow, _clock.UtcNow, "Locked"));
+        journal.Append(new JournalEntry("pending", FileOperationType.Copy, JournalState.Prepared,
+            @"C:\photos\c.jpg", @"C:\photos\d.jpg", 1024, _clock.UtcNow, _clock.UtcNow));
+        journal.Append(new JournalEntry("kept", FileOperationType.Recycle, JournalState.Failed,
+            @"C:\photos\e.jpg", null, 1024, _clock.UtcNow, _clock.UtcNow, "Locked"));
+
+        var dismissed = journal.Dismiss([journal.ReadFailedOperations().Single(x => x.Id == "failed"), journal.ReadPendingOperations().Single()]);
+
+        Assert.All(dismissed, x => Assert.Equal(JournalState.Dismissed, x.State));
+        Assert.Empty(journal.ReadPendingOperations());
+        Assert.Equal("kept", Assert.Single(journal.ReadFailedOperations()).Id);
+        Assert.Empty(journal.ReconcilePendingOperations());
+        Assert.Empty(journal.Dismiss([]));
+    }
+
     [Fact(DisplayName = "Tolerates invalid and corrupted JSONL lines")]
     public void ToleratesCorruptedLines()
     {

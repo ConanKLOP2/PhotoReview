@@ -11,6 +11,11 @@
 - Left for user (visual): Fit first-frame (T89), TurboJPEG item greyed without dll, AR04 GUI acceptance, #47 zoom feel. CI tags missing for runs cancelled by quick successive merges (e.g. v2.0.44/45/48) — tag job could backfill.
 - **Next:** OC14 (Undo gate → MainViewModel), IO01 (needs decision), DT10.
 
+## Also 2026-09-24: Recovery clear — branch `feat/recovery-clear` (PR open, not merged)
+
+- Recovery window: "Xoá mục đã chọn" (multi-select) + "Xoá tất cả", with confirm. Appends `JournalState.Dismissed` under the same Id (journal stays append-only; latest entry wins) — no file is touched. `OperationJournal.Dismiss`.
+- Build 0/0, all tests pass. GUI click-through not done (needs a journal with failed entries).
+
 ## Previous: AR00–AR07 done (#23–#37); nav perf pass #20/#21 — details `docs/archive/progress-log-2026-09.md`.
 
 ## Status by Group
