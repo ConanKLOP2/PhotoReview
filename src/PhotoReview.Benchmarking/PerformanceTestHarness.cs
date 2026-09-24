@@ -20,6 +20,9 @@ public static class PerformanceTestHarness
         { ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff" };
     private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
 
+    /// <summary>Test seam: called once per cold-read decode; the argument is true when the decode is timed.</summary>
+    internal static Action<bool>? DecodeObserver { get; set; }
+
     public static string CreateFixture(string root, int count = 30)
     {
         var folder = Path.Combine(root, "performance-fixture");
@@ -60,11 +63,13 @@ public static class PerformanceTestHarness
     {
         var before = Process.GetCurrentProcess().WorkingSet64;
         var times = new List<long>(files.Length); long reads = 0;
+        // One untimed decode so first-call WPF/codec JIT and native init do not inflate the first timed sample (TOOL-02).
+        await Task.Run(() => { DecodeObserver?.Invoke(false); using var stream = new FileStream(files[0], FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); GC.KeepAlive(Decode(stream, 2200)); }, ct);
         foreach (var path in files)
         {
             ct.ThrowIfCancellationRequested();
             var sw = Stopwatch.StartNew();
-            await Task.Run(() => { using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
+            await Task.Run(() => { DecodeObserver?.Invoke(true); using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
             sw.Stop(); times.Add(sw.ElapsedMilliseconds); reads++;
         }
         return Sample("cold-read", times, before, Process.GetCurrentProcess().WorkingSet64, reads, 0, 0, 0);
