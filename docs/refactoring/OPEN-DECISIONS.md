@@ -24,6 +24,7 @@ Consolidation of all pending decisions (Q-*) across active task groups. See link
 | Q-AR3 | AR | One composition root for app/tests/benchmarks; replace ST06 public fields with read-only properties (revisits ST06/Q-ST3 field decision, keeps Cli→App)? | ✅ **YES** — 2026-09-23 | arch-review/AR02-single-composition-root.md |
 | Q-AR4 | AR | Single release location = CI path `src/PhotoReview.App/bin/Release/net10.0-windows/publish`; delete `outputs/release/`? | ✅ **YES** (CI path only) — 2026-09-23 | arch-review/AR06-release-output-cleanup.md |
 | Q-AR5 | AR | Task-group triage: keep/close per group (proposal table in AR07 §5) | ✅ **Per AR07 §5 proposal table** — 2026-09-23 | arch-review/AR07-docs-and-triage.md |
+| Q-L1..Q-L8 | I18N | Default language, journal error codes, dev tools, default actions, copy polish, community channel, live switch | ✅ **All = recommendation (a)** — 2026-09-24 | I18N-PLAN.md, ../adr/0006-localization-json-catalogs.md |
 
 **Legend:** ✅ Decided · 🔄 Pending · ⏸ Blocked
 
