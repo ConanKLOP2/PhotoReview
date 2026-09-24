@@ -453,6 +453,7 @@ public sealed class MainViewModelFileActionTests : IDisposable
         public virtual void Delete(string path) => inner.Delete(path);
         public virtual Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
         public virtual Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
+        public virtual Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
         public virtual void WriteAllTextAtomic(string path, string text) => inner.WriteAllTextAtomic(path, text);
         public virtual string ReadAllText(string path) => inner.ReadAllText(path);
         public virtual IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);

@@ -39,6 +39,12 @@ public interface IFileSystem
     Stream OpenAppendDurable(string path);
 
     /// <summary>
+    /// Mở luồng ghi nối tiếp; <paramref name="durable"/> = true giống <see cref="OpenAppendDurable"/>, false = không WriteThrough
+    /// (dữ liệu chỉ tới cache của OS sau Flush thường; ADR 0007 chế độ Nhanh). Mặc định chuyển tiếp sang OpenAppendDurable.
+    /// </summary>
+    Stream OpenAppend(string path, bool durable) => OpenAppendDurable(path);
+
+    /// <summary>
     /// Ghi nội dung văn bản ra tệp tin nguyên tử (ghi ra file tạm trước rồi đổi tên đè).
     /// </summary>
     void WriteAllTextAtomic(string path, string text);

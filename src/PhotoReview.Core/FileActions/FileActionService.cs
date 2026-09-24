@@ -105,7 +105,7 @@ public sealed class FileActionService
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
-                _journal.Append(new JournalEntry(
+                await AppendPreparedAsync(new JournalEntry(
                     operationId,
                     request.Operation,
                     JournalState.Prepared,
@@ -113,7 +113,7 @@ public sealed class FileActionService
                     destinationPath,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow));
+                    _clock.UtcNow)).ConfigureAwait(false);
                 prepared = true;
 
                 if (request.Operation == FileOperationType.Copy)
@@ -178,7 +178,7 @@ public sealed class FileActionService
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
-                _journal.Append(new JournalEntry(
+                await AppendPreparedAsync(new JournalEntry(
                     operationId,
                     FileOperationType.Recycle,
                     JournalState.Prepared,
@@ -186,7 +186,7 @@ public sealed class FileActionService
                     null,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow));
+                    _clock.UtcNow)).ConfigureAwait(false);
                 prepared = true;
 
                 await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
@@ -267,6 +267,20 @@ public sealed class FileActionService
         {
             End();
         }
+    }
+
+    // ADR 0007 J-D: in PowerLossSafe mode the Prepared record costs a WriteThrough + Flush(true) (~2 ms, tail > 15 ms),
+    // so it is written on a pool thread and awaited: the mutation still starts only after Prepared is durable, and the
+    // rest of ExecuteAsync (mutation + Committed) already continues off the caller's thread (ConfigureAwait(false)).
+    // Fast mode keeps the ~0.4 ms cache write inline -- a thread hop would cost more than the write.
+    private Task AppendPreparedAsync(JournalEntry prepared)
+    {
+        if (_journal.Durability != JournalDurability.PowerLossSafe)
+        {
+            _journal.Append(prepared);
+            return Task.CompletedTask;
+        }
+        return Task.Run(() => _journal.Append(prepared));
     }
 
     private static bool IsSamePath(string first, string second)

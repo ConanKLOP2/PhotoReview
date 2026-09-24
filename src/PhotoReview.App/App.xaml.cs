@@ -61,7 +61,8 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<OperationJournal>(sp => new OperationJournal(
             sp.GetRequiredService<IAppPaths>(),
             sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IClock>()));
+            sp.GetRequiredService<IClock>(),
+            () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability));
         services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),

@@ -376,5 +376,11 @@
   "status.zoom": "{position}/{count} · {size} · Zoom {zoom}x",
   "test.greeting": "Xin chào {name}",
   "test.items.other": "{count} mục",
-  "test.sample": "Mẫu"
+  "test.sample": "Mẫu",
+  "settings.group.journalDurability": "Nhật ký thao tác",
+  "settings.journalDurability.label": "Độ bền nhật ký thao tác",
+  "settings.journalDurability.fast": "Nhanh (mặc định)",
+  "settings.journalDurability.fast.hint": "Bản ghi vào bộ nhớ đệm của hệ điều hành trước mỗi thao tác file. An toàn khi app bị crash; nếu mất điện hoặc hệ điều hành crash, vài bản ghi cuối có thể mất nên Undo/Recovery có thể không biết một thao tác vừa xảy ra.",
+  "settings.journalDurability.safe": "An toàn khi mất điện",
+  "settings.journalDurability.safe.hint": "Mỗi bản ghi được ghi xuống đĩa trước khi thao tác file bắt đầu. An toàn nhất nhưng chậm hơn khoảng 4 lần mỗi bản ghi (vẫn chạy ngoài luồng giao diện nên app không bị đơ)."
 }
