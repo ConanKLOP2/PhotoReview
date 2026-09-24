@@ -24,11 +24,11 @@
         </DockPanel>
         <StackPanel Grid.Column="1">
             <TextBlock Text="{loc:Tr actionProfiles.details.header}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Dark.TextStrong}" Margin="0,0,0,16"/>
-            <TextBlock Text="{loc:Tr actionProfiles.name.label}"/><TextBox x:Name="NameText"/>
-            <TextBlock Text="{loc:Tr actionProfiles.shortcut.label}"/><TextBox x:Name="ShortcutText"/>
+            <TextBlock x:Name="NameLabel" Text="{loc:Tr actionProfiles.name.label}"/><TextBox x:Name="NameText" AutomationProperties.LabeledBy="{Binding ElementName=NameLabel}"/>
+            <TextBlock x:Name="ShortcutLabel" Text="{loc:Tr actionProfiles.shortcut.label}"/><TextBox x:Name="ShortcutText" AutomationProperties.LabeledBy="{Binding ElementName=ShortcutLabel}"/>
             <!-- Mapped by SelectedIndex in code-behind (0 Move, 1 Copy, 2 Recycle, 3 legacy Delete = Recycle): keep the order. -->
-            <TextBlock Text="{loc:Tr actionProfiles.operation.label}"/><ComboBox x:Name="OperationCombo"><ComboBoxItem Content="{loc:Tr enum.fileOperation.move}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.copy}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.recycle}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.delete}"/></ComboBox>
-            <TextBlock Text="{loc:Tr actionProfiles.destination.label}"/><TextBox x:Name="DestinationText"/>
+            <TextBlock x:Name="OperationLabel" Text="{loc:Tr actionProfiles.operation.label}"/><ComboBox x:Name="OperationCombo" AutomationProperties.LabeledBy="{Binding ElementName=OperationLabel}"><ComboBoxItem Content="{loc:Tr enum.fileOperation.move}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.copy}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.recycle}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.delete}"/></ComboBox>
+            <TextBlock x:Name="DestinationLabel" Text="{loc:Tr actionProfiles.destination.label}"/><TextBox x:Name="DestinationText" AutomationProperties.LabeledBy="{Binding ElementName=DestinationLabel}"/>
             <CheckBox x:Name="ConfirmCheck" Content="{loc:Tr actionProfiles.confirm.label}"/>
         </StackPanel>
         <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0"><Button Content="{loc:Tr common.cancel}" IsCancel="True" Padding="16,7" Margin="0,0,8,0"/><Button Content="{loc:Tr common.apply}" IsDefault="True" Click="Apply_Click" Padding="18,7"/></StackPanel>
