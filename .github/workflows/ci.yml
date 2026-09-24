@@ -127,19 +127,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create version tag
+      - name: Create version tags (current + any missed)
         shell: bash
         run: |
           set -euo pipefail
           mm=$(sed -n 's:.*<PhotoReviewVersionMajorMinor>\(.*\)</PhotoReviewVersionMajorMinor>.*:\1:p' Directory.Build.targets)
           anchor=$(sed -n 's:.*<PhotoReviewVersionAnchorTag>\(.*\)</PhotoReviewVersionAnchorTag>.*:\1:p' Directory.Build.targets)
-          n=$(git rev-list --count --first-parent "${anchor}..HEAD")
-          tag="v${mm}.${n}"
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            echo "Tag ${tag} already exists"; exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${tag}" -m "PhotoReview ${mm}.${n}" "${GITHUB_SHA}"
-          git push origin "${tag}"
-          echo "Tagged ${tag} at ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          # Quick successive merges cancel pending master runs (GitHub keeps one pending run per
+          # concurrency group), so some versions never got a tag. Backfill every first-parent commit
+          # from the first auto-created tag onward; older versions (before tagging existed) stay untagged.
+          first=$(git tag -l "v${mm}.*" | sed "s/^v${mm}\.//" | grep -E '^[0-9]+$' | awk '$1 > 0' | sort -n | head -1 || true)
+          n=0; created=()
+          for c in $(git rev-list --first-parent --reverse "${anchor}..HEAD"); do
+            n=$((n + 1))
+            if [ -n "${first}" ] && [ "${n}" -lt "${first}" ]; then continue; fi
+            if [ -z "${first}" ] && [ "${c}" != "${GITHUB_SHA}" ]; then continue; fi
+            tag="v${mm}.${n}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then continue; fi
+            note=""; [ "${c}" != "${GITHUB_SHA}" ] && note=" (backfilled; that commit's own CI run was cancelled)"
+            if [ ${#created[@]} -eq 0 ]; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            fi
+            git tag -a "${tag}" -m "PhotoReview ${mm}.${n}${note}" "${c}"
+            created+=("${tag}")
+            echo "Tagged ${tag} at ${c}${note}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          done
+          if [ ${#created[@]} -gt 0 ]; then git push origin "${created[@]}"; else echo "No missing tags"; fi
