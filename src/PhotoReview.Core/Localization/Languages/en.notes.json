@@ -281,8 +281,6 @@
   "recovery.dismiss.confirm.message": "Confirmation dialog text; {count} = number of entries. Keep the blank line.",
   "recovery.dismiss.confirm.title": "Confirmation dialog caption.",
   "recovery.dismiss.failed.title": "Error dialog caption; the message is the OS/journal error text.",
-  "recovery.entry": "ListBox line. CONCATENATION: ' · {error}' is appended when entry.Error is not null -> second key recovery.entry.withError.",
-  "recovery.entry.withError": "Variant with error.",
   "recovery.header": "Heading.",
   "recovery.retry": "Button.Content. SourcePresenceTests looks for the literal 'Retry Move/Copy' in XAML attributes.",
   "recovery.retry.automationName": "AutomationProperties.Name.",

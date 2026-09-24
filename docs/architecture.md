@@ -67,6 +67,20 @@ Input/action profile
 
 Ảnh kế tiếp được advance đúng một lần trước I/O. Nếu action thất bại, vị trí catalog được khôi phục. Nếu người dùng đã đổi folder, kết quả action cũ không được ghi undo hoặc sửa catalog mới. Delete dùng Recycle Bin; journal và fingerprint bảo vệ recovery/undo.
 
+**Recovery check.** Khi `RecoveryWindow` mở (và khi bấm Re-check), `RecoveryFileCheck` (Core, chỉ `GetFileStat`/`DirectoryExists`, không sửa file, journal vẫn append-only) chạy nền cho từng entry và đưa ra verdict. Path: Missing / Changed (size khác journal; nguồn thêm last-write) / Unreadable / Exists. Verdict cho Move/Copy Prepared/Failed (S = nguồn, D = đích):
+
+| S | D | Verdict |
+|---|---|---|
+| exists | missing | `CanRetry` (chỉ verdict này bật nút Retry; `RecoveryRetryService` vẫn tự kiểm tra lại) |
+| changed | missing | `SourceChanged` |
+| missing | exists | `AlreadyDone` (đề nghị dismiss) |
+| missing | changed | `DestinationChanged` |
+| missing | missing | `Lost` |
+| exists | exists | Copy: `AlreadyDone`; Move: `Conflict` (mọi tổ hợp cả hai còn: `Conflict`) |
+| unreadable | any | `Unknown` (cũng khi entry không có đích) |
+
+Committed: D exists = `AlreadyDone`, S và D missing = `Lost`, còn lại `Unknown`. Recycle: S missing = `RecycleUnverifiable`, S present = `NotRecycled`. Chi tiết trong comment của `RecoveryFileCheck`.
+
 ## Threading (ADR 0005)
 
 Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **không bao giờ** `ConfigureAwait(false)` và không chặn đồng bộ trên Task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), nên mọi continuation quay về `SynchronizationContext` của WPF và `ReviewCatalog`, `ViewerState`, `CompareViewModel`, `MainViewModel` chỉ bị sửa trên UI thread. Core, Imaging và Platform.Windows thì ngược lại: luôn `ConfigureAwait(false)` và đặt việc CPU/I-O nặng trong `Task.Run` (hoặc I/O async thật) — phần đồng bộ trước `await` đầu tiên của một method mà App gọi phải nhẹ, vì nó chạy trên UI thread. Khi một callee có phần đầu đồng bộ nặng, sửa ở callee (hoặc App bọc lời gọi trong `Task.Run`), không thêm `ConfigureAwait(false)` vào App. Khoá bằng: `AppThreadAffinityTests` (quét source `src/PhotoReview.App`), guard Debug `ReviewCatalog.AssertOwnerThread` (composition root gọi `BindToCurrentThread()`; unit test không bind thì không kiểm tra), và metric `CrossThreadPresentCount` (số lần `WpfPresentationSink` phải `Dispatcher.Invoke` vì nhận cập nhật ngoài UI thread; kỳ vọng 0, hiện trong cửa sổ Diagnostics và `metrics.json` của perf session).
