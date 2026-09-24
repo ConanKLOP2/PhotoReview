@@ -334,6 +334,25 @@ public class CompositionRootTests
         Assert.Null(policy.Cache);
     }
 
+    // Lost in T46d together with the decode width: PreviewStateContext.IsOriginalLoadingMode stayed
+    // at its default (false), so LoadingMode.Original still produced downscaled previews.
+    [Fact]
+    public void ConfigureServices_PreviewStateContext_IsOriginalLoadingMode_FollowsSettings()
+    {
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var settingsStore = provider.GetRequiredService<SettingsStore>();
+        _ = provider.GetRequiredService<PreviewImageService>();
+        var ctx = provider.GetRequiredService<PreviewStateContext>();
+
+        settingsStore.Current.LoadingMode = PhotoReview.Core.Model.LoadingMode.Original;
+        Assert.True(ctx.IsOriginalLoadingMode());
+        settingsStore.Current.LoadingMode = PhotoReview.Core.Model.LoadingMode.Preview;
+        Assert.False(ctx.IsOriginalLoadingMode());
+    }
+
     [Fact]
     public void ConfigureServices_SourceBytesCachePolicy_EnabledSharesSameCacheAcrossConsumers()
     {
