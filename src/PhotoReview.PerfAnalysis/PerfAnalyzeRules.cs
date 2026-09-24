@@ -53,12 +53,12 @@ public static class PerfRules
         if (eligible.Count == 0)
         {
             return new RuleResult("R-IO", null,
-                $"0/{sourceMissNavs.Count} nav SourceMiss có t_open/t_read",
-                "Chưa có bộ đếm số lần mở file nguồn (SourceOpen chưa được gọi); chỉ có khi bật PHOTOREVIEW_DIAG_PREREAD. Dùng số liệu Procmon D02 để suy ra số lần mở file.");
+                FormattableString.Invariant($"0/{sourceMissNavs.Count} SourceMiss navs have t_open/t_read"),
+                "No source-open counter yet (SourceOpen is never called); only available with PHOTOREVIEW_DIAG_PREREAD. Use the Procmon D02 data to derive open counts.");
         }
         var avgShare = eligible.Average(n => ((n.TOpenMs ?? 0) + (n.TReadMs ?? 0)) / n.FinalVisualMs!.Value) * 100.0;
         return new RuleResult("R-IO", avgShare >= sharePct,
-            $"avg((t_open+t_read)/finalVisual)={avgShare:F1}% trên {eligible.Count} nav SourceMiss (ngưỡng {sharePct}%)");
+            FormattableString.Invariant($"avg((t_open+t_read)/finalVisual)={avgShare:F1}% over {eligible.Count} SourceMiss navs (threshold {sharePct}%)"));
     }
 
     /// <summary>R-DEC: in the SourceMiss/InflightJoin group, t_decode share of finalVisual is high.</summary>
@@ -67,10 +67,10 @@ public static class PerfRules
         var sharePct = cfg.Get("R-DEC", "decodeSharePct", 40);
         var eligible = decodeNavs.Where(n => n.FinalVisualMs is > 0 && n.TDecodeMs.HasValue).ToList();
         if (eligible.Count == 0)
-            return new RuleResult("R-DEC", null, "0 nav SourceMiss/InflightJoin có t_decode", "Không đủ dữ liệu decode.");
+            return new RuleResult("R-DEC", null, "0 SourceMiss/InflightJoin navs have t_decode", "Not enough decode data.");
         var avgShare = eligible.Average(n => n.TDecodeMs!.Value / n.FinalVisualMs!.Value) * 100.0;
         return new RuleResult("R-DEC", avgShare >= sharePct,
-            $"avg(t_decode/finalVisual)={avgShare:F1}% trên {eligible.Count} nav (ngưỡng {sharePct}%)");
+            FormattableString.Invariant($"avg(t_decode/finalVisual)={avgShare:F1}% over {eligible.Count} navs (threshold {sharePct}%)"));
     }
 
     /// <summary>R-UI: in the RamHit group, (t_input+t_assign+t_render) share is high, or RamHit
@@ -90,12 +90,13 @@ public static class PerfRules
         var byRamHitP95 = !double.IsNaN(ramHitFinalP95) && ramHitFinalP95 > ramHitP95Threshold;
         var byFrameTime = frameTimeP95Ms is { } ft && ft > frameThreshold;
 
-        var evidence = $"avg((t_input+t_assign+t_render)/finalVisual)={(avgShare is { } sv ? $"{sv:F1}%" : "N/A")} " +
-                        $"(ngưỡng {sharePct}%); RamHit finalVisual P95={ramHitFinalP95:F1}ms (ngưỡng {ramHitP95Threshold}ms); " +
-                        $"frameTime P95={(frameTimeP95Ms is { } f ? $"{f:F1}ms" : "N/A")} (ngưỡng {frameThreshold}ms)";
+        var evidence =
+            FormattableString.Invariant($"avg((t_input+t_assign+t_render)/finalVisual)={(avgShare is { } sv ? FormattableString.Invariant($"{sv:F1}%") : "N/A")} ") +
+            FormattableString.Invariant($"(threshold {sharePct}%); RamHit finalVisual P95={ramHitFinalP95:F1}ms (threshold {ramHitP95Threshold}ms); ") +
+            FormattableString.Invariant($"frameTime P95={(frameTimeP95Ms is { } f ? FormattableString.Invariant($"{f:F1}ms") : "N/A")} (threshold {frameThreshold}ms)");
 
         if (avgShare is null && double.IsNaN(ramHitFinalP95) && frameTimeP95Ms is null)
-            return new RuleResult("R-UI", null, evidence, "Không có nav RamHit hoặc dữ liệu frame time trong nhóm này.");
+            return new RuleResult("R-UI", null, evidence, "No RamHit navs or frame-time data in this group.");
 
         return new RuleResult("R-UI", byShare || byRamHitP95 || byFrameTime, evidence);
     }
@@ -110,12 +111,12 @@ public static class PerfRules
         var threshold = cfg.Get("R-PRE", thresholdKey, isBurstScenario ? 30 : 10);
 
         if (double.IsNaN(ramHitFinalP95))
-            return new RuleResult("R-PRE", null, "Không có nav RamHit trong nhóm này.");
+            return new RuleResult("R-PRE", null, "No RamHit navs in this group.");
 
         var triggered = ramHitFinalP95 <= ramHitMax && nonRamHitSharePct >= threshold;
         return new RuleResult("R-PRE", triggered,
-            $"RamHit finalVisual P95={ramHitFinalP95:F1}ms (ngưỡng ≤{ramHitMax}ms); " +
-            $"tỷ lệ không phải RamHit={nonRamHitSharePct:F1}% (ngưỡng ≥{threshold}% cho {(isBurstScenario ? "S3/S4" : "S2")})");
+            FormattableString.Invariant($"RamHit finalVisual P95={ramHitFinalP95:F1}ms (threshold ≤{ramHitMax}ms); ") +
+            FormattableString.Invariant($"non-RamHit share={nonRamHitSharePct:F1}% (threshold ≥{threshold}% for {(isBurstScenario ? "S3/S4" : "S2")})"));
     }
 
     /// <summary>R-CONT: the viewed image's decode time grows substantially between a low- and a
@@ -126,12 +127,12 @@ public static class PerfRules
         var factor = cfg.Get("R-CONT", "decodeSlowdownFactor", 1.3);
         if (decodeMsLowWorkers is null || decodeMsHighWorkers is null || lowWorkers == highWorkers)
         {
-            return new RuleResult("R-CONT", null, "Thiếu cặp run PHOTOREVIEW_DIAG_PRELOAD_WORKERS khác nhau để so sánh.",
-                "Cần ít nhất 2 run cùng scenario/mode với PHOTOREVIEW_DIAG_PRELOAD_WORKERS khác nhau (D07).");
+            return new RuleResult("R-CONT", null, "Missing a pair of runs with different PHOTOREVIEW_DIAG_PRELOAD_WORKERS to compare.",
+                "Needs at least 2 runs of the same scenario/mode with different PHOTOREVIEW_DIAG_PRELOAD_WORKERS (D07).");
         }
         var ratio = decodeMsHighWorkers.Value / Math.Max(decodeMsLowWorkers.Value, 0.0001);
         return new RuleResult("R-CONT", ratio >= factor,
-            $"t_decode(workers={highWorkers})={decodeMsHighWorkers:F1}ms so t_decode(workers={lowWorkers})={decodeMsLowWorkers:F1}ms, tỷ lệ={ratio:F2} (ngưỡng {factor})");
+            FormattableString.Invariant($"t_decode(workers={highWorkers})={decodeMsHighWorkers:F1}ms vs t_decode(workers={lowWorkers})={decodeMsLowWorkers:F1}ms, ratio={ratio:F2} (threshold {factor})"));
     }
 
     /// <summary>R-THREAD: repeated DispatcherLongOp (>16ms) during S2/S3, or high t_input P95.</summary>
@@ -141,9 +142,10 @@ public static class PerfRules
         var inputThreshold = cfg.Get("R-THREAD", "inputP95Ms", 16);
         var byDispatcher = dispatcherLongOpCount > 0;
         var byInput = tInputP95Ms is { } t && t > inputThreshold;
-        var evidence = $"DispatcherLongOp>{msThreshold}ms count={dispatcherLongOpCount}; t_input P95={(tInputP95Ms is { } v ? $"{v:F1}ms" : "N/A")} (ngưỡng {inputThreshold}ms)";
+        var evidence = FormattableString.Invariant(
+            $"DispatcherLongOp>{msThreshold}ms count={dispatcherLongOpCount}; t_input P95={(tInputP95Ms is { } v ? FormattableString.Invariant($"{v:F1}ms") : "N/A")} (threshold {inputThreshold}ms)");
         if (dispatcherLongOpCount == 0 && tInputP95Ms is null)
-            return new RuleResult("R-THREAD", null, evidence, "Không có DispatcherLongOp hay t_input trong nhóm này.");
+            return new RuleResult("R-THREAD", null, evidence, "No DispatcherLongOp or t_input in this group.");
         return new RuleResult("R-THREAD", byDispatcher || byInput, evidence);
     }
 
@@ -152,8 +154,8 @@ public static class PerfRules
     {
         var threshold = cfg.Get("R-GC", "gcTimePct", 10);
         if (gcTimePercent is null)
-            return new RuleResult("R-GC", null, "Không có process.json/% time in GC cho nhóm này.", "Cần dotnet-counters (D09) hoặc process.json (D06).");
-        return new RuleResult("R-GC", gcTimePercent.Value >= threshold, $"% time in GC={gcTimePercent:F1}% (ngưỡng {threshold}%)");
+            return new RuleResult("R-GC", null, "No process.json/% time in GC for this group.", "Needs dotnet-counters (D09) or process.json (D06).");
+        return new RuleResult("R-GC", gcTimePercent.Value >= threshold, FormattableString.Invariant($"% time in GC={gcTimePercent:F1}% (threshold {threshold}%)"));
     }
 
     /// <summary>R-DISK: reading the on-disk preview cache is no faster than re-reading and
@@ -166,12 +168,12 @@ public static class PerfRules
         var readDecodeTimes = sourceMissNavs.Where(n => n.TDecodeMs.HasValue)
             .Select(n => (n.TReadMs ?? 0) + n.TDecodeMs!.Value).ToList();
         if (diskTimes.Count == 0 || readDecodeTimes.Count == 0)
-            return new RuleResult("R-DISK", null, $"diskCacheHit navs={diskTimes.Count}, sourceMiss navs={readDecodeTimes.Count}",
-                "Cần ít nhất một nav DiskCacheHit và một nav SourceMiss trong cùng nhóm.");
+            return new RuleResult("R-DISK", null, FormattableString.Invariant($"diskCacheHit navs={diskTimes.Count}, sourceMiss navs={readDecodeTimes.Count}"),
+                "Needs at least one DiskCacheHit nav and one SourceMiss nav in the same group.");
         var avgDisk = diskTimes.Average();
         var avgReadDecode = readDecodeTimes.Average();
         return new RuleResult("R-DISK", avgDisk >= factor * avgReadDecode,
-            $"avg(t_disk)={avgDisk:F1}ms so avg(t_read+t_decode)={avgReadDecode:F1}ms (ngưỡng hệ số {factor})");
+            FormattableString.Invariant($"avg(t_disk)={avgDisk:F1}ms vs avg(t_read+t_decode)={avgReadDecode:F1}ms (threshold factor {factor})"));
     }
 
     /// <summary>R-FOLDER: opening a folder (T0→T2, first image presented) takes too long.</summary>
@@ -180,9 +182,9 @@ public static class PerfRules
         var thresholdMs = cfg.Get("R-FOLDER", "folderT0ToT2Ms", 1000);
         var withT2 = gens.Where(g => g.T2Ms.HasValue).ToList();
         if (withT2.Count == 0)
-            return new RuleResult("R-FOLDER", null, "Không có Folder gen nào có T2 (ảnh đầu tiên present).");
+            return new RuleResult("R-FOLDER", null, "No folder generation has T2 (first image presented).");
         var worst = withT2.OrderByDescending(g => g.T2Ms).First();
         return new RuleResult("R-FOLDER", worst.T2Ms > thresholdMs,
-            $"T0->T2 tệ nhất={worst.T2Ms:F1}ms (gen={worst.Gen}, T1 catalogReady={worst.T1CatalogReadyMs:F1}ms, T3 {worst.T3Phase}={worst.T3Ms:F1}ms; ngưỡng {thresholdMs}ms)");
+            FormattableString.Invariant($"worst T0->T2={worst.T2Ms:F1}ms (gen={worst.Gen}, T1 catalogReady={worst.T1CatalogReadyMs:F1}ms, T3 {worst.T3Phase}={worst.T3Ms:F1}ms; threshold {thresholdMs}ms)"));
     }
 }

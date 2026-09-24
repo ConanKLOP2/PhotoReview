@@ -1,7 +1,9 @@
 <Window x:Class="PhotoReview.App.BenchmarkWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Photo Review · Benchmark" Width="960" Height="700"
+        xmlns:loc="clr-namespace:PhotoReview.App.Localization"
+        xmlns:local="clr-namespace:PhotoReview.App"
+        Title="{loc:Tr benchmark.window.title}" Width="960" Height="700"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize" MinWidth="820" MinHeight="560"
         Background="#171717" Foreground="#F5F5F5">
     <Window.Resources>
@@ -64,21 +66,21 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Benchmark" FontSize="26" FontWeight="SemiBold"/>
-            <TextBlock Text="So sánh các cấu hình tải/giải mã ảnh trên bộ ảnh thật để tìm cấu hình nhanh và ổn định nhất cho máy này." Foreground="#AAAAAA" Margin="0,4,0,16" TextWrapping="Wrap"/>
+            <TextBlock Text="{loc:Tr benchmark.header}" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock Text="{loc:Tr benchmark.description}" Foreground="#AAAAAA" Margin="0,4,0,16" TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,0,0,12">
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBox x:Name="FolderText" Grid.Column="0" AutomationProperties.Name="Folder ảnh thật dùng để benchmark"/>
-                <Button x:Name="BrowseButton" Grid.Column="1" Content="Chọn folder…" Click="Browse_Click" Margin="8,0,0,0"/>
+                <TextBox x:Name="FolderText" Grid.Column="0" AutomationProperties.Name="{loc:Tr benchmark.folder.automationName}"/>
+                <Button x:Name="BrowseButton" Grid.Column="1" Content="{loc:Tr benchmark.browse}" Click="Browse_Click" Margin="8,0,0,0"/>
             </Grid>
             <Grid Margin="0,0,0,6">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Margin="0" VerticalAlignment="Center" Text="Chọn các cấu hình cần so sánh (giữ Ctrl để chọn nhiều — cùng Workload mới so sánh trực tiếp được):"/>
-                <Button x:Name="SelectAllButton" Grid.Column="1" Content="Chọn tất cả" Click="SelectAll_Click" Margin="8,0,0,0"/>
-                <Button x:Name="SelectNoneButton" Grid.Column="2" Content="Bỏ chọn" Click="SelectNone_Click" Margin="8,0,0,0"/>
+                <TextBlock Grid.Column="0" Margin="0" VerticalAlignment="Center" Text="{loc:Tr benchmark.profiles.label}"/>
+                <Button x:Name="SelectAllButton" Grid.Column="1" Content="{loc:Tr benchmark.selectAll}" Click="SelectAll_Click" Margin="8,0,0,0"/>
+                <Button x:Name="SelectNoneButton" Grid.Column="2" Content="{loc:Tr benchmark.selectNone}" Click="SelectNone_Click" Margin="8,0,0,0"/>
             </Grid>
             <ListBox x:Name="ProfilesList" Height="120" SelectionMode="Multiple" DisplayMemberPath="Name"
                      VirtualizingPanel.IsVirtualizing="False">
@@ -90,8 +92,8 @@
                 </ListBox.ItemContainerStyle>
             </ListBox>
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Button x:Name="RunButton" Content="Chạy benchmark" Click="Run_Click" Margin="0,0,8,0" IsDefault="True"/>
-                <Button x:Name="CancelButton" Content="Hủy" Click="Cancel_Click" IsEnabled="False"/>
+                <Button x:Name="RunButton" Content="{loc:Tr benchmark.run}" Click="Run_Click" Margin="0,0,8,0" IsDefault="True"/>
+                <Button x:Name="CancelButton" Content="{loc:Tr common.cancel}" Click="Cancel_Click" IsEnabled="False"/>
             </StackPanel>
         </StackPanel>
 
@@ -102,23 +104,23 @@
 
         <DataGrid x:Name="ResultsGrid" Grid.Row="3">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="🏆" Binding="{Binding BestMarker}" Width="36"/>
-                <DataGridTextColumn Header="Cấu hình" Binding="{Binding ProfileName}" Width="2*"/>
-                <DataGridTextColumn Header="Chế độ tải" Binding="{Binding LoadingMode}" Width="90"/>
-                <DataGridTextColumn Header="Workload" Binding="{Binding Workload}" Width="100"/>
-                <DataGridTextColumn Header="Mẫu" Binding="{Binding Count}" Width="55" ElementStyle="{StaticResource NumericCell}"/>
+                <DataGridTextColumn Header="{x:Static local:BenchmarkResultRow.BestSymbol}" Binding="{Binding BestMarker}" Width="36"/>
+                <DataGridTextColumn Header="{loc:Tr benchmark.column.profile}" Binding="{Binding ProfileName}" Width="2*"/>
+                <DataGridTextColumn Header="{loc:Tr benchmark.column.loadingMode}" Binding="{Binding LoadingModeText}" Width="90"/>
+                <DataGridTextColumn Header="{loc:Tr benchmark.column.workload}" Binding="{Binding WorkloadText}" Width="100"/>
+                <DataGridTextColumn Header="{loc:Tr benchmark.column.samples}" Binding="{Binding Count}" Width="55" ElementStyle="{StaticResource NumericCell}"/>
                 <DataGridTextColumn Header="P50" Binding="{Binding P50Text}" Width="75" ElementStyle="{StaticResource NumericCell}"/>
                 <DataGridTextColumn Header="P95" Binding="{Binding P95Text}" Width="75" ElementStyle="{StaticResource NumericCell}"/>
                 <DataGridTextColumn Header="P99" Binding="{Binding P99Text}" Width="75" ElementStyle="{StaticResource NumericCell}"/>
                 <DataGridTextColumn Header="Max" Binding="{Binding MaxText}" Width="75" ElementStyle="{StaticResource NumericCell}"/>
-                <DataGridTextColumn Header="Trạng thái" Binding="{Binding StatusText}" Width="1*"/>
+                <DataGridTextColumn Header="{loc:Tr benchmark.column.status}" Binding="{Binding StatusText}" Width="1*"/>
             </DataGrid.Columns>
         </DataGrid>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button x:Name="OpenReportButton" Content="Mở báo cáo cuối" Click="OpenReport_Click" Margin="0,0,8,0"/>
-            <Button x:Name="OpenResultFolderButton" Content="Mở thư mục kết quả" Click="OpenResultFolder_Click" Margin="0,0,8,0"/>
-            <Button Content="Đóng" Click="Close_Click" Padding="18,7"/>
+            <Button x:Name="OpenReportButton" Content="{loc:Tr benchmark.openReport}" Click="OpenReport_Click" Margin="0,0,8,0"/>
+            <Button x:Name="OpenResultFolderButton" Content="{loc:Tr benchmark.openResultFolder}" Click="OpenResultFolder_Click" Margin="0,0,8,0"/>
+            <Button Content="{loc:Tr common.close}" Click="Close_Click" Padding="18,7"/>
         </StackPanel>
     </Grid>
 </Window>

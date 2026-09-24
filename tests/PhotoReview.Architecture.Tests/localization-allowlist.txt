@@ -5,15 +5,10 @@
 src/PhotoReview.App/ActionProfilesWindow.xaml.cs|5
 src/PhotoReview.App/App.xaml.cs|1
 src/PhotoReview.App/BatchReviewWindow.xaml.cs|2
-src/PhotoReview.App/BenchmarkWindow.xaml.cs|11
 src/PhotoReview.App/BuildInfo.cs|2
 src/PhotoReview.App/DiagnosticsWindow.xaml.cs|2
 src/PhotoReview.App/RecoveryWindow.xaml.cs|7
 src/PhotoReview.App/Services/WpfDialogService.cs|1
 src/PhotoReview.App/SettingsWindow.xaml.cs|10
-src/PhotoReview.Benchmarking/BenchmarkProfiles.cs|29
 src/PhotoReview.Core/Settings/ReviewAction.cs|4
-src/PhotoReview.PerfAnalysis/PerfAnalyze.cs|1
-src/PhotoReview.PerfAnalysis/PerfAnalyzeReport.cs|19
-src/PhotoReview.PerfAnalysis/PerfAnalyzeRules.cs|24
 src/PhotoReview.Platform.Windows/WindowsRecycleBin.cs|1

@@ -38,7 +38,7 @@ public static class PerfAnalyze
                 .Any(part => string.Equals(part, "warmup", StringComparison.OrdinalIgnoreCase)))
             .OrderBy(p => p, StringComparer.Ordinal).ToList();
         if (csvFiles.Count == 0)
-            throw new InvalidOperationException($"Không tìm thấy file perf-*.csv nào trong {runDir}");
+            throw new InvalidOperationException($"No perf-*.csv files found in {runDir}");
 
         var rules = !string.IsNullOrEmpty(rulesPath) ? RulesConfig.Load(rulesPath) : RulesConfig.Default();
 
