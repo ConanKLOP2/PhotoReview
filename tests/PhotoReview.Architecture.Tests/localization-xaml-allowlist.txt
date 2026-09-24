@@ -2,4 +2,3 @@
 # Title/Text/Content/Header/ToolTip/AutomationProperties.Name or as element text, and how many.
 # Format: relative/path.xaml|count. Use {loc:Tr key} instead. This list may only shrink: lower the count
 # (or delete the line) when you convert text; a new file or a higher count fails the test.
-src/PhotoReview.App/MainWindow.xaml|1

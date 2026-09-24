@@ -1,3 +1,4 @@
+using PhotoReview.Core.Localization;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -73,6 +74,8 @@ public partial class MainWindow : Window
         _shortcutRouter = new ShortcutRouter(_settings);
         _settingsStore.Changed += (_, s) => { _settings = s; _shortcutRouter.Rebuild(s); };
         PhotoReviewPerf.StartupMark("mainWindowCtor");
+        // I18N: a live language switch re-renders the texts the ViewModel builds in code (ADR 0006).
+        Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
         PhotoReviewPerf.StartupMark("xamlLoaded");
@@ -191,8 +194,15 @@ public partial class MainWindow : Window
         _placementRestored = true;
         Closing -= Window_Closing;
     }
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.CheckAccess()) _viewModel.RefreshLocalizedText();
+        else Dispatcher.BeginInvoke(_viewModel.RefreshLocalizedText);
+    }
+
     private void Window_Closed(object? sender, EventArgs e)
     {
+        Localizer.CurrentChanged -= OnLanguageChanged;
         CancelPan();
         _viewModel.FlushSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();

@@ -21,16 +21,17 @@ public partial class RecoveryWindow : Window
         SummaryText.Text = entries.Count == 0 ? Tr.RecoverySummaryEmpty : Tr.RecoverySummaryCount(entries.Count);
     }
 
-    // entry.Error is the stored journal text (shown as stored; I18N L06 localizes it by error code).
+    // Journal errors are localized by their stable code; old entries without a code show the stored text (Q-L3).
     internal static string FormatEntry(JournalEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         var state = StateText(entry.State);
         var operation = OperationText(entry.Type);
         var fileName = Path.GetFileName(entry.Source);
-        return entry.Error is null
+        var error = JournalErrors.Describe(entry);
+        return error is null
             ? Tr.RecoveryEntry(state, operation, fileName, entry.Source)
-            : Tr.RecoveryEntryWithError(state, operation, fileName, entry.Source, entry.Error);
+            : Tr.RecoveryEntryWithError(state, operation, fileName, entry.Source, error);
     }
 
     internal static string OperationText(FileOperationType type) => type switch

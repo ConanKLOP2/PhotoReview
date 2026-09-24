@@ -43,7 +43,8 @@ public sealed class LocalizationGuardTests
     private static readonly HashSet<string> NeutralWords = new(StringComparer.Ordinal) { "P50", "P95", "P99", "Max" };
 
     // Numbers, punctuation, symbols and spaces only ("100%", "·", "×", "…", "+", "-").
-    private static readonly Regex NeutralSymbols = new(@"^[\p{N}\p{P}\p{S}\s]+$", RegexOptions.CultureInvariant);
+    // Emoji are surrogate pairs (\p{Cs}) plus an optional variation selector / zero-width joiner: symbols, not words.
+    private static readonly Regex NeutralSymbols = new(@"^[\p{N}\p{P}\p{S}\p{Cs}️‍\s]+$", RegexOptions.CultureInvariant);
 
     private static readonly Regex TrMarkupKey = new(
         @"\{\s*loc:Tr(?:Extension)?\s+(?:Key\s*=\s*)?(?<key>[A-Za-z0-9_.\-]+)\s*[,}]",
