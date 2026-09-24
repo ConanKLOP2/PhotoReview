@@ -30,7 +30,7 @@ public static class BenchmarkWorkloadRunner
         BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,
         int iteration, Random random, IRecycleBin recycleBin, CancellationToken ct)
     {
-        if (workload == BenchmarkWorkload.Correctness && profile.Id is "explorer-reindex" or "cache-recovery")
+        if (BenchmarkProfiles.IsNotImplemented(profile))
         {
             // These profiles would otherwise just decode a plain sequential file with no
             // check of Explorer native order or of cache clear/rebuild behavior, so they

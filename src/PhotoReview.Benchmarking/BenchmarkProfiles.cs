@@ -40,6 +40,18 @@ public static class BenchmarkProfiles
         new("original-correctness", "Original Correctness", "Check quality and cache identity", LoadingMode.Original, 1, 0, 0, false, Reserve, false, true, BenchmarkWorkload.Correctness, 0, 3, true)
     ];
 
+    /// <summary>
+    /// R2-F-21: profiles whose real check is not implemented yet; <see cref="BenchmarkWorkloadRunner"/> refuses to run them.
+    /// They stay listed (Find / --benchmark-list-profiles) but are excluded from <see cref="Runnable"/>, so a whole-registry
+    /// run does not FAIL on every invocation.
+    /// </summary>
+    public static bool IsNotImplemented(BenchmarkProfile profile) =>
+        profile.Workload == BenchmarkWorkload.Correctness && profile.Id is "explorer-reindex" or "cache-recovery";
+
+    /// <summary>Profiles a batch run (<c>--benchmark-all</c>) may execute: speed profiles that are implemented.</summary>
+    public static IReadOnlyList<BenchmarkProfile> Runnable { get; } =
+        [.. All.Where(p => !p.CorrectnessOnly && !IsNotImplemented(p))];
+
     public static BenchmarkProfile? Find(string id) => All.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
 
     private static BenchmarkProfile P(string id, string name, string desc, LoadingMode mode, int workers, int next, int previous, bool full, BenchmarkWorkload workload, long reserve = Reserve, bool detailed = false)

@@ -83,7 +83,7 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
     var benchmarkFolder = args[1];
     var requested = args[0] switch
     {
-        "--benchmark-all" => BenchmarkProfiles.All.Where(p => !p.CorrectnessOnly).ToArray(),
+        "--benchmark-all" => BenchmarkProfiles.Runnable.ToArray(),
         "--benchmark-actions" => BenchmarkProfiles.All.Where(p => p.Workload == BenchmarkWorkload.FileAction).ToArray(),
         _ => (args.Length >= 3
             ? args[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
