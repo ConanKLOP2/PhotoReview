@@ -9,7 +9,8 @@ Quick reference for finding documentation by purpose. Read-tier guides which fil
 | **docs/ACTIVE-TASKS.md** | Consolidated open tasks across all groups | T0 | Startup, for task context |
 | **docs/architecture.md** | System design, code map, component ownership | T1 | When working in any area |
 | **docs/APP-MECHANISMS-VI.md** | Core flow descriptions (Vietnamese) | T1 | When understanding App startup/flow |
-| **docs/adr/*.md** | Architecture decisions (0001-0003, 0005 Accepted; 0004 Proposed) | T1 | When working in relevant area |
+| **docs/adr/*.md** | Architecture decisions (0001-0003, 0005, 0006 Accepted; 0004 Proposed) | T1 | When working in relevant area |
+| **docs/refactoring/I18N-PLAN.md** | Multi-language (EN+VI, community JSON catalogs): design, L00–L12 tasks, Q-L decisions | T1 | Before any localization/UI-text change |
 | **docs/refactoring/ARCH-REVIEW-SUMMARY.md** | Architecture review 2026-09-23: findings F1-F9, AR task table, order | T1 | Before any AR task or boundary change |
 | **docs/refactoring/arch-review/AR0x-*.md** | Step-by-step plan per AR task (files, lines, tests, acceptance) | T1 | Only the file of the AR task you work on |
 | **docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md** | ST task status & INV (invariants) | T1 | When touching ST scope |
