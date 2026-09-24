@@ -41,9 +41,6 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         }
     }
 
-    public static IDecodedImage DecodeWithFallback(string path, int targetWidth)
-        => DecodeWithFallback(new DecodeRequest(path, targetWidth));
-
     public static BitmapSource DecodeSource(DecodeRequest request)
         => DecodeSource(request, out _, out _, out _, out _);
 
@@ -147,9 +144,6 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             ? ExifOrientation.Apply(bitmap, orientation)
             : bitmap;
     }
-
-    public static BitmapSource DecodeSource(string path, int targetWidth)
-        => DecodeSource(new DecodeRequest(path, targetWidth));
 
     private static bool IsDownscaleFallbackException(Exception ex)
         => ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException;

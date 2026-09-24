@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using PhotoReview.Core.Caching;
-using PhotoReview.Imaging.Preload;
 
 namespace PhotoReview.App.Coordinators;
 
@@ -44,39 +43,4 @@ public interface IPreloadController
     /// only during a key-held burst). Default zero (test fakes).
     /// </summary>
     TimeSpan GetViewerDecodeDelay() => TimeSpan.Zero;
-}
-
-/// <summary>
-/// Bộ chuyển đổi mặc định nối IPreloadController tới PreloadScheduler của Imaging.
-/// </summary>
-public sealed class PreloadSchedulerAdapter : IPreloadController
-{
-    private readonly Func<PreloadScheduler?> _getScheduler;
-
-    public PreloadSchedulerAdapter(Func<PreloadScheduler?> getScheduler)
-    {
-        _getScheduler = getScheduler ?? throw new ArgumentNullException(nameof(getScheduler));
-    }
-
-    public PreloadSchedulerAdapter(PreloadScheduler scheduler)
-    {
-        ArgumentNullException.ThrowIfNull(scheduler);
-        _getScheduler = () => scheduler;
-    }
-
-    public Task PreloadAroundAsync(int center) => _getScheduler()?.PreloadAroundAsync(center) ?? Task.CompletedTask;
-
-    public bool TryConsumePreloadedKey(ImageCacheKey key) => _getScheduler()?.TryConsumePreloadedKey(key) ?? false;
-
-    public void Cancel() => _getScheduler()?.Cancel();
-
-    public void RemovePreloadedKeysForPath(string normalizedPath) => _getScheduler()?.RemovePreloadedKeysForPath(normalizedPath);
-
-    public void ClearPreloadedKeys() => _getScheduler()?.ClearPreloadedKeys();
-
-    public bool IsIdle => _getScheduler()?.IsIdle ?? true;
-
-    public void NotifyNavigation(int index) => _getScheduler()?.NotifyNavigation(index);
-
-    public TimeSpan GetViewerDecodeDelay() => _getScheduler()?.GetViewerDecodeDelay() ?? TimeSpan.Zero;
 }

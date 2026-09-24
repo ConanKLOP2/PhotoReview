@@ -1,6 +1,6 @@
 # TS — Test Speed & Gate Reliability (Summary)
 
-**Status:** TS00–TS04 DONE (4 commits merged); gate now runs ~23s without hang. TS05–TS10 TODO.
+**Status:** TS00–TS07, TS10 DONE (TS05-TS07 via #36, TS10 audit via #32); gate now runs ~23s without hang. TS08/TS09 closed 2026-09-23 (Q-AR5).
 
 Full plan: [`../archive/historical/TEST-SPEED-PLAN-2026-09-20.md`](../archive/historical/TEST-SPEED-PLAN-2026-09-20.md)
 
@@ -28,16 +28,16 @@ Gate (`dotnet test PhotoReview.slnx`) runs ≤60s (local) / ≤3 min (CI), never
 | **TS03** | Restore `StaTestHost.WaitForAsync` polling (revert spin loop) | ✅ DONE | Integration tests no longer timeout |
 | **TS04** | Fix UTF-8 encoding (mojibake in tests + source docs) | ✅ DONE | Vietnamese strings display correctly |
 
-## Remaining (TS05–TS10)
+## TS05–TS10 (done / closed)
 
-| ID | Task | Status | Blocker |
+| ID | Task | Status | Evidence |
 |---|---|---|---|
-| **TS05** | Deterministic journal test (remove `Task.Delay` timespan) | 🔄 TODO | Q-S3: decide if barrier or deterministic schedule |
-| **TS06** | Honest hot-path tests (every test has real assertion) | 🔄 TODO | TS01 pass rate confirmed |
-| **TS07** | Temp hygiene: `TempRoot` cleanup fixture | 🔄 TODO | TS02 infrastructure in place |
-| **TS08** | Timing report in verify-all (show per-project wall time) | 🔄 TODO | Informational; enables TS09 |
-| **TS09** | Align CI filters with local (same Category logic) | 🔄 TODO | TS08 report enables |
-| **TS10** | **Re-audit TC01–TC11 "done" claims before trusting TC status** | 🔄 TODO | **Blocks all TC work** |
+| **TS05** | Deterministic journal test (remove `Task.Delay` timespan) | ✅ DONE | #36 |
+| **TS06** | Honest hot-path tests (every test has real assertion) | ✅ DONE | #36 |
+| **TS07** | Temp hygiene: `TempRoot` cleanup fixture | ✅ DONE | #36 |
+| **TS08** | Timing report in verify-all (show per-project wall time) | ❌ Closed 2026-09-23 (Q-AR5) | — |
+| **TS09** | Align CI filters with local (same Category logic) | ❌ Closed 2026-09-23 (Q-AR5) | CI filter already aligned |
+| **TS10** | **Re-audit TC01–TC11 "done" claims before trusting TC status** | ✅ DONE | Audit completed 2026-09-22; #32 |
 
 ## Current Gate Status (after TS00–TS04)
 

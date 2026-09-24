@@ -1,16 +1,15 @@
 # Performance Diagnosis Status (D Series)
 
-**Last updated:** 2026-09-22  
-**Overall status:** Most D00-D07/D10-D12 complete; D01/D02 blocked on D06 data; D08/D09 pending
+**Last updated:** 2026-09-24  
+**Overall status:** D series closed 2026-09-23 (Q-AR5) — superseded by the AR02e production-graph baseline below
 
 ## Current Status
 
-| ID | Task | Status | Blocker |
+| ID | Task | Status | Notes |
 |---|---|---|---|
 | D00 | Setup, fixtures, tools | ✅ DONE | — |
 | D03-D07, D10-D12 | Instrumentation, scenarios, analysis | ✅ DONE | — |
-| D01, D02 | AppLog/File-access analysis | 🔄 BLOCKED | D06 (Procmon data) |
-| D08, D09 | ETW, GC profiler deep-dive | 🔄 TODO | D07 complete, tools pending |
+| D01, D02, D08, D09 | AppLog/File-access analysis, ETW, GC profiler deep-dive | ❌ Closed 2026-09-23 (Q-AR5) | Numbers were from the legacy `--perf-session` graph (no preload); re-open any item from the AR02e baseline if a bottleneck shows |
 
 ## Full Task History
 
@@ -18,11 +17,9 @@ Detailed task tracking archived at: [`docs/archive/historical/PERF-DIAGNOSIS-TAS
 
 ## Key Conclusions
 
-- D06 Procmon scenario driver established baseline (_perf-session_ mode)
+- D06 Procmon scenario driver established baseline (_perf-session_ mode); superseded by the AR02e production-graph baseline (see below)
 - EventSource instrumentation and measurement points in place (D03-D04)
-- Scenario matrix (D07) run; analysis pending profiler data (D08/D09)
-
-Next: D01/D02 completion requires Procmon session; D08/D09 require ETW trace analysis.
+- Scenario matrix (D07) run; D series closed 2026-09-23 (Q-AR5) instead of profiler deep-dive — see `docs/ACTIVE-TASKS.md`
 
 See [`docs/ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) for current work status.
 
@@ -71,7 +68,7 @@ Real folder F4 (1841 files ≈ 14 GB, mostly portrait 20–30 MP JPEG), producti
 | Peak WS open / slow-next / burst | 1.6 / 4.2 / 5.2 GB | **0.33 / 1.1–1.3 / 1.7 GB** |
 | App start → first image from Explorer (#46, 11 runs) | 3169 ms | **1817 ms** |
 
-Per PR (measured as it landed): #40 ICC via WIC color transform + Bgr32/Pbgra32 + worker-side materialization; #41 preview races the thumbnail, embedded EXIF thumbnails; #42 JPEG single-file disk cache (fallback previews cached); together open 453→180 ms, burst incomplete 250→57. #44 original dims from the decode (first made open +20 ms → fixed by yielding before bookkeeping); #45 direction-aware burst preload, viewer-priority decode (worst burst final 1.9–3.9 s → 0.36–1.1 s). #43 decode to the viewport box (portraits −85 % pixels): burst incomplete 22–40 → 0–2, peak WS −70 % — blocked on the zoom decision (#47 = option A). #46 startup: Explorer order batched (1.1 s → ~0.1 s), first image before Explorer order (INV-9 behaviour change). #48 Original mode wiring (lost in T46d).
+Per PR (measured as it landed): #40 ICC via WIC color transform + Bgr32/Pbgra32 + worker-side materialization; #41 preview races the thumbnail, embedded EXIF thumbnails; #42 JPEG single-file disk cache (fallback previews cached); together open 453→180 ms, burst incomplete 250→57. #44 original dims from the decode (first made open +20 ms → fixed by yielding before bookkeeping); #45 direction-aware burst preload, viewer-priority decode (worst burst final 1.9–3.9 s → 0.36–1.1 s). #43 decode to the viewport box (portraits −85 % pixels): burst incomplete 22–40 → 0–2, peak WS −70 % — zoom decision made (option A), #43 and #47 merged. #46 startup: Explorer order batched (1.1 s → ~0.1 s), first image before Explorer order (INV-9 behaviour change). #48 Original mode wiring (lost in T46d).
 
 - New harness: `run-matrix.ps1 -Profile quick|gate|full` (gate ≈ 7 min vs ~30 min), `-ColdDiskCache`, fixture-change guard; `--perf-analyze` reports `renderedFrame` (2nd Rendering tick) and Startup/Folder phases again.
 - Not shipped: SIMD-only TurboJpeg scale factors (measured slower). TurboJpeg remains slower than WicDirect on this set.
