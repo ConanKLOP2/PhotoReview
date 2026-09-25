@@ -205,6 +205,91 @@ public sealed class PreviewCacheFileTests : IDisposable
         Assert.False(File.Exists(path));
     }
 
+    private static BitmapSource AlphaBitmap(PixelFormat format, int width, int height, Func<int, int, byte> alphaAt)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                var o = (y * width + x) * 4;
+                var a = alphaAt(x, y);
+                // Premultiplied formats require colour <= alpha.
+                pixels[o] = pixels[o + 1] = pixels[o + 2] = Math.Min(a, (byte)77);
+                pixels[o + 3] = a;
+            }
+        var bmp = BitmapSource.Create(width, height, 96, 96, format, null, pixels, width * 4);
+        bmp.Freeze();
+        return bmp;
+    }
+
+    [Theory(DisplayName = "IsFullyOpaque: an alpha-format bitmap with only opaque pixels is cacheable")]
+    [InlineData(1, 1)]
+    [InlineData(3, 3)]
+    [InlineData(37, 11)]
+    [InlineData(2200, 3)]
+    public void IsFullyOpaque_AllOpaque_True(int width, int height)
+    {
+        Assert.True(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, (_, _) => 255)));
+        Assert.True(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, (_, _) => 255)));
+    }
+
+    [Theory(DisplayName = "IsFullyOpaque: one non-opaque pixel anywhere (first, middle, last, vector tail) makes it not cacheable")]
+    [InlineData(1, 1, 0, 0)]
+    [InlineData(37, 11, 0, 0)]
+    [InlineData(37, 11, 20, 5)]
+    [InlineData(37, 11, 36, 10)]
+    [InlineData(2200, 3, 2199, 2)]
+    [InlineData(2200, 3, 2199, 1)]
+    public void IsFullyOpaque_OneTransparentPixel_False(int width, int height, int tx, int ty)
+    {
+        byte AlphaAt(int x, int y) => x == tx && y == ty ? (byte)254 : (byte)255;
+        Assert.False(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Pbgra32, width, height, AlphaAt)));
+        Assert.False(PreviewCacheFile.IsFullyOpaque(AlphaBitmap(PixelFormats.Bgra32, width, height, AlphaAt)));
+    }
+
+    [Fact(DisplayName = "IsFullyOpaque: opaque formats skip the scan, translucent palettes are rejected")]
+    public void IsFullyOpaque_NonAlphaFormats()
+    {
+        Assert.True(PreviewCacheFile.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr32, null, new byte[64], 16)));
+        Assert.True(PreviewCacheFile.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Bgr24, null, new byte[48], 12)));
+        var translucent = new BitmapPalette([Colors.Red, Color.FromArgb(10, 0, 0, 0)]);
+        Assert.False(PreviewCacheFile.IsFullyOpaque(BitmapSource.Create(4, 4, 96, 96, PixelFormats.Indexed1, translucent, new byte[4], 1)));
+    }
+
+    [Fact(DisplayName = "A fully opaque Pbgra32 bitmap is written and reads back with the same colours (premultiplied == straight)")]
+    public async Task WriteAtomically_OpaquePbgra32_RoundTripsColours()
+    {
+        var source = AlphaBitmap(PixelFormats.Pbgra32, 32, 32, (_, _) => 255);
+        var path = CachePath();
+
+        await PreviewCacheFile.WriteAtomicallyAsync(
+            new WpfDecodedImage(source, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 32, originalHeight: 32), path);
+        var read = (BitmapSource)PreviewCacheFile.ReadAsDecodedImage(path).PlatformImage;
+        var expected = new byte[32 * 32 * 4];
+        source.CopyPixels(expected, 32 * 4, 0);
+        var actual = new byte[32 * 32 * 4];
+        new FormatConvertedBitmap(read, PixelFormats.Bgra32, null, 0).CopyPixels(actual, 32 * 4, 0);
+
+        for (var i = 0; i < expected.Length; i += 4)
+        {
+            Assert.InRange(Math.Abs(actual[i] - expected[i]), 0, 3);
+            Assert.InRange(Math.Abs(actual[i + 1] - expected[i + 1]), 0, 3);
+            Assert.InRange(Math.Abs(actual[i + 2] - expected[i + 2]), 0, 3);
+        }
+    }
+
+    [Fact(DisplayName = "Writing an alpha-format bitmap with a single transparent pixel is rejected")]
+    public async Task WriteAtomically_OneTransparentPixel_Rejected()
+    {
+        var alpha = AlphaBitmap(PixelFormats.Pbgra32, 16, 16, (x, y) => x == 15 && y == 15 ? (byte)0 : (byte)255);
+        var path = CachePath();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            PreviewCacheFile.WriteAtomicallyAsync(
+                new WpfDecodedImage(alpha, downscaled: true, orientation: 1, actualBackend: DecoderBackend.Wpf, originalWidth: 16, originalHeight: 16), path));
+        Assert.False(File.Exists(path));
+    }
+
     [Fact(DisplayName = "HasAlpha is true for alpha formats and translucent palettes, false for opaque formats")]
     public void HasAlpha_ClassifiesFormats()
     {

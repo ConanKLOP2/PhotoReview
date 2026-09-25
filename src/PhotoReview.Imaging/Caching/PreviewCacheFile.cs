@@ -105,7 +105,8 @@ public static class PreviewCacheFile
         ArgumentNullException.ThrowIfNull(bitmap);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
         // IMG-01: JPEG cannot carry alpha; refuse so a future caller cannot silently flatten transparency.
-        if (HasAlpha(bitmap)) throw new ArgumentException("Bitmaps with an alpha channel cannot be stored in the JPEG preview cache.", nameof(bitmap));
+        // Q-R7: alpha-capable formats are accepted only when every pixel is actually opaque.
+        if (!IsFullyOpaque(bitmap)) throw new ArgumentException("Bitmaps with transparent pixels cannot be stored in the JPEG preview cache.", nameof(bitmap));
         if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -232,6 +233,63 @@ public static class PreviewCacheFile
         if (format == PixelFormats.Indexed1 || format == PixelFormats.Indexed2 || format == PixelFormats.Indexed4 || format == PixelFormats.Indexed8)
             return bmp.Palette?.Colors.Any(c => c.A < 255) == true;
         return false;
+    }
+
+    /// <summary>
+    /// Q-R7: true when <paramref name="bmp"/> can be written to the JPEG cache without losing
+    /// transparency. Formats that cannot carry alpha are opaque without a scan; Bgra32/Pbgra32 are
+    /// scanned (band by band through a small pooled buffer, vectorised, early exit on the first
+    /// A&lt;255 pixel). For fully opaque pixels premultiplied equals straight colour, so writing
+    /// them is colour-safe. Other alpha formats (16-bit/float) are conservatively treated as not opaque.
+    /// </summary>
+    internal static bool IsFullyOpaque(BitmapSource bmp)
+    {
+        ArgumentNullException.ThrowIfNull(bmp);
+        if (!HasAlpha(bmp)) return true;
+        var format = bmp.Format;
+        if (format != PixelFormats.Bgra32 && format != PixelFormats.Pbgra32) return false;
+
+        var width = bmp.PixelWidth;
+        var height = bmp.PixelHeight;
+        if (width <= 0 || height <= 0) return true;
+        var stride = width * 4;
+        var rowsPerBand = Math.Clamp(65536 / stride, 1, height);
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(rowsPerBand * stride);
+        try
+        {
+            for (var y = 0; y < height; y += rowsPerBand)
+            {
+                var rows = Math.Min(rowsPerBand, height - y);
+                bmp.CopyPixels(new System.Windows.Int32Rect(0, y, width, rows), buffer, stride, 0);
+                if (!AllAlphaOpaque(buffer.AsSpan(0, rows * stride))) return false;
+            }
+            return true;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>True when every 4th byte (alpha of BGRA) of <paramref name="pixels"/> is 255.</summary>
+    internal static bool AllAlphaOpaque(ReadOnlySpan<byte> pixels)
+    {
+        var px = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(pixels);
+        const uint AlphaMask = 0xFF000000u; // little-endian: byte 3 is the top byte
+        var i = 0;
+        if (System.Numerics.Vector.IsHardwareAccelerated && px.Length >= System.Numerics.Vector<uint>.Count)
+        {
+            var mask = new System.Numerics.Vector<uint>(AlphaMask);
+            var last = px.Length - System.Numerics.Vector<uint>.Count;
+            for (; i <= last; i += System.Numerics.Vector<uint>.Count)
+            {
+                var v = new System.Numerics.Vector<uint>(px.Slice(i));
+                if (!System.Numerics.Vector.EqualsAll(v & mask, mask)) return false;
+            }
+        }
+        for (; i < px.Length; i++)
+            if ((px[i] & AlphaMask) != AlphaMask) return false;
+        return true;
     }
 
     private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height, int originalWidth, int originalHeight)

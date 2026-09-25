@@ -522,6 +522,54 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         Assert.Single(files);
     }
 
+    private async Task<(string[] Persisted, IDecodedImage Image)> DecodePngAsync(string name, byte[] png)
+    {
+        var path = Path.Combine(_root.Dir("src-" + name), name + ".png");
+        File.WriteAllBytes(path, png);
+        var diskDir = _root.Dir("out-" + name);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        var image = await service.GetPreviewAsync(path);
+        await service.ShutdownPersistWorkersAsync(); // drains every queued persist deterministically
+        return (Directory.GetFiles(diskDir, "*.pv4", SearchOption.AllDirectories), image);
+    }
+
+    [Fact(DisplayName = "Q-R7: an RGBA PNG with every pixel opaque (alpha-format preview) is persisted")]
+    public async Task OpaqueRgbaPng_IsPersisted()
+    {
+        var (files, image) = await DecodePngAsync("rgba-opaque", TestImages.BuildRgbaPng(64, 64, (_, _) => 255));
+
+        Assert.True(image.Downscaled);
+        Assert.True(PreviewCacheFile.HasAlpha(image)); // proves the alpha scan path (not the opaque-format shortcut) was exercised
+        Assert.Single(files);
+    }
+
+    [Fact(DisplayName = "Q-R7: an RGBA PNG with half-transparent pixels is not persisted")]
+    public async Task HalfTransparentRgbaPng_IsNotPersisted()
+    {
+        var (files, image) = await DecodePngAsync("rgba-half", TestImages.BuildRgbaPng(64, 64, (_, _) => 128));
+
+        Assert.True(PreviewCacheFile.HasAlpha(image));
+        Assert.Empty(files);
+    }
+
+    [Fact(DisplayName = "Q-R7: an RGBA PNG whose bottom-right quadrant is transparent is not persisted")]
+    public async Task PartiallyTransparentRgbaPng_IsNotPersisted()
+    {
+        var (files, _) = await DecodePngAsync("rgba-corner", TestImages.BuildRgbaPng(64, 64, (x, y) => x >= 32 && y >= 32 ? (byte)0 : (byte)255));
+
+        Assert.Empty(files);
+    }
+
+    [Fact(DisplayName = "Q-R7: an indexed PNG with an opaque palette is persisted; with a transparent entry it is not")]
+    public async Task IndexedPng_PersistedOnlyWhenPaletteOpaque()
+    {
+        var (opaqueFiles, _) = await DecodePngAsync("idx-opaque", TestImages.BuildIndexedPng(64, 64, translucentPalette: false));
+        var (translucentFiles, _) = await DecodePngAsync("idx-trns", TestImages.BuildIndexedPng(64, 64, translucentPalette: true));
+
+        Assert.Single(opaqueFiles);
+        Assert.Empty(translucentFiles);
+    }
+
     [Fact(DisplayName = "Original (full-resolution) mode never writes to the disk cache")]
     public async Task OriginalModeDoesNotWriteToDiskCache()
     {

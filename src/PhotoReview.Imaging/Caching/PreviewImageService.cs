@@ -491,7 +491,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp &&
-            !PreviewCacheFile.HasAlpha(bmp)) // IMG-01/Q-R1: the JPEG cache would flatten transparency to black
+            PreviewCacheFile.IsFullyOpaque(bmp)) // IMG-01/Q-R7: JPEG would flatten transparency; alpha-format previews persist only if no pixel is transparent
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
