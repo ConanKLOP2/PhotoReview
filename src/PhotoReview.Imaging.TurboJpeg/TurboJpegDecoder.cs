@@ -37,6 +37,20 @@ public sealed class TurboJpegDecoder : IImageDecoder
     public IDecodedImage Decode(DecodeRequest request)
     {
         ReadOnlyMemory<byte> bytesMemory = LoadBytes(request);
+        try
+        {
+            return Decode(request, bytesMemory);
+        }
+        catch (Exception ex) when (!request.Bytes.HasValue)
+        {
+            // Read from disk here: hand the bytes to FallbackImageDecoder so it does not read the file again.
+            DecodeFailureSourceBytes.Attach(ex, bytesMemory);
+            throw;
+        }
+    }
+
+    private static WpfDecodedImage Decode(DecodeRequest request, ReadOnlyMemory<byte> bytesMemory)
+    {
         var bytes = bytesMemory.Span;
 
         // Magic byte verification: JPEG SOI marker (0xFF, 0xD8, 0xFF)
