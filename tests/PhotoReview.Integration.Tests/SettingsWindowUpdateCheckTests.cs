@@ -102,6 +102,21 @@ public sealed class SettingsWindowUpdateCheckTests
         });
     }
 
+    [Fact(DisplayName = "The open-page click re-validates the URL: a foreign URL is never opened even if it got stored")]
+    public async Task OpenPage_RevalidatesUrl()
+    {
+        await Run(new FakeChecker(), window =>
+        {
+            var opened = new List<string>();
+            window.OpenUrl = opened.Add;
+            typeof(SettingsWindow).GetField("_updateUrl", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(window, "https://evil.example/x.exe");
+            Click(window.OpenUpdatePageButton);
+            Assert.Empty(opened);
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory(DisplayName = "Each failure code shows its own message and re-enables the button")]
     [InlineData(UpdateFailure.Offline)]
     [InlineData(UpdateFailure.Timeout)]

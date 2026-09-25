@@ -130,7 +130,8 @@ public sealed class UpdateCheckerTests
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         var pending = Check(handler, ct: cts.Token);
-        await started.Task;
+        await Task.WhenAny(started.Task, pending); // never hang if the request is not even sent
+        Assert.True(started.Task.IsCompleted);
         await cts.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
     }
