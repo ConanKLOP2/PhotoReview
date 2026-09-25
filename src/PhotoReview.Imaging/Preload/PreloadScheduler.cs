@@ -263,6 +263,8 @@ public sealed class PreloadScheduler : IDisposable
         var seenShape = (Direction: 1, Lead: 0);
         var seenBox = DecodeBox.Unbounded;
         var seenCalibrated = false;
+        var seenWholeFolder = false;
+        var orderCenter = 0;
         IEnumerator<int>? order = null;
         var examinedSinceYield = 0;
         var headroom = new HeadroomProbeState();
@@ -301,6 +303,8 @@ public sealed class PreloadScheduler : IDisposable
                     seenShape = shape;
                     seenBox = box;
                     seenCalibrated = measured is not null;
+                    seenWholeFolder = wholeFolder;
+                    orderCenter = center;
                 }
                 // perf(preload): viewer priority -- while the viewer is decoding the image on screen, preload
                 // does not ramp up to its full worker count against it (e.g. right after a burst stops on a
@@ -330,6 +334,12 @@ public sealed class PreloadScheduler : IDisposable
                         paused = true;
                         break;
                     }
+                    // Beyond the 32/8 window a whole-folder pass stops once the cache is nearly full: past
+                    // that point each far image would only evict an older one, and the LRU drops the
+                    // earliest preloaded -- the images right next to the user (estimate off, or other
+                    // decodes such as compare/zoom sharing the cache).
+                    if (seenWholeFolder && _target.CacheBytes >= _options.FullFolderThresholdBytes * WholeFolderCacheFillLimit
+                        && !InPreloadWindow(order.Current, orderCenter, seenShape)) break;
                     var entry = entries[order.Current];
                     var path = entry.Path;
                     if (queued.Contains(path)) continue;
@@ -452,6 +462,17 @@ public sealed class PreloadScheduler : IDisposable
         var ahead = direction * (index - center);
         if (ahead == 0) return false;
         return lead == 0 || ahead > 0;
+    }
+
+    /// <summary>Share of the preview budget a whole-folder pass may fill before it stops adding far images.</summary>
+    public const double WholeFolderCacheFillLimit = 0.9;
+
+    // The directional window PreloadOrderService.Build queues first (before the rest of the folder).
+    private static bool InPreloadWindow(int index, int center, (int Direction, int Lead) shape)
+    {
+        var ahead = (shape.Direction < 0 ? -1 : 1) * (index - center);
+        return ahead > 0 ? ahead <= shape.Lead + PreloadOrderService.ForwardLookahead
+            : ahead < 0 && -ahead <= PreloadOrderService.BackwardLookahead;
     }
 
     // Decode box previews are cached at right now, from the key of the image at the preload center

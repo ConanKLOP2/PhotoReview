@@ -58,6 +58,20 @@ public sealed class PreloadEstimateCalibrationTests
         Assert.Equal(ImageCount - 1, target.PreloadedCount);
     }
 
+    [Fact(DisplayName = "Whole folder stops adding far images once the cache is 90% full, the window is still preloaded")]
+    public async Task WholeFolder_StopsAtCacheFillLimit()
+    {
+        // Estimate fits (200 x 40 KB box bound = 8 MB), but the cache really holds 1 MB per image: past
+        // ~90 images each far decode would only evict a near one.
+        var target = new InMemoryTarget(new DecodeBox(100, 100), previewBytes: null, cacheBytesPerImage: 1024 * 1024);
+        using var scheduler = Create(target);
+
+        await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
+
+        var limit = (int)Math.Ceiling(Budget * PreloadScheduler.WholeFolderCacheFillLimit / (1024 * 1024));
+        Assert.InRange(target.PreloadedCount, PreloadOrderService.ForwardLookahead, limit + 4); // + in-flight workers
+    }
+
     [Fact]
     public void Estimate_BoundedBox_IsCountTimesBoxTimesFour()
     {
@@ -111,8 +125,11 @@ public sealed class PreloadEstimateCalibrationTests
         private readonly ConcurrentDictionary<string, byte> _cached = new(StringComparer.OrdinalIgnoreCase);
         private int _preloaded;
 
-        public InMemoryTarget(DecodeBox box, long? previewBytes)
+        private readonly long _cacheBytesPerImage;
+
+        public InMemoryTarget(DecodeBox box, long? previewBytes, long cacheBytesPerImage = 0)
         {
+            _cacheBytesPerImage = cacheBytesPerImage;
             _box = box;
             _previewBytes = previewBytes;
             var written = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -125,7 +142,7 @@ public sealed class PreloadEstimateCalibrationTests
         public CatalogEntry[] Entries { get; }
         public int PreloadedCount => Volatile.Read(ref _preloaded);
         public int CacheCount => _cached.Count;
-        public long CacheBytes => 0;
+        public long CacheBytes => _cached.Count * _cacheBytesPerImage;
 
         public bool TryGetCachedPreview(string path) => _cached.ContainsKey(path);
         public bool TryGetCachedPreview(ImageCacheKey key) => _cached.ContainsKey(key.Path);
