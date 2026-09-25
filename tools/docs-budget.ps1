@@ -21,8 +21,9 @@ function Get-DocTier {
 }
 
 # Measure the working tree (not HEAD) so staged-new and uncommitted growth count; quotepath=off keeps non-ASCII names intact.
-$root = (Get-Location).Path
-$docs = @(& git -c core.quotepath=off ls-files | Where-Object { $_ -match '\.(md|txt)$' -and (Test-Path -LiteralPath $_ -PathType Leaf) } | ForEach-Object {
+# Always the repo root, whatever the caller's current directory (verify-all may run from tools/).
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$docs = @(& git -C $root -c core.quotepath=off ls-files | Where-Object { $_ -match '\.(md|txt)$' -and (Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf) } | ForEach-Object {
     $content = [System.IO.File]::ReadAllText((Join-Path $root $_), [System.Text.Encoding]::UTF8)
     $bytes = [System.Text.Encoding]::UTF8.GetByteCount($content)
     [pscustomobject]@{
