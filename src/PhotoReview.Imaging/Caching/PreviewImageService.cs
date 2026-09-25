@@ -623,7 +623,8 @@ public sealed class PreviewImageService : IPreloadTarget
     private IDecodedImage DecodeFromSource(string path, long sourceLength, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
-        // A file the byte cache cannot hold is streamed by the decoder: pre-reading it would allocate the whole file (LOH, and
+        // A file the byte cache cannot hold is not pre-read here (the WPF/WIC decoders stream it; TurboJpeg still reads it whole
+        // itself, which needs the full buffer anyway): pre-reading it would allocate the whole file (LOH, and
         // several at once under preload) only to drop it again.
         if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
         {

@@ -24,6 +24,27 @@ public sealed class SourceBytesCacheTests : IDisposable
         Assert.Equal(1, cache.Count);
     }
 
+    [Fact(DisplayName = "Prefetch caches a file that fits and reads nothing for a file larger than the whole cache")]
+    public void TryPrefetch_SkipsFilesTheCacheCouldNeverKeep()
+    {
+        Directory.CreateDirectory(_root);
+        var small = Path.Combine(_root, "small.bin");
+        var big = Path.Combine(_root, "big.bin");
+        File.WriteAllBytes(small, new byte[100]);
+        File.WriteAllBytes(big, new byte[5000]);
+        var cache = new SourceBytesCache(1024);
+        Assert.True(cache.CapacityBytes >= 1024 && cache.CapacityBytes < 5000, "the fixture assumes a 1 KB cache");
+
+        // An exclusive lock makes any attempt to read the big file throw a sharing violation.
+        using var exclusive = new FileStream(big, FileMode.Open, FileAccess.Read, FileShare.None);
+        Assert.False(cache.TryPrefetch(big));
+        Assert.Equal(0, cache.Count);
+
+        Assert.True(cache.TryPrefetch(small));
+        Assert.Equal(1, cache.Count);
+        Assert.Equal(100, cache.CurrentSize);
+    }
+
     [Fact(DisplayName = "Source bytes cache clear and evict remove entries")]
     public void ClearAndEvictRemoveEntries()
     {
