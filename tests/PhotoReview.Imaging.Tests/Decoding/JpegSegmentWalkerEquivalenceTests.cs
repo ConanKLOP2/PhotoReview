@@ -3,7 +3,7 @@ using PhotoReview.Imaging.TurboJpeg;
 namespace PhotoReview.Imaging.Tests.Decoding;
 
 /// <summary>
-/// IMG-07: the shared marker walker must behave exactly like the two hand-rolled loops it replaced.
+/// IMG-07: the shared marker walker must behave like the two hand-rolled loops it replaced (plus the IMG-01 fill/TEM fixes).
 /// The pre-refactor ICC loop is kept here verbatim as the oracle; the orientation oracle locates the
 /// first Exif APP1 payload with the old loop and asks the (unchanged) public API to parse it.
 /// </summary>
@@ -40,6 +40,48 @@ public sealed class JpegSegmentWalkerEquivalenceTests
 
         Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(beforeSos));
         Assert.False(TurboJpegDecoder.HasEmbeddedIccProfile(afterSos));
+    }
+
+    [Fact]
+    public void Walker_SkipsMarkerFillBytesBeforeExif()
+    {
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xFF, 0xFF, .. Segment(0xE1, ExifPayload(6)), 0xFF, 0xDA, 0x00, 0x02];
+
+        Assert.Equal(6, TurboJpegDecoder.ReadExifOrientation(jpeg));
+    }
+
+    [Fact]
+    public void Walker_SkipsMarkerFillBytesBeforeIcc()
+    {
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0, 0, 0xFF, 0xFF, .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
+
+        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+    }
+
+    [Fact]
+    public void Walker_SkipsTemMarkerBeforeIccAndExif()
+    {
+        byte[] icc = [0xFF, 0xD8, 0xFF, 0x01, .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
+        byte[] exif = [0xFF, 0xD8, 0xFF, 0x01, 0xFF, 0x01, .. Segment(0xE1, ExifPayload(3)), 0xFF, 0xDA, 0x00, 0x02];
+
+        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(icc));
+        Assert.Equal(3, TurboJpegDecoder.ReadExifOrientation(exif));
+    }
+
+    [Fact]
+    public void Walker_NormalExifAndIcc_StillFound()
+    {
+        byte[] jpeg = [0xFF, 0xD8, .. Segment(0xE1, ExifPayload(8)), .. Segment(0xE2, IccTag), 0xFF, 0xDA, 0x00, 0x02];
+
+        Assert.Equal(8, TurboJpegDecoder.ReadExifOrientation(jpeg));
+        Assert.True(TurboJpegDecoder.HasEmbeddedIccProfile(jpeg));
+    }
+
+    [Fact]
+    public void Walker_TruncatedFillOrStuffedByte_DoesNotThrowOrMatch()
+    {
+        Assert.Equal(1, TurboJpegDecoder.ReadExifOrientation([0xFF, 0xD8, 0xFF, 0xFF, 0xFF]));
+        Assert.False(TurboJpegDecoder.HasEmbeddedIccProfile([0xFF, 0xD8, 0xFF, 0x00, 0x00, 0x00]));
     }
 
     private static byte[] Segment(byte marker, byte[] payload)
@@ -105,8 +147,12 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         {
             if (jpeg[offset] != 0xFF) break;
 
+            // IMG-01 deliberate deviation from the pre-refactor loop: skip 0xFF fill, stop at 0xFF00, skip TEM.
+            while (offset + 1 < jpeg.Length && jpeg[offset + 1] == 0xFF) offset++;
+            if (offset + 4 > jpeg.Length) break;
             byte marker = jpeg[offset + 1];
-            if (marker is 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
+            if (marker is 0x00 or 0xFF) break;
+            if (marker is 0x01 or 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
@@ -144,8 +190,12 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         {
             if (jpeg[offset] != 0xFF) break;
 
+            // IMG-01 deliberate deviation from the pre-refactor loop: skip 0xFF fill, stop at 0xFF00, skip TEM.
+            while (offset + 1 < jpeg.Length && jpeg[offset + 1] == 0xFF) offset++;
+            if (offset + 4 > jpeg.Length) break;
             byte marker = jpeg[offset + 1];
-            if (marker is 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
+            if (marker is 0x00 or 0xFF) break;
+            if (marker is 0x01 or 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
