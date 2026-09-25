@@ -1,0 +1,129 @@
+using System.IO;
+using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Tests.Fakes;
+
+namespace PhotoReview.Core.Tests.Settings;
+
+/// <summary>Failure injection on <see cref="SettingsStore"/>: a failed save must not lose or corrupt what is on disk.</summary>
+public sealed class SettingsStoreFailureTests
+{
+    private readonly InMemoryFileSystem _fs = new();
+    private readonly AppPaths _paths = new(@"C:\Users\test\AppData\Local");
+
+    private SettingsStore NewStore() => new(_paths, _fs, NullLog.Instance);
+
+    [Theory(DisplayName = "A failed Save throws, leaves the previous config.json byte-for-byte, keeps Current and raises no Changed")]
+    [InlineData(typeof(IOException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public void Save_WriteFails_KeepsPreviousFileAndState(Type failure)
+    {
+        var store = NewStore();
+        store.Save(new AppSettings { ClickZoomPercent = 150 });
+        var before = _fs.ReadAllText(_paths.ConfigFile);
+        var current = store.Current;
+        var changed = 0;
+        store.Changed += (_, _) => changed++;
+        _fs.WriteHook = _ => (Exception)Activator.CreateInstance(failure, "disk full")!;
+
+        Assert.Throws(failure, () => store.Save(new AppSettings { ClickZoomPercent = 400 }));
+
+        Assert.Equal(before, _fs.ReadAllText(_paths.ConfigFile));
+        Assert.Same(current, store.Current);
+        Assert.Equal(0, changed);
+        _fs.WriteHook = null;
+        store.Save(new AppSettings { ClickZoomPercent = 400 });
+        Assert.Equal(400, NewStore().Load().ClickZoomPercent);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact(DisplayName = "Save(null) is rejected")]
+    public void Save_Null_Throws() => Assert.Throws<ArgumentNullException>(() => NewStore().Save(null!));
+
+    [Theory(DisplayName = "Migrate is idempotent for every historic version and never leaves null members")]
+    [InlineData(int.MinValue)]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(int.MaxValue)]
+    public void Migrate_Idempotent(int version)
+    {
+        var settings = new AppSettings { ConfigVersion = version, UiLanguage = null!, Actions = null!, Shortcuts = null! };
+
+        SettingsStore.Migrate(settings);
+        var once = System.Text.Json.JsonSerializer.Serialize(settings);
+        SettingsStore.Migrate(settings);
+
+        Assert.Equal(once, System.Text.Json.JsonSerializer.Serialize(settings));
+        Assert.NotNull(settings.Actions);
+        Assert.NotNull(settings.Shortcuts);
+        Assert.False(string.IsNullOrWhiteSpace(settings.UiLanguage));
+        Assert.True(settings.ConfigVersion >= AppSettings.CurrentConfigVersion);
+    }
+
+    [Fact(DisplayName = "A pre-language config (version 2) keeps the Vietnamese UI; a version-3 config keeps its own language")]
+    public void Migrate_LanguageDefaults()
+    {
+        var old = new AppSettings { ConfigVersion = 2, UiLanguage = "auto" };
+        var current = new AppSettings { ConfigVersion = 3, UiLanguage = "de" };
+
+        SettingsStore.Migrate(old);
+        SettingsStore.Migrate(current);
+
+        Assert.Equal("vi", old.UiLanguage);
+        Assert.Equal("de", current.UiLanguage);
+    }
+
+    [Fact(DisplayName = "Two corrupt loads within the same second never overwrite the first backup")]
+    public void Load_TwoCorruptLoadsInOneSecond_KeepBothOrFirstBackup()
+    {
+        _fs.AddFile(_paths.ConfigFile, "{ broken 1");
+        var first = NewStore();
+        first.Load();
+        var backups = _fs.EnumerateFiles(Path.GetDirectoryName(_paths.ConfigFile)!, "config.json.corrupt-*").ToList();
+        Assert.Single(backups);
+        var firstBackupText = _fs.ReadAllText(backups[0]);
+
+        // Corrupt the freshly written defaults again straight away (same clock second).
+        _fs.AddFile(_paths.ConfigFile, "{ broken 2");
+        var second = Record.Exception(() => NewStore().Load());
+
+        Assert.Null(second);
+        Assert.Equal("{ broken 1", firstBackupText);
+        var afterSecond = _fs.EnumerateFiles(Path.GetDirectoryName(_paths.ConfigFile)!, "config.json.corrupt-*").Select(f => _fs.ReadAllText(f)).ToList();
+        Assert.Contains("{ broken 1", afterSecond);
+    }
+
+    [Fact(DisplayName = "Load with a mistyped value keeps the readable properties, backs the file up and reports the reset names")]
+    public void Load_MistypedValue_SalvagesAndReports()
+    {
+        _fs.AddFile(_paths.ConfigFile, """{"ConfigVersion":3,"ClickZoomPercent":"abc","LoggingEnabled":true,"LoadingMode":"Original"}""");
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.True(loaded.LoggingEnabled);
+        Assert.Equal(LoadingMode.Original, loaded.LoadingMode);
+        Assert.Equal(AppSettings.DefaultClickZoomPercent, loaded.ClickZoomPercent);
+        Assert.Contains(nameof(AppSettings.ClickZoomPercent), store.LastLoadRepairs);
+        Assert.Single(_fs.EnumerateFiles(Path.GetDirectoryName(_paths.ConfigFile)!, "config.json.corrupt-*"));
+    }
+
+    [Fact(DisplayName = "Salvage whose backup fails keeps the file untouched for the whole session (no overwrite on Save)")]
+    public void Load_SalvageBackupFails_ConfigNeverOverwritten()
+    {
+        const string original = """{"ConfigVersion":3,"ClickZoomPercent":"abc","LoggingEnabled":true}""";
+        _fs.AddFile(_paths.ConfigFile, original);
+        _fs.CopyHook = (_, _) => new IOException("read-only volume");
+        var store = NewStore();
+
+        var loaded = store.Load();
+        store.Save(loaded);
+
+        Assert.True(loaded.LoggingEnabled);
+        Assert.Equal(original, _fs.ReadAllText(_paths.ConfigFile));
+    }
+}
