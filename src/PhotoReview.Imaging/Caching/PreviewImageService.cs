@@ -203,12 +203,20 @@ public sealed class PreviewImageService : IPreloadTarget
     // so a huge leftover pile from a very old install can't turn this into an unbounded scan.
     private const int LegacyCleanupMaxFiles = 5000;
 
+    /// <summary>The start-up cleanup pass (legacy files + stale temp files) started by the constructor; test seam.</summary>
+    internal Task StartupCleanup { get; private set; } = Task.CompletedTask;
+
     private void ScheduleLegacyCacheCleanup()
     {
         if (_disableDiskCache) return;
         var directory = _diskCacheDirectory;
         var log = _log;
-        _ = Task.Run(() => CleanupLegacyCacheFiles(directory, log));
+        StartupCleanup = Task.Run(() =>
+        {
+            CleanupLegacyCacheFiles(directory, log);
+            // Atomic-write temp files orphaned by a killed process: no prune/clear pattern ever matches them.
+            DiskCacheStore.DeleteStaleTempFiles(directory, DateTime.UtcNow, LegacyCleanupMaxFiles, log);
+        });
     }
 
     private static void CleanupLegacyCacheFiles(string directory, ILog log)
@@ -757,6 +765,12 @@ public sealed class PreviewImageService : IPreloadTarget
         // preview is dropped rather than growing the backlog or blocking the caller.
         _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight));
     }
+
+    /// <summary>
+    /// True when the disk preview cache holds an entry for <paramref name="key"/> (one <see cref="File.Exists"/>, the
+    /// same check the decode path makes first). Always false while the disk cache is disabled.
+    /// </summary>
+    public bool HasDiskCachedPreview(ImageCacheKey key) => !_disableDiskCache && File.Exists(GetDiskCachePath(key));
 
     bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);
     bool IPreloadTarget.TryGetCachedPreview(ImageCacheKey key) => TryGetCachedPreview(key, out _);

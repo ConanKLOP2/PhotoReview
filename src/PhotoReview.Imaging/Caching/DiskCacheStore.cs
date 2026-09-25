@@ -259,12 +259,50 @@ public sealed class DiskCacheStore
         => PruneDirectory(directory, searchPattern, maxBytes, log: null, companionSuffix);
 
     /// <summary>
-    /// Removes every file matching this store's pattern in its directory.
+    /// Removes every file matching this store's pattern in its directory, plus leftover atomic-write temp files
+    /// (<see cref="TempFilePattern"/>), which the store pattern never matches.
     /// </summary>
     public void ClearDirectory()
     {
         ClearDirectory(_directory, _searchPattern, _log);
+        // No log: a temp file a writer still holds open fails to delete, and that writer removes it itself.
+        ClearDirectory(_directory, TempFilePattern, log: null);
         lock (_sizeGate) { _trackedBytes = -1; _notedDuringScan = 0; }
+    }
+
+    /// <summary>
+    /// Temp files of <see cref="WriteAtomicallyAsync(BitmapSource, string, ILog?, CancellationToken)"/> and
+    /// PreviewCacheFile's atomic write (<c>X.png.&lt;guid&gt;.tmp</c>, <c>X.pv4.&lt;guid&gt;.tmp</c>). A process killed
+    /// between creating one and the rename leaves it behind; no prune or clear pattern of the store matches it.
+    /// </summary>
+    public const string TempFilePattern = "*.tmp";
+
+    /// <summary>A live writer's temp file exists for milliseconds; older ones were left by a killed process.</summary>
+    public static readonly TimeSpan StaleTempFileAge = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Deletes up to <paramref name="maxFiles"/> <see cref="TempFilePattern"/> files in <paramref name="directory"/>
+    /// last written more than <see cref="StaleTempFileAge"/> before <paramref name="utcNow"/>. Best effort, never throws.
+    /// </summary>
+    /// <returns>Number of files deleted.</returns>
+    public static int DeleteStaleTempFiles(string directory, DateTime utcNow, int maxFiles, ILog? log = null)
+    {
+        var removed = 0;
+        try
+        {
+            if (!System.IO.Directory.Exists(directory)) return 0;
+            foreach (var path in System.IO.Directory.EnumerateFiles(directory, TempFilePattern).Take(maxFiles))
+            {
+                DateTime written;
+                try { written = File.GetLastWriteTimeUtc(path); }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                if (utcNow - written > StaleTempFileAge && TryDelete(path, log)) removed++;
+            }
+        }
+        catch (IOException ex) { log?.Error($"Stale temp file cleanup failed: {directory}", ex); }
+        catch (UnauthorizedAccessException ex) { log?.Error($"Stale temp file cleanup failed: {directory}", ex); }
+        return removed;
     }
 
     /// <summary>
