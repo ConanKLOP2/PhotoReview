@@ -23,20 +23,20 @@ public static class ExplorerSnapshotValidator
         {
             if (string.IsNullOrWhiteSpace(candidate))
             {
-                reason = "Native view returned an empty path";
+                reason = ExplorerReason.EmptyPath;
                 return false;
             }
 
             var path = Path.GetFullPath(candidate);
             if (!SamePath(Path.GetDirectoryName(path) ?? string.Empty, folder))
             {
-                reason = "Native view returned an item outside the folder";
+                reason = ExplorerReason.OutsideFolder;
                 return false;
             }
 
             if (!seen.Add(path))
             {
-                reason = "Native view returned a duplicate item";
+                reason = ExplorerReason.DuplicateItem;
                 return false;
             }
 
@@ -48,7 +48,7 @@ public static class ExplorerSnapshotValidator
 
         if (result.Count != expected.Count || !expected.SetEquals(result))
         {
-            reason = "Native view did not contain the complete image snapshot";
+            reason = ExplorerReason.IncompleteSnapshot;
             return false;
         }
 

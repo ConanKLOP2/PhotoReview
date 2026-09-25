@@ -27,15 +27,33 @@ public static class BenchmarkProfileExtensions
     };
 }
 
+/// <summary>What is wrong with a benchmark profile (stable code; the WPF window maps it to catalog text).</summary>
+public enum BenchmarkProfileProblem
+{
+    MissingIdOrMode,
+    InvalidSettings,
+    /// <summary>The profile has no real check yet and refuses to run (a decode-only stand-in would misreport).</summary>
+    NotImplemented,
+}
+
+/// <summary>A profile that cannot run. <see cref="Exception.Message"/> stays English (CLI, logs, reports);
+/// <see cref="Problem"/> and <see cref="ProfileId"/> let the WPF window show translated text.</summary>
+public sealed class BenchmarkProfileException(BenchmarkProfileProblem problem, string profileId, string message)
+    : ArgumentException(message)
+{
+    public BenchmarkProfileProblem Problem { get; } = problem;
+    public string ProfileId { get; } = profileId;
+}
+
 public static class BenchmarkProfileValidation
 {
     public static void Validate(BenchmarkProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
         if (string.IsNullOrWhiteSpace(profile.Id) || !Enum.IsDefined(profile.LoadingMode))
-            throw new ArgumentException("Profile id and loading mode are required");
+            throw new BenchmarkProfileException(BenchmarkProfileProblem.MissingIdOrMode, profile?.Id ?? string.Empty, "Profile id and loading mode are required");
         if (profile.Workers < 1 || profile.NextWindow < 0 || profile.PreviousWindow < 0 || profile.Iterations < 1)
-            throw new ArgumentException($"Invalid benchmark settings for profile '{profile.Id}'");
+            throw new BenchmarkProfileException(BenchmarkProfileProblem.InvalidSettings, profile.Id, $"Invalid benchmark settings for profile '{profile.Id}'");
     }
 }
 

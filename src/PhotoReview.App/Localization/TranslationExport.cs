@@ -18,11 +18,8 @@ public static class TranslationExport
 
     public const string NotesFileName = "en.notes.json";
 
-    /// <summary>English guidance written into every export (the file is for translators; it is not UI text).</summary>
-    public const string HelpText =
-        "Translate the values (keep {placeholders} and the key names), then copy the entries into <code>.json in this folder " +
-        "(create it with this _meta block if it does not exist) and press 'Reload translations' in Settings. " +
-        "_notes explains where each text appears; keys starting with '_' are ignored by PhotoReview.";
+    /// <summary>Guidance written into every export (catalog key <c>export.help</c>, in the current UI language).</summary>
+    public static string HelpText => Tr.ExportHelp;
 
     private static readonly JsonWriterOptions WriterOptions = new()
     {

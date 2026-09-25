@@ -50,7 +50,7 @@ public sealed class ExplorerSnapshotValidatorTests
         var valid = ExplorerSnapshotValidator.TryValidate(snapshot, [FileA, FileB], out var ordered, out var reason);
 
         Assert.False(valid);
-        Assert.NotNull(reason);
+        Assert.Equal(ExplorerReason.IncompleteSnapshot, reason);
         Assert.Empty(ordered);
     }
 
@@ -62,7 +62,7 @@ public sealed class ExplorerSnapshotValidatorTests
         var valid = ExplorerSnapshotValidator.TryValidate(snapshot, [FileA, FileB], out var ordered, out var reason);
 
         Assert.False(valid);
-        Assert.Contains("duplicate", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ExplorerReason.DuplicateItem, reason);
         Assert.Empty(ordered);
     }
 
@@ -75,7 +75,7 @@ public sealed class ExplorerSnapshotValidatorTests
         var valid = ExplorerSnapshotValidator.TryValidate(snapshot, [FileA], out var ordered, out var reason);
 
         Assert.False(valid);
-        Assert.Contains("outside", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ExplorerReason.OutsideFolder, reason);
         Assert.Empty(ordered);
     }
 
@@ -87,7 +87,7 @@ public sealed class ExplorerSnapshotValidatorTests
         var valid = ExplorerSnapshotValidator.TryValidate(snapshot, [FileA], out var ordered, out var reason);
 
         Assert.False(valid);
-        Assert.Contains("empty", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ExplorerReason.EmptyPath, reason);
         Assert.Empty(ordered);
     }
 

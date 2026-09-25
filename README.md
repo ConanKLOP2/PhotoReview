@@ -36,6 +36,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact. Verification for self-contained builds uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
 
+**Releasing:** CI tags every merge to `master` (`v2.0.N`) and then automatically creates a **draft** GitHub Release for that tag (framework-dependent zip, exe SHA256, generated notes). Drafts are invisible to the public: review one under Releases and press **Publish** to release it. Delete drafts you do not want. You can also run the **Release** workflow by hand (Actions → Release → Run workflow) for an existing tag that has no release yet.
+
 Note: `Microsoft.CodeAnalysis.CSharp` (Localization generator, `Directory.Packages.props`) must not be newer than the compiler in the installed .NET SDK; upgrade it only together with the SDK.
 
 ### Benchmarks
@@ -76,6 +78,15 @@ The UI ships in English and Vietnamese (Settings → Language; `auto` follows Wi
 | English (`en`) | built in, complete |
 | Tiếng Việt (`vi`) | complete |
 
+**Add your own language (e.g. Chinese) — no build needed:**
+
+1. Settings → pick a language → **Export strings to translate**. This writes `<code>.todo.json` with every missing key, its English text and translator notes.
+2. Create `zh.json` in `%LocalAppData%\PhotoReview\Languages\` (Settings → **Open languages folder**) with a `_meta` block (`"code": "zh"`, `"nativeName": "中文"`, `"plural": "none"` for languages without plural forms) and your translations.
+3. Settings → **Reload translations**, then choose the language under **Language**. Untranslated keys fall back to English, so you can translate gradually.
+4. Share it: open a pull request that adds the file to `src/PhotoReview.Core/Localization/Languages/`; run `tools/i18n-check.ps1` first.
+
+Details, rules and the Vietnamese glossary: [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
 ### Known Limitations
 
 Explorer ordering depends on open folder windows and valid Shell snapshots; fallback ordering is used if Explorer is not ready or if the snapshot encounters an error or timeout. Contract tests do not guarantee GUI behavior, perceived first-image latency, or P95 timings; these conclusions require controlled runtime measurements. The update check is manual only: there is no automatic update, and it needs an internet connection and may fail when GitHub rate-limits requests.
@@ -114,6 +125,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish`. Verification cho self-contained dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
 
+**Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`) rồi tự tạo một **bản nháp (draft)** GitHub Release cho tag đó (zip framework-dependent, SHA256 của exe, release notes tự sinh). Bản nháp không hiện công khai: vào Releases xem lại rồi bấm **Publish** để phát hành, bản không cần thì xoá. Vẫn có thể chạy tay workflow **Release** (Actions → Release → Run workflow) cho một tag chưa có release.
+
 Lưu ý: `Microsoft.CodeAnalysis.CSharp` (generator Localization, `Directory.Packages.props`) không được mới hơn compiler của .NET SDK đang cài; chỉ nâng cùng lúc với SDK.
 
 ### Benchmark
@@ -148,6 +161,15 @@ Gỡ đăng ký:
 ### Ngôn ngữ
 
 Giao diện có English và Tiếng Việt (Cài đặt → Ngôn ngữ; `auto` theo Windows). Chữ nằm trong các file JSON thường, ai cũng sửa hoặc thêm ngôn ngữ được mà không cần build — xem [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
+**Thêm ngôn ngữ của bạn (ví dụ tiếng Trung), không cần build:**
+
+1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm các key còn thiếu, câu English và ghi chú.
+2. Tạo `zh.json` trong `%LocalAppData%\PhotoReview\Languages\` (Cài đặt → **Mở thư mục ngôn ngữ**) có khối `_meta` (`"code": "zh"`, `"nativeName": "中文"`, `"plural": "none"` cho ngôn ngữ không có số nhiều) và bản dịch.
+3. Cài đặt → **Tải lại bản dịch**, rồi chọn ngôn ngữ trong **Ngôn ngữ**. Key chưa dịch tự hiện English nên dịch dần được.
+4. Chia sẻ: mở pull request thêm file vào `src/PhotoReview.Core/Localization/Languages/`; nên chạy `tools/i18n-check.ps1` trước.
+
+Chi tiết, quy tắc và bảng thuật ngữ: [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ### Giới hạn cần biết
 

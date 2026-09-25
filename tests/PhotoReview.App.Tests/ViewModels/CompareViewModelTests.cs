@@ -172,10 +172,10 @@ public sealed class CompareViewModelTests
             getFileSize: p => p == pair.Item1 ? 1048576L : 2097152L);
 
         Assert.True(success);
-        Assert.Equal(" (1,048,576 B)", vm.LeftSizeText);
-        Assert.Equal(" (2,097,152 B)", vm.RightSizeText);
-        Assert.Equal(" (1,048,576 B) ↔  (2,097,152 B)", vm.SizeText);
-        Assert.Equal("3/5 | So sánh | img1.jpg (1,048,576 B) ↔ img2.jpg (2,097,152 B) | hash tắt | nhấn để chọn", vm.StatusText);
+        Assert.Equal(" (1,048,576 byte)", vm.LeftSizeText);
+        Assert.Equal(" (2,097,152 byte)", vm.RightSizeText);
+        Assert.Equal(" (1,048,576 byte) ↔  (2,097,152 byte)", vm.SizeText);
+        Assert.Equal("3/5 | So sánh | img1.jpg (1,048,576 byte) ↔ img2.jpg (2,097,152 byte) | hash tắt | nhấn để chọn", vm.StatusText);
     }
 
     [Fact]

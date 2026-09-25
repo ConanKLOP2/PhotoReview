@@ -73,13 +73,15 @@ public sealed class DuplicateCleanupController
             remove = await DuplicateFinder.FindAsync(
                 candidates,
                 removeNumbered,
-                (path, ct) => _hashService?.GetAsync(path, ct) ?? throw new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
+                (path, ct) => _hashService?.GetAsync(path, ct) ?? throw UserFacingError.Localized(
+                    new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
+                    () => Tr.ErrIoHashServiceMissing),
                 _fileSystem,
                 System.Threading.CancellationToken.None);
         }
         catch (Exception ex)
         {
-            _sink.SetStatusText(StatusFormatter.DuplicateCheckFailed(ex.Message));
+            _sink.SetStatusText(StatusFormatter.DuplicateCheckFailed(UserFacingError.Describe(ex)));
             return;
         }
 

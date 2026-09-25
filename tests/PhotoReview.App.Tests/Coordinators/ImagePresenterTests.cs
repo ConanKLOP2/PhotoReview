@@ -18,6 +18,7 @@ using PhotoReview.Core.Settings;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Coordinators;
@@ -205,6 +206,24 @@ public sealed class ImagePresenterTests : IDisposable
         using var stream = new MemoryStream();
         encoder.Save(stream);
         return stream.ToArray();
+    }
+
+    [Fact(DisplayName = "A decode error with a localized sentence (source changed during decode) is shown in the UI language, not as English exception text")]
+    public async Task PresentAsync_WhenSourceChangesDuringDecode_ShowsLocalizedImageError()
+    {
+        var path = CreateFakeImageFile("racing.png");
+        var info = new FileInfo(path);
+        _catalog.Reset([new CatalogEntry(path).WithMetadata(info.Length, info.LastWriteTimeUtc)]);
+        var presenter = CreatePresenter();
+
+        // Another program keeps rewriting the file: the key taken before the decode never matches afterwards.
+        using (new FileToucher(path))
+        {
+            await presenter.PresentAsync(0);
+        }
+
+        Assert.Equal($"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc giải mã: {path}", presenter.StatusText);
+        Assert.DoesNotContain("changed during decode", presenter.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]

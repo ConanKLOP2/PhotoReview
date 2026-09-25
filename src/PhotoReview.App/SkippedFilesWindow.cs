@@ -32,7 +32,7 @@ internal sealed class SkippedFilesWindow : Window
         };
         var list = new ListBox
         {
-            ItemsSource = entries.Select(e => $"{e.Path}  ({e.Reason})").ToList(),
+            ItemsSource = entries.Select(FormatEntry).ToList(),
             Background = new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)),
             Foreground = new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xEE)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
@@ -59,4 +59,11 @@ internal sealed class SkippedFilesWindow : Window
         grid.Children.Add(close);
         Content = grid;
     }
+
+    /// <summary>"path  (reason)": the OS message stays verbatim inside a translated category sentence.</summary>
+    internal static string FormatEntry(SkippedEntry entry) => Tr.SkippedEntry(entry.Path, entry.Kind switch
+    {
+        SkippedKind.ListingInterrupted => Tr.SkippedReasonListingInterrupted(entry.Reason),
+        _ => Tr.SkippedReasonFileUnreadable(entry.Reason),
+    });
 }
