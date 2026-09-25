@@ -52,8 +52,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.CanRetry => Good,
         RecoveryVerdict.AlreadyDone => Info,
         RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled => Warn,
-        RecoveryVerdict.PermanentlyDeleted => Bad,
-        RecoveryVerdict.Lost => Bad,
+        RecoveryVerdict.PermanentlyDeleted or RecoveryVerdict.Lost => Bad,
         _ => Neutral,
     };
 

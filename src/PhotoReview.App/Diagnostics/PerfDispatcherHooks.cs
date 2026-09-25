@@ -21,8 +21,10 @@ public sealed class PerfDispatcherHooks
     private const double LongOpThresholdMs = 16;
     // DispatcherOperation keeps its callback in a private field; reading it is best effort and only
     // happens for operations that already exceeded the threshold.
+    internal const string MethodFieldName = "_method";
+
     private static readonly FieldInfo? MethodField =
-        typeof(DispatcherOperation).GetField("_method", BindingFlags.Instance | BindingFlags.NonPublic);
+        typeof(DispatcherOperation).GetField(MethodFieldName, BindingFlags.Instance | BindingFlags.NonPublic);
 
     private readonly DispatcherHooks _hooks;
     private readonly ConditionalWeakTable<DispatcherOperation, StrongBox<long>> _starts = new();

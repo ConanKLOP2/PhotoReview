@@ -122,6 +122,21 @@ public sealed class TranslationExportTests : IDisposable
     }
 
     [Fact]
+    public void Export_KeepsTheEarlierExportAsBackup_SoHandEditsAreNotLost()
+    {
+        var shipped = _temp.Dir("shipped4");
+        var user = _temp.Dir("user4");
+        var existing = Path.Combine(user, "xx.todo.json");
+        File.WriteAllText(existing, "my half-done translation");
+
+        var path = TranslationExport.Export("xx", shipped, user);
+
+        Assert.Equal(existing, path);
+        Assert.Equal("my half-done translation", File.ReadAllText(existing + TranslationExport.BackupSuffix));
+        Assert.StartsWith("{", File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Export_RejectsInvalidCode()
     {
         Assert.Throws<ArgumentException>(() => TranslationExport.Export("..\\evil", _temp.Dir("s3"), _temp.Dir("u3")));

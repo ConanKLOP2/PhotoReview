@@ -16,6 +16,9 @@ public static class TranslationExport
 {
     public const string FileSuffix = ".todo.json";
 
+    /// <summary>Appended to the previous export when Export replaces it (never matches the loader's <c>*.json</c> scan).</summary>
+    public const string BackupSuffix = ".bak";
+
     public const string NotesFileName = "en.notes.json";
 
     /// <summary>Guidance written into every export (catalog key <c>export.help</c>, in the current UI language).</summary>
@@ -45,6 +48,8 @@ public static class TranslationExport
 
         Directory.CreateDirectory(userDir);
         var path = Path.Combine(userDir, code.ToLowerInvariant() + FileSuffix);
+        // The export is what a translator edits by hand: a second Export must not silently destroy that work.
+        if (File.Exists(path)) File.Copy(path, path + BackupSuffix, overwrite: true);
         File.WriteAllText(path, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         return path;
     }
@@ -100,7 +105,7 @@ public static class TranslationExport
         var notes = new Dictionary<string, string>(StringComparer.Ordinal);
         try
         {
-            if (!File.Exists(path)) return notes;
+            if (!File.Exists(path) || new FileInfo(path).Length > LanguageCatalog.MaxFileBytes) return notes;
             using var doc = JsonDocument.Parse(File.ReadAllText(path),
                 new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return notes;
