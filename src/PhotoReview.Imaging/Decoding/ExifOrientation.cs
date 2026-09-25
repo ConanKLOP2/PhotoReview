@@ -1,5 +1,6 @@
 using System;
-using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -20,42 +21,33 @@ public static class ExifOrientation
     public static int Read(BitmapMetadata? metadata)
     {
         if (metadata is null) return 1;
+        var orientation = TryReadQuery(metadata, ExifOrientationQuery);
+        return orientation is >= 1 and <= 8 ? (int)orientation : ReadFallback(metadata);
+    }
 
+    private static int ReadFallback(BitmapMetadata metadata)
+    {
+        var orientation = TryReadQuery(metadata, WindowsOrientationQuery);
+        return orientation is >= 1 and <= 8 ? (int)orientation : 1;
+    }
+
+    /// <summary>
+    /// One metadata query as an integer (the first element when the tag holds several values, exactly as WicDirect and the
+    /// TurboJpeg byte parser read it), or null when absent or unreadable. WIC surfaces corrupt metadata as several exception
+    /// types (a count-2 tag as <c>ushort[]</c>, an offset overflow as <see cref="OverflowException"/>); none of them may fail
+    /// the decode of an otherwise valid image.
+    /// </summary>
+    private static long? TryReadQuery(BitmapMetadata metadata, string query)
+    {
         try
         {
-            if (metadata.ContainsQuery(ExifOrientationQuery))
-            {
-                var val = metadata.GetQuery(ExifOrientationQuery);
-                if (val is not null)
-                {
-                    var orient = Convert.ToInt32(val, CultureInfo.InvariantCulture);
-                    if (orient is >= 1 and <= 8) return orient;
-                }
-            }
+            return metadata.ContainsQuery(query) ? Metadata.ExifQueryInterpreter.AsInteger(metadata.GetQuery(query)) : null;
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException
+            or OverflowException or InvalidCastException or FormatException or IOException or COMException)
         {
-            // Fall through to secondary query
+            return null;
         }
-
-        try
-        {
-            if (metadata.ContainsQuery(WindowsOrientationQuery))
-            {
-                var val = metadata.GetQuery(WindowsOrientationQuery);
-                if (val is not null)
-                {
-                    var orient = Convert.ToInt32(val, CultureInfo.InvariantCulture);
-                    if (orient is >= 1 and <= 8) return orient;
-                }
-            }
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
-        {
-            // Ignored, default to 1
-        }
-
-        return 1;
     }
 
     /// <summary>

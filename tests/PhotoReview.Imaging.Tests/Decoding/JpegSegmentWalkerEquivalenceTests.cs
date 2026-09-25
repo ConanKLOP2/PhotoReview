@@ -147,12 +147,12 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         {
             if (jpeg[offset] != 0xFF) break;
 
-            // IMG-01 deliberate deviation from the pre-refactor loop: skip 0xFF fill, stop at 0xFF00, skip TEM.
+            // IMG-01 deliberate deviation from the pre-refactor loop: skip 0xFF fill, stop at 0xFF00 and at EOI, skip TEM.
             while (offset + 1 < jpeg.Length && jpeg[offset + 1] == 0xFF) offset++;
             if (offset + 4 > jpeg.Length) break;
             byte marker = jpeg[offset + 1];
-            if (marker is 0x00 or 0xFF) break;
-            if (marker is 0x01 or 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
+            if (marker is 0x00 or 0xFF or 0xD9) break;
+            if (marker is 0x01 or 0xD8 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
@@ -190,12 +190,12 @@ public sealed class JpegSegmentWalkerEquivalenceTests
         {
             if (jpeg[offset] != 0xFF) break;
 
-            // IMG-01 deliberate deviation from the pre-refactor loop: skip 0xFF fill, stop at 0xFF00, skip TEM.
+            // IMG-01 deliberate deviation from the pre-refactor loop: skip 0xFF fill, stop at 0xFF00 and at EOI, skip TEM.
             while (offset + 1 < jpeg.Length && jpeg[offset + 1] == 0xFF) offset++;
             if (offset + 4 > jpeg.Length) break;
             byte marker = jpeg[offset + 1];
-            if (marker is 0x00 or 0xFF) break;
-            if (marker is 0x01 or 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
+            if (marker is 0x00 or 0xFF or 0xD9) break;
+            if (marker is 0x01 or 0xD8 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
@@ -208,7 +208,7 @@ public sealed class JpegSegmentWalkerEquivalenceTests
             if (marker == 0xE1)
             {
                 var payload = jpeg.Slice(offset + 4, length - 2);
-                if (payload.Length >= 14 &&
+                if (payload.Length >= 6 &&
                     payload[0] == (byte)'E' && payload[1] == (byte)'x' && payload[2] == (byte)'i' &&
                     payload[3] == (byte)'f' && payload[4] == 0 && payload[5] == 0)
                 {

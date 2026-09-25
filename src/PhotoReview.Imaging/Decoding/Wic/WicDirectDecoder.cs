@@ -21,7 +21,8 @@ public sealed class WicDirectDecoder : IImageDecoder
 
     public IDecodedImage Decode(DecodeRequest request)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
+        // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.
+        if (!request.Bytes.HasValue) ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         Stream stream = request.Bytes.HasValue
             ? ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value)
@@ -309,7 +310,18 @@ public sealed class WicDirectDecoder : IImageDecoder
 
     private static IWICColorContext[]? ReadColorContexts(IWICImagingFactory factory, IWICBitmapFrameDecode frame)
     {
-        frame.GetColorContexts(0, null, out uint count);
+        uint count;
+        try
+        {
+            frame.GetColorContexts(0, null, out count);
+        }
+        catch (ArgumentException)
+        {
+            // E_INVALIDARG: the colour metadata (e.g. a damaged EXIF TIFF header) cannot be read. The pixels are fine, so the
+            // picture is treated as untagged sRGB instead of failing the decode.
+            return null;
+        }
+
         if (count == 0)
         {
             return null;
@@ -325,6 +337,11 @@ public sealed class WicDirectDecoder : IImageDecoder
 
             frame.GetColorContexts(count, contexts, out _);
             return contexts;
+        }
+        catch (ArgumentException)
+        {
+            ReleaseAll(contexts);
+            return null;
         }
         catch
         {

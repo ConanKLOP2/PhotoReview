@@ -56,6 +56,7 @@ public static class ExifParser
             if (jpeg[offset] != 0xFF) return default;
             var marker = jpeg[offset + 1];
             if (marker == 0xFF) { offset++; continue; } // fill byte
+            if (marker == 0x00) return default;         // 0xFF00 is a stuffed byte, not a marker: the header area is corrupt
             if (marker is 0xD8 or 0x01 or (>= 0xD0 and <= 0xD7)) { offset += 2; continue; }
             if (marker is 0xDA or 0xD9) return default; // image data / end: EXIF must come before
 
@@ -63,7 +64,8 @@ public static class ExifParser
             if (length < 2 || offset + 2 + length > jpeg.Length) return default;
 
             var payload = jpeg.Slice(offset + 4, length - 2);
-            if (marker == 0xE1 && payload.Length > 6 && payload[..6].SequenceEqual("Exif\0\0"u8))
+            // The first Exif-headed APP1 wins even when its TIFF part is empty/garbage (same rule as TurboJpegDecoder).
+            if (marker == 0xE1 && payload.Length >= 6 && payload[..6].SequenceEqual("Exif\0\0"u8))
                 return payload[6..];
             offset += 2 + length;
         }

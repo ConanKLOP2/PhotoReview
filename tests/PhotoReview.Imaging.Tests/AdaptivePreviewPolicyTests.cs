@@ -2,7 +2,7 @@
 
 namespace PhotoReview.Imaging.Tests;
 
-[Trait("Category", "Slow")]
+[Trait("Category", "HotPath")] // pure computation: no I/O or timing, so it belongs in the default gate
 public sealed class AdaptivePreviewPolicyTests
 {
     [Fact(DisplayName = "Decode width clamped between MinimumDecodeWidth and MaximumDecodeWidth")]

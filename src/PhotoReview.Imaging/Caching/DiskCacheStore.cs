@@ -148,24 +148,28 @@ public sealed class DiskCacheStore
     {
         _ = Task.Run(() =>
         {
-            do
+            try
             {
-                Volatile.Write(ref _prunePending, 0);
-                try
+                do
                 {
-                    RunPrunePass();
-                }
-                catch (IOException ex)
-                {
-                    _log.Error($"Prune failed: {_directory}", ex);
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    _log.Error($"Prune failed: {_directory}", ex);
-                }
-            } while (Volatile.Read(ref _prunePending) == 1);
-
-            Interlocked.Exchange(ref _pruneScheduled, 0);
+                    Volatile.Write(ref _prunePending, 0);
+                    try
+                    {
+                        RunPrunePass();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Any failure (I/O, access, or an unexpected one) costs only this pass: an exception escaping this task would
+                        // leave _pruneScheduled at 1 forever, so every later SchedulePrune would just set "pending" and the cache
+                        // would never be pruned again.
+                        _log.Error($"Prune failed: {_directory}", ex);
+                    }
+                } while (Volatile.Read(ref _prunePending) == 1);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _pruneScheduled, 0);
+            }
 
             // If a prune was requested right before or during clearing the flag, ensure it is serviced.
             if (Volatile.Read(ref _prunePending) == 1 && Interlocked.Exchange(ref _pruneScheduled, 1) == 0)

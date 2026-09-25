@@ -232,8 +232,16 @@ public static class PreviewCacheFile
         // decode the header bytes themselves as if they were the JPEG. Copying just the payload
         // (still a single file open/read) into a fresh, independently-zero-based stream sidesteps
         // that without a second file open.
+        if (payloadLength > int.MaxValue)
+            throw new InvalidDataException("Preview cache entry payload is implausibly large.");
         using var payloadStream = new MemoryStream((int)payloadLength);
         stream.CopyTo(payloadStream);
+        // The entry has no length or checksum, and WPF decodes a truncated JPEG into a partly grey picture instead of failing,
+        // so a cut-off entry would be served (and kept in RAM) as a valid preview. Every payload the encoder writes ends with
+        // the EOI marker; a payload without it was cut short (or is not a JPEG at all).
+        var payload = payloadStream.GetBuffer().AsSpan(0, (int)payloadLength);
+        if (payload.Length < 4 || payload[^2] != 0xFF || payload[^1] != 0xD9)
+            throw new InvalidDataException("Preview cache entry payload is truncated (no JPEG end-of-image marker).");
         payloadStream.Position = 0;
 
         var bitmap = new BitmapImage();
