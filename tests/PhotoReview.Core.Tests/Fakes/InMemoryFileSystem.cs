@@ -21,6 +21,8 @@ public sealed class InMemoryFileSystem : IFileSystem
     public Func<string, Exception?>? OpenReadHook { get; set; }
     public Func<string, Exception?>? OpenAppendHook { get; set; }
     public Func<string, Exception?>? WriteHook { get; set; }
+    /// <summary>Runs (outside the internal lock, so it may block) at the start of every <see cref="GetFileStat"/>; a returned exception is thrown.</summary>
+    public Func<string, Exception?>? StatHook { get; set; }
     public Func<string, Exception?>? DeleteHook { get; set; }
     public Func<string, string, Exception?>? MoveHook { get; set; }
     public Func<string, string, Exception?>? CopyHook { get; set; }
@@ -84,6 +86,11 @@ public sealed class InMemoryFileSystem : IFileSystem
     public FileStat? GetFileStat(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (StatHook?.Invoke(path) is { } statEx)
+        {
+            throw statEx;
+        }
+
         lock (_lock)
         {
             var normalized = NormalizePath(path);

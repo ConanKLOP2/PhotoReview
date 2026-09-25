@@ -1,10 +1,14 @@
-﻿using System.IO;
+using System.IO;
 
-namespace PhotoReview.Core.Catalog;
+using PhotoReview.Core.Catalog;
 
-public static class ExplorerSnapshotValidator
+namespace PhotoReview.Core.Tests.Catalog;
+
+/// <summary>Verbatim copy of the pre-optimisation validator: the oracle for the equivalence test and the benchmark baseline.</summary>
+
+internal static class ExplorerSnapshotValidatorReference
 {
-    public static bool TryValidate(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)
+    internal static bool TryValidate(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)
     {
         try
         {
@@ -70,7 +74,7 @@ public static class ExplorerSnapshotValidator
                 reason = ExplorerReason.OutsideFolder;
                 return false;
             }
-            if (!InFolder(path, folder))
+            if (!SamePath(Path.GetDirectoryName(path) ?? string.Empty, folder))
             {
                 reason = ExplorerReason.OutsideFolder;
                 return false;
@@ -88,8 +92,7 @@ public static class ExplorerSnapshotValidator
             }
         }
 
-        // result holds unique members of expected (seen rejects duplicates), so equal counts already mean equal sets.
-        if (result.Count != expected.Count)
+        if (result.Count != expected.Count || !expected.SetEquals(result))
         {
             reason = ExplorerReason.IncompleteSnapshot;
             return false;
@@ -99,14 +102,14 @@ public static class ExplorerSnapshotValidator
         return true;
     }
 
-    public static string CanonicalizeFolder(string folder) => Path.TrimEndingDirectorySeparator(NormalizePath(folder));
+    internal static string CanonicalizeFolder(string folder) => Path.TrimEndingDirectorySeparator(NormalizePath(folder));
 
     /// <summary>
     /// Full path with the Win32 extended-length prefix removed (<c>\\?\C:\x</c> becomes <c>C:\x</c>,
     /// <c>\\?\UNC\srv\share</c> becomes <c>\\srv\share</c>), so a shell that reports a long path in
     /// extended form still compares equal to the scanned path.
     /// </summary>
-    public static string NormalizePath(string path)
+    internal static string NormalizePath(string path)
     {
         var full = Path.GetFullPath(path);
         if (full.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + full[8..];
@@ -114,18 +117,6 @@ public static class ExplorerSnapshotValidator
         return full;
     }
 
-    /// <summary>
-    /// <see cref="SamePath"/>(directory of <paramref name="normalizedPath"/>, <paramref name="canonicalFolder"/>) without
-    /// re-canonicalising per item: an already normalised path's directory that textually equals the canonical folder is
-    /// the same folder; anything else falls back to the full comparison, so the result never differs.
-    /// </summary>
-    private static bool InFolder(string normalizedPath, string canonicalFolder)
-    {
-        var directory = Path.GetDirectoryName(normalizedPath.AsSpan());
-        return directory.Equals(canonicalFolder, StringComparison.OrdinalIgnoreCase)
-            || SamePath(directory.ToString(), canonicalFolder);
-    }
-
-    public static bool SamePath(string first, string second) =>
+    internal static bool SamePath(string first, string second) =>
         string.Equals(CanonicalizeFolder(first), CanonicalizeFolder(second), StringComparison.OrdinalIgnoreCase);
 }

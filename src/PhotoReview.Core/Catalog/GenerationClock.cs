@@ -63,7 +63,8 @@ public sealed class GenerationClock
     public bool IsInteractionCurrent(long generation) => Volatile.Read(ref _interactionGeneration) == generation;
 
     /// <summary>
-    /// Advances all three generation counters (Navigation, Folder, Interaction) atomically
+    /// Advances all three generation counters (Navigation, Folder, Interaction) in one call
+    /// (three independent interlocked increments, not one atomic step: callers run on the UI thread and consumers only compare tokens)
     /// to invalidate any pending in-flight reads, decodes, and scans when a file action begins.
     /// Equivalent to legacy StopImageReadsForAction.
     /// </summary>
