@@ -119,8 +119,8 @@ public partial class BenchmarkWindow : Window, IDisposable
                 // DetailedLogging distinguishes the logging-on/logging-off profiles: without
                 // toggling AppLog around the run, both profiles measured identical (whatever
                 // the app's ambient setting happened to be) logging overhead.
-                var previousLogEnabled = AppLog.Enabled;
-                AppLog.Enabled = profile.DetailedLogging;
+                // (shared with the CLI via BenchmarkProfileScope so both front ends apply the profile identically)
+                using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled);
                 try
                 {
                     // The per-iteration workload logic (correctness guard, file-action mapping,
@@ -142,7 +142,7 @@ public partial class BenchmarkWindow : Window, IDisposable
                     RecomputeBest();
                     StatusText.Text = Tr.BenchmarkStatusProfileFailed(BenchmarkText.ProfileName(profile), ex.Message);
                 }
-                finally { AppLog.Enabled = previousLogEnabled; await executor.DisposeAsync(); }
+                finally { loggingScope.Dispose(); await executor.DisposeAsync(); }
             }
             if (sessionReports.Count > 0)
             {
