@@ -24,7 +24,7 @@ using Xunit;
 namespace PhotoReview.App.Tests.Coordinators;
 
 [Trait("Category", "HotPath")]
-public sealed class ImagePresenterTests : IDisposable
+public sealed partial class ImagePresenterTests : IDisposable
 {
     private readonly string _tempDir;
     private readonly ReviewCatalog _catalog;
