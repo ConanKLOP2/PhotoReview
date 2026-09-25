@@ -117,6 +117,9 @@ public sealed class OperationJournal
             var durable = _durability() == JournalDurability.PowerLossSafe;
             // A crash can leave a partial last line; appending straight after it would glue two records together and lose both.
             if (!_tailChecked && TailLacksNewline()) text.Insert(0, Environment.NewLine);
+            // Disarm until this write is known to have completed: a write that fails half-way (disk full) leaves a partial
+            // line, and the next append must repair it even though an earlier append of this process succeeded.
+            _tailChecked = false;
             using var stream = OpenAppendWithRetry(durable);
             var bytes = Encoding.UTF8.GetBytes(text.ToString());
             stream.Write(bytes, 0, bytes.Length);
@@ -274,9 +277,21 @@ public sealed class OperationJournal
     private Dictionary<string, JournalEntry> ComputeLatestEntries()
     {
         var latest = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
-        ReadEntries(entry => latest[entry.Id] = entry);
+        ReadEntries(entry =>
+        {
+            // FA-01 (cross-process residue): another process's reconcile judged this operation from a stale snapshot and its
+            // Failed landed after the owner's Committed (the recheck-then-append window cannot be closed without a file lock).
+            // A reconcile verdict can only ever follow Prepared, so after Committed it is stale and must not win.
+            if (entry.State == JournalState.Failed && IsReconcileCode(entry.ErrorCode)
+                && latest.TryGetValue(entry.Id, out var previous) && previous.State == JournalState.Committed)
+                return;
+            latest[entry.Id] = entry;
+        });
         return latest;
     }
+
+    private static bool IsReconcileCode(string? code) =>
+        code is JournalErrors.PendingUnconfirmed or JournalErrors.SourceStillExistsAfterRecovery;
 
     private void ReadEntries(Action<JournalEntry> handle)
     {
