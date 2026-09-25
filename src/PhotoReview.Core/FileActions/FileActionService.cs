@@ -149,7 +149,10 @@ public sealed class FileActionService
                 }
 
                 // Journaled after Prepared: persisted as a code + English, shown via ex.Message (UI language).
-                tx.VerifyDestination(_fileSystem, destinationPath, JournalErrors.VerifySizeChanged);
+                if (request.Operation == FileOperationType.Move)
+                    tx.VerifyMoved(_fileSystem, source, destinationPath, JournalErrors.VerifySizeChanged);
+                else
+                    tx.VerifyDestination(_fileSystem, destinationPath, JournalErrors.VerifySizeChanged);
 
                 _ = tx.Commit(out var journalError);
                 if (journalError is not null)

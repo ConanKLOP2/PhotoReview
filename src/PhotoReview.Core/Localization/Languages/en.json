@@ -478,5 +478,6 @@
   "settings.allowPermanentDelete.label": "Allow permanent delete on drives without a Recycle Bin",
   "settings.allowPermanentDelete.hint": "Off by default: Delete is refused on removable, network and unknown drives because they have no Recycle Bin. When on, Delete removes the file permanently after a confirmation. Deleted files cannot be restored, not even with Undo.",
   "dialog.confirmPermanentDelete.title": "Delete permanently?",
-  "dialog.confirmPermanentDelete.message": "\"{fileName}\" is on a drive without a Recycle Bin. It will be deleted PERMANENTLY and cannot be restored (Undo will not bring it back). Delete it?"
+  "dialog.confirmPermanentDelete.message": "\"{fileName}\" is on a drive without a Recycle Bin. It will be deleted PERMANENTLY and cannot be restored (Undo will not bring it back). Delete it?",
+  "core.fileAction.moveSourceNotRemoved": "The file was copied to the destination, but the original could not be removed (it may be read-only or in use). Both copies now exist; nothing was deleted."
 }

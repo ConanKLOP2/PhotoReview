@@ -402,5 +402,6 @@
   "settings.allowPermanentDelete.label": "CheckBox.Content (default off, Q-R8).",
   "settings.allowPermanentDelete.hint": "TextBlock under the checkbox; warns that deleted files cannot be restored.",
   "dialog.confirmPermanentDelete.title": "ShowConfirmation caption before a permanent delete (drive without Recycle Bin).",
-  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent."
+  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent.",
+  "core.fileAction.moveSourceNotRemoved": "Journal error code MoveSourceNotRemoved: a cross-drive Move copied the file but Windows could not delete the source. Persisted as a code, shown in the status bar and the Recovery window; must say both copies exist and nothing was deleted."
 }
