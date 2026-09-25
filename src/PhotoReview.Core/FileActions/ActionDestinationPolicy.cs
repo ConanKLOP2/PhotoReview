@@ -27,7 +27,10 @@ public static class ActionDestinationPolicy
     public static ActionDestinationCheck Validate(string? destination)
     {
         if (string.IsNullOrWhiteSpace(destination)) return ActionDestinationCheck.Empty;
-        if (destination.AsSpan().IndexOfAny(s_invalidChars) >= 0) return ActionDestinationCheck.InvalidChars;
+        // The Win32 extended-length prefix \\?\ (long paths) legitimately contains '?'; only what follows it is checked.
+        var body = destination.AsSpan();
+        if (body.StartsWith(@"\\?\", StringComparison.Ordinal)) body = body[4..];
+        if (body.IndexOfAny(s_invalidChars) >= 0) return ActionDestinationCheck.InvalidChars;
 
         // A drive-relative "a:b" is "rooted" to .NET but is neither a real absolute path nor a valid relative one.
         if (!Path.IsPathFullyQualified(destination) && destination.Contains(':', StringComparison.Ordinal))

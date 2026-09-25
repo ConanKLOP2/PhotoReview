@@ -25,6 +25,21 @@ public sealed class DuplicateFinderTests
     }
 
     [Fact]
+    public async Task FindAsync_SamePathListedTwiceOrRecased_IsNotItsOwnDuplicate()
+    {
+        var f = @"C:\photos\img (1).jpg";
+        _fs.WriteAllTextAtomic(f, "content");
+
+        var result = await DuplicateFinder.FindAsync(
+            [f, f, f.ToUpperInvariant()],
+            removeNumbered: true,
+            hash: (p, ct) => Task.FromResult("same"),
+            fileSystem: _fs);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public async Task FindAsync_RemoveNumbered_SelectsOnlyNumberedCopies()
     {
         var f1 = @"C:\photos\img.jpg";
