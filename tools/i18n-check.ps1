@@ -19,6 +19,16 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $shippedDir = Join-Path $repoRoot 'src\PhotoReview.Core\Localization\Languages'
 $maxFileBytes = 1024 * 1024   # LanguageCatalog.MaxFileBytes
 
+# Try to load System.Text.Json for strict JSON parsing
+$hasStrictJson = $false
+try {
+    [void][System.Reflection.Assembly]::Load('System.Text.Json')
+    $hasStrictJson = $true
+}
+catch {
+    # System.Text.Json not available in this PowerShell/Windows version
+}
+
 function Remove-JsonComments([string]$Text) {
     # Drops // and /* */ comments outside strings, then trailing commas before } or ].
     $sb = New-Object System.Text.StringBuilder $Text.Length
@@ -83,6 +93,96 @@ function Get-Placeholders([string]$Text) {
     return , $names.ToArray()
 }
 
+function Test-JsonStrict([string]$File) {
+    # Strictly parse JSON. Detects invalid syntax like double commas.
+    # Returns $null on success; returns error message string on failure.
+    $text = [IO.File]::ReadAllText($File, [Text.Encoding]::UTF8)
+
+    if ($hasStrictJson) {
+        try {
+            $parseOpts = New-Object 'System.Text.Json.JsonSerializerOptions'
+            $parseOpts.AllowTrailingCommas = $false
+            $parseOpts.ReadCommentHandling = [System.Text.Json.JsonCommentHandling]::Disallow
+            [System.Text.Json.JsonDocument]::Parse($text, $parseOpts) | Out-Null
+            return $null
+        }
+        catch {
+            return "Invalid JSON: $($_.Exception.Message)"
+        }
+    }
+    else {
+        # Fallback: detect common JSON errors
+        # Check for double commas
+        if ($text -match ',,') {
+            return "Invalid JSON: unexpected token - double comma detected"
+        }
+
+        # Try parsing
+        try {
+            $text | ConvertFrom-Json | Out-Null
+            return $null
+        }
+        catch {
+            return "Invalid JSON: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Test-JsonDuplicateKeys([string]$File) {
+    # Check for duplicate keys in the root-level JSON object.
+    # Returns $null on success; returns error message string on failure.
+    $text = [IO.File]::ReadAllText($File, [Text.Encoding]::UTF8)
+
+    if ($hasStrictJson) {
+        try {
+            $parseOpts = New-Object 'System.Text.Json.JsonSerializerOptions'
+            $parseOpts.AllowTrailingCommas = $false
+            $parseOpts.ReadCommentHandling = [System.Text.Json.JsonCommentHandling]::Disallow
+            $doc = [System.Text.Json.JsonDocument]::Parse($text, $parseOpts)
+
+            if ($doc.RootElement.ValueKind -ne [System.Text.Json.JsonValueKind]::Object) {
+                return "Root is not a JSON object"
+            }
+
+            $seenKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+            foreach ($prop in $doc.RootElement.EnumerateObject()) {
+                if (-not $seenKeys.Add($prop.Name)) {
+                    return "Duplicate key: '$($prop.Name)'"
+                }
+            }
+            return $null
+        }
+        catch {
+            return "JSON validation error: $($_.Exception.Message)"
+        }
+    }
+    else {
+        # Fallback: parse with ConvertFrom-Json and check for duplicates using regex
+        try {
+            $doc = $text | ConvertFrom-Json
+            if ($null -eq $doc -or $doc -isnot [System.Management.Automation.PSCustomObject]) {
+                return "Root is not a JSON object"
+            }
+
+            # Check for duplicate keys by parsing the raw JSON text
+            $keyPattern = '"([^"\\]*(?:\\.[^"\\]*)*)"\s*:'
+            $matches = [regex]::Matches($text, $keyPattern)
+            $seenKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+
+            foreach ($match in $matches) {
+                $key = $match.Groups[1].Value
+                if (-not $seenKeys.Add($key)) {
+                    return "Duplicate key: '$key'"
+                }
+            }
+            return $null
+        }
+        catch {
+            return "JSON validation error: $($_.Exception.Message)"
+        }
+    }
+}
+
 function Read-Catalog([string]$File) {
     $result = [ordered]@{
         File = $File; Code = ''; NativeName = ''; Plural = 'one-other'
@@ -90,10 +190,32 @@ function Read-Catalog([string]$File) {
         Warnings = New-Object System.Collections.Generic.List[string]
     }
     $name = Split-Path -Leaf $File
+    $isNotesFile = $name -like '*.notes.json'
+
     if ((Get-Item -LiteralPath $File).Length -gt $maxFileBytes) {
         $result.Errors.Add("$name is larger than $maxFileBytes bytes")
         return $result
     }
+
+    # Strict JSON validation (no comments or trailing commas) - applies to all JSON files
+    $strictError = Test-JsonStrict $File
+    if ($null -ne $strictError) {
+        $result.Errors.Add($strictError)
+        return $result
+    }
+
+    # Check for duplicate keys - applies to all JSON files
+    $dupError = Test-JsonDuplicateKeys $File
+    if ($null -ne $dupError) {
+        $result.Errors.Add($dupError)
+        return $result
+    }
+
+    # For notes files, we only validate JSON structure; skip catalog-specific checks
+    if ($isNotesFile) {
+        return $result
+    }
+
     try {
         $text = [IO.File]::ReadAllText($File, [Text.Encoding]::UTF8)
         $doc = (Remove-JsonComments $text) | ConvertFrom-Json
@@ -177,9 +299,17 @@ foreach ($dir in $Path) {
 foreach ($s in $sources) {
     $file = $s[1]
     $leaf = Split-Path -Leaf $file
-    if ($leaf -like '*.notes.json') { continue }
+    $isNotesFile = $leaf -like '*.notes.json'
     if ($s[0] -eq 'shipped' -and $leaf -eq 'en.json') { continue }
+
     $cat = Read-Catalog $file
+
+    # For notes files, only validate JSON structure; skip translation checks
+    if ($isNotesFile) {
+        $rows.Add((New-Row $cat $s[0] 0 0))
+        continue
+    }
+
     $translated = 0
     $total = 0
     foreach ($key in $en.Entries.Keys) {
