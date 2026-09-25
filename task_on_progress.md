@@ -1,12 +1,14 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `fa035e6` | **Branch:** `integration/2026-09-25-features` (one PR)
+**Updated:** 2026-09-25 | **Base:** master `dd85670` (v2.0.90) | **Review branch:** `codex/review-function-audit-20260925`
 
-## Now: integration PR for review round 7 + viewer features + Settings redesign
+## Now: function-level codebase review
 
-- **What:** [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md) — 9 agent branches + Settings redesign + strict i18n-check + flaky-test fix, all merged into `integration/2026-09-25-features`; gate green (1779 tests).
-- **User:** review Q-R19 (defaults chosen by Claude, see OPEN-DECISIONS); GUI checks listed in the WORK doc (Settings pages, click-zoom/kinetic, EXIF line, folder info, Explorer double-click in both instance modes, Recycle restore with hidden extensions, close during a cross-drive Move); perf run for Q-R17 on F4; Native `NativeRecycleBinTests` only if you want (touches the real bin).
-- **After merge:** fast-forward `develop` to master; delete merged agent branches; Release build per CLAUDE.local.md.
+- **What:** [Function audit](docs/refactoring/REVIEW-2026-09-25-FUNCTION-AUDIT.md) at `dd85670`: independent Core/Platform, Imaging/Benchmarking, App, and tools/tests lanes. Read-only code review; no production edits.
+- **Git:** PR #86 integration and PR #87 defaults are on `master`; `develop` fast-forwarded to `dd85670` on 2026-09-25. Do not reuse older "PR open" statements.
+- **Validation:** `dotnet build PhotoReview.slnx -c Release --nologo` passed, 0 warnings; default filtered `dotnet test` passed 1779, skipped 6. Native/Slow/Manual and GUI were not run. One corrupt-JPEG CLI repro returned exit 0 with 0 valid groups.
+- **Caution:** the default test run included `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder`, which writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; the path is now absent. Its prior state is unknown. Do not rerun this test until isolated.
+- **Next:** finish function/test coverage, review findings and decisions in the audit; Q-R19 defaults, GUI checks in [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md), and Q-R17 real-machine perf remain open.
 
 ## Status by Group
 
