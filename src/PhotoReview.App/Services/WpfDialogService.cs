@@ -101,16 +101,11 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         if (store is null) return false;
 
         var decoderFactory = serviceProvider.GetService<IImageDecoderFactory>();
-        var before = store.Current;
         var window = new SettingsWindow(store, decoderFactory, serviceProvider.GetService<PhotoReview.App.Localization.LocalizationService>())
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
-        var saved = window.ShowDialog() == true;
-        // feat/mouse-zoom: the window has no mouse controls yet and rebuilt the settings without them; keep the user's values.
-        if (saved && !ReferenceEquals(before, store.Current) && MouseSettingsCarryOver.Apply(before, store.Current))
-            store.Save(store.Current);
-        return saved;
+        return window.ShowDialog() == true;
     }
 
     public void ShowBenchmark(string? folder = null)

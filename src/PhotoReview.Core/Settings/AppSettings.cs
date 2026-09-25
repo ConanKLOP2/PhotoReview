@@ -109,6 +109,19 @@ public class AppSettings
 
     public static void Save(AppSettings settings) => Saver?.Invoke(settings);
 
+    /// <summary>
+    /// Deep-clones <paramref name="source"/> by round-tripping it through the same JSON contract as disk storage
+    /// (<see cref="AppSettingsJsonContext"/>), so every property is copied automatically -- including ones a caller
+    /// (e.g. the Settings window) has no control for yet. Prefer this over hand-copying fields one by one: a
+    /// hand-copy silently drops any property the copier forgot, which is exactly the bug this method replaces.
+    /// </summary>
+    public static AppSettings Clone(AppSettings source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var json = JsonSerializer.Serialize(source, AppSettingsJsonContext.Default.AppSettings);
+        return JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+    }
+
     private static readonly SettingsValidator FallbackValidator = new(new SimpleKeyNameValidator());
 
     public static string? ValidateShortcuts(AppSettings settings) =>
