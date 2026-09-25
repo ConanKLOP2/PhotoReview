@@ -25,3 +25,8 @@ delay|tests/PhotoReview.TestSupport/Wait.cs|1
 # TC06 (Q-T1: queue keypresses) is decided but production still drops actions while a file action runs (FileActionController).
 stale-skip|tests/PhotoReview.App.Tests/HotPath/WarmNavigationReadBoundsTests.cs::MoveDeleteQueue_RapidActionsWhileBusy_AllExecutedInOrder|1
 
+# Fuzz tests that delegate to a shared Run/RunMutations helper: the assertions live inside the helper (the guard only reads the test body).
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/DecoderMutationFuzzTests.cs::MutatedImages_DeepRun|1
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/DecoderMutationFuzzTests.cs::MutatedImages_FailOnlyWithUnderstoodExceptions|1
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/PreviewCacheFileMutationTests.cs::MutatedEntries_DeepRun|1
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/PreviewCacheFileMutationTests.cs::MutatedEntries_EndInResultOrCorruptEntryFailure|1
