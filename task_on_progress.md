@@ -1,12 +1,12 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `fa035e6` | **Branch:** `integration/2026-09-25-features` (one PR)
+**Updated:** 2026-09-26 | **Base:** master `3ea2555`+ (PRs #94-#96 open) | **Branches:** `integration/review-2026-09-26` (PR #96), `integration/wave5-2026-09-26` (everything, incl. waves 3-5)
 
-## Now: integration PR for review round 7 + viewer features + Settings redesign
+## Now: overnight review 2026-09-26 (Q-R25)
 
-- **What:** [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md) — 9 agent branches + Settings redesign + strict i18n-check + flaky-test fix, all merged into `integration/2026-09-25-features`; gate green (1779 tests).
-- **User:** review Q-R19 (defaults chosen by Claude, see OPEN-DECISIONS); GUI checks listed in the WORK doc (Settings pages, click-zoom/kinetic, EXIF line, folder info, Explorer double-click in both instance modes, Recycle restore with hidden extensions, close during a cross-drive Move); perf run for Q-R17 on F4; Native `NativeRecycleBinTests` only if you want (touches the real bin).
-- **After merge:** fast-forward `develop` to master; delete merged agent branches; Release build per CLAUDE.local.md.
+- **What:** 7 lane review branches (fileactions, core, imaging, platform, app, tools/CI, test quality) = PR #96; ~20 more small-agent branches (`opt/*`, `fix2/*`) merged into `integration/wave5-2026-09-26`: bug fixes, dead-code removal, measured optimisations, cross-review fixes. Gate on wave5: build 0 warnings, default tests green, `i18n-check` PASS. PR order: #94 (flaky fix), #95 (update button), #96, then a PR from `integration/wave5-2026-09-26`.
+- **User:** merge order above; GUI checks: Settings > General > Updates, Defaults button (WIC, EXIF off), close during a folder scan, Recycle Bin undo on a non-English Windows (`undelete` fallback is unverified), decoder fallbacks with damaged EXIF/ICC; real-machine perf run for the measured optimisations (natural sort, snapshot validator) on F4.
+- **Decisions needed:** see Q-R25 (APP-03, Enter/Return, DuplicateCleanup cancellation, journal ownership marker, Actions pinned by SHA).
 
 ## Status by Group
 
