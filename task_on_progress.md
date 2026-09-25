@@ -1,13 +1,13 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `8de2ac4` (#76-#81 merged) | **Branch:** `perf/q-r17-preload-estimate`
+**Updated:** 2026-09-25 | **Base:** master `ebf2bf3` (#82 Q-R17, #83 docs budget, #84 RAM % merged; v2.0.87) | **Branch:** `develop` (decision log + handoff)
 
-## Now: Q-R17 = D on a branch; RAM-cache % setting and full code review in progress
+## Now: 9 agent branches → one integration PR (read this first after a new session)
 
-- **Q-R17 (branch `perf/q-r17-preload-estimate`, PR pending):** whole-folder estimate = box bound, then measured preview mean x 1.25; also fixes a preload-loop crash on synchronously completed `Task<bool>` (see [ROUND3-4](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md)). Perf run on the user machine (fixture F4) still due.
-- **In progress:** RAM cache as % of physical RAM (max 90 %, system minimum) on `feat/ram-cache-percent`; docs budget limits; full code review 2026-09-25 (round 7).
-- **User:** GUI check of #78 (multi-select open from Explorer), toolbar focus handback (#81), Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04. The real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven).
-- **Plan / evidence:** [plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) · [rounds 3-6](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
+- **Handoff:** [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md) — the 9 branches (5 features incl. Q-R18, 4 round-7 fix branches), their contracts, the integration + Settings-redesign plan. Agents work in `.claude/worktrees/agent-*`; check `git ls-remote origin` for which branches are pushed.
+- **Branch `develop`:** long-lived decision log (OPEN-DECISIONS, this file, WORK docs). Merge to master by PR from time to time; feature/fix branches still start from master.
+- **User:** review Q-R19 (defaults chosen by Claude); perf run for Q-R17 on F4; GUI checks listed in the WORK doc plus #78 multi-select open, toolbar focus handback (#81), Recovery, Settings journal option, VI wording, Fit first frame (T89), AR04. The real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven).
+- **Evidence:** [archived review plan](docs/archive/historical/REVIEW-2026-09-25-PLAN.md) · [rounds 3-6](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
 
 ## Status by Group
 

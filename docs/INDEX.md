@@ -19,6 +19,7 @@ Quick reference for finding documentation by purpose. Read-tier guides which fil
 | **docs/refactoring/REFACTOR-STATUS.md** | OC/ST consolidated status | T1, refactoring |
 | **docs/refactoring/PERF-STATUS.md** | Perf baselines (AR02e, perf night) | T1, perf diagnosis |
 | **docs/refactoring/OPEN-DECISIONS.md** | Q-* decision registry (mostly resolved) | T1, decision lookup |
+| **docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md** | 9 agent branches (features + review round 7 fixes), integration + Settings redesign plan | T1, current batch |
 | **docs/refactoring/OPTIMIZE-CLEAN-SUMMARY.md** | OC task status & blockers | T1, OC tasks |
 | **docs/refactoring/TEST-CLEANUP-SUMMARY.md** | TC status (DONE); pointer to archive | T1, test cleanup |
 | **docs/refactoring/TEST-SPEED-SUMMARY.md** | TS completed work, remaining tasks | T1, test speed |
