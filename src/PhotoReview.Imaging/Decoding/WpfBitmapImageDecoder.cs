@@ -147,12 +147,6 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                 bitmap.DecodePixelHeight = targetH;
                 downscaled = true;
             }
-            else if (request.TargetWidth <= 0 || request.TargetHeight <= 0)
-            {
-                // Compatibility: a one-axis (width-only) request has always reported Downscaled, also when the source already
-                // fit (it used to be stretched instead). Callers and tests key the disk-cache persistence on this flag.
-                downscaled = true;
-            }
         }
         else if (request.IsDownscaleRequested)
         {

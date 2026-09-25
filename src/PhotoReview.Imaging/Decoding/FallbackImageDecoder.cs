@@ -89,7 +89,11 @@ public sealed class FallbackImageDecoder : IImageDecoder
             return false;
         }
 
+        // InvalidCast (a failed COM interface cast) and Overflow (checked size math) are backend-specific failures the WPF
+        // path can decode around. InvalidOperationException stays non-fallbackable: it signals a programming error.
         return ex is NotSupportedException
+            or InvalidCastException
+            or OverflowException
             or FileFormatException
             or InvalidDataException
             or COMException

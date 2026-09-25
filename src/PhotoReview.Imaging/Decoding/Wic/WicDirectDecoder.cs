@@ -500,24 +500,13 @@ public sealed class WicDirectDecoder : IImageDecoder
             frame.GetMetadataQueryReader(out reader);
             pvar = Marshal.AllocHGlobal(PropVariantSize);
             ZeroPropVariant(pvar);
-            var orientation = 1;
-            if (readOrientation)
-            {
-                var value = ExifQueryInterpreter.AsInteger(QueryValue(reader, ExifOrientationQuery, pvar));
-                if (value is not (>= 1 and <= 8))
-                    value = ExifQueryInterpreter.AsInteger(QueryValue(reader, WindowsOrientationQuery, pvar));
-                if (value is >= 1 and <= 8) orientation = (int)value.Value;
-            }
-
-            if (exifIfdRoot is not null)
-            {
-                var queryReader = reader;
-                exif = ExifQueryInterpreter.Read(name => QueryValue(queryReader, name, pvar), exifIfdRoot);
-            }
-            return orientation;
+            var queryReader = reader;
+            var queryBuffer = pvar;
+            return ReadMetadataValues(name => QueryValue(queryReader, name, queryBuffer), readOrientation, exifIfdRoot, out exif);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // No metadata reader at all (or the buffer could not be set up).
             exif = null;
             return 1;
         }
@@ -530,6 +519,44 @@ public sealed class WicDirectDecoder : IImageDecoder
             }
             SafeReleaseCom(reader);
         }
+    }
+
+    /// <summary>
+    /// The orientation and the photo-information read are independent: a failure in one (a damaged EXIF field) must not
+    /// discard the other, or a photo whose orientation was read fine would silently show unrotated.
+    /// </summary>
+    internal static int ReadMetadataValues(Func<string, object?> query, bool readOrientation, string? exifIfdRoot, out ExifSummary? exif)
+    {
+        var orientation = 1;
+        exif = null;
+        if (readOrientation)
+        {
+            try
+            {
+                var value = ExifQueryInterpreter.AsInteger(query(ExifOrientationQuery));
+                if (value is not (>= 1 and <= 8))
+                    value = ExifQueryInterpreter.AsInteger(query(WindowsOrientationQuery));
+                if (value is >= 1 and <= 8) orientation = (int)value.Value;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                orientation = 1;
+            }
+        }
+
+        if (exifIfdRoot is not null)
+        {
+            try
+            {
+                exif = ExifQueryInterpreter.Read(query, exifIfdRoot);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                exif = null;
+            }
+        }
+
+        return orientation;
     }
 
     private const int PropVariantSize = 24;

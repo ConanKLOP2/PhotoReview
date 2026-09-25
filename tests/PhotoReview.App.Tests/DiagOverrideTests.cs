@@ -138,12 +138,16 @@ public sealed class DiagOverrideTests : IAsyncLifetime
         Assert.Equal(DefaultPreloadWorkerCount, ReadPreloadSlotsField(scheduler).CurrentCount);
     }
 
+    // Wider than the 256-px target these tests decode at: only a source that is actually downscaled is persisted to the disk cache
+    // (a source that already fits is decoded as is and never written), so a narrower fixture would make the persist assertions vacuous.
+    private static readonly byte[] WiderThanTargetPng = TestImages.BuildRgbaPng(512, 512, (_, _) => 255);
+
     [Fact(DisplayName = "disableDiskCacheOverride=true never writes a decoded preview to the disk cache")]
     public async Task DisableDiskCacheOverrideSkipsPersist()
     {
         var folder = _root.Dir("disable-write-source");
         var previewPath = Path.Combine(folder, "preview.png");
-        File.WriteAllBytes(previewPath, TestImages.OpaquePng);
+        File.WriteAllBytes(previewPath, WiderThanTargetPng);
         var diskDirectory = _root.Dir("disable-write-cache");
         var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256,
             diskCacheDirectory: diskDirectory, disableDiskCacheOverride: true), diskDirectory);
@@ -160,7 +164,7 @@ public sealed class DiagOverrideTests : IAsyncLifetime
     {
         var folder = _root.Dir("disable-read-source");
         var previewPath = Path.Combine(folder, "preview.png");
-        File.WriteAllBytes(previewPath, TestImages.OpaquePng);
+        File.WriteAllBytes(previewPath, WiderThanTargetPng);
         var diskDirectory = _root.Dir("disable-read-cache");
 
         // Populate a real, valid disk-cache entry at the exact path a matching key would use,
