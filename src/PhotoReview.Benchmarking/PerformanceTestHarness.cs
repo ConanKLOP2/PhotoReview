@@ -75,7 +75,7 @@ public static class PerformanceTestHarness
         // One untimed decode of an in-memory image so first-call WPF/codec JIT and native init do not inflate the first
         // timed sample (TOOL-02). It must not read a measured file, or the first "cold" read would hit the OS file cache (R2-A-09).
         await Task.Run(() => { DecodeObserver?.Invoke(false, null); using var stream = new MemoryStream(TinyPng, writable: false); GC.KeepAlive(Decode(stream, 2200)); }, ct);
-        var before = Process.GetCurrentProcess().WorkingSet64; // after warm-up so JIT/native init is not part of the delta
+        var before = CurrentWorkingSet(); // after warm-up so JIT/native init is not part of the delta
         foreach (var path in files)
         {
             ct.ThrowIfCancellationRequested();
@@ -83,12 +83,12 @@ public static class PerformanceTestHarness
             await Task.Run(() => { DecodeObserver?.Invoke(true, path); using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
             sw.Stop(); times.Add(sw.ElapsedMilliseconds); reads++;
         }
-        return Sample("cold-read", times, before, Process.GetCurrentProcess().WorkingSet64, reads, 0, 0, 0);
+        return Sample("cold-read", times, before, CurrentWorkingSet(), reads, 0, 0, 0);
     }
 
     private static async Task<PerformanceSample> MeasureParallelAsync(string[] files, int workers, CancellationToken ct)
     {
-        var before = Process.GetCurrentProcess().WorkingSet64;
+        var before = CurrentWorkingSet();
         var times = new long[files.Length]; var waits = new long[files.Length]; long reads = 0;
         var gate = new SemaphoreSlim(workers, workers); var queue = Stopwatch.StartNew();
         await Task.WhenAll(files.Select((path, i) => Task.Run(async () =>
@@ -97,7 +97,14 @@ public static class PerformanceTestHarness
             try { var sw = Stopwatch.StartNew(); await Task.Run(() => { using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct); times[i] = sw.ElapsedMilliseconds; Interlocked.Increment(ref reads); }
             finally { gate.Release(); }
         }, ct)));
-        return Sample($"parallel-read-{workers}", times, before, Process.GetCurrentProcess().WorkingSet64, reads, 0, 0, Percentile(waits, .95));
+        return Sample($"parallel-read-{workers}", times, before, CurrentWorkingSet(), reads, 0, 0, Percentile(waits, .95));
+    }
+
+    // Process is IDisposable (native handle); GetCurrentProcess() returns a new instance every call.
+    private static long CurrentWorkingSet()
+    {
+        using var process = Process.GetCurrentProcess();
+        return process.WorkingSet64;
     }
 
     private static PerformanceSample Sample(string name, IReadOnlyList<long> values, long before, long after, long reads, long hits, long misses, long waitP95)

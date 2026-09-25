@@ -1,3 +1,4 @@
+using System.IO;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
@@ -18,16 +19,54 @@ public sealed record InstanceKeys(string MutexName, string PipeName)
     /// <summary>Production name prefix. Tests pass a unique prefix so they never collide with a running PhotoReview.</summary>
     public const string DefaultPrefix = "PhotoReview";
 
-    internal static string CurrentUserSid { get; } = WindowsIdentity.GetCurrent().User?.Value ?? "nosid";
+    internal static string CurrentUserSid { get; } = ReadUserSid();
 
-    internal static int CurrentSessionId { get; } = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+    internal static int CurrentSessionId { get; } = ReadSessionId();
+
+    // Both objects wrap OS handles; they are read once per process and released right away.
+    private static string ReadUserSid()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return identity.User?.Value ?? "nosid";
+    }
+
+    private static int ReadSessionId()
+    {
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        return process.SessionId;
+    }
 
     public static InstanceKeys For(InstanceMode mode, string? folder, string prefix = DefaultPrefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
         var mutex = mode == InstanceMode.PerFolder
-            ? InstanceLock.MutexNameFor(folder, prefix)
+            ? MutexNameFor(folder, prefix)
             : "Local\\" + prefix + "_App_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("app|" + CurrentUserSid)));
         return new InstanceKeys(mutex, InstanceForwardPipe.NameForMutex(mutex, prefix));
+    }
+
+    /// <summary>
+    /// R2-F-08: one mutex per folder regardless of spelling (<c>C:\Photos</c>, <c>c:\photos\</c>, a relative path), and one
+    /// constant mutex for the no-folder launch instead of one that depends on the current directory.
+    /// </summary>
+    internal static string MutexNameFor(string? path) => MutexNameFor(path, DefaultPrefix);
+
+    /// <summary>Q-R18: same rule with a name prefix (tests use a unique one so they never meet a real PhotoReview).</summary>
+    internal static string MutexNameFor(string? path, string prefix) =>
+        "Local\\" + prefix + "_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalKey(path))));
+
+    /// <summary>
+    /// R2-F-08 canonical folder key: full path, no trailing separator, upper case; one constant for "no folder".
+    /// Text that is not a usable path (embedded NUL, ...) keys on its own upper-cased spelling instead of throwing,
+    /// so a bad folder argument reaches the normal "cannot open folder" handling rather than crashing the lock lookup.
+    /// </summary>
+    internal static string CanonicalKey(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "PhotoReview";
+        try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)).ToUpperInvariant(); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return path.ToUpperInvariant();
+        }
     }
 }

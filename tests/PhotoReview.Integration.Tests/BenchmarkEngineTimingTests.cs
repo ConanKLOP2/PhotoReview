@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Benchmarking;
 using PhotoReview.Core.Diagnostics;
 
@@ -114,5 +116,40 @@ public sealed class BenchmarkEngineTimingTests
         Assert.Equal(3, metrics.DiskCacheHits);
         Assert.Equal(15, metrics.SourceOpenCount);
         Assert.Equal(15, Assert.Single(metrics.TopSourceOpens).Count);
+    }
+
+    private sealed class LineLog : ILog
+    {
+        public List<string> Lines { get; } = [];
+        public bool Enabled => true;
+        public void Info(string message) => Lines.Add(message);
+        public void Warn(string message) => Lines.Add(message);
+        public void Error(string message, Exception? ex = null) => Lines.Add(message);
+    }
+
+    [Fact(DisplayName = "Benchmark log lines use invariant decimals under a comma-decimal culture (AGENTS rule 4)")]
+    public async Task RunPreparedAsync_LogUsesInvariantDecimals()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("vi-VN");
+        try
+        {
+            var clock = new ManualTimeProvider();
+            using var root = new TempRoot("bench-log-culture");
+            var profile = BenchmarkProfiles.Find("action-move")! with { Iterations = 1, WarmupCount = 0 };
+            var log = new LineLog();
+
+            await BenchmarkEngine.RunPreparedAsync(root.Path, profile,
+                (_, _, _, _) => Task.FromResult<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>>(() =>
+                {
+                    clock.Advance(TimeSpan.FromMilliseconds(12.5));
+                    return Task.FromResult<(bool, ReviewMetricsSnapshot?)>((true, null));
+                }),
+                timeProvider: clock, log: log);
+
+            Assert.Contains(log.Lines, l => l.Contains("elapsedMs=12.5 ", StringComparison.Ordinal));
+            Assert.Contains(log.Lines, l => l.Contains("p50Ms=12.5 p95Ms=12.5 maxMs=12.5", StringComparison.Ordinal));
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
     }
 }

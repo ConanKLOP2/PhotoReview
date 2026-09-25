@@ -51,16 +51,11 @@ public static class BenchmarkProfileValidation
     {
         ArgumentNullException.ThrowIfNull(profile);
         if (string.IsNullOrWhiteSpace(profile.Id) || !Enum.IsDefined(profile.LoadingMode))
-            throw new BenchmarkProfileException(BenchmarkProfileProblem.MissingIdOrMode, profile?.Id ?? string.Empty, "Profile id and loading mode are required");
+            throw new BenchmarkProfileException(BenchmarkProfileProblem.MissingIdOrMode, profile.Id ?? string.Empty, "Profile id and loading mode are required");
         if (profile.Workers < 1 || profile.NextWindow < 0 || profile.PreviousWindow < 0 || profile.Iterations < 1)
             throw new BenchmarkProfileException(BenchmarkProfileProblem.InvalidSettings, profile.Id, $"Invalid benchmark settings for profile '{profile.Id}'");
     }
 }
-
-/// The executor must call the production decode/cache/navigation path and return
-/// false when it only measured file I/O without presenting a decoded image.
-public delegate Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> BenchmarkWorkloadExecutor(
-    BenchmarkProfile profile, BenchmarkWorkload workload, int iteration, CancellationToken cancellationToken);
 
 /// <summary>
 /// Two-step executor (R2-F-14): the returned task prepares one iteration (untimed setup such as copying a scratch file or
@@ -68,9 +63,6 @@ public delegate Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> BenchmarkWo
 /// </summary>
 public delegate Task<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>> BenchmarkPreparedWorkloadExecutor(
     BenchmarkProfile profile, BenchmarkWorkload workload, int iteration, CancellationToken cancellationToken);
-
-public sealed record BenchmarkSample(string ProfileId, BenchmarkWorkload Workload,
-    double ElapsedMilliseconds, bool Correct, string? Error = null);
 
 public sealed record BenchmarkPhaseResult(string ProfileId, BenchmarkWorkload Workload,
     IReadOnlyList<double> Samples, BenchmarkResultStatus Status, string? Message = null, int? ImagesPerSample = null)

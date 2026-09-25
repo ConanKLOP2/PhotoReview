@@ -14,7 +14,7 @@ namespace PhotoReview.Platform.Windows;
 public static class InstanceForwardPipe
 {
     /// <summary>
-    /// Pipe name for the same folder key as <see cref="InstanceLock"/>, additionally scoped by user SID and logon session
+    /// Pipe name for the same folder key as <see cref="InstanceKeys"/>, additionally scoped by user SID and logon session
     /// (the mutex is session-local, so a pipe of another session must never be mistaken for the owner).
     /// </summary>
     public static string NameFor(string? folder) => InstanceKeys.For(InstanceMode.PerFolder, folder).PipeName;
