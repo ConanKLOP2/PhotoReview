@@ -8,6 +8,7 @@ using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.TurboJpeg.Native;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging.TurboJpeg;
 
@@ -57,13 +58,16 @@ public sealed class TurboJpegDecoder : IImageDecoder
         // Magic byte verification: JPEG SOI marker (0xFF, 0xD8, 0xFF)
         if (bytes.Length < 3 || bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF)
         {
-            throw new NotSupportedException($"File is not a valid JPEG: {request.Path ?? "memory buffer"}");
+            var source = request.Path;
+            throw UserFacingError.Localized(new NotSupportedException($"File is not a valid JPEG: {source ?? "memory buffer"}"),
+                () => Tr.ErrDecoderNotJpeg(source ?? Tr.ErrDecoderMemoryBuffer));
         }
 
         // ICC Profile check: if image contains embedded ICC profile, fallback to preserve color accuracy
         if (HasEmbeddedIccProfile(bytes))
         {
-            throw new NotSupportedException("Embedded ICC profile detected in JPEG; falling back to WIC/WPF.");
+            throw UserFacingError.Localized(new NotSupportedException("Embedded ICC profile detected in JPEG; falling back to WIC/WPF."),
+                () => Tr.ErrDecoderIccFallback);
         }
 
         int orientation = request.ApplyOrientation ? ReadExifOrientation(bytes) : 1;
@@ -82,8 +86,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 int headerRes = TurboJpegNative.tj3DecompressHeader(decompressor, pJpeg, (nuint)bytes.Length);
                 if (headerRes != 0)
                 {
-                    string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Header parse error";
-                    throw new InvalidDataException($"TurboJPEG failed to decompress header: {err}");
+                    string? nativeErr = TurboJpegNative.GetErrorMessage(decompressor);
+                    string err = nativeErr ?? "Header parse error";
+                    throw UserFacingError.Localized(new InvalidDataException($"TurboJPEG failed to decompress header: {err}"),
+                        () => Tr.ErrDecoderHeaderFailed(nativeErr ?? Tr.ErrDecoderNoDetail));
                 }
 
                 int origW = TurboJpegNative.tj3Get(decompressor, (int)TjParam.JpegWidth);
@@ -91,7 +97,8 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 if (origW <= 0 || origH <= 0)
                 {
-                    throw new InvalidDataException($"Invalid image dimensions reported by TurboJPEG: {origW}x{origH}");
+                    throw UserFacingError.Localized(new InvalidDataException($"Invalid image dimensions reported by TurboJPEG: {origW}x{origH}"),
+                        () => Tr.ErrDecoderInvalidDimensions(origW, origH));
                 }
 
                 int targetW = origW;
@@ -135,8 +142,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                     if (decRes != 0)
                     {
-                        string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Decompression error";
-                        throw new InvalidDataException($"TurboJPEG decompression failed: {err}");
+                        string? nativeErr = TurboJpegNative.GetErrorMessage(decompressor);
+                        string err = nativeErr ?? "Decompression error";
+                        throw UserFacingError.Localized(new InvalidDataException($"TurboJPEG decompression failed: {err}"),
+                            () => Tr.ErrDecoderDecompressFailed(nativeErr ?? Tr.ErrDecoderNoDetail));
                     }
 
                     bitmap = BitmapSource.Create(
@@ -192,7 +201,8 @@ public sealed class TurboJpegDecoder : IImageDecoder
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path))
         {
-            throw new FileNotFoundException("Image file not found.", path);
+            throw UserFacingError.Localized(new FileNotFoundException("Image file not found.", path),
+                () => Tr.ErrIoImageNotFound(path));
         }
 
         byte[] headerBytes;
@@ -213,7 +223,8 @@ public sealed class TurboJpegDecoder : IImageDecoder
         var bytes = headerBytes.AsSpan();
         if (bytes.Length < 3 || bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF)
         {
-            throw new NotSupportedException($"File is not a valid JPEG: {path}");
+            throw UserFacingError.Localized(new NotSupportedException($"File is not a valid JPEG: {path}"),
+                () => Tr.ErrDecoderNotJpeg(path));
         }
 
         int orientation = ReadExifOrientation(bytes);
@@ -234,8 +245,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
                         headerRes = TurboJpegNative.tj3DecompressHeader(decompressor, pFull, (nuint)fullBytes.Length);
                         if (headerRes != 0)
                         {
-                            string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Header parse error";
-                            throw new InvalidDataException($"TurboJPEG failed to read image info: {err}");
+                            string? nativeErr = TurboJpegNative.GetErrorMessage(decompressor);
+                            string err = nativeErr ?? "Header parse error";
+                            throw UserFacingError.Localized(new InvalidDataException($"TurboJPEG failed to read image info: {err}"),
+                                () => Tr.ErrDecoderInfoFailed(nativeErr ?? Tr.ErrDecoderNoDetail));
                         }
                     }
                 }
@@ -256,12 +269,15 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
         if (string.IsNullOrWhiteSpace(request.Path))
         {
-            throw new ArgumentException("DecodeRequest must provide either Path or Bytes.");
+            throw UserFacingError.Localized(new ArgumentException("DecodeRequest must provide either Path or Bytes."),
+                () => Tr.ErrDecoderNoSource);
         }
 
         if (!File.Exists(request.Path))
         {
-            throw new FileNotFoundException("Image file not found.", request.Path);
+            var missingPath = request.Path;
+            throw UserFacingError.Localized(new FileNotFoundException("Image file not found.", missingPath),
+                () => Tr.ErrIoImageNotFound(missingPath));
         }
 
         // Compliant with INV-8: File handle is closed immediately after reading byte buffer
@@ -312,8 +328,9 @@ public sealed class TurboJpegDecoder : IImageDecoder
         if (width is <= 0 or > int.MaxValue || height is <= 0 or > int.MaxValue ||
             stride > int.MaxValue || bufferLength > int.MaxValue)
         {
-            throw new InvalidDataException(
-                $"TurboJPEG output dimensions are too large: {width}x{height} ({bufferLength} bytes).");
+            throw UserFacingError.Localized(
+                new InvalidDataException($"TurboJPEG output dimensions are too large: {width}x{height} ({bufferLength} bytes)."),
+                () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
         }
 
         return ((int)width, (int)height, (int)stride, (int)bufferLength);
@@ -323,8 +340,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
     {
         if (TurboJpegNative.tj3Set(decompressor, (int)TjParam.StopOnWarning, 1) != 0)
         {
-            string err = TurboJpegNative.GetErrorMessage(decompressor) ?? "Unknown configuration error";
-            throw new InvalidOperationException($"TurboJPEG could not enable strict decoding: {err}");
+            string? nativeErr = TurboJpegNative.GetErrorMessage(decompressor);
+            string err = nativeErr ?? "Unknown configuration error";
+            throw UserFacingError.Localized(new InvalidOperationException($"TurboJPEG could not enable strict decoding: {err}"),
+                () => Tr.ErrDecoderStrictModeFailed(nativeErr ?? Tr.ErrDecoderNoDetail));
         }
     }
 
