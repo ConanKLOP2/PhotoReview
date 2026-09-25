@@ -23,4 +23,10 @@ public interface IPreloadTarget
     /// Default 0 for targets without a viewer (test fakes).
     /// </summary>
     int ActiveViewerDecodes => 0;
+
+    /// <summary>
+    /// Q-R17: decoded size of the cached preview for <paramref name="key"/>, or null when it is not
+    /// cached. Feeds the measured whole-folder estimate. Default null for targets without real sizes.
+    /// </summary>
+    long? CachedPreviewBytes(ImageCacheKey key) => null;
 }

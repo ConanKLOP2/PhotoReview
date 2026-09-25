@@ -1,15 +1,13 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `633ea3c` (#76-#80 merged) | **Branch:** `review/2026-09-25-round3`
+**Updated:** 2026-09-25 | **Base:** master `8de2ac4` (#76-#81 merged) | **Branch:** `perf/q-r17-preload-estimate`
 
-## Now: round-2 decisions merged (#77-#80); rounds 3+4 on a branch, PR pending
+## Now: Q-R17 = D on a branch; RAM-cache % setting and full code review in progress
 
-- **User:** open + merge the round 3+4 PR; GUI check of #78 (multi-select open from Explorer); the real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven); visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
-- **Plan / evidence:** [plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
-
-## Review rounds 3+4 (2026-09-25, branch `review/2026-09-25-round3`, PR pending)
-
-- Q-R12..Q-R16 decided and implemented; round-3/4 fixes, deferred items and gate results: [ROUND3-4](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md). Gate green (0 warnings, non-Manual/Native/Slow tests).
+- **Q-R17 (branch `perf/q-r17-preload-estimate`, PR pending):** whole-folder estimate = box bound, then measured preview mean x 1.25; also fixes a preload-loop crash on synchronously completed `Task<bool>` (see [ROUND3-4](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md)). Perf run on the user machine (fixture F4) still due.
+- **In progress:** RAM cache as % of physical RAM (max 90 %, system minimum) on `feat/ram-cache-percent`; docs budget limits; full code review 2026-09-25 (round 7).
+- **User:** GUI check of #78 (multi-select open from Explorer), toolbar focus handback (#81), Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04. The real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven).
+- **Plan / evidence:** [plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) · [rounds 3-6](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
 
 ## Status by Group
 

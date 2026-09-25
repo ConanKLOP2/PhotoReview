@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
@@ -28,6 +29,8 @@ public sealed class PreloadScheduler : IDisposable
     private readonly Func<string, CancellationToken, Task>? _prefetchSourceBytes;
     // perf(preload): direction + key-rate tracking; see NotifyNavigation and PreloadOrderService.Build.
     private readonly NavigationPace _pace;
+    // Q-R17: measured preview sizes behind the whole-folder estimate.
+    private readonly PreviewSizeSampler _sizes = new();
     // Concurrent preload decodes allowed to start while a viewer decode is running.
     private readonly int _viewerBusyWorkerLimit = Math.Max(2, Environment.ProcessorCount / 3);
 
@@ -258,6 +261,8 @@ public sealed class PreloadScheduler : IDisposable
         var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenVersion = -1L;
         var seenShape = (Direction: 1, Lead: 0);
+        var seenBox = DecodeBox.Unbounded;
+        var seenCalibrated = false;
         IEnumerator<int>? order = null;
         var examinedSinceYield = 0;
         var headroom = new HeadroomProbeState();
@@ -274,19 +279,28 @@ public sealed class PreloadScheduler : IDisposable
                 // navigation: when a burst ends no further key arrives to bump the version, but the lead
                 // must still drop back to 0 so the images right next to the stop position come first.
                 var shape = CurrentShape();
-                if (seenVersion != currentVersion || shape != seenShape)
+                // Q-R17: the order is also rebuilt once enough previews were measured at the current box,
+                // so the whole-folder decision moves from the box upper bound to the measured size
+                // without waiting for the next navigation.
+                var calibrated = _sizes.MeanBytes(seenBox) is not null;
+                if (seenVersion != currentVersion || shape != seenShape || calibrated != seenCalibrated)
                 {
                     order?.Dispose();
                     var sourceBytes = _totalSourceBytes();
-                    var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolder(sourceBytes,
-                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
                     var center = Volatile.Read(ref _preloadCenter);
+                    var box = CurrentBox(entries, center);
+                    var measured = _sizes.MeanBytes(box);
+                    var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries.Length, box, sourceBytes, measured);
+                    var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(estimated,
+                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
                     if (_log.Enabled)
-                        _log.Info($"Preload policy: sourceBytes={sourceBytes} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
+                        _log.Info($"Preload policy: sourceBytes={sourceBytes} images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
                     order = PreloadOrderService.Build(center, entries.Length,
                         wholeFolder, shape.Direction, shape.Lead).GetEnumerator();
                     seenVersion = currentVersion;
                     seenShape = shape;
+                    seenBox = box;
+                    seenCalibrated = measured is not null;
                 }
                 // perf(preload): viewer priority -- while the viewer is decoding the image on screen, preload
                 // does not ramp up to its full worker count against it (e.g. right after a burst stops on a
@@ -331,7 +345,12 @@ public sealed class PreloadScheduler : IDisposable
                     if (_target.TryGetCachedPreview(key)) continue;
                     queued.Add(path);
                     headroom.DecodeQueuedSinceCheck = true;
-                    running.Add(PreloadOneAsync(order.Current, path, key, cancellationToken), path);
+                    var work = PreloadOneAsync(order.Current, path, key, cancellationToken);
+                    // A call that finished synchronously (already cached, or superseded, before any await
+                    // yielded) returns the runtime's cached Task<bool> -- one shared instance per result --
+                    // so it cannot key `running`: a second one threw and ended the whole scheduler loop.
+                    if (work.IsCompletedSuccessfully) { if (!work.Result) queued.Remove(path); }
+                    else running.Add(work, path);
                     // Yield only after actual queue work; give input/rendering a
                     // chance without limiting every batch to two decodes.
                     if (++examinedSinceYield >= workers)
@@ -351,6 +370,9 @@ public sealed class PreloadScheduler : IDisposable
                         await Task.Delay(1, cancellationToken).ConfigureAwait(false);
                     }
                 }
+                // Q-R17: the window may run out right as its decodes finish calibrating the estimate;
+                // take one more pass so a now-affordable whole folder still gets queued.
+                if (!paused && running.Count == 0 && (_sizes.MeanBytes(seenBox) is not null) != seenCalibrated) continue;
                 if (paused || running.Count == 0) break;
                 var signalled = await Task.WhenAny(running.Keys.Append<Task>(wake)).ConfigureAwait(false);
                 if (ReferenceEquals(signalled, wake)) continue; // woken by a navigation: re-prioritize
@@ -432,6 +454,15 @@ public sealed class PreloadScheduler : IDisposable
         return lead == 0 || ahead > 0;
     }
 
+    // Decode box previews are cached at right now, from the key of the image at the preload center
+    // (reuses the folder scan's Length/LastWriteUtc: no stat). Unbounded when unknown.
+    private DecodeBox CurrentBox(CatalogEntry[] entries, int center)
+    {
+        if (center < 0 || center >= entries.Length) return DecodeBox.Unbounded;
+        try { return _target.GetCurrentCacheKey(entries[center]).TargetBox; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return DecodeBox.Unbounded; }
+    }
+
     /// <returns>false when the item was dropped as superseded (see <see cref="IsStillWanted"/>).</returns>
     private async Task<bool> PreloadOneAsync(int index, string path, ImageCacheKey key, CancellationToken cancellationToken)
     {
@@ -477,6 +508,8 @@ public sealed class PreloadScheduler : IDisposable
                 var freshKey = _target.GetCurrentCacheKey(path);
                 var isHit = _target.TryGetCachedPreview(freshKey);
                 if (isHit) lock (_preloadedKeysGate) _preloadedKeys.Add(freshKey);
+                if (isHit && _target.CachedPreviewBytes(freshKey) is { } previewBytes)
+                    _sizes.Record(freshKey.TargetBox, previewBytes);
                 if (perf)
                 {
                     var sourceRead = _metrics.Snapshot().SourceReads > beforeReads;
