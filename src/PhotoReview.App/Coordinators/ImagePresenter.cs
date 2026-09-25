@@ -193,10 +193,22 @@ public sealed class ImagePresenter
 
         // 2. Stat; file mất thì xóa khỏi catalog và chuyển tiếp
         long perfStat = perf ? Stopwatch.GetTimestamp() : 0;
-        if (!TryGetFileStat(path, out var initialStat))
+        var initialOutcome = TryGetFileStat(path, out var initialStat, out var initialStatError);
+        if (initialOutcome != StatOutcome.Found)
         {
             if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
-            await RemoveMissingCatalogItemAsync(path, index, token);
+            if (initialOutcome == StatOutcome.Missing)
+            {
+                await RemoveMissingCatalogItemAsync(path, index, token);
+            }
+            else
+            {
+                // An unreadable file (share hiccup, access denied) is not a missing one: keep it in the catalog.
+                AppLog.Error($"ShowImage stat failed token={token} index={index} path={path}", initialStatError!);
+                CurrentPhotoInfo = null;
+                UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(initialStatError!)));
+            }
+
             return;
         }
 
@@ -435,7 +447,7 @@ public sealed class ImagePresenter
 
                 if (!_clock.IsNavigationCurrent(token)) return;
 
-                if (!TryGetFileStat(path, out var currentInfo)) return;
+                if (TryGetFileStat(path, out var currentInfo, out _) != StatOutcome.Found) return;
                 if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
                 {
                     _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
@@ -511,7 +523,8 @@ public sealed class ImagePresenter
             if (nextIndex < 0 || nextIndex >= _catalog.Count) return;
 
             var nextPath = _catalog.PathAt(nextIndex);
-            if (TryGetFileStat(nextPath, out _))
+            // Only a file that is really gone is skipped; an unreadable one is presented so its error is reported.
+            if (TryGetFileStat(nextPath, out _, out _) != StatOutcome.Missing)
             {
                 await PresentAsync(nextIndex);
                 return;
@@ -552,24 +565,40 @@ public sealed class ImagePresenter
         _sink.SetStatusText(status);
     }
 
-    /// <summary>One stat: existence plus the Length/LastWriteUtc the cache key is built from.</summary>
-    private bool TryGetFileStat(string path, out FileStat stat)
+    private enum StatOutcome { Found, Missing, Error }
+
+    /// <summary>
+    /// One stat: existence plus the Length/LastWriteUtc the cache key is built from. Only "not there" is
+    /// <see cref="StatOutcome.Missing"/> (the caller drops the item from the catalog); any other failure is
+    /// <see cref="StatOutcome.Error"/> with the exception, so a flaky share never silently loses a photo.
+    /// </summary>
+    private StatOutcome TryGetFileStat(string path, out FileStat stat, out Exception? error)
     {
+        stat = null!;
+        error = null;
         try
         {
             // When an IFileSystem is available, its (counted, mockable) stat is the source of truth.
             if (_fileSystem != null)
             {
-                if (_fileSystem.GetFileStat(path) is not { } fsStat) { stat = null!; return false; }
+                if (_fileSystem.GetFileStat(path) is not { } fsStat) return StatOutcome.Missing;
                 stat = fsStat;
-                return true;
+                return StatOutcome.Found;
             }
             var info = new FileInfo(path);
-            if (!info.Exists) { stat = null!; return false; }
+            if (!info.Exists) return StatOutcome.Missing;
             stat = new FileStat(info.Length, info.LastWriteTimeUtc);
-            return true;
+            return StatOutcome.Found;
         }
-        catch { stat = null!; return false; }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return StatOutcome.Missing;
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            return StatOutcome.Error;
+        }
     }
 
     /// <summary>
