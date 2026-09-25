@@ -429,7 +429,7 @@ public sealed class PreloadScheduler : IDisposable
             await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
         }
         // Any other exception (unexpected cancellation source, or a genuine
-        // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
+        // failure in PreloadOrderService/the memory probe) would otherwise escape
         // unobserved once the discarded fire-and-forget task
         // (`_ = PreloadAroundAsync(...)`) is garbage collected.
         catch (Exception ex)

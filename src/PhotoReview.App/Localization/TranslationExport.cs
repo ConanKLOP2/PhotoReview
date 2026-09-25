@@ -49,9 +49,19 @@ public static class TranslationExport
         Directory.CreateDirectory(userDir);
         var path = Path.Combine(userDir, code.ToLowerInvariant() + FileSuffix);
         // The export is what a translator edits by hand: a second Export must not silently destroy that work.
-        if (File.Exists(path)) File.Copy(path, path + BackupSuffix, overwrite: true);
+        // Each export that would replace different content keeps its own backup (.bak, .bak2, ...): a second Export
+        // must not overwrite the only copy of the first with the generated file. An identical file needs none.
+        if (File.Exists(path) && !string.Equals(File.ReadAllText(path), json, StringComparison.Ordinal))
+            File.Copy(path, FreeBackupPath(path), overwrite: false);
         File.WriteAllText(path, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         return path;
+    }
+
+    private static string FreeBackupPath(string path)
+    {
+        var candidate = path + BackupSuffix;
+        for (var n = 2; File.Exists(candidate); n++) candidate = path + BackupSuffix + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return candidate;
     }
 
     /// <summary>

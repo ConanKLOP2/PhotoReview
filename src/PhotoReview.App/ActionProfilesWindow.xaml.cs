@@ -97,12 +97,12 @@ public partial class ActionProfilesWindow : Window
             error = "";
             return imported.Select(Clone).ToList();
         }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidCastException)
         {
             error = Tr.DialogImportActionsInvalidMessage;
             return null;
         }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
         {
             AppLog.Error($"Action import failed: {path}", ex);
             error = Tr.DialogImportActionsFailedMessage(ex.Message);
@@ -130,7 +130,7 @@ public partial class ActionProfilesWindow : Window
             System.IO.File.WriteAllText(path, JsonSerializer.Serialize(actions, JsonOptions));
             return null;
         }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
         {
             AppLog.Error($"Action export failed: {path}", ex);
             return Tr.DialogExportActionsFailedMessage(ex.Message);
