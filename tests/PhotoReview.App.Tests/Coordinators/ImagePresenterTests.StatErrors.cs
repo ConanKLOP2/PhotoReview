@@ -94,4 +94,39 @@ public sealed partial class ImagePresenterTests
 
         Assert.Equal([flaky], _catalog.Paths);
     }
+
+    [Theory]
+    [InlineData(typeof(ArgumentException))]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(PathTooLongException))]
+    public async Task PresentAsync_WhenPathCanNeverExist_TreatsThePhotoAsMissingAndMovesOn(Type exceptionType)
+    {
+        var bad = Path.Combine(_tempDir, "bad.png");
+        var other = CreateFakeImageFile("other.png");
+        _catalog.Reset([bad, other]);
+        var error = (Exception)Activator.CreateInstance(exceptionType, "invalid path")!;
+        var presenter = CreatePresenterWith(new StatThrowingFileSystem(new PhysicalFileSystem(), bad, error));
+
+        await presenter.PresentAsync(0);
+
+        // Not a permanent Error item that the skip loop would land on forever.
+        Assert.Equal([other], _catalog.Paths);
+    }
+
+    [Fact]
+    public async Task PresentAsync_WhenStatFailsWithIoError_ClearsThePreviouslyShownImage()
+    {
+        var good = CreateFakeImageFile("good.png");
+        var flaky = CreateFakeImageFile("flaky.png");
+        _catalog.Reset([good, flaky]);
+        var presenter = CreatePresenterWith(new StatThrowingFileSystem(new PhysicalFileSystem(), flaky, new IOException("share hiccup")));
+        var previous = new object();
+        _sink.SetCurrentImage(previous);
+
+        await presenter.PresentAsync(1);
+
+        // The error status names flaky.png; the previous photo must not stay visible under it.
+        Assert.Null(_sink.CurrentImage);
+        Assert.Null(presenter.CurrentImage);
+    }
 }

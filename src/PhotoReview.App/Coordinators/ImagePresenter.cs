@@ -206,6 +206,8 @@ public sealed class ImagePresenter
                 // An unreadable file (share hiccup, access denied) is not a missing one: keep it in the catalog.
                 AppLog.Error($"ShowImage stat failed token={token} index={index} path={path}", initialStatError!);
                 CurrentPhotoInfo = null;
+                // The status names this file, so the previous photo must not stay visible under it.
+                UpdateCurrentImage(null);
                 UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(initialStatError!)));
             }
 
@@ -590,7 +592,8 @@ public sealed class ImagePresenter
             stat = new FileStat(info.Length, info.LastWriteTimeUtc);
             return StatOutcome.Found;
         }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        // A path that can never name a file (blank, illegal characters, too long, unsupported) is as good as missing.
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException or PathTooLongException)
         {
             return StatOutcome.Missing;
         }
