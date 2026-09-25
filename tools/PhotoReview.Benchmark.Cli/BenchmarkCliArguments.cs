@@ -45,6 +45,23 @@ internal static class BenchmarkCliArguments
                 : throw new ArgumentException($"Invalid width '{part}' (expected a non-negative whole number)"))];
     }
 
+    /// <summary>
+    /// The optional <c>--rules &lt;file&gt;</c> of <c>--perf-analyze &lt;dir&gt;</c> (args[0] is the mode, args[1] the run dir). A dangling
+    /// <c>--rules</c> or any other extra token is an error: silently falling back to the default thresholds would make the
+    /// report look tuned when it is not.
+    /// </summary>
+    public static string? ParsePerfAnalyzeRules(IReadOnlyList<string> args)
+    {
+        string? rulesPath = null;
+        for (var i = 2; i < args.Count; i++)
+        {
+            if (args[i] != "--rules") throw new ArgumentException($"Unexpected argument for --perf-analyze: {args[i]}");
+            if (i + 1 >= args.Count || string.IsNullOrWhiteSpace(args[i + 1])) throw new ArgumentException("--rules needs a file path");
+            rulesPath = args[++i];
+        }
+        return rulesPath;
+    }
+
     /// <summary>Parses a positive whole number option (a file limit or count) using the invariant culture.</summary>
     public static int ParsePositiveInt(string text, string name) =>
         int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value > 0

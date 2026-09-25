@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Windows.Media.Imaging;
 using PhotoReview.App;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Imaging.Decoding;
 
 /// <summary>
@@ -25,19 +26,17 @@ using PhotoReview.Imaging.Decoding;
 internal static class IoDecodeSplit
 {
     private const int PngCompareWidth = 2560;
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
-        { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
 
     /// <summary>One timed quantity across 3 runs. <see cref="WarmP50"/> is the average of runs 2-3
     /// (median of two values), used everywhere a single "warm" number is reported; run 1 ("cold") is
     /// kept separately because it is not necessarily cold with respect to the OS file-system cache --
     /// only with respect to this process (see io-decode-split.md caveats).</summary>
-    private readonly record struct Measurement(double Cold, double Warm2, double Warm3, long Bytes)
+    internal readonly record struct Measurement(double Cold, double Warm2, double Warm3, long Bytes)
     {
         public double WarmP50 => (Warm2 + Warm3) / 2.0;
     }
 
-    private sealed class FileResult
+    internal sealed class FileResult
     {
         public int Index;
         public long SourceBytes;
@@ -58,7 +57,7 @@ internal static class IoDecodeSplit
         if (widths.Length == 0) throw new ArgumentException("At least one width is required", nameof(widths));
         Directory.CreateDirectory(outDir);
         var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-            .Where(p => SupportedExtensions.Contains(Path.GetExtension(p)))
+            .Where(ImageFileTypes.IsSupported)
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .Take(Math.Max(1, max))
             .ToArray();
@@ -227,7 +226,7 @@ internal static class IoDecodeSplit
         return sorted[idx];
     }
 
-    private static string BuildSummary(IReadOnlyList<FileResult> results, int[] widths, int fileCount, int max)
+    internal static string BuildSummary(IReadOnlyList<FileResult> results, int[] widths, int fileCount, int max)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# io-decode-split summary");
@@ -261,9 +260,8 @@ internal static class IoDecodeSplit
         {
             var mem = results.Select(r => r.DecodeFromMem[width]).ToArray();
             var file = results.Select(r => r.DecodeFromFile[width]).ToArray();
-            sb.AppendLine(CultureInfo.InvariantCulture, $"| {width} | {Percentile(mem.Select(m => m.Cold), .5):F1} | {Percentile(mem.Select(m => m.WarmP50), .5):F1} | " +
-                           $"{Percentile(mem.Select(m => m.WarmP50), .95):F1} | {Percentile(file.Select(m => m.Cold), .5):F1} | " +
-                           $"{Percentile(file.Select(m => m.WarmP50), .5):F1} | {Percentile(file.Select(m => m.WarmP50), .95):F1} |");
+            // One interpolation with the invariant provider: a "+"-joined second interpolation is a plain string formatted with the current culture.
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {width} | {Percentile(mem.Select(m => m.Cold), .5):F1} | {Percentile(mem.Select(m => m.WarmP50), .5):F1} | {Percentile(mem.Select(m => m.WarmP50), .95):F1} | {Percentile(file.Select(m => m.Cold), .5):F1} | {Percentile(file.Select(m => m.WarmP50), .5):F1} | {Percentile(file.Select(m => m.WarmP50), .95):F1} |");
         }
         var distinctWidths = widths.Distinct().OrderBy(w => w).ToArray();
         sb.AppendLine();
@@ -315,6 +313,6 @@ internal static class IoDecodeSplit
     private static string MetricRow(string name, IEnumerable<Measurement> measurements)
     {
         var list = measurements.ToArray();
-        return $"| {name} | {Percentile(list.Select(m => m.Cold), .5):F1} | {Percentile(list.Select(m => m.WarmP50), .5):F1} | {Percentile(list.Select(m => m.WarmP50), .95):F1} |";
+        return string.Create(CultureInfo.InvariantCulture, $"| {name} | {Percentile(list.Select(m => m.Cold), .5):F1} | {Percentile(list.Select(m => m.WarmP50), .5):F1} | {Percentile(list.Select(m => m.WarmP50), .95):F1} |");
     }
 }

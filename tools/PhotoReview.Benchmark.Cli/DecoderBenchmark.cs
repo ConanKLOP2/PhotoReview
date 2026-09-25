@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
@@ -19,11 +20,6 @@ namespace PhotoReview.Benchmark.Cli;
 /// </summary>
 public static class DecoderBenchmark
 {
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"
-    };
-
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     public sealed class BenchmarkRecord
@@ -150,7 +146,7 @@ public static class DecoderBenchmark
 
         // Gather image files
         var files = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-            .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
+            .Where(ImageFileTypes.IsSupported)
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -390,7 +386,7 @@ public static class DecoderBenchmark
         return sorted[lower] * (1 - fraction) + sorted[upper] * fraction;
     }
 
-    private static string GenerateMarkdownReport(BenchmarkSummary summary)
+    internal static string GenerateMarkdownReport(BenchmarkSummary summary)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# PhotoReview — Decoder Benchmark Report");
@@ -411,7 +407,7 @@ public static class DecoderBenchmark
         {
             var widthStr = g.TargetWidth == 0 ? "Full (0)" : g.TargetWidth.ToString(CultureInfo.InvariantCulture);
             var allocStr = FormatBytes(g.AvgAllocatedBytes);
-            var speedupStr = g.SpeedupVsWpf > 0 ? $"{g.SpeedupVsWpf:F2}x" : "1.00x";
+            var speedupStr = FormatSpeedup(g.SpeedupVsWpf);
 
             sb.AppendLine(CultureInfo.InvariantCulture, $"| **{g.Backend}** | {widthStr} | {g.FailureCount}/{g.TotalRuns} | {g.P50Ms:F2} | {g.P95Ms:F2} | {g.MeanMs:F2} | {g.MaxMs:F2} | {g.ThroughputMegapixelsPerSec:F1} | {allocStr} | **{speedupStr}** |");
         }
@@ -435,7 +431,7 @@ public static class DecoderBenchmark
                 sb.AppendLine(CultureInfo.InvariantCulture, $"- **Fastest backend:** `{fastest.Backend}` (P50: {fastest.P50Ms:F2} ms, Throughput: {fastest.ThroughputMegapixelsPerSec:F1} MP/s).");
                 if (fastest.Backend != baseline.Backend)
                 {
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"- **Improvement over {baseline.Backend}:** {diffPct:F1}% faster ({fastest.SpeedupVsWpf:F2}x speedup).");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"- **Improvement over {baseline.Backend}:** {diffPct:F1}% faster ({baseline.P50Ms / fastest.P50Ms:F2}x speedup).");
                 }
             }
             sb.AppendLine();
@@ -455,8 +451,8 @@ public static class DecoderBenchmark
         {
             var widthStr = g.TargetWidth == 0 ? "Full (0)" : g.TargetWidth.ToString(CultureInfo.InvariantCulture);
             var allocStr = FormatBytes(g.AvgAllocatedBytes);
-            var tpStr = $"{g.ThroughputMegapixelsPerSec:F1} MP/s";
-            var speedupStr = g.SpeedupVsWpf > 0 ? $"{g.SpeedupVsWpf:F2}x" : "1.00x";
+            var tpStr = string.Create(CultureInfo.InvariantCulture, $"{g.ThroughputMegapixelsPerSec:F1} MP/s");
+            var speedupStr = FormatSpeedup(g.SpeedupVsWpf);
 
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "{0,-12} | {1,-12} | {8,9} | {2,10:F2} | {3,10:F2} | {4,10:F2} | {5,14} | {6,12} | {7,14}",
@@ -482,10 +478,14 @@ public static class DecoderBenchmark
         await File.WriteAllTextAsync(path, sb.ToString());
     }
 
+    /// <summary>"1.25x", or "n/a" when there is no Wpf baseline for the width (a 0 speedup is "not computed", never "1.00x").</summary>
+    private static string FormatSpeedup(double speedup) =>
+        speedup > 0 ? string.Create(CultureInfo.InvariantCulture, $"{speedup:F2}x") : "n/a";
+
     private static string FormatBytes(long bytes)
     {
-        if (bytes < 1024) return $"{bytes} B";
-        if (bytes < 1024 * 1024) return $"{(bytes / 1024.0):F1} KB";
-        return $"{(bytes / (1024.0 * 1024.0)):F1} MB";
+        if (bytes < 1024) return string.Create(CultureInfo.InvariantCulture, $"{bytes} B");
+        if (bytes < 1024 * 1024) return string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0:F1} KB");
+        return string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024.0 * 1024.0):F1} MB");
     }
 }
