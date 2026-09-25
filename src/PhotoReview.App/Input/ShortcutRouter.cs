@@ -23,6 +23,8 @@ public sealed class ShortcutRouter
     private Key? _zoomOutKey;
     private Key? _nextKey;
     private Key? _prevKey;
+    private Key? _moveToFolderKey;
+    private Key? _copyToFolderKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -52,6 +54,8 @@ public sealed class ShortcutRouter
         _zoomOutKey = ParseKey(settings.Shortcuts.ZoomOut);
         _nextKey = ParseKey(settings.Shortcuts.Next);
         _prevKey = ParseKey(settings.Shortcuts.Previous);
+        _moveToFolderKey = ParseKey(settings.Shortcuts.MoveToFolder); // empty = disabled (null)
+        _copyToFolderKey = ParseKey(settings.Shortcuts.CopyToFolder);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -177,6 +181,20 @@ public sealed class ShortcutRouter
         if (_prevKey.HasValue && key == _prevKey.Value)
         {
             return ReviewCommand.Previous;
+        }
+
+        // 14. Move to… / Copy to… (Shift forces the folder picker; Ctrl combinations are not these commands)
+        if ((modifiers & ModifierKeys.Control) == 0)
+        {
+            var forcePicker = (modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            if (_moveToFolderKey.HasValue && key == _moveToFolderKey.Value)
+            {
+                return ReviewCommand.MoveToFolder(forcePicker);
+            }
+            if (_copyToFolderKey.HasValue && key == _copyToFolderKey.Value)
+            {
+                return ReviewCommand.CopyToFolder(forcePicker);
+            }
         }
 
         return null;

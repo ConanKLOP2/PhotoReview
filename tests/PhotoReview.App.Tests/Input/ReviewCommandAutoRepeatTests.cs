@@ -9,6 +9,8 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.Recycle)]
     [InlineData(ReviewCommandType.RunAction)]
     [InlineData(ReviewCommandType.Undo)]
+    [InlineData(ReviewCommandType.MoveToFolder)]
+    [InlineData(ReviewCommandType.CopyToFolder)]
     public void FileChangingCommandsIgnoreAutoRepeat(ReviewCommandType type) =>
         Assert.True(type.IgnoresAutoRepeat());
 

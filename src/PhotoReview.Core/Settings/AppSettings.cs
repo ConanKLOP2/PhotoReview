@@ -52,6 +52,21 @@ public class AppSettings
     /// </summary>
     public bool AllowPermanentDeleteWithoutRecycleBin { get; set; }
 
+    /// <summary>
+    /// "Move to…": the folder the last Move-to went to; the folder picker starts there. Absent in older configs = null
+    /// (the picker starts at the photo folder's parent).
+    /// </summary>
+    public string? LastMoveToFolder { get; set; }
+
+    /// <summary>"Copy to…": the folder the last Copy-to went to; the folder picker starts there. Absent = null.</summary>
+    public string? LastCopyToFolder { get; set; }
+
+    /// <summary>
+    /// When true and the last Move-to/Copy-to folder still exists, the shortcut acts on it immediately without the folder
+    /// picker (Shift+shortcut still opens the picker). Default false.
+    /// </summary>
+    public bool MoveCopyReuseLastFolder { get; set; }
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }

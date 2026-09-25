@@ -99,6 +99,7 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
         services.AddSingleton<PhotoReview.App.Services.ViewportSizeSource>();
         services.AddSingleton<PhotoReview.App.Services.IPresentationObserver>(_ => PhotoReview.App.Services.NullPresentationObserver.Instance);
+        services.AddSingleton<PhotoReview.App.Coordinators.IFolderPicker, PhotoReview.App.Services.WpfFolderPicker>();
 
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>

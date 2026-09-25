@@ -17,5 +17,11 @@ public class ShortcutMappings
     public string Undo { get; set; } = "Z";
     public string Fullscreen { get; set; } = "F11";
 
+    /// <summary>"Move to…": asks for a folder (or reuses the last one) and moves the current photo there. Empty = disabled.</summary>
+    public string MoveToFolder { get; set; } = "M";
+
+    /// <summary>"Copy to…": asks for a folder (or reuses the last one) and copies the current photo there. Empty = disabled.</summary>
+    public string CopyToFolder { get; set; } = "Y";
+
     public static ShortcutMappings Default() => new();
 }

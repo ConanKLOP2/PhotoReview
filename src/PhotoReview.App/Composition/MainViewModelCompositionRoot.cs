@@ -94,7 +94,8 @@ internal static class MainViewModelCompositionRoot
             fs, actions, undo, dialog, hash, preview, thumbs, sessionWriter,
             preloadController: preloadController, naturalComparer: natural,
             metrics: sp.GetRequiredService<ReviewMetrics>(),
-            uiScheduler: sp.GetRequiredService<IUiScheduler>());
+            uiScheduler: sp.GetRequiredService<IUiScheduler>(),
+            folderPicker: sp.GetService<IFolderPicker>());
 
         return vm;
     }

@@ -478,5 +478,15 @@
   "settings.allowPermanentDelete.label": "Allow permanent delete on drives without a Recycle Bin",
   "settings.allowPermanentDelete.hint": "Off by default: Delete is refused on removable, network and unknown drives because they have no Recycle Bin. When on, Delete removes the file permanently after a confirmation. Deleted files cannot be restored, not even with Undo.",
   "dialog.confirmPermanentDelete.title": "Delete permanently?",
-  "dialog.confirmPermanentDelete.message": "\"{fileName}\" is on a drive without a Recycle Bin. It will be deleted PERMANENTLY and cannot be restored (Undo will not bring it back). Delete it?"
+  "dialog.confirmPermanentDelete.message": "\"{fileName}\" is on a drive without a Recycle Bin. It will be deleted PERMANENTLY and cannot be restored (Undo will not bring it back). Delete it?",
+  "action.moveToFolder.name": "Move to folder",
+  "action.copyToFolder.name": "Copy to folder",
+  "dialog.moveToFolder.title": "Choose a folder to move the photo to",
+  "dialog.copyToFolder.title": "Choose a folder to copy the photo to",
+  "status.movedToFolder": "Moved {fileName} to {folder}",
+  "status.copiedToFolder": "Copied {fileName} to {folder}",
+  "status.moveCopyTo.notAbsolute": "Could not run {actionName}: choose a full folder path (with a drive letter).",
+  "status.moveCopyTo.sameFolder": "Could not run {actionName}: that is the photo folder itself. Choose another folder.",
+  "status.moveCopyTo.folderMissing": "Could not run {actionName}: the folder does not exist: {folder}",
+  "status.moveCopyTo.stateChanged": "Could not run {actionName}: the folder, the photo or another file operation changed while the folder dialog was open. Nothing was changed."
 }

@@ -402,5 +402,15 @@
   "settings.allowPermanentDelete.label": "CheckBox.Content (default off, Q-R8).",
   "settings.allowPermanentDelete.hint": "TextBlock under the checkbox; warns that deleted files cannot be restored.",
   "dialog.confirmPermanentDelete.title": "ShowConfirmation caption before a permanent delete (drive without Recycle Bin).",
-  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent."
+  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent.",
+  "action.moveToFolder.name": "Name of the Move-to-folder shortcut (default M); fills {actionName} in status messages.",
+  "action.copyToFolder.name": "Name of the Copy-to-folder shortcut (default Y); fills {actionName} in status messages.",
+  "dialog.moveToFolder.title": "Title of the Windows folder picker opened by the Move-to-folder shortcut.",
+  "dialog.copyToFolder.title": "Title of the Windows folder picker opened by the Copy-to-folder shortcut.",
+  "status.movedToFolder": "Status bar after Move-to-folder; {fileName} = file name, {folder} = full destination folder path.",
+  "status.copiedToFolder": "Status bar after Copy-to-folder; {fileName} = file name, {folder} = full destination folder path.",
+  "status.moveCopyTo.notAbsolute": "Status bar: the chosen folder is not a full path (e.g. no drive letter). {actionName} = Move/Copy to folder.",
+  "status.moveCopyTo.sameFolder": "Status bar: the chosen folder is the folder of the photo being reviewed.",
+  "status.moveCopyTo.folderMissing": "Status bar: the chosen or remembered folder no longer exists; {folder} = its path.",
+  "status.moveCopyTo.stateChanged": "Status bar: aborted because another folder was opened, the photo changed or another file operation started while the picker was open."
 }
