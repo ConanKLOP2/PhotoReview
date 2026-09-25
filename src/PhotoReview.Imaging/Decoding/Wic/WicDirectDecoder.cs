@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Metadata;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging.Decoding.Wic;
 
@@ -273,8 +274,10 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
         catch (COMException ex) when (colorTransformActive)
         {
-            throw new NotSupportedException(
-                "WicDirect could not transform the embedded ICC profile to sRGB: " + ex.Message, ex);
+            var osMessage = ex.Message;
+            throw UserFacingError.Localized(new NotSupportedException(
+                "WicDirect could not transform the embedded ICC profile to sRGB: " + osMessage, ex),
+                () => Tr.ErrDecoderIccTransformFailed(osMessage));
         }
     }
 
@@ -414,8 +417,10 @@ public sealed class WicDirectDecoder : IImageDecoder
             }
             catch (Exception ex) when (ex is COMException or InvalidCastException or ArgumentException)
             {
-                throw new NotSupportedException(
-                    "WicDirect could not transform the embedded ICC profile to sRGB: " + ex.Message, ex);
+                var osMessage = ex.Message;
+                throw UserFacingError.Localized(new NotSupportedException(
+                    "WicDirect could not transform the embedded ICC profile to sRGB: " + osMessage, ex),
+                    () => Tr.ErrDecoderIccTransformFailed(osMessage));
             }
         }
 

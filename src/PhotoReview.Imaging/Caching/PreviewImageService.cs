@@ -9,6 +9,7 @@ using PhotoReview.Core.Caching;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -504,7 +505,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // the old pixels under the new source's identity.
         // D04 perf: Verify is only emitted when the check passes (the throw path is not traced).
         if (perf) perfT0 = Stopwatch.GetTimestamp();
-        if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
+        if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
         if (perf) PhotoReviewPerf.Log.Verify(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0));
         lock (_cacheLifecycleGate)
             if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
@@ -707,7 +708,7 @@ public sealed class PreviewImageService : IPreloadTarget
             var stopwatch = Stopwatch.StartNew();
             var decoded = DecodeFromSource(path, key.Backend, DecodeBox.Unbounded, perf,
                 perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
-            if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
+            if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
             _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
             _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
             return decoded;
@@ -732,7 +733,7 @@ public sealed class PreviewImageService : IPreloadTarget
         _metrics.RecordSourceOpen(path);
         var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path)).ConfigureAwait(false);
         dimensions = (info.Width, info.Height);
-        if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
+        if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed while reading dimensions: {path}"), () => Tr.ErrIoSourceChangedReadingDimensions(path));
         _originalDimensions.Set(key, dimensions);
         return dimensions;
     }
