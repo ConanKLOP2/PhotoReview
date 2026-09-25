@@ -226,7 +226,15 @@ public sealed class FileLog : ILog, IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             if (NeedsRotation(path))
             {
-                Rotate(path);
+                try
+                {
+                    Rotate(path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The backup is read-only or held open (antivirus, an editor): keep appending to the current file rather than
+                    // failing every drain, which would silence the log for the rest of the session. Rotation is retried next drain.
+                }
             }
 
             using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
