@@ -166,15 +166,27 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         }
     }
 
-    private void Start(FileStream stream)
+    internal long DroppedCount => Interlocked.Read(ref _dropped);
+
+    /// <summary>Test seam: a listener writing to <paramref name="stream"/> with a custom channel capacity.</summary>
+    internal static PerfCsvListener StartForTest(Stream stream, int capacity)
+    {
+        var listener = new PerfCsvListener();
+        listener.Start(stream, capacity);
+        return listener;
+    }
+
+    private void Start(Stream stream, int capacity = ChannelCapacity)
     {
         _writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = false };
-        _channel = Channel.CreateBounded<Row>(new BoundedChannelOptions(ChannelCapacity)
+        // CORE-03: with DropWrite a full channel makes TryWrite return true and silently discard the new item, so the
+        // drop must be counted via the itemDropped callback (a false TryWrite only happens after completion).
+        _channel = Channel.CreateBounded<Row>(new BoundedChannelOptions(capacity)
         {
             FullMode = BoundedChannelFullMode.DropWrite,
             SingleReader = true,
             SingleWriter = false,
-        });
+        }, _ => Interlocked.Increment(ref _dropped));
 
         WriteHeader(_writer);
         _writerTask = Task.Run(WriterLoopAsync);

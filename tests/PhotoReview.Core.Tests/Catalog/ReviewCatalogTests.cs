@@ -127,6 +127,24 @@ public class ReviewCatalogTests
         Assert.Equal(["c.jpg", "a.jpg", "b.jpg"], catalog.Paths);
     }
 
+    [Theory]
+    [InlineData("a.jpg", "a.jpg", "c.jpg")]
+    [InlineData("A.JPG", "a.jpg", "c.jpg")]
+    [InlineData("a.jpg", "b.jpg", "b.jpg")]
+    public void ReplaceOrder_RejectsDuplicatesEvenWhenCountAndMembersMatch(string x, string y, string z)
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(["a.jpg", "b.jpg", "c.jpg"]);
+        catalog.SetCurrent(1);
+        var versionBefore = catalog.StructuralVersion;
+
+        Assert.False(catalog.ReplaceOrder([x, y, z]));
+
+        Assert.Equal(["a.jpg", "b.jpg", "c.jpg"], catalog.Paths);
+        Assert.Equal(1, catalog.CurrentIndex);
+        Assert.Equal(versionBefore, catalog.StructuralVersion);
+    }
+
     [Fact]
     public void ReplaceOrder_PreservesCurrentByPath_AndRejectsMismatchedSet()
     {

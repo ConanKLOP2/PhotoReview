@@ -23,6 +23,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
+. (Join-Path $PSScriptRoot 'Publish-Guard.ps1')
+$approvedPublishRoots = @((Join-Path $root 'src\PhotoReview.App\bin'), (Join-Path $root 'outputs\release'))
 
 # Build filter string dynamically
 # NOTE: This filter is verified to match TEST_FILTER in .github/workflows/ci.yml and AGENTS.md > Tests.
@@ -48,15 +50,15 @@ function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
     # FileVersion) as if it were this run's build.
     # Guard: only ever wipe a directory that is unmistakably a publish output (a stray -ReleaseDirectory such
     # as '.' or the repo root must never be deleted recursively).
-    $leaf = Split-Path -Leaf ([System.IO.Path]::GetFullPath($Directory).TrimEnd([char]92, [char]47))
-    if ($leaf -notin @('publish', 'PhotoReview-self-contained')) {
-        throw "Refusing to wipe '$Directory': the release directory name must be 'publish' or 'PhotoReview-self-contained'."
-    }
+    # TOOL-02: the leaf name alone is not ownership; the directory must also sit under an approved output root or
+    # carry the marker a previous publish wrote (see tools/Publish-Guard.ps1).
+    Assert-ReleaseDirectoryOwned -Directory $Directory -ApprovedRoots $approvedPublishRoots
     if (Test-Path -LiteralPath $Directory) { Remove-Item -LiteralPath $Directory -Recurse -Force }
     $publishArgs = @($appProject, '-c', $Configuration, '-o', $Directory, '--nologo')
     if ($SelfContained) { $publishArgs += @('--self-contained', 'true', '-r', 'win-x64') }
     else { $publishArgs += @('--self-contained', 'false') }
     dotnet publish @publishArgs
+    if ($LASTEXITCODE -eq 0) { Set-ReleaseDirectoryMarker $Directory }
 }
 
 function Find-TrxFiles {
