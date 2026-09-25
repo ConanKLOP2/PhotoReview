@@ -19,6 +19,7 @@ public class ShortcutKeyNameTests
     [Theory(DisplayName = "Numbers, comma lists, unknown names and never-firing keys are rejected")]
     [InlineData("999")]
     [InlineData("-1")]
+    [InlineData("+44")]
     [InlineData("A,B")]
     [InlineData("NotAKey")]
     [InlineData("")]

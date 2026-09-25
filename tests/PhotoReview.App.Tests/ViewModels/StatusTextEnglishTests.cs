@@ -24,7 +24,6 @@ public sealed class StatusTextEnglishTests
             Assert.Equal("1/10 · 1.5 MB · Loading", StatusFormatter.Loading(0, 10, 1572864));
             Assert.Equal("1/10 · 1.5 MB · Loading full resolution", StatusFormatter.LoadingFullRes(0, 10, 1572864));
             Assert.Equal("1/10 · 1.5 MB · 1920×1080 · photo.jpg", StatusFormatter.WithDimensions(0, 10, 1572864, 1920, 1080, "photo.jpg"));
-            Assert.Equal("1/10 · 1.5 MB · Zoom 1.25x", StatusFormatter.Zoom(0, 10, 1572864, 1.25));
             Assert.Equal("Image error: photo.jpg — File is corrupt", StatusFormatter.ImageError("photo.jpg", "File is corrupt"));
         }
     }

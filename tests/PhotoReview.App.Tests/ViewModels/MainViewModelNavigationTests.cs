@@ -320,10 +320,10 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         var (vm, _, _) = CreateViewModel();
         await vm.OpenFolderAsync(singleFolder);
 
-        await vm.NextFolderAsync();
+        await vm.NavigateSiblingFolderAsync(1);
         Assert.Equal("Đã ở thư mục cuối cùng cùng cấp.", vm.StatusText);
 
-        await vm.PreviousFolderAsync();
+        await vm.NavigateSiblingFolderAsync(-1);
         Assert.Equal("Đã ở thư mục đầu tiên cùng cấp.", vm.StatusText);
     }
 
@@ -456,7 +456,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
             vm.InfoOverlay.FolderInfoText);
 
         // The display agrees with the key: PageDown opens the folder shown on the right (the empty one is skipped).
-        await vm.NextFolderAsync();
+        await vm.NavigateSiblingFolderAsync(1);
         await vm.InfoOverlay.PendingSiblings.WithTimeout(TimeSpan.FromSeconds(10), "sibling info after switch");
         Assert.Contains("2024-05-03", vm.FolderTitle, StringComparison.Ordinal);
         Assert.Equal(
