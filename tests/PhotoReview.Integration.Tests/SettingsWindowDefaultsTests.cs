@@ -36,4 +36,29 @@ public sealed class SettingsWindowDefaultsTests
             return Task.CompletedTask;
         });
     }
+
+    [Fact(DisplayName = "Restore defaults selects the default decoder (WicDirect) and hides the EXIF line")]
+    public async Task RestoreDefaults_UsesDecoderAndExifDefaults()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings { DecoderBackend = PhotoReview.Core.Model.DecoderBackend.Wpf, ShowExifInfo = true });
+            try
+            {
+                Assert.Equal(PhotoReview.Core.Model.DecoderBackend.Wpf, window.Settings.DecoderBackend);
+                Assert.True(window.Settings.ShowExifInfo);
+
+                typeof(SettingsWindow).GetMethod("Defaults_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, [null, new RoutedEventArgs()]);
+
+                Assert.Equal(new AppSettings().DecoderBackend, window.Settings.DecoderBackend);
+                Assert.Equal(PhotoReview.Core.Model.DecoderBackend.WicDirect, window.Settings.DecoderBackend);
+                Assert.False(window.Settings.ShowExifInfo);
+                Assert.Equal(1, window.DecoderBackendCombo.SelectedIndex);
+                Assert.False(window.ShowExifInfoCheck.IsChecked);
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
 }
