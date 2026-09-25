@@ -129,11 +129,14 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private WindowState _stateBeforeFullscreen = WindowState.Normal;
+
     private void ApplyFullscreenState(bool isFullscreen)
     {
         ResizeMode = isFullscreen ? ResizeMode.NoResize : ResizeMode.CanResize;
         WindowStyle = isFullscreen ? WindowStyle.None : WindowStyle.SingleBorderWindow;
-        WindowState = isFullscreen ? WindowState.Maximized : WindowState.Normal;
+        if (isFullscreen) _stateBeforeFullscreen = WindowState == WindowState.Minimized ? WindowState.Normal : WindowState;
+        WindowState = isFullscreen ? WindowState.Maximized : _stateBeforeFullscreen;
     }
 
     private (double Width, double Height) GetViewportSize() =>
@@ -350,7 +353,7 @@ public partial class MainWindow : Window
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
 
-        var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.Compare.IsVisible, isCompareVisible: _viewModel.Compare.IsVisible);
+        var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible);
         if (cmd is null) return;
         e.Handled = true;
         if (e.IsRepeat && cmd.Value.Type.IgnoresAutoRepeat()) return; // R2-F-06: never repeat file actions
