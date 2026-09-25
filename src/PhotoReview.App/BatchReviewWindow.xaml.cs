@@ -17,7 +17,7 @@ public partial class BatchReviewWindow : Window
                 var info = new FileInfo(path);
                 return Tr.BatchReviewItem(Path.GetFileName(path), info.Length.ToString("N0", CultureInfo.CurrentCulture), path);
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return Tr.BatchReviewItemMissing(Path.GetFileName(path), path);
             }
