@@ -76,6 +76,12 @@ jobs:
           if ($v -match '-nogit' -or $v -notmatch '\+[0-9a-fA-F]+') { Write-Error "Build has no git commit identity: $v"; exit 1 }
           "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
+      # L10: strict JSON validator self-test (comments/trailing commas/duplicate keys) before trusting it
+      # against real files.
+      - name: Check translation catalogs (self-test)
+        shell: powershell
+        run: ./tools/i18n-check.ps1 -SelfTest
+
       # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.
       - name: Check translation catalogs
         shell: powershell

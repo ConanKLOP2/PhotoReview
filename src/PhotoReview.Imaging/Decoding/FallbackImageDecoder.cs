@@ -111,6 +111,7 @@ public sealed class FallbackImageDecoder : IImageDecoder
         public DecoderBackend ActualBackend { get; }
         public int OriginalWidth => _inner.OriginalWidth;
         public int OriginalHeight => _inner.OriginalHeight;
+        public PhotoReview.Imaging.Metadata.ExifSummary? Exif => _inner.Exif;
 
         public DecodedImageWithBackend(IDecodedImage inner, DecoderBackend actualBackend)
         {

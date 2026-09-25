@@ -132,6 +132,7 @@ public sealed class ImagePresenter
     /// <summary>Clears the displayed frame when the catalog has no images.</summary>
     public void ClearPresentation()
     {
+        CurrentPhotoInfo = null;
         _zoomDetail.Reset();
         UpdateCurrentImage(null);
         _compareViewModel.Clear();
@@ -233,6 +234,9 @@ public sealed class ImagePresenter
                 _metrics.RecordPreloadHit();
         }
 
+        // Photo information line: never show the previous image's EXIF; a RAM hit already has this image's.
+        CurrentPhotoInfo = ramReady ? PhotoInfo.From(path, readyImage) : null;
+
         var settings = _getSettings();
         var initialStatus = ramReady
             ? StatusFormatter.Ready(index, _catalog.Count, initialSize, Path.GetFileName(path))
@@ -331,6 +335,7 @@ public sealed class ImagePresenter
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
             var uiAssign = Stopwatch.StartNew();
 
+            CurrentPhotoInfo = PhotoInfo.From(path, image);
             UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
 
             long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
@@ -359,6 +364,7 @@ public sealed class ImagePresenter
 
             if (pair is not null && allowCompare)
             {
+                CurrentPhotoInfo = null; // two images: the compare status describes them
                 UpdateCurrentImage(null);
                 var loaded = await _compareViewModel.LoadAsync(
                     pair.Value,
@@ -452,6 +458,7 @@ public sealed class ImagePresenter
         catch (Exception ex) when (_clock.IsNavigationCurrent(token))
         {
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
+            CurrentPhotoInfo = null;
             UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), ex.Message));
         }
         catch (Exception ex)
@@ -475,6 +482,7 @@ public sealed class ImagePresenter
             var nextIndex = _catalog.Remove(path);
             if (_catalog.Count == 0)
             {
+                CurrentPhotoInfo = null;
                 _zoomDetail.Reset();
                 UpdateCurrentImage(null);
                 _compareViewModel.Clear();
@@ -544,5 +552,22 @@ public sealed class ImagePresenter
             return true;
         }
         catch { stat = null!; return false; }
+    }
+
+    /// <summary>
+    /// What the photo information line describes: the presented image's file name, original size and the EXIF its
+    /// decoder (or preview disk-cache entry) carried -- null while loading, in compare mode or with nothing shown.
+    /// Set before the sink notification of the same step, so bindings refreshed by it already see the new value.
+    /// </summary>
+    public PhotoInfo? CurrentPhotoInfo { get; private set; }
+}
+
+/// <summary>Input of the photo information line (see <see cref="ImagePresenter.CurrentPhotoInfo"/>).</summary>
+public sealed record PhotoInfo(string FileName, int Width, int Height, PhotoReview.Imaging.Metadata.ExifSummary? Exif)
+{
+    public static PhotoInfo From(string path, PhotoReview.Imaging.Decoding.IDecodedImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return new PhotoInfo(Path.GetFileName(path), image.OriginalWidth, image.OriginalHeight, image.Exif);
     }
 }

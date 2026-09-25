@@ -470,5 +470,22 @@
   "settings.moveCopyReuseLastFolder.hint": "Settings > Shortcuts: help text noting that holding Shift always shows the folder picker even when reuse is on.",
   "settings.editActionProfiles": "Settings > Shortcuts: button that opens the action profiles editor (ActionProfilesWindow) for the JSON on the Files & safety page.",
   "settings.group.compareOptions": "Settings > Files & safety: section header over the duplicate-detection options (compare by hash / by size).",
-  "dialog.settingsInvalid.clickZoomPercent": "MessageBox text shown on Save when the click-zoom percent box is not a number in [{min}, {max}] (AppSettings.MinClickZoomPercent/MaxClickZoomPercent)."
+  "dialog.settingsInvalid.clickZoomPercent": "MessageBox text shown on Save when the click-zoom percent box is not a number in [{min}, {max}] (AppSettings.MinClickZoomPercent/MaxClickZoomPercent).",
+  "exif.dimensions": "Photo information line (under the status line): original image size in pixels; {width}/{height} are plain numbers. Parts of the line are joined with \" · \".",
+  "exif.iso": "Photo information line: sensor sensitivity; {value} = ISO number (e.g. 400). \"ISO\" is normally kept as is.",
+  "exif.focalLength": "Photo information line: lens focal length; {value} = millimetres (e.g. 50 or 18.5).",
+  "exif.aperture": "Photo information line: aperture as an f-number; {value} = e.g. 2.8. \"f/\" is the photographic notation, normally kept.",
+  "exif.shutterFraction": "Photo information line: short shutter speed as a fraction of a second; {denominator} = e.g. 250 (1/250 s). Keep it short.",
+  "exif.shutterSeconds": "Photo information line: long shutter speed in seconds; {value} = e.g. 0.5 or 30. Keep it short.",
+  "main.exif.automationName": "Screen-reader name of the photo information line; {details} = the line's text (file name, date, size, camera, lens, exposure).",
+  "settings.showExifInfo.label": "Settings > Display, EXIF section: master switch for the photo information line; the fields below are disabled when this is off (and the whole overlay is hidden by ShowInfoOverlay, shortcut I).",
+  "settings.exifField.fileName": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.FileName.",
+  "settings.exifField.dateTaken": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.DateTaken.",
+  "settings.exifField.dimensions": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Dimensions.",
+  "settings.exifField.camera": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Camera.",
+  "settings.exifField.lens": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Lens.",
+  "settings.exifField.iso": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Iso.",
+  "settings.exifField.focalLength": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.FocalLength.",
+  "settings.exifField.aperture": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Aperture.",
+  "settings.exifField.shutterSpeed": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.ShutterSpeed."
 }

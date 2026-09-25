@@ -163,7 +163,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// The bottom-left panel is shown when the file info is on, or when there is a skipped-files warning: the warning is
     /// not "info" and must stay visible even with the overlays hidden.
     /// </summary>
-    public bool IsStatusPanelVisible => InfoOverlay.IsFileInfoVisible || HasSkippedEntries;
+    public bool IsStatusPanelVisible => InfoOverlay.IsFileInfoVisible || IsExifLineVisible || HasSkippedEntries;
 
     public string FolderTitle
     {
@@ -497,6 +497,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var settings = Settings;
         settings.ShowInfoOverlay = !settings.ShowInfoOverlay;
         InfoOverlay.Refresh();
+        NotifyExifLineChanged();
         try
         {
             _settingsStore.Save(settings);
@@ -570,6 +571,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             UpdateFolderTitle();
             InfoOverlay.Refresh();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
+            NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
             var newMode = _settingsStore.Current.LoadingMode;
             var newBackend = _settingsStore.Current.DecoderBackend;
             if (previousMode != newMode || previousBackend != newBackend)
@@ -639,6 +641,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(SkippedWarningText));
         InfoOverlay.Refresh();
         // StatusText is event text (last action); it switches language with the next update.
+        NotifyExifLineChanged();
     }
 
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
@@ -652,6 +655,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(TotalFiles));
         OnPropertyChanged(nameof(CurrentImage));
         OnPropertyChanged(nameof(StatusText));
+        NotifyExifLineChanged();
     }
 
     // --- IFolderLoadSink implementation ---
@@ -834,5 +838,34 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             // The file operation already succeeded; only the remembered folder is lost (kept in memory for this session).
             FileLog.Default.Warn("Could not save the last Move-to/Copy-to folder: " + ex.Message);
         }
+    }
+
+    // --- Photo information (EXIF) line under the status line ---
+
+    /// <summary>
+    /// The photo information line for the presented image (<see cref="ExifFormatter"/>, fields from
+    /// <see cref="AppSettings.ExifInfoFields"/>); empty while loading, in compare mode or with nothing shown.
+    /// Independent of <see cref="AppSettings.ShowExifInfo"/> -- see <see cref="IsExifLineVisible"/>.
+    /// </summary>
+    public string ExifText => _presenter.CurrentPhotoInfo is { } info
+        ? ExifFormatter.Format(Settings.ExifInfoFields, info.FileName, info.Width, info.Height, info.Exif,
+            System.Globalization.CultureInfo.CurrentCulture) // display text: user's number/date format
+        : string.Empty;
+
+    /// <summary>
+    /// <see cref="AppSettings.ShowInfoOverlay"/> (master switch, key I) and <see cref="AppSettings.ShowExifInfo"/>, and
+    /// there is something to show.
+    /// </summary>
+    public bool IsExifLineVisible => Settings.ShowInfoOverlay && Settings.ShowExifInfo && ExifText.Length > 0;
+
+    /// <summary>Screen-reader name of the line.</summary>
+    public string ExifAutomationName => Tr.MainExifAutomationName(ExifText);
+
+    private void NotifyExifLineChanged()
+    {
+        OnPropertyChanged(nameof(ExifText));
+        OnPropertyChanged(nameof(IsExifLineVisible));
+        OnPropertyChanged(nameof(ExifAutomationName));
+        OnPropertyChanged(nameof(IsStatusPanelVisible));
     }
 }

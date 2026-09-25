@@ -71,8 +71,8 @@ public sealed class PreviewImageService : IPreloadTarget
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
     private const int PersistQueueCapacity = 16; // queued bitmaps stay alive outside the RAM cache budget until written
-    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight)> _persistQueue =
-        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int)>(
+    private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight, Metadata.ExifSummary? Exif)> _persistQueue =
+        Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int, Metadata.ExifSummary?)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly Task[] _persistWorkers;
 
@@ -258,7 +258,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 // transparent. Scanned here (background) rather than on the decode path that returns the image.
                 if (!PreviewCacheFile.IsFullyOpaque(request.Bitmap)) continue;
                 await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
-                        request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true)
+                        request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true, exif: request.Exif)
                     .ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
@@ -474,7 +474,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 // whichever backend actually produced the pixels.
                 var cacheEntry = PreviewCacheFile.Read(cachePath);
                 decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend,
-                    originalWidth: cacheEntry.OriginalWidth, originalHeight: cacheEntry.OriginalHeight);
+                    originalWidth: cacheEntry.OriginalWidth, originalHeight: cacheEntry.OriginalHeight, exif: cacheEntry.Exif);
                 _metrics.RecordDiskCacheHit();
                 if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), cacheEntry.FileBytes);
             }
@@ -534,7 +534,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
-            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
+            PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight, decodedImage.Exif);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
@@ -758,12 +758,12 @@ public sealed class PreviewImageService : IPreloadTarget
     }
 
     /// <summary>Queues the decoded preview for background persistence; drops it if the bounded queue is full.</summary>
-    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation, int originalWidth, int originalHeight)
+    private void PersistToDiskCache(BitmapSource bitmap, string cachePath, long cacheEpoch, DecoderBackend backend, int orientation, int originalWidth, int originalHeight, Metadata.ExifSummary? exif)
     {
         if (cacheEpoch != Volatile.Read(ref _cacheEpoch)) return;
         // Best-effort: a full queue means persistence is falling behind decode, so this
         // preview is dropped rather than growing the backlog or blocking the caller.
-        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight));
+        _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight, exif));
     }
 
     /// <summary>

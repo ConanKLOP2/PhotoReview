@@ -546,5 +546,22 @@
   "settings.moveCopyReuseLastFolder.hint": "Shift always asks.",
   "settings.editActionProfiles": "Edit action profiles…",
   "settings.group.compareOptions": "Duplicate comparison",
-  "dialog.settingsInvalid.clickZoomPercent": "Click zoom level must be a number between {min} and {max}."
+  "dialog.settingsInvalid.clickZoomPercent": "Click zoom level must be a number between {min} and {max}.",
+  "exif.dimensions": "{width}×{height}",
+  "exif.iso": "ISO {value}",
+  "exif.focalLength": "{value} mm",
+  "exif.aperture": "f/{value}",
+  "exif.shutterFraction": "1/{denominator} s",
+  "exif.shutterSeconds": "{value} s",
+  "main.exif.automationName": "Photo information: {details}",
+  "settings.showExifInfo.label": "Show photo information line",
+  "settings.exifField.fileName": "File name",
+  "settings.exifField.dateTaken": "Date taken",
+  "settings.exifField.dimensions": "Dimensions",
+  "settings.exifField.camera": "Camera",
+  "settings.exifField.lens": "Lens",
+  "settings.exifField.iso": "ISO",
+  "settings.exifField.focalLength": "Focal length",
+  "settings.exifField.aperture": "Aperture",
+  "settings.exifField.shutterSpeed": "Shutter speed"
 }

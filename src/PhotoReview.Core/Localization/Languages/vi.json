@@ -539,5 +539,22 @@
   "settings.moveCopyReuseLastFolder.hint": "Giữ Shift để luôn hỏi lại.",
   "settings.editActionProfiles": "Sửa thiết lập hành động…",
   "settings.group.compareOptions": "So sánh bản trùng lặp",
-  "dialog.settingsInvalid.clickZoomPercent": "Mức thu phóng khi nhấn phải là số từ {min} đến {max}."
+  "dialog.settingsInvalid.clickZoomPercent": "Mức thu phóng khi nhấn phải là số từ {min} đến {max}.",
+  "exif.dimensions": "{width}×{height}",
+  "exif.iso": "ISO {value}",
+  "exif.focalLength": "{value} mm",
+  "exif.aperture": "f/{value}",
+  "exif.shutterFraction": "1/{denominator} giây",
+  "exif.shutterSeconds": "{value} giây",
+  "main.exif.automationName": "Thông tin ảnh: {details}",
+  "settings.showExifInfo.label": "Hiện dòng thông tin ảnh",
+  "settings.exifField.fileName": "Tên tệp",
+  "settings.exifField.dateTaken": "Ngày chụp",
+  "settings.exifField.dimensions": "Kích thước",
+  "settings.exifField.camera": "Máy ảnh",
+  "settings.exifField.lens": "Ống kính",
+  "settings.exifField.iso": "ISO",
+  "settings.exifField.focalLength": "Tiêu cự",
+  "settings.exifField.aperture": "Khẩu độ",
+  "settings.exifField.shutterSpeed": "Tốc độ màn trập"
 }

@@ -101,6 +101,7 @@
         <Border x:Name="StatusPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" Visibility="{Binding IsStatusPanelVisible, Converter={StaticResource BoolToVis}}">
             <StackPanel>
                 <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="13" TextTrimming="CharacterEllipsis" Visibility="{Binding InfoOverlay.IsFileInfoVisible, Converter={StaticResource BoolToVis}}" />
+                <TextBlock x:Name="ExifInfoText" Text="{Binding ExifText}" Visibility="{Binding IsExifLineVisible, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding ExifAutomationName}" ToolTip="{Binding ExifText}" Foreground="{DynamicResource Dark.TextSecondary}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding HasSkippedEntries, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="{Binding SkippedWarningText}" Foreground="{DynamicResource Dark.Warning}" FontSize="13" VerticalAlignment="Center" />
                     <Button Content="{loc:Tr main.skipped.viewList}" AutomationProperties.Name="{loc:Tr main.skipped.viewList.automationName}" Padding="8,2" Margin="8,0,0,0" Click="SkippedFiles_Click" />
