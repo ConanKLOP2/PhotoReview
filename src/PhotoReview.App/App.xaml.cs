@@ -364,9 +364,9 @@ public partial class App : System.Windows.Application, IDisposable
     {
         GC.SuppressFinalize(this);
         _services?.GetService<SessionWriter>()?.Flush();
-        AppLog.Shutdown();
         Interlocked.Exchange(ref _forwardServer, null)?.Dispose();
         Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
+        AppLog.Shutdown(); // after the forward server/coalescer so their shutdown warnings still reach the log
         Interlocked.Exchange(ref _instanceLock, null)?.Dispose();
         _perfHooks?.Detach();
         _perfListener?.Dispose();

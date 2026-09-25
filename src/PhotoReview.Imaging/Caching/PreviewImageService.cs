@@ -214,8 +214,11 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
+                // IMG-01/Q-R7: JPEG would flatten transparency, so alpha-format previews persist only if no pixel is
+                // transparent. Scanned here (background) rather than on the decode path that returns the image.
+                if (!PreviewCacheFile.IsFullyOpaque(request.Bitmap)) continue;
                 await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
-                        request.OriginalWidth, request.OriginalHeight, request.CachePath)
+                        request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true)
                     .ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
@@ -490,8 +493,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
-            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp &&
-            PreviewCacheFile.IsFullyOpaque(bmp)) // IMG-01/Q-R7: JPEG would flatten transparency; alpha-format previews persist only if no pixel is transparent
+            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by

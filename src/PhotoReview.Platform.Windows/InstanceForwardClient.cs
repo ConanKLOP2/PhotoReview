@@ -29,7 +29,7 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
     public async Task<ForwardOutcome> SendAsync(IReadOnlyList<string> paths, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         byte[] request;
-        try { request = ForwardedPathProtocol.Encode(paths); }
+        try { request = ForwardedPathProtocol.Encode(paths.Count > ForwardedPathProtocol.MaxPaths ? [.. paths.Take(ForwardedPathProtocol.MaxPaths)] : paths); }
         catch (ArgumentException) { return ForwardOutcome.Rejected; }
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -53,6 +53,8 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
                     if (read == 0) break;
                     length += read;
                 }
+                // The owner hung up without answering (its read timed out): same as nobody home, not a refusal.
+                if (length == 0) return ForwardOutcome.NoInstance;
                 return Encoding.ASCII.GetString(reply, 0, length).StartsWith("OK", StringComparison.Ordinal)
                     ? ForwardOutcome.Delivered
                     : ForwardOutcome.Rejected;
