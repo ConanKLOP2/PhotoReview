@@ -203,12 +203,20 @@ public sealed class PreviewImageService : IPreloadTarget
     // so a huge leftover pile from a very old install can't turn this into an unbounded scan.
     private const int LegacyCleanupMaxFiles = 5000;
 
+    /// <summary>The start-up cleanup pass (legacy files + stale temp files) started by the constructor; test seam.</summary>
+    internal Task StartupCleanup { get; private set; } = Task.CompletedTask;
+
     private void ScheduleLegacyCacheCleanup()
     {
         if (_disableDiskCache) return;
         var directory = _diskCacheDirectory;
         var log = _log;
-        _ = Task.Run(() => CleanupLegacyCacheFiles(directory, log));
+        StartupCleanup = Task.Run(() =>
+        {
+            CleanupLegacyCacheFiles(directory, log);
+            // Atomic-write temp files orphaned by a killed process: no prune/clear pattern ever matches them.
+            DiskCacheStore.DeleteStaleTempFiles(directory, DateTime.UtcNow, LegacyCleanupMaxFiles, log);
+        });
     }
 
     private static void CleanupLegacyCacheFiles(string directory, ILog log)

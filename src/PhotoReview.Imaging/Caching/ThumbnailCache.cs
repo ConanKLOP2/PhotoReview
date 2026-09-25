@@ -37,6 +37,11 @@ public sealed class ThumbnailCache : IDisposable
     private long _cacheGeneration;
     private bool _disposed;
 
+    private const int StartupTempCleanupMaxFiles = 5000;
+
+    /// <summary>The start-up stale temp-file sweep started by the constructor; test seam.</summary>
+    internal Task StartupCleanup { get; }
+
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskDirectory;
 
@@ -61,6 +66,10 @@ public sealed class ThumbnailCache : IDisposable
         _sourceBytesCache = sourceBytesCache;
         _embeddedThumbnailReader = embeddedThumbnailReader ?? DefaultReadEmbeddedThumbnailAsync;
         _diskStore = new DiskCacheStore(_diskDirectory, "*.png", _maxDiskBytes, _log);
+        // Atomic-write temp files orphaned by a killed process (see DiskCacheStore.TempFilePattern); off the caller's thread.
+        var directory = _diskDirectory;
+        var cleanupLog = _log;
+        StartupCleanup = Task.Run(() => DiskCacheStore.DeleteStaleTempFiles(directory, DateTime.UtcNow, StartupTempCleanupMaxFiles, cleanupLog));
         _ramCache = new BoundedLruCache<string, IDecodedImage>(_maxRamBytes, EstimateBytes, StringComparer.OrdinalIgnoreCase);
     }
 
