@@ -69,7 +69,7 @@ public static class BenchmarkWorkloadRunner
             // could report Pass without ever exercising what their name claims. Refuse to
             // run rather than keep reporting a misleading Pass; a real check needs to drive
             // ExplorerOrderService/ClearCache from here.
-            throw new NotSupportedException(
+            throw new BenchmarkProfileException(BenchmarkProfileProblem.NotImplemented, profile.Id,
                 $"Benchmark profile '{profile.Id}' does not implement a real {profile.Name} check yet; " +
                 "a decode-only stand-in would misreport results, so it refuses to run.");
         }

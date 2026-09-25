@@ -159,12 +159,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         catch (TimeoutException)
         {
             prefetched.Cts.Cancel();
-            return Unavailable(prefetched.Folder, ExplorerOrderStatus.TimedOut, "Native view query exceeded timeout");
+            return Unavailable(prefetched.Folder, ExplorerOrderStatus.TimedOut, ExplorerReason.Timeout);
         }
         catch (OperationCanceledException)
         {
             prefetched.Cts.Cancel();
-            return Unavailable(prefetched.Folder, ExplorerOrderStatus.Canceled, "Request canceled");
+            return Unavailable(prefetched.Folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
         }
     }
 
@@ -175,15 +175,15 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
         var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
-        if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled");
+        if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(timeout);
         var linkedToken = timeoutCts.Token;
         var workTask = _pump.Enqueue(() =>
         {
             try { return QueryShell(canonicalFolder, progress, batchSize, linkedToken); }
-            catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
-            catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ex.GetType().Name); }
+            catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled); }
+            catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ExplorerReason.Format(ExplorerReason.QueryFailed, ex.GetType().Name)); }
         });
         try
         {
@@ -192,7 +192,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         catch (OperationCanceledException)
         {
             var status = cancellationToken.IsCancellationRequested ? ExplorerOrderStatus.Canceled : ExplorerOrderStatus.TimedOut;
-            return Unavailable(canonicalFolder, status, status == ExplorerOrderStatus.TimedOut ? "Native view query exceeded timeout" : "Request canceled");
+            return Unavailable(canonicalFolder, status, status == ExplorerOrderStatus.TimedOut ? ExplorerReason.Timeout : ExplorerReason.Canceled);
         }
     }
 
@@ -202,12 +202,12 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         var queryTimer = Stopwatch.StartNew();
         _log.Info($"Explorer query-start: folder={folder}");
         var shellType = Type.GetTypeFromProgID("Shell.Application");
-        if (shellType is null) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, "Shell.Application unavailable");
+        if (shellType is null) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.ShellUnavailable);
         // The caller's timeout only cancels the Task it is awaiting; this action already
         // started running on the single STA pump thread and must check the token itself,
         // or a stale/superseded query keeps occupying that thread and delays whatever
         // query was actually issued for it next (e.g. a fast folder switch).
-        if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled before native enumeration");
+        if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
         object? shell = null, windows = null;
         try
         {
@@ -219,19 +219,19 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                 try
                 {
                     windowsInspected++;
-                    if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled during window enumeration");
+                    if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
                     var location = (string?)((dynamic)window).LocationURL;
                     if (!TryCanonicalizeLocation(location, out var current)) continue;
                     if (!ExplorerSnapshotValidator.SamePath(current, folder)) continue;
                     try { return TryReadNativeView(window, folder, progress, batchSize, cancellationToken); }
-                    catch (OperationCanceledException) { return Unavailable(folder, ExplorerOrderStatus.Canceled, "Request canceled during native enumeration"); }
-                    catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, $"Native view failed: {ex.GetType().Name}, HRESULT=0x{ex.HResult:X8}"); }
+                    catch (OperationCanceledException) { return Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled); }
+                    catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, ExplorerReason.Format(ExplorerReason.NativeViewFailed, ex.GetType().Name, $"0x{ex.HResult:X8}")); }
                 }
                 catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
                 catch (Exception ex) { _log.Error($"Explorer window inspection failed after {windowsInspected} window(s)", ex); }
                 finally { Release(window); }
             }
-            var unavailable = Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, $"No matching Explorer window among {windowsInspected} window(s)");
+            var unavailable = Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, ExplorerReason.Format(ExplorerReason.NoMatchingWindow, windowsInspected.ToString(CultureInfo.InvariantCulture)));
             _log.Info($"Explorer query-complete: status={unavailable.Status}, windows={windowsInspected}, elapsedMs={queryTimer.ElapsedMilliseconds}");
             return unavailable;
         }
@@ -250,17 +250,17 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             windowPtr = Marshal.GetIUnknownForObject(window);
             var serviceIid = ExplorerComInterop.IidServiceProvider;
             var providerResult = Marshal.QueryInterface(windowPtr, in serviceIid, out servicePtr);
-            if (providerResult < 0 || servicePtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"QueryInterface(IServiceProvider) failed: 0x{providerResult:X8}");
+            if (providerResult < 0 || servicePtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, "QueryInterface(IServiceProvider)", $"0x{providerResult:X8}"));
             var service = ExplorerComInterop.SidTopLevelBrowser; var browserIid = ExplorerComInterop.IidShellBrowser;
             var serviceResult = ExplorerNativeVtable.QueryService(servicePtr, ref service, ref browserIid, out browserPtr);
-            if (serviceResult < 0 || browserPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"QueryService(IShellBrowser) failed: 0x{serviceResult:X8}");
+            if (serviceResult < 0 || browserPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, "QueryService(IShellBrowser)", $"0x{serviceResult:X8}"));
             var activeViewResult = ExplorerNativeVtable.QueryActiveShellView(browserPtr, out shellViewPtr);
-            if (activeViewResult < 0 || shellViewPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"QueryActiveShellView failed: 0x{activeViewResult:X8}");
+            if (activeViewResult < 0 || shellViewPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, "QueryActiveShellView", $"0x{activeViewResult:X8}"));
             var viewIid = ExplorerComInterop.IidFolderView2;
             var folderViewResult = Marshal.QueryInterface(shellViewPtr, in viewIid, out folderViewPtr);
-            if (folderViewResult < 0 || folderViewPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"QueryInterface(IFolderView2) failed: 0x{folderViewResult:X8}");
+            if (folderViewResult < 0 || folderViewPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, "QueryInterface(IFolderView2)", $"0x{folderViewResult:X8}"));
             var countResult = ExplorerNativeVtable.ItemCount(folderViewPtr, ExplorerComInterop.SvgioAllView, out var count);
-            if (countResult < 0 || count <= 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.ItemCount failed/empty: 0x{countResult:X8}, count={count}");
+            if (countResult < 0 || count <= 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.EmptyView, $"0x{countResult:X8}", count.ToString(CultureInfo.InvariantCulture)));
             var itemCountElapsed = timer.ElapsedMilliseconds;
             _log.Info($"Explorer native-read-start: count={count}, itemCountElapsedMs={itemCountElapsed}");
 
@@ -300,14 +300,14 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
                     getItemCalls++;
                     var itemResult = getItem(folderViewPtr, index, ref itemIid, out itemPtr);
                     comCalls++;
-                    if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IFolderView2.GetItem({index}) failed: 0x{itemResult:X8}");
+                    if (itemResult < 0 || itemPtr == IntPtr.Zero) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, $"IFolderView2.GetItem({index})", $"0x{itemResult:X8}"));
                     var itemVtable = Marshal.ReadIntPtr(itemPtr);
                     if (!getDisplayNameByVtable.TryGetValue(itemVtable, out var getDisplayName))
                         getDisplayNameByVtable[itemVtable] = getDisplayName = ExplorerNativeVtable.ResolveGetDisplayName(itemPtr);
                     displayNameCalls++;
                     var nameResult = getDisplayName(itemPtr, ExplorerComInterop.SigdnFileSystemPath, out var namePtr);
                     comCalls++;
-                    if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, $"IShellItem.GetDisplayName({index}) failed: 0x{nameResult:X8}");
+                    if (nameResult < 0) return Unavailable(folder, ExplorerOrderStatus.NativeViewUnavailable, ExplorerReason.Format(ExplorerReason.ComCallFailed, $"IShellItem.GetDisplayName({index})", $"0x{nameResult:X8}"));
                     try { paths.Add(Marshal.PtrToStringUni(namePtr) ?? string.Empty); }
                     finally { Marshal.FreeCoTaskMem(namePtr); }
                 }

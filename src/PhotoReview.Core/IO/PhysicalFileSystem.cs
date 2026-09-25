@@ -173,7 +173,7 @@ public sealed class PhysicalFileSystem : IFileSystem
                 // (A failure before the first entry means the folder itself is unreadable: that
                 // propagates, so the load fails loudly instead of showing an empty catalog.)
                 // The listing itself broke part-way: keep what was read, report the rest as skipped.
-                onSkipped(new SkippedEntry(directory, ex.Message));
+                onSkipped(new SkippedEntry(directory, ex.Message, SkippedKind.ListingInterrupted));
                 yield break;
             }
 
