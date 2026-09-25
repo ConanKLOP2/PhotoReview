@@ -22,6 +22,7 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-R14 | Review r3 | Duplicate cleanup on drives without a Recycle Bin | ✅ ACCEPTED 2026-09-25 — A: stay refused, one up-front message instead of per-file errors | same |
 | Q-R15 | Review r3 | Group B fixes (Settings errors, Space/Enter, zoom decode retry, shortcut capture, journal enum, stat) | ✅ ACCEPTED 2026-09-25 — A: all; stat catch-all left (File.Exists never reports access errors, nothing to distinguish) | same |
 | Q-R16 | Review r3 | Group C low-priority items | ✅ ACCEPTED 2026-09-25 — C: all done (persist queue 8, bounded Dispose, ZoomOut from Fit, `\photos`, per-path source-bytes evict) | same |
+| Q-R17 | Review r3 | Whole-folder preload estimate (10x compressed size) is ~8x too pessimistic for viewport-sized previews | 🔄 PENDING — proposed: estimate `entries x box w x h x 4`; needs a perf run on the user machine | [ROUND3-4](REVIEW-2026-09-25-ROUND3-4.md) |
 
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 
