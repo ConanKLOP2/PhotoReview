@@ -209,6 +209,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     public Task FirstImageAsync() => FirstAsync();
 
+    public bool CurrentHasComparePair =>
+        _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.Paths[_catalog.CurrentIndex]);
+
     public void ToggleCompare()
     {
         var enableCompare = !_compare.IsVisible;

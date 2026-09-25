@@ -168,15 +168,25 @@ public sealed partial class ViewerState : ObservableObject
     /// <summary>
     /// Giảm mức zoom bớt 0.25 (tối thiểu 0.25).
     /// </summary>
-    public void ZoomOut() => SetZoom(StepBase - ZoomStep);
+    public void ZoomOut() => StepZoom(-ZoomStep);
+
+    /// <summary>
+    /// A step down from Fit must never end up larger than Fit: when the fit zoom is already below <see cref="MinZoom"/>
+    /// (huge originals), clamping to <see cref="MinZoom"/> would enlarge the image, so do nothing.
+    /// </summary>
+    private void StepZoom(double step)
+    {
+        var next = StepBase + step;
+        if (step < 0 && IsFit && FitZoom < MinZoom) return;
+        SetZoom(next);
+    }
 
     /// <summary>
     /// Điều chỉnh zoom bằng con lăn chuột theo delta.
     /// </summary>
     public void WheelZoom(int delta)
     {
-        var next = StepBase + (delta > 0 ? ZoomStep : -ZoomStep);
-        SetZoom(next);
+        StepZoom(delta > 0 ? ZoomStep : -ZoomStep);
     }
 
     /// <summary>

@@ -14,7 +14,7 @@ public sealed class WpfDecodedImage : IDecodedImage
     public int PixelHeight => Source.PixelHeight;
     public bool Downscaled { get; }
     public int Orientation { get; }
-    public long EstimatedBytes => Math.Max(1, (long)Source.PixelWidth * Source.PixelHeight * 4);
+    public long EstimatedBytes => Math.Max(1, (long)Source.PixelWidth * Source.PixelHeight * Math.Max(4, (Source.Format.BitsPerPixel + 7) / 8));
     public object PlatformImage => Source;
     public DecoderBackend ActualBackend { get; }
 

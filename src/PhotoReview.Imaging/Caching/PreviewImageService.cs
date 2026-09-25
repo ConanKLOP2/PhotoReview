@@ -70,7 +70,7 @@ public sealed class PreviewImageService : IPreloadTarget
     // bitmap's closure (and the RAM it references) alive until its write finishes.
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
-    private const int PersistQueueCapacity = 32;
+    private const int PersistQueueCapacity = 16; // queued bitmaps stay alive outside the RAM cache budget until written
     private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight)> _persistQueue =
         Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });
@@ -214,8 +214,11 @@ public sealed class PreviewImageService : IPreloadTarget
             if (request.Epoch != Volatile.Read(ref _cacheEpoch)) continue;
             try
             {
+                // IMG-01/Q-R7: JPEG would flatten transparency, so alpha-format previews persist only if no pixel is
+                // transparent. Scanned here (background) rather than on the decode path that returns the image.
+                if (!PreviewCacheFile.IsFullyOpaque(request.Bitmap)) continue;
                 await PreviewCacheFile.WriteAtomicallyAsync(request.Bitmap, request.Backend, request.Orientation,
-                        request.OriginalWidth, request.OriginalHeight, request.CachePath)
+                        request.OriginalWidth, request.OriginalHeight, request.CachePath, opacityVerified: true)
                     .ConfigureAwait(false);
                 if (request.Epoch != Volatile.Read(ref _cacheEpoch))
                 {
@@ -490,8 +493,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
-            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp &&
-            PreviewCacheFile.IsFullyOpaque(bmp)) // IMG-01/Q-R7: JPEG would flatten transparency; alpha-format previews persist only if no pixel is transparent
+            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
@@ -540,6 +542,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public void EvictCachedPath(string path, Action<string>? alsoInvalidate = null)
     {
         var normalized = Path.GetFullPath(path).ToUpperInvariant();
+        _sourceBytesCache?.Evict(path); // a moved/deleted file must not keep its raw bytes in RAM (per-path, no global bump)
         // No epoch bump: this drops one path only. Bumping would also discard every in-flight
         // preload/viewer decode of OTHER paths (R2-F-02). A decode of this path that is still in flight
         // may publish one stale entry; keys include length+mtime so it is never served for a new file.

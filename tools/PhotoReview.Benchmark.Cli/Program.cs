@@ -32,6 +32,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     var manifest = new BenchmarkDatasetManifest(Path.GetFullPath(folder),
         files.Select(Path.GetFullPath).ToArray(), unsupportedExtensions, 64);
     var anyFailed = false;
+    var recycleBin = BenchmarkRecycleBin.Create(() => PhotoReview.Platform.Windows.WindowsRecycleBin.Instance);
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
@@ -41,7 +42,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         {
             // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior.
             var report = await BenchmarkEngine.RunAsync(folder, profile,
-                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, PhotoReview.Platform.Windows.WindowsRecycleBin.Instance, token),
+                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, recycleBin, token),
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
             reports.Add(report);
             outcomes.Add(report.Phases[0]);

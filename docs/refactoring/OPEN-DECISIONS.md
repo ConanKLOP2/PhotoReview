@@ -17,6 +17,12 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-R9 | Review r2 | TEST-03 Recycle Bin orphan sweep | ❌ DECLINED 2026-09-25 — a sweep deletes items from the real bin (a subagent mutation run left the bin without `$R` files); tests only clean their own items, the user empties the bin | — |
 | Q-R10 | Review r2 | Opening another photo from Explorer while the app is running (R2-F-09): forward the path to the running instance (needs a named-pipe IPC) or keep the current message | ✅ ACCEPTED 2026-09-25 — (a) forward to the running instance via named pipe; implemented in #78 | [round2/fresh.md](../archive/evidence/review-2026-09-25/round2/fresh.md) |
 | Q-R11 | Review r2 | Session resume is discarded when Explorer order applies (R2-F-10; intentional per 3943fb6); benchmark profiles run with disk cache off (R2-F-22); dead knob `MemoryReserveBytes`, 0.80 vs 0.90 headroom (R2-F-33); per-solution version computation (R2-F-35) | ✅ DECIDED 2026-09-25 — leave as is (no change) | same |
+| Q-R12 | Review r3 | Forward client times out after the path was written | ✅ ACCEPTED 2026-09-25 — C: new `ForwardOutcome.Unknown`, exit without the "already open" dialog | branch `review/2026-09-25-round3` |
+| Q-R13 | Review r3 | Undo depth | ✅ ACCEPTED 2026-09-25 — A: keep single-step undo (intentional) | same |
+| Q-R14 | Review r3 | Duplicate cleanup on drives without a Recycle Bin | ✅ ACCEPTED 2026-09-25 — A: stay refused, one up-front message instead of per-file errors | same |
+| Q-R15 | Review r3 | Group B fixes (Settings errors, Space/Enter, zoom decode retry, shortcut capture, journal enum, stat) | ✅ ACCEPTED 2026-09-25 — A: all; stat catch-all left (File.Exists never reports access errors, nothing to distinguish) | same |
+| Q-R16 | Review r3 | Group C low-priority items | ✅ ACCEPTED 2026-09-25 — C: all done (persist queue 8, bounded Dispose, ZoomOut from Fit, `\photos`, per-path source-bytes evict) | same |
+| Q-R17 | Review r3 | Whole-folder preload estimate (10x compressed size) is ~8x too pessimistic for viewport-sized previews | 🔄 PENDING — proposed: estimate `entries x box w x h x 4`; needs a perf run on the user machine | [ROUND3-4](REVIEW-2026-09-25-ROUND3-4.md) |
 
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 

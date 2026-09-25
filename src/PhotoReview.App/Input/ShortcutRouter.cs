@@ -1,4 +1,4 @@
-﻿using System.Windows.Input;
+using System.Windows.Input;
 using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Input;
@@ -185,6 +185,6 @@ public sealed class ShortcutRouter
     private static Key? ParseKey(string? str)
     {
         if (string.IsNullOrWhiteSpace(str)) return null;
-        return Enum.TryParse<Key>(str, true, out var key) ? key : null;
+        return Services.ShortcutKeyName.TryParse(str, out var key) ? key : null;
     }
 }

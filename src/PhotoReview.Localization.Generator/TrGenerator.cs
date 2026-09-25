@@ -264,7 +264,7 @@ public sealed class TrGenerator : IIncrementalGenerator
                 case '\r': break;
                 case '\n': sb.Append("\\n"); break;
                 default:
-                    if (c < ' ') sb.Append(' ');
+                    if (c < ' ' || c is (char)0x85 or (char)0x2028 or (char)0x2029) sb.Append(' '); // U+0085/2028/2029 are C# line terminators and would end the /// comment
                     else sb.Append(c);
                     break;
             }

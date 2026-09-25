@@ -13,6 +13,7 @@ public sealed class SettingsStore
     private readonly ILog _log;
     private readonly Action<string, Exception>? _onStartupError;
     private AppSettings _current;
+    private bool _keepCorruptFile; // the corrupt config.json could not be backed up: never overwrite the only copy this session
 
     public AppSettings Current => _current;
 
@@ -40,6 +41,7 @@ public sealed class SettingsStore
     {
         var filePath = path ?? _appPaths.ConfigFile;
         LastLoadRepairs = [];
+        _keepCorruptFile = false;
         try
         {
             if (_fileSystem.FileExists(filePath))
@@ -64,14 +66,20 @@ public sealed class SettingsStore
             {
                 _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
             }
-            catch
+            catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
             {
-                // Bỏ qua lỗi copy file hỏng
+                // The corrupt file could not be preserved: keep defaults in memory and do not overwrite the only copy.
+                LogStartupError("Could not back up corrupt config.json, using in-memory defaults for this session", copyEx);
+                _keepCorruptFile = path is null;
+                _current = new AppSettings();
+                Changed?.Invoke(this, _current);
+                return _current;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             LogStartupError("Config.json inaccessible, using in-memory defaults for this session", ex);
+            _keepCorruptFile = path is null; // a briefly locked but valid config must not be replaced by defaults on the next Save
             _current = new AppSettings();
             Changed?.Invoke(this, _current);
             return _current;
@@ -93,6 +101,13 @@ public sealed class SettingsStore
     public void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        if (_keepCorruptFile)
+        {
+            _log.Warn("Settings kept in memory only: config.json is preserved untouched because it could not be read or backed up");
+            _current = settings;
+            Changed?.Invoke(this, _current);
+            return;
+        }
         var filePath = _appPaths.ConfigFile;
         var dir = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(dir))

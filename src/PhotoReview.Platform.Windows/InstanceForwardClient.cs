@@ -29,7 +29,7 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
     public async Task<ForwardOutcome> SendAsync(IReadOnlyList<string> paths, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         byte[] request;
-        try { request = ForwardedPathProtocol.Encode(paths); }
+        try { request = ForwardedPathProtocol.Encode(paths.Count > ForwardedPathProtocol.MaxPaths ? [.. paths.Take(ForwardedPathProtocol.MaxPaths)] : paths); }
         catch (ArgumentException) { return ForwardOutcome.Rejected; }
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -38,12 +38,14 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
         var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await using (pipe.ConfigureAwait(false))
         {
+            var written = false;
             try
             {
                 await pipe.ConnectAsync(deadline.Token).ConfigureAwait(false);
                 if (_allowServerForeground) TryAllowForeground(pipe);
                 await pipe.WriteAsync(request, deadline.Token).ConfigureAwait(false);
                 await pipe.FlushAsync(deadline.Token).ConfigureAwait(false);
+                written = true;
 
                 var reply = new byte[16];
                 var length = 0;
@@ -53,13 +55,16 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
                     if (read == 0) break;
                     length += read;
                 }
+                // An owner that accepted the request always answers OK or ERR; hanging up silently means it read nothing
+                // (read timeout, oversized input, shutting down), so fall back to opening here.
+                if (length == 0) return ForwardOutcome.NoInstance;
                 return Encoding.ASCII.GetString(reply, 0, length).StartsWith("OK", StringComparison.Ordinal)
                     ? ForwardOutcome.Delivered
                     : ForwardOutcome.Rejected;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                return ForwardOutcome.NoInstance;
+                return written ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

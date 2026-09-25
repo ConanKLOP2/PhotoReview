@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -129,6 +129,41 @@ public sealed class InstanceForwardPipeTests : IDisposable
 
         Assert.Equal(ForwardOutcome.Delivered, outcome);
         Assert.True(await signal.WaitAsync(Timeout));
+    }
+
+    [Fact(DisplayName = "A busy owner that answers after the client's deadline yields Unknown, not NoInstance (Q-R12: no false error dialog)")]
+    public async Task Client_OwnerAnswersTooLate_ReportsUnknown()
+    {
+        var release = new ManualResetEventSlim();
+        var server = new InstanceForwardServer(_pipe, _ => release.Wait(Timeout));
+        _disposables.Add(server);
+        _disposables.Add(release);
+        server.Start();
+
+        var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("slow.jpg")], TimeSpan.FromMilliseconds(400));
+        release.Set();
+
+        Assert.Equal(ForwardOutcome.Unknown, outcome);
+    }
+
+    [Fact(DisplayName = "An owner that hangs up without answering (nothing accepted) yields NoInstance so the second launch opens its own window")]
+    public async Task Client_OwnerHangsUpSilently_ReportsNoInstance()
+    {
+        var listening = new SemaphoreSlim(0);
+        var serverTask = Task.Run(async () =>
+        {
+            await using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            listening.Release();
+            await server.WaitForConnectionAsync();
+            var buffer = new byte[256];
+            _ = await server.ReadAsync(buffer); // read the request, then close without replying
+        });
+        await listening.WaitAsync(Timeout);
+
+        var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("silent.jpg")], Timeout);
+        await serverTask.WaitAsync(Timeout);
+
+        Assert.Equal(ForwardOutcome.NoInstance, outcome);
     }
 
     [Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]

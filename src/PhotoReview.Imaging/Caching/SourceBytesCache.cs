@@ -10,6 +10,9 @@ public sealed class SourceBytesCache
     private readonly BoundedLruCache<Key, byte[]> _cache;
     private readonly ConcurrentDictionary<Key, Lazy<Task<byte[]>>> _inFlight = new();
     private int _generation;
+    // Per-path eviction versions: evicting one moved/deleted file must not invalidate in-flight reads of OTHER paths
+    // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
+    private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
 
     public SourceBytesCache(long capacityBytes)
     {
@@ -36,8 +39,9 @@ public sealed class SourceBytesCache
         var key = CreateKey(path);
         if (_cache.TryGet(key, out var cached)) return cached;
         var generation = Volatile.Read(ref _generation);
+        var pathVersion = _pathVersions.GetValueOrDefault(key.Path);
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<byte[]>>(
-            () => Task.Run(() => ReadAndCache(key, generation)), LazyThreadSafetyMode.ExecutionAndPublication));
+            () => Task.Run(() => ReadAndCache(key, generation, pathVersion)), LazyThreadSafetyMode.ExecutionAndPublication));
         try { return lazy.Value.GetAwaiter().GetResult(); }
         finally { _inFlight.TryRemove(new KeyValuePair<Key, Lazy<Task<byte[]>>>(key, lazy)); }
     }
@@ -50,15 +54,14 @@ public sealed class SourceBytesCache
 
     public void Evict(string path)
     {
-        // In-flight reads capture the generation before opening the file.  Advance it
-        // before removing the entry so a read that completes after eviction cannot
-        // republish bytes for the evicted source.
-        Interlocked.Increment(ref _generation);
+        // In-flight reads of this path capture its version before opening the file. Advance it before removing
+        // the entry so a read that completes after eviction cannot republish bytes for the evicted source.
         var full = Path.GetFullPath(path);
+        _pathVersions.AddOrUpdate(full, 1, (_, version) => version + 1);
         _cache.RemoveWhere(key => string.Equals(key.Path, full, StringComparison.OrdinalIgnoreCase));
     }
 
-    private byte[] ReadAndCache(Key key, int generation)
+    private byte[] ReadAndCache(Key key, int generation, int pathVersion)
     {
         using var stream = new FileStream(key.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
@@ -73,7 +76,7 @@ public sealed class SourceBytesCache
         var current = new FileInfo(key.Path);
         if (current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
             throw new IOException($"File changed while reading: {key.Path}");
-        if (generation == Volatile.Read(ref _generation)) _cache.Set(key, bytes);
+        if (generation == Volatile.Read(ref _generation) && pathVersion == _pathVersions.GetValueOrDefault(key.Path)) _cache.Set(key, bytes);
         return bytes;
     }
 

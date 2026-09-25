@@ -321,7 +321,13 @@ public sealed class PreloadScheduler : IDisposable
                     if (queued.Contains(path)) continue;
                     // Reuses the folder scan's Length/LastWriteUtc: no stat for candidates
                     // already warm (the common case once preload has caught up).
-                    var key = _target.GetCurrentCacheKey(entry);
+                    ImageCacheKey key;
+                    try { key = _target.GetCurrentCacheKey(entry); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _log.Warn($"Preload skipped, cannot stat: {path}"); // deleted between scan and stat
+                        continue;
+                    }
                     if (_target.TryGetCachedPreview(key)) continue;
                     queued.Add(path);
                     headroom.DecodeQueuedSinceCheck = true;
@@ -486,6 +492,12 @@ public sealed class PreloadScheduler : IDisposable
             {
                 _log.Error($"Preload failed: {path}", ex);
             }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A corrupt/unsupported file (FileFormatException, NotSupportedException, ...) must skip only itself:
+                // rethrowing would end the whole scheduler loop and stall preload at the bad file on every navigation.
+                _log.Error($"Preload failed: {path}", ex);
+            }
             return true;
         }
         finally
@@ -493,6 +505,9 @@ public sealed class PreloadScheduler : IDisposable
             _preloadSlots.Release();
         }
     }
+
+    /// <summary>Longest Dispose blocks its caller (the UI thread at window close) for workers that ignore cancellation, e.g. a decode already running.</summary>
+    internal TimeSpan DisposeDrainTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     public void Dispose()
     {
@@ -511,11 +526,27 @@ public sealed class PreloadScheduler : IDisposable
         // The scheduler and workers use ConfigureAwait(false), so draining cannot require the
         // caller's UI context. Keep synchronization primitives alive until every waiter/holder
         // has observed cancellation and released its slot.
-        foreach (var schedulerTask in lifetimeTasks)
+        try
         {
-            try { schedulerTask.GetAwaiter().GetResult(); }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { _log.Error("Preload scheduler failed during disposal", ex); }
+            if (!Task.WaitAll(lifetimeTasks, DisposeDrainTimeout))
+            {
+                // A decode that cannot be cancelled is still running. Do not hold the caller for it, and do not dispose the
+                // slots/CTS it will still release/observe; they are unreferenced afterwards and reclaimed by the GC.
+                _log.Warn("Preload scheduler did not drain in time; leaving in-flight decodes to finish on their own");
+                // The slots/CTS are still in use by those decodes: release them once the last lifetime task has finished.
+                _ = Task.WhenAll(lifetimeTasks).ContinueWith(_ =>
+                {
+                    foreach (var lifetimeCtsSource in lifetimeCts) lifetimeCtsSource.Dispose();
+                    _preloadSlots.Dispose();
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                return;
+            }
+        }
+        catch (AggregateException ex)
+        {
+            // WaitAll observed every task complete; only genuine failures (not cancellation) are worth a log line.
+            foreach (var inner in ex.InnerExceptions)
+                if (inner is not OperationCanceledException) _log.Error("Preload scheduler failed during disposal", inner);
         }
 
         foreach (var lifetimeCtsSource in lifetimeCts)

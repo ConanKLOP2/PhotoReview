@@ -118,6 +118,34 @@ public sealed class SettingsStoreTests
         Assert.Equal(corruptContent, _fileSystem.ReadAllText(backupFiles[0]));
     }
 
+    [Fact(DisplayName = "A corrupt config that could not be backed up is never overwritten, not even by a later Save")]
+    public void Load_CorruptConfigBackupFails_LaterSaveKeepsTheCorruptFile()
+    {
+        var corruptContent = "{ this is not valid json }";
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, corruptContent);
+        _fileSystem.CopyHook = (_, _) => new UnauthorizedAccessException("backup denied");
+
+        var loaded = _store.Load();
+        _store.Save(loaded);
+
+        Assert.Equal(corruptContent, _fileSystem.ReadAllText(_appPaths.ConfigFile));
+        Assert.Same(loaded, _store.Current);
+    }
+
+    [Fact(DisplayName = "A valid config that was only unreadable (locked) is not replaced by defaults on a later Save")]
+    public void Load_ConfigLocked_LaterSaveKeepsTheValidFile()
+    {
+        var validJson = "{ \"ConfigVersion\": 3, \"LoggingEnabled\": true }";
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, validJson);
+        _fileSystem.OpenReadHook = _ => new IOException("locked");
+
+        var loaded = _store.Load();
+        _fileSystem.OpenReadHook = null;
+        _store.Save(loaded);
+
+        Assert.Equal(validJson, _fileSystem.ReadAllText(_appPaths.ConfigFile));
+    }
+
     [Fact(DisplayName = "INV-11: Load falls back to in-memory defaults without overwriting locked config")]
     public void Load_Inv11_WhenFileLocked_UsesInMemoryDefaultsAndLeavesFileIntact()
     {

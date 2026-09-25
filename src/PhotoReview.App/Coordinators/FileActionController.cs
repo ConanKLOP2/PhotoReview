@@ -119,9 +119,12 @@ public sealed class FileActionController
         var allowPermanent = false;
         if (operation == FileOperationType.Recycle && WillAskPermanentDelete(source))
         {
+            // The dialog runs a nested dispatcher loop: a forwarded open can switch the folder meanwhile.
+            var folderBeforeDialog = _clock.CurrentFolder;
             if (_dialogService is null
                 || !_dialogService.ShowConfirmation(Tr.DialogConfirmPermanentDeleteTitle, Tr.DialogConfirmPermanentDeleteMessage(Path.GetFileName(source))))
                 return;
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return;
             allowPermanent = true;
         }
 

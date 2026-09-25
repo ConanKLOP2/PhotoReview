@@ -38,6 +38,7 @@ public sealed class ZoomDetailLoader
     private bool _showingOriginal;
     private double? _zoom; // null = Fit
     private CancellationTokenSource? _cts;
+    private long _failedToken = -1; // navigation token whose full-resolution decode failed: do not retry on every zoom step
     private Task? _pendingLoad;
 
     /// <param name="show">Displays a platform image with the given original dimensions (the presenter's
@@ -119,6 +120,7 @@ public sealed class ZoomDetailLoader
         // The preview already has at least as many pixels as the screen shows: no decode needed.
         if (zoom * target.OriginalWidth <= target.PreviewPixelWidth) return;
         if (_cts is not null) return; // already decoding this target
+        if (_failedToken == target.Token) return;
 
         var cts = new CancellationTokenSource();
         _cts = cts;
@@ -147,6 +149,7 @@ public sealed class ZoomDetailLoader
         {
             // Zoom detail is best effort: on any decode failure the preview simply stays on screen.
             AppLog.Error($"ZoomDetail original decode failed token={target.Token} path={target.Path}", ex);
+            if (ReferenceEquals(_target, target)) _failedToken = target.Token;
             return;
         }
         finally

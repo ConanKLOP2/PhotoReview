@@ -472,6 +472,9 @@ public sealed class ImagePresenter
         }
     }
 
+    /// <summary>True when <paramref name="path"/> belongs to a numbered compare pair (lets the compare key open compare while it is closed).</summary>
+    public bool HasComparePair(string path) => GetComparePair(path) is not null;
+
     private (string Left, string Right)? GetComparePair(string path)
     {
         lock (_compareIndexGate)

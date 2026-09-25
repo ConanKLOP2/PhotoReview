@@ -61,5 +61,11 @@ public class SiblingFolderServiceTests : IDisposable
         var end = SiblingFolderService.GetTarget(_folderC, 1);
         Assert.Null(end);
     }
-}
 
+    [Fact]
+    public void GetTarget_FolderPathWithTrailingSeparator_StillFindsSiblings()
+    {
+        var target = SiblingFolderService.GetTarget(_folderA + Path.DirectorySeparatorChar, 1);
+        Assert.Equal(_folderB, target);
+    }
+}

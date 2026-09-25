@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.App.Localization;
+using PhotoReview.App.Services;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
@@ -103,8 +104,13 @@ public partial class SettingsWindow : Window
     private void OpenLanguagesFolder_Click(object sender, RoutedEventArgs e)
     {
         if (_localization is null) return;
-        Directory.CreateDirectory(_localization.UserLanguagesDir);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_localization.UserLanguagesDir}\"") { UseShellExecute = true });
+        try { Directory.CreateDirectory(_localization.UserLanguagesDir); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowOpenFailed(ex);
+            return;
+        }
+        StartExplorer($"\"{_localization.UserLanguagesDir}\"");
     }
 
     private void ReloadTranslations_Click(object sender, RoutedEventArgs e)
@@ -130,15 +136,29 @@ public partial class SettingsWindow : Window
             return;
         }
         AppLog.Info("Translation export written");
-        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        StartExplorer($"/select,\"{path}\"");
     }
 
     private void OpenLogLocation_Click(object sender, RoutedEventArgs e)
     {
         var directory = Path.GetDirectoryName(AppLog.FilePath)!;
-        Directory.CreateDirectory(directory);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{AppLog.FilePath}\"") { UseShellExecute = true });
+        try { Directory.CreateDirectory(directory); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowOpenFailed(ex);
+            return;
+        }
+        StartExplorer($"/select,\"{AppLog.FilePath}\"");
     }
+
+    private void StartExplorer(string arguments)
+    {
+        try { Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { ShowOpenFailed(ex); }
+    }
+
+    private void ShowOpenFailed(Exception ex) =>
+        System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogSettingsOpenFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
 
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
     {
@@ -190,7 +210,7 @@ public partial class SettingsWindow : Window
     {
         AppLog.Info("Settings save requested");
         var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
-        if (values.Any(v => !Enum.TryParse<Key>(v, true, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
+        if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
             System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidShortcuts, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return;
         }
@@ -212,7 +232,7 @@ public partial class SettingsWindow : Window
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
             if (Settings.Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) ||
-                !Enum.TryParse<Key>(action.Shortcut, true, out _) ||
+                !ShortcutKeyName.TryParse(action.Shortcut, out _) ||
                 !Enum.IsDefined(action.Operation)))
                 throw new JsonException("An action has no name, an invalid shortcut or an invalid operation."); // never shown (caught below)
             if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
@@ -224,10 +244,20 @@ public partial class SettingsWindow : Window
         if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (_localization is not null)
             Settings.UiLanguage = LanguageOptions.ToSetting(LanguageCombo.SelectedItem as LanguageOption, Settings.UiLanguage);
-        if (_store is not null)
-            _store.Save(Settings);
-        else
-            AppSettings.Save(Settings);
+        try
+        {
+            if (_store is not null)
+                _store.Save(Settings);
+            else
+                AppSettings.Save(Settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Keep the dialog open so the edits are not lost; the user sees why nothing was saved.
+            AppLog.Error("Settings save failed", ex);
+            System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogSettingsSaveFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         AppLog.Info("Settings saved");
         // Q-L8: the new language applies live (UI thread, ADR 0005); every {loc:Tr} text follows the switch.
         if (_localization is not null && !string.Equals(_localization.RequestedLanguage, Settings.UiLanguage, StringComparison.OrdinalIgnoreCase))
@@ -239,7 +269,10 @@ public partial class SettingsWindow : Window
     {
         if (sender is not System.Windows.Controls.TextBox textBox) return;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+        // An active IME (Vietnamese) reports ImeProcessed; the real key is in ImeProcessedKey.
+        if (key == Key.ImeProcessed) key = e.ImeProcessedKey;
+        // Tab/Escape/modifiers and anything else that can never be a shortcut must not be swallowed (focus trap, Esc cancel).
+        if (ShortcutKeyName.IsReserved(key)) return;
         textBox.Text = key.ToString();
         textBox.SelectAll();
         e.Handled = true;

@@ -475,6 +475,36 @@ public class PerfAnalyzeTests
         Assert.False(double.IsNaN(summary.RenderedFrameP95));
     }
 
+    [Fact(DisplayName = "A group with no complete navs (NaN percentiles) still gets a summary.json")]
+    public async Task PerfAnalyzeWithOnlyIncompleteNavsStillWritesJson()
+    {
+        var runDir = Path.Combine(Path.GetTempPath(), "PhotoReview-PerfAnalyze-Incomplete-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(runDir);
+        File.WriteAllText(Path.Combine(runDir, "perf-1-x.csv"),
+            "# commit=test diag= qpcFrequency=5000000\n" +
+            "utcTicks,qpcTicks,thread,event,nav,pathId,a,b,c,d,text\n" +
+            "1,1000,1,ShowStart,1,,0,,,,Preview\n");
+
+        var result = await PerfAnalyze.RunAsync(runDir, rulesPath: null);
+
+        Assert.True(File.Exists(result.SummaryJsonPath));
+        var json = File.ReadAllText(result.SummaryJsonPath);
+        Assert.Contains("\"groups\"", json);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var firstVisual = doc.RootElement.GetProperty("groups")[0].GetProperty("firstVisualMs");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, firstVisual.GetProperty("p50").ValueKind); // null, never a "NaN" string where consumers expect a number
+    }
+
+    [Theory]
+    [InlineData("S3", true)]
+    [InlineData("s4@F1", true)]
+    [InlineData("S3-burst@F2", true)]
+    [InlineData("S2@pics3", false)]
+    [InlineData("S30", false)]
+    [InlineData("S2@class4", false)]
+    public void BurstScenarioMatchesTheScenarioPartOnly(string key, bool expected) =>
+        Assert.Equal(expected, PerfAnalyze.IsBurstScenario(key));
+
     [Fact]
     public async Task PerfAnalyzeThrowsWhenNoCsvFilesArePresent()
     {

@@ -13,6 +13,8 @@ public sealed class ActionDestinationPolicyTests
     [InlineData("a/../../x", ActionDestinationCheck.EscapesSourceFolder)]
     [InlineData("D:\\Backup", ActionDestinationCheck.Ok)]
     [InlineData("\\\\server\\share\\x", ActionDestinationCheck.Ok)]
+    [InlineData("\\photos", ActionDestinationCheck.InvalidChars)]
+    [InlineData("/photos", ActionDestinationCheck.InvalidChars)]
     [InlineData("a|b", ActionDestinationCheck.InvalidChars)]
     [InlineData("a:b", ActionDestinationCheck.InvalidChars)]
     [InlineData("", ActionDestinationCheck.Empty)]

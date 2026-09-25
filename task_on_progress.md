@@ -1,11 +1,15 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `2d52f6d` (#76 merged) | **Branch:** `docs/decisions-q-r7-r11`
+**Updated:** 2026-09-25 | **Base:** master `633ea3c` (#76-#80 merged) | **Branch:** `review/2026-09-25-round3`
 
-## Now: round-2 decisions implemented, PRs #77 #78 #79 open
+## Now: round-2 decisions merged (#77-#80); rounds 3+4 on a branch, PR pending
 
-- **User:** review + merge #77 (Q-R7), #78 (Q-R10, needs a GUI check: multi-select open from Explorer), #79 (Q-R8); the real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven); visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
+- **User:** open + merge the round 3+4 PR; GUI check of #78 (multi-select open from Explorer); the real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven); visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
 - **Plan / evidence:** [plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
+
+## Review rounds 3+4 (2026-09-25, branch `review/2026-09-25-round3`, PR pending)
+
+- Q-R12..Q-R16 decided and implemented; round-3/4 fixes, deferred items and gate results: [ROUND3-4](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md). Gate green (0 warnings, non-Manual/Native/Slow tests).
 
 ## Status by Group
 

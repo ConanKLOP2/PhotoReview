@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -115,6 +115,20 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.DoesNotContain(nameof(ViewerState.ImageHeight), changed);
     }
 
+    [Fact(DisplayName = "Zooming out from a Fit below the minimum zoom never enlarges the image")]
+    public void ZoomOut_FromFitBelowMinZoom_LeavesFitUntouched()
+    {
+        var viewer = new ViewerState { DpiScale = 1.0 };
+        viewer.SetSourceSize(12000, 8000);
+        viewer.ResetFit(1500, 1000); // fit = 0.125 < MinZoom
+
+        viewer.ZoomOut();
+        viewer.WheelZoom(-120);
+
+        Assert.True(viewer.IsFit);
+        Assert.Equal(0.125, viewer.FitZoom, 6);
+    }
+
     [Fact]
     public void ZoomStep_FromFit_StartsAtTheFitZoomInsteadOf100Percent()
     {
@@ -205,6 +219,28 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.Equal(6000, _viewer.ImageWidth, 6);
         Assert.Equal(4000, _viewer.ImageHeight, 6);
         Assert.Equal(1, decoder.OriginalDecodes);
+    }
+
+    [Fact(DisplayName = "A failed full-resolution decode is not retried on every further zoom step")]
+    public async Task FailedOriginalDecode_IsNotRetriedOnNextZoomStep()
+    {
+        var decoder = new SizedDecoder { OriginalGate = new SemaphoreSlim(0), FailOriginal = true };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+
+        _viewer.SetZoom(1.0);
+        var load = presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        decoder.OriginalGate.Release();
+        await load!;
+        Assert.Equal(1, decoder.OriginalDecodes);
+
+        _viewer.SetZoom(2.0);
+        _viewer.SetZoom(3.0);
+
+        Assert.Null(presenter.ZoomDetail.PendingLoad);
+        Assert.Equal(1, decoder.OriginalDecodes);
+        Assert.False(presenter.ZoomDetail.IsShowingOriginal);
     }
 
     [Fact]
@@ -440,6 +476,7 @@ public sealed class ZoomDetailTests : IDisposable
         public int OriginalHeight { get; init; } = 4000;
         public int PreviewWidth { get; init; } = 600;
         public SemaphoreSlim? OriginalGate { get; init; }
+        public bool FailOriginal { get; init; }
         public Dictionary<string, SemaphoreSlim> GateByName { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int OriginalDecodes => Volatile.Read(ref _originalDecodes);
 
@@ -449,6 +486,7 @@ public sealed class ZoomDetailTests : IDisposable
             {
                 Interlocked.Increment(ref _originalDecodes);
                 (GateByName.TryGetValue(Path.GetFileName(request.Path), out var gate) ? gate : OriginalGate)?.Wait();
+                if (FailOriginal) throw new InvalidOperationException("original decode failed");
                 return new SizedImage(OriginalWidth, OriginalHeight, OriginalWidth, OriginalHeight, downscaled: false);
             }
             return new SizedImage(PreviewWidth, PreviewWidth * OriginalHeight / OriginalWidth, OriginalWidth, OriginalHeight, downscaled: true);

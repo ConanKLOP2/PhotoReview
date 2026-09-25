@@ -1,6 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
 
+// Load turbojpeg.dll only from the application folder: without this Windows falls back to its default search order
+// (working directory, PATH) and a planted turbojpeg.dll would be loaded into the process. A missing DLL simply reports "unavailable".
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory)]
+
 namespace PhotoReview.Imaging.TurboJpeg.Native;
 
 public enum TjInit

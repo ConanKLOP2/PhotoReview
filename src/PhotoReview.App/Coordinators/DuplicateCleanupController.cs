@@ -73,7 +73,7 @@ public sealed class DuplicateCleanupController
             remove = await DuplicateFinder.FindAsync(
                 candidates,
                 removeNumbered,
-                (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
+                (path, ct) => _hashService?.GetAsync(path, ct) ?? throw new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
                 _fileSystem,
                 System.Threading.CancellationToken.None);
         }
@@ -93,6 +93,15 @@ public sealed class DuplicateCleanupController
         if (remove.Count == 0)
         {
             _sink.SetStatusText(StatusFormatter.NoDuplicatesFound());
+            return;
+        }
+
+        // Q-R14: batch cleanup never deletes permanently. Say so once, up front, instead of one refusal per file after the confirmation.
+        var withoutBin = remove.FirstOrDefault(_fileActionService.LacksRecycleBin);
+        if (withoutBin is not null)
+        {
+            _sink.SetStatusText(StatusFormatter.BatchCanceled());
+            _dialogService?.ShowError(Tr.DialogBatchErrorsTitle, Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(withoutBin)));
             return;
         }
 

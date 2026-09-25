@@ -73,7 +73,7 @@ public static class PreviewCacheFile
         ArgumentNullException.ThrowIfNull(image);
         if (image.PlatformImage is not BitmapSource bitmap)
             throw new ArgumentException("PlatformImage must be a BitmapSource for the preview cache.", nameof(image));
-        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, jpegQuality, cancellationToken);
+        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, jpegQuality, cancellationToken: cancellationToken);
     }
 
     /// <summary>Public, framework-agnostic entry point: reads a v5 entry back as an <see cref="IDecodedImage"/>.</summary>
@@ -100,13 +100,14 @@ public static class PreviewCacheFile
         int originalHeight,
         string cachePath,
         int jpegQuality = DefaultJpegQuality,
+        bool opacityVerified = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
         // IMG-01: JPEG cannot carry alpha; refuse so a future caller cannot silently flatten transparency.
         // Q-R7: alpha-capable formats are accepted only when every pixel is actually opaque.
-        if (!IsFullyOpaque(bitmap)) throw new ArgumentException("Bitmaps with transparent pixels cannot be stored in the JPEG preview cache.", nameof(bitmap));
+        if (!opacityVerified && !IsFullyOpaque(bitmap)) throw new ArgumentException("Bitmaps with transparent pixels cannot be stored in the JPEG preview cache.", nameof(bitmap));
         if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
