@@ -163,7 +163,7 @@ public partial class App : System.Windows.Application, IDisposable
                 workerCountOverride: settingsStore.Current.PreloadWorkerCount,
                 log: sp.GetService<ILog>(),
                 prefetchSourceBytes: sourceBytesCache is not null
-                    ? (path, token) => Task.Run(() => sourceBytesCache.GetOrRead(path), token)
+                    ? (path, token) => Task.Run(() => sourceBytesCache.TryPrefetch(path), token)
                     : null);
             });
 
