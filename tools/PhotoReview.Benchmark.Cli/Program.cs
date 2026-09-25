@@ -40,9 +40,9 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
         try
         {
-            // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior.
-            var report = await BenchmarkEngine.RunAsync(folder, profile,
-                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, recycleBin, token),
+            // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior, with the same
+            // setup/measure split (R2-F-14): scratch copies and cold-cache eviction stay out of the samples.
+            var report = await BenchmarkWorkloadRunner.RunProfileAsync(folder, profile, imageExecutor, files, random, recycleBin,
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
             reports.Add(report);
             outcomes.Add(report.Phases[0]);
@@ -96,9 +96,9 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
     await RunCliBenchmarksAsync(benchmarkFolder, requested, output);
     return;
 }
-if (args.Length == 2 && args[0] == "--ui-next-probe")
+if (args.Length is 2 or 4 && args[0] == "--ui-next-probe" && (args.Length == 2 || args[2] == "--cache-dir"))
 {
-    await LocalUiNextProbe.RunAsync(args[1]);
+    await LocalUiNextProbe.RunAsync(args[1], args.Length == 4 ? args[3] : null);
     return;
 }
 
@@ -159,7 +159,7 @@ Console.Error.WriteLine("PhotoReview.Benchmark.Cli: unknown or missing mode. Sup
 foreach (var mode in new[]
 {
     "--benchmark-list-profiles", "--benchmark <folder> <profile,...>", "--benchmark-all <folder> [output]", "--benchmark-actions <folder> [output]",
-    "--ui-next-probe <folder>", "--perf-session ...", "--preload-bench <folder> [n]", "--perf-analyze <dir> [--rules <file>]",
+    "--ui-next-probe <folder> [--cache-dir DIR]", "--perf-session ...", "--preload-bench <folder> [n]", "--perf-analyze <dir> [--rules <file>]",
     "--io-decode-split ...", "--decoder-bench ...", "--explorer-probe <folder>",
 })
     Console.Error.WriteLine("  " + mode);

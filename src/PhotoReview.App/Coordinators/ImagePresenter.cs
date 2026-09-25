@@ -111,6 +111,13 @@ public sealed class ImagePresenter
     public int CurrentOriginalHeight { get; private set; }
 
     public string StatusText { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// True when the latest <see cref="PresentAsync"/> found its preview already in the RAM cache, i.e. it showed the
+    /// image straight away instead of the loading status. A language-independent state for probes and tests.
+    /// </summary>
+    public bool LastPresentStartedFromRam { get; private set; }
+
     public bool IsCompareVisible => _compareViewModel.IsVisible;
 
     /// <summary>feat(zoom): on-demand full-resolution decode of the current image while zoomed.</summary>
@@ -144,6 +151,7 @@ public sealed class ImagePresenter
     public async Task PresentAsync(int index, bool allowCompare = true)
     {
         if (index < 0 || index >= _catalog.Count) return;
+        LastPresentStartedFromRam = false;
 
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var presentStopwatch = Stopwatch.StartNew();
@@ -199,6 +207,7 @@ public sealed class ImagePresenter
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
         var ramReady = _previewService.TryGetCachedPreview(currentKey, out var readyImage);
+        LastPresentStartedFromRam = ramReady;
         var hasInflight = !ramReady && _previewService.HasInflightPreview(currentKey);
         if (perf)
         {

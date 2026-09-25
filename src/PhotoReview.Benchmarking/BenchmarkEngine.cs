@@ -48,13 +48,16 @@ public sealed class BenchmarkEngine
         ReviewMetricsSnapshot? metrics = null;
         var allCorrect = true;
         var total = profile.Iterations;
+        // Executors report cumulative metrics; the last warm-up's snapshot is the baseline subtracted from the
+        // final one, so the report's reads/hits cover the measured iterations only.
+        ReviewMetricsSnapshot? warmupBaseline = null;
         for (var w = 0; w < profile.WarmupCount; w++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var warmup = await operation(profile, profile.Workload, w, cancellationToken).ConfigureAwait(false);
-                await warmup().ConfigureAwait(false);
+                warmupBaseline = (await warmup().ConfigureAwait(false)).Metrics ?? warmupBaseline;
             }
             catch (OperationCanceledException)
             {
@@ -96,6 +99,7 @@ public sealed class BenchmarkEngine
             FileLog.Default.Info($"Benchmark sample runId={runId} profile={profile.Id} phase={profile.Workload} iteration={i + 1}/{total} elapsedMs={elapsed.TotalMilliseconds:F1} correct={result.Correct}");
             progress?.Report(new(profile.Id, profile.Workload, i + 1, total, result.Correct ? ProgressOk : ProgressCorrectnessFailed));
         }
+        if (metrics is not null && warmupBaseline is not null) metrics = BenchmarkMetrics.Since(metrics, warmupBaseline);
         var correct = samples.Count > 0 && allCorrect;
         var phase = new BenchmarkPhaseResult(profile.Id, profile.Workload, samples,
             samples.Count == 0 ? BenchmarkResultStatus.InsufficientData : correct ? BenchmarkResultStatus.Pass : BenchmarkResultStatus.Fail,

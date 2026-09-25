@@ -20,18 +20,6 @@ namespace PhotoReview.Integration.Tests;
 [Collection("GlobalState")]
 public partial class MainWindowBehaviorTests
 {
-    private const string FitTestFolder = @"C:\temp\photoreview-fit-test";
-
-    static MainWindowBehaviorTests()
-    {
-        // Cleanup old folder
-        if (Directory.Exists(FitTestFolder))
-        {
-            try { Directory.Delete(FitTestFolder, true); } catch { }
-        }
-        Directory.CreateDirectory(FitTestFolder);
-    }
-
     /// <summary>
     /// DF02 Case 1: Zoom 200%, double-click main image → Fit converges (Zoom=1, Stretch=Uniform, offset=0).
     /// This is the primary happy path; must FAIL on baseline (no double-click handler yet).
@@ -40,6 +28,7 @@ public partial class MainWindowBehaviorTests
     public async Task DoubleClickFit_From200Percent_ConvergesTo1x()
     {
         using var dataRoot = new DataRootFixture();
+        using var fitFolder = new TempRoot("fit");
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -47,12 +36,12 @@ public partial class MainWindowBehaviorTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                WriteTestImages(FitTestFolder, "square.png");
+                WriteTestImages(fitFolder.Path, "square.png");
                 var hooks = new TestHostHooks
                 {
                     OnPresented = path => presented.Add(path),
                 };
-                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
+                window = TestAppHost.CreateMainWindow(fitFolder.Path, hooks);
 
                 // Wait for image load
                 Assert.True(
@@ -115,6 +104,7 @@ public partial class MainWindowBehaviorTests
     public async Task DoubleClickFit_AlreadyFit_NoChange()
     {
         using var dataRoot = new DataRootFixture();
+        using var fitFolder = new TempRoot("fit");
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -122,9 +112,9 @@ public partial class MainWindowBehaviorTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                WriteTestImages(FitTestFolder, "test.png");
+                WriteTestImages(fitFolder.Path, "test.png");
                 var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
-                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
+                window = TestAppHost.CreateMainWindow(fitFolder.Path, hooks);
 
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => presented.Count > 0 && window.ViewModel.Viewer.IsFit,
@@ -174,6 +164,7 @@ public partial class MainWindowBehaviorTests
     public async Task DoubleClickFit_SingleClick_DoesNotFit()
     {
         using var dataRoot = new DataRootFixture();
+        using var fitFolder = new TempRoot("fit");
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -181,9 +172,9 @@ public partial class MainWindowBehaviorTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                WriteTestImages(FitTestFolder, "test.png");
+                WriteTestImages(fitFolder.Path, "test.png");
                 var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
-                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
+                window = TestAppHost.CreateMainWindow(fitFolder.Path, hooks);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)));
 
@@ -229,6 +220,7 @@ public partial class MainWindowBehaviorTests
     public async Task DoubleClickFit_AfterPan_StillFits()
     {
         using var dataRoot = new DataRootFixture();
+        using var fitFolder = new TempRoot("fit");
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -236,9 +228,9 @@ public partial class MainWindowBehaviorTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                WriteTestImages(FitTestFolder, "test.png");
+                WriteTestImages(fitFolder.Path, "test.png");
                 var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
-                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
+                window = TestAppHost.CreateMainWindow(fitFolder.Path, hooks);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)));
 
@@ -288,6 +280,7 @@ public partial class MainWindowBehaviorTests
     public async Task DoubleClickFit_RightButton_DoesNotFit()
     {
         using var dataRoot = new DataRootFixture();
+        using var fitFolder = new TempRoot("fit");
         MainWindow? window = null;
         var presented = new List<string>();
 
@@ -295,9 +288,9 @@ public partial class MainWindowBehaviorTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                WriteTestImages(FitTestFolder, "test.png");
+                WriteTestImages(fitFolder.Path, "test.png");
                 var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
-                window = TestAppHost.CreateMainWindow(FitTestFolder, hooks);
+                window = TestAppHost.CreateMainWindow(fitFolder.Path, hooks);
 
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 0, TimeSpan.FromSeconds(10)));
 

@@ -321,6 +321,26 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.NotNull(presenter.CurrentImage);
     }
 
+    [Fact(DisplayName = "LastPresentStartedFromRam reports whether a present found its preview in RAM (the probe's language-independent loading check)")]
+    public async Task PresentAsync_LastPresentStartedFromRam_TracksRamHit()
+    {
+        var f1 = CreateFakeImageFile("state1.jpg");
+        var f2 = CreateFakeImageFile("state2.jpg");
+        _catalog.Reset([f1, f2]);
+        await _previewService.GetPreviewAsync(f2);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0); // cold: shows the loading status first
+        Assert.False(presenter.LastPresentStartedFromRam);
+
+        await presenter.PresentAsync(1); // warm: shown straight from RAM
+        Assert.True(presenter.LastPresentStartedFromRam);
+
+        _previewService.EvictCachedPath(f1, _ => { });
+        await presenter.PresentAsync(0); // cold again: the previous present's true must not leak
+        Assert.False(presenter.LastPresentStartedFromRam);
+    }
+
     [Fact]
     public async Task PresentAsync_TokenSuperseded_AbortsUiUpdates_PreservingInv1()
     {
