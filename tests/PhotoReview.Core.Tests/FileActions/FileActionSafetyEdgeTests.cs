@@ -170,4 +170,31 @@ public sealed class FileActionSafetyEdgeTests
 
         Assert.Single(journal.ReadFailedOperations());
     }
+
+    [Theory(DisplayName = "Retry refuses a source whose size or last-write time differs from the journal, and touches nothing")]
+    [InlineData(6, 0)]
+    [InlineData(5, 1)]
+    public async Task Retry_SourceChanged_IsRefused(int currentLength, int secondsOff)
+    {
+        var disk = new InMemoryFileSystem();
+        disk.AddFile(@"C:\photos\a.jpg", new string('x', currentLength), Stamp.AddSeconds(secondsOff));
+        var clock = new Clock();
+        var journal = new OperationJournal(Paths, disk, clock);
+        var failed = Move("chg", @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", JournalState.Failed); // journaled Size 5, Stamp
+        journal.Append(failed);
+
+        var result = await new RecoveryRetryService(journal, disk, clock).RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.CoreRecoverySourceChanged, result.Message);
+        Assert.True(disk.FileExists(@"C:\photos\a.jpg"));
+        Assert.False(disk.FileExists(@"C:\photos\sel\a.jpg"));
+    }
+
+    [Theory(DisplayName = "A '..' segment padded with spaces still escapes the photo folder")]
+    [InlineData(@".. \x")]
+    [InlineData(@"a\ .. \x")]
+    [InlineData(@" ..")]
+    public void Policy_PaddedParentSegment_Escapes(string destination) =>
+        Assert.Equal(ActionDestinationCheck.EscapesSourceFolder, ActionDestinationPolicy.Validate(destination));
 }
