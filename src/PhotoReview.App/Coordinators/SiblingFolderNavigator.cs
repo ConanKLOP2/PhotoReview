@@ -89,8 +89,20 @@ public sealed class SiblingFolderNavigator
         return new SiblingImageFolders(previous, next);
     }
 
-    private static int IndexOfFolder(IReadOnlyList<string> folders, string currentFolder) =>
-        folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
+    private static int IndexOfFolder(IReadOnlyList<string> folders, string currentFolder)
+    {
+        // Trim both sides: GetSorted trims, so a caller's trailing separator must not make the current folder "not found".
+        var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(currentFolder));
+        for (var i = 0; i < folders.Count; i++)
+        {
+            if (string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folders[i])), target, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 
     private string? FindImageFolder(IReadOnlyList<string> folders, int index, int direction, CancellationToken cancellationToken)
     {

@@ -796,11 +796,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         await OpenFolderAsync(folder, initialPath);
     }
 
-    void ISiblingNavigatorSink.NotifyNavigationStateChanged()
-    {
-        NotifyNavigationStateChanged();
-    }
-
     // IDuplicateCleanupSink implementation
     void IDuplicateCleanupSink.SetStatusText(string status)
     {
@@ -810,11 +805,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
     {
         await OpenFolderAsync(folder, initialPath);
-    }
-
-    void IDuplicateCleanupSink.NotifyNavigationStateChanged()
-    {
-        NotifyNavigationStateChanged();
     }
 
     // ---- "Move to… / Copy to…" ----
