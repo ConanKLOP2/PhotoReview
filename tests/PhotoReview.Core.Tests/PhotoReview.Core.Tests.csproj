@@ -15,6 +15,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
+    <!-- The i18n source generator is driven directly (CSharpGeneratorDriver) by LocalizationGeneratorTests. -->
+    <ProjectReference Include="..\..\src\PhotoReview.Localization.Generator\PhotoReview.Localization.Generator.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
   </ItemGroup>
 
   <ItemGroup>
