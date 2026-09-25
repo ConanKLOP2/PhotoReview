@@ -18,7 +18,7 @@ public sealed class SettingsValidatorTests
                 {
                     "Right", "Left", "Enter", "Delete", "C", "PageDown", "PageUp",
                     "Home", "Add", "Subtract", "F", "Space", "Z", "F11", "F3",
-                    "F4", "F5", "F6", "T", "D1", "D2", "D3", "D4"
+                    "F4", "F5", "F6", "T", "D1", "D2", "D3", "D4", "End", "I"
                 };
         }
 

@@ -45,6 +45,21 @@ public class AppSettings
     /// </summary>
     public bool AllowPermanentDeleteWithoutRecycleBin { get; set; }
 
+    /// <summary>
+    /// Master switch for the on-image info overlays (<see cref="ShowFileInfo"/>, <see cref="ShowFolderInfo"/>).
+    /// Flipped at runtime by <see cref="ShortcutMappings.ToggleInfoOverlay"/> and persisted. Absent in older configs = true.
+    /// </summary>
+    public bool ShowInfoOverlay { get; set; } = true;
+
+    /// <summary>Bottom-left file status block (position/count, size, name, dimensions). Absent in older configs = true.</summary>
+    public bool ShowFileInfo { get; set; } = true;
+
+    /// <summary>
+    /// Bottom-right folder block: current folder and the sibling image folders that PageUp/PageDown would open.
+    /// Absent in older configs = true. When hidden the siblings are not computed at all (no disk I/O).
+    /// </summary>
+    public bool ShowFolderInfo { get; set; } = true;
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }

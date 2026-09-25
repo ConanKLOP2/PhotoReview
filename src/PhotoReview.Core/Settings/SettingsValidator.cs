@@ -1,3 +1,4 @@
+using System.Reflection;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
 
@@ -16,10 +17,12 @@ public sealed class SettingsValidator
     {
         ArgumentNullException.ThrowIfNull(settings);
         var bindings = new List<(string Name, string Value)>();
-        foreach (var property in typeof(ShortcutMappings).GetProperties())
+        foreach (var property in typeof(ShortcutMappings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue; // Legacy alias; Enter is owned by ReviewAction.
             var value = property.GetValue(settings.Shortcuts)?.ToString()?.Trim();
+            // Optional shortcuts (LastImage, ZoomActualSize, ToggleInfoOverlay): empty = feature disabled, not an error.
+            if (string.IsNullOrEmpty(value) && ShortcutMappings.IsOptional(property.Name)) continue;
             if (string.IsNullOrWhiteSpace(value) || !_keyValidator.IsValidKeyName(value))
                 return Tr.CoreSettingsShortcutInvalid(property.Name);
             bindings.Add((property.Name, value));

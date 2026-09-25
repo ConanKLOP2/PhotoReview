@@ -215,8 +215,26 @@ public partial class MainWindow : Window
     private async void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         e.Handled = true;
-        var mouse = e.GetPosition(ImageScroll);
-        var elementPoint = ImageScroll.TranslatePoint(mouse, MainImage);
+        var delta = e.Delta;
+        await ZoomAroundAsync(e.GetPosition(ImageScroll), () => _viewModel.Viewer.WheelZoom(delta));
+    }
+
+    /// <summary>ZoomActualSize: 100 % (ADR 0008) keeping the image point at the viewport centre in place.</summary>
+    private async Task ZoomActualSizeAsync()
+    {
+        if (!_viewModel.HasImages) return;
+        CancelPan();
+        var centre = new Point(ImageScroll.ViewportWidth / 2, ImageScroll.ViewportHeight / 2);
+        await ZoomAroundAsync(centre, _viewModel.ZoomActualSize);
+    }
+
+    /// <summary>
+    /// Applies <paramref name="applyZoom"/> and scrolls so the image point under <paramref name="anchor"/> (in
+    /// ImageScroll coordinates) stays under it: the wheel's mouse position, or the viewport centre for ZoomActualSize.
+    /// </summary>
+    private async Task ZoomAroundAsync(Point anchor, Action applyZoom)
+    {
+        var elementPoint = ImageScroll.TranslatePoint(anchor, MainImage);
         var anchorBefore = MainImage.TranslatePoint(elementPoint, ImageScroll);
         // feat(zoom): the element is sized from original dims x zoom (no LayoutTransform), so the
         // anchor is carried across the zoom step as a fraction of the displayed image.
@@ -237,7 +255,7 @@ public partial class MainWindow : Window
             anchorFraction = MainWindowHelpers.NormalizeImagePoint(elementPoint.X, elementPoint.Y, MainImage.ActualWidth, MainImage.ActualHeight);
         }
         var version = ++_viewportOperationVersion;
-        _viewModel.Viewer.WheelZoom(e.Delta);
+        applyZoom();
         await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
         if (version != _viewportOperationVersion || !IsLoaded) return;
         ImageScroll.UpdateLayout();
@@ -372,6 +390,9 @@ public partial class MainWindow : Window
             case ReviewCommandType.NextFolder: await _viewModel.NavigateSiblingFolderAsync(1); break;
             case ReviewCommandType.PreviousFolder: await _viewModel.NavigateSiblingFolderAsync(-1); break;
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
+            case ReviewCommandType.LastImage: await _viewModel.LastImageAsync(); break;
+            case ReviewCommandType.ToggleInfoOverlay: _viewModel.ToggleInfoOverlay(); break;
+            case ReviewCommandType.ZoomActualSize: await ZoomActualSizeAsync(); break;
             case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.RunAction:

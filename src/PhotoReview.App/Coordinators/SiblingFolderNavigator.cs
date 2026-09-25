@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
@@ -63,11 +64,39 @@ public sealed class SiblingFolderNavigator
     private string? FindNextImageFolder(string currentFolder, int direction)
     {
         var folders = SiblingFolderService.GetSorted(currentFolder);
-        var index = folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
-        if (index < 0) return null;
+        var index = IndexOfFolder(folders, currentFolder);
+        return index < 0 ? null : FindImageFolder(folders, index, direction, CancellationToken.None);
+    }
 
+    /// <summary>
+    /// The sibling image folders that <see cref="NavigateSiblingFolderAsync"/> would open from
+    /// <paramref name="currentFolder"/> with direction -1 (<see cref="SiblingImageFolders.Previous"/>) and +1
+    /// (<see cref="SiblingImageFolders.Next"/>): the same search, so the info overlay never disagrees with the key.
+    /// Blocking directory I/O -- call it off the UI thread. Cost: one listing of the parent folder, then per direction the
+    /// file listings of the siblings up to the first one that contains a supported image (metadata only; the listing
+    /// stops at the first image file, no file content is read).
+    /// </summary>
+    public SiblingImageFolders FindSiblingImageFolders(string currentFolder, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentFolder);
+        var fullFolder = Path.GetFullPath(currentFolder);
+        var folders = SiblingFolderService.GetSorted(fullFolder);
+        cancellationToken.ThrowIfCancellationRequested();
+        var index = IndexOfFolder(folders, fullFolder);
+        if (index < 0) return default;
+        var previous = FindImageFolder(folders, index, -1, cancellationToken);
+        var next = FindImageFolder(folders, index, 1, cancellationToken);
+        return new SiblingImageFolders(previous, next);
+    }
+
+    private static int IndexOfFolder(IReadOnlyList<string> folders, string currentFolder) =>
+        folders.ToList().FindIndex(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(currentFolder), StringComparison.OrdinalIgnoreCase));
+
+    private string? FindImageFolder(IReadOnlyList<string> folders, int index, int direction, CancellationToken cancellationToken)
+    {
         for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var candidates = _fileSystem.EnumerateFiles(folders[i], "*")
@@ -80,3 +109,6 @@ public sealed class SiblingFolderNavigator
         return null;
     }
 }
+
+/// <summary>The sibling image folders PageUp (<see cref="Previous"/>) and PageDown (<see cref="Next"/>) would open; null = none.</summary>
+public readonly record struct SiblingImageFolders(string? Previous, string? Next);

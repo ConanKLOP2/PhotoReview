@@ -13,6 +13,9 @@ public sealed class ShortcutRouter
     private Key? _nextFolderKey;
     private Key? _prevFolderKey;
     private Key? _firstImageKey;
+    private Key? _lastImageKey;
+    private Key? _toggleInfoOverlayKey;
+    private Key? _zoomActualSizeKey;
     private Key? _undoKey;
     private Key? _compareKey;
     private readonly List<(Key Key, int Index)> _actionKeys = [];
@@ -43,6 +46,10 @@ public sealed class ShortcutRouter
         _nextFolderKey = ParseKey(settings.Shortcuts.NextFolder);
         _prevFolderKey = ParseKey(settings.Shortcuts.PreviousFolder);
         _firstImageKey = ParseKey(settings.Shortcuts.FirstImage);
+        // Optional shortcuts: empty or unparseable = no key (feature disabled).
+        _lastImageKey = ParseKey(settings.Shortcuts.LastImage);
+        _toggleInfoOverlayKey = ParseKey(settings.Shortcuts.ToggleInfoOverlay);
+        _zoomActualSizeKey = ParseKey(settings.Shortcuts.ZoomActualSize);
         _undoKey = ParseKey(settings.Shortcuts.Undo);
         _compareKey = ParseKey(settings.Shortcuts.Compare);
         _recycleKey = ParseKey(settings.Shortcuts.SendToRecycleBin);
@@ -110,10 +117,22 @@ public sealed class ShortcutRouter
             return hasImage ? ReviewCommand.FirstImage : null;
         }
 
+        // 4b. Tới ảnh cuối cùng (cùng nhóm với FirstImage, chỉ tác dụng khi có ảnh)
+        if (_lastImageKey.HasValue && key == _lastImageKey.Value)
+        {
+            return hasImage ? ReviewCommand.LastImage : null;
+        }
+
         // 5. Undo Move: yêu cầu phím khớp và giữ Ctrl
         if (_undoKey.HasValue && key == _undoKey.Value && (modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {
             return ReviewCommand.Undo;
+        }
+
+        // 5b. Bật/tắt lớp thông tin trên ảnh: không cần ảnh (chỉ đổi hiển thị và lưu cài đặt)
+        if (_toggleInfoOverlayKey.HasValue && key == _toggleInfoOverlayKey.Value)
+        {
+            return ReviewCommand.ToggleInfoOverlay;
         }
 
         // 6. Nhóm lệnh sau if (_index < 0) return: chỉ chạy khi có ảnh hợp lệ
@@ -167,6 +186,10 @@ public sealed class ShortcutRouter
         if (_zoomOutKey.HasValue && key == _zoomOutKey.Value)
         {
             return ReviewCommand.ZoomOut;
+        }
+        if (_zoomActualSizeKey.HasValue && key == _zoomActualSizeKey.Value)
+        {
+            return ReviewCommand.ZoomActualSize;
         }
 
         // 13. Next / Previous
