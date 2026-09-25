@@ -385,12 +385,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     private async Task UndoCoreAsync()
     {
-        var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path);
+        var currentFolder = _currentSession?.Folder;
+        var result = await _fileActionController.UndoLastAsync(currentFolder);
 
-        // Handle Recycle Undo which needs folder change
-        if (result?.Succeeded == true && result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
+        // Recycle undo, or a Move made in a previous folder (R7-2): open the restored file's folder at that file.
+        if (FileActionController.RestoresOutsideFolder(result, currentFolder))
         {
-            var folder = Path.GetDirectoryName(result.Source);
+            var folder = Path.GetDirectoryName(result!.Source);
             if (!string.IsNullOrEmpty(folder))
             {
                 await OpenFolderAsync(folder, result.Source);

@@ -194,7 +194,8 @@ public sealed class FileActionController
         }
     }
 
-    public async Task<UndoResult?> UndoLastAsync(string? currentPath)
+    /// <param name="currentFolder">The folder open when the undo started; a Move restored elsewhere is not inserted here.</param>
+    public async Task<UndoResult?> UndoLastAsync(string? currentFolder)
     {
         if (_undoService is null) return null;
 
@@ -209,7 +210,10 @@ public sealed class FileActionController
 
         if (!_clock.IsFolderCurrent(folderGen)) return result;
 
-        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
+        // R7-2: a Move made in another folder is restored there, not into this folder's catalog; the caller opens
+        // that folder at the restored file, as for a Recycle undo (see RestoresOutsideFolder).
+        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
+            && IsInFolder(result.Source, currentFolder))
         {
             _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
             _sink.OnCatalogChanged(null);
@@ -228,5 +232,32 @@ public sealed class FileActionController
 
         _sink.NotifyNavigationStateChanged();
         return result;
+    }
+
+    /// <summary>
+    /// R7-2: a successful undo whose restored file is not in <paramref name="currentFolder"/> -- a Recycle (always
+    /// reloaded) or a Move made in a previous folder -- so the caller opens the file's folder at that file.
+    /// </summary>
+    public static bool RestoresOutsideFolder(UndoResult? result, string? currentFolder) =>
+        result is { Succeeded: true } && !string.IsNullOrEmpty(result.Source)
+        && (result.Operation == FileOperationType.Recycle
+            || (result.Operation == FileOperationType.Move && !IsInFolder(result.Source, currentFolder)));
+
+    private static bool IsInFolder(string path, string? folder)
+    {
+        if (string.IsNullOrEmpty(folder)) return false;
+        var parent = Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(parent)) return false;
+        try
+        {
+            return string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 }

@@ -498,6 +498,32 @@ public sealed class MainViewModelFileActionTests : IDisposable
         Assert.True(File.Exists(img1));
     }
 
+    [Fact(DisplayName = "R7-2: undoing a Move made in a previous folder opens that folder at the file, not the current catalog")]
+    public async Task UndoAsync_MoveFromPreviousFolder_OpensThatFolderInsteadOfInsertingHere()
+    {
+        var folderA = Path.Combine(_tempDir, "undo_prev_a");
+        var folderB = Path.Combine(_tempDir, "undo_prev_b");
+        Directory.CreateDirectory(folderA);
+        Directory.CreateDirectory(folderB);
+        var imgA = CreateImageFile(folderA, "1.jpg");
+        CreateImageFile(folderA, "2.jpg");
+        var imgB = CreateImageFile(folderB, "x.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folderA);
+        await vm.RunActionAsync(0); // Move A\1.jpg to A\Sorted
+        await vm.OpenFolderAsync(folderB);
+        Assert.Equal([imgB], vm.Catalog.Paths);
+
+        await vm.UndoAsync();
+
+        Assert.True(File.Exists(imgA));
+        Assert.Equal(folderA, vm.Session?.Folder);
+        Assert.Equal(2, vm.TotalFiles);
+        Assert.DoesNotContain(imgB, vm.Catalog.Paths);
+        Assert.Equal(imgA, vm.Catalog.Current?.Path);
+    }
+
     [Fact]
     public async Task OC14_UndoDuringFileAction_IsNoOp_AndGateReleasedAfter()
     {
