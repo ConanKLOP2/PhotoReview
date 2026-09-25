@@ -78,6 +78,23 @@ public sealed class PreloadSafetyTests : IDisposable
         scheduler.Dispose(); // idempotent
     }
 
+    [Fact(DisplayName = "Dispose does not hold its caller for a worker that ignores cancellation")]
+    public async Task Dispose_WorkerIgnoresCancellation_ReturnsWithinDrainTimeout()
+    {
+        using var gate = new SemaphoreSlim(0);
+        using var target = new RecordingTarget(uncancellableGate: gate);
+        var scheduler = Create(target, new FakeMemoryProbe(true), workerCount: 2);
+        scheduler.DisposeDrainTimeout = TimeSpan.FromMilliseconds(200);
+        _ = scheduler.PreloadAroundAsync(0);
+        await target.WaitForStartsAsync(1);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await Task.Run(scheduler.Dispose).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Dispose blocked for {stopwatch.Elapsed}.");
+        gate.Release(8); // let the abandoned workers finish
+    }
+
     [Fact]
     public async Task CancelThenRestart_UsesFreshLifetime_AndDisposeStopsIt()
     {
@@ -137,7 +154,7 @@ public sealed class PreloadSafetyTests : IDisposable
         public long GetAvailableMemoryBytes() => hasHeadroom() ? 16L * 1024 * 1024 * 1024 : 0;
     }
 
-    private sealed class RecordingTarget(bool blockUntilCancellation = false) : IPreloadTarget, IDisposable
+    private sealed class RecordingTarget(bool blockUntilCancellation = false, SemaphoreSlim? uncancellableGate = null) : IPreloadTarget, IDisposable
     {
         private readonly ConcurrentDictionary<string, byte> _cached = new(StringComparer.OrdinalIgnoreCase);
         private readonly SemaphoreSlim _startedSignal = new(0);
@@ -162,7 +179,9 @@ public sealed class PreloadSafetyTests : IDisposable
             _startedSignal.Release();
             try
             {
-                if (blockUntilCancellation)
+                if (uncancellableGate is not null)
+                    await uncancellableGate.WaitAsync(CancellationToken.None); // deliberately ignores cancellation: a decode already running
+                else if (blockUntilCancellation)
                     await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
                 else
                     await Task.Delay(10, cancellationToken);

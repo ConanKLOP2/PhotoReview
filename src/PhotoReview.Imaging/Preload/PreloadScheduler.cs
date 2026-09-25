@@ -506,6 +506,9 @@ public sealed class PreloadScheduler : IDisposable
         }
     }
 
+    /// <summary>Longest Dispose blocks its caller (the UI thread at window close) for workers that ignore cancellation, e.g. a decode already running.</summary>
+    internal TimeSpan DisposeDrainTimeout { get; set; } = TimeSpan.FromSeconds(3);
+
     public void Dispose()
     {
         Task[] lifetimeTasks;
@@ -523,11 +526,21 @@ public sealed class PreloadScheduler : IDisposable
         // The scheduler and workers use ConfigureAwait(false), so draining cannot require the
         // caller's UI context. Keep synchronization primitives alive until every waiter/holder
         // has observed cancellation and released its slot.
-        foreach (var schedulerTask in lifetimeTasks)
+        try
         {
-            try { schedulerTask.GetAwaiter().GetResult(); }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { _log.Error("Preload scheduler failed during disposal", ex); }
+            if (!Task.WaitAll(lifetimeTasks, DisposeDrainTimeout))
+            {
+                // A decode that cannot be cancelled is still running. Do not hold the caller for it, and do not dispose the
+                // slots/CTS it will still release/observe; they are unreferenced afterwards and reclaimed by the GC.
+                _log.Warn("Preload scheduler did not drain in time; leaving in-flight decodes to finish on their own");
+                return;
+            }
+        }
+        catch (AggregateException ex)
+        {
+            // WaitAll observed every task complete; only genuine failures (not cancellation) are worth a log line.
+            foreach (var inner in ex.InnerExceptions)
+                if (inner is not OperationCanceledException) _log.Error("Preload scheduler failed during disposal", inner);
         }
 
         foreach (var lifetimeCtsSource in lifetimeCts)

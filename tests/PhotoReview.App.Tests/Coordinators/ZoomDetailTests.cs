@@ -115,6 +115,20 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.DoesNotContain(nameof(ViewerState.ImageHeight), changed);
     }
 
+    [Fact(DisplayName = "Zooming out from a Fit below the minimum zoom never enlarges the image")]
+    public void ZoomOut_FromFitBelowMinZoom_LeavesFitUntouched()
+    {
+        var viewer = new ViewerState { DpiScale = 1.0 };
+        viewer.SetSourceSize(12000, 8000);
+        viewer.ResetFit(1500, 1000); // fit = 0.125 < MinZoom
+
+        viewer.ZoomOut();
+        viewer.WheelZoom(-120);
+
+        Assert.True(viewer.IsFit);
+        Assert.Equal(0.125, viewer.FitZoom, 6);
+    }
+
     [Fact]
     public void ZoomStep_FromFit_StartsAtTheFitZoomInsteadOf100Percent()
     {

@@ -28,6 +28,9 @@ public static class ActionDestinationPolicy
         if (!Path.IsPathFullyQualified(destination) && destination.Contains(':', StringComparison.Ordinal))
             return ActionDestinationCheck.InvalidChars;
 
+        // "\photos" / "/photos" is rooted but names no drive: it would resolve against whatever drive the process happens to be on.
+        if (Path.IsPathRooted(destination) && !Path.IsPathFullyQualified(destination)) return ActionDestinationCheck.InvalidChars;
+
         if (Path.IsPathRooted(destination)) return ActionDestinationCheck.Ok;
 
         foreach (var segment in destination.Split(s_separators))
