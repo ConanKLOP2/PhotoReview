@@ -1,0 +1,116 @@
+name: Release
+
+# Manual only: pick an existing version tag (created by CI's tag-version job) and publish it as a GitHub
+# Release with the framework-dependent zip attached. Tags created with GITHUB_TOKEN do not trigger other
+# workflows, so this is dispatched by hand; the release is a DRAFT by default so it can be reviewed first.
+# Tests are not re-run here: CI already ran the full gate on the same commit before it created the tag.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to release, e.g. v2.0.93"
+        required: true
+        type: string
+      draft:
+        description: "Create as a draft (review, then press Publish on GitHub)"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Validate tag name
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag '$env:TAG' must look like v2.0.93" }
+
+      - name: Checkout the tag with full history (the version is derived from git)
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Refuse if the release already exists
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release $env:TAG already exists; delete it on GitHub first or pick another tag." }
+          $global:LASTEXITCODE = 0
+
+      - name: Cache .NET SDK
+        uses: actions/cache@v4
+        with:
+          path: C:\hostedtoolcache\windows\dotnet
+          key: ${{ runner.os }}-dotnet-sdk-${{ hashFiles('global.json') }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Fetch native binaries
+        shell: powershell
+        run: ./tools/fetch-native.ps1
+
+      - name: Restore
+        run: dotnet restore PhotoReview.slnx
+
+      - name: Publish (framework-dependent)
+        run: dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --no-restore --self-contained false -o src/PhotoReview.App/bin/Release/net10.0-windows/publish
+
+      - name: Verify release folder
+        shell: powershell
+        run: ./tools/verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
+
+      - name: Check the built version matches the tag
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          $v = (Get-Item 'src/PhotoReview.App/bin/Release/net10.0-windows/publish/PhotoReview.App.dll').VersionInfo.ProductVersion
+          Write-Host "Built $v for $env:TAG"
+          $expected = $env:TAG.TrimStart('v')
+          if (-not $v.StartsWith("$expected+")) { throw "Built version '$v' does not match tag '$env:TAG'" }
+
+      - name: Zip and create the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          $pub = 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
+          $zip = "PhotoReview-$env:TAG-win-x64.zip"
+          Compress-Archive -Path "$pub/*" -DestinationPath $zip
+          $sha = (Get-FileHash "$pub/PhotoReview.App.exe" -Algorithm SHA256).Hash
+          $notes = @"
+          Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe``.
+
+          SHA256 of ``PhotoReview.App.exe``: ``$sha``
+          "@
+          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+          $ghArgs = @('release', 'create', $env:TAG, $zip, '--title', "PhotoReview $($env:TAG.TrimStart('v'))",
+                    '--verify-tag', '--generate-notes', '--notes-file', 'release-notes.md')
+          if ($env:DRAFT -eq 'true') { $ghArgs += '--draft' }
+          gh @ghArgs
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
+          "Release $env:TAG created (draft=$env:DRAFT), zip $zip, exe SHA256 $sha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
