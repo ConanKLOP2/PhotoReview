@@ -14,8 +14,18 @@ public static class ExplorerSnapshotValidator
             return false;
         }
 
-        var folder = CanonicalizeFolder(snapshot.Folder);
-        var expected = new HashSet<string>(scannedFiles.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
+        string folder;
+        HashSet<string> expected;
+        try
+        {
+            folder = CanonicalizeFolder(snapshot.Folder);
+            expected = new HashSet<string>(scannedFiles.Select(NormalizePath), StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            reason = ExplorerReason.OutsideFolder;
+            return false;
+        }
         var result = new List<string>(expected.Count);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -27,7 +37,15 @@ public static class ExplorerSnapshotValidator
                 return false;
             }
 
-            var path = Path.GetFullPath(candidate);
+            string path;
+            try { path = NormalizePath(candidate); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                // Embedded NUL or otherwise unrepresentable text: never a member of the folder, and it must
+                // not escape as an exception into the folder load.
+                reason = ExplorerReason.OutsideFolder;
+                return false;
+            }
             if (!SamePath(Path.GetDirectoryName(path) ?? string.Empty, folder))
             {
                 reason = ExplorerReason.OutsideFolder;
@@ -56,7 +74,20 @@ public static class ExplorerSnapshotValidator
         return true;
     }
 
-    public static string CanonicalizeFolder(string folder) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+    public static string CanonicalizeFolder(string folder) => Path.TrimEndingDirectorySeparator(NormalizePath(folder));
+
+    /// <summary>
+    /// Full path with the Win32 extended-length prefix removed (<c>\\?\C:\x</c> becomes <c>C:\x</c>,
+    /// <c>\\?\UNC\srv\share</c> becomes <c>\\srv\share</c>), so a shell that reports a long path in
+    /// extended form still compares equal to the scanned path.
+    /// </summary>
+    public static string NormalizePath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (full.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + full[8..];
+        if (full.Length >= 6 && full.StartsWith(@"\\?\", StringComparison.Ordinal) && full[5] == ':') return full[4..];
+        return full;
+    }
 
     public static bool SamePath(string first, string second) =>
         string.Equals(CanonicalizeFolder(first), CanonicalizeFolder(second), StringComparison.OrdinalIgnoreCase);
