@@ -339,17 +339,24 @@ public sealed class TurboJpegDecoder : IImageDecoder
     {
         marker = 0;
         payload = default;
-        while (offset + 4 <= jpeg.Length)
+        while (offset + 2 <= jpeg.Length)
         {
             if (jpeg[offset] != 0xFF) return false;
 
+            // Any marker may be preceded by repeated 0xFF fill bytes (ITU T.81 B.1.1.2).
+            while (offset + 1 < jpeg.Length && jpeg[offset + 1] == 0xFF) offset++;
+            if (offset + 2 > jpeg.Length) return false;
+
             marker = jpeg[offset + 1];
-            if (marker is 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
+            if (marker is 0x00 or 0xFF) return false; // 0xFF00 is a stuffed byte, not a marker
+            // Parameterless markers: TEM (0x01), RSTn (0xD0-0xD7), SOI (0xD8), EOI (0xD9).
+            if (marker is 0x01 or 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
             }
             if (marker == 0xDA) return false; // SOS marker reached
+            if (offset + 4 > jpeg.Length) return false;
 
             int length = (jpeg[offset + 2] << 8) | jpeg[offset + 3];
             if (length < 2 || offset + 2 + length > jpeg.Length) return false;
