@@ -27,4 +27,11 @@ public interface IDecodedImage
 
     /// <summary>See <see cref="OriginalWidth"/>.</summary>
     int OriginalHeight => PixelHeight;
+
+    /// <summary>
+    /// EXIF fields for the photo information line, read by the decoder from the metadata it already parses during
+    /// this decode (or restored from the preview disk-cache entry) -- never by an extra file read. Null when the
+    /// source has no usable EXIF, the backend could not read it, or the image came from an older cache entry.
+    /// </summary>
+    PhotoReview.Imaging.Metadata.ExifSummary? Exif => null;
 }

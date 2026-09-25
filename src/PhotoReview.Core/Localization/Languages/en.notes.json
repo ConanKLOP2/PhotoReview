@@ -402,5 +402,12 @@
   "settings.allowPermanentDelete.label": "CheckBox.Content (default off, Q-R8).",
   "settings.allowPermanentDelete.hint": "TextBlock under the checkbox; warns that deleted files cannot be restored.",
   "dialog.confirmPermanentDelete.title": "ShowConfirmation caption before a permanent delete (drive without Recycle Bin).",
-  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent."
+  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent.",
+  "exif.dimensions": "Photo information line (under the status line): original image size in pixels; {width}/{height} are plain numbers. Parts of the line are joined with \" · \".",
+  "exif.iso": "Photo information line: sensor sensitivity; {value} = ISO number (e.g. 400). \"ISO\" is normally kept as is.",
+  "exif.focalLength": "Photo information line: lens focal length; {value} = millimetres (e.g. 50 or 18.5).",
+  "exif.aperture": "Photo information line: aperture as an f-number; {value} = e.g. 2.8. \"f/\" is the photographic notation, normally kept.",
+  "exif.shutterFraction": "Photo information line: short shutter speed as a fraction of a second; {denominator} = e.g. 250 (1/250 s). Keep it short.",
+  "exif.shutterSeconds": "Photo information line: long shutter speed in seconds; {value} = e.g. 0.5 or 30. Keep it short.",
+  "main.exif.automationName": "Screen-reader name of the photo information line; {details} = the line's text (file name, date, size, camera, lens, exposure)."
 }

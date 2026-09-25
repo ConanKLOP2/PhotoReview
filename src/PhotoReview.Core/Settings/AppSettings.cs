@@ -52,6 +52,15 @@ public class AppSettings
     /// </summary>
     public bool AllowPermanentDeleteWithoutRecycleBin { get; set; }
 
+    /// <summary>
+    /// Shows the photo information line (file name, date taken, dimensions, camera, lens, exposure) under the status line.
+    /// Absent in older configs = true. The EXIF values come from the decode that already runs, never an extra file read.
+    /// </summary>
+    public bool ShowExifInfo { get; set; } = true;
+
+    /// <summary>Parts of the photo information line to show; absent in older configs = <see cref="ExifInfoFields.All"/>.</summary>
+    public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.All;
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }

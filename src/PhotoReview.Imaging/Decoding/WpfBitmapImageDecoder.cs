@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Media.Imaging;
+using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Decoding;
 
@@ -28,40 +29,41 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     {
         try
         {
-            var bitmap = DecodeSource(request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight);
+            var bitmap = DecodeSource(request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
             return new WpfDecodedImage(bitmap, downscaled, orientation: orientation,
-                originalWidth: originalWidth, originalHeight: originalHeight);
+                originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
         }
         catch (Exception ex) when (request.IsDownscaleRequested && IsDownscaleFallbackException(ex))
         {
             var fallbackRequest = new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes);
-            var bitmap = DecodeSource(fallbackRequest, out int orientation, out _, out int originalWidth, out int originalHeight);
+            var bitmap = DecodeSource(fallbackRequest, out int orientation, out _, out int originalWidth, out int originalHeight, out var exif);
             return new WpfDecodedImage(bitmap, downscaled: false, orientation: orientation,
-                originalWidth: originalWidth, originalHeight: originalHeight);
+                originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
         }
     }
 
     public static BitmapSource DecodeSource(DecodeRequest request)
-        => DecodeSource(request, out _, out _, out _, out _);
+        => DecodeSource(request, out _, out _, out _, out _, out _);
 
-    private static BitmapSource DecodeSource(DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight)
+    private static BitmapSource DecodeSource(DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         if (request.Bytes.HasValue)
         {
             using var memoryStream = ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value);
-            return DecodeStream(memoryStream, request, out orientation, out downscaled, out originalWidth, out originalHeight);
+            return DecodeStream(memoryStream, request, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
         }
 
         using var stream = new FileStream(request.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-        return DecodeStream(stream, request, out orientation, out downscaled, out originalWidth, out originalHeight);
+        return DecodeStream(stream, request, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
     }
 
-    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight)
+    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         orientation = 1;
+        exif = null;
         originalWidth = 0;
         originalHeight = 0;
         // A box (both axes, e.g. previews) needs the source size to pick the constraining side and
@@ -79,7 +81,10 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                 if (headerDecoder.Frames.Count > 0)
                 {
                     var frame = headerDecoder.Frames[0];
-                    if (request.ApplyOrientation) orientation = ExifOrientation.Read(frame.Metadata as BitmapMetadata);
+                    var metadata = frame.Metadata as BitmapMetadata;
+                    if (request.ApplyOrientation) orientation = ExifOrientation.Read(metadata);
+                    // Photo information line: same header frame, same metadata block -- no extra read.
+                    exif = WpfExifReader.Read(metadata);
                     rawWidth = frame.PixelWidth;
                     rawHeight = frame.PixelHeight;
                 }
@@ -87,6 +92,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException)
             {
                 orientation = 1;
+                exif = null;
                 rawWidth = rawHeight = 0;
             }
             stream.Position = 0;

@@ -463,6 +463,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         {
             UpdateFolderTitle();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
+            NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
             var newMode = _settingsStore.Current.LoadingMode;
             var newBackend = _settingsStore.Current.DecoderBackend;
             if (previousMode != newMode || previousBackend != newBackend)
@@ -525,6 +526,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
         OnPropertyChanged(nameof(SkippedWarningText));
         // StatusText is event text (last action); it switches language with the next update.
+        NotifyExifLineChanged();
     }
 
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
@@ -538,6 +540,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(TotalFiles));
         OnPropertyChanged(nameof(CurrentImage));
         OnPropertyChanged(nameof(StatusText));
+        NotifyExifLineChanged();
     }
 
     // --- IFolderLoadSink implementation ---
@@ -681,5 +684,30 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     void IDuplicateCleanupSink.NotifyNavigationStateChanged()
     {
         NotifyNavigationStateChanged();
+    }
+
+    // --- Photo information (EXIF) line under the status line ---
+
+    /// <summary>
+    /// The photo information line for the presented image (<see cref="ExifFormatter"/>, fields from
+    /// <see cref="AppSettings.ExifInfoFields"/>); empty while loading, in compare mode or with nothing shown.
+    /// Independent of <see cref="AppSettings.ShowExifInfo"/> -- see <see cref="IsExifLineVisible"/>.
+    /// </summary>
+    public string ExifText => _presenter.CurrentPhotoInfo is { } info
+        ? ExifFormatter.Format(Settings.ExifInfoFields, info.FileName, info.Width, info.Height, info.Exif,
+            System.Globalization.CultureInfo.CurrentCulture) // display text: user's number/date format
+        : string.Empty;
+
+    /// <summary><see cref="AppSettings.ShowExifInfo"/> and there is something to show.</summary>
+    public bool IsExifLineVisible => Settings.ShowExifInfo && ExifText.Length > 0;
+
+    /// <summary>Screen-reader name of the line.</summary>
+    public string ExifAutomationName => Tr.MainExifAutomationName(ExifText);
+
+    private void NotifyExifLineChanged()
+    {
+        OnPropertyChanged(nameof(ExifText));
+        OnPropertyChanged(nameof(IsExifLineVisible));
+        OnPropertyChanged(nameof(ExifAutomationName));
     }
 }

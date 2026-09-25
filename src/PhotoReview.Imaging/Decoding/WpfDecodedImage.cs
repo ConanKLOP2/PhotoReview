@@ -25,9 +25,14 @@ public sealed class WpfDecodedImage : IDecodedImage
     /// <summary>See <see cref="IDecodedImage.OriginalHeight"/>.</summary>
     public int OriginalHeight { get; }
 
+    /// <summary>See <see cref="IDecodedImage.Exif"/>.</summary>
+    public PhotoReview.Imaging.Metadata.ExifSummary? Exif { get; }
+
     public WpfDecodedImage(BitmapSource source, bool downscaled = false, int orientation = 1,
-        DecoderBackend actualBackend = DecoderBackend.Wpf, int originalWidth = 0, int originalHeight = 0)
+        DecoderBackend actualBackend = DecoderBackend.Wpf, int originalWidth = 0, int originalHeight = 0,
+        PhotoReview.Imaging.Metadata.ExifSummary? exif = null)
     {
+        Exif = exif;
         ArgumentNullException.ThrowIfNull(source);
         if (!source.IsFrozen && source.CanFreeze)
         {
