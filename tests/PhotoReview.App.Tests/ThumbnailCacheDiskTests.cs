@@ -47,12 +47,16 @@ public sealed class ThumbnailCacheDiskTests : IDisposable
     {
         var locked = Path.Combine(_diskDir, "locked.png");
         File.WriteAllBytes(locked, [1, 2, 3]);
+        var free = Path.Combine(_diskDir, "free.png");
+        File.WriteAllBytes(free, [4, 5, 6]);
         using var hold = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None);
         using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024);
 
         var ex = Record.Exception(cache.ClearDisk);
 
         Assert.Null(ex);
+        Assert.False(File.Exists(free), "The unlocked file must still be cleared.");
+        Assert.True(File.Exists(locked));
     }
 
     [Fact(DisplayName = "ThumbnailCache prunes the disk cache down to its byte quota after a write")]

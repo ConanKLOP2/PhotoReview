@@ -70,7 +70,7 @@ public sealed class PreviewImageService : IPreloadTarget
     // bitmap's closure (and the RAM it references) alive until its write finishes.
     // A small fixed worker pool with a bounded, drop-when-full queue caps that instead.
     private const int PersistWorkerCount = 2;
-    private const int PersistQueueCapacity = 8; // queued bitmaps stay alive outside the RAM cache budget until written
+    private const int PersistQueueCapacity = 16; // queued bitmaps stay alive outside the RAM cache budget until written
     private readonly Channel<(BitmapSource Bitmap, string CachePath, long Epoch, DecoderBackend Backend, int Orientation, int OriginalWidth, int OriginalHeight)> _persistQueue =
         Channel.CreateBounded<(BitmapSource, string, long, DecoderBackend, int, int, int)>(
             new BoundedChannelOptions(PersistQueueCapacity) { FullMode = BoundedChannelFullMode.DropWrite });

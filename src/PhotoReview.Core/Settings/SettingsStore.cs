@@ -13,6 +13,7 @@ public sealed class SettingsStore
     private readonly ILog _log;
     private readonly Action<string, Exception>? _onStartupError;
     private AppSettings _current;
+    private bool _keepCorruptFile; // the corrupt config.json could not be backed up: never overwrite the only copy this session
 
     public AppSettings Current => _current;
 
@@ -68,6 +69,7 @@ public sealed class SettingsStore
             {
                 // The corrupt file could not be preserved: keep defaults in memory and do not overwrite the only copy.
                 LogStartupError("Could not back up corrupt config.json, using in-memory defaults for this session", copyEx);
+                _keepCorruptFile = true;
                 _current = new AppSettings();
                 Changed?.Invoke(this, _current);
                 return _current;
@@ -97,6 +99,12 @@ public sealed class SettingsStore
     public void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        if (_keepCorruptFile)
+        {
+            _current = settings;
+            Changed?.Invoke(this, _current);
+            return;
+        }
         var filePath = _appPaths.ConfigFile;
         var dir = Path.GetDirectoryName(filePath);
         if (!string.IsNullOrEmpty(dir))

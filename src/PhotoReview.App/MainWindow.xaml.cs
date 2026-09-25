@@ -353,7 +353,8 @@ public partial class MainWindow : Window
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
 
-        // Space/Enter belong to a focused button or compare pane (keyboard activation); the window-level tunnel must not steal them.
+        // Space/Enter belong to a focused compare pane (keyboard selection); the window-level tunnel must not steal them.
+        // Toolbar buttons are deliberately not exempt: after a click they keep focus and would swallow the Skip/Move shortcuts.
         if (pressedKey is Key.Space or Key.Enter && e.OriginalSource is DependencyObject source && OwnsActivationKeys(source)) return;
 
         var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible);
@@ -388,7 +389,7 @@ public partial class MainWindow : Window
     {
         for (var node = source; node is not null && !ReferenceEquals(node, this); node = node is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
         {
-            if (node is System.Windows.Controls.Primitives.ButtonBase || ReferenceEquals(node, CompareLeftBorder) || ReferenceEquals(node, CompareRightBorder)) return true;
+            if (ReferenceEquals(node, CompareLeftBorder) || ReferenceEquals(node, CompareRightBorder)) return true;
         }
         return false;
     }

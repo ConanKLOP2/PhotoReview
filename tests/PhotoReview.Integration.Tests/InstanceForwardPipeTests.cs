@@ -146,7 +146,7 @@ public sealed class InstanceForwardPipeTests : IDisposable
         Assert.Equal(ForwardOutcome.Unknown, outcome);
     }
 
-[Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]
+    [Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]
     public async Task Client_NoServer_ReportsNoInstance()
     {
         var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("x.jpg")], TimeSpan.FromMilliseconds(300));

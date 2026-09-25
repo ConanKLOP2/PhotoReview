@@ -254,7 +254,7 @@ public partial class SettingsWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Keep the dialog open so the edits are not lost; the user sees why nothing was saved.
-            AppLog.Info("Settings save failed");
+            AppLog.Error("Settings save failed", ex);
             System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogSettingsSaveFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }

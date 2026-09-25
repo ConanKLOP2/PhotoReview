@@ -533,6 +533,12 @@ public sealed class PreloadScheduler : IDisposable
                 // A decode that cannot be cancelled is still running. Do not hold the caller for it, and do not dispose the
                 // slots/CTS it will still release/observe; they are unreferenced afterwards and reclaimed by the GC.
                 _log.Warn("Preload scheduler did not drain in time; leaving in-flight decodes to finish on their own");
+                // The slots/CTS are still in use by those decodes: release them once the last lifetime task has finished.
+                _ = Task.WhenAll(lifetimeTasks).ContinueWith(_ =>
+                {
+                    foreach (var lifetimeCtsSource in lifetimeCts) lifetimeCtsSource.Dispose();
+                    _preloadSlots.Dispose();
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 return;
             }
         }

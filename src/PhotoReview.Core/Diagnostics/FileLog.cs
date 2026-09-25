@@ -93,7 +93,11 @@ public sealed class FileLog : ILog, IDisposable
         {
             _signal.Set();
             var start = Environment.TickCount64;
-            _drained.Wait(remaining);
+            // _drained can be set while an entry is already (or about to be) queued: the writer's empty-queue Drain may run
+            // between Write's Reset and Enqueue. Waiting on a set event returns at once and would burn the whole budget in a
+            // spin, returning before the entry is written, so back off briefly and re-check the real condition instead.
+            if (_drained.IsSet) Thread.Sleep(1);
+            else _drained.Wait(remaining);
             remaining -= (int)Math.Max(1, Environment.TickCount64 - start);
         }
     }
