@@ -28,8 +28,15 @@ public static class JournalErrors
     /// <summary>A relative Move/Copy destination resolved outside the source folder; rejected before anything is journaled.</summary>
     public const string DestinationOutsideSource = "DestinationOutsideSource";
 
+    /// <summary>
+    /// A Move copied the file (cross-volume MoveFileEx) but could not delete the source (read-only, opened without
+    /// FILE_SHARE_DELETE): both copies exist, so the Move did not happen from the user's point of view.
+    /// </summary>
+    public const string MoveSourceNotRemoved = "MoveSourceNotRemoved";
+
     private static readonly FrozenDictionary<string, string> s_keys = new Dictionary<string, string>(StringComparer.Ordinal)
     {
+        [MoveSourceNotRemoved] = TrKeys.CoreFileActionMoveSourceNotRemoved,
         [SourceStillExistsAfterRecovery] = TrKeys.CoreJournalSourceStillExists,
         [PendingUnconfirmed] = TrKeys.CoreJournalPendingUnconfirmed,
         [VerifySizeChanged] = TrKeys.CoreFileActionVerifyFailedSizeChanged,

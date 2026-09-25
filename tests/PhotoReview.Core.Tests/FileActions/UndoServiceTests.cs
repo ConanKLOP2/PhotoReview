@@ -86,6 +86,87 @@ public sealed class UndoServiceTests
         Assert.False(_service.CanUndoMove);
     }
 
+    [Fact(DisplayName = "Undo of a Move is journaled Prepared before the move and Committed after it")]
+    public async Task UndoMoveAsync_JournalsReverseMove_PreparedBeforeMutationThenCommitted()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"C:\photos\sorted\photo1.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+        IReadOnlyList<JournalEntry>? pendingAtMutation = null;
+        _fs.MoveHook = (_, _) => { pendingAtMutation = _journal.ReadPendingOperations(); return null; };
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.True(result.Succeeded);
+        // A crash during the move would leave exactly this pending entry for startup reconcile / Recovery.
+        var pending = Assert.Single(pendingAtMutation!);
+        Assert.Equal(FileOperationType.Move, pending.Type);
+        Assert.Equal(destination, pending.Source);
+        Assert.Equal(source, pending.Destination);
+        Assert.Equal(13, pending.Size);
+        Assert.True(pending.Undo);
+        Assert.Empty(_journal.ReadPendingOperations());
+        var committed = Assert.Single(_journal.ReadCommittedMoves());
+        Assert.Equal(pending.Id, committed.Id);
+        Assert.True(committed.Undo);
+    }
+
+    [Fact(DisplayName = "A failed undo move is journaled Failed and the move stays undoable")]
+    public async Task UndoMoveAsync_MoveThrows_JournalsFailed()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"C:\photos\sorted\photo1.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+        _fs.MoveHook = (_, _) => new IOException("locked");
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(_service.CanUndoMove);
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal(destination, failed.Source);
+        Assert.True(failed.Undo);
+    }
+
+    [Fact(DisplayName = "An undo move that copied back but left the moved file is a failure (MoveSourceNotRemoved)")]
+    public async Task UndoMoveAsync_MoveLeavesSource_FailsWithDistinctCode()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"D:\sorted\photo1.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+        _fs.CreateDirectory(@"C:\photos");
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+        _fs.MoveLeavesSource = true;
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(destination));
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, Assert.Single(_journal.ReadFailedOperations()).ErrorCode);
+    }
+
+    [Fact(DisplayName = "A journaled undo is not loaded back as undoable history at startup")]
+    public async Task LoadFromJournal_AfterUndo_DoesNotOfferReverseMove()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"C:\photos\sorted\photo1.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+        _journal.Append(new JournalEntry("1", FileOperationType.Move, JournalState.Committed, source, destination, 13, writeTime, _clock.UtcNow));
+        _service.LoadFromJournal();
+        Assert.True((await _service.UndoMoveAsync()).Succeeded);
+
+        var restarted = new UndoService(_journal, _fs, _recycleBin);
+        restarted.LoadFromJournal();
+
+        Assert.False(restarted.CanUndoMove);
+    }
+
     [Fact(DisplayName = "In-session undo retains more than the startup journal tail")]
     public async Task RegisterMoreThanStartupTail_UndoLatestUsesRegisteredFingerprint()
     {

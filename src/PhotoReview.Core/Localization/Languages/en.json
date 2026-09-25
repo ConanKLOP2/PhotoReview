@@ -496,5 +496,9 @@
   "main.folderInfo.current": "📁 {folder}",
   "main.folderInfo.pending": "…",
   "main.folderInfo.previous": "◀ {key}: {folder}",
-  "main.folderInfo.next": "{key}: {folder} ▶"
+  "main.folderInfo.next": "{key}: {folder} ▶",
+  "core.fileAction.moveSourceNotRemoved": "The file was copied to the destination, but the original could not be removed (it may be read-only or in use). Both copies now exist; nothing was deleted.",
+  "dialog.startupRecoveryFailed.title": "Interrupted file operations",
+  "dialog.startupRecoveryFailed.message.one": "{count} file operation was interrupted last time and could not be confirmed. Nothing was replayed or deleted. Open Recovery to review it now?",
+  "dialog.startupRecoveryFailed.message.other": "{count} file operations were interrupted last time and could not be confirmed. Nothing was replayed or deleted. Open Recovery to review them now?"
 }

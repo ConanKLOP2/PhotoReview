@@ -490,5 +490,8 @@
   "main.folderInfo.current": "📁 {folder}",
   "main.folderInfo.pending": "…",
   "main.folderInfo.previous": "◀ {key}: {folder}",
-  "main.folderInfo.next": "{key}: {folder} ▶"
+  "main.folderInfo.next": "{key}: {folder} ▶",
+  "core.fileAction.moveSourceNotRemoved": "Tệp đã được sao chép tới thư mục đích nhưng không xóa được tệp gốc (có thể tệp chỉ đọc hoặc đang được mở). Hiện có cả hai bản; không có gì bị xóa.",
+  "dialog.startupRecoveryFailed.title": "Thao tác tệp bị gián đoạn",
+  "dialog.startupRecoveryFailed.message.other": "Có {count} thao tác tệp bị gián đoạn ở lần chạy trước và không xác nhận được. Không có gì được thực hiện lại hay bị xóa. Mở Phục hồi để xem ngay?"
 }

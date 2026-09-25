@@ -62,6 +62,19 @@ internal sealed class JournalTransaction
         MutationCompleted = true;
     }
 
+    /// <summary>
+    /// Move check: the source must be gone and the destination must have the prepared size. File.Move across volumes
+    /// is MoveFileEx(MOVEFILE_COPY_ALLOWED), which reports success after the copy even when deleting the source failed
+    /// (read-only file, a handle without FILE_SHARE_DELETE). Such a Move did not happen from the user's point of view:
+    /// it throws <see cref="JournalErrors.MoveSourceNotRemoved"/> and the destination copy is kept (nothing is deleted).
+    /// </summary>
+    public void VerifyMoved(IFileSystem fileSystem, string source, string destination, string sizeErrorCode)
+    {
+        if (fileSystem.FileExists(source))
+            throw new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
+        VerifyDestination(fileSystem, destination, sizeErrorCode);
+    }
+
     /// <summary>For operations with nothing to verify (Recycle).</summary>
     public void MarkMutationCompleted() => MutationCompleted = true;
 

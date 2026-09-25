@@ -420,5 +420,9 @@
   "main.folderInfo.current": "Bottom-right overlay, middle part: the open folder. {folder} = folder name (not a path). The emoji is a folder icon; keep it.",
   "main.folderInfo.pending": "Bottom-right overlay placeholder shown after the folder name while the neighbouring folders are being looked up (a fraction of a second). Neutral symbol; usually unchanged.",
   "main.folderInfo.previous": "Bottom-right overlay, left part: the folder the PreviousFolder key opens. {key} = key name as configured (PageUp; not translated), {folder} = folder name. The arrow points left (previous).",
-  "main.folderInfo.next": "Bottom-right overlay, right part: the folder the NextFolder key opens. {key} = key name as configured (PageDown; not translated), {folder} = folder name. The arrow points right (next)."
+  "main.folderInfo.next": "Bottom-right overlay, right part: the folder the NextFolder key opens. {key} = key name as configured (PageDown; not translated), {folder} = folder name. The arrow points right (next).",
+  "core.fileAction.moveSourceNotRemoved": "Journal error code MoveSourceNotRemoved: a cross-drive Move copied the file but Windows could not delete the source. Persisted as a code, shown in the status bar and the Recovery window; must say both copies exist and nothing was deleted.",
+  "dialog.startupRecoveryFailed.title": "ShowConfirmation caption at startup when journal reconcile marked interrupted operations Failed.",
+  "dialog.startupRecoveryFailed.message.one": "ShowConfirmation text at startup; {count} = number of interrupted operations marked Failed. Yes opens the Recovery window.",
+  "dialog.startupRecoveryFailed.message.other": "Plural form of dialog.startupRecoveryFailed.message.one."
 }

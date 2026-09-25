@@ -216,11 +216,28 @@ internal static class RecycleCandidateSelector
     private static bool TimestampMatches(DateTime shellValueUtc, DateTime expectedUtc)
         => (shellValueUtc - expectedUtc).Duration() < TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// <see cref="RecycleCandidate.DeletedFrom"/> (System.Recycle.DeletedFrom) is the item's original FOLDER, and
+    /// <see cref="RecycleCandidate.Name"/> (FolderItem.Name) is the shell DISPLAY name, which drops the extension when
+    /// Explorer hides known extensions (the Windows default). So the folder must equal the original folder and the
+    /// name must be the file name with or without its extension; size and timestamp are still required, and the caller
+    /// still restores only when exactly one item matches (review r7).
+    /// </summary>
     internal static bool IsMatch(RecycleCandidate candidate, string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
     {
-        var pathMatches = string.Equals(candidate.DeletedFrom, originalPath, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(Path.Combine(candidate.DeletedFrom ?? string.Empty, candidate.Name ?? string.Empty), originalPath, StringComparison.OrdinalIgnoreCase);
-        return pathMatches && candidate.Size == expectedSize && (TimestampMatches(candidate.LastWriteUtc, expectedLastWriteUtc)
+        return FolderMatches(candidate.DeletedFrom, Path.GetDirectoryName(originalPath))
+            && NameMatches(candidate.Name, Path.GetFileName(originalPath))
+            && candidate.Size == expectedSize
+            && (TimestampMatches(candidate.LastWriteUtc, expectedLastWriteUtc)
                 || (candidate.AlternateLastWriteUtc is { } alternate && TimestampMatches(alternate, expectedLastWriteUtc)));
     }
+
+    private static bool FolderMatches(string? deletedFrom, string? originalFolder) =>
+        !string.IsNullOrEmpty(deletedFrom) && !string.IsNullOrEmpty(originalFolder)
+        && string.Equals(Path.TrimEndingDirectorySeparator(deletedFrom), Path.TrimEndingDirectorySeparator(originalFolder), StringComparison.OrdinalIgnoreCase);
+
+    private static bool NameMatches(string? displayName, string fileName) =>
+        !string.IsNullOrEmpty(displayName)
+        && (string.Equals(displayName, fileName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(displayName, Path.GetFileNameWithoutExtension(fileName), StringComparison.OrdinalIgnoreCase));
 }

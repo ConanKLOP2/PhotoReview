@@ -80,11 +80,15 @@ public sealed class RecoveryRetryService
             }
 
             if (failed.Type == FileOperationType.Copy)
+            {
                 _fileSystem.Copy(failed.Source, destination);
+                tx.VerifyDestination(_fileSystem, destination, JournalErrors.RetryVerifyFailed);
+            }
             else
+            {
                 _fileSystem.Move(failed.Source, destination);
-
-            tx.VerifyDestination(_fileSystem, destination, JournalErrors.RetryVerifyFailed);
+                tx.VerifyMoved(_fileSystem, failed.Source, destination, JournalErrors.RetryVerifyFailed);
+            }
 
             var committed = tx.Commit(out var commitError);
             return commitError is null

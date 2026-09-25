@@ -327,12 +327,35 @@ public partial class App : System.Windows.Application, IDisposable
         MainWindow = window;
         window.Show();
         PhotoReviewPerf.StartupMark("windowShown");
+        _ = RecoverJournalAsync(window);
         if (store.LastLoadRepairs.Count > 0)
         {
             _services.GetRequiredService<IDialogService>().ShowMessage(
                 PhotoReview.Core.Localization.Tr.AppTitle,
                 PhotoReview.Core.Localization.Tr.SettingsLoadRepaired(string.Join(", ", store.LastLoadRepairs)));
         }
+    }
+
+    /// <summary>
+    /// INV-6 / ADR 0003 (review r7): reconcile pending journal operations and load the Undo history. Runs after the
+    /// instance lock and after the window is shown; the journal work itself is on the thread pool
+    /// (<see cref="JournalStartupRecovery"/>), so the first image is not delayed. Operations it had to mark Failed are
+    /// reported once, with an offer to open the Recovery window.
+    /// </summary>
+    private async Task RecoverJournalAsync(MainWindow window)
+    {
+        var services = _services!;
+        var failed = await JournalStartupRecovery.RunAsync(
+            services.GetRequiredService<OperationJournal>(),
+            services.GetRequiredService<UndoService>(),
+            services.GetRequiredService<IClock>(),
+            services.GetRequiredService<IUiScheduler>(),
+            services.GetRequiredService<ILog>());
+        if (failed.Count == 0) return;
+        var dialogs = services.GetRequiredService<IDialogService>();
+        if (dialogs.ShowConfirmation(PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedTitle,
+                PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedMessage(failed.Count)))
+            window.ViewModel.ShowRecovery();
     }
 
     /// <summary>
