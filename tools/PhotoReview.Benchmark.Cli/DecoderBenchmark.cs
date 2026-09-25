@@ -49,6 +49,8 @@ public static class DecoderBenchmark
         public int TargetWidth { get; set; }
         public int TotalRuns { get; set; }
         public int SuccessCount { get; set; }
+        public int FailureCount { get; set; }
+        public string? FirstError { get; set; }
         public int FallbackCount { get; set; }
         public double MeanMs { get; set; }
         public double P50Ms { get; set; }
@@ -73,16 +75,18 @@ public static class DecoderBenchmark
         public List<string> TestedBackends { get; set; } = new();
         public List<int> TestedWidths { get; set; } = new();
         public string CacheCondition { get; set; } = "Warm OS cache (interleaved by file)";
+        public int TotalRuns { get; set; }
+        public int TotalFailures { get; set; }
         public List<GroupStatistics> Groups { get; set; } = new();
     }
 
-    public static async Task RunAsync(string[] args)
+    /// <returns>0 on success; 1 when usage is wrong or no decode succeeded at all (so a folder of undecodable files never looks like a pass).</returns>
+    public static async Task<int> RunAsync(string[] args)
     {
         if (args.Length < 3)
         {
             Console.Error.WriteLine("Usage: --decoder-bench <folder> <outDir> [backends=Wpf,WicDirect,TurboJpeg] [widths=0,1920,2560,3840] [iterations=5]");
-            Environment.ExitCode = 1;
-            return;
+            return 1;
         }
 
         var folder = Path.GetFullPath(args[1]);
@@ -261,7 +265,22 @@ public static class DecoderBenchmark
         foreach (var g in grouped)
         {
             var valid = g.Where(r => r.Success).ToList();
-            if (valid.Count == 0) continue;
+            var failed = g.Where(r => !r.Success).ToList();
+            if (valid.Count == 0)
+            {
+                // Keep all-failed groups in the report (zeroed timings): silently dropping them made a folder
+                // of undecodable files produce an empty, apparently successful summary.
+                groupStats.Add(new GroupStatistics
+                {
+                    Backend = g.Key.RequestedBackend,
+                    TargetWidth = g.Key.TargetWidth,
+                    TotalRuns = g.Count(),
+                    SuccessCount = 0,
+                    FailureCount = failed.Count,
+                    FirstError = failed.Select(r => r.Error).FirstOrDefault(e => !string.IsNullOrEmpty(e)),
+                });
+                continue;
+            }
 
             var times = valid.Select(r => r.DecodeMs).OrderBy(t => t).ToList();
             var mean = times.Average();
@@ -284,6 +303,8 @@ public static class DecoderBenchmark
                 TargetWidth = g.Key.TargetWidth,
                 TotalRuns = g.Count(),
                 SuccessCount = valid.Count,
+                FailureCount = failed.Count,
+                FirstError = failed.Select(r => r.Error).FirstOrDefault(e => !string.IsNullOrEmpty(e)),
                 FallbackCount = fallbacks,
                 MeanMs = mean,
                 P50Ms = p50,
@@ -322,6 +343,8 @@ public static class DecoderBenchmark
             TestedBackends = activeDecoders.Select(d => d.Backend.ToString()).ToList(),
             TestedWidths = widths.ToList(),
             CacheCondition = "Warm OS file-system cache (interleaved per file)",
+            TotalRuns = records.Count,
+            TotalFailures = records.Count(r => !r.Success),
             Groups = groupStats.OrderBy(s => s.TargetWidth).ThenBy(s => s.Backend).ToList()
         };
 
@@ -343,6 +366,14 @@ public static class DecoderBenchmark
         Console.WriteLine($"[DEC-BENCH] Markdown Report: {summaryMdPath}");
         Console.WriteLine($"[DEC-BENCH] JSON Summary:    {summaryJsonPath}");
         Console.WriteLine($"[DEC-BENCH] Raw Details CSV: {detailsCsvPath}");
+
+        Console.WriteLine($"[DEC-BENCH] Decodes: {summary.TotalRuns - summary.TotalFailures} succeeded, {summary.TotalFailures} failed of {summary.TotalRuns}.");
+        if (summary.TotalRuns - summary.TotalFailures == 0)
+        {
+            Console.Error.WriteLine("[DEC-BENCH] FAIL: no decode succeeded; the results above are not a valid benchmark.");
+            return 1;
+        }
+        return 0;
     }
 
     private static double GetPercentile(List<double> sorted, double percentile)
@@ -369,11 +400,12 @@ public static class DecoderBenchmark
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Source Folder:** `{summary.SourceFolder}` ({summary.ImageCount} images)");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Iterations:** {summary.Iterations} iterations per image");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Condition:** {summary.CacheCondition}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Failed decodes:** {summary.TotalFailures} of {summary.TotalRuns}");
         sb.AppendLine();
         sb.AppendLine("## Summary Table");
         sb.AppendLine();
-        sb.AppendLine("| Backend | Target Width | P50 (ms) | P95 (ms) | Mean (ms) | Max (ms) | Throughput (MP/s) | Avg Alloc | Speedup vs Wpf |");
-        sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
+        sb.AppendLine("| Backend | Target Width | Failures | P50 (ms) | P95 (ms) | Mean (ms) | Max (ms) | Throughput (MP/s) | Avg Alloc | Speedup vs Wpf |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|");
 
         foreach (var g in summary.Groups)
         {
@@ -381,7 +413,7 @@ public static class DecoderBenchmark
             var allocStr = FormatBytes(g.AvgAllocatedBytes);
             var speedupStr = g.SpeedupVsWpf > 0 ? $"{g.SpeedupVsWpf:F2}x" : "1.00x";
 
-            sb.AppendLine(CultureInfo.InvariantCulture, $"| **{g.Backend}** | {widthStr} | {g.P50Ms:F2} | {g.P95Ms:F2} | {g.MeanMs:F2} | {g.MaxMs:F2} | {g.ThroughputMegapixelsPerSec:F1} | {allocStr} | **{speedupStr}** |");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| **{g.Backend}** | {widthStr} | {g.FailureCount}/{g.TotalRuns} | {g.P50Ms:F2} | {g.P95Ms:F2} | {g.MeanMs:F2} | {g.MaxMs:F2} | {g.ThroughputMegapixelsPerSec:F1} | {allocStr} | **{speedupStr}** |");
         }
 
         sb.AppendLine();
@@ -393,7 +425,7 @@ public static class DecoderBenchmark
             var wStr = width == 0 ? "Full resolution (Original)" : $"{width}px target width";
             sb.AppendLine(CultureInfo.InvariantCulture, $"### Width: {wStr}");
 
-            var statsForWidth = summary.Groups.Where(g => g.TargetWidth == width).OrderBy(g => g.P50Ms).ToList();
+            var statsForWidth = summary.Groups.Where(g => g.TargetWidth == width && g.SuccessCount > 0).OrderBy(g => g.P50Ms).ToList();
             if (statsForWidth.Count >= 2)
             {
                 var fastest = statsForWidth[0];
@@ -415,9 +447,9 @@ public static class DecoderBenchmark
     private static void PrintConsoleSummaryTable(BenchmarkSummary summary)
     {
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "{0,-12} | {1,-12} | {2,10} | {3,10} | {4,10} | {5,14} | {6,12} | {7,14}",
-            "Backend", "Target Width", "P50 (ms)", "P95 (ms)", "Max (ms)", "Throughput", "Avg Alloc", "Speedup vs Wpf"));
-        Console.WriteLine(new string('-', 102));
+            "{0,-12} | {1,-12} | {8,9} | {2,10} | {3,10} | {4,10} | {5,14} | {6,12} | {7,14}",
+            "Backend", "Target Width", "P50 (ms)", "P95 (ms)", "Max (ms)", "Throughput", "Avg Alloc", "Speedup vs Wpf", "Failures"));
+        Console.WriteLine(new string('-', 114));
 
         foreach (var g in summary.Groups)
         {
@@ -427,8 +459,9 @@ public static class DecoderBenchmark
             var speedupStr = g.SpeedupVsWpf > 0 ? $"{g.SpeedupVsWpf:F2}x" : "1.00x";
 
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "{0,-12} | {1,-12} | {2,10:F2} | {3,10:F2} | {4,10:F2} | {5,14} | {6,12} | {7,14}",
-                g.Backend, widthStr, g.P50Ms, g.P95Ms, g.MaxMs, tpStr, allocStr, speedupStr));
+                "{0,-12} | {1,-12} | {8,9} | {2,10:F2} | {3,10:F2} | {4,10:F2} | {5,14} | {6,12} | {7,14}",
+                g.Backend, widthStr, g.P50Ms, g.P95Ms, g.MaxMs, tpStr, allocStr, speedupStr, $"{g.FailureCount}/{g.TotalRuns}"));
+            if (g.FailureCount > 0 && g.FirstError is not null) Console.WriteLine($"    first error: {g.FirstError}");
         }
     }
 

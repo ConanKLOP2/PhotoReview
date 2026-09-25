@@ -38,6 +38,8 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");
         await using var imageExecutor = new BenchmarkImageExecutor(profile, files, totalSourceBytes);
         var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
+        // Same profile application as the WPF benchmark window: logging-on/logging-off must differ (PERF-01).
+        using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled);
         try
         {
             // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior, with the same
@@ -140,7 +142,7 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
 
 if (args.Length is >= 3 and <= 6 && args[0] == "--decoder-bench")
 {
-    await DecoderBenchmark.RunAsync(args);
+    Environment.ExitCode = await DecoderBenchmark.RunAsync(args);
     return;
 }
 

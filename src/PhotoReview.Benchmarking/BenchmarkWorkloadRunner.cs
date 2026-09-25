@@ -23,15 +23,27 @@ public static class BenchmarkWorkloadRunner
         IProgress<BenchmarkProgress>? progress = null, CancellationToken ct = default) =>
         RunProfileAsync(folder, profile,
             (workload, iteration, token) => PrepareIterationAsync(executor, files, profile, workload, iteration, random, recycleBin, token),
-            progress, timeProvider: null, ct);
+            progress, timeProvider: null, ct, files.Length);
 
     /// <summary>Test seam for <see cref="RunProfileAsync(string, BenchmarkProfile, BenchmarkImageExecutor, string[], Random, IRecycleBin, IProgress{BenchmarkProgress}?, CancellationToken)"/>: a fake prepare step and clock.</summary>
     internal static Task<BenchmarkReport> RunProfileAsync(string folder, BenchmarkProfile profile,
         Func<BenchmarkWorkload, int, CancellationToken, Task<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>>> prepare,
-        IProgress<BenchmarkProgress>? progress, TimeProvider? timeProvider, CancellationToken ct) =>
-        BenchmarkEngine.RunPreparedAsync(folder, profile,
+        IProgress<BenchmarkProgress>? progress, TimeProvider? timeProvider, CancellationToken ct, int fileCount = int.MaxValue) =>
+        StampImagesPerSample(BenchmarkEngine.RunPreparedAsync(folder, profile,
             (_, workload, iteration, token) => prepare(workload, iteration, token),
-            progress, timeProvider, ct);
+            progress, timeProvider, ct), profile, fileCount);
+
+    private static async Task<BenchmarkReport> StampImagesPerSample(Task<BenchmarkReport> run, BenchmarkProfile profile, int fileCount)
+    {
+        var report = await run.ConfigureAwait(false);
+        return report with { Phases = [.. report.Phases.Select(p => p with { ImagesPerSample = ImagesPerSample(profile, p.Workload, fileCount) })] };
+    }
+
+    /// <summary>Images decoded by one timed sample: one per navigation-style workload, otherwise one per worker (capped by the folder).</summary>
+    public static int ImagesPerSample(BenchmarkProfile profile, BenchmarkWorkload workload, int fileCount) =>
+        workload is BenchmarkWorkload.FirstFrame or BenchmarkWorkload.Preload or BenchmarkWorkload.WarmNext or BenchmarkWorkload.FileAction
+            ? 1
+            : Math.Min(Math.Max(1, profile.Workers), Math.Max(1, fileCount));
 
     public static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunIterationAsync(
         BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,

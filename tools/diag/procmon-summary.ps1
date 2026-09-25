@@ -38,7 +38,7 @@ function Get-LengthBytes {
 
 function Get-Category {
     param([string]$Path)
-    if ($Path -match '\\cache\\[^\\]+\.png$') { return 'cache-png' }
+    if ($Path -match '\\cache\\[^\\]+\.pv4$') { return 'cache-pv4' }
     if ($Path -match '\\thumbnails\\[^\\]+\.png$') { return 'thumbnail-png' }
     if ($Path -match '\\Sessions\\[^\\]+\.json$') { return 'session-json' }
     if ($Path -match 'operations\.jsonl$') { return 'operations-jsonl' }
@@ -50,7 +50,7 @@ $statOps = @('QueryBasicInformationFile', 'QueryNetworkOpenInformationFile', 'Qu
 
 $byPath = @{}
 $catCounts = @{
-    'cache-png' = [ordered]@{ CreateFile = 0; ReadFile = 0; Bytes = 0; Stat = 0 }
+    'cache-pv4' = [ordered]@{ CreateFile = 0; ReadFile = 0; Bytes = 0; Stat = 0 }
     'thumbnail-png' = [ordered]@{ CreateFile = 0; ReadFile = 0; Bytes = 0; Stat = 0 }
     'session-json' = [ordered]@{ CreateFile = 0; ReadFile = 0; Bytes = 0; Stat = 0 }
     'operations-jsonl' = [ordered]@{ CreateFile = 0; ReadFile = 0; Bytes = 0; Stat = 0 }

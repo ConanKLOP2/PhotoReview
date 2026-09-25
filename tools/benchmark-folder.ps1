@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $resolved = (Resolve-Path -LiteralPath $Folder).Path
-$files = Get-ChildItem -LiteralPath $resolved -File | Where-Object { $_.Extension -match '^\.(jpg|jpeg|png|bmp|gif|tif|tiff|webp)$' }
+$files = Get-ChildItem -LiteralPath $resolved -File | Where-Object { $_.Extension -match '^\.(jpg|jpeg|png|bmp|gif|tif|tiff)$' }
 if ($files.Count -eq 0) { throw "Không tìm thấy ảnh được hỗ trợ trong: $resolved" }
 
 $times = [System.Collections.Generic.List[double]]::new()
