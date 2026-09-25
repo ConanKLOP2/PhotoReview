@@ -196,6 +196,7 @@ public sealed class BenchmarkTrustTests : IDisposable
 
     // ---- TOOL-04 / TOOL-05 -----------------------------------------------------------------------
 
+    private static readonly string[] PowerShellPrefix = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"];
     private static readonly byte[] Bytes = [1, 2, 3];
 
     private static string RepoRoot()
@@ -208,7 +209,7 @@ public sealed class BenchmarkTrustTests : IDisposable
     private static (int ExitCode, string Output) RunPowerShell(params string[] args)
     {
         var psi = new ProcessStartInfo("powershell.exe") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var a in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File" }.Concat(args)) psi.ArgumentList.Add(a);
+        foreach (var a in PowerShellPrefix.Concat(args)) psi.ArgumentList.Add(a);
         using var process = Process.Start(psi)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
