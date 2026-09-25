@@ -16,6 +16,9 @@ public sealed class NaturalSortPropertyTests
         "٣", "３", "_", "-", " ", "(", ")", ".", "\ud83d\ude00", "Z", "z", "~",
     ];
 
+    private static readonly string[] TurkishSample = ["i2.jpg", "I10.jpg", "İ 1.jpg", "ı 3.jpg", "i1.jpg"];
+    private static readonly string[] ZeroSample = ["a1", "a01", "a001", "a0", "a00", "a2", "a10", "a010"];
+
     private static string RandomName(Random r)
     {
         var parts = r.Next(1, 7);
@@ -128,7 +131,7 @@ public sealed class NaturalSortPropertyTests
             Assert.NotEqual(0, c.Compare("PHOTO.jpg", "photo.jpg"));
             Assert.Equal(-Math.Sign(c.Compare("I.jpg", "\u0131.jpg")), Math.Sign(c.Compare("\u0131.jpg", "I.jpg")));
             Assert.NotEqual(0, c.Compare("\u0130.jpg", "i.jpg"));
-            var sorted = new[] { "i2.jpg", "I10.jpg", "\u0130 1.jpg", "\u0131 3.jpg", "i1.jpg" }.OrderBy(x => x, c).ToArray();
+            var sorted = TurkishSample.OrderBy(x => x, c).ToArray();
             Assert.Equal(["i1.jpg", "i2.jpg", "I10.jpg"], sorted.Where(x => x[0] is 'i' or 'I'));
         }
         finally
@@ -159,7 +162,7 @@ public sealed class NaturalSortPropertyTests
     public void Comparer_LeadingZeros()
     {
         var c = ManagedNaturalComparer.Instance;
-        var list = new[] { "a1", "a01", "a001", "a0", "a00", "a2", "a10", "a010" }.OrderBy(x => x, c).ToList();
+        var list = ZeroSample.OrderBy(x => x, c).ToList();
 
         Assert.Equal(list, list.OrderBy(x => x, c).ToList());
         Assert.True(list.IndexOf("a0") < list.IndexOf("a1") && list.IndexOf("a00") < list.IndexOf("a1"));

@@ -17,6 +17,12 @@ public sealed partial class LocalizationFuzzTests
         "日本語", "مرحبا", "😀", "\n", "{{x}}", "{x}}", "{{x}", "%s", "{0}", "{X}", "{ñ}",
     ];
 
+    private static LocTemplate Parse(string text)
+    {
+        Assert.True(LocTemplate.TryParse(text, out var template), text);
+        return template;
+    }
+
     private static string RandomTemplateText(Random r)
     {
         var sb = new StringBuilder();
@@ -84,7 +90,7 @@ public sealed partial class LocalizationFuzzTests
     [Fact(DisplayName = "Render never throws when an argument's ToString throws or returns null, or the value is a huge number")]
     public void Render_HostileArguments_DoNotThrowForFormatting()
     {
-        LocTemplate.TryParse("[{a}] [{b}] [{c}]", out var t);
+        var t = Parse("[{a}] [{b}] [{c}]");
 
         var text = t.Render([new LocArg("a", null), new LocArg("b", new NullToString()), new LocArg("c", decimal.MinValue)]);
 
@@ -105,7 +111,7 @@ public sealed partial class LocalizationFuzzTests
     [InlineData("")]
     public void Render_NumbersUseCurrentCulture(string culture)
     {
-        LocTemplate.TryParse("{n} | {n2} | {date}", out var t);
+        var t = Parse("{n} | {n2} | {date}");
         var ci = CultureInfo.GetCultureInfo(culture);
         var date = new DateTime(2026, 9, 26, 13, 5, 0, DateTimeKind.Utc);
         var previous = CultureInfo.CurrentCulture;
@@ -128,7 +134,7 @@ public sealed partial class LocalizationFuzzTests
     {
         var templates = Enumerable.Range(0, 8).Select(i =>
         {
-            LocTemplate.TryParse("T" + i + "-{a}-" + new string((char)('a' + i), 40) + "-{b}", out var t);
+            var t = Parse("T" + i + "-{a}-" + new string((char)('a' + i), 40) + "-{b}");
             return t;
         }).ToArray();
 
@@ -149,8 +155,8 @@ public sealed partial class LocalizationFuzzTests
     [Fact(DisplayName = "A nested render (an argument whose ToString renders another template) does not corrupt the outer text")]
     public void Render_Nested_KeepsOuterText()
     {
-        LocTemplate.TryParse("outer[{inner}]end", out var outer);
-        LocTemplate.TryParse("in{v}ner", out var inner);
+        var outer = Parse("outer[{inner}]end");
+        var inner = Parse("in{v}ner");
 
         var text = outer.Render([new LocArg("inner", new RendersTemplate(inner))]);
 
