@@ -25,11 +25,11 @@ public sealed class ExifInfoSettingsTests
     }
 
     [Fact]
-    public void Defaults_ShowEveryFieldExceptFileNameAndDimensions()
+    public void Defaults_LineOffAndFieldsExcludeFileNameAndDimensions()
     {
         var settings = new AppSettings();
 
-        Assert.True(settings.ShowExifInfo);
+        Assert.False(settings.ShowExifInfo);
         // FileName and Dimensions are excluded: the status line above already shows the file name and W×H.
         Assert.Equal(ExifInfoFields.Default, settings.ExifInfoFields);
         Assert.Equal(
@@ -46,7 +46,7 @@ public sealed class ExifInfoSettingsTests
         var loaded = LoadJson("""{ "ConfigVersion": 3, "CompareHashEnabled": false }""");
 
         Assert.False(loaded.CompareHashEnabled);
-        Assert.True(loaded.ShowExifInfo);
+        Assert.False(loaded.ShowExifInfo);
         Assert.Equal(ExifInfoFields.Default, loaded.ExifInfoFields);
     }
 

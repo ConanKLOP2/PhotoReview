@@ -116,7 +116,7 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 
 | Setting | Giá trị | Điểm áp dụng |
 |---|---|---|
-| `DecoderBackend` | `Wpf` mặc định; `WicDirect`; `TurboJpeg` | `SettingsStore` → `PreviewStateContext` → `PreviewImageService`/`ImageDecoderFactory`. Đổi khi đang xem làm clear cache và present lại ảnh hiện tại. |
+| `DecoderBackend` | `WicDirect` mặc định (nhanh nhất, ADR 0001); `Wpf`; `TurboJpeg` | `SettingsStore` → `PreviewStateContext` → `PreviewImageService`/`ImageDecoderFactory`. Đổi khi đang xem làm clear cache và present lại ảnh hiện tại. |
 | `ScalingQuality` | `HighQuality` mặc định; `Linear` | `MainViewModel` → `ViewerState` → WPF `RenderOptions.BitmapScalingMode`; không đổi decode/cache key. |
 | `UseSourceBytesCache` | `false` mặc định | Được chụp lúc composition trong `App.xaml.cs`; bật cache byte 16 GiB cho service hỗ trợ. Thay đổi cần khởi động lại để toàn bộ dependency nhận cùng policy. |
 

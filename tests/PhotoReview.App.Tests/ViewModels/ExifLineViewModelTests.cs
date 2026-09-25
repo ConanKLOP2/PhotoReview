@@ -83,7 +83,7 @@ public sealed class ExifLineViewModelTests : IDisposable
             Assert.True(bGate.Wait(TimeSpan.FromSeconds(10)));
             return null;
         }));
-        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview };
+        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview, ShowExifInfo = true };
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
