@@ -119,21 +119,30 @@ public sealed class PhysicalFileSystem : IFileSystem
     /// target. The temp file is complete and durable at this point, so retry a few times with a short backoff (worst case
     /// ~100 ms in total) before giving up with the original exception.
     /// </summary>
-    private static void ReplaceWithRetry(string tempPath, string path)
+    private static void ReplaceWithRetry(string tempPath, string path) =>
+        ReplaceWithRetry(() => File.Move(tempPath, path, overwrite: true), static delay => Thread.Sleep(delay));
+
+    // Only transient contention is retried (sharing/lock violation, access denied); a missing directory, too-long path
+    // etc. cannot heal in ~100 ms, so those surface at once instead of stalling the caller (settings save runs on the UI thread).
+    internal static void ReplaceWithRetry(Action move, Action<int> sleep)
     {
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                File.Move(tempPath, path, overwrite: true);
+                move();
                 return;
             }
-            catch (Exception ex) when (attempt < ReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (attempt < ReplaceAttempts && IsTransientReplaceFailure(ex))
             {
-                Thread.Sleep(attempt * 3);
+                sleep(attempt * 3);
             }
         }
     }
+
+    private static bool IsTransientReplaceFailure(Exception ex) =>
+        ex is UnauthorizedAccessException
+        || ex is IOException { HResult: unchecked((int)0x80070020) or unchecked((int)0x80070021) };
 
     private const int ReplaceAttempts = 8;
 
