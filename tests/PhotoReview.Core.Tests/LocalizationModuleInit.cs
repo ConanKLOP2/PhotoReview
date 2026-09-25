@@ -20,7 +20,17 @@ internal static class LocalizationModuleInit
         TestLocalization.UseVietnamese();
         var name = Environment.GetEnvironmentVariable("PHOTOREVIEW_TEST_CULTURE");
         if (string.IsNullOrWhiteSpace(name)) return;
-        var culture = CultureInfo.GetCultureInfo(name);
+        CultureInfo culture;
+        try
+        {
+            culture = CultureInfo.GetCultureInfo(name);
+        }
+        catch (CultureNotFoundException ex)
+        {
+            // A module initializer failure surfaces as an opaque TypeInitializationException for the whole assembly.
+            throw new InvalidOperationException($"PHOTOREVIEW_TEST_CULTURE='{name}' is not a valid culture name (e.g. tr-TR, de-DE, ja-JP).", ex);
+        }
+
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.CurrentCulture = culture;
     }

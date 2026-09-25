@@ -128,6 +128,9 @@ public partial class MainWindowBehaviorTests
                 Assert.Equal(beforeStretch, window.ViewModel.Viewer.Stretch);
                 Assert.True(Math.Abs(window.MainImage.ActualWidth - beforeWidth) < 0.5, "Image width changed");
                 Assert.True(Math.Abs(window.MainImage.ActualHeight - beforeHeight) < 0.5, "Image height changed");
+
+                // Positive control: the same gesture on the same window DOES fit once zoomed, so "no change" above is meaningful.
+                await AssertDoubleClickFitsFrom200Async(window);
             });
         }
         finally
@@ -175,6 +178,11 @@ public partial class MainWindowBehaviorTests
                 // Should still be at Zoom 2.0
                 Assert.Equal(2.0, window.ViewModel.Viewer.Zoom);
                 Assert.False(window.ViewModel.Viewer.IsFit);
+
+                // Positive control: a real double-click from this exact state fits.
+                RaiseMainImagePress(window, MouseButton.Left, 2);
+                Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.Viewer.IsFit, TimeSpan.FromSeconds(5)),
+                    "Positive control failed: a left double-click did not fit");
             });
         }
         finally
@@ -288,6 +296,12 @@ public partial class MainWindowBehaviorTests
 
                 // Should not fit
                 Assert.False(window.ViewModel.Viewer.IsFit, "Right-click should not trigger Fit");
+                Assert.Equal(2.0, window.ViewModel.Viewer.Zoom);
+
+                // Positive control: a left double-click from this exact state fits.
+                RaiseMainImagePress(window, MouseButton.Left, 2);
+                Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.Viewer.IsFit, TimeSpan.FromSeconds(5)),
+                    "Positive control failed: a left double-click did not fit");
             });
         }
         finally
@@ -295,6 +309,19 @@ public partial class MainWindowBehaviorTests
             if (window is not null)
                 await CloseAsync(window);
         }
+    }
+
+    private static async Task AssertDoubleClickFitsFrom200Async(MainWindow window)
+    {
+        window.ViewModel.Viewer.SetZoom(2.0);
+        window.MainImage.UpdateLayout();
+        await StaTestHost.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+        Assert.False(window.ViewModel.Viewer.IsFit);
+
+        RaiseMainImagePress(window, MouseButton.Left, 2);
+
+        Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.Viewer.IsFit, TimeSpan.FromSeconds(5)),
+            "Positive control failed: a left double-click did not fit");
     }
 
     /// <summary>
