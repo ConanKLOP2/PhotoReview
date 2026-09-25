@@ -172,7 +172,7 @@ if (-not $SkipBuild) {
 }
 
 # Prefer the built exe (no `dotnet run` host/build-check overhead per process); fall back to `dotnet run --no-build`.
-$cliExe = Get-ChildItem -Path (Join-Path (Split-Path -Parent $testsProject) 'bin\Release') -Filter 'PhotoReview.Benchmark.Cli.exe' -Recurse -ErrorAction SilentlyContinue |
+$cliExe = Get-ChildItem -LiteralPath (Join-Path (Split-Path -Parent $testsProject) 'bin\Release') -Filter 'PhotoReview.Benchmark.Cli.exe' -Recurse -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($cliExe) { Write-Host "Using built exe: $($cliExe.FullName)" }
 else { Write-Host "Built exe not found under tools\PhotoReview.Benchmark.Cli\bin\Release; falling back to 'dotnet run --no-build' (slower, one MSBuild up-to-date check per process)." -ForegroundColor Yellow }

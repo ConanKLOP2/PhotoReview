@@ -38,6 +38,10 @@ using System.Text;
 
 public static class StrictJsonValidator
 {
+    // Same nesting limit as System.Text.Json's default (JsonDocument.Parse), which LanguageCatalog uses at runtime; it also
+    // keeps a hostile 1 MB file of '[' from overflowing the stack of this recursive-descent parser.
+    private const int MaxDepth = 64;
+
     private sealed class ParseError : Exception
     {
         public readonly int Line;
@@ -58,10 +62,11 @@ public static class StrictJsonValidator
         if (text == null) return "line 1, column 1: input is null";
         try
         {
+            // No BOM handling here: the caller decodes the file bytes and strips exactly one BOM, so a second BOM
+            // (which System.Text.Json rejects too) is reported as an unexpected character.
             int pos = 0;
-            if (text.Length > 0 && text[0] == '﻿') pos = 1;
             SkipWhitespace(text, ref pos);
-            ParseValue(text, ref pos);
+            ParseValue(text, ref pos, 0);
             SkipWhitespace(text, ref pos);
             if (pos != text.Length)
             {
@@ -115,12 +120,13 @@ public static class StrictJsonValidator
         return true;
     }
 
-    private static void ParseValue(string text, ref int pos)
+    private static void ParseValue(string text, ref int pos, int depth)
     {
         if (pos >= text.Length) { Throw(text, pos, "Unexpected end of input"); return; }
         char c = text[pos];
-        if (c == '{') { ParseObject(text, ref pos); return; }
-        if (c == '[') { ParseArray(text, ref pos); return; }
+        if ((c == '{' || c == '[') && depth >= MaxDepth) { Throw(text, pos, "Nesting is deeper than " + MaxDepth + " levels"); return; }
+        if (c == '{') { ParseObject(text, ref pos, depth); return; }
+        if (c == '[') { ParseArray(text, ref pos, depth); return; }
         if (c == '"') { ParseString(text, ref pos); return; }
         if (c == '-' || IsDigit(c)) { ParseNumber(text, ref pos); return; }
         if (Match(text, pos, "true")) { pos += 4; return; }
@@ -129,7 +135,7 @@ public static class StrictJsonValidator
         Throw(text, pos, "Unexpected character '" + c + "'");
     }
 
-    private static void ParseObject(string text, ref int pos)
+    private static void ParseObject(string text, ref int pos, int depth)
     {
         pos++; // consume '{'
         SkipWhitespace(text, ref pos);
@@ -155,7 +161,7 @@ public static class StrictJsonValidator
             }
             pos++;
             SkipWhitespace(text, ref pos);
-            ParseValue(text, ref pos);
+            ParseValue(text, ref pos, depth + 1);
             SkipWhitespace(text, ref pos);
             if (pos >= text.Length) { Throw(text, pos, "Unexpected end of input in object"); }
             if (text[pos] == ',')
@@ -173,7 +179,7 @@ public static class StrictJsonValidator
         }
     }
 
-    private static void ParseArray(string text, ref int pos)
+    private static void ParseArray(string text, ref int pos, int depth)
     {
         pos++; // consume '['
         SkipWhitespace(text, ref pos);
@@ -181,7 +187,7 @@ public static class StrictJsonValidator
         while (true)
         {
             SkipWhitespace(text, ref pos);
-            ParseValue(text, ref pos);
+            ParseValue(text, ref pos, depth + 1);
             SkipWhitespace(text, ref pos);
             if (pos >= text.Length) { Throw(text, pos, "Unexpected end of input in array"); }
             if (text[pos] == ',')
@@ -248,7 +254,15 @@ public static class StrictJsonValidator
             sb.Append(c);
             pos++;
         }
-        return sb.ToString();
+        string value = sb.ToString();
+        // A lone surrogate escape is grammatical JSON but not a valid Unicode string: System.Text.Json refuses to read it,
+        // so a catalog containing one would pass this check and then fail to load in the app.
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (char.IsHighSurrogate(value[i]) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1])) { i++; continue; }
+            if (char.IsSurrogate(value[i])) { Throw(text, start, "Unpaired UTF-16 surrogate in string"); }
+        }
+        return value;
     }
 
     private static void ParseNumber(string text, ref int pos)
@@ -322,6 +336,36 @@ function Invoke-SelfTest {
             Name = 'TrailingGarbage'
             Json = '{"a":1} extra'
             ExpectPass = $false; ExpectLine = 1; ExpectColumn = 9
+        },
+        [pscustomobject]@{
+            Name = 'ValidSurrogatePair'
+            Json = '{"a":"😀"}'
+            ExpectPass = $true
+        },
+        [pscustomobject]@{
+            Name = 'LoneHighSurrogate'
+            Json = '{"a":"x\ud800y"}'
+            ExpectPass = $false; ExpectLine = 1; ExpectColumn = 6
+        },
+        [pscustomobject]@{
+            Name = 'LoneLowSurrogate'
+            Json = '{"a":"\ude00"}'
+            ExpectPass = $false; ExpectLine = 1; ExpectColumn = 6
+        },
+        [pscustomobject]@{
+            Name = 'DepthAtLimit'
+            Json = ('[' * 64) + (']' * 64)
+            ExpectPass = $true
+        },
+        [pscustomobject]@{
+            Name = 'DepthOverLimit'
+            Json = ('[' * 65) + (']' * 65)
+            ExpectPass = $false; ExpectLine = 1; ExpectColumn = 65
+        },
+        [pscustomobject]@{
+            Name = 'SecondBom'
+            Json = [string][char]0xFEFF
+            ExpectPass = $false; ExpectLine = 1; ExpectColumn = 1
         }
     )
 
@@ -425,7 +469,8 @@ function Get-Placeholders([string]$Text) {
             $end = $Text.IndexOf('}', $i + 1)
             if ($end -lt 0) { return $null }
             $name = $Text.Substring($i + 1, $end - $i - 1)
-            if ($name -cnotmatch '^[A-Za-z][A-Za-z0-9]*$') { return $null }
+            # \z, not $: in .NET '$' also matches before a trailing newline, so a name ending in a line feed would count.
+            if ($name -cnotmatch '^[A-Za-z][A-Za-z0-9]*\z') { return $null }
             $names.Add($name)
             $i = $end + 1
             continue
@@ -439,12 +484,24 @@ function Get-Placeholders([string]$Text) {
     return , $names.ToArray()
 }
 
+function Read-Utf8Text([string]$File) {
+    # Strict UTF-8: [IO.File]::ReadAllText(..., UTF8) silently turns invalid bytes into U+FFFD, so a corrupted or
+    # mis-encoded catalog (e.g. saved as ANSI) would pass the check and then show mojibake or fail in the app.
+    # Strips exactly one leading BOM, like ReadAllText.
+    $bytes = [IO.File]::ReadAllBytes($File)
+    $strict = New-Object System.Text.UTF8Encoding($false, $true)
+    $offset = 0
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { $offset = 3 }
+    return $strict.GetString($bytes, $offset, $bytes.Length - $offset)
+}
+
 function Test-JsonValid([string]$File) {
     # Strictly parses JSON (RFC 8259: no comments, no trailing/double commas) and checks for duplicate
     # keys at every nesting level, via the StrictJsonValidator C# parser above. One code path, same
     # behaviour on Windows PowerShell 5.1 and PowerShell 7+.
     # Returns $null on success; returns error message string on failure.
-    $text = [IO.File]::ReadAllText($File, [Text.Encoding]::UTF8)
+    try { $text = Read-Utf8Text $File }
+    catch { return "Invalid UTF-8: $($_.Exception.Message)" }
     $err = [StrictJsonValidator]::Validate($text)
     if ($null -ne $err) { return "Invalid JSON: $err" }
     return $null
@@ -477,7 +534,7 @@ function Read-Catalog([string]$File) {
     }
 
     try {
-        $text = [IO.File]::ReadAllText($File, [Text.Encoding]::UTF8)
+        $text = Read-Utf8Text $File
         $doc = (Remove-JsonComments $text) | ConvertFrom-Json
     }
     catch {

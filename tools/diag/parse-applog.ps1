@@ -20,11 +20,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path $Log)) { throw "Log not found: $Log" }
+if (-not (Test-Path -LiteralPath $Log)) { throw "Log not found: $Log" }
 
 $tsRegex = '^(?<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?<level>[A-Z]+)\] \[T(?<thread>\d+)\] (?<msg>.*)$'
 
-$lines = Get-Content -Path $Log
+$lines = Get-Content -LiteralPath $Log -Encoding UTF8
 $parsed = foreach ($line in $lines) {
     if ($line -match $tsRegex) {
         [pscustomobject]@{
@@ -94,7 +94,7 @@ $rows = foreach ($t in $tokens.Values) {
     }
 }
 
-$rows | Sort-Object { [int]$_.Token } | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8
+$rows | Sort-Object { [int]$_.Token } | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
 
 # ---------------------------------------------------------------------------
 # Counters: Preload paused, Preload progress, Explorer lines

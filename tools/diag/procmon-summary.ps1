@@ -23,9 +23,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path $Csv)) { throw "CSV not found: $Csv" }
+if (-not (Test-Path -LiteralPath $Csv)) { throw "CSV not found: $Csv" }
 
-$rows = Import-Csv -Path $Csv
+$rows = Import-Csv -LiteralPath $Csv
 $rows = $rows | Where-Object { $_.'Process Name' -eq 'PhotoReview.App.exe' }
 
 function Get-LengthBytes {
@@ -80,7 +80,7 @@ foreach ($r in $rows) {
 }
 
 $perFileRows = $byPath.Values | ForEach-Object { [pscustomobject]$_ }
-$perFileRows | Export-Csv -Path $Out -NoTypeInformation -Encoding UTF8
+$perFileRows | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
 
 Write-Output "== Source image file access (PhotoReview.App.exe) =="
 Write-Output ("{0,-60} {1,10} {2,10} {3,14} {4,8}" -f 'Path', 'CreateFile', 'ReadFile', 'Bytes', 'Stat')

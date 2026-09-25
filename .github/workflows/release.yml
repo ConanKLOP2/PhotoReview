@@ -43,7 +43,8 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
         run: |
-          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag '$env:TAG' must look like v2.0.93" }
+          # [0-9] and \z, not \d and $: in .NET \d also matches non-ASCII digits and $ also matches before a trailing newline.
+          if ($env:TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+\z') { throw "Tag '$env:TAG' must look like v2.0.93" }
 
       - name: Checkout the tag with full history (the version is derived from git)
         uses: actions/checkout@v4
@@ -112,9 +113,11 @@ jobs:
           $zip = "PhotoReview-$env:TAG-win-x64.zip"
           Compress-Archive -Path "$pub/*" -DestinationPath $zip
           $sha = (Get-FileHash "$pub/PhotoReview.App.exe" -Algorithm SHA256).Hash
+          $zipSha = (Get-FileHash $zip -Algorithm SHA256).Hash
           $notes = @"
           Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe``.
 
+          SHA256 of ``$zip``: ``$zipSha``
           SHA256 of ``PhotoReview.App.exe``: ``$sha``
           "@
           Set-Content -Path release-notes.md -Value $notes -Encoding utf8
@@ -123,4 +126,4 @@ jobs:
           if ($env:DRAFT -eq 'true') { $ghArgs += '--draft' }
           gh @ghArgs
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
-          "Release $env:TAG created (draft=$env:DRAFT), zip $zip, exe SHA256 $sha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Release $env:TAG created (draft=$env:DRAFT), zip $zip (SHA256 $zipSha), exe SHA256 $sha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
