@@ -1,12 +1,10 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `2a76263` (v2.0.x, #64–#75 merged) | **Branch:** `review/2026-09-25-integration`
+**Updated:** 2026-09-25 | **Base:** master `2d52f6d` (#76 merged) | **Branch:** `docs/decisions-q-r7-r11`
 
-## Now: review 2026-09-25 — waves implemented on the integration branch, PR pending
+## Now: round-2 decisions implemented, PRs #77 #78 #79 open
 
-- **Done on the branch (cherry-picked, all gates green):** W1a (retry off UI, ConfigureAwait, SessionWriter 2 s, COM) · W1b (alpha previews not cached, preload headroom) · W1c (destination policy) · W2a (CA2007, CI Integration step, TestIsolation rule) · W2b (TEST-04/05/06; TEST-03 sweep declined, Q-R9) · W3 docs · W4 a11y + `Dark.*` · W5a/b/c · round 2: R2-A fixes, R2-F-01/02/03/04/05/06/07/08/14/15/18.
-- **Round 2 done:** all verified mediums/lows fixed or recorded (r2-f3 App, r2-f4 tooling/Imaging/Core). PR from the integration branch pending merge by the user.
-- **User:** answer Q-R7..Q-R11 ([OPEN-DECISIONS](docs/refactoring/OPEN-DECISIONS.md)); the real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven); visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
+- **User:** review + merge #77 (Q-R7), #78 (Q-R10, needs a GUI check: multi-select open from Explorer), #79 (Q-R8); the real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven); visual checks: Recovery, Settings journal option, VI wording, zoom, Fit first frame (T89), AR04.
 - **Plan / evidence:** [plan](docs/refactoring/REVIEW-2026-09-25-PLAN.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
 
 ## Status by Group
