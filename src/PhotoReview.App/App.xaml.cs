@@ -184,7 +184,6 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
-            sp.GetRequiredService<IExplorerOrderProvider>(),
             sp.GetRequiredService<IAppPaths>()));
     }
 
@@ -404,9 +403,12 @@ public partial class App : System.Windows.Application, IDisposable
     public void Dispose()
     {
         GC.SuppressFinalize(this);
-        _services?.GetService<SessionWriter>()?.Dispose(); // Q-R5: bounded (2 s), not the unbounded Flush
         _instanceScope?.StopListening();
         Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
+        // APP-01 ownership: the container disposes every singleton it created (SessionWriter with its bounded 2 s flush
+        // (Q-R5), ExplorerOrderService, caches). Instances registered by value (FileLog.Default) are NOT disposed by it;
+        // AppLog.Shutdown below owns those. Nothing else disposes a container-owned service, so there is no double-dispose.
+        (Interlocked.Exchange(ref _services, null) as IDisposable)?.Dispose();
         AppLog.Shutdown(); // after the forward server/coalescer so their shutdown warnings still reach the log
         Interlocked.Exchange(ref _instanceScope, null)?.Dispose();
         _perfHooks?.Detach();

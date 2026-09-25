@@ -25,7 +25,6 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private readonly ShortcutRouter _shortcutRouter;
-    private readonly IExplorerOrderProvider? _explorerOrder;
     private readonly SettingsStore _settingsStore;
     private AppSettings _settings;
     private double? _cachedDpiScale;
@@ -67,12 +66,11 @@ public partial class MainWindow : Window
     /// </summary>
     internal string? PlacementFile { get; private set; }
 
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IExplorerOrderProvider? explorerOrder = null, IAppPaths? appPaths = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
-        _explorerOrder = explorerOrder;
         _kineticFrameHandler = OnKineticFrame; // one delegate for += / -= (no allocation per glide)
         PlacementFile = (appPaths ?? PhotoReview.Core.AppPaths.FromEnvironment()).WindowPlacementFile;
         // AR02b finding (see AR02-single-composition-root.md AR02d step 1, applied a step early
@@ -275,7 +273,7 @@ public partial class MainWindow : Window
         CancelPan();
         _viewModel.CloseSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
-        _explorerOrder?.Dispose();
+        // The IExplorerOrderProvider singleton is owned by the service provider (App.Dispose), not by this window (APP-01).
     }
 
     // ---- feat/mouse-zoom: wheel (zoom / navigate), click-to-zoom, drag-pan with kinetic glide ----

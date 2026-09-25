@@ -205,6 +205,18 @@ public sealed class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
+    public async Task CloseSession_DisposesFolderCoordinator_SoNoFurtherLoadStarts()
+    {
+        var folder = Path.Combine(_tempDir, "close_coordinator");
+        Directory.CreateDirectory(folder);
+        var (vm, _, _) = CreateViewModel();
+
+        vm.CloseSession();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => vm.OpenFolderAsync(folder));
+    }
+
+    [Fact]
     public async Task RunActionAsync_Move_PresentsNextBeforeMoveCompletes_PreservingInv3()
     {
         var folder = Path.Combine(_tempDir, "inv3_album");
@@ -813,9 +825,9 @@ public sealed class MainViewModelFileActionTests : IDisposable
     private sealed class ForwardingFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink
     {
         public void ResetCaches() => targetProvider().ResetCaches();
-        public void OnCatalogReady(string folder, int count) => targetProvider().OnCatalogReady(folder, count);
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => targetProvider().OnCatalogReady(folder, count, session);
         public Task PresentAsync(int index, long presentationGeneration) => targetProvider().PresentAsync(index, presentationGeneration);
-        public void OnEmpty(string folder) => targetProvider().OnEmpty(folder);
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => targetProvider().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => targetProvider().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => targetProvider().OnFailed(folder, exception);
     }

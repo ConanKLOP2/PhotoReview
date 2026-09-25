@@ -606,7 +606,16 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// Window close / app exit (Q-R5, R7-3): writes pending session state but waits at most 2 s for a write already
     /// in flight on a slow disk, then skips it instead of hanging shutdown. Later updates are ignored.
     /// </summary>
-    public void CloseSession() => _sessionWriter?.Dispose();
+    /// <summary>
+    /// Window closed: cancel and dispose the folder-load coordinator (a scan/Explorer await must not keep
+    /// running or touch this view model afterwards, APP-01), then write pending session state through the
+    /// bounded shutdown path.
+    /// </summary>
+    public void CloseSession()
+    {
+        _folderCoordinator.Dispose();
+        _sessionWriter?.Dispose();
+    }
 
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 
@@ -665,13 +674,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _resetCachesAction?.Invoke();
     }
 
-    void IFolderLoadSink.OnCatalogReady(string folder, int count)
+    void IFolderLoadSink.OnCatalogReady(string folder, int count, SessionState session)
     {
         // The running preload loop holds a snapshot of the PREVIOUS catalog; stop it so the next
         // PreloadAroundAsync starts a fresh lifetime over the new entries (R2-F-01).
         _preloadController?.Cancel();
-        _sessionWriter?.Flush();
-        _currentSession = _sessionStore.Load(folder);
+        _currentSession = session; // loaded once by FolderLoadCoordinator (APP-02)
         OnFolderShown(folder);
         if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
         SetFolderText(folder, count, explorerOrderApplied: false);
@@ -688,11 +696,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         return _presenter.PresentAsync(index);
     }
 
-    void IFolderLoadSink.OnEmpty(string folder)
+    void IFolderLoadSink.OnEmpty(string folder, SessionState session)
     {
         _preloadController?.Cancel();
-        _sessionWriter?.Flush();
-        _currentSession = _sessionStore.Load(folder);
+        _currentSession = session; // loaded once by FolderLoadCoordinator (APP-02)
         OnFolderShown(folder);
         SetFolderText(folder, 0, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
