@@ -99,19 +99,46 @@ public sealed class UndoService
     {
         _moveHistory.Clear();
         _moveFingerprints.Clear();
-        var committedMoves = _journal.ReadCommittedMoves();
-        foreach (var entry in committedMoves)
+        SeedHistory(ReadStartupHistory());
+    }
+
+    /// <summary>
+    /// Startup, any thread (no in-memory state is touched): the recent committed Moves whose file is still at the
+    /// destination and not back at the source, oldest first. Pass the result to <see cref="SeedHistory"/> on the UI thread.
+    /// </summary>
+    public IReadOnlyList<JournalEntry> ReadStartupHistory()
+    {
+        var history = new List<JournalEntry>();
+        foreach (var entry in _journal.ReadCommittedMoves())
         {
             if (string.IsNullOrEmpty(entry.Destination)) continue;
             // An undo is journaled as a reverse Move; loading it would turn Ctrl+Z after a restart into a redo.
             if (entry.Undo == true) continue;
 
             if (_fileSystem.FileExists(entry.Destination) && !_fileSystem.FileExists(entry.Source))
-            {
-                _moveHistory.Push((entry.Source, entry.Destination));
-                _moveFingerprints[entry.Destination] = (entry.Size, entry.LastWriteUtc);
-            }
+                history.Add(entry);
         }
+        return history;
+    }
+
+    /// <summary>
+    /// Adds journal history (oldest first, from <see cref="ReadStartupHistory"/>) BELOW the moves already registered
+    /// in this session, which are newer; a Move registered meanwhile is not added twice. Same thread as
+    /// <see cref="Register"/> (UI).
+    /// </summary>
+    public void SeedHistory(IReadOnlyList<JournalEntry> history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        var sessionMoves = _moveHistory.ToArray(); // newest first
+        var sessionDestinations = new HashSet<string>(sessionMoves.Select(move => move.Destination), StringComparer.OrdinalIgnoreCase);
+        _moveHistory.Clear();
+        foreach (var entry in history)
+        {
+            if (entry.Destination is null || sessionDestinations.Contains(entry.Destination)) continue;
+            _moveHistory.Push((entry.Source, entry.Destination));
+            _moveFingerprints[entry.Destination] = (entry.Size, entry.LastWriteUtc);
+        }
+        for (var i = sessionMoves.Length - 1; i >= 0; i--) _moveHistory.Push(sessionMoves[i]);
     }
 
     /// <summary>

@@ -323,11 +323,16 @@ public sealed class OperationJournal
         };
     }
 
-    public IReadOnlyList<JournalEntry> ReconcilePendingOperations()
+    /// <param name="preparedBeforeUtc">
+    /// Only Prepared entries stamped before this instant are reconciled. Startup passes the moment it began, so an
+    /// action this process starts while the (background) reconcile runs is never judged mid-flight.
+    /// </param>
+    public IReadOnlyList<JournalEntry> ReconcilePendingOperations(DateTime? preparedBeforeUtc = null)
     {
         var reconciled = new List<JournalEntry>();
         foreach (var pending in ReadPendingOperations())
         {
+            if (preparedBeforeUtc is { } cutoff && pending.TimestampUtc >= cutoff) continue;
             if (pending.Type == FileOperationType.Recycle)
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;

@@ -479,5 +479,8 @@
   "settings.allowPermanentDelete.hint": "Off by default: Delete is refused on removable, network and unknown drives because they have no Recycle Bin. When on, Delete removes the file permanently after a confirmation. Deleted files cannot be restored, not even with Undo.",
   "dialog.confirmPermanentDelete.title": "Delete permanently?",
   "dialog.confirmPermanentDelete.message": "\"{fileName}\" is on a drive without a Recycle Bin. It will be deleted PERMANENTLY and cannot be restored (Undo will not bring it back). Delete it?",
-  "core.fileAction.moveSourceNotRemoved": "The file was copied to the destination, but the original could not be removed (it may be read-only or in use). Both copies now exist; nothing was deleted."
+  "core.fileAction.moveSourceNotRemoved": "The file was copied to the destination, but the original could not be removed (it may be read-only or in use). Both copies now exist; nothing was deleted.",
+  "dialog.startupRecoveryFailed.title": "Interrupted file operations",
+  "dialog.startupRecoveryFailed.message.one": "{count} file operation was interrupted last time and could not be confirmed. Nothing was replayed or deleted. Open Recovery to review it now?",
+  "dialog.startupRecoveryFailed.message.other": "{count} file operations were interrupted last time and could not be confirmed. Nothing was replayed or deleted. Open Recovery to review them now?"
 }
