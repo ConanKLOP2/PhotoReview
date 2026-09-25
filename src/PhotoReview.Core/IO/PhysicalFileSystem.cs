@@ -102,7 +102,7 @@ public sealed class PhysicalFileSystem : IFileSystem
                 stream.Flush(flushToDisk: durable);
             }
 
-            File.Move(tempPath, path, overwrite: true);
+            ReplaceWithRetry(tempPath, path);
         }
         finally
         {
@@ -112,6 +112,30 @@ public sealed class PhysicalFileSystem : IFileSystem
             }
         }
     }
+
+    /// <summary>
+    /// The final rename over an existing file fails sporadically with "access denied"/"sharing violation" while another
+    /// writer (a second PhotoReview process saving the same settings/session file) or a reader/AV scanner briefly holds the
+    /// target. The temp file is complete and durable at this point, so retry a few times with a short backoff (worst case
+    /// ~100 ms in total) before giving up with the original exception.
+    /// </summary>
+    private static void ReplaceWithRetry(string tempPath, string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(tempPath, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < ReplaceAttempts && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(attempt * 3);
+            }
+        }
+    }
+
+    private const int ReplaceAttempts = 8;
 
     public string ReadAllText(string path)
     {
