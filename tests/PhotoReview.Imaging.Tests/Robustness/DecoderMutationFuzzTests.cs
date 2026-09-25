@@ -95,7 +95,8 @@ public sealed class DecoderMutationFuzzTests(ITestOutputHelper output)
                         }
                         catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
                         {
-                            histogram[$"{decoderName}: {ex.GetType().Name}"] = histogram.GetValueOrDefault($"{decoderName}: {ex.GetType().Name}") + 1;
+                            var hk = $"{decoderName}: {ex.GetType().Name}" + (ex is ArgumentException ? $" [{ex.Message.Split((char)10)[0]}] at {ex.StackTrace?.Split((char)10).FirstOrDefault()?.Trim()}" : "");
+                            histogram[hk] = histogram.GetValueOrDefault(hk) + 1;
                             if (IsDefect(ex) && defects.Count < 12)
                                 defects.Add($"{decoderName} on {seedName} mutant {i} ({mutant.Length} B, box={request.Box}): {ex.GetType().Name}: {ex.Message} :: {ex.StackTrace?.Split('\n').FirstOrDefault()?.Trim()}");
                         }
@@ -195,6 +196,31 @@ public sealed class DecoderMutationFuzzTests(ITestOutputHelper output)
             var image = decoder.Decode(new DecodeRequest("two-values.jpg", DecodeBox.Unbounded, bytes: jpeg));
             Assert.True(image.Orientation == 6, $"{name} reported orientation {image.Orientation}");
             Assert.Equal((16, 24), (image.PixelWidth, image.PixelHeight));
+        }
+    }
+
+    [Theory(DisplayName = "A JPEG whose EXIF TIFF header is damaged (bad byte order mark, magic or IFD offset) still decodes in every decoder and chain, with orientation 1")]
+    [InlineData(0)] // byte order mark
+    [InlineData(2)] // magic 42
+    [InlineData(3)]
+    [InlineData(4)] // IFD0 offset (high byte)
+    public void DamagedExifTiffHeader_StillDecodes(int tiffOffset)
+    {
+        var jpeg = ExifTestData.EncodeJpegWithExif(24, 16, orientation: 6);
+        var (start, _) = FindApp1(jpeg);
+        var at = start + 4 + 6 + tiffOffset;
+        jpeg[at] = (byte)(jpeg[at] ^ 0x5A);
+
+        // The bare WicDirect decoder may answer COMException for damaged colour metadata: that is its designed signal to
+        // hand the file to the WPF fallback, which is what the chain (the production configuration) must then do.
+        foreach (var (name, decoder) in Decoders().Where(d => d.Name != "WicDirect"))
+        {
+            foreach (var box in new[] { new DecodeBox(12, 12), DecodeBox.Unbounded })
+            {
+                var image = decoder.Decode(new DecodeRequest("damaged-exif.jpg", box, bytes: jpeg));
+                Assert.True(image.Orientation == 1, $"{name} reported orientation {image.Orientation}");
+                Assert.Equal((24, 16), (image.OriginalWidth, image.OriginalHeight));
+            }
         }
     }
 

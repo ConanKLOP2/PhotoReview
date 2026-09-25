@@ -309,7 +309,18 @@ public sealed class WicDirectDecoder : IImageDecoder
 
     private static IWICColorContext[]? ReadColorContexts(IWICImagingFactory factory, IWICBitmapFrameDecode frame)
     {
-        frame.GetColorContexts(0, null, out uint count);
+        uint count;
+        try
+        {
+            frame.GetColorContexts(0, null, out count);
+        }
+        catch (ArgumentException)
+        {
+            // E_INVALIDARG: the colour metadata (e.g. a damaged EXIF TIFF header) cannot be read. The pixels are fine, so the
+            // picture is treated as untagged sRGB instead of failing the decode.
+            return null;
+        }
+
         if (count == 0)
         {
             return null;
@@ -325,6 +336,11 @@ public sealed class WicDirectDecoder : IImageDecoder
 
             frame.GetColorContexts(count, contexts, out _);
             return contexts;
+        }
+        catch (ArgumentException)
+        {
+            ReleaseAll(contexts);
+            return null;
         }
         catch
         {

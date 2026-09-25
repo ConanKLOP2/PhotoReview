@@ -70,6 +70,31 @@ public sealed class WpfBitmapImageDecoderTests : IDisposable
         Assert.True(wpfImage.Source.IsFrozen);
     }
 
+    [Theory(DisplayName = "A source that already fits the requested width or height is never upscaled (same rule as every other backend)")]
+    [InlineData(100, 0)]
+    [InlineData(0, 100)]
+    [InlineData(100, 100)]
+    public void DecodeNeverUpscalesASourceThatFits(int targetWidth, int targetHeight)
+    {
+        // ValidPng1x1 is 1x1: a 100-wide request used to stretch it to 100x100 through DecodePixelWidth.
+        var decoded = _decoder.Decode(new DecodeRequest(_imagePath, targetWidth, ApplyOrientation: true, Bytes: null, TargetHeight: targetHeight));
+
+        Assert.Equal((1, 1), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.Equal((1, 1), (decoded.OriginalWidth, decoded.OriginalHeight));
+    }
+
+    [Fact(DisplayName = "A width-only decode of a larger source scales to exactly that width and still reports the full original size (ApplyOrientation off too)")]
+    public void WidthOnlyDecodeReportsOriginalSizeWithoutOrientation()
+    {
+        var largePath = Path.Combine(_tempDir, "large.png");
+        FixtureGenerator.GeneratePng(largePath, 64, 48);
+
+        var decoded = _decoder.Decode(new DecodeRequest(largePath, TargetWidth: 32, ApplyOrientation: false));
+
+        Assert.Equal((32, 24), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.Equal((64, 48), (decoded.OriginalWidth, decoded.OriginalHeight));
+    }
+
     [Fact(DisplayName = "Decode with target width reports OriginalWidth/Height separately from the downscaled pixel dimensions")]
     public void DecodeWithTargetWidthReportsOriginalDimensions()
     {

@@ -29,49 +29,67 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     {
         try
         {
-            return DecodeImage(request);
+            return DecodeWithoutProfileFallback(request);
         }
         catch (Exception ex) when (request.IsDownscaleRequested && IsDownscaleFallbackException(ex))
         {
             // Full-resolution retry: same path (and EXIF extraction) as a normal decode, just unconstrained.
-            return DecodeImage(new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes));
+            return DecodeWithoutProfileFallback(new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes));
         }
     }
 
-    private static WpfDecodedImage DecodeImage(DecodeRequest request)
+    /// <summary>
+    /// WPF reads the colour contexts (embedded ICC profile, EXIF colour space) while finishing the bitmap, and a damaged
+    /// EXIF/ICC block there fails the whole decode with <see cref="ArgumentException"/> although the pixel data is fine.
+    /// The retry ignores the colour profile: an untagged (sRGB) picture beats an error for a photo whose metadata is bad.
+    /// </summary>
+    private static WpfDecodedImage DecodeWithoutProfileFallback(DecodeRequest request)
     {
-        var bitmap = DecodeSource(request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
+        try
+        {
+            return DecodeImage(request, ignoreColorProfile: false);
+        }
+        catch (ArgumentException)
+        {
+            return DecodeImage(request, ignoreColorProfile: true);
+        }
+    }
+
+    private static WpfDecodedImage DecodeImage(DecodeRequest request, bool ignoreColorProfile)
+    {
+        var bitmap = DecodeSource(request, ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
         return new WpfDecodedImage(bitmap, downscaled, orientation: orientation,
             originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
     }
 
     public static BitmapSource DecodeSource(DecodeRequest request)
-        => DecodeSource(request, out _, out _, out _, out _, out _);
+        => DecodeSource(request, ignoreColorProfile: false, out _, out _, out _, out _, out _);
 
-    private static BitmapSource DecodeSource(DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
+    private static BitmapSource DecodeSource(DecodeRequest request, bool ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         if (request.Bytes.HasValue)
         {
             using var memoryStream = ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value);
-            return DecodeStream(memoryStream, request, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
+            return DecodeStream(memoryStream, request, ignoreColorProfile, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
         }
 
         using var stream = new FileStream(request.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
-        return DecodeStream(stream, request, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
+        return DecodeStream(stream, request, ignoreColorProfile, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
     }
 
-    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
+    private static BitmapSource DecodeStream(Stream stream, DecodeRequest request, bool ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         orientation = 1;
         exif = null;
         originalWidth = 0;
         originalHeight = 0;
-        // A box (both axes, e.g. previews) needs the source size to pick the constraining side and
-        // to avoid upscaling; width-only requests (thumbnails, legacy callers) keep the old path.
-        bool isBox = request.TargetHeight > 0;
+        // Any downscale request (a box, or one axis only: thumbnails, legacy callers) needs the source size to pick the
+        // constraining side and, above all, to never upscale a source that already fits -- DecodePixelWidth alone stretches
+        // a small image up to the requested width, unlike the other backends' DecodeBox.Fit.
+        bool isBox = request.IsDownscaleRequested;
         int rawWidth = 0, rawHeight = 0;
         if ((request.ApplyOrientation || isBox) && stream.CanSeek)
         {
@@ -116,6 +134,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        if (ignoreColorProfile) bitmap.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
 
         downscaled = false;
         if (isBox && rawWidth > 0 && rawHeight > 0)
@@ -130,10 +149,16 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                 bitmap.DecodePixelHeight = targetH;
                 downscaled = true;
             }
+            else if (request.TargetWidth <= 0 || request.TargetHeight <= 0)
+            {
+                // Compatibility: a one-axis (width-only) request has always reported Downscaled, also when the source already
+                // fit (it used to be stretched instead). Callers and tests key the disk-cache persistence on this flag.
+                downscaled = true;
+            }
         }
         else if (request.IsDownscaleRequested)
         {
-            // Width-only request (or a box whose source size could not be read): legacy behaviour.
+            // The source size could not be read (unseekable stream or a failed header pre-read): legacy behaviour.
             if (request.TargetWidth > 0)
             {
                 if (isTransposed) bitmap.DecodePixelHeight = request.TargetWidth;
