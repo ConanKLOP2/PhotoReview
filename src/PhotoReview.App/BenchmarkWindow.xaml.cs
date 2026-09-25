@@ -138,9 +138,9 @@ public partial class BenchmarkWindow : Window, IDisposable
                 catch (Exception ex)
                 {
                     AppLog.Error($"Benchmark profile failed: {profile.Id}", ex);
-                    _rows.Add(new BenchmarkResultRow(profile, new BenchmarkPhaseResult(profile.Id, profile.Workload, [], BenchmarkResultStatus.Fail, ex.Message)));
+                    _rows.Add(new BenchmarkResultRow(profile, new BenchmarkPhaseResult(profile.Id, profile.Workload, [], BenchmarkResultStatus.Fail, ex.Message), ex));
                     RecomputeBest();
-                    StatusText.Text = Tr.BenchmarkStatusProfileFailed(BenchmarkText.ProfileName(profile), ex.Message);
+                    StatusText.Text = Tr.BenchmarkStatusProfileFailed(BenchmarkText.ProfileName(profile), BenchmarkText.Describe(ex));
                 }
                 finally { loggingScope.Dispose(); await executor.DisposeAsync(); }
             }
@@ -151,7 +151,7 @@ public partial class BenchmarkWindow : Window, IDisposable
             }
         }
         catch (OperationCanceledException) { StatusText.Text = Tr.BenchmarkStatusCanceled; }
-        catch (Exception ex) { StatusText.Text = ex.Message; }
+        catch (Exception ex) { StatusText.Text = Tr.BenchStatusFailed(BenchmarkText.Describe(ex)); }
         finally
         {
             RunButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true;
@@ -203,7 +203,7 @@ public partial class BenchmarkWindow : Window, IDisposable
 /// <summary>Presentation row for one profile's result in the comparison grid.
 /// Wraps the profile and its raw <see cref="BenchmarkPhaseResult"/> so ranking
 /// can reuse <see cref="BenchmarkRanking"/> instead of re-deriving P50/P95 order.</summary>
-public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseResult phase)
+public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseResult phase, Exception? error = null)
 {
     public BenchmarkProfile Profile { get; } = profile;
     /// <summary>Trophy marker for the best row; also the (language-neutral) column header.</summary>
@@ -211,6 +211,8 @@ public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseR
 
     public BenchmarkPhaseResult Phase { get; } = phase;
     public bool IsBest { get; set; }
+    /// <summary>The exception behind a failed profile (null for library-reported results); used for translated text.</summary>
+    public Exception? Error { get; } = error;
 
     public string ProfileName => BenchmarkText.ProfileName(Profile);
     public LoadingMode LoadingMode => Profile.LoadingMode;
@@ -220,10 +222,11 @@ public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseR
     public int Count => Phase.Count;
     public BenchmarkResultStatus Status => Phase.Status;
     public string BestMarker => IsBest ? BestSymbol : "";
-    public string P50Text => Count == 0 ? "—" : $"{Phase.P50:F0} ms";
-    public string P95Text => Count == 0 ? "—" : $"{Phase.P95:F0} ms";
-    public string P99Text => Count == 0 ? "—" : $"{Phase.P99:F0} ms";
-    public string MaxText => Count == 0 ? "—" : $"{Phase.Max:F0} ms";
+    public string P50Text => MillisecondsText(Phase.P50);
+    public string P95Text => MillisecondsText(Phase.P95);
+    public string P99Text => MillisecondsText(Phase.P99);
+    public string MaxText => MillisecondsText(Phase.Max);
+    private string MillisecondsText(double value) => Count == 0 ? Tr.BenchNoValue : Tr.UnitMilliseconds(value.ToString("F0", CultureInfo.CurrentCulture));
     public string StatusText => Status switch
     {
         BenchmarkResultStatus.Pass => Tr.EnumBenchmarkResultStatusPass,
@@ -232,7 +235,7 @@ public sealed class BenchmarkResultRow(BenchmarkProfile profile, BenchmarkPhaseR
         {
             null => Tr.EnumBenchmarkResultStatusFail,
             BenchmarkEngine.ResultCorrectnessFailed => Tr.BenchmarkResultCorrectnessFailed,
-            var message => message, // exception text (pass-through)
+            var message => Tr.BenchResultFailedDetail(Error is null ? message : BenchmarkText.Describe(Error)),
         },
         _ => Tr.EnumBenchmarkResultStatusInsufficientData,
     };
@@ -301,6 +304,21 @@ public static class BenchmarkText
         BenchmarkWorkload.Correctness => Tr.EnumBenchmarkWorkloadCorrectness,
         _ => workload.ToString(),
     };
+
+    /// <summary>Translated sentence for a failed benchmark: known library problems map to catalog text, any other
+    /// exception keeps its (OS/technical) message inside a translated wrapper.</summary>
+    public static string Describe(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        return ex switch
+        {
+            BenchmarkProfileException { Problem: BenchmarkProfileProblem.NotImplemented } p =>
+                Tr.BenchErrorNotImplemented(BenchmarkProfiles.Find(p.ProfileId) is { } profile ? ProfileName(profile) : p.ProfileId),
+            BenchmarkProfileException { Problem: BenchmarkProfileProblem.MissingIdOrMode } => Tr.BenchErrorProfileIncomplete,
+            BenchmarkProfileException p => Tr.BenchErrorProfileSettings(p.ProfileId),
+            _ => Tr.BenchErrorUnexpected(ex.Message),
+        };
+    }
 
     private static string Lookup(string key, string fallback)
     {

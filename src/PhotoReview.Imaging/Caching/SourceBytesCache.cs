@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using PhotoReview.Core.Caching;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -70,12 +71,12 @@ public sealed class SourceBytesCache
         while (offset < bytes.Length)
         {
             var read = stream.Read(bytes, offset, bytes.Length - offset);
-            if (read == 0) throw new EndOfStreamException($"Unexpected EOF while reading {key.Path}");
+            if (read == 0) throw UserFacingError.Localized(new EndOfStreamException($"Unexpected EOF while reading {key.Path}"), () => Tr.ErrIoUnexpectedEof(key.Path));
             offset += read;
         }
         var current = new FileInfo(key.Path);
         if (current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
-            throw new IOException($"File changed while reading: {key.Path}");
+            throw UserFacingError.Localized(new IOException($"File changed while reading: {key.Path}"), () => Tr.ErrIoFileChangedWhileReading(key.Path));
         if (generation == Volatile.Read(ref _generation) && pathVersion == _pathVersions.GetValueOrDefault(key.Path)) _cache.Set(key, bytes);
         return bytes;
     }

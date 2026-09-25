@@ -12,6 +12,7 @@ using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Caching;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App.Coordinators;
 
@@ -459,7 +460,7 @@ public sealed class ImagePresenter
         {
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
             CurrentPhotoInfo = null;
-            UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), ex.Message));
+            UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)));
         }
         catch (Exception ex)
         {

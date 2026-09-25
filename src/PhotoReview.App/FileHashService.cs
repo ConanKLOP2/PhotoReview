@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using PhotoReview.Core.Caching;
 using PhotoReview.Imaging.Caching;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App;
 
@@ -46,7 +47,7 @@ public sealed class FileHashService
             var hashFromBytes = Convert.ToHexString(SHA256.HashData(bytes));
             var currentFromBytes = new FileInfo(path);
             if (currentFromBytes.Length != length || currentFromBytes.LastWriteTimeUtc != lastWriteUtc)
-                throw new IOException($"File changed while hashing: {path}");
+                throw UserFacingError.Localized(new IOException($"File changed while hashing: {path}"), () => Tr.ErrIoFileChangedWhileHashing(path));
             if (generation == Volatile.Read(ref _generation))
                 _cache.Set(path, new HashEntry(path, length, lastWriteUtc, hashFromBytes));
             return hashFromBytes;
@@ -55,7 +56,7 @@ public sealed class FileHashService
         var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
         var current = new FileInfo(path);
         if (current.Length != length || current.LastWriteTimeUtc != lastWriteUtc)
-            throw new IOException($"File changed while hashing: {path}");
+            throw UserFacingError.Localized(new IOException($"File changed while hashing: {path}"), () => Tr.ErrIoFileChangedWhileHashing(path));
         if (generation == Volatile.Read(ref _generation))
             _cache.Set(path, new HashEntry(path, length, lastWriteUtc, hash));
         return hash;

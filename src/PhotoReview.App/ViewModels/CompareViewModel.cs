@@ -2,6 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using PhotoReview.Core.Localization;
 
 namespace PhotoReview.App.ViewModels;
 
@@ -109,7 +110,7 @@ public sealed partial class CompareViewModel : ObservableObject
         }
     }
 
-    public string SizeText => $"{LeftSizeText} ↔ {RightSizeText}";
+    public string SizeText => Tr.CompareSizePair(LeftSizeText, RightSizeText);
 
     public string HashText
     {
