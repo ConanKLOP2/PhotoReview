@@ -132,6 +132,24 @@ public sealed class UndoServiceTests
         Assert.True(failed.Undo);
     }
 
+    [Fact(DisplayName = "An undo move that copied back but left the moved file is a failure (MoveSourceNotRemoved)")]
+    public async Task UndoMoveAsync_MoveLeavesSource_FailsWithDistinctCode()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"D:\sorted\photo1.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+        _fs.CreateDirectory(@"C:\photos");
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+        _fs.MoveLeavesSource = true;
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(destination));
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, Assert.Single(_journal.ReadFailedOperations()).ErrorCode);
+    }
+
     [Fact(DisplayName = "A journaled undo is not loaded back as undoable history at startup")]
     public async Task LoadFromJournal_AfterUndo_DoesNotOfferReverseMove()
     {
