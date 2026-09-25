@@ -77,7 +77,7 @@ public sealed class SettingsStoreFailureTests
         Assert.Equal("de", current.UiLanguage);
     }
 
-    [Fact(DisplayName = "Two corrupt loads within the same second never overwrite the first backup")]
+    [Fact(DisplayName = "Two corrupt loads within the same second keep both backups under unique names")]
     public void Load_TwoCorruptLoadsInOneSecond_KeepBothOrFirstBackup()
     {
         _fs.AddFile(_paths.ConfigFile, "{ broken 1");
@@ -95,6 +95,8 @@ public sealed class SettingsStoreFailureTests
         Assert.Equal("{ broken 1", firstBackupText);
         var afterSecond = _fs.EnumerateFiles(Path.GetDirectoryName(_paths.ConfigFile)!, "config.json.corrupt-*").Select(f => _fs.ReadAllText(f)).ToList();
         Assert.Contains("{ broken 1", afterSecond);
+        Assert.Contains("{ broken 2", afterSecond); // the second bad file is preserved too, under a unique name
+        Assert.Equal(2, afterSecond.Count);
     }
 
     [Fact(DisplayName = "Load with a mistyped value keeps the readable properties, backs the file up and reports the reset names")]

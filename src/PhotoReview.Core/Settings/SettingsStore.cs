@@ -62,7 +62,7 @@ public sealed class SettingsStore
                     LogStartupError("config.json has unreadable values (" + string.Join(", ", unusable) + "); the rest was kept", ex);
                     try
                     {
-                        _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
+                        _fileSystem.Copy(filePath, UniqueBackupPath(filePath));
                     }
                     catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
                     {
@@ -89,7 +89,7 @@ public sealed class SettingsStore
             LogStartupError("Corrupt config.json detected, resetting to defaults", ex);
             try
             {
-                _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
+                _fileSystem.Copy(filePath, UniqueBackupPath(filePath));
             }
             catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
             {
@@ -183,6 +183,15 @@ public sealed class SettingsStore
         {
             return false;
         }
+    }
+
+    // Second resolution is not unique when the app crash-loops on a bad file: never overwrite (or fail on) an earlier backup.
+    private string UniqueBackupPath(string filePath)
+    {
+        var stem = filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        var candidate = stem;
+        for (var i = 2; i < 100 && _fileSystem.FileExists(candidate); i++) candidate = stem + "-" + i.ToString(CultureInfo.InvariantCulture);
+        return candidate;
     }
 
     private void LogStartupError(string message, Exception ex)
