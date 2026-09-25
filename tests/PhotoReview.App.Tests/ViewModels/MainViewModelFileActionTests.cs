@@ -24,7 +24,7 @@ using Xunit;
 namespace PhotoReview.App.Tests.ViewModels;
 
 [Trait("Category", "HotPath")]
-public sealed class MainViewModelFileActionTests : IDisposable
+public sealed partial class MainViewModelFileActionTests : IDisposable
 {
     private static readonly byte[] ValidPngBytes =
     [

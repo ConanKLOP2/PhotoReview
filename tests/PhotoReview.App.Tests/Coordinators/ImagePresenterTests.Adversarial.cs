@@ -80,10 +80,13 @@ public sealed partial class ImagePresenterTests
     {
         var f1 = CreateFakeImageFile("stale.png");
         _catalog.Reset([f1]);
-        var presenter = CreatePresenter();
+        // The decode is held back until the newer navigation has happened, so the order is deterministic.
+        using var decoder = new GatedDecoder(new FakeDecodedImage());
+        var presenter = CreatePresenterWithServices(CreatePreviewService(decoder), _thumbnailCache);
 
         var stale = presenter.PresentAsync(0);
         _clock.NextNavigation(); // a newer navigation took over before the decode came back
+        decoder.Release();
         await stale.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Empty(_sink.PresentedPaths);
