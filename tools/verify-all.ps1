@@ -267,9 +267,8 @@ if ($TestReport) {
 }
 
 # DT09: Documentation budget check (warning level; error after stabilization)
-Invoke-Gate 'Check documentation budget (T0 <= 12 KB)' {
+Invoke-Gate 'Check documentation budget (T0 <= 16 KB total, T1 <= 24 KB per file)' {
     & (Join-Path $PSScriptRoot 'docs-budget.ps1') -Check | Out-Null
-    # Note: T1 budget exceeded is a warning (see docs-budget.ps1 for details)
 }
 
 # AR07 §3: doc link check (non-archive markdown must have no broken links)

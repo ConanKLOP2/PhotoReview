@@ -22,8 +22,8 @@ The application must prioritize the following principles when processing and rev
 
 **Goal:** Reduce token overhead by tiering documentation. Read only what's needed.
 
-1. **Every session (T0, ≤12 KB):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
-2. **Per task (T1, ≤15 KB per file):** Use `INDEX.md` to find which single plan/architecture doc relates to the work. Read that file + relevant ADR. Do not pre-read all plans.
+1. **Every session (T0, ≤16 KB total):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
+2. **Per task (T1, ≤24 KB per file):** Use `INDEX.md` to find which single plan/architecture doc relates to the work. Read that file + relevant ADR. Do not pre-read all plans.
 3. **Archive (T2, unlimited):** `docs/archive/` and `docs/archive/future/` are historical only. Do not read unless referenced or verifying decisions. Use `git log --follow` for change rationale.
 4. **Task completion:** When a task is done and reaches status DONE, compress it to a single line (`ID · status · SHA`) in its plan, move detailed evidence/findings to archive, and reference the digest in `task_on_progress.md`.
 

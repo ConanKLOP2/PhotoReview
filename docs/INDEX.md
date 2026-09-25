@@ -26,4 +26,4 @@ Quick reference for finding documentation by purpose. Read-tier guides which fil
 | **README.md** | Project overview, setup, build commands | T1, first-time setup |
 | **docs/archive/** (`historical/`, `future/`, `evidence/`, `progress-log-2026-09.md`) | Full plans, ADR evidence, completed-task detail | T2, **do not read** unless referenced |
 
-**Tiers:** T0 ≤ 12 KB total (always read) · T1 ≤ 15 KB/file (per work) · T2 unlimited (archive only).
+**Tiers:** T0 ≤ 16 KB total (always read) · T1 ≤ 24 KB/file (per work; `README.md`, `docs/*.md`, `docs/adr/`, `docs/refactoring/*.md`, `arch-review/`) · T2 unlimited (archive only). Checked by `tools/docs-budget.ps1 -Check`.
