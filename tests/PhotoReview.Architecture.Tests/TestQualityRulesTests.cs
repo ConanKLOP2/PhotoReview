@@ -87,8 +87,13 @@ public sealed class TestQualityRulesTests
     [Trait("Category", "Architecture")]
     public void RealOsResourceTestsAreCategorised()
     {
+        // The token may sit in a helper of the file (e.g. a RunPowerShell method) rather than in the test body, so it is
+        // judged per file: a file that uses a real OS resource makes every uncategorised test in it a suspect.
+        var osFiles = RepoScan.CsFiles("tests")
+            .Where(f => RealOsToken.IsMatch(TestIsolationRulesTests.Blank(RepoScan.Text(f))))
+            .Select(RepoScan.Relative).ToHashSet(StringComparer.Ordinal);
         var actual = TestSourceScanner.AllTests()
-            .Where(t => !t.IsSkipped && RealOsToken.IsMatch(t.Body) && !t.Categories.Any(OptOutCategories.Contains))
+            .Where(t => !t.IsSkipped && osFiles.Contains(t.File) && !t.Categories.Any(OptOutCategories.Contains))
             .GroupBy(t => t.Key).ToDictionary(g => g.Key, g => g.Count());
 
         AssertMatchesAllowlist("real-os-uncategorised", actual,
@@ -140,6 +145,27 @@ public sealed class TestQualityRulesTests
 
         Assert.True(mutating > 0, "The scan found no culture-mutating tests; the rule is not checking anything.");
         Assert.True(violations.Count == 0, "Process-wide culture mutation outside [Collection(\"GlobalState\")]:\n" + string.Join("\n", violations));
+    }
+
+    [Fact(DisplayName = "Rule TEST-09c: test files that switch the ambient localizer declare a non-parallel [Collection]")]
+    [Trait("Category", "Architecture")]
+    public void AmbientLocalizerSwitchingTestsAreInACollection()
+    {
+        var switching = new Regex(@"\bTestLocalization\s*\.\s*Use(?:Vietnamese)?\s*\(|\bLocalizer\s*\.\s*SetCurrent\s*\(", RegexOptions.CultureInvariant);
+        var files = TestSourceScanner.AllTests().Select(t => t.File).ToHashSet(StringComparer.Ordinal);
+        var violations = new List<string>();
+        var switchingFiles = 0;
+        foreach (var file in files)
+        {
+            var text = RepoScan.Text(Path.Combine(RepoScan.Root, file));
+            if (!switching.IsMatch(TestIsolationRulesTests.Blank(text))) continue;
+            switchingFiles++;
+            if (!text.Contains("[Collection(\"", StringComparison.Ordinal)) violations.Add(file);
+        }
+
+        Assert.True(switchingFiles > 3, "The scan found almost no localizer-switching tests; the rule is not checking anything.");
+        Assert.True(violations.Count == 0,
+            "Localizer.Current is process-wide; these tests switch it without a [Collection(...)] and can race Vietnamese assertions:\n" + string.Join("\n", violations));
     }
 
     [Fact(DisplayName = "Rule TEST-QUALITY: the allowlist only names known rules")]
