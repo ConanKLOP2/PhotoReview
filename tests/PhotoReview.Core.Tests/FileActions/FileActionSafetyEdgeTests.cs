@@ -15,7 +15,6 @@ public sealed class FileActionSafetyEdgeTests
     private sealed class Clock : IClock
     {
         public DateTime UtcNow { get; } = new(2026, 9, 26, 1, 0, 0, DateTimeKind.Utc);
-        public long Timestamp => 0;
     }
 
     private sealed class Bin : IRecycleBin

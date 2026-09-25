@@ -15,7 +15,6 @@ public sealed class PlatformPrimitivesTests
         Assert.NotNull(snapshot);
         Assert.True(snapshot.Value.LoadPercent <= 100);
         Assert.True(snapshot.Value.AvailableBytes > 0);
-        Assert.True(probe.GetAvailableMemoryBytes() > 0);
         Assert.True(probe.HasHeadroom(1.0, 0));
     }
 

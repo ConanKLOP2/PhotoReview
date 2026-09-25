@@ -13,10 +13,6 @@ internal sealed class PhysicalMemory : IMemoryProbe
 
     public MemorySnapshot? GetSnapshot() => _probe.GetSnapshot();
 
-    public bool IsMemoryPressureHigh() => !HasHeadroom(0.85, PerformanceOptions.MemoryReserveBytes);
-
-    public long GetAvailableMemoryBytes() => (long)(GetSnapshot()?.AvailableBytes ?? 0);
-
     /// <param name="maximumLoad">A 0-1 fraction of physical memory load, not a percentage.</param>
     internal static bool HasHeadroom(double maximumLoad) => Instance.HasHeadroom(maximumLoad, PerformanceOptions.MemoryReserveBytes);
 }

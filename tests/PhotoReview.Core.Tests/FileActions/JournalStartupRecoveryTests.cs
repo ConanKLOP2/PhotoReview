@@ -12,7 +12,6 @@ public sealed class JournalStartupRecoveryTests
     private sealed class FakeClock(DateTime utcNow) : IClock
     {
         public DateTime UtcNow { get; set; } = utcNow;
-        public long Timestamp => 0;
     }
 
     private sealed class NoRecycleBin : IRecycleBin
