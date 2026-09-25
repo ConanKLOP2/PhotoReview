@@ -167,6 +167,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      # The tag of THIS commit when it has no GitHub release yet; empty otherwise.
+      tag: ${{ steps.release_tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -200,3 +203,28 @@ jobs:
             echo "Tagged ${tag} at ${c}${note}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
           done
           if [ ${#created[@]} -gt 0 ]; then git push origin "${created[@]}"; else echo "No missing tags"; fi
+
+      - name: Find this commit's tag when it has no release yet
+        id: release_tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(git tag --points-at "${GITHUB_SHA}" -l 'v*' | head -1)
+          if [ -n "${tag}" ] && ! gh release view "${tag}" >/dev/null 2>&1; then
+            echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "tag=" >> "${GITHUB_OUTPUT}"
+          fi
+
+  # Every merge to master gets a DRAFT release (zip + SHA256 + generated notes) to review on GitHub and
+  # publish by hand. Draft = invisible to the public, so a bad build never reaches users by itself.
+  draft-release:
+    needs: tag-version
+    if: needs.tag-version.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag-version.outputs.tag }}
+      draft: true
