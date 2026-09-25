@@ -5,7 +5,20 @@ namespace PhotoReview.Core.Settings;
 /// </summary>
 public static class PerformanceOptions
 {
+    /// <summary>
+    /// Byte budget of the in-memory preview cache, now used only when physical RAM cannot be determined; otherwise
+    /// <see cref="ImageCacheRamPercent"/> decides the budget.
+    /// </summary>
     public const long ImageCacheCapacityBytes = 16L * 1024 * 1024 * 1024;
+
+    /// <summary>Default share of physical RAM (percent) for the in-memory preview (+ source-bytes) cache: 16 GiB on a 32 GB machine.</summary>
+    public const int ImageCacheRamPercent = 50;
+
+    /// <summary>Largest selectable <see cref="ImageCacheRamPercent"/>; the minimum is decided at runtime from the preload window.</summary>
+    public const int MaxImageCacheRamPercent = 90;
+
+    /// <summary>Absolute floor of <see cref="ImageCacheRamPercent"/> when physical RAM is unknown (the real minimum depends on it).</summary>
+    public const int MinImageCacheRamPercent = 1;
     public const long MemoryReserveBytes = 2L * 1024 * 1024 * 1024;
     public const int PreloadWorkerCount = 8;
     public const double PreloadMemoryLoadLimit = 0.90;

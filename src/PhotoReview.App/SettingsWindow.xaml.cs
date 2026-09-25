@@ -9,6 +9,7 @@ using PhotoReview.App.Services;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Preload;
 
 using PhotoReview.Core.Settings;
 
@@ -48,6 +49,7 @@ public partial class SettingsWindow : Window
             JournalDurability = current.JournalDurability,
             AllowPermanentDeleteWithoutRecycleBin = current.AllowPermanentDeleteWithoutRecycleBin,
             ImageCacheCapacityBytes = current.ImageCacheCapacityBytes,
+            ImageCacheRamPercent = current.ImageCacheRamPercent,
             MemoryReserveBytes = current.MemoryReserveBytes,
             PreloadWorkerCount = current.PreloadWorkerCount,
             PreloadMemoryLoadLimit = current.PreloadMemoryLoadLimit,
@@ -189,7 +191,37 @@ public partial class SettingsWindow : Window
         AllowPermanentDeleteCheck.IsChecked = Settings.AllowPermanentDeleteWithoutRecycleBin;
         JournalSafeRadio.IsChecked = Settings.JournalDurability == JournalDurability.PowerLossSafe;
         JournalFastRadio.IsChecked = !JournalSafeRadio.IsChecked;
+        LoadRamCache();
     }
+
+    // ---- RAM%: in-memory cache share of physical RAM ----
+
+    private readonly long _physicalMemoryBytes = RamBudgetPolicy.GetPhysicalMemoryBytes();
+
+    /// <summary>Slider range = [system minimum, 90] for this device; the value is the saved percent clamped into it.</summary>
+    private void LoadRamCache()
+    {
+        RamCacheSlider.Minimum = RamBudgetPolicy.MinimumCachePercent(_physicalMemoryBytes);
+        RamCacheSlider.Maximum = PerformanceOptions.MaxImageCacheRamPercent;
+        RamCacheSlider.Value = RamBudgetPolicy.ClampCachePercent(Settings.ImageCacheRamPercent, _physicalMemoryBytes);
+        RamCacheHint.Text = Tr.SettingsRamCacheHint(FormatGb(_physicalMemoryBytes), (int)RamCacheSlider.Minimum, (int)RamCacheSlider.Maximum);
+        UpdateRamCacheValueText();
+    }
+
+    private void RamCacheSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateRamCacheValueText();
+
+    private int SelectedRamCachePercent => (int)Math.Round(RamCacheSlider.Value);
+
+    private void UpdateRamCacheValueText()
+    {
+        if (RamCacheValueText is null) return; // ValueChanged can fire while InitializeComponent is still building the tree
+        var percent = SelectedRamCachePercent;
+        RamCacheValueText.Text = Tr.SettingsRamCacheValue(percent, FormatGb(RamBudgetPolicy.BytesForPercent(percent, _physicalMemoryBytes)));
+    }
+
+    /// <summary>UI text in the user's locale (GiB shown as "GB", as Windows does); "?" when RAM is unknown.</summary>
+    private static string FormatGb(long bytes) =>
+        bytes > 0 ? (bytes / (1024d * 1024 * 1024)).ToString("0.0", System.Globalization.CultureInfo.CurrentCulture) : "?";
 
     private void Defaults_Click(object sender, RoutedEventArgs e)
     {
@@ -197,6 +229,7 @@ public partial class SettingsWindow : Window
         Settings.JournalDurability = JournalDurability.Fast;
         Settings.AllowPermanentDeleteWithoutRecycleBin = false;
         Settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
+        Settings.ImageCacheRamPercent = PerformanceOptions.ImageCacheRamPercent;
         Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
         Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
         Settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
@@ -224,6 +257,7 @@ public partial class SettingsWindow : Window
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
         Settings.AllowPermanentDeleteWithoutRecycleBin = AllowPermanentDeleteCheck.IsChecked == true;
         Settings.JournalDurability = JournalSafeRadio.IsChecked == true ? JournalDurability.PowerLossSafe : JournalDurability.Fast;
+        Settings.ImageCacheRamPercent = SelectedRamCachePercent;
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();

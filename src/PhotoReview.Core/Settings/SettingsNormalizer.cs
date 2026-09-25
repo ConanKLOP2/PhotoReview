@@ -21,6 +21,15 @@ public static class SettingsNormalizer
             settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
             fixedNames.Add(nameof(AppSettings.ImageCacheCapacityBytes));
         }
+        // The device-dependent minimum (preload window) is applied where physical RAM is known (RamBudgetPolicy); here
+        // only the device-independent range is enforced, clamping to the nearest bound rather than resetting.
+        var ramPercent = Math.Clamp(settings.ImageCacheRamPercent,
+            PerformanceOptions.MinImageCacheRamPercent, PerformanceOptions.MaxImageCacheRamPercent);
+        if (ramPercent != settings.ImageCacheRamPercent)
+        {
+            settings.ImageCacheRamPercent = ramPercent;
+            fixedNames.Add(nameof(AppSettings.ImageCacheRamPercent));
+        }
         if (settings.SourceBytesCapacityBytes <= 0)
         {
             settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;

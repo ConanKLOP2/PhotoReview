@@ -58,7 +58,7 @@
 
                 <GroupBox Header="{loc:Tr settings.group.displayPerformance}"><Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock x:Name="ViewModeLabel" Text="{loc:Tr settings.viewMode.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                     <ComboBox x:Name="ViewModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=ViewModeLabel}" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.initialViewMode.fit}"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
                     <TextBlock x:Name="LoadingModeLabel" Text="{loc:Tr settings.loadingMode.label}" Grid.Row="1" Style="{StaticResource FormLabel}"/>
@@ -71,6 +71,14 @@
                     <ComboBox x:Name="DecoderBackendCombo" Grid.Row="5" Grid.Column="1" AutomationProperties.Name="{loc:Tr settings.decoderBackend.automationName}"><ComboBoxItem Content="{loc:Tr enum.decoderBackend.wpf}"/><ComboBoxItem Content="{loc:Tr enum.decoderBackend.wicDirect}"/><ComboBoxItem x:Name="TurboJpegOption" Content="{loc:Tr enum.decoderBackend.turboJpeg}"/></ComboBox>
                     <TextBlock Text="{loc:Tr settings.scalingQuality.label}" Grid.Row="6" Style="{StaticResource FormLabel}"/>
                     <ComboBox x:Name="ScalingQualityCombo" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="{loc:Tr settings.scalingQuality.automationName}" Margin="0"><ComboBoxItem Content="{loc:Tr enum.scalingQuality.highQuality}"/><ComboBoxItem Content="{loc:Tr enum.scalingQuality.linear}"/></ComboBox>
+                    <!-- RAM%: in-memory preview cache share of physical RAM, [system minimum, 90]; applies after restart. -->
+                    <TextBlock x:Name="RamCacheLabel" Text="{loc:Tr settings.ramCache.label}" Grid.Row="7" Style="{StaticResource FormLabel}" Margin="0,10,12,10"/>
+                    <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,10">
+                        <Slider x:Name="RamCacheSlider" Width="260" VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" LargeChange="5"
+                                AutomationProperties.Name="{loc:Tr settings.ramCache.automationName}" ValueChanged="RamCacheSlider_ValueChanged"/>
+                        <TextBlock x:Name="RamCacheValueText" VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.LiveSetting="Polite"/>
+                    </StackPanel>
+                    <TextBlock x:Name="RamCacheHint" Grid.Row="8" Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource Dark.TextMuted}"/>
                 </Grid></GroupBox>
 
                 <GroupBox Header="{loc:Tr settings.group.diagnostics}"><StackPanel>
