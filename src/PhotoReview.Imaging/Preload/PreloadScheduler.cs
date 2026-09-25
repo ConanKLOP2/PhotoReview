@@ -537,7 +537,9 @@ public sealed class PreloadScheduler : IDisposable
             }
             try
             {
-                if (_prefetchSourceBytes is not null)
+                // A preview already in the disk cache decodes from there without touching the original:
+                // prefetching the whole source file would be a read nobody uses.
+                if (_prefetchSourceBytes is not null && !_target.HasDiskCachedPreview(key))
                     await _prefetchSourceBytes(path, cancellationToken).ConfigureAwait(false);
                 // Snapshot() copies/sorts the per-path open table: only pay for it when tracing.
                 var beforeReads = perf ? _metrics.Snapshot().SourceReads : 0;

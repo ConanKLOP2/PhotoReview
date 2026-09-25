@@ -29,4 +29,10 @@ public interface IPreloadTarget
     /// cached. Feeds the measured whole-folder estimate. Default null for targets without real sizes.
     /// </summary>
     long? CachedPreviewBytes(ImageCacheKey key) => null;
+
+    /// <summary>
+    /// True when the on-disk preview cache holds an entry for <paramref name="key"/>, so a decode would read it
+    /// instead of the original (the source-bytes prefetch is skipped then). Default false for targets without one.
+    /// </summary>
+    bool HasDiskCachedPreview(ImageCacheKey key) => false;
 }

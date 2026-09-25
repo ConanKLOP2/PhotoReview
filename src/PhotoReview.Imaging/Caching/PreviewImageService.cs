@@ -758,6 +758,12 @@ public sealed class PreviewImageService : IPreloadTarget
         _persistQueue.Writer.TryWrite((bitmap, cachePath, cacheEpoch, backend, orientation, originalWidth, originalHeight));
     }
 
+    /// <summary>
+    /// True when the disk preview cache holds an entry for <paramref name="key"/> (one <see cref="File.Exists"/>, the
+    /// same check the decode path makes first). Always false while the disk cache is disabled.
+    /// </summary>
+    public bool HasDiskCachedPreview(ImageCacheKey key) => !_disableDiskCache && File.Exists(GetDiskCachePath(key));
+
     bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);
     bool IPreloadTarget.TryGetCachedPreview(ImageCacheKey key) => TryGetCachedPreview(key, out _);
     long? IPreloadTarget.CachedPreviewBytes(ImageCacheKey key) => TryGetCachedPreview(key, out var image) ? image.EstimatedBytes : null;
