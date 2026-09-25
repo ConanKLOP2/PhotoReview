@@ -44,6 +44,16 @@ The application must prioritize the following principles when processing and rev
 - Version is automatic (`Directory.Build.targets`): `2.0.N`, +1 per merge to master, CI tags `v2.0.N`; never hand-edit `<Version>`.
 - Base every PR on `master` (no stacked PRs).
 
+## Agent Workflow (applies on every machine)
+
+- **Decision log:** branch `develop` holds decisions and the handoff (`docs/refactoring/OPEN-DECISIONS.md`, `task_on_progress.md`, current `WORK-*` doc). At session start `git fetch` and read them on `origin/develop`; record a new decision there in the same turn. Merge `develop` → `master` by PR from time to time; feature/fix branches still start from `master`.
+- **Worktrees:** the user runs several sessions on one repo — never switch branches or leave edits in the main checkout; work in `git worktree add .claude/worktrees/<name> -b <branch> origin/master`. Never use bare `git stash` (shared stack).
+- **Parallel agents:** split independent work across subagents in isolated worktrees with a fixed contract (names, files, keys) agreed first; new members/i18n keys are appended at the end of shared files; the lead merges the branches (one integration PR when branches overlap). Pick the cheapest suitable agent/model: `Explore` for read-only searches, a small model for mechanical edits and doc updates, the strongest model only for risky work (concurrency, data safety, Fit/T89, integration merges).
+- **Verify claims:** never report an agent's "done / N tests pass" without rebuilding (`dotnet build PhotoReview.slnx -c Release`, 0 warnings) and rerunning the gate on the merged result.
+- **No stacked PRs:** after the user merges, check each PR head with `git merge-base --is-ancestor <head> origin/master`, not the MERGED label.
+- **Recycle Bin:** never run code that deletes from, sweeps or empties the user's real Recycle Bin — including mutation checks of such code (2026-09-24 incident, Q-R9 declined). Use fakes; Native bin tests only remove their own items.
+- **Real-machine checks:** Claude runs perf/headless checks on the user's PC itself (machine-specific fixture paths live in `work/diag/fixtures.local.json` / `CLAUDE.local.md`); only visual checks go to the user.
+
 ## Tests
 
 - Must fail when the guarded code is broken (mutate to check). No source-text tests, fixed-delay asserts or `Task.Yield()` polling; real-OS tests are `Native`/`Slow` and self-cleaning. Local filter: `Category!=Manual&Category!=Native&Category!=Slow`.
