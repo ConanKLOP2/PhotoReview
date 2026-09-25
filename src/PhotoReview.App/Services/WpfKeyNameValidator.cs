@@ -7,7 +7,7 @@ namespace PhotoReview.App.Services;
 public sealed class WpfKeyNameValidator : IKeyNameValidator
 {
     public bool IsValidKeyName(string keyName) =>
-        !string.IsNullOrWhiteSpace(keyName) && Enum.TryParse<Key>(keyName.Trim(), true, out _);
+        ShortcutKeyName.TryParse(keyName, out _);
 
     public static void WireUp()
     {

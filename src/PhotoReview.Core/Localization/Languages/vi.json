@@ -210,6 +210,8 @@
   "dialog.settingsInvalid.actionsJson": "JSON thiết lập hành động không hợp lệ.",
   "dialog.settingsInvalid.shortcuts": "Các phím phải hợp lệ và không được trùng nhau.",
   "dialog.settingsInvalid.title": "Cài đặt không hợp lệ",
+  "dialog.settingsOpenFailed.title": "Không thể mở",
+  "dialog.settingsSaveFailed.title": "Chưa lưu được cài đặt",
   "enum.benchmarkResultStatus.fail": "Lỗi",
   "enum.benchmarkResultStatus.insufficientData": "Thiếu dữ liệu",
   "enum.benchmarkResultStatus.pass": "Đạt",

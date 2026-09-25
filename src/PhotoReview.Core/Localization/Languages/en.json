@@ -211,6 +211,8 @@
   "dialog.settingsInvalid.actionsJson": "The action profiles JSON is not valid.",
   "dialog.settingsInvalid.shortcuts": "Keys must be valid and must not repeat.",
   "dialog.settingsInvalid.title": "Invalid settings",
+  "dialog.settingsOpenFailed.title": "Could not open",
+  "dialog.settingsSaveFailed.title": "Settings not saved",
   "enum.benchmarkResultStatus.fail": "Error",
   "enum.benchmarkResultStatus.insufficientData": "Insufficient data",
   "enum.benchmarkResultStatus.pass": "Pass",

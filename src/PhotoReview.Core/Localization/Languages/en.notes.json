@@ -204,6 +204,8 @@
   "dialog.settingsInvalid.actionsJson": "MessageBox text. The two JsonException messages thrown on lines 149/151 are swallowed by this catch and never shown (see excluded).",
   "dialog.settingsInvalid.shortcuts": "MessageBox text (keys must be valid and unique; there is no folder field any more).",
   "dialog.settingsInvalid.title": "MessageBox caption; same key on lines 153 and 156.",
+  "dialog.settingsOpenFailed.title": "MessageBox caption when Explorer cannot be started from Settings (open languages folder, show export, show log); the body is the Windows error message.",
+  "dialog.settingsSaveFailed.title": "MessageBox caption when config.json cannot be written on Save; the body is the Windows error message.",
   "enum.benchmarkResultStatus.fail": "Fallback when Phase.Message is null; otherwise Phase.Message is shown raw (ex.Message from BenchmarkWindow.xaml.cs:127 or 'One or more samples failed correctness' from BenchmarkEngine.cs:75 - English, also written to the report JSON).",
   "enum.benchmarkResultStatus.insufficientData": "StatusText default arm (InsufficientData).",
   "enum.benchmarkResultStatus.pass": "BenchmarkResultRow.StatusText for BenchmarkResultStatus.Pass (grid Status column). The DataTrigger in BenchmarkWindow.xaml:49 binds the enum 'Status', not this text - safe.",

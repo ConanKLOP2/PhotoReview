@@ -74,7 +74,7 @@ public partial class ActionProfilesWindow : Window
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
-        if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !Enum.TryParse<Key>(action.Shortcut, true, out _) || !Enum.IsDefined(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+        if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !ShortcutKeyName.TryParse(action.Shortcut, out _) || !Enum.IsDefined(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
         { System.Windows.MessageBox.Show(this, Tr.DialogActionProfilesInvalidMessage, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (FindDestinationProblem(Actions) is { } problem)
         { System.Windows.MessageBox.Show(this, problem, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
