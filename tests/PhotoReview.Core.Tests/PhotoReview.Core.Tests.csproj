@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The generator's JSON reader is internal to a netstandard2.0 analyzer: compile it into the tests to check it against System.Text.Json. -->
+    <Compile Include="..\..\src\PhotoReview.Localization.Generator\FlatJsonReader.cs" Link="Localization\Generator\FlatJsonReader.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="PhotoReview.Core.Settings" />
     <Using Include="PhotoReview.Core.FileActions" />
