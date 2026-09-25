@@ -544,5 +544,6 @@
   "compare.sizePair": "Compare window: sizes of the two images separated by a double arrow.",
   "export.help": "Header written into every exported .todo.json for translators. {{ and }} are literal braces; <code> stands for the language code.",
   "action.default.name": "Default Name of the built-in actions 2, 3 and 4 ({n} = the number). PERSISTED: fixed in settings.json when the settings are first created, so a later language switch will not rename it. The destination folder (Group-N) is deliberately language-neutral.",
-  "action.default.backup": "Default Name of the built-in Copy-to-Backup action. PERSISTED like action.default.name. Its destination folder \"Backup\" is not translated."
+  "action.default.backup": "Default Name of the built-in Copy-to-Backup action. PERSISTED like action.default.name. Its destination folder \"Backup\" is not translated.",
+  "dialog.importActions.failed.message": "MessageBox text when Import of action profiles cannot read the file; {error} = the system error message (access denied, ...). A malformed file uses dialog.importActions.invalid.message instead."
 }

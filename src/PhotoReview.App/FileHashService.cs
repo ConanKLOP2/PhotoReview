@@ -44,16 +44,19 @@ public sealed class FileHashService
         if (_sourceBytesCache is not null)
         {
             var bytes = _sourceBytesCache.GetOrRead(path);
-            var hashFromBytes = Convert.ToHexString(SHA256.HashData(bytes));
-            var currentFromBytes = new FileInfo(path);
-            if (currentFromBytes.Length != length || currentFromBytes.LastWriteTimeUtc != lastWriteUtc)
-                throw UserFacingError.Localized(new IOException($"File changed while hashing: {path}"), () => Tr.ErrIoFileChangedWhileHashing(path));
-            if (generation == Volatile.Read(ref _generation))
-                _cache.Set(path, new HashEntry(path, length, lastWriteUtc, hashFromBytes));
-            return hashFromBytes;
+            return CompleteIfUnchanged(path, length, lastWriteUtc, generation, Convert.ToHexString(SHA256.HashData(bytes)));
         }
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+        return CompleteIfUnchanged(path, length, lastWriteUtc, generation, hash);
+    }
+
+    /// <summary>
+    /// Re-stats the file after hashing: a changed length/mtime means the hash may mix two versions, so it is rejected;
+    /// otherwise it is cached unless <see cref="Clear"/> ran since the request started.
+    /// </summary>
+    private string CompleteIfUnchanged(string path, long length, DateTime lastWriteUtc, int generation, string hash)
+    {
         var current = new FileInfo(path);
         if (current.Length != length || current.LastWriteTimeUtc != lastWriteUtc)
             throw UserFacingError.Localized(new IOException($"File changed while hashing: {path}"), () => Tr.ErrIoFileChangedWhileHashing(path));
