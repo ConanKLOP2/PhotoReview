@@ -7,6 +7,7 @@ namespace PhotoReview.Integration.Tests;
 /// TOOL-02 / TOOL-03: destructive-path guards in tools/*.ps1. Every scenario uses fake roots under an owned
 /// temp directory; nothing outside it is created or deleted.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class PowerShellSafetyGuardTests : IDisposable
 {
     private readonly TempRoot _root = new("ps-guard");

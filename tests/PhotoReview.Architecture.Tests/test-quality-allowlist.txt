@@ -10,6 +10,7 @@ delay|tests/PhotoReview.App.Tests/Coordinators/FileActionGateTests.cs|1
 delay|tests/PhotoReview.App.Tests/Coordinators/ImagePresenterTests.cs|1
 delay|tests/PhotoReview.App.Tests/Coordinators/ZoomDetailTests.cs|2
 delay|tests/PhotoReview.App.Tests/HotPath/NativeRecycleBinTests.cs|1
+delay|tests/PhotoReview.Core.Tests/Diagnostics/FileLogLifecycleTests.cs|1
 delay|tests/PhotoReview.Core.Tests/FileActions/FileActionServiceTests.cs|1
 delay|tests/PhotoReview.Core.Tests/Instance/ForwardingCoreTests.cs|1
 delay|tests/PhotoReview.Core.Tests/Session/SessionWriterTests.cs|1
@@ -24,12 +25,3 @@ delay|tests/PhotoReview.TestSupport/Wait.cs|1
 # TC06 (Q-T1: queue keypresses) is decided but production still drops actions while a file action runs (FileActionController).
 stale-skip|tests/PhotoReview.App.Tests/HotPath/WarmNavigationReadBoundsTests.cs::MoveDeleteQueue_RapidActionsWhileBusy_AllExecutedInOrder|1
 
-# PowerShellSafetyGuardTests (TOOL-02/03) spawn powershell.exe against temp-owned fake roots; they guard tools/*.ps1, which is
-# another lane's area, so they stay in the default gate for now. Categorise Slow (or test the guard in-process) when that lane settles.
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::ColdDiskCacheConditionAloneIsNotRejectedForCacheReasons|1
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::ColdDiskCacheConditionWithSharedAppCacheIsRejected|1
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::DirectoryUnderApprovedRootIsAccepted|1
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::ExternalDirectoryWithPublisherMarkerIsAccepted|1
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::ExternalSameLeafDirectoryIsRejected|1
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::PrefixSiblingOfApprovedRootIsRejected|1
-real-os-uncategorised|tests/PhotoReview.Integration.Tests/PowerShellSafetyGuardTests.cs::WrongLeafUnderApprovedRootIsRejected|1

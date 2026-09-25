@@ -52,6 +52,7 @@ internal static class PowerShellRunner
 /// tools/i18n-check.ps1 edge cases (strict UTF-8, surrogates, nesting, placeholders, size, BOM). One script run over a
 /// folder of crafted catalogs (the script spends seconds compiling its C# validator), asserted per file from the -Json output.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class I18nCheckScriptTests : IClassFixture<I18nCheckScriptTests.Fixture>
 {
     public sealed class Fixture : IDisposable
@@ -182,6 +183,7 @@ public sealed class I18nCheckScriptTests : IClassFixture<I18nCheckScriptTests.Fi
 }
 
 /// <summary>tools/fetch-native.ps1 offline paths (present file, malformed pin) inside a temp fake repository whose folder name has wildcard characters.</summary>
+[Trait("Category", "Integration")]
 public sealed class FetchNativeScriptTests : IDisposable
 {
     private readonly TempRoot _root = new("fetch-native");
@@ -249,6 +251,7 @@ public sealed class FetchNativeScriptTests : IDisposable
 }
 
 /// <summary>tools/clean-work.ps1: dry run, retention, protected folder, links and wildcard characters, inside a temp fake repository.</summary>
+[Trait("Category", "Integration")]
 public sealed class CleanWorkScriptTests : IDisposable
 {
     private readonly TempRoot _root = new("clean-work");
@@ -332,6 +335,7 @@ public sealed class CleanWorkScriptTests : IDisposable
 }
 
 /// <summary>tools/*.ps1 encoding and misc script guards.</summary>
+[Trait("Category", "Integration")]
 public sealed class ToolScriptEncodingTests : IDisposable
 {
     private readonly TempRoot _root = new("tool-scripts");
