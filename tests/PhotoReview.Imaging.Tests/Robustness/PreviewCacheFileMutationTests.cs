@@ -92,25 +92,33 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
         Assert.True(good > iterations / 30 && rejected > iterations / 30, $"corpus is one-sided: {good} good, {rejected} rejected");
     }
 
-    [Fact(DisplayName = "A .pv4 entry cut at every possible length is a rejected entry (or, if the JPEG payload is still complete, a good one), never another exception")]
-    public async Task EveryTruncation_IsRejectedOrReadable()
+    [Fact(DisplayName = "A .pv4 entry cut at ANY length is rejected: WPF would happily decode a truncated JPEG payload into a half-grey preview")]
+    public async Task EveryTruncation_IsRejected()
     {
         var seed = await WriteSeedAsync(width: 8, height: 8, orientation: 3);
         var path = Path.Combine(_dir, "cut.pv4");
-        var rejected = 0;
         for (var length = 0; length < seed.Length; length++)
         {
             await File.WriteAllBytesAsync(path, seed.AsSpan(0, length).ToArray());
-            try { _ = PreviewCacheFile.Read(path); }
-            catch (Exception ex) when (IsCorruptEntryFailure(ex)) { rejected++; }
-            catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
+            try
             {
-                Assert.Fail($"truncated to {length}/{seed.Length} bytes escaped as {ex.GetType().FullName}: {ex.Message}");
+                _ = PreviewCacheFile.Read(path);
+                Assert.Fail($"an entry truncated to {length}/{seed.Length} bytes was accepted as a valid preview");
+            }
+            catch (Exception ex) when (IsCorruptEntryFailure(ex))
+            {
+                // expected
             }
         }
 
-        // Everything shorter than the fixed header + EXIF length field can never be a valid entry.
-        Assert.True(rejected >= 26, $"only {rejected} truncations rejected");
+        Assert.True(PreviewCacheFile.Read(await WriteFullAsync(seed)).Bitmap.PixelWidth == 8); // the untruncated entry is still good
+    }
+
+    private async Task<string> WriteFullAsync(byte[] bytes)
+    {
+        var full = Path.Combine(_dir, "full.pv4");
+        await File.WriteAllBytesAsync(full, bytes);
+        return full;
     }
 
     [Theory(DisplayName = "Header fields at their extremes (dimensions 0/negative/int.Max, orientation 0/9/255, backend 255, alpha flag) are rejected as corrupt, not decoded or allocated")]

@@ -46,8 +46,10 @@ public sealed class PreloadScheduler : IDisposable
     private CancellationTokenSource? _preloadSchedulerCts;
     // A cancelled lifetime can still be draining while navigation starts a fresh one.
     // Keep every lifetime owned by this scheduler so Dispose waits for all of them.
+    // Finished lifetimes (and their disposed CTS) are dropped again by PruneFinishedLifetimes, so a session of many
+    // navigations does not accumulate one CTS and one task per navigation.
     private readonly List<CancellationTokenSource> _preloadLifetimes = [];
-    private readonly List<Task> _preloadLifetimeTasks = [];
+    private readonly List<(CancellationTokenSource Cts, Task Task)> _preloadLifetimeTasks = [];
     private int _preloadCenter;
     private long _preloadPriorityVersion;
     // Written from concurrent PreloadOneAsync worker tasks (PreloadWorkerCount at once)
@@ -229,6 +231,7 @@ public sealed class PreloadScheduler : IDisposable
             if (_disposed) return Task.CompletedTask;
             if (_preloadCts.IsCancellationRequested)
             {
+                PruneFinishedLifetimes();
                 _preloadCts = new CancellationTokenSource();
                 _preloadLifetimes.Add(_preloadCts);
             }
@@ -248,9 +251,27 @@ public sealed class PreloadScheduler : IDisposable
             // so the first candidates are queued before the caller moves on. Every await in the
             // loop uses ConfigureAwait(false), so no continuation is ever posted to the Dispatcher
             // (Dispose drains this task synchronously on the UI thread).
+            _preloadLifetimeTasks.RemoveAll(entry => entry.Task.IsCompleted);
             _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotEntries(), cts.Token);
-            _preloadLifetimeTasks.Add(_preloadSchedulerTask);
+            _preloadLifetimeTasks.Add((cts, _preloadSchedulerTask));
             return _preloadSchedulerTask;
+        }
+    }
+
+    /// <summary>
+    /// Drops completed scheduler tasks and disposes every lifetime CTS that is no longer current and has no unfinished task.
+    /// Caller holds <see cref="_preloadCtsGate"/>.
+    /// </summary>
+    private void PruneFinishedLifetimes()
+    {
+        _preloadLifetimeTasks.RemoveAll(entry => entry.Task.IsCompleted);
+        for (var i = _preloadLifetimes.Count - 1; i >= 0; i--)
+        {
+            var lifetime = _preloadLifetimes[i];
+            if (ReferenceEquals(lifetime, _preloadCts)) continue;
+            if (_preloadLifetimeTasks.Exists(entry => ReferenceEquals(entry.Cts, lifetime))) continue;
+            _preloadLifetimes.RemoveAt(i);
+            lifetime.Dispose();
         }
     }
 
@@ -583,6 +604,12 @@ public sealed class PreloadScheduler : IDisposable
         }
     }
 
+    /// <summary>Cancellation lifetimes and scheduler tasks this scheduler still tracks for Dispose (test seam: must stay bounded over a long session).</summary>
+    internal (int Lifetimes, int Tasks) TrackedLifetimeCounts
+    {
+        get { lock (_preloadCtsGate) return (_preloadLifetimes.Count, _preloadLifetimeTasks.Count); }
+    }
+
     /// <summary>Longest Dispose blocks its caller (the UI thread at window close) for workers that ignore cancellation, e.g. a decode already running.</summary>
     internal TimeSpan DisposeDrainTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
@@ -595,7 +622,7 @@ public sealed class PreloadScheduler : IDisposable
             if (_disposed) return;
             _disposed = true;
             _preloadCts.Cancel();
-            lifetimeTasks = _preloadLifetimeTasks.ToArray();
+            lifetimeTasks = _preloadLifetimeTasks.Select(entry => entry.Task).ToArray();
             lifetimeCts = _preloadLifetimes.ToArray();
         }
         WakeScheduler();
