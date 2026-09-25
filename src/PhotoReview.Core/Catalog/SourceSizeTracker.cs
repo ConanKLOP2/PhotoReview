@@ -81,12 +81,10 @@ public sealed class SourceSizeTracker
                         size = _fileSystem.GetFileStat(entry.Path)?.Length ?? 0L;
                         _fsCallCount++;
                     }
-                    catch (IOException)
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                     {
-                        size = 0L;
-                    }
-                    catch (UnauthorizedAccessException)
-                    {
+                        // Runs on the preload thread: a path the file system rejects (odd characters, unsupported
+                        // format) counts as size 0 like an unreadable file instead of faulting the whole preload.
                         size = 0L;
                     }
                 }
