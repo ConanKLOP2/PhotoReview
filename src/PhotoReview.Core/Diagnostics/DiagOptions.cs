@@ -17,11 +17,11 @@ namespace PhotoReview.Core.Diagnostics;
 /// </summary>
 public static class DiagOptions
 {
-    private const string PreReadVar = "PHOTOREVIEW_DIAG_PREREAD";
-    private const string PreloadWorkersVar = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS";
-    private const string DisableDiskCacheVar = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";
+    internal const string PreReadVar = "PHOTOREVIEW_DIAG_PREREAD";
+    internal const string PreloadWorkersVar = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS";
+    internal const string DisableDiskCacheVar = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";
 
-    private static Lazy<Snapshot> _snapshot = new(ReadFromEnvironment);
+    private static volatile Lazy<Snapshot> _snapshot = new(ReadFromEnvironment);
 
     private sealed record Snapshot(bool PreRead, int? PreloadWorkers, bool DisableDiskCache);
 
