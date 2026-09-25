@@ -77,6 +77,22 @@ public sealed record BenchmarkPhaseResult(string ProfileId, BenchmarkWorkload Wo
 {
     private readonly Lazy<double[]> _sorted = new(() => Samples.OrderBy(x => x).ToArray());
 
+    // The compiler-synthesized copy constructor would copy the _sorted reference, so `phase with { Samples = ... }` kept
+    // answering from the ORIGINAL samples (the lazy delegate is bound to the original instance). The explicit copy
+    // constructor binds a fresh cache to the copy.
+    private BenchmarkPhaseResult(BenchmarkPhaseResult original)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        ProfileId = original.ProfileId;
+        Workload = original.Workload;
+        Samples = original.Samples;
+        Status = original.Status;
+        Message = original.Message;
+        ImagesPerSample = original.ImagesPerSample;
+        // Field initializers belong to the primary constructor, which a copy constructor does not run.
+        _sorted = new Lazy<double[]>(() => Samples.OrderBy(x => x).ToArray());
+    }
+
     public int Count => Samples.Count;
     public double P50 => BenchmarkStatistics.Percentile(_sorted.Value, .50);
     public double P95 => BenchmarkStatistics.Percentile(_sorted.Value, .95);
@@ -131,6 +147,8 @@ public static class BenchmarkRanking
 {
     public static IReadOnlyList<BenchmarkPhaseResult> Rank(IEnumerable<BenchmarkPhaseResult> phases, BenchmarkWorkload workload)
         => phases.Where(x => x.Workload == workload && x.Status is not BenchmarkResultStatus.Fail
-                             && x.Status is not BenchmarkResultStatus.InsufficientData)
+                             && x.Status is not BenchmarkResultStatus.InsufficientData
+                             // LINQ OrderBy sorts NaN before every number, so a corrupt phase would otherwise rank first.
+                             && double.IsFinite(x.P95PerImage) && double.IsFinite(x.P50PerImage))
                  .OrderBy(x => x.P95PerImage).ThenBy(x => x.P50PerImage).ToArray();
 }
