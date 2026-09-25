@@ -124,7 +124,7 @@
   "compare.hash.different": " | hash KHÁC",
   "compare.hash.off": " | hash tắt",
   "compare.hash.same": " | hash TRÙNG",
-  "compare.sizeSuffix": " ({bytes} B)",
+  "compare.sizeSuffix": " ({bytes} byte)",
   "core.dragDrop.folderUnknown": "Không xác định được thư mục của ảnh.",
   "core.dragDrop.mixedFolders": "Các ảnh nằm ở nhiều thư mục khác nhau; chỉ mở thư mục của ảnh đầu tiên.",
   "core.dragDrop.noSupportedImages": "Không tìm thấy ảnh được hỗ trợ.",
