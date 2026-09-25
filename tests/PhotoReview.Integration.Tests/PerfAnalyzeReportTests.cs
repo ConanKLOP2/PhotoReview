@@ -105,3 +105,55 @@ public sealed class PerfAnalyzeReportTests : IDisposable
         Assert.Contains("=N/A;", r.Evidence, StringComparison.Ordinal);
     }
 }
+
+/// <summary>KeyInput to ShowStart matching must equal the straightforward definition (nearest KeyInput on the same thread at or
+/// before ShowStart, within 500 ms, first in file order among equal timestamps) whatever the row order, threads and ties.</summary>
+public sealed class PerfAnalyzeKeyInputMatchTests
+{
+    private static PerfRow Row(long qpc, int thread, string ev, string nav, string a, string text = "") =>
+        new(0, qpc, thread, ev, nav, "", a, "", "", "", text);
+
+    [Fact]
+    public void KeyInputMatchingAgreesWithTheBruteForceDefinition()
+    {
+        var rnd = new Random(12345);
+        var rows = new List<PerfRow>();
+        var keyInputs = new List<PerfRow>();
+        for (var i = 0; i < 300; i++)
+        {
+            // Frequency 1 MHz: 1000 ticks = 1 ms. Timestamps collide often (multiples of 500) and arrive out of order.
+            var k = Row(rnd.Next(0, 400) * 500L, rnd.Next(1, 4), "KeyInput", "", (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            keyInputs.Add(k);
+            rows.Add(k);
+        }
+        var starts = new List<PerfRow>();
+        for (var n = 1; n <= 200; n++)
+        {
+            var s = Row(rnd.Next(0, 500) * 500L, rnd.Next(1, 4), "ShowStart", n.ToString(System.Globalization.CultureInfo.InvariantCulture), "0", "Preview");
+            starts.Add(s);
+            rows.Add(s);
+            rows.Add(Row(s.QpcTicks + 100, s.Thread, "Presented", s.Nav, "1", "final"));
+        }
+        var file = new PerfCsvFile
+        {
+            Path = "synthetic", CommitVersion = "x", DiagFlags = new Dictionary<string, string>(),
+            QpcFrequency = 1_000_000, DroppedRows = 0, Rows = rows,
+        };
+
+        var analysis = PerfAnalyzeNavBuilder.Build(file);
+
+        var matched = 0;
+        foreach (var nav in analysis.Navs)
+        {
+            var start = starts.Single(s => s.Nav == nav.Nav.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var expected = keyInputs
+                .Where(k => k.Thread == start.Thread && k.QpcTicks <= start.QpcTicks)
+                .Where(k => (start.QpcTicks - k.QpcTicks) * 1000.0 / 1_000_000 <= 500.0)
+                .OrderByDescending(k => k.QpcTicks)
+                .FirstOrDefault();
+            Assert.Equal(expected?.ANum, nav.TInputMs);
+            if (expected is not null) matched++;
+        }
+        Assert.InRange(matched, 20, 199); // the scenario exercises both matching and non-matching navs
+    }
+}
