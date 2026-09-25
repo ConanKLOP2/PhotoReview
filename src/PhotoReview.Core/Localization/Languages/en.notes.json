@@ -488,5 +488,18 @@
   "settings.exifField.focalLength": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.FocalLength.",
   "settings.exifField.aperture": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Aperture.",
   "settings.exifField.shutterSpeed": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.ShutterSpeed.",
-  "settings.group.exif.hint": "Settings > Display, EXIF section: help text noting that the whole section is hidden whenever the ShowInfoOverlay master switch (shortcut I) is off."
+  "settings.group.exif.hint": "Settings > Display, EXIF section: help text noting that the whole section is hidden whenever the ShowInfoOverlay master switch (shortcut I) is off.",
+  "update.section.title": "Settings \u003e General, group header of the manual update check.",
+  "update.check.button": "Settings \u003e General \u003e Updates: button that starts the manual update check.",
+  "update.check.checking": "Status line shown while the update check is running (button is disabled meanwhile).",
+  "update.status.upToDate": "Status line: the running version is the newest release. {version} = latest release number like 2.0.93.",
+  "update.status.available": "Status line: a newer release exists. {version} = newer version, {current} = running version.",
+  "update.status.failed.offline": "Status line: network error (no connection, DNS, TLS).",
+  "update.status.failed.timeout": "Status line: the server did not answer within 10 seconds.",
+  "update.status.failed.rateLimited": "Status line: GitHub answered HTTP 403/429 (rate limit).",
+  "update.status.failed.badResponse": "Status line: unexpected HTTP status or unreadable answer from GitHub.",
+  "update.status.failed.invalidVersion": "Status line: the running app version could not be parsed (developer builds).",
+  "update.openPage.button": "Button shown only when a newer version exists; opens the project release page in the default browser.",
+  "update.openPage.failed": "Status line when the browser could not be started.",
+  "update.hint": "Help text under the update button: privacy note that this is the only network use, user-initiated, nothing sent, no auto download/install."
 }

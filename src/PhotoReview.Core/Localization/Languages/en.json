@@ -564,5 +564,18 @@
   "settings.exifField.focalLength": "Focal length",
   "settings.exifField.aperture": "Aperture",
   "settings.exifField.shutterSpeed": "Shutter speed",
-  "settings.group.exif.hint": "Hidden together with the info overlay above (shortcut: I)."
+  "settings.group.exif.hint": "Hidden together with the info overlay above (shortcut: I).",
+  "update.section.title": "Updates",
+  "update.check.button": "Check for updates",
+  "update.check.checking": "Checking for updates…",
+  "update.status.upToDate": "You are up to date. Latest version: {version}.",
+  "update.status.available": "Version {version} is available (you have {current}).",
+  "update.status.failed.offline": "Could not reach the update server. Check your internet connection.",
+  "update.status.failed.timeout": "The update server did not answer in time. Try again later.",
+  "update.status.failed.rateLimited": "The update server is busy or limiting requests. Try again later.",
+  "update.status.failed.badResponse": "The update server sent an unexpected answer.",
+  "update.status.failed.invalidVersion": "This build has no readable version number, so it cannot be compared.",
+  "update.openPage.button": "Open download page",
+  "update.openPage.failed": "Could not open the download page in your browser.",
+  "update.hint": "This is the only feature that uses the network, and only when you click the button. Nothing about your photos or folders is sent. Updates are never downloaded or installed automatically."
 }

@@ -18,6 +18,13 @@ internal static class BuildInfo
         return Describe(informational, buildTime);
     }
 
+    /// <summary>The running version as written by the build ("2.0.93+hash"), or null when absent.</summary>
+    public static string? GetVersion(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        return assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    }
+
     internal static string Describe(string? informationalVersion, string? buildTime)
     {
         if (string.IsNullOrWhiteSpace(informationalVersion)) return Tr.SettingsVersionUnknown;

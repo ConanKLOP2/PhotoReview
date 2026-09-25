@@ -16,6 +16,7 @@ PhotoReview is a Windows WPF application for browsing, comparing, and organizing
 - Delete operations move files to the Recycle Bin; Move/Copy/Delete actions are journaled to support Undo and recovery.
 - Supports side-by-side Compare, optional hash/dimension verification, batch duplicate cleanup with a confirmation step, zoom/Fit/fullscreen views, and keyboard shortcuts.
 - Images and file paths are processed locally; internal diagnostics are only enabled when configured.
+- Optional manual update check (Settings > General > Updates): only when you click the button, the app asks GitHub for the latest release number and offers a link to the download page. This is the only feature that uses the network; nothing about your photos or paths is sent, and nothing is downloaded or installed automatically.
 
 See [Architecture](docs/architecture.md) and [Image Loading Mechanisms, Safety Invariants, and Benchmark Guide](docs/APP-MECHANISMS-VI.md) before modifying the pipeline or interpreting performance metrics.
 
@@ -77,7 +78,7 @@ The UI ships in English and Vietnamese (Settings → Language; `auto` follows Wi
 
 ### Known Limitations
 
-Explorer ordering depends on open folder windows and valid Shell snapshots; fallback ordering is used if Explorer is not ready or if the snapshot encounters an error or timeout. Contract tests do not guarantee GUI behavior, perceived first-image latency, or P95 timings; these conclusions require controlled runtime measurements.
+Explorer ordering depends on open folder windows and valid Shell snapshots; fallback ordering is used if Explorer is not ready or if the snapshot encounters an error or timeout. Contract tests do not guarantee GUI behavior, perceived first-image latency, or P95 timings; these conclusions require controlled runtime measurements. The update check is manual only: there is no automatic update, and it needs an internet connection and may fail when GitHub rate-limits requests.
 
 ---
 
@@ -93,6 +94,7 @@ PhotoReview là ứng dụng Windows WPF để duyệt, so sánh và phân loạ
 - Delete chuyển file vào Recycle Bin; Move/Copy/Delete được ghi journal để hỗ trợ Undo và recovery.
 - Hỗ trợ Compare, kiểm tra hash/kích thước tùy chọn, batch duplicate có bước xác nhận, zoom/Fit/fullscreen và phím tắt.
 - Ảnh và đường dẫn được xử lý cục bộ; diagnostics nội bộ chỉ bật theo cấu hình.
+- Có nút kiểm tra cập nhật thủ công (Cài đặt → Chung → Cập nhật): chỉ khi bạn bấm, ứng dụng hỏi GitHub số phiên bản mới nhất và đưa liên kết tới trang tải về. Đây là tính năng duy nhất dùng mạng; không gửi gì về ảnh hoặc đường dẫn, và không tự tải hay tự cài đặt.
 
 Xem [kiến trúc](docs/architecture.md) và [cơ chế load ảnh, bất biến an toàn, hướng dẫn benchmark](docs/APP-MECHANISMS-VI.md) trước khi sửa pipeline hoặc diễn giải kết quả hiệu năng.
 
@@ -149,4 +151,4 @@ Giao diện có English và Tiếng Việt (Cài đặt → Ngôn ngữ; `auto` 
 
 ### Giới hạn cần biết
 
-Thứ tự Explorer phụ thuộc cửa sổ/folder và snapshot Shell hợp lệ; fallback vẫn được dùng nếu Explorer chưa sẵn sàng hoặc snapshot lỗi/timeout. Contract tests không chứng minh GUI behavior, cảm nhận first-image latency hay P95; các kết luận đó cần phép đo runtime có kiểm soát.
+Thứ tự Explorer phụ thuộc cửa sổ/folder và snapshot Shell hợp lệ; fallback vẫn được dùng nếu Explorer chưa sẵn sàng hoặc snapshot lỗi/timeout. Contract tests không chứng minh GUI behavior, cảm nhận first-image latency hay P95; các kết luận đó cần phép đo runtime có kiểm soát. Kiểm tra cập nhật chỉ chạy thủ công: không có tự cập nhật, cần kết nối Internet và có thể lỗi khi GitHub giới hạn số yêu cầu.

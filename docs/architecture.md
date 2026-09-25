@@ -120,6 +120,10 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 | `ScalingQuality` | `HighQuality` mặc định; `Linear` | `MainViewModel` → `ViewerState` → WPF `RenderOptions.BitmapScalingMode`; không đổi decode/cache key. |
 | `UseSourceBytesCache` | `false` mặc định | Được chụp lúc composition trong `App.xaml.cs`; bật cache byte 16 GiB cho service hỗ trợ. Thay đổi cần khởi động lại để toàn bộ dependency nhận cùng policy. |
 
+## Kiểm tra cập nhật thủ công (chỉ dùng mạng ở đây)
+
+PhotoReview.Core.Updates (IUpdateChecker, UpdateChecker, AppVersion, UpdateUrlPolicy) là **nơi duy nhất trong ứng dụng chạm tới mạng**, và chỉ chạy khi người dùng bấm **Cài đặt → Chung → Cập nhật → Kiểm tra cập nhật**. Không tự kiểm tra, không tự tải, không tự cài, không ép cập nhật. Một request GET https://api.github.com/repos/ConanKLOP2/PhotoReview/releases/latest (HTTPS, có User-Agent, timeout 10 giây, CancellationToken, async — không chặn UI) chỉ đọc 	ag_name/html_url; không gửi gì về ảnh hoặc đường dẫn. Bỏ qua draft/prerelease; so sánh số major.minor.patch với phiên bản đang chạy (BuildInfo.GetVersion, chấp nhận tiền tố  và +metadata). Kết quả: UpToDate / UpdateAvailable(version, url) / Failed(Offline, Timeout, RateLimited, BadResponse, InvalidVersion). Tầng HTTP tiêm được qua HttpMessageHandler nên test không dùng mạng thật. Nút **Mở trang tải về** chỉ hiện khi có bản mới và chỉ mở URL https://github.com/ConanKLOP2/PhotoReview/... (UpdateUrlPolicy) bằng trình duyệt mặc định.
+
 ## Build, test, benchmark và publish
 
 ```powershell

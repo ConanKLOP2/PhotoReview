@@ -557,5 +557,18 @@
   "settings.exifField.focalLength": "Tiêu cự",
   "settings.exifField.aperture": "Khẩu độ",
   "settings.exifField.shutterSpeed": "Tốc độ màn trập",
-  "settings.group.exif.hint": "Ẩn cùng với lớp thông tin bên trên (phím tắt: I)."
+  "settings.group.exif.hint": "Ẩn cùng với lớp thông tin bên trên (phím tắt: I).",
+  "update.section.title": "Cập nhật",
+  "update.check.button": "Kiểm tra cập nhật",
+  "update.check.checking": "Đang kiểm tra cập nhật…",
+  "update.status.upToDate": "Bạn đang dùng bản mới nhất. Phiên bản mới nhất: {version}.",
+  "update.status.available": "Đã có phiên bản {version} (bạn đang dùng {current}).",
+  "update.status.failed.offline": "Không kết nối được máy chủ cập nhật. Hãy kiểm tra kết nối Internet.",
+  "update.status.failed.timeout": "Máy chủ cập nhật không phản hồi kịp. Hãy thử lại sau.",
+  "update.status.failed.rateLimited": "Máy chủ cập nhật đang bận hoặc giới hạn số yêu cầu. Hãy thử lại sau.",
+  "update.status.failed.badResponse": "Máy chủ cập nhật trả về phản hồi không như mong đợi.",
+  "update.status.failed.invalidVersion": "Bản dựng này không có số phiên bản đọc được nên không thể so sánh.",
+  "update.openPage.button": "Mở trang tải về",
+  "update.openPage.failed": "Không mở được trang tải về trong trình duyệt.",
+  "update.hint": "Đây là tính năng duy nhất dùng mạng, và chỉ khi bạn bấm nút. Không có thông tin nào về ảnh hoặc thư mục của bạn được gửi đi. Bản cập nhật không bao giờ được tự động tải hoặc cài đặt."
 }
