@@ -51,16 +51,20 @@ public sealed class PreviewCacheFormatBenchmarkTests
             Console.WriteLine($"Preview size: {previewBgr32.PixelWidth}x{previewBgr32.PixelHeight}");
             Console.WriteLine($"{"Candidate",-16} {"EncodeMs",10} {"FileBytes",12} {"DecodeMs",10} {"PSNR(dB)",10}");
 
+            var results = new List<(double EncodeMs, long Bytes, double DecodeMs, double Psnr)>();
             foreach (var quality in new[] { 92, 95 })
             {
                 var result = MeasureJpeg(previewBgr32, quality, tempDir);
                 Print($"Jpeg q{quality}", result);
+                results.Add(result);
             }
 
             var rawResult = MeasureRawBgr32(previewBgr32, tempDir);
             Print("RawBgr32", rawResult);
+            results.Add(rawResult);
 
-            Assert.True(true, "Diagnostic benchmark; see console output for the format decision table.");
+            // Diagnostic benchmark (see console output for the decision table); it only asserts every candidate produced output.
+            Assert.All(results, r => Assert.True(r.Bytes > 0 && r.Psnr > 0, $"invalid candidate result: {r}"));
         }
         finally
         {

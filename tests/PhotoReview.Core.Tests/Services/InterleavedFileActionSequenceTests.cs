@@ -2,102 +2,27 @@ using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.Services;
 
 /// <summary>
-/// Mirrors the UI contract sequence from Program.cs's RunInterleavedFileActionSequence:
-/// navigation/action advances first, then the filesystem operation runs against the
-/// captured source path.
+/// Interleaved navigation/action sequences (advance first, then the file operation on the captured source path)
+/// checked against the production <see cref="ReviewCatalog"/>. The former in-test List + File.Move simulations were
+/// tautological and are gone; TC08a-c below replace them.
 /// </summary>
-/// <remarks>
-/// G1 TAUTOLOGICAL TESTS → TC05 REPLACEMENTS
-///
-/// Tests in this class are tautological: they test List<![CDATA[<string>]]> + File.Move/Delete against hardcoded logic,
-/// not against production code (ReviewCatalog, FileActionService, MainViewModel).
-///
-/// These have been superseded by TC05 production-path tests:
-/// - SequenceNextThenMoveKeepsNextImage → TC05a (Move×N sequential) + TC05c (random seed)
-/// - SequenceNextThenDeleteKeepsNextImage → TC05a/c (Delete variant)
-/// - SequenceDeleteAtEndSelectsPriorSurvivingSlot → TC05d (Delete at boundary)
-///
-/// Marked as [Obsolete] for eventual removal once TC05 integration is verified.
-/// </remarks>
 [Trait("Category", "HotPath")]
 public sealed class InterleavedFileActionSequenceTests : IDisposable
 {
     private readonly TempRoot _root = new("sequence");
 
-    private readonly bool _moveCheckpoint;
-    private readonly bool _deleteCheckpoint;
-    private readonly bool _finalDeleteCheckpoint;
-
-    public InterleavedFileActionSequenceTests()
-    {
-        var folder = _root.Dir("sequence");
-        var moved = _root.Dir("sequence-moved");
-        var files = Enumerable.Range(1, 5).Select(i => Path.Combine(folder, $"{i}.jpg")).ToList();
-        foreach (var file in files) File.WriteAllText(file, $"image-{Path.GetFileNameWithoutExtension(file)}");
-        var catalog = files.ToList();
-        var index = 0;
-
-        index = Math.Min(index + 1, catalog.Count - 1); // Next => 2
-        var moveSource = catalog[index];
-        var moveDestination = Path.Combine(moved, Path.GetFileName(moveSource));
-        catalog.RemoveAt(index); // Move advances/removes exactly once; current becomes 3.
-        index = Math.Min(index, catalog.Count - 1);
-        File.Move(moveSource, moveDestination);
-        _moveCheckpoint = Path.Exists(moveDestination) && !Path.Exists(moveSource)
-            && Path.GetFileName(catalog[index]) == "3.jpg";
-
-        index = Math.Min(index + 1, catalog.Count - 1); // Next => 4
-        var deleteSource = catalog[index];
-        catalog.RemoveAt(index); // Delete advances/removes exactly once; current becomes 5.
-        index = Math.Min(index, catalog.Count - 1);
-        File.Delete(deleteSource);
-        _deleteCheckpoint = !Path.Exists(deleteSource) && Path.GetFileName(catalog[index]) == "5.jpg";
-
-        index = Math.Min(index + 1, catalog.Count - 1); // Next at end remains 5.
-        var finalDelete = catalog[index];
-        catalog.RemoveAt(index);
-        index = Math.Min(index, catalog.Count - 1);
-        File.Delete(finalDelete);
-        _finalDeleteCheckpoint = catalog.Count == 2 && Path.GetFileName(catalog[index]) == "3.jpg"
-            && catalog.All(File.Exists);
-    }
-
     public void Dispose() => _root.Dispose();
 
-    /// <summary>
-    /// OBSOLETE: G1 tautological test on List<![CDATA[<string>]]> + File.Move.
-    /// Replaced by TC05a (Move×N sequential) and TC05c (random seed variation).
-    /// </summary>
-    [Obsolete("Use TC05 production-path tests instead (TC05a, TC05c)")]
-    [Fact(DisplayName = "Sequence Next then Move keeps next image without skipping")]
-    public void SequenceNextThenMoveKeepsNextImage() => Assert.True(_moveCheckpoint);
-
-    /// <summary>
-    /// OBSOLETE: G1 tautological test on List<![CDATA[<string>]]> + File.Delete.
-    /// Replaced by TC05a (Delete variant) and TC05c (random seed variation).
-    /// </summary>
-    [Obsolete("Use TC05 production-path tests instead (TC05a, TC05c)")]
-    [Fact(DisplayName = "Sequence Next then Delete keeps next image without skipping")]
-    public void SequenceNextThenDeleteKeepsNextImage() => Assert.True(_deleteCheckpoint);
-
-    /// <summary>
-    /// OBSOLETE: G1 tautological test on List<![CDATA[<string>]]> + File.Delete at boundary.
-    /// Replaced by TC05d (Delete at boundary condition).
-    /// </summary>
-    [Obsolete("Use TC05 production-path tests instead (TC05d)")]
-    [Fact(DisplayName = "Sequence Delete at end selects the prior surviving slot")]
-    public void SequenceDeleteAtEndSelectsPriorSurvivingSlot() => Assert.True(_finalDeleteCheckpoint);
-
-    // ============================================================
-    // TC08: PRODUCTION-CODE REPLACEMENT TESTS
-    // ============================================================
-    // These tests replace the tautological G1 tests above.
-    // They use real FileActionService, ReviewCatalog, and OperationJournal.
-    // ============================================================
+    // TC08: production-path tests - the real ReviewCatalog for navigation/removal and the real FileActionService
+    // (physical file system, temp-owned fake recycle bin) for the file operation.
+    private PhysicalActionHarness NewActions(string name) => new(_root.Dir(name + "-data"));
 
     /// <summary>
     /// TC08a: Replace G1's SequenceNextThenMoveKeepsNextImage.
@@ -105,7 +30,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
     /// Mirrors old test: Next to index 1, remove it, verify current stays at index 1 (now different file).
     /// </summary>
     [Fact(DisplayName = "TC08a: Move keeps next image without skipping (production code)")]
-    public void TC08a_MoveKeepsNextImageWithoutSkipping()
+    public async Task TC08a_MoveKeepsNextImageWithoutSkipping()
     {
         var workDir = _root.Dir("tc08a-move");
         var destDir = _root.Dir("tc08a-dest");
@@ -136,8 +61,9 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         var sourceToMove = catalog.Current.Path;
         var destPath = Path.Combine(destDir, Path.GetFileName(sourceToMove));
 
-        // Simulate the move that would happen via FileActionService
-        File.Move(sourceToMove, destPath);
+        var actions = NewActions("tc08a");
+        var moved = await actions.Service.ExecuteAsync(new FileActionRequest(sourceToMove, FileOperationType.Move, destDir));
+        Assert.True(moved.Succeeded, moved.Error);
 
         // Use ReviewCatalog.Remove() which automatically adjusts CurrentIndex using production formula:
         // Math.Min(Math.Max(removedIndex, 0), Count - 1)
@@ -161,7 +87,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
     /// Mirrors old test: navigate to index 3, delete, verify current selection.
     /// </summary>
     [Fact(DisplayName = "TC08b: Delete keeps next image without skipping (production code)")]
-    public void TC08b_DeleteKeepsNextImageWithoutSkipping()
+    public async Task TC08b_DeleteKeepsNextImageWithoutSkipping()
     {
         var workDir = _root.Dir("tc08b-delete");
 
@@ -194,8 +120,9 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
 
         var sourceToDelete = catalog.Current.Path;
 
-        // Delete the file
-        File.Delete(sourceToDelete);
+        var actions = NewActions("tc08b");
+        var deleted = await actions.Service.ExecuteAsync(new FileActionRequest(sourceToDelete, FileOperationType.Recycle));
+        Assert.True(deleted.Succeeded, deleted.Error);
 
         // Use ReviewCatalog.Remove() which handles index adjustment
         var newIndex = catalog.Remove(sourceToDelete);
@@ -217,7 +144,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
     /// Mirrors old test sequence: move file 1, delete file 2, delete at end (should go back).
     /// </summary>
     [Fact(DisplayName = "TC08c: Delete at end selects prior surviving slot (production code)")]
-    public void TC08c_DeleteAtEndSelectsPriorSurvivingSlot()
+    public async Task TC08c_DeleteAtEndSelectsPriorSurvivingSlot()
     {
         var workDir = _root.Dir("tc08c-boundary");
 
@@ -239,7 +166,8 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         catalog.SetCurrent(1);
         Assert.EndsWith("2.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
         var fileToMove = catalog.Current!.Path;
-        File.Move(fileToMove, fileToMove + ".moved");
+        var actions = NewActions("tc08c");
+        Assert.True((await actions.Service.ExecuteAsync(new FileActionRequest(fileToMove, FileOperationType.Move, "moved"))).Succeeded);
         catalog.Remove(fileToMove);
 
         // Now at [1.jpg, 3.jpg, 4.jpg, 5.jpg], current should be at index 1 (3.jpg)
@@ -250,7 +178,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         catalog.SetCurrent(2);
         Assert.EndsWith("4.jpg", catalog.Current!.Path, StringComparison.OrdinalIgnoreCase);
         var fileToDelete1 = catalog.Current!.Path;
-        File.Delete(fileToDelete1);
+        Assert.True((await actions.Service.ExecuteAsync(new FileActionRequest(fileToDelete1, FileOperationType.Recycle))).Succeeded);
         catalog.Remove(fileToDelete1);
 
         // Now at [1.jpg, 3.jpg, 5.jpg], current should be at index 2 (5.jpg)
@@ -261,7 +189,7 @@ public sealed class InterleavedFileActionSequenceTests : IDisposable
         // Step 3: Delete at end (index 2 of 3 items)
         var fileToDelete2 = catalog.Current!.Path;
         Assert.EndsWith("5.jpg", fileToDelete2, StringComparison.OrdinalIgnoreCase);
-        File.Delete(fileToDelete2);
+        Assert.True((await actions.Service.ExecuteAsync(new FileActionRequest(fileToDelete2, FileOperationType.Recycle))).Succeeded);
 
         // Remove at index 2 of 3 items: Math.Min(Math.Max(2, 0), 3-1) = Math.Min(2, 2) = 2
         // But then catalog count becomes 2, so index 2 becomes 1

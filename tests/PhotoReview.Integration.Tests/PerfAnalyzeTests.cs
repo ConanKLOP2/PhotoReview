@@ -115,7 +115,7 @@ public class PerfAnalyzeTests
         var nav5 = analysis.Navs.Single(n => n.Nav == 5);
         Assert.Equal(6.0, nav5.FirstVisualMs!.Value, 3);
         Assert.Equal(63.05, nav5.FinalVisualMs!.Value, 3);
-        Assert.Equal("thumbnail", "thumbnail"); // first-visual is the thumbnail Presented row
+        Assert.True(nav5.HasThumbnail); // first-visual is the thumbnail Presented row
         Assert.Equal("final", nav5.FinalPresentedKind);
     }
 
