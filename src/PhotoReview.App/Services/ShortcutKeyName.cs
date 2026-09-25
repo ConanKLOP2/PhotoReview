@@ -13,7 +13,7 @@ public static class ShortcutKeyName
     {
         key = Key.None;
         var text = name?.Trim();
-        if (string.IsNullOrEmpty(text) || text.Contains(',', StringComparison.Ordinal) || char.IsDigit(text[0]) || text[0] == '-') return false;
+        if (string.IsNullOrEmpty(text) || text.Contains(',', StringComparison.Ordinal) || char.IsDigit(text[0]) || text[0] is '-' or '+') return false;
         if (!Enum.TryParse(text, ignoreCase: true, out Key parsed) || !Enum.IsDefined(parsed)) return false;
         if (IsReserved(parsed)) return false;
         key = parsed;

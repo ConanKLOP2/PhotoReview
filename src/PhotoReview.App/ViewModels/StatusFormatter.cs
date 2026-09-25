@@ -32,8 +32,6 @@ public static class StatusFormatter
         };
     }
 
-    public static string ScanningFolder() => Tr.StatusScanningFolder;
-
     public static string NoSupportedImages() => Tr.StatusNoSupportedImages;
 
     public static string FolderOpenFailed(string message) => Tr.StatusFolderOpenFailed(message);
@@ -51,9 +49,6 @@ public static class StatusFormatter
 
     public static string WithDimensions(int index, int count, long size, int width, int height, string fileName) =>
         Tr.StatusWithDimensions(index + 1, count, FormatFileSize(size), width, height, fileName);
-
-    public static string Zoom(int index, int count, long size, double zoom) =>
-        Tr.StatusZoom(index + 1, count, FormatFileSize(size), zoom.ToString("0.##", CultureInfo.CurrentCulture));
 
     /// <param name="leftSize">Fragment from <see cref="CompareSizeSuffix"/> or empty.</param>
     /// <param name="rightSize">Fragment from <see cref="CompareSizeSuffix"/> or empty.</param>
@@ -105,20 +100,6 @@ public static class StatusFormatter
 
     public static string CopiedTo(string? fileName) => Tr.StatusCopiedTo(fileName);
 
-    public static string FileProcessingFailed(string fileName, string message) =>
-        Tr.StatusFileProcessingFailed(fileName, message);
-
-    public static string UndoNoMoves() => Tr.CoreUndoNoMoveToUndo;
-
-    public static string UndoNoActions() => Tr.CoreUndoNothingToUndo;
-
-    public static string UndoFailed(string message) => Tr.CoreUndoFailed(message);
-
-    /// <summary>Fallback when the obsolete Move-only undo fails without a message.</summary>
-    public static string UndoFailedGeneric() => Tr.StatusUndoFailedGeneric;
-
     /// <summary>Fallback when undo fails without a message.</summary>
     public static string NothingToUndo() => Tr.StatusNothingToUndo;
-
-    public static string RecycleRestoreFailed(string fileName) => Tr.CoreUndoRecycleRestoreFailed(fileName);
 }
