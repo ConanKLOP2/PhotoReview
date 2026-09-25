@@ -368,8 +368,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
             marker = jpeg[offset + 1];
             if (marker is 0x00 or 0xFF) return false; // 0xFF00 is a stuffed byte, not a marker
-            // Parameterless markers: TEM (0x01), RSTn (0xD0-0xD7), SOI (0xD8), EOI (0xD9).
-            if (marker is 0x01 or 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
+            // EOI ends the image: nothing after it belongs to the header area (ITU T.81 B.1.1.4).
+            if (marker == 0xD9) return false;
+            // Parameterless markers: TEM (0x01), RSTn (0xD0-0xD7), SOI (0xD8).
+            if (marker is 0x01 or 0xD8 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
@@ -418,8 +420,10 @@ public sealed class TurboJpegDecoder : IImageDecoder
         while (TryReadSegment(jpeg, ref offset, out byte marker, out var payload))
         {
             // Marker APP1 (0xE1)
+            // The first Exif-headed APP1 is the one that counts (same rule as ExifParser); a short or garbage TIFF in it
+            // means "no orientation", never a search for a later APP1.
             if (marker == 0xE1 &&
-                payload.Length >= 14 &&
+                payload.Length >= 6 &&
                 payload[0] == (byte)'E' && payload[1] == (byte)'x' && payload[2] == (byte)'i' &&
                 payload[3] == (byte)'f' && payload[4] == 0 && payload[5] == 0)
             {
