@@ -21,7 +21,8 @@ public sealed class WicDirectDecoder : IImageDecoder
 
     public IDecodedImage Decode(DecodeRequest request)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
+        // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.
+        if (!request.Bytes.HasValue) ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
         Stream stream = request.Bytes.HasValue
             ? ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value)
