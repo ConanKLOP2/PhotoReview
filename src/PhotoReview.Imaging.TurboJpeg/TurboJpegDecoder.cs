@@ -205,20 +205,9 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 () => Tr.ErrIoImageNotFound(path));
         }
 
-        byte[] headerBytes;
-        // Read the first 64KB, which typically contains all header and EXIF markers
-        using (var fs = new FileStream(
-            path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete,
-            bufferSize: 64 * 1024,
-            FileOptions.SequentialScan))
-        {
-            int toRead = (int)Math.Min(fs.Length, 64 * 1024);
-            headerBytes = new byte[toRead];
-            fs.ReadExactly(headerBytes, 0, toRead);
-        }
+        // The header area (everything before the first scan) is normally a few KB, but big APPn/COM segments in front of
+        // the EXIF block are legal: read on until the marker walk says the header is complete.
+        byte[] headerBytes = ReadHeaderArea(path);
 
         var bytes = headerBytes.AsSpan();
         if (bytes.Length < 3 || bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF)
@@ -229,33 +218,83 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
         int orientation = ReadExifOrientation(bytes);
 
+        if (TryReadDimensions(headerBytes, out int width, out int height, out _)) return new ImageInfo(width, height, orientation);
+
+        // The header area was cut by the read cap or the file is damaged: one last try on the whole file.
+        byte[] fullBytes = File.ReadAllBytes(path);
+        if (fullBytes.Length > headerBytes.Length &&
+            TryReadDimensions(fullBytes, out width, out height, out _))
+        {
+            return new ImageInfo(width, height, orientation);
+        }
+
+        // Report the failure of the buffer that saw the most of the file.
+        TryReadDimensions(fullBytes, out _, out _, out string? nativeErr);
+        string err = nativeErr ?? "Header parse error";
+        throw UserFacingError.Localized(new InvalidDataException($"TurboJPEG failed to read image info: {err}"),
+            () => Tr.ErrDecoderInfoFailed(nativeErr ?? Tr.ErrDecoderNoDetail));
+    }
+
+    /// <summary>First read of <see cref="ReadInfo"/>, in bytes.</summary>
+    private const int HeaderReadChunk = 64 * 1024;
+
+    /// <summary>Most of a file <see cref="ReadInfo"/> reads while looking for the end of the header area.</summary>
+    private const int HeaderReadCap = 8 * 1024 * 1024;
+
+    /// <summary>Reads the start of the file: 64 KB, then doubling while the marker walk shows the header area is not finished (capped).</summary>
+    private static byte[] ReadHeaderArea(string path)
+    {
+        using var fs = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: HeaderReadChunk,
+            FileOptions.SequentialScan);
+        var length = fs.Length;
+        var buffer = new byte[(int)Math.Min(length, HeaderReadChunk)];
+        fs.ReadExactly(buffer);
+        while (buffer.Length < length && buffer.Length < HeaderReadCap && HeaderNeedsMoreData(buffer))
+        {
+            var grown = new byte[(int)Math.Min(Math.Min(length, HeaderReadCap), (long)buffer.Length * 2)];
+            buffer.CopyTo(grown, 0);
+            fs.ReadExactly(grown.AsSpan(buffer.Length));
+            buffer = grown;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>True when the marker walk over <paramref name="jpeg"/> ran out of bytes before the first scan (SOS), EOI or garbage.</summary>
+    private static bool HeaderNeedsMoreData(ReadOnlySpan<byte> jpeg)
+    {
+        if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return false;
+        var offset = 2;
+        var needsMoreData = false;
+        while (TryReadSegment(jpeg, ref offset, out _, out _, out needsMoreData)) { }
+        return needsMoreData;
+    }
+
+    /// <summary>Header-only parse on a fresh decompressor (a failed parse leaves a handle unusable for another buffer).</summary>
+    private static bool TryReadDimensions(byte[] jpeg, out int width, out int height, out string? nativeError)
+    {
+        width = height = 0;
+        nativeError = null;
         using var decompressor = TurboJpegNative.CreateDecompressor();
         ConfigureStrictDecoding(decompressor);
         unsafe
         {
-            fixed (byte* pJpeg = bytes)
+            fixed (byte* pJpeg = jpeg)
             {
-                int headerRes = TurboJpegNative.tj3DecompressHeader(decompressor, pJpeg, (nuint)bytes.Length);
-                if (headerRes != 0)
+                if (TurboJpegNative.tj3DecompressHeader(decompressor, pJpeg, (nuint)jpeg.Length) != 0)
                 {
-                    // If 64KB wasn't enough, read full file
-                    byte[] fullBytes = File.ReadAllBytes(path);
-                    fixed (byte* pFull = fullBytes)
-                    {
-                        headerRes = TurboJpegNative.tj3DecompressHeader(decompressor, pFull, (nuint)fullBytes.Length);
-                        if (headerRes != 0)
-                        {
-                            string? nativeErr = TurboJpegNative.GetErrorMessage(decompressor);
-                            string err = nativeErr ?? "Header parse error";
-                            throw UserFacingError.Localized(new InvalidDataException($"TurboJPEG failed to read image info: {err}"),
-                                () => Tr.ErrDecoderInfoFailed(nativeErr ?? Tr.ErrDecoderNoDetail));
-                        }
-                    }
+                    nativeError = TurboJpegNative.GetErrorMessage(decompressor);
+                    return false;
                 }
 
-                int width = TurboJpegNative.tj3Get(decompressor, (int)TjParam.JpegWidth);
-                int height = TurboJpegNative.tj3Get(decompressor, (int)TjParam.JpegHeight);
-                return new ImageInfo(width, height, orientation);
+                width = TurboJpegNative.tj3Get(decompressor, (int)TjParam.JpegWidth);
+                height = TurboJpegNative.tj3Get(decompressor, (int)TjParam.JpegHeight);
+                return width > 0 && height > 0;
             }
         }
     }
@@ -354,17 +393,26 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// (just past SOI).
     /// </summary>
     private static bool TryReadSegment(
-        ReadOnlySpan<byte> jpeg, ref int offset, out byte marker, out ReadOnlySpan<byte> payload)
+        ReadOnlySpan<byte> jpeg, ref int offset, out byte marker, out ReadOnlySpan<byte> payload) =>
+        TryReadSegment(jpeg, ref offset, out marker, out payload, out _);
+
+    /// <param name="needsMoreData">
+    /// Set when the walk stopped only because <paramref name="jpeg"/> ended (a marker or segment cut off by the buffer end),
+    /// as opposed to SOS, EOI, a stuffed 0xFF00 or a malformed segment, where more bytes would not change the answer.
+    /// </param>
+    private static bool TryReadSegment(
+        ReadOnlySpan<byte> jpeg, ref int offset, out byte marker, out ReadOnlySpan<byte> payload, out bool needsMoreData)
     {
         marker = 0;
         payload = default;
+        needsMoreData = false;
         while (offset + 2 <= jpeg.Length)
         {
             if (jpeg[offset] != 0xFF) return false;
 
             // Any marker may be preceded by repeated 0xFF fill bytes (ITU T.81 B.1.1.2).
             while (offset + 1 < jpeg.Length && jpeg[offset + 1] == 0xFF) offset++;
-            if (offset + 2 > jpeg.Length) return false;
+            if (offset + 2 > jpeg.Length) { needsMoreData = true; return false; }
 
             marker = jpeg[offset + 1];
             if (marker is 0x00 or 0xFF) return false; // 0xFF00 is a stuffed byte, not a marker
@@ -377,16 +425,18 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 continue;
             }
             if (marker == 0xDA) return false; // SOS marker reached
-            if (offset + 4 > jpeg.Length) return false;
+            if (offset + 4 > jpeg.Length) { needsMoreData = true; return false; }
 
             int length = (jpeg[offset + 2] << 8) | jpeg[offset + 3];
-            if (length < 2 || offset + 2 + length > jpeg.Length) return false;
+            if (length < 2) return false;
+            if (offset + 2 + length > jpeg.Length) { needsMoreData = true; return false; }
 
             payload = jpeg.Slice(offset + 4, length - 2);
             offset += 2 + length;
             return true;
         }
 
+        needsMoreData = true; // ran out of bytes exactly at a segment boundary
         return false;
     }
 

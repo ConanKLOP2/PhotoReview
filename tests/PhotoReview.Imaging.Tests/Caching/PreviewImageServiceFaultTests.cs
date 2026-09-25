@@ -158,4 +158,38 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         Assert.Empty(failures);
         Assert.False(service.HasInflightPreview(_source));
     }
+
+    [Fact(DisplayName = "Threads hammering more images than the RAM cache holds always get valid images, and the cache never exceeds its byte budget")]
+    public async Task LruThrash_StaysWithinBudget_AndCorrect()
+    {
+        var folder = _root.Dir("thrash-source");
+        var files = Enumerable.Range(0, 12).Select(i =>
+        {
+            var path = Path.Combine(folder, $"img{i}.png");
+            File.WriteAllBytes(path, TestImages.OpaquePng);
+            return path;
+        }).ToArray();
+        var diskDir = _root.Dir("thrash-disk");
+        // 32x32 previews cost 4096 bytes each; the budget holds about three.
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 3 * 4096 + 100,
+            diskCacheDirectory: diskDir, disableDiskCacheOverride: true);
+        using var barrier = new Barrier(8);
+        var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(worker => Task.Run(async () =>
+        {
+            var rng = new Random(worker);
+            barrier.SignalAndWait();
+            for (var i = 0; i < 150; i++)
+            {
+                var image = await service.GetPreviewAsync(files[rng.Next(files.Length)]);
+                if (image.PixelWidth != 32) failures.Add($"width {image.PixelWidth}");
+                if (service.CacheBytes > service.CapacityBytes) failures.Add($"cache {service.CacheBytes} > budget {service.CapacityBytes}");
+            }
+        })));
+        await service.ShutdownPersistWorkersAsync();
+
+        Assert.Empty(failures);
+        Assert.InRange(service.CacheCount, 1, 4);
+    }
 }
