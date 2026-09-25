@@ -424,13 +424,33 @@ public sealed class MainViewModelAdvancedTests : IDisposable
     }
 
     [Fact]
+    public void Sink_OnCatalogReadyAndOnEmpty_AdoptTheSessionPassedInWithoutReloading()
+    {
+        var folder = Path.Combine(_tempDir, "session_adopt");
+        var (vm, _) = CreateViewModel();
+        IFolderLoadSink sink = vm;
+
+        // The store holds a different session for this folder: a sink that re-read it would return that one.
+        Directory.CreateDirectory(folder);
+        _sessionStore.Save(new SessionState { Folder = folder, CurrentPath = "from-disk" });
+
+        var passed = new SessionState { Folder = folder, CurrentPath = "from-coordinator" };
+        sink.OnCatalogReady(folder, 3, passed);
+        Assert.Same(passed, vm.Session);
+
+        var passedEmpty = new SessionState { Folder = folder, CurrentPath = "from-coordinator-empty" };
+        sink.OnEmpty(folder, passedEmpty);
+        Assert.Same(passedEmpty, vm.Session);
+    }
+
+    [Fact]
     public void FolderText_ExplorerOrder_IsTrackedByStateFlagNotByText()
     {
         var folder = Path.Combine(_tempDir, "explorer_flag");
         var (vm, _) = CreateViewModel();
         IFolderLoadSink sink = vm;
 
-        sink.OnCatalogReady(folder, 3);
+        sink.OnCatalogReady(folder, 3, new PhotoReview.Core.Session.SessionState { Folder = folder });
         Assert.False(vm.IsExplorerOrderApplied);
         Assert.Equal($"{folder}  (3 ảnh)", vm.FolderText);
 
@@ -443,7 +463,7 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         Assert.Equal($"{folder}  (3 ảnh) · Explorer", vm.FolderText);
 
         // A new catalog starts in natural order again.
-        sink.OnEmpty(folder);
+        sink.OnEmpty(folder, new SessionState { Folder = folder });
         Assert.False(vm.IsExplorerOrderApplied);
         Assert.Equal($"{folder}  (0 ảnh)", vm.FolderText);
     }
@@ -453,9 +473,9 @@ public sealed class MainViewModelAdvancedTests : IDisposable
     private sealed class ForwardingFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink
     {
         public void ResetCaches() => targetProvider().ResetCaches();
-        public void OnCatalogReady(string folder, int count) => targetProvider().OnCatalogReady(folder, count);
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => targetProvider().OnCatalogReady(folder, count, session);
         public Task PresentAsync(int index, long presentationGeneration) => targetProvider().PresentAsync(index, presentationGeneration);
-        public void OnEmpty(string folder) => targetProvider().OnEmpty(folder);
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => targetProvider().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => targetProvider().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => targetProvider().OnFailed(folder, exception);
     }

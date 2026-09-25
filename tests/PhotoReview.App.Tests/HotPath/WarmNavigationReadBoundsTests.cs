@@ -497,9 +497,9 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
     private sealed class StubFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink
     {
         public void ResetCaches() => targetProvider().ResetCaches();
-        public void OnCatalogReady(string folder, int count) => targetProvider().OnCatalogReady(folder, count);
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => targetProvider().OnCatalogReady(folder, count, session);
         public Task PresentAsync(int index, long presentationGeneration) => targetProvider().PresentAsync(index, presentationGeneration);
-        public void OnEmpty(string folder) => targetProvider().OnEmpty(folder);
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => targetProvider().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => targetProvider().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => targetProvider().OnFailed(folder, exception);
     }

@@ -10,14 +10,14 @@ public interface IFolderLoadSink
     /// <summary>Xóa bộ nhớ đệm hình ảnh và scheduler của thư mục trước.</summary>
     void ResetCaches();
 
-    /// <summary>Thông báo danh mục ảnh sơ bộ đã sẵn sàng.</summary>
-    void OnCatalogReady(string folder, int count);
+    /// <summary>Thông báo danh mục ảnh sơ bộ đã sẵn sàng. <paramref name="session"/> là phiên đã nạp đúng một lần bởi coordinator.</summary>
+    void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session);
 
     /// <summary>Yêu cầu hiển thị ảnh tại vị trí chỉ định.</summary>
     Task PresentAsync(int index, long presentationGeneration);
 
     /// <summary>Thông báo thư mục rỗng không có ảnh hỗ trợ.</summary>
-    void OnEmpty(string folder);
+    void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session);
 
     /// <summary>
     /// Thông báo thứ tự Explorer tự nhiên đã được áp dụng vào danh mục. <paramref name="currentKept"/>:

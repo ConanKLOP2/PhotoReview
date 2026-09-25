@@ -14,7 +14,7 @@ public sealed class MainViewModelLanguageSwitchTests
         var (vm, _) = host.CreateViewModel();
         var folder = Path.Combine(Path.GetTempPath(), "lang_switch");
         IFolderLoadSink sink = vm;
-        sink.OnCatalogReady(folder, 3);
+        sink.OnCatalogReady(folder, 3, new PhotoReview.Core.Session.SessionState { Folder = folder });
         sink.OnOrderApplied(3, 0, currentKept: false);
         Assert.Equal($"{folder}  (3 ảnh) · Explorer", vm.FolderText);
 

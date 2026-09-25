@@ -152,7 +152,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             _sessionWriter?.Flush(); // a pending write for this folder must be visible to Load
             var session = _sessionStore.Load(folder);
             _catalog.Reset(entries);
-            _sink.OnCatalogReady(folder, _catalog.Count);
+            _sink.OnCatalogReady(folder, _catalog.Count, session);
             if (skipped.Count > 0)
             {
                 AppLog.Warn($"Folder scan skipped {skipped.Count.ToString(CultureInfo.InvariantCulture)} unreadable entr(y/ies) in '{folder}': "
@@ -215,7 +215,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             else
             {
                 _clock.NextNavigation();
-                _sink.OnEmpty(folder);
+                _sink.OnEmpty(folder, session);
             }
 
             if (orderSettled)
@@ -267,7 +267,7 @@ public sealed class FolderLoadCoordinator : IDisposable
         {
             // Bỏ qua khi loadToken bị hủy
         }
-        catch (Exception ex) when (_clock.IsFolderCurrent(loadGeneration))
+        catch (Exception ex) when (!loadToken.IsCancellationRequested && _clock.IsFolderCurrent(loadGeneration))
         {
             _sink.OnFailed(folder, ex);
         }
