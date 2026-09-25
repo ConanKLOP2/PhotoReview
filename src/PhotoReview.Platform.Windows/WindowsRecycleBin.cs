@@ -36,6 +36,23 @@ public sealed class WindowsRecycleBin : IRecycleBin
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
     }
 
+    public bool CanRecycle(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType);
+    }
+
+    /// <summary>Q-R8: permanent delete for drives without a Recycle Bin. Refuses fixed drives so it can never bypass the Recycle Bin there.</summary>
+    public void DeletePermanently(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (CanRecycle(path))
+            throw new InvalidOperationException("DeletePermanently is only for drives without a Recycle Bin.");
+        File.Delete(path);
+        if (File.Exists(path))
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
+    }
+
     public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(originalPath);

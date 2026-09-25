@@ -64,7 +64,9 @@ public sealed class FileActionController
             return;
         }
 
-        if (action.Confirm && _dialogService is not null)
+        // Q-R8: a permanent delete gets its own explicit confirmation (in the core step), which replaces the generic one.
+        var permanentPrompt = action.Operation == FileOperationType.Recycle && WillAskPermanentDelete(compareSelectedPath ?? currentPath);
+        if (action.Confirm && _dialogService is not null && !permanentPrompt)
         {
             var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(action.Name));
             if (!ok) return;
@@ -93,6 +95,13 @@ public sealed class FileActionController
         await ExecuteFileActionCoreAsync(Tr.ActionRecycleName, FileOperationType.Recycle, null, compareSelectedPath, currentPath);
     }
 
+    /// <summary>Q-R8: the setting is on and <paramref name="source"/> is on a drive without a Recycle Bin, so Recycle would delete permanently.</summary>
+    private bool WillAskPermanentDelete(string? source) =>
+        !string.IsNullOrEmpty(source)
+        && _getSettings().AllowPermanentDeleteWithoutRecycleBin
+        && _fileActionService is not null
+        && _fileActionService.LacksRecycleBin(source);
+
     private async Task ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
     {
         if (_catalog.Count == 0) return;
@@ -103,6 +112,18 @@ public sealed class FileActionController
 
         var source = compareSelectedPath ?? currentPath;
         if (string.IsNullOrEmpty(source)) return;
+
+        // Q-R8: permanent delete only with the setting on AND an explicit "this is permanent" confirmation every time.
+        // Without a dialog service nothing can be confirmed, so nothing is deleted. Setting off: the request stays
+        // AllowPermanentDelete=false and the service refuses (fixed drives never reach this branch).
+        var allowPermanent = false;
+        if (operation == FileOperationType.Recycle && WillAskPermanentDelete(source))
+        {
+            if (_dialogService is null
+                || !_dialogService.ShowConfirmation(Tr.DialogConfirmPermanentDeleteTitle, Tr.DialogConfirmPermanentDeleteMessage(Path.GetFileName(source))))
+                return;
+            allowPermanent = true;
+        }
 
         var sourceIndex = _catalog.IndexOf(source);
         _clock.StopForAction();
@@ -130,7 +151,7 @@ public sealed class FileActionController
 
         try
         {
-            var request = new FileActionRequest(source, operation, destination);
+            var request = new FileActionRequest(source, operation, destination, allowPermanent);
             var result = await _fileActionService.ExecuteAsync(request);
 
             // Stale Folder Guard: Nếu người dùng đã đổi thư mục trong khi I/O đang chạy, bỏ qua

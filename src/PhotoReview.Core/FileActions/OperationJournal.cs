@@ -13,7 +13,8 @@ namespace PhotoReview.Core.FileActions;
 /// otherwise; files written before ADR 0006 may hold Vietnamese. <see cref="ErrorCode"/> (Q-L3) is a stable
 /// <see cref="JournalErrors"/> code the UI localizes by (<see cref="JournalErrors.Describe(JournalEntry)"/>). It is
 /// omitted from the JSON when null, so records without a code keep their previous shape, and older builds (which
-/// skip unknown members) still read new files.
+/// skip unknown members) still read new files. <see cref="Permanent"/> (Q-R8) is true for a Recycle that deleted the file
+/// permanently (drive without a Recycle Bin, user opt-in): such an entry can never be restored; null/omitted otherwise.
 /// </summary>
 public sealed record JournalEntry(
     string Id,
@@ -25,7 +26,8 @@ public sealed record JournalEntry(
     DateTime LastWriteUtc,
     DateTime TimestampUtc,
     string? Error = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Permanent = null);
 
 public sealed class OperationJournal
 {
