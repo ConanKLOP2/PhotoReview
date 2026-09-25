@@ -45,16 +45,58 @@ public sealed class TestFilterDriftTests
         Assert.Equal(ci, gate);
     }
 
+    private static IEnumerable<string> TestProjects() =>
+        Directory.GetDirectories(Path.Combine(RepoScan.Root, "tests"), "PhotoReview.*.Tests")
+            .Select(dir => Path.GetFileName(dir)!)
+            .Where(name => Directory.GetFiles(Path.Combine(RepoScan.Root, "tests", name), "*.csproj").Length > 0);
+
+    private const string SharedFilterArgument = "--filter \"$env:TEST_FILTER\"";
+
+    [Fact(DisplayName = "Rule R2-A-12: every CI dotnet test command passes the shared TEST_FILTER (or the Integration+Slow safety net)")]
+    public void EveryCiTestCommand_PassesTheSharedFilter()
+    {
+        var commands = ReadRepoFile(".github/workflows/ci.yml").Split('\n')
+            .Where(line => line.Contains("dotnet test ", StringComparison.Ordinal) && !line.TrimStart().StartsWith('#'))
+            .ToArray();
+        Assert.NotEmpty(commands);
+
+        // A step that defines TEST_FILTER but forgets to pass it would silently run Native/Slow/Manual tests (or none).
+        foreach (var command in commands)
+        {
+            var usesShared = command.Contains(SharedFilterArgument, StringComparison.Ordinal);
+            var usesSafetyNet = command.Contains("--filter \"Category=Integration&Category=Slow&", StringComparison.Ordinal);
+            Assert.True(usesShared || usesSafetyNet, $"CI test command without the shared filter: {command.Trim()}");
+        }
+
+        // ...and every test project has a main step with the shared filter.
+        foreach (var project in TestProjects())
+            Assert.Contains(commands, c => c.Contains($"tests/{project}/{project}.csproj", StringComparison.Ordinal)
+                && c.Contains(SharedFilterArgument, StringComparison.Ordinal));
+
+        // verify-all.ps1's per-project run passes the filter it builds (checked against CI above).
+        Assert.Contains("'--filter', $filter,", ReadRepoFile("tools/verify-all.ps1"), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "Rule R2-A-12: CI and verify-all.ps1 both run the translation and documentation gates")]
+    public void CiAndLocalGate_RunTheSameScriptGates()
+    {
+        var ci = ReadRepoFile(".github/workflows/ci.yml");
+        var gate = ReadRepoFile("tools/verify-all.ps1");
+
+        foreach (var script in new[] { "i18n-check.ps1", "docs-budget.ps1", "check-doc-links.ps1" })
+        {
+            Assert.Matches(new Regex(@"^\s*run:\s*\./tools/" + Regex.Escape(script), RegexOptions.Multiline), ci);
+            Assert.Matches(new Regex(@"^\s*&\s*\(Join-Path \$PSScriptRoot '" + Regex.Escape(script) + "'\\)", RegexOptions.Multiline), gate);
+        }
+    }
+
     [Fact(DisplayName = "Rule R2-A-12: the CI safety-net step covers every test project")]
     public void IntegrationSlowStep_CoversEveryTestProject()
     {
         var ci = ReadRepoFile(".github/workflows/ci.yml");
         var step = ci[ci.IndexOf("Integration-category tests that the main filter skips", StringComparison.Ordinal)..];
-        var projects = Directory.GetDirectories(Path.Combine(RepoScan.Root, "tests"), "PhotoReview.*.Tests")
-            .Select(Path.GetFileName)
-            .Where(name => Directory.GetFiles(Path.Combine(RepoScan.Root, "tests", name!), "*.csproj").Length > 0);
 
-        foreach (var project in projects)
+        foreach (var project in TestProjects())
             Assert.Contains($"'{project}'", step[..step.IndexOf("- name: Publish Release", StringComparison.Ordinal)], StringComparison.Ordinal);
     }
 }

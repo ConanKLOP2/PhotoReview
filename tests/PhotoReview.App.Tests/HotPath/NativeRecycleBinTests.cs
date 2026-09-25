@@ -252,11 +252,15 @@ public sealed class NativeRecycleBinTests : IAsyncLifetime
                 }
             }
 
-            Assert.True(maxRetries > 0, $"Retried too many times - files may not have deleted properly");
+            // The loop can end with the queue drained on the very last allowed retry (maxRetries then reads 0 or -1),
+            // so success is "nothing left unfinished", not a retry-counter comparison.
+            Assert.True(unfinishedPaths.Count == 0, $"Retried too many times - {unfinishedPaths.Count} delete(s) never went through");
 
-            // Step 6: Verify all K files are gone from original location (moved to Recycle Bin)
+            // Step 6: Verify all K files are gone from original location...
             Assert.All(fileList, path => Assert.False(File.Exists(path),
                 $"File should be in Recycle Bin, not on disk: {path}"));
+            // ...and really landed in the Recycle Bin: a regression to a permanent delete also removes them from disk.
+            Assert.Equal(K, TestRecycleBinCleanup.CountItemsDeletedFrom(_testFolder));
         }
         finally
         {

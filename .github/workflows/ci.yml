@@ -81,6 +81,15 @@ jobs:
         shell: powershell
         run: ./tools/i18n-check.ps1
 
+      # Same documentation gates as tools/verify-all.ps1: T0/T1 size budget, and no broken links outside docs/archive.
+      - name: Check documentation budget
+        shell: powershell
+        run: ./tools/docs-budget.ps1 -Check
+
+      - name: Check documentation links
+        shell: powershell
+        run: ./tools/check-doc-links.ps1
+
       # CI runs the HotPath tests plus the Category=Integration tests (fast, mocked deps, no real
       # Recycle Bin); Native/Slow/Manual run locally only (verify-all.ps1 -Native/-Slow).
       # NOTE: TEST_FILTER (job env) is verified to match tools/verify-all.ps1 and AGENTS.md > Tests.

@@ -106,39 +106,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         Assert.Single(_bin.Sent);
     }
 
-    [Fact(DisplayName = "CreateSeededRandom produces the same sequence for the same profile id across separate calls")]
-    public void CreateSeededRandomIsStableAcrossCalls()
-    {
-        var first = BenchmarkWorkloadRunner.CreateSeededRandom("preview-balanced");
-        var second = BenchmarkWorkloadRunner.CreateSeededRandom("preview-balanced");
-        var firstSequence = Enumerable.Range(0, 25).Select(_ => first.Next(1000)).ToArray();
-        var secondSequence = Enumerable.Range(0, 25).Select(_ => second.Next(1000)).ToArray();
-        Assert.Equal(firstSequence, secondSequence);
-    }
-
-    [Fact(DisplayName = "Random workload selects the identical file sequence across separate runs seeded from the same profile id")]
-    [Trait("Category", "Integration")]
-    public async Task RandomWorkloadSelectionIsDeterministicAcrossRuns()
-    {
-        var profile = BenchmarkProfiles.Find("random-navigation")! with { Workers = 1 };
-        var files = Enumerable.Range(0, 5)
-            .Select(i => _root.File($"rand-{i}.png", TestImages.PreviewPng)).ToArray();
-        var totalBytes = files.Sum(f => new FileInfo(f).Length);
-
-        async Task<long> RunAsync()
-        {
-            var executor = NewExecutor(profile, files, totalBytes);
-            var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
-            for (var iteration = 0; iteration < 10; iteration++)
-                await BenchmarkWorkloadRunner.RunIterationAsync(
-                    executor, files, profile, BenchmarkWorkload.Random, iteration, random, _bin, CancellationToken.None);
-            // Cache hit/miss pattern (and so this count) depends entirely on the random
-            // index sequence, so it only matches across runs if that sequence is identical.
-            return executor.Metrics.SourceReads;
-        }
-
-        Assert.Equal(await RunAsync(), await RunAsync());
-    }
+    // The seeded-random golden tests live in BenchmarkSelectionGoldenTests (no I/O, runs in the gate).
 
     [Fact(DisplayName = "WarmNext workload records a real preload hit once the previous iteration's warm-up lands")]
     public async Task WarmNextWorkloadRecordsPreloadHitAfterWarming()
@@ -153,17 +121,15 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 
         await executor.DecodeAsync(files[0]);
         executor.WarmPreloadAround(0);
+        // WarmPreloadAround is fire-and-forget by design (matches production). Wait for that preload pass
+        // itself to finish -- it marks files[1]'s key as preloaded -- before the one foreground decode below;
+        // decoding files[1] while the pass is still running could cache it first and the preload worker would
+        // then skip it, so no hit would ever be recorded.
+        await executor.WhenPreloadSettledAsync();
 
-        // WarmPreloadAround is fire-and-forget by design (matches production), so poll for
-        // the background warm-up to land instead of asserting on a fixed delay.
-        // TC09: poll a condition with a deadline instead of asserting after a fixed delay.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (executor.Metrics.PreloadHits == 0 && DateTime.UtcNow < deadline)
-        {
-            await executor.DecodeAsync(files[1]);
-            await Task.Delay(10); // not Task.Yield: a yield loop busy-spins a pool thread and starved the code under test on 2-vCPU CI
-        }
+        Assert.Equal(0, executor.Metrics.PreloadHits);
+        await executor.DecodeAsync(files[1]);
 
-        Assert.True(executor.Metrics.PreloadHits > 0);
+        Assert.Equal(1, executor.Metrics.PreloadHits);
     }
 }
