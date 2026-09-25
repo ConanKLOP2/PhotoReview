@@ -19,7 +19,6 @@ public sealed class PermanentDeleteTests
     private sealed class FakeClock : IClock
     {
         public DateTime UtcNow => Stamp;
-        public long Timestamp => 0;
     }
 
     private sealed class FakePaths : IAppPaths

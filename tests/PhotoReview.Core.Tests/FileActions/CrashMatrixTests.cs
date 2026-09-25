@@ -24,7 +24,6 @@ public sealed class CrashMatrixTests
     private sealed class Clock : IClock
     {
         public DateTime UtcNow { get; } = new(2026, 9, 26, 1, 0, 0, DateTimeKind.Utc);
-        public long Timestamp => 0;
     }
 
     /// <summary>Recycle Bin fake whose "send" is a real (crash-numbered) delete on the fake file system.</summary>

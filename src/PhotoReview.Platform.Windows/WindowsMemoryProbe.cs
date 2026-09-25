@@ -54,8 +54,4 @@ public sealed class WindowsMemoryProbe : IMemoryProbe
         _log.Error($"GlobalMemoryStatusEx failed: Win32Error={Marshal.GetLastWin32Error()}");
         return null;
     }
-
-    public bool IsMemoryPressureHigh() => !HasHeadroom(0.85, 2L * 1024 * 1024 * 1024);
-
-    public long GetAvailableMemoryBytes() => (long)(GetSnapshot()?.AvailableBytes ?? 0);
 }

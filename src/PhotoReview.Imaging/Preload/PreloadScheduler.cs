@@ -665,8 +665,6 @@ public sealed class DelegateMemoryProbe : IMemoryProbe
     public DelegateMemoryProbe(Func<double, bool> hasHeadroom) => _hasHeadroom = hasHeadroom;
     public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom(maximumLoad);
     public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-    public bool IsMemoryPressureHigh() => false;
-    public long GetAvailableMemoryBytes() => 16L * 1024 * 1024 * 1024;
 }
 
 public sealed class FakeMemoryProbe : IMemoryProbe
@@ -675,6 +673,4 @@ public sealed class FakeMemoryProbe : IMemoryProbe
     public FakeMemoryProbe(bool hasHeadroom = true) => _hasHeadroom = hasHeadroom;
     public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom;
     public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-    public bool IsMemoryPressureHigh() => !_hasHeadroom;
-    public long GetAvailableMemoryBytes() => _hasHeadroom ? 16L * 1024 * 1024 * 1024 : 0;
 }

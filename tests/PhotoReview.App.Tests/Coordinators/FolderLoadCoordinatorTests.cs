@@ -89,7 +89,6 @@ public sealed partial class FolderLoadCoordinatorTests
     private sealed class FakeClock : IClock
     {
         public DateTime UtcNow => new(2026, 9, 19, 12, 0, 0, DateTimeKind.Utc);
-        public long Timestamp => 0;
     }
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider

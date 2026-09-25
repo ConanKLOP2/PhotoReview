@@ -12,7 +12,6 @@ public sealed class JournalReconcileRaceTests
     private sealed class FakeClock(DateTime utcNow) : IClock
     {
         public DateTime UtcNow { get; } = utcNow;
-        public long Timestamp => 0;
     }
 
     /// <summary>Forwards to the in-memory FS and runs a one-shot action when FileExists is first called (the barrier).</summary>

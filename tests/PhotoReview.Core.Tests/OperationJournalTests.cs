@@ -195,7 +195,6 @@ public sealed class OperationJournalUnitTests
     {
         public FakeClock(DateTime utcNow) => UtcNow = utcNow;
         public DateTime UtcNow { get; set; }
-        public long Timestamp => 0;
     }
 
     private sealed class FakeAppPaths : IAppPaths
