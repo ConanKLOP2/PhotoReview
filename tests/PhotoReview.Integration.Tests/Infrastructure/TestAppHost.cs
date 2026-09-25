@@ -45,6 +45,8 @@ internal static class TestAppHost
         });
 
         var window = sp.GetRequiredService<MainWindow>();
+        // R7-11: never restore or overwrite the user's real window-placement.json from a test window.
+        window.SuppressWindowPlacement();
         window.Closed += (_, _) => sp.Dispose();
         window.InitializeWithInitialPath(initialPath);
         return window;

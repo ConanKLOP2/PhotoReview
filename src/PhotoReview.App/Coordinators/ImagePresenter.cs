@@ -191,18 +191,31 @@ public sealed class ImagePresenter
 
         // 2. Stat; file mất thì xóa khỏi catalog và chuyển tiếp
         long perfStat = perf ? Stopwatch.GetTimestamp() : 0;
-        if (!TryGetFileInfo(path, out var initialInfo))
+        if (!TryGetFileStat(path, out var initialStat))
         {
             if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
 
+        // R7-1: the key must describe the file as it is now, not as the folder scan saw it. A photo edited in
+        // another app since the scan kept the old Length/mtime in the catalog, so the viewer served the old
+        // preview from RAM, or decoded and then failed MatchesCurrentSource forever; preload (which reads the
+        // catalog) cached under keys the viewer never asked for. Refresh the entry from the stat just taken
+        // (no extra I/O) and drop the old version's RAM entries (stale disk entries are keyed by length+mtime
+        // and are never served; the disk LRU prunes them).
         var initialEntry = _catalog.Find(path);
-        var initialSize = initialEntry?.Length ?? initialInfo.Length;
-        var currentKey = initialEntry?.Length is not null && initialEntry.LastWriteUtc is not null
+        if (initialEntry is not null && !initialEntry.Matches(initialStat))
+        {
+            if (initialEntry.Length is not null && initialEntry.LastWriteUtc is not null)
+                EvictCachedPath(path);
+            _catalog.UpdateMetadata(path, initialStat.Length, initialStat.LastWriteUtc);
+            initialEntry = _catalog.Find(path);
+        }
+        var initialSize = initialStat.Length;
+        var currentKey = initialEntry is not null
             ? _previewService.GetCurrentCacheKey(initialEntry)
-            : _previewService.GetCurrentCacheKey(initialInfo);
+            : _previewService.GetCurrentCacheKey(path);
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
@@ -398,10 +411,10 @@ public sealed class ImagePresenter
 
                 if (!_clock.IsNavigationCurrent(token)) return;
 
-                if (!TryGetFileInfo(path, out var currentInfo)) return;
-                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteTimeUtc))
+                if (!TryGetFileStat(path, out var currentInfo)) return;
+                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
                 {
-                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteTimeUtc);
+                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
                 }
 
                 UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
@@ -472,7 +485,7 @@ public sealed class ImagePresenter
             if (nextIndex < 0 || nextIndex >= _catalog.Count) return;
 
             var nextPath = _catalog.PathAt(nextIndex);
-            if (TryGetFileInfo(nextPath, out _))
+            if (TryGetFileStat(nextPath, out _))
             {
                 await PresentAsync(nextIndex);
                 return;
@@ -513,23 +526,23 @@ public sealed class ImagePresenter
         _sink.SetStatusText(status);
     }
 
-    private bool TryGetFileInfo(string path, out FileInfo info)
+    /// <summary>One stat: existence plus the Length/LastWriteUtc the cache key is built from.</summary>
+    private bool TryGetFileStat(string path, out FileStat stat)
     {
         try
         {
-            info = new FileInfo(path);
-            // When an IFileSystem is available, its (counted, mockable) existence check is the
-            // source of truth and FileInfo.Exists below would just be a second, redundant stat.
+            // When an IFileSystem is available, its (counted, mockable) stat is the source of truth.
             if (_fileSystem != null)
             {
-                if (!_fileSystem.FileExists(path)) { info = null!; return false; }
+                if (_fileSystem.GetFileStat(path) is not { } fsStat) { stat = null!; return false; }
+                stat = fsStat;
                 return true;
             }
-            if (!info.Exists) { info = null!; return false; }
+            var info = new FileInfo(path);
+            if (!info.Exists) { stat = null!; return false; }
+            stat = new FileStat(info.Length, info.LastWriteTimeUtc);
             return true;
         }
-        catch (FileNotFoundException) { info = null!; return false; }
-        catch (DirectoryNotFoundException) { info = null!; return false; }
-        catch { info = null!; return false; }
+        catch { stat = null!; return false; }
     }
 }

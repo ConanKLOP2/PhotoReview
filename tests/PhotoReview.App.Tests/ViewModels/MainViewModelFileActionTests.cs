@@ -131,7 +131,7 @@ public sealed class MainViewModelFileActionTests : IDisposable
         return filePath;
     }
 
-    private (MainViewModel ViewModel, FileActionService FileActions, UndoService Undo) CreateViewModel(IFileSystem? fs = null)
+    private (MainViewModel ViewModel, FileActionService FileActions, UndoService Undo) CreateViewModel(IFileSystem? fs = null, SessionWriter? sessionWriter = null)
     {
         var activeFs = fs ?? _fileSystem;
         var clock = new SystemClock();
@@ -179,11 +179,29 @@ public sealed class MainViewModelFileActionTests : IDisposable
             _hashService,
             _previewService,
             _thumbnailCache,
-            new SessionWriter(_sessionStore, FileLog.Default),
+            sessionWriter ?? new SessionWriter(_sessionStore, FileLog.Default),
             preloadController: _preloadController,
             naturalComparer: ManagedNaturalComparer.Instance);
 
         return (vm, fileActions, undo);
+    }
+
+    [Fact(DisplayName = "R7-3: CloseSession writes pending state through the bounded shutdown path (writer disposed)")]
+    public void CloseSession_WritesPendingState_AndDisposesWriter()
+    {
+        var folder = Path.Combine(_tempDir, "close_session");
+        Directory.CreateDirectory(folder);
+        var writer = new SessionWriter(_sessionStore, FileLog.Default, delay: (_, _) => new TaskCompletionSource().Task);
+        var (vm, _, _) = CreateViewModel(sessionWriter: writer);
+
+        writer.Update(new SessionState { Folder = folder, CurrentPath = Path.Combine(folder, "a.jpg") });
+        vm.CloseSession();
+        Assert.Equal(Path.Combine(folder, "a.jpg"), _sessionStore.Load(folder).CurrentPath);
+
+        // Disposed (Q-R5 bounded path), not just flushed: a late update after close is not written.
+        writer.Update(new SessionState { Folder = folder, CurrentPath = Path.Combine(folder, "b.jpg") });
+        writer.Flush();
+        Assert.Equal(Path.Combine(folder, "a.jpg"), _sessionStore.Load(folder).CurrentPath);
     }
 
     [Fact]
@@ -312,6 +330,42 @@ public sealed class MainViewModelFileActionTests : IDisposable
 
         Assert.True(File.Exists(img1));
         Assert.Equal(1, vm.TotalFiles);
+    }
+
+    [Fact(DisplayName = "R7-4: a folder switch while the action's Confirm dialog is open cancels the action")]
+    public async Task RunActionAsync_FolderSwitchDuringConfirm_DoesNotExecute()
+    {
+        var folder = Path.Combine(_tempDir, "confirm_switch");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.OnConfirmation = () => _clock.NextFolder(); // a forwarded open ran in the nested loop
+
+        await vm.RunActionAsync(2); // ConfirmRecycle
+
+        Assert.Single(_dialogService.Confirmations);
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.True(File.Exists(img1));
+    }
+
+    [Fact(DisplayName = "R7-4: an image that left the catalog while the Confirm dialog was open is not acted on")]
+    public async Task RunActionAsync_EntryRemovedDuringConfirm_DoesNotExecute()
+    {
+        var folder = Path.Combine(_tempDir, "confirm_removed");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.OnConfirmation = () => _catalog.Remove(img1);
+
+        await vm.RunActionAsync(2); // ConfirmRecycle on 1.jpg
+
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.True(File.Exists(img1));
     }
 
     [Fact]
@@ -496,6 +550,32 @@ public sealed class MainViewModelFileActionTests : IDisposable
         Assert.Equal(2, vm.TotalFiles);
         Assert.Equal(img1, vm.Catalog.Paths[0]);
         Assert.True(File.Exists(img1));
+    }
+
+    [Fact(DisplayName = "R7-2: undoing a Move made in a previous folder opens that folder at the file, not the current catalog")]
+    public async Task UndoAsync_MoveFromPreviousFolder_OpensThatFolderInsteadOfInsertingHere()
+    {
+        var folderA = Path.Combine(_tempDir, "undo_prev_a");
+        var folderB = Path.Combine(_tempDir, "undo_prev_b");
+        Directory.CreateDirectory(folderA);
+        Directory.CreateDirectory(folderB);
+        var imgA = CreateImageFile(folderA, "1.jpg");
+        CreateImageFile(folderA, "2.jpg");
+        var imgB = CreateImageFile(folderB, "x.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folderA);
+        await vm.RunActionAsync(0); // Move A\1.jpg to A\Sorted
+        await vm.OpenFolderAsync(folderB);
+        Assert.Equal([imgB], vm.Catalog.Paths);
+
+        await vm.UndoAsync();
+
+        Assert.True(File.Exists(imgA));
+        Assert.Equal(folderA, vm.Session?.Folder);
+        Assert.Equal(2, vm.TotalFiles);
+        Assert.DoesNotContain(imgB, vm.Catalog.Paths);
+        Assert.Equal(imgA, vm.Catalog.Current?.Path);
     }
 
     [Fact]
@@ -776,9 +856,11 @@ public sealed class MainViewModelFileActionTests : IDisposable
     {
         public bool ConfirmationResponse { get; set; } = true;
         public List<(string Title, string Message)> Confirmations { get; } = [];
+        public Action? OnConfirmation { get; set; }
         public bool ShowConfirmation(string title, string message)
         {
             Confirmations.Add((title, message));
+            OnConfirmation?.Invoke();
             return ConfirmationResponse;
         }
         public void ShowMessage(string title, string message) { }

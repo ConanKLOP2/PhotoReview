@@ -24,6 +24,9 @@ public partial class SettingsWindow : Window
     private readonly LocalizationService? _localization;
     public AppSettings Settings { get; }
 
+    /// <summary>Test seam: receives the invalid-destination warning of Save instead of a MessageBox.</summary>
+    internal Action<string>? InvalidSettingsWarning { get; set; }
+
     public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null)
         : this(store.Current, decoderFactory, localization)
     {
@@ -276,6 +279,13 @@ public partial class SettingsWindow : Window
         var validator = new PhotoReview.App.Services.WpfKeyNameValidator();
         var shortcutError = new SettingsValidator(validator).ValidateShortcuts(Settings);
         if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        // R7-8: destinations typed in the raw actions JSON get the same check as the Action Profiles editor (CORE-03 / Q-R2).
+        if (ActionProfilesWindow.FindDestinationProblem(Settings.Actions) is { } destinationProblem)
+        {
+            if (InvalidSettingsWarning is { } warn) warn(destinationProblem);
+            else System.Windows.MessageBox.Show(this, destinationProblem, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         if (_localization is not null)
             Settings.UiLanguage = LanguageOptions.ToSetting(LanguageCombo.SelectedItem as LanguageOption, Settings.UiLanguage);
         try

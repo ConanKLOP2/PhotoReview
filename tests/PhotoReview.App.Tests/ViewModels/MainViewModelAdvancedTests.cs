@@ -255,6 +255,44 @@ public sealed class MainViewModelAdvancedTests : IDisposable
         Assert.False(vm.IsFileActionInProgress);
     }
 
+    [Fact(DisplayName = "R7-4: a folder switch while the duplicate review is open cancels the cleanup")]
+    public async Task RemoveDuplicatesAsync_FolderSwitchDuringReview_RecyclesNothing()
+    {
+        var folder = Path.Combine(_tempDir, "dup_switch");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png", ValidPngBytes);
+        var numbered = CreateImageFile(folder, "photo (1).png", ValidPngBytes);
+
+        var (vm, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.BatchReviewResponse = true;
+        _dialogService.OnBatchReview = () => _clock.NextFolder(); // a forwarded open ran in the nested loop
+
+        await vm.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.True(File.Exists(numbered));
+    }
+
+    [Fact(DisplayName = "R7-4: a duplicate that left the catalog during the review is not recycled")]
+    public async Task RemoveDuplicatesAsync_EntryRemovedDuringReview_SkipsIt()
+    {
+        var folder = Path.Combine(_tempDir, "dup_removed");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png", ValidPngBytes);
+        var numbered = CreateImageFile(folder, "photo (1).png", ValidPngBytes);
+
+        var (vm, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.BatchReviewResponse = true;
+        _dialogService.OnBatchReview = () => _catalog.Remove(numbered);
+
+        await vm.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.True(File.Exists(numbered));
+    }
+
     [Fact]
     public async Task RemoveDuplicatesAsync_OriginalDuplicates_RecyclesOriginalAndReloads()
     {

@@ -62,13 +62,19 @@ public partial class MainWindow : Window
     public MainViewModel ViewModel => _viewModel;
     public AppSettings Settings => _settings;
 
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IExplorerOrderProvider? explorerOrder = null)
+    /// <summary>
+    /// R7-11: window-placement.json from <see cref="IAppPaths"/>; null when placement is suppressed (test harness).
+    /// </summary>
+    internal string? PlacementFile { get; private set; }
+
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IExplorerOrderProvider? explorerOrder = null, IAppPaths? appPaths = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
         _explorerOrder = explorerOrder;
         _kineticFrameHandler = OnKineticFrame; // one delegate for += / -= (no allocation per glide)
+        PlacementFile = (appPaths ?? PhotoReview.Core.AppPaths.FromEnvironment()).WindowPlacementFile;
         // AR02b finding (see AR02-single-composition-root.md AR02d step 1, applied a step early
         // here because AR02b's migrated integration tests need it to observe real behaviour):
         // this used to call _settingsStore.Load() again, which re-reads/deserializes config.json
@@ -199,7 +205,7 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         PhotoReviewPerf.StartupMark("windowLoaded");
-        if (!_placementRestored) { _placementRestored = true; WindowPlacementService.Restore(this); }
+        if (!_placementRestored) { _placementRestored = true; if (PlacementFile is { } placementFile) WindowPlacementService.Restore(this, placementFile); }
         UpdateFitSize();
     }
 
@@ -214,13 +220,47 @@ public partial class MainWindow : Window
         _cachedDpiScale = e.NewDpi.DpiScaleX;
         UpdateTargetDecodeBox();
     }
-    private void Window_Closing(object? sender, CancelEventArgs e) => WindowPlacementService.Save(this);
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (e.Cancel || PlacementFile is not { } placementFile) return;
+        // R7-10: fullscreen is a borderless Maximized; reopen in the state the window had before it.
+        WindowPlacementService.Save(this, placementFile, _viewModel.Viewer.IsFullscreen ? _stateBeforeFullscreen : null);
+    }
 
     /// <summary>Harness use: never restore or save the user's real window-placement.json for this instance.</summary>
     public void SuppressWindowPlacement()
     {
         _placementRestored = true;
+        PlacementFile = null;
         Closing -= Window_Closing;
+    }
+
+    private bool _closeWhenFileActionDone;
+
+    /// <summary>
+    /// R7-7: closing while a file action or undo holds the gate would kill a cross-drive Move mid-copy (the process
+    /// exits under it). Keep the window open and close it once the action releases the gate (as RecoveryWindow does
+    /// for its retry, R2-A-01). Esc goes through Close() and lands here too.
+    /// </summary>
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_viewModel.IsFileActionInProgress)
+        {
+            e.Cancel = true;
+            if (!_closeWhenFileActionDone)
+            {
+                _closeWhenFileActionDone = true;
+                _ = CloseWhenFileActionDoneAsync();
+            }
+        }
+        base.OnClosing(e);
+    }
+
+    private async Task CloseWhenFileActionDoneAsync()
+    {
+        await _viewModel.WhenFileActionIdleAsync();
+        _closeWhenFileActionDone = false;
+        Close();
     }
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
@@ -233,7 +273,7 @@ public partial class MainWindow : Window
         Localizer.CurrentChanged -= OnLanguageChanged;
         StopKinetic(); // unhooks CompositionTarget.Rendering, a static event that would otherwise keep this window alive
         CancelPan();
-        _viewModel.FlushSession();
+        _viewModel.CloseSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         _explorerOrder?.Dispose();
     }
@@ -530,6 +570,14 @@ public partial class MainWindow : Window
         StopKinetic(); // feat/mouse-zoom: any key press stops a glide
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
+
+        // R7-6: Esc with the tools popup open closes the popup, not the whole app.
+        if (pressedKey == Key.Escape && ToolsButton.IsChecked == true)
+        {
+            ToolsButton.IsChecked = false;
+            e.Handled = true;
+            return;
+        }
 
         // Space/Enter belong to a focused button or compare pane (keyboard activation); the window-level tunnel must not steal them.
         // A mouse click leaves focus on the toolbar button, so ReturnFocusAfterButtonClick hands it back to the window;

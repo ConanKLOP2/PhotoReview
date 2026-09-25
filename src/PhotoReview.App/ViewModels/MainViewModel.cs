@@ -439,6 +439,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>True while a file action or undo is in flight (read-only projection of the gate).</summary>
     public bool IsFileActionInProgress => _fileActionGate.IsHeld;
 
+    /// <summary>R7-7: completes once no file action or undo holds the gate (window close waits for it).</summary>
+    public Task WhenFileActionIdleAsync() => _fileActionGate.WhenReleasedAsync();
+
     /// <summary>
     /// INV-9: a file opened directly is presented before Explorer's view order arrives. Commands that
     /// move away from it (navigation, file actions that advance) wait for that order to be applied or
@@ -460,12 +463,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     private async Task UndoCoreAsync()
     {
-        var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path);
+        var currentFolder = _currentSession?.Folder;
+        var result = await _fileActionController.UndoLastAsync(currentFolder);
 
-        // Handle Recycle Undo which needs folder change
-        if (result?.Succeeded == true && result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
+        // Recycle undo, or a Move made in a previous folder (R7-2): open the restored file's folder at that file.
+        if (FileActionController.RestoresOutsideFolder(result, currentFolder))
         {
-            var folder = Path.GetDirectoryName(result.Source);
+            var folder = Path.GetDirectoryName(result!.Source);
             if (!string.IsNullOrEmpty(folder))
             {
                 await OpenFolderAsync(folder, result.Source);
@@ -595,6 +599,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     /// <summary>Writes any debounced session state now (window close, folder change).</summary>
     public void FlushSession() => _sessionWriter?.Flush();
+
+    /// <summary>
+    /// Window close / app exit (Q-R5, R7-3): writes pending session state but waits at most 2 s for a write already
+    /// in flight on a slow disk, then skips it instead of hanging shutdown. Later updates are ignored.
+    /// </summary>
+    public void CloseSession() => _sessionWriter?.Dispose();
 
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 

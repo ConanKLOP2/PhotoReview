@@ -424,5 +424,7 @@
   "core.fileAction.moveSourceNotRemoved": "Journal error code MoveSourceNotRemoved: a cross-drive Move copied the file but Windows could not delete the source. Persisted as a code, shown in the status bar and the Recovery window; must say both copies exist and nothing was deleted.",
   "dialog.startupRecoveryFailed.title": "ShowConfirmation caption at startup when journal reconcile marked interrupted operations Failed.",
   "dialog.startupRecoveryFailed.message.one": "ShowConfirmation text at startup; {count} = number of interrupted operations marked Failed. Yes opens the Recovery window.",
-  "dialog.startupRecoveryFailed.message.other": "Plural form of dialog.startupRecoveryFailed.message.one."
+  "dialog.startupRecoveryFailed.message.other": "Plural form of dialog.startupRecoveryFailed.message.one.",
+  "dialog.exportActions.failed.title": "MessageBox caption when Export of action profiles cannot write the file.",
+  "dialog.exportActions.failed.message": "MessageBox text; {error} = the system error message (disk full, access denied, ...)."
 }
