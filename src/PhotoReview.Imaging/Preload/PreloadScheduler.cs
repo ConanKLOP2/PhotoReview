@@ -321,7 +321,13 @@ public sealed class PreloadScheduler : IDisposable
                     if (queued.Contains(path)) continue;
                     // Reuses the folder scan's Length/LastWriteUtc: no stat for candidates
                     // already warm (the common case once preload has caught up).
-                    var key = _target.GetCurrentCacheKey(entry);
+                    ImageCacheKey key;
+                    try { key = _target.GetCurrentCacheKey(entry); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _log.Warn($"Preload skipped, cannot stat: {path}"); // deleted between scan and stat
+                        continue;
+                    }
                     if (_target.TryGetCachedPreview(key)) continue;
                     queued.Add(path);
                     headroom.DecodeQueuedSinceCheck = true;
@@ -484,6 +490,12 @@ public sealed class PreloadScheduler : IDisposable
             }
             catch (UnauthorizedAccessException ex)
             {
+                _log.Error($"Preload failed: {path}", ex);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A corrupt/unsupported file (FileFormatException, NotSupportedException, ...) must skip only itself:
+                // rethrowing would end the whole scheduler loop and stall preload at the bad file on every navigation.
                 _log.Error($"Preload failed: {path}", ex);
             }
             return true;

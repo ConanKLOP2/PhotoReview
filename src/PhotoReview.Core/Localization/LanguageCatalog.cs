@@ -66,6 +66,22 @@ public sealed class LanguageCatalog
             return false;
         }
 
+        try
+        {
+            return ParseDocument(doc, source, warnings, out catalog);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            // Well-formed JSON can still hold text GetString() rejects (a lone "\ud800" surrogate escape).
+            warnings.Add($"{source}: unreadable text ({ex.Message})");
+            catalog = null!;
+            return false;
+        }
+    }
+
+    private static bool ParseDocument(JsonDocument doc, string source, ICollection<string> warnings, out LanguageCatalog catalog)
+    {
+        catalog = null!;
         using (doc)
         {
             if (doc.RootElement.ValueKind != JsonValueKind.Object)

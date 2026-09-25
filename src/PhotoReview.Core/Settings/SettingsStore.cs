@@ -64,9 +64,13 @@ public sealed class SettingsStore
             {
                 _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
             }
-            catch
+            catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
             {
-                // Bỏ qua lỗi copy file hỏng
+                // The corrupt file could not be preserved: keep defaults in memory and do not overwrite the only copy.
+                LogStartupError("Could not back up corrupt config.json, using in-memory defaults for this session", copyEx);
+                _current = new AppSettings();
+                Changed?.Invoke(this, _current);
+                return _current;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
