@@ -230,6 +230,13 @@ public sealed class UndoService
                 return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoBusy, Rejected: true);
             }
 
+            // The shell Restore verb would replace (or prompt about) a newer file that now sits at the original path.
+            if (_fileSystem.FileExists(action.Source))
+            {
+                End();
+                return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleTargetExists(Path.GetFileName(action.Source)));
+            }
+
             try
             {
                 var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);

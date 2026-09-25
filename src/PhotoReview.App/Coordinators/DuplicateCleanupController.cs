@@ -73,7 +73,7 @@ public sealed class DuplicateCleanupController
             remove = await DuplicateFinder.FindAsync(
                 candidates,
                 removeNumbered,
-                (path, ct) => _hashService?.GetAsync(path, ct) ?? Task.FromResult(string.Empty),
+                (path, ct) => _hashService?.GetAsync(path, ct) ?? throw new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
                 _fileSystem,
                 System.Threading.CancellationToken.None);
         }

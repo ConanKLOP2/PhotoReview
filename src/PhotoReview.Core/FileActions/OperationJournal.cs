@@ -73,6 +73,17 @@ public sealed class OperationJournal
         return dismissed;
     }
 
+    private bool _tailChecked; // every append ends with a newline, so the file tail only needs checking before this process's first append
+
+    private bool TailLacksNewline()
+    {
+        if (!_fileSystem.FileExists(_path)) return false;
+        using var stream = _fileSystem.OpenReadShared(_path, 16);
+        if (!stream.CanSeek || stream.Length == 0) return false;
+        stream.Seek(-1, SeekOrigin.End);
+        return stream.ReadByte() is not (-1 or (int)'\n');
+    }
+
     private void AppendLines(IReadOnlyList<JournalEntry> entries)
     {
         lock (_gate)
@@ -86,6 +97,12 @@ public sealed class OperationJournal
             foreach (var entry in entries)
                 text.Append(JsonSerializer.Serialize(entry)).Append(Environment.NewLine);
             var durable = _durability() == JournalDurability.PowerLossSafe;
+            // A crash can leave a partial last line; appending straight after it would glue two records together and lose both.
+            if (!_tailChecked)
+            {
+                if (TailLacksNewline()) text.Insert(0, Environment.NewLine);
+                _tailChecked = true;
+            }
             using var stream = _fileSystem.OpenAppend(_path, durable);
             var bytes = Encoding.UTF8.GetBytes(text.ToString());
             stream.Write(bytes, 0, bytes.Length);

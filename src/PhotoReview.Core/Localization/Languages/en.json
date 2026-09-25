@@ -161,6 +161,7 @@
   "core.undo.noMoveToUndo": "There is no Move to undo.",
   "core.undo.nothingToUndo": "There is no recent Move/Delete to undo.",
   "core.undo.recycleRestoreFailed": "Could not restore from the Recycle Bin: {fileName}",
+  "core.undo.recycleTargetExists": "A file named {fileName} already exists at the original location; restoring would replace it.",
   "core.undo.sourceOrDestinationChanged": "The source or destination has changed.",
   "core.undo.unsupported": "Undo is not supported for this operation.",
   "diagnostics.explorerMetadata": "{count} sort column(s), group={groupState}",

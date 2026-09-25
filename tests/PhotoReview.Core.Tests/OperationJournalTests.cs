@@ -71,6 +71,19 @@ public sealed class OperationJournalTests : IDisposable
         Assert.Empty(_journal.ReadPendingOperations());
     }
 
+    [Fact(DisplayName = "An append after a torn (newline-less) last line starts on its own line and stays readable")]
+    public void Append_AfterTornLastLine_KeepsTheNewEntry()
+    {
+        File.AppendAllText(JournalFile, "{\"Id\":\"torn\",\"Type\":\"Mov"); // power loss mid-record: no trailing newline
+        var freshJournal = new OperationJournal(); // a new process: has not checked the tail yet
+        var id = Guid.NewGuid().ToString("N");
+
+        freshJournal.Append(new JournalEntry(id, FileOperationType.Move, JournalState.Prepared, _source, _destination,
+            _info.Length, _info.LastWriteTimeUtc, DateTime.UtcNow));
+
+        Assert.Contains(freshJournal.ReadPendingOperations(), e => e.Id == id);
+    }
+
     [Fact(DisplayName = "Journal entries are durably written as JSONL")]
     [Trait("Category", "Integration")]
     public void JournalEntriesAreDurablyWrittenAsJsonl()

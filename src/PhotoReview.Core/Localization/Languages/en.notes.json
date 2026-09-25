@@ -154,6 +154,7 @@
   "core.undo.noMoveToUndo": "StatusFormatter.UndoNoMoves duplicates the Core text (UndoService.cs:146) and is unused in src - point it at the Core key or delete it.",
   "core.undo.nothingToUndo": "UndoNoActions duplicates UndoService.cs:208; unused in src.",
   "core.undo.recycleRestoreFailed": "RecycleRestoreFailed duplicates UndoService.cs:229; unused in src.",
+  "core.undo.recycleTargetExists": "UndoResult.ErrorMessage when undoing a Recycle while another file now occupies the original path (restore would overwrite it).",
   "core.undo.sourceOrDestinationChanged": "IOException message caught at line 189 and wrapped in core.undo.failed {message} - nested translated text (CONCATENATION).",
   "core.undo.unsupported": "UndoResult.ErrorMessage (e.g. Copy).",
   "diagnostics.explorerMetadata": "Value cell; '(s)' could become a plural pair.",

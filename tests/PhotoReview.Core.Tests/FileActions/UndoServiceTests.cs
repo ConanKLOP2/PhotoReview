@@ -209,6 +209,22 @@ public sealed class UndoServiceTests
         Assert.Contains("Không thể khôi phục từ Thùng rác", result.ErrorMessage);
     }
 
+    [Fact(DisplayName = "Undo of a Recycle refuses to restore over a newer file at the original path and keeps the action")]
+    public async Task UndoLastAsync_Recycle_SourceOccupied_DoesNotRestore()
+    {
+        var source = @"C:\photos\deleted.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(source, "a newer file", writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Recycle, source, null, 100, writeTime, null));
+
+        var result = await _service.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Null(_recycleBin.LastRestoredPath);
+        Assert.True(_service.HasLastAction);
+        Assert.Contains("deleted.jpg", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task UndoLastAsync_NoLastAction_ReturnsError()
     {
