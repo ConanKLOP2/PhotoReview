@@ -387,5 +387,13 @@
   "settings.load.repaired": "MessageBox shown once after start-up; {items} = comma-separated setting names (keep them in English, they are the JSON property names).",,
   "app.startupFailed": "MessageBox shown when start-up throws; {message} = technical exception message.",
   "core.recycle.unsupportedDrive": "Error shown when Delete/Recycle is refused on a removable or network drive; {name} = file name.",
-  "core.recycle.notDeleted": "Error shown when the shell reported no failure but the file is still there; {name} = file name."
+  "core.recycle.notDeleted": "Error shown when the shell reported no failure but the file is still there; {name} = file name.",
+  "core.undo.permanentlyDeleted": "Undo status text when the last Delete was permanent (Q-R8); {fileName} = file name.",
+  "recovery.verdict.permanentlyDeleted": "Recovery verdict label for a Recycle entry that deleted the file permanently (Q-R8).",
+  "recovery.explain.permanentlyDeleted": "Recovery explanation for the PermanentlyDeleted verdict.",
+  "recovery.action.permanentlyDeleted": "Recovery suggested action for the PermanentlyDeleted verdict (nothing can be restored).",
+  "settings.allowPermanentDelete.label": "CheckBox.Content (default off, Q-R8).",
+  "settings.allowPermanentDelete.hint": "TextBlock under the checkbox; warns that deleted files cannot be restored.",
+  "dialog.confirmPermanentDelete.title": "ShowConfirmation caption before a permanent delete (drive without Recycle Bin).",
+  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent."
 }

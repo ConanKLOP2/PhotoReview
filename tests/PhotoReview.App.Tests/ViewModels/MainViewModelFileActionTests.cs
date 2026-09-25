@@ -636,6 +636,98 @@ public sealed class MainViewModelFileActionTests : IDisposable
         Assert.Equal(1, undo.MoveHistoryCount);
     }
 
+    // --- Q-R8: permanent delete on drives without a Recycle Bin ---
+
+    private async Task<(MainViewModel Vm, UndoService Undo, string Img1)> OpenPermanentDeleteAlbumAsync(string name, bool noRecycleBin, bool allowSetting)
+    {
+        var folder = Path.Combine(_tempDir, name);
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+        _recycleBin.HasNoRecycleBin = noRecycleBin;
+        _settings.AllowPermanentDeleteWithoutRecycleBin = allowSetting;
+        var (vm, _, undo) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        return (vm, undo, img1);
+    }
+
+    [Fact]
+    public async Task Recycle_NoRecycleBinDriveAndSettingOff_RefusesAndKeepsFile()
+    {
+        var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("qr8_off", noRecycleBin: true, allowSetting: false);
+
+        await vm.RecycleAsync();
+
+        Assert.True(File.Exists(img1));
+        Assert.Empty(_recycleBin.PermanentlyDeleted);
+        Assert.Empty(_dialogService.Confirmations);
+        Assert.Equal(2, vm.TotalFiles); // INV-5: the source went back into the catalog
+    }
+
+    [Fact]
+    public async Task Recycle_NoRecycleBinDriveSettingOnButUserDeclines_KeepsFile()
+    {
+        var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("qr8_decline", noRecycleBin: true, allowSetting: true);
+        _dialogService.ConfirmationResponse = false;
+
+        await vm.RecycleAsync();
+
+        var confirmation = Assert.Single(_dialogService.Confirmations);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogConfirmPermanentDeleteTitle, confirmation.Title);
+        Assert.True(File.Exists(img1));
+        Assert.Empty(_recycleBin.PermanentlyDeleted);
+        Assert.Equal(2, vm.TotalFiles);
+    }
+
+    [Fact]
+    public async Task Recycle_NoRecycleBinDriveSettingOnAndConfirmed_DeletesPermanentlyAndUndoSaysCannotRestore()
+    {
+        var (vm, undo, img1) = await OpenPermanentDeleteAlbumAsync("qr8_on", noRecycleBin: true, allowSetting: true);
+
+        await vm.RecycleAsync();
+
+        var confirmation = Assert.Single(_dialogService.Confirmations);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogConfirmPermanentDeleteMessage("1.jpg"), confirmation.Message);
+        Assert.False(File.Exists(img1));
+        Assert.Equal(img1, Assert.Single(_recycleBin.PermanentlyDeleted));
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.Equal(1, vm.TotalFiles);
+
+        var undoResult = await undo.UndoLastAsync();
+        Assert.False(undoResult.Succeeded);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.CoreUndoPermanentlyDeleted("1.jpg"), undoResult.ErrorMessage);
+        Assert.Equal(0, _recycleBin.RestoreCalls);
+        Assert.False(File.Exists(img1));
+    }
+
+    [Fact]
+    public async Task RunAction_RecycleProfileWithConfirmOnNoRecycleBinDrive_AsksOnlyOnceAndExplicitly()
+    {
+        var (vm, _, img1) = await OpenPermanentDeleteAlbumAsync("qr8_profile", noRecycleBin: true, allowSetting: true);
+
+        await vm.RunActionAsync(2); // "ConfirmRecycle": Recycle with Confirm = true
+
+        var confirmation = Assert.Single(_dialogService.Confirmations);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.DialogConfirmPermanentDeleteTitle, confirmation.Title);
+        Assert.Equal(img1, Assert.Single(_recycleBin.PermanentlyDeleted));
+    }
+
+    [Fact]
+    public async Task Recycle_FixedDriveWithSettingOn_BehavesAsBefore()
+    {
+        var (vm, undo, img1) = await OpenPermanentDeleteAlbumAsync("qr8_fixed", noRecycleBin: false, allowSetting: true);
+
+        await vm.RecycleAsync();
+
+        Assert.Empty(_dialogService.Confirmations);
+        Assert.Empty(_recycleBin.PermanentlyDeleted);
+        Assert.Equal(img1, Assert.Single(_recycleBin.RecycledPaths));
+
+        var undoResult = await undo.UndoLastAsync();
+        Assert.True(undoResult.Succeeded);
+        Assert.Equal(1, _recycleBin.RestoreCalls);
+    }
+
     // --- Test Doubles ---
 
     private sealed class ForwardingFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink
@@ -651,15 +743,30 @@ public sealed class MainViewModelFileActionTests : IDisposable
     private sealed class FakeRecycleBin : IRecycleBin
     {
         public List<string> RecycledPaths { get; } = [];
+        /// <summary>Q-R8: simulates a removable/network drive (no Recycle Bin). Files are ordinary temp files; nothing real is affected.</summary>
+        public bool HasNoRecycleBin { get; set; }
+        public List<string> PermanentlyDeleted { get; } = [];
+        public int RestoreCalls { get; private set; }
+
+        public bool CanRecycle(string path) => !HasNoRecycleBin;
 
         public void SendToRecycleBin(string path)
         {
+            if (HasNoRecycleBin) throw new IOException("no recycle bin");
             RecycledPaths.Add(path);
+            if (File.Exists(path)) File.Delete(path);
+        }
+
+        public void DeletePermanently(string path)
+        {
+            if (!HasNoRecycleBin) throw new InvalidOperationException("fixed drive must never be deleted permanently");
+            PermanentlyDeleted.Add(path);
             if (File.Exists(path)) File.Delete(path);
         }
 
         public bool TryRestore(string path, long expectedSize, DateTime expectedLastWriteUtc)
         {
+            RestoreCalls++;
             File.WriteAllBytes(path, ValidPngBytes);
             return true;
         }
@@ -668,7 +775,12 @@ public sealed class MainViewModelFileActionTests : IDisposable
     private sealed class FakeDialogService : IDialogService
     {
         public bool ConfirmationResponse { get; set; } = true;
-        public bool ShowConfirmation(string title, string message) => ConfirmationResponse;
+        public List<(string Title, string Message)> Confirmations { get; } = [];
+        public bool ShowConfirmation(string title, string message)
+        {
+            Confirmations.Add((title, message));
+            return ConfirmationResponse;
+        }
         public void ShowMessage(string title, string message) { }
         public void ShowError(string title, string message) { }
         public string? PickFolder(string? initialFolder = null) => null;

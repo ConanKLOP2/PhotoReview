@@ -29,6 +29,8 @@ public enum RecoveryVerdict
     Unknown,
     RecycleUnverifiable,
     NotRecycled,
+    /// <summary>Q-R8: a Recycle that deleted the file permanently (drive without a Recycle Bin); it cannot be restored.</summary>
+    PermanentlyDeleted,
 }
 
 /// <summary>Result of checking one path. Size/time are the current values (null when missing or unreadable).</summary>
@@ -69,7 +71,8 @@ public sealed record RecoveryCheckResult(
 /// </list>
 /// <para>Committed: D exists = AlreadyDone; S and D missing = Lost; otherwise Unknown. Dismissed: Unknown.
 /// Recycle (any state): S missing = RecycleUnverifiable (presumably in the Recycle Bin, cannot be verified);
-/// S present = NotRecycled; unreadable = Unknown.</para>
+/// S present = NotRecycled; unreadable = Unknown. A Recycle marked <see cref="JournalEntry.Permanent"/> with S missing
+/// is PermanentlyDeleted (deleted for good, cannot be restored).</para>
 /// </summary>
 public sealed class RecoveryFileCheck
 {
@@ -91,6 +94,7 @@ public sealed class RecoveryFileCheck
         RecoveryVerdict.Lost => "Lost",
         RecoveryVerdict.RecycleUnverifiable => "RecycleUnverifiable",
         RecoveryVerdict.NotRecycled => "NotRecycled",
+        RecoveryVerdict.PermanentlyDeleted => "PermanentlyDeleted",
         _ => "Unknown",
     };
 
@@ -111,7 +115,7 @@ public sealed class RecoveryFileCheck
         {
             return s switch
             {
-                RecoveryPathStatus.Missing => RecoveryVerdict.RecycleUnverifiable,
+                RecoveryPathStatus.Missing => entry.Permanent == true ? RecoveryVerdict.PermanentlyDeleted : RecoveryVerdict.RecycleUnverifiable,
                 RecoveryPathStatus.Unreadable => RecoveryVerdict.Unknown,
                 _ => RecoveryVerdict.NotRecycled,
             };

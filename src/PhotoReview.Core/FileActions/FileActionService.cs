@@ -49,6 +49,12 @@ public sealed class FileActionService
     public void End() => Volatile.Write(ref _inProgress, 0);
 
     /// <summary>
+    /// Q-R8: true when a Recycle of <paramref name="path"/> cannot go to a Recycle Bin (removable/network/unknown drive), i.e.
+    /// it would be a PERMANENT delete. Callers use it to decide whether the user must confirm (and whether the setting applies).
+    /// </summary>
+    public bool LacksRecycleBin(string path) => !_recycleBin.CanRecycle(path);
+
+    /// <summary>
     /// Thực thi yêu cầu thao tác tệp tin không đồng bộ.
     /// </summary>
     public async Task<FileActionResult> ExecuteAsync(FileActionRequest request, CancellationToken cancellationToken = default)
@@ -73,6 +79,7 @@ public sealed class FileActionService
         string? destinationPath = null;
         long sourceSize = 0;
         var sourceLastWriteUtc = DateTime.MinValue;
+        var permanent = false;
 
         try
         {
@@ -171,6 +178,12 @@ public sealed class FileActionService
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
+                // Q-R8: on a drive without a Recycle Bin the file is only deleted (permanently) when the caller opted in
+                // (setting + confirmation). Otherwise refuse BEFORE anything is journaled, exactly as R2-F-05 requires.
+                permanent = !_recycleBin.CanRecycle(source);
+                if (permanent && !request.AllowPermanentDelete)
+                    throw new IOException(Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(source)));
+
                 tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,
                     FileOperationType.Recycle,
@@ -179,10 +192,14 @@ public sealed class FileActionService
                     null,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow));
+                    _clock.UtcNow,
+                    Permanent: permanent ? true : null));
                 await tx.BeginAsync().ConfigureAwait(false);
 
-                await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
+                if (permanent)
+                    await Task.Run(() => _recycleBin.DeletePermanently(source), cancellationToken).ConfigureAwait(false);
+                else
+                    await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
                 tx.MarkMutationCompleted();
 
                 _ = tx.Commit(out var journalError);
@@ -190,7 +207,7 @@ public sealed class FileActionService
                 {
                     return new FileActionResult(true, FileOperationType.Recycle, source, null,
                         sourceSize, sourceLastWriteUtc, null, JournalPersisted: false,
-                        JournalError: journalError);
+                        JournalError: journalError, PermanentlyDeleted: permanent);
                 }
 
                 return new FileActionResult(
@@ -200,7 +217,8 @@ public sealed class FileActionService
                     DestinationPath: null,
                     Size: sourceSize,
                     LastWriteUtc: sourceLastWriteUtc,
-                    Error: null);
+                    Error: null,
+                    PermanentlyDeleted: permanent);
             }
             else
             {
@@ -222,7 +240,8 @@ public sealed class FileActionService
                 LastWriteUtc: sourceLastWriteUtc,
                 Error: mutationCompleted ? null : ex.Message,
                 JournalPersisted: journalError is null,
-                JournalError: journalError);
+                JournalError: journalError,
+                PermanentlyDeleted: permanent && mutationCompleted);
         }
         finally
         {

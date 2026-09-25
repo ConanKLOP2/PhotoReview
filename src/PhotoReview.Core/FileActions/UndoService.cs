@@ -27,7 +27,7 @@ public sealed class UndoService
     private UndoActionRecord? _lastUndoAction;
     private int _internalInProgress;
 
-    private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc);
+    private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc, bool Permanent = false);
 
     public UndoService(
         OperationJournal journal,
@@ -126,7 +126,7 @@ public sealed class UndoService
         }
         else if (result.Operation == FileOperationType.Recycle)
         {
-            _lastUndoAction = new UndoActionRecord(FileOperationType.Recycle, result.Source, null, result.Size, result.LastWriteUtc);
+            _lastUndoAction = new UndoActionRecord(FileOperationType.Recycle, result.Source, null, result.Size, result.LastWriteUtc, result.PermanentlyDeleted);
         }
     }
 
@@ -217,6 +217,14 @@ public sealed class UndoService
 
         if (action.Operation == FileOperationType.Recycle)
         {
+            // Q-R8: deleted permanently on a drive without a Recycle Bin: there is nothing to restore. Say so instead of
+            // searching the Recycle Bin (it could even match an unrelated item with the same path/size/time).
+            if (action.Permanent)
+            {
+                _lastUndoAction = null;
+                return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoPermanentlyDeleted(Path.GetFileName(action.Source)));
+            }
+
             if (!TryBegin())
             {
                 return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoBusy, Rejected: true);

@@ -457,5 +457,13 @@
   "settings.load.repaired": "config.json có giá trị không hợp lệ. Các cài đặt sau đã được đặt lại về mặc định: {items}.",
   "app.startupFailed": "Photo Review không thể khởi động và sẽ đóng. Chi tiết: {message}",
   "core.recycle.unsupportedDrive": "\"{name}\" nằm trên ổ đĩa rời hoặc ổ mạng không có Thùng rác, nên KHÔNG được xóa (nếu xóa sẽ mất vĩnh viễn). Hãy xóa trong Explorer nếu bạn thật sự muốn xóa.",
-  "core.recycle.notDeleted": "\"{name}\" chưa được chuyển vào Thùng rác."
+  "core.recycle.notDeleted": "\"{name}\" chưa được chuyển vào Thùng rác.",
+  "core.undo.permanentlyDeleted": "\"{fileName}\" đã bị xóa vĩnh viễn (ổ đĩa không có Thùng rác) nên không thể khôi phục.",
+  "recovery.verdict.permanentlyDeleted": "Đã xóa vĩnh viễn",
+  "recovery.explain.permanentlyDeleted": "Tệp đã bị xóa vĩnh viễn vì ổ đĩa không có Thùng rác. Không thể khôi phục từ Photo Review.",
+  "recovery.action.permanentlyDeleted": "Không có gì để khôi phục. Hãy xóa mục này khỏi danh sách, hoặc khôi phục tệp bằng bản sao lưu hay công cụ phục hồi dữ liệu.",
+  "settings.allowPermanentDelete.label": "Cho phép xóa vĩnh viễn trên ổ đĩa không có Thùng rác",
+  "settings.allowPermanentDelete.hint": "Mặc định tắt: thao tác Xóa bị từ chối trên ổ đĩa rời, ổ mạng và ổ không xác định vì các ổ này không có Thùng rác. Khi bật, Xóa sẽ xóa vĩnh viễn tệp sau khi bạn xác nhận. Tệp đã xóa không thể khôi phục, kể cả bằng Hoàn tác.",
+  "dialog.confirmPermanentDelete.title": "Xóa vĩnh viễn?",
+  "dialog.confirmPermanentDelete.message": "\"{fileName}\" nằm trên ổ đĩa không có Thùng rác. Tệp sẽ bị xóa VĨNH VIỄN và không thể khôi phục (Hoàn tác cũng không lấy lại được). Bạn có muốn xóa không?"
 }

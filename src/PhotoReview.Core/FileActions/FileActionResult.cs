@@ -15,4 +15,5 @@ public sealed record FileActionResult(
     string? Error,
     bool Rejected = false,
     bool JournalPersisted = true,
-    string? JournalError = null);
+    string? JournalError = null,
+    bool PermanentlyDeleted = false);

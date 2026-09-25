@@ -107,6 +107,11 @@
                     <Button Content="{loc:Tr settings.editActions}" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Left" Click="EditActions_Click"/>
                 </Grid></GroupBox>
 
+                <StackPanel Margin="0,0,0,10">
+                    <CheckBox x:Name="AllowPermanentDeleteCheck" AutomationProperties.Name="{loc:Tr settings.allowPermanentDelete.label}" Content="{loc:Tr settings.allowPermanentDelete.label}"/>
+                    <TextBlock x:Name="AllowPermanentDeleteHint" Text="{loc:Tr settings.allowPermanentDelete.hint}" TextWrapping="Wrap" Foreground="{DynamicResource Dark.TextMuted}" Margin="20,4,0,0"/>
+                </StackPanel>
+
                 <GroupBox Header="{loc:Tr settings.group.journalDurability}"><StackPanel AutomationProperties.Name="{loc:Tr settings.journalDurability.label}">
                     <TextBlock Text="{loc:Tr settings.journalDurability.label}" Margin="0,0,0,8"/>
                     <RadioButton x:Name="JournalFastRadio" GroupName="JournalDurability" Content="{loc:Tr settings.journalDurability.fast}" IsChecked="True"/>

@@ -39,6 +39,12 @@ public class AppSettings
     /// </summary>
     public JournalDurability JournalDurability { get; set; } = JournalDurability.Fast;
 
+    /// <summary>
+    /// Q-R8: when true, Delete/Recycle on a drive without a Recycle Bin (removable, network/UNC, unknown) deletes the file
+    /// PERMANENTLY after a confirmation. Default false = such deletes are refused (R2-F-05). Absent in older configs = false.
+    /// </summary>
+    public bool AllowPermanentDeleteWithoutRecycleBin { get; set; }
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }

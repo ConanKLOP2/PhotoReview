@@ -463,5 +463,13 @@
   "settings.load.repaired": "config.json contained invalid values. These settings were reset to their defaults: {items}.",
   "app.startupFailed": "Photo Review could not start and will close. Details: {message}",
   "core.recycle.unsupportedDrive": "\"{name}\" is on a removable or network drive that has no Recycle Bin, so it was NOT deleted (it would be removed permanently). Delete it in Explorer if you really want it gone.",
-  "core.recycle.notDeleted": "\"{name}\" was not moved to the Recycle Bin."
+  "core.recycle.notDeleted": "\"{name}\" was not moved to the Recycle Bin.",
+  "core.undo.permanentlyDeleted": "\"{fileName}\" was deleted permanently (its drive has no Recycle Bin), so it cannot be restored.",
+  "recovery.verdict.permanentlyDeleted": "Deleted permanently",
+  "recovery.explain.permanentlyDeleted": "The file was deleted permanently because its drive has no Recycle Bin. It cannot be restored from Photo Review.",
+  "recovery.action.permanentlyDeleted": "Nothing to restore. Dismiss this entry, or recover the file with a backup or data-recovery tool.",
+  "settings.allowPermanentDelete.label": "Allow permanent delete on drives without a Recycle Bin",
+  "settings.allowPermanentDelete.hint": "Off by default: Delete is refused on removable, network and unknown drives because they have no Recycle Bin. When on, Delete removes the file permanently after a confirmation. Deleted files cannot be restored, not even with Undo.",
+  "dialog.confirmPermanentDelete.title": "Delete permanently?",
+  "dialog.confirmPermanentDelete.message": "\"{fileName}\" is on a drive without a Recycle Bin. It will be deleted PERMANENTLY and cannot be restored (Undo will not bring it back). Delete it?"
 }

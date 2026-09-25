@@ -52,6 +52,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.CanRetry => Good,
         RecoveryVerdict.AlreadyDone => Info,
         RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled => Warn,
+        RecoveryVerdict.PermanentlyDeleted => Bad,
         RecoveryVerdict.Lost => Bad,
         _ => Neutral,
     };
@@ -66,6 +67,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.Lost => Tr.RecoveryVerdictLost,
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryVerdictRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryVerdictNotRecycled,
+        RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryVerdictPermanentlyDeleted,
         _ => Tr.RecoveryVerdictUnknown,
     };
 
@@ -79,6 +81,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.Lost => Tr.RecoveryExplainLost,
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryExplainRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryExplainNotRecycled,
+        RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryExplainPermanentlyDeleted,
         _ => Tr.RecoveryExplainUnknown,
     };
 
@@ -92,6 +95,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.Lost => Tr.RecoveryActionLost,
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryActionRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryActionNotRecycled,
+        RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryActionPermanentlyDeleted,
         _ => Tr.RecoveryActionUnknown,
     };
 

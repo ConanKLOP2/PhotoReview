@@ -45,6 +45,7 @@ public partial class SettingsWindow : Window
             CompareSizeEnabled = current.CompareSizeEnabled,
             LoggingEnabled = current.LoggingEnabled,
             JournalDurability = current.JournalDurability,
+            AllowPermanentDeleteWithoutRecycleBin = current.AllowPermanentDeleteWithoutRecycleBin,
             ImageCacheCapacityBytes = current.ImageCacheCapacityBytes,
             MemoryReserveBytes = current.MemoryReserveBytes,
             PreloadWorkerCount = current.PreloadWorkerCount,
@@ -165,6 +166,7 @@ public partial class SettingsWindow : Window
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
+        AllowPermanentDeleteCheck.IsChecked = Settings.AllowPermanentDeleteWithoutRecycleBin;
         JournalSafeRadio.IsChecked = Settings.JournalDurability == JournalDurability.PowerLossSafe;
         JournalFastRadio.IsChecked = !JournalSafeRadio.IsChecked;
     }
@@ -173,6 +175,7 @@ public partial class SettingsWindow : Window
     {
         Settings.LoggingEnabled = false;
         Settings.JournalDurability = JournalDurability.Fast;
+        Settings.AllowPermanentDeleteWithoutRecycleBin = false;
         Settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
         Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
         Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
@@ -199,6 +202,7 @@ public partial class SettingsWindow : Window
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
+        Settings.AllowPermanentDeleteWithoutRecycleBin = AllowPermanentDeleteCheck.IsChecked == true;
         Settings.JournalDurability = JournalSafeRadio.IsChecked == true ? JournalDurability.PowerLossSafe : JournalDurability.Fast;
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
