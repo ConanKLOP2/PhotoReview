@@ -47,11 +47,33 @@ public sealed class SettingsStore
             if (_fileSystem.FileExists(filePath))
             {
                 var json = _fileSystem.ReadAllText(filePath);
-                var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new();
+                AppSettings loaded;
+                IReadOnlyList<string> salvagedFrom = [];
+                try
+                {
+                    loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new();
+                }
+                catch (JsonException ex) when (TrySalvage(json, out var salvaged, out var unusable))
+                {
+                    // One mistyped value (e.g. "ClickZoomPercent": "abc") must not throw away the user's actions and shortcuts:
+                    // keep every property that reads fine, reset only the unusable ones, and keep the original as a backup.
+                    loaded = salvaged;
+                    salvagedFrom = unusable;
+                    LogStartupError("config.json has unreadable values (" + string.Join(", ", unusable) + "); the rest was kept", ex);
+                    try
+                    {
+                        _fileSystem.Copy(filePath, filePath + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture));
+                    }
+                    catch (Exception copyEx) when (copyEx is IOException or UnauthorizedAccessException)
+                    {
+                        _keepCorruptFile = path is null; // never overwrite the only copy of the unreadable values
+                        LogStartupError("Could not back up config.json with unreadable values", copyEx);
+                    }
+                }
                 Migrate(loaded);
                 loaded.Shortcuts ??= ShortcutMappings.Default();
                 loaded.Actions ??= ReviewAction.Defaults();
-                LastLoadRepairs = SettingsNormalizer.Normalize(loaded);
+                LastLoadRepairs = [.. salvagedFrom, .. SettingsNormalizer.Normalize(loaded).Except(salvagedFrom, StringComparer.Ordinal)];
                 if (LastLoadRepairs.Count > 0)
                     _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
                 var disabledShortcuts = SettingsNormalizer.DisableConflictingOptionalShortcuts(loaded);
@@ -124,6 +146,43 @@ public sealed class SettingsStore
 
         _current = settings;
         Changed?.Invoke(this, _current);
+    }
+
+    /// <summary>
+    /// Reads <paramref name="json"/> property by property so that unusable values are skipped instead of failing the
+    /// whole file. False when the text is not a JSON object at all (then the caller treats the file as corrupt).
+    /// </summary>
+    private static bool TrySalvage(string json, out AppSettings settings, out IReadOnlyList<string> unusable)
+    {
+        settings = new AppSettings();
+        var bad = new List<string>();
+        unusable = bad;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+            var typeInfo = AppSettingsJsonContext.Default.AppSettings;
+            foreach (var element in doc.RootElement.EnumerateObject())
+            {
+                var info = typeInfo.Properties.FirstOrDefault(p => string.Equals(p.Name, element.Name, StringComparison.Ordinal));
+                if (info?.Set is null) continue; // unknown property
+                try
+                {
+                    var value = JsonSerializer.Deserialize(element.Value, info.PropertyType, AppSettingsJsonContext.Default);
+                    if (value is null && info.PropertyType.IsValueType) throw new JsonException("null for a value type");
+                    info.Set(settings, value);
+                }
+                catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidOperationException)
+                {
+                    bad.Add(element.Name);
+                }
+            }
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private void LogStartupError(string message, Exception ex)
