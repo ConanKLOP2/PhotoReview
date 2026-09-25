@@ -556,5 +556,6 @@
   "settings.exifField.iso": "ISO",
   "settings.exifField.focalLength": "Tiêu cự",
   "settings.exifField.aperture": "Khẩu độ",
-  "settings.exifField.shutterSpeed": "Tốc độ màn trập"
+  "settings.exifField.shutterSpeed": "Tốc độ màn trập",
+  "settings.group.exif.hint": "Ẩn cùng với lớp thông tin bên trên (phím tắt: I)."
 }

@@ -487,5 +487,6 @@
   "settings.exifField.iso": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Iso.",
   "settings.exifField.focalLength": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.FocalLength.",
   "settings.exifField.aperture": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Aperture.",
-  "settings.exifField.shutterSpeed": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.ShutterSpeed."
+  "settings.exifField.shutterSpeed": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.ShutterSpeed.",
+  "settings.group.exif.hint": "Settings > Display, EXIF section: help text noting that the whole section is hidden whenever the ShowInfoOverlay master switch (shortcut I) is off."
 }

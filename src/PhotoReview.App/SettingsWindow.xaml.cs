@@ -236,8 +236,19 @@ public partial class SettingsWindow : Window
         ClickZoomPercentBox.Text = Settings.ClickZoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KineticPanCheck.IsChecked = Settings.KineticPanEnabled;
         MoveCopyReuseLastFolderCheck.IsChecked = Settings.MoveCopyReuseLastFolder;
+        ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
+        ExifFieldFileNameCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FileName);
+        ExifFieldDateTakenCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.DateTaken);
+        ExifFieldDimensionsCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Dimensions);
+        ExifFieldCameraCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Camera);
+        ExifFieldLensCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Lens);
+        ExifFieldIsoCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Iso);
+        ExifFieldFocalLengthCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FocalLength);
+        ExifFieldApertureCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Aperture);
+        ExifFieldShutterSpeedCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.ShutterSpeed);
         UpdateClickZoomEnabled();
         UpdateShowInfoSubOptionsEnabled();
+        UpdateExifFieldsEnabled();
         LoadRamCache();
         UpdateDuplicateWarning();
     }
@@ -254,6 +265,21 @@ public partial class SettingsWindow : Window
         ShowFileInfoCheck.IsEnabled = enabled;
         ShowFolderInfoCheck.IsEnabled = enabled;
     }
+
+    private void ShowExifInfoCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateExifFieldsEnabled();
+
+    /// <summary>The per-field checkboxes only matter when ShowExifInfo is on (and, at runtime, when ShowInfoOverlay is too).</summary>
+    private void UpdateExifFieldsEnabled()
+    {
+        var enabled = ShowExifInfoCheck.IsChecked == true;
+        foreach (var check in ExifFieldChecks) check.IsEnabled = enabled;
+    }
+
+    private IEnumerable<System.Windows.Controls.CheckBox> ExifFieldChecks =>
+    [
+        ExifFieldFileNameCheck, ExifFieldDateTakenCheck, ExifFieldDimensionsCheck, ExifFieldCameraCheck, ExifFieldLensCheck,
+        ExifFieldIsoCheck, ExifFieldFocalLengthCheck, ExifFieldApertureCheck, ExifFieldShutterSpeedCheck,
+    ];
 
     // ---- Optional shortcuts (ShortcutMappings.OptionalNames): a small "clear" button empties the box. ----
 
@@ -346,7 +372,18 @@ public partial class SettingsWindow : Window
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = true;
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = true; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true;
         Settings.MoveCopyReuseLastFolder = false;
+        Settings.ShowExifInfo = true; Settings.ExifInfoFields = ExifInfoFields.All;
         LoadFields();
+    }
+
+    /// <summary>
+    /// Every "this input is invalid, Save was refused" message goes through here: <see cref="InvalidSettingsWarning"/>
+    /// (a test seam -- also used by callers that want to react to the warning) when set, a real MessageBox otherwise.
+    /// </summary>
+    private void ShowInvalid(string message)
+    {
+        if (InvalidSettingsWarning is { } warn) warn(message);
+        else System.Windows.MessageBox.Show(this, message, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -355,14 +392,14 @@ public partial class SettingsWindow : Window
         var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
         if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
-            System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidShortcuts, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return;
+            ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
         var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text };
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
-            System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidShortcuts, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return;
+            ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
         Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
@@ -383,10 +420,21 @@ public partial class SettingsWindow : Window
         Settings.ClickToZoomEnabled = ClickToZoomCheck.IsChecked == true;
         Settings.KineticPanEnabled = KineticPanCheck.IsChecked == true;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
+        Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;
+        Settings.ExifInfoFields =
+            (ExifFieldFileNameCheck.IsChecked == true ? ExifInfoFields.FileName : ExifInfoFields.None) |
+            (ExifFieldDateTakenCheck.IsChecked == true ? ExifInfoFields.DateTaken : ExifInfoFields.None) |
+            (ExifFieldDimensionsCheck.IsChecked == true ? ExifInfoFields.Dimensions : ExifInfoFields.None) |
+            (ExifFieldCameraCheck.IsChecked == true ? ExifInfoFields.Camera : ExifInfoFields.None) |
+            (ExifFieldLensCheck.IsChecked == true ? ExifInfoFields.Lens : ExifInfoFields.None) |
+            (ExifFieldIsoCheck.IsChecked == true ? ExifInfoFields.Iso : ExifInfoFields.None) |
+            (ExifFieldFocalLengthCheck.IsChecked == true ? ExifInfoFields.FocalLength : ExifInfoFields.None) |
+            (ExifFieldApertureCheck.IsChecked == true ? ExifInfoFields.Aperture : ExifInfoFields.None) |
+            (ExifFieldShutterSpeedCheck.IsChecked == true ? ExifInfoFields.ShutterSpeed : ExifInfoFields.None);
         if (!int.TryParse(ClickZoomPercentBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var clickZoomPercent)
             || clickZoomPercent < AppSettings.MinClickZoomPercent || clickZoomPercent > AppSettings.MaxClickZoomPercent)
         {
-            System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidClickZoomPercent(AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent), Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowInvalid(Tr.DialogSettingsInvalidClickZoomPercent(AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent));
             return;
         }
         Settings.ClickZoomPercent = clickZoomPercent;
@@ -406,15 +454,14 @@ public partial class SettingsWindow : Window
             if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
                 throw new JsonException("Two actions use the same shortcut."); // never shown (caught below)
         }
-        catch { System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidActionsJson, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        catch { ShowInvalid(Tr.DialogSettingsInvalidActionsJson); return; }
         var validator = new PhotoReview.App.Services.WpfKeyNameValidator();
         var shortcutError = new SettingsValidator(validator).ValidateShortcuts(Settings);
-        if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (shortcutError is not null) { ShowInvalid(shortcutError); return; }
         // R7-8: destinations typed in the raw actions JSON get the same check as the Action Profiles editor (CORE-03 / Q-R2).
         if (ActionProfilesWindow.FindDestinationProblem(Settings.Actions) is { } destinationProblem)
         {
-            if (InvalidSettingsWarning is { } warn) warn(destinationProblem);
-            else System.Windows.MessageBox.Show(this, destinationProblem, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowInvalid(destinationProblem);
             return;
         }
         if (_localization is not null)

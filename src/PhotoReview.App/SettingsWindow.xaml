@@ -135,8 +135,21 @@
                             <ComboBox x:Name="ScalingQualityCombo" Grid.Row="1" Grid.Column="1" AutomationProperties.Name="{loc:Tr settings.scalingQuality.automationName}" Margin="0,0,0,0"><ComboBoxItem Content="{loc:Tr enum.scalingQuality.highQuality}"/><ComboBoxItem Content="{loc:Tr enum.scalingQuality.linear}"/></ComboBox>
                         </Grid></GroupBox>
 
-                        <!-- Lead merges the EXIF branch and fills this host; left empty and collapsed on purpose. -->
-                        <StackPanel x:Name="ExifSettingsHost" Visibility="Collapsed"/>
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.exif}"><StackPanel x:Name="ExifSettingsHost">
+                            <CheckBox x:Name="ShowExifInfoCheck" Content="{loc:Tr settings.showExifInfo.label}" Checked="ShowExifInfoCheck_CheckedChanged" Unchecked="ShowExifInfoCheck_CheckedChanged"/>
+                            <TextBlock Text="{loc:Tr settings.group.exif.hint}" Style="{StaticResource HelpText}" Margin="20,0,0,8"/>
+                            <WrapPanel Margin="20,0,0,0">
+                                <CheckBox x:Name="ExifFieldFileNameCheck" Content="{loc:Tr settings.exifField.fileName}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldDateTakenCheck" Content="{loc:Tr settings.exifField.dateTaken}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldDimensionsCheck" Content="{loc:Tr settings.exifField.dimensions}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldCameraCheck" Content="{loc:Tr settings.exifField.camera}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldLensCheck" Content="{loc:Tr settings.exifField.lens}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldIsoCheck" Content="{loc:Tr settings.exifField.iso}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldFocalLengthCheck" Content="{loc:Tr settings.exifField.focalLength}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldApertureCheck" Content="{loc:Tr settings.exifField.aperture}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldShutterSpeedCheck" Content="{loc:Tr settings.exifField.shutterSpeed}" Margin="0,2,16,10"/>
+                            </WrapPanel>
+                        </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 
