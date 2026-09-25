@@ -31,7 +31,7 @@ public static class BenchmarkWorkloadRunner
         IProgress<BenchmarkProgress>? progress, TimeProvider? timeProvider, CancellationToken ct, int fileCount = int.MaxValue) =>
         StampImagesPerSample(BenchmarkEngine.RunPreparedAsync(folder, profile,
             (_, workload, iteration, token) => prepare(workload, iteration, token),
-            progress, timeProvider, ct), profile, fileCount);
+            progress, timeProvider, cancellationToken: ct), profile, fileCount);
 
     private static async Task<BenchmarkReport> StampImagesPerSample(Task<BenchmarkReport> run, BenchmarkProfile profile, int fileCount)
     {
