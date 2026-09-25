@@ -82,22 +82,52 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         }
     }
 
+    /// <summary>The synchronous Explorer query that runs on the STA pump thread (the real COM read, or a fake in tests).</summary>
+    internal delegate ExplorerViewSnapshot ExplorerQuery(string canonicalFolder, IProgress<ExplorerQueryProgress>? progress,
+        int batchSize, CancellationToken cancellationToken);
+
+    /// <summary>A prefetched snapshot older than this is discarded: Explorer's sort order may have changed since it was read.</summary>
+    internal static readonly TimeSpan DefaultPrefetchMaxAge = TimeSpan.FromSeconds(30);
+
     private readonly ILog _log;
     private readonly StaThreadPump _pump;
+    private readonly ExplorerQuery _query;
+    private readonly TimeProvider _time;
+    private readonly TimeSpan _prefetchMaxAge;
+    private int _disposed;
 
-    public ExplorerOrderService(ILog? log = null)
+    public ExplorerOrderService(ILog? log = null) : this(log, null) { }
+
+    internal ExplorerOrderService(ILog? log, ExplorerQuery? query, TimeProvider? time = null, TimeSpan? prefetchMaxAge = null)
     {
         _log = log ?? NullLog.Instance;
+        _query = query ?? QueryShell;
+        _time = time ?? TimeProvider.System;
+        _prefetchMaxAge = prefetchMaxAge ?? DefaultPrefetchMaxAge;
         _pump = new StaThreadPump(_log);
     }
 
     public void Dispose()
     {
+        // Idempotent: the window and a DI container may both dispose the singleton.
+        Interlocked.Exchange(ref _disposed, 1);
         TakePrefetch()?.Cts.Cancel();
         _pump.Dispose();
     }
 
-    private sealed record PrefetchedQuery(string Folder, Task<ExplorerViewSnapshot> Task, CancellationTokenSource Cts);
+    private sealed record PrefetchedQuery(string Folder, Task<ExplorerViewSnapshot> Task, CancellationTokenSource Cts, long StartedTimestamp);
+
+    /// <summary>Canonical folder, or false for text that is not a usable path (empty, embedded NUL, ...): callers report Failed instead of throwing.</summary>
+    private static bool TryCanonicalize(string? folder, out string canonical)
+    {
+        canonical = string.Empty;
+        if (string.IsNullOrWhiteSpace(folder)) return false;
+        try { canonical = ExplorerSnapshotValidator.CanonicalizeFolder(folder); return true; }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+    }
+
+    private static ExplorerViewSnapshot InvalidFolder(string? folder)
+        => Unavailable(folder ?? string.Empty, ExplorerOrderStatus.Failed, ExplorerReason.Format(ExplorerReason.QueryFailed, nameof(ArgumentException)));
 
     private readonly object _prefetchGate = new();
     private PrefetchedQuery? _prefetch;
@@ -115,14 +145,20 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     /// <inheritdoc />
     public void Prefetch(string folder, TimeSpan timeout)
     {
-        var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
+        if (Volatile.Read(ref _disposed) != 0) return;
+        if (!TryCanonicalize(folder, out var canonicalFolder))
+        {
+            _log.Warn("Explorer prefetch skipped: folder is not a usable path");
+            return;
+        }
         var cts = new CancellationTokenSource();
+        var started = _time.GetTimestamp();
         var task = TryGetSnapshotCoreAsync(canonicalFolder, timeout, null, 16, cts.Token);
         PrefetchedQuery? superseded;
         lock (_prefetchGate)
         {
             superseded = _prefetch;
-            _prefetch = new PrefetchedQuery(canonicalFolder, task, cts);
+            _prefetch = new PrefetchedQuery(canonicalFolder, task, cts, started);
         }
         superseded?.Cts.Cancel();
         _log.Info($"Explorer prefetch-start: folder={canonicalFolder}");
@@ -134,11 +170,13 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         batchSize = Math.Clamp(batchSize, 1, 128);
         // perf(startup): a query prefetched for this folder is joined (one-shot); one prefetched for
-        // another folder is cancelled so it stops occupying the single STA pump thread.
+        // another folder (or too old to trust its order) is cancelled so it stops occupying the single STA pump thread.
         var prefetched = TakePrefetch();
         if (prefetched is not null)
         {
-            if (ExplorerSnapshotValidator.SamePath(prefetched.Folder, ExplorerSnapshotValidator.CanonicalizeFolder(folder)))
+            if (TryCanonicalize(folder, out var canonical)
+                && ExplorerSnapshotValidator.SamePath(prefetched.Folder, canonical)
+                && _time.GetElapsedTime(prefetched.StartedTimestamp) <= _prefetchMaxAge)
                 return JoinPrefetchAsync(prefetched, timeout, cancellationToken);
             prefetched.Cts.Cancel();
         }
@@ -154,7 +192,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     {
         try
         {
-            return await prefetched.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            return await prefetched.Task.WaitAsync(NormalizeTimeout(timeout), cancellationToken).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -174,14 +212,15 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
     private async Task<ExplorerViewSnapshot> TryGetSnapshotCoreAsync(string folder, TimeSpan timeout,
         IProgress<ExplorerQueryProgress>? progress, int batchSize, CancellationToken cancellationToken)
     {
-        var canonicalFolder = ExplorerSnapshotValidator.CanonicalizeFolder(folder);
-        if (cancellationToken.IsCancellationRequested) return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
+        if (!TryCanonicalize(folder, out var canonicalFolder)) return InvalidFolder(folder);
+        if (cancellationToken.IsCancellationRequested || Volatile.Read(ref _disposed) != 0)
+            return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(timeout);
+        timeoutCts.CancelAfter(NormalizeTimeout(timeout));
         var linkedToken = timeoutCts.Token;
         var workTask = _pump.Enqueue(() =>
         {
-            try { return QueryShell(canonicalFolder, progress, batchSize, linkedToken); }
+            try { return _query(canonicalFolder, progress, batchSize, linkedToken); }
             catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled); }
             catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ExplorerReason.Format(ExplorerReason.QueryFailed, ex.GetType().Name)); }
         });
@@ -194,7 +233,16 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             var status = cancellationToken.IsCancellationRequested ? ExplorerOrderStatus.Canceled : ExplorerOrderStatus.TimedOut;
             return Unavailable(canonicalFolder, status, status == ExplorerOrderStatus.TimedOut ? ExplorerReason.Timeout : ExplorerReason.Canceled);
         }
+        catch (ObjectDisposedException)
+        {
+            // The pump was shut down (window closed) between the check above and the enqueue.
+            return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
+        }
     }
+
+    /// <summary>A negative timeout other than <see cref="Timeout.InfiniteTimeSpan"/> means "already expired", not an exception.</summary>
+    private static TimeSpan NormalizeTimeout(TimeSpan timeout)
+        => timeout == Timeout.InfiniteTimeSpan || timeout >= TimeSpan.Zero ? timeout : TimeSpan.Zero;
 
     private ExplorerViewSnapshot QueryShell(string folder, IProgress<ExplorerQueryProgress>? progress,
         int batchSize, CancellationToken cancellationToken)
@@ -213,27 +261,10 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         {
             shell = Activator.CreateInstance(shellType);
             windows = shell!.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shell, null, CultureInfo.InvariantCulture);
-            var windowsInspected = 0;
-            foreach (var window in (IEnumerable)windows!)
-            {
-                try
-                {
-                    windowsInspected++;
-                    if (cancellationToken.IsCancellationRequested) return Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
-                    var location = (string?)((dynamic)window).LocationURL;
-                    if (!TryCanonicalizeLocation(location, out var current)) continue;
-                    if (!ExplorerSnapshotValidator.SamePath(current, folder)) continue;
-                    try { return TryReadNativeView(window, folder, progress, batchSize, cancellationToken); }
-                    catch (OperationCanceledException) { return Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled); }
-                    catch (Exception ex) { return Unavailable(folder, ExplorerOrderStatus.Failed, ExplorerReason.Format(ExplorerReason.NativeViewFailed, ex.GetType().Name, $"0x{ex.HResult:X8}")); }
-                }
-                catch (Exception ex) when (ex is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
-                catch (Exception ex) { _log.Error($"Explorer window inspection failed after {windowsInspected} window(s)", ex); }
-                finally { Release(window); }
-            }
-            var unavailable = Unavailable(folder, ExplorerOrderStatus.NoMatchingWindow, ExplorerReason.Format(ExplorerReason.NoMatchingWindow, windowsInspected.ToString(CultureInfo.InvariantCulture)));
-            _log.Info($"Explorer query-complete: status={unavailable.Status}, windows={windowsInspected}, elapsedMs={queryTimer.ElapsedMilliseconds}");
-            return unavailable;
+            return ExplorerWindowSelector.Select(folder, ((IEnumerable)windows!).Cast<object>(),
+                window => (string?)((dynamic)window).LocationURL,
+                window => TryReadNativeView(window, folder, progress, batchSize, cancellationToken),
+                Release, _log, queryTimer, cancellationToken);
         }
         finally { Release(windows); Release(shell); }
     }
@@ -410,14 +441,7 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             c.direction == 1 ? ExplorerSortDirection.Ascending : c.direction == -1 ? ExplorerSortDirection.Descending : ExplorerSortDirection.Unknown)).ToArray();
     }
 
-    private static bool TryCanonicalizeLocation(string? location, out string folder)
-    {
-        folder = string.Empty;
-        if (string.IsNullOrWhiteSpace(location) || !Uri.TryCreate(location, UriKind.Absolute, out var uri) || !uri.IsFile) return false;
-        folder = ExplorerSnapshotValidator.CanonicalizeFolder(uri.LocalPath); return true;
-    }
-
-    private static ExplorerViewSnapshot Unavailable(string folder, ExplorerOrderStatus status, string reason)
+    internal static ExplorerViewSnapshot Unavailable(string folder, ExplorerOrderStatus status, string reason)
         => new(folder, [], [], ExplorerGroupState.Unknown, status, reason, DateTime.UtcNow);
-    private static void Release(object? value) { if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
+    internal static void Release(object? value) { if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
 }

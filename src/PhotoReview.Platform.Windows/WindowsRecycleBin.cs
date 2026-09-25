@@ -107,31 +107,25 @@ public sealed class WindowsRecycleBin : IRecycleBin
                 if (candidates.Count != 1) return false;
                 var selected = candidates[0].Item;
                 dynamic selectedItem = selected;
-                var restoredVerb = false;
                 object? verbs = selectedItem.Verbs();
+                var verbItems = new List<object>();
                 try
                 {
+                    var verbNames = new List<string>();
                     foreach (dynamic verb in (IEnumerable)verbs!)
                     {
-                        var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
-                            // Matched against the WINDOWS shell's verb name ("Restore" / Vietnamese "Khôi phục" /
-                            // German "Wiederherstellen"), which follows the OS display language, not our UI catalogs.
-                            // "khôi" must stay Vietnamese (I18N ADR 0006; allowlisted in localization-allowlist.txt).
-                            if (!verbName.Contains("restore", StringComparison.OrdinalIgnoreCase) &&
-                                !verbName.Contains("khôi", StringComparison.OrdinalIgnoreCase) &&
-                                !verbName.Contains("wiederher", StringComparison.OrdinalIgnoreCase))
-                        {
-                            Release(verb); // not the restore verb
-                            continue;
-                        }
-                        try { verb.DoIt(); }
-                        finally { Release(verb); }
-                        restoredVerb = true;
-                        break;
+                        verbItems.Add(verb);
+                        verbNames.Add((string?)verb.Name ?? string.Empty);
                     }
+                    RestoreVerb.Invoke(verbNames,
+                        index => { dynamic chosen = verbItems[index]; chosen.DoIt(); },
+                        canonical => selectedItem.InvokeVerb(canonical));
                 }
-                finally { Release(verbs); }
-                if (!restoredVerb) selectedItem.InvokeVerb("Restore");
+                finally
+                {
+                    foreach (var verb in verbItems) Release(verb);
+                    Release(verbs);
+                }
                 return WaitForRestore(originalPath, expectedLastWriteUtc);
             }
             finally
@@ -201,6 +195,64 @@ internal static class RecycleEligibility
     {
         try { return new DriveInfo(root).DriveType; }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return null; }
+    }
+}
+
+/// <summary>
+/// Chooses how to restore a Recycle Bin item. The shell's verb NAMES follow the OS display language, so the name
+/// list below is only the fast path; the language-independent fallback is the canonical verb <c>undelete</c>
+/// (what <c>IContextMenu</c> maps the localized "Restore" to), which <c>FolderItem.InvokeVerb</c> accepts on every
+/// language. The former fallback <c>InvokeVerb("Restore")</c> only ever worked on English.
+/// </summary>
+internal static class RestoreVerb
+{
+    internal const string CanonicalVerb = "undelete";
+
+    // Lower-case fragments of the shell's localized "Restore" verb. Non-ASCII text is deliberate (OS-language
+    // data, not our UI catalogs; I18N ADR 0006, allowlisted in localization-allowlist.txt).
+    private static readonly string[] NameFragments =
+    [
+        "restore", "restaur", "ripristin", "wiederher", "herstel", "gendan", "återställ", "palauta", "przywr",
+        "obnovi", "vissza", "geri yükle", "khôi", "восстанов", "відновит", "επαναφορ",
+        "還原", "还原", "元に戻す", "복원", "استعادة", "שחזר",
+    ];
+
+    /// <summary>Removes accelerator markers such as <c>&amp;R</c> and CJK <c>(&amp;E)</c> and trims.</summary>
+    internal static string Normalize(string? verbName)
+    {
+        if (string.IsNullOrWhiteSpace(verbName)) return string.Empty;
+        var text = verbName.Replace("(&", "(", StringComparison.Ordinal).Replace("&", string.Empty, StringComparison.Ordinal);
+        return text.Trim();
+    }
+
+    internal static bool IsRestoreName(string? verbName)
+    {
+        var name = Normalize(verbName);
+        if (name.Length == 0) return false;
+        foreach (var fragment in NameFragments)
+            if (name.Contains(fragment, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>Index of the first verb whose name is a known Restore label, or -1.</summary>
+    internal static int FindIndex(IReadOnlyList<string> verbNames)
+    {
+        for (var i = 0; i < verbNames.Count; i++)
+            if (IsRestoreName(verbNames[i])) return i;
+        return -1;
+    }
+
+    /// <summary>Invokes exactly one restore route and returns which: the matching verb by index, else the canonical verb.</summary>
+    internal static string Invoke(IReadOnlyList<string> verbNames, Action<int> invokeByIndex, Action<string> invokeCanonical)
+    {
+        var index = FindIndex(verbNames);
+        if (index >= 0)
+        {
+            invokeByIndex(index);
+            return "verb:" + index.ToString(CultureInfo.InvariantCulture);
+        }
+        invokeCanonical(CanonicalVerb);
+        return CanonicalVerb;
     }
 }
 
