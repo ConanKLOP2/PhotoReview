@@ -15,6 +15,8 @@ namespace PhotoReview.Core.FileActions;
 /// omitted from the JSON when null, so records without a code keep their previous shape, and older builds (which
 /// skip unknown members) still read new files. <see cref="Permanent"/> (Q-R8) is true for a Recycle that deleted the file
 /// permanently (drive without a Recycle Bin, user opt-in): such an entry can never be restored; null/omitted otherwise.
+/// <see cref="Undo"/> (review r7) is true for the Move that undoes an earlier Move (Source = the earlier destination):
+/// it is journaled so a crash mid-undo is reconciled/recoverable, but it is never itself loaded as undoable history.
 /// </summary>
 public sealed record JournalEntry(
     string Id,
@@ -27,7 +29,8 @@ public sealed record JournalEntry(
     DateTime TimestampUtc,
     string? Error = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Permanent = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Permanent = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Undo = null);
 
 public sealed class OperationJournal
 {
