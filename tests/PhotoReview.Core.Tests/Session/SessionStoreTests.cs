@@ -150,6 +150,20 @@ public sealed class SessionStoreTests
         Assert.True(_fs.FileExists(_sessionsDir + @"\abc.json"));
     }
 
+    [Fact(DisplayName = "One undeletable stale temp file does not stop the sweep of the others")]
+    public void Constructor_SweepContinuesAfterOneDeleteFails()
+    {
+        var old = DateTime.UtcNow.AddDays(-3);
+        _fs.AddFile(_sessionsDir + @"\a.json.1111.tmp", "x", old);
+        _fs.AddFile(_sessionsDir + @"\b.json.2222.tmp", "x", old);
+        _fs.DeleteHook = path => path.EndsWith("a.json.1111.tmp", StringComparison.OrdinalIgnoreCase) ? new IOException("locked") : null;
+
+        _ = CreateStore();
+
+        Assert.True(_fs.FileExists(_sessionsDir + @"\a.json.1111.tmp"));
+        Assert.False(_fs.FileExists(_sessionsDir + @"\b.json.2222.tmp"));
+    }
+
     [Fact(DisplayName = "Session file with null Skipped loads as an empty list (R2-F-25)")]
     public void Load_NullSkipped_BecomesEmptyList()
     {

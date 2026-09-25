@@ -45,9 +45,15 @@ public sealed class SessionStore
     internal int SweepStaleTempFiles(DateTime utcNow)
     {
         var removed = 0;
-        try
+        List<string> temps;
+        try { temps = _fileSystem.EnumerateFiles(_sessionsDir, "*.tmp").ToList(); }
+        catch (IOException) { return 0; }
+        catch (UnauthorizedAccessException) { return 0; }
+
+        foreach (var temp in temps)
         {
-            foreach (var temp in _fileSystem.EnumerateFiles(_sessionsDir, "*.tmp").ToList())
+            // Per file: one locked or vanished temp file must not stop the sweep of the rest.
+            try
             {
                 if (_fileSystem.GetFileStat(temp) is { } stat && utcNow - stat.LastWriteUtc > StaleTempAge)
                 {
@@ -55,9 +61,10 @@ public sealed class SessionStore
                     removed++;
                 }
             }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+
         return removed;
     }
 
