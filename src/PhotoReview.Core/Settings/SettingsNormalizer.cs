@@ -80,6 +80,15 @@ public static class SettingsNormalizer
             }
             if (removed > 0 || invalidOperation) fixedNames.Add(nameof(AppSettings.Actions));
         }
+
+        // feat/mouse-zoom
+        if (!Enum.IsDefined(settings.MouseWheelAction)) { settings.MouseWheelAction = MouseWheelAction.Zoom; fixedNames.Add(nameof(AppSettings.MouseWheelAction)); }
+        var clickZoom = Math.Clamp(settings.ClickZoomPercent, AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent);
+        if (clickZoom != settings.ClickZoomPercent)
+        {
+            settings.ClickZoomPercent = clickZoom;
+            fixedNames.Add(nameof(AppSettings.ClickZoomPercent));
+        }
         return fixedNames;
     }
 }

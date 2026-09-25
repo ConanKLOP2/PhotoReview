@@ -55,6 +55,39 @@ internal static class MainWindowHelpers
             ClampOffset(currentHorizontalOffset + anchorAfterX - anchorBeforeX, newExtentWidth, viewportWidth),
             ClampOffset(currentVerticalOffset + anchorAfterY - anchorBeforeY, newExtentHeight, viewportHeight));
 
+    /// <summary>
+    /// feat/mouse-zoom: scroll offsets that put the image point at <paramref name="anchor"/> (a fraction of the
+    /// image, see <see cref="NormalizeImagePoint"/>) back under the cursor after a zoom to ANY level (wheel step or
+    /// click-to-zoom). <paramref name="imageLeft"/>/<paramref name="imageTop"/> are where the image element sits in
+    /// the viewport after the new layout at the current offsets, <paramref name="imageWidth"/>/<paramref name="imageHeight"/>
+    /// its new size; <paramref name="cursorX"/>/<paramref name="cursorY"/> the cursor in viewport coordinates.
+    /// </summary>
+    internal static ZoomViewportOffsets CalculateZoomToPointOffsets(
+        ZoomImagePoint anchor,
+        double imageLeft,
+        double imageTop,
+        double imageWidth,
+        double imageHeight,
+        double cursorX,
+        double cursorY,
+        double currentHorizontalOffset,
+        double currentVerticalOffset,
+        double extentWidth,
+        double extentHeight,
+        double viewportWidth,
+        double viewportHeight) =>
+        CalculateOffsetsFromAnchorDelta(
+            currentHorizontalOffset,
+            currentVerticalOffset,
+            cursorX,
+            cursorY,
+            imageLeft + anchor.X * imageWidth,
+            imageTop + anchor.Y * imageHeight,
+            extentWidth,
+            extentHeight,
+            viewportWidth,
+            viewportHeight);
+
     internal static ZoomViewportOffsets CalculatePanOffsets(
         double currentHorizontalOffset,
         double currentVerticalOffset,

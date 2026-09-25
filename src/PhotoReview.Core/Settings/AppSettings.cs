@@ -82,4 +82,27 @@ public class AppSettings
     {
         public bool IsValidKeyName(string keyName) => !string.IsNullOrWhiteSpace(keyName);
     }
+
+    // ---- Mouse / zoom (feat/mouse-zoom). Absent in older configs = these defaults; no migration step. ----
+
+    /// <summary>Smallest accepted <see cref="ClickZoomPercent"/>.</summary>
+    public const int MinClickZoomPercent = 10;
+
+    /// <summary>Largest accepted <see cref="ClickZoomPercent"/>.</summary>
+    public const int MaxClickZoomPercent = 800;
+
+    /// <summary>Default <see cref="ClickZoomPercent"/>: 100 % = one source pixel per device pixel (ADR 0008).</summary>
+    public const int DefaultClickZoomPercent = 100;
+
+    /// <summary>What the plain mouse wheel does over the image; Ctrl+wheel always zooms at the cursor.</summary>
+    public MouseWheelAction MouseWheelAction { get; set; } = MouseWheelAction.Zoom;
+
+    /// <summary>A left click (no drag) toggles between Fit and <see cref="ClickZoomPercent"/>, anchored at the cursor.</summary>
+    public bool ClickToZoomEnabled { get; set; } = true;
+
+    /// <summary>Zoom a click jumps to, in percent of source pixels (ADR 0008), [<see cref="MinClickZoomPercent"/>, <see cref="MaxClickZoomPercent"/>].</summary>
+    public int ClickZoomPercent { get; set; } = DefaultClickZoomPercent;
+
+    /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
+    public bool KineticPanEnabled { get; set; } = true;
 }
