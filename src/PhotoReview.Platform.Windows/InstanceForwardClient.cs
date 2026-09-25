@@ -55,9 +55,9 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
                     if (read == 0) break;
                     length += read;
                 }
-                // The owner hung up without answering (its read timed out): not a refusal, and not known to have failed.
-                // The request was already written, so it may have been accepted: not a reason to open a second window.
-                if (length == 0) return ForwardOutcome.Unknown;
+                // An owner that accepted the request always answers OK or ERR; hanging up silently means it read nothing
+                // (read timeout, oversized input, shutting down), so fall back to opening here.
+                if (length == 0) return ForwardOutcome.NoInstance;
                 return Encoding.ASCII.GetString(reply, 0, length).StartsWith("OK", StringComparison.Ordinal)
                     ? ForwardOutcome.Delivered
                     : ForwardOutcome.Rejected;

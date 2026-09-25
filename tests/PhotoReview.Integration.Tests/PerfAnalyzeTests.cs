@@ -488,7 +488,11 @@ public class PerfAnalyzeTests
         var result = await PerfAnalyze.RunAsync(runDir, rulesPath: null);
 
         Assert.True(File.Exists(result.SummaryJsonPath));
-        Assert.Contains("\"groups\"", File.ReadAllText(result.SummaryJsonPath));
+        var json = File.ReadAllText(result.SummaryJsonPath);
+        Assert.Contains("\"groups\"", json);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var firstVisual = doc.RootElement.GetProperty("groups")[0].GetProperty("firstVisualMs");
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, firstVisual.GetProperty("p50").ValueKind); // null, never a "NaN" string where consumers expect a number
     }
 
     [Theory]

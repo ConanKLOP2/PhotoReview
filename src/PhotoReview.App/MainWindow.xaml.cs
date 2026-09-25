@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
+        AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
         ContentRendered += (_, _) => PhotoReviewPerf.StartupMark("contentRendered");
         viewport.Get = GetViewportSize;
@@ -353,8 +354,9 @@ public partial class MainWindow : Window
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
 
-        // Space/Enter belong to a focused compare pane (keyboard selection); the window-level tunnel must not steal them.
-        // Toolbar buttons are deliberately not exempt: after a click they keep focus and would swallow the Skip/Move shortcuts.
+        // Space/Enter belong to a focused button or compare pane (keyboard activation); the window-level tunnel must not steal them.
+        // A mouse click leaves focus on the toolbar button, so ReturnFocusAfterButtonClick hands it back to the window;
+        // otherwise Space/Enter would keep re-activating that button instead of Skip / Move to folder 2.
         if (pressedKey is Key.Space or Key.Enter && e.OriginalSource is DependencyObject source && OwnsActivationKeys(source)) return;
 
         var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible);
@@ -385,11 +387,21 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ReturnFocusAfterButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase) return;
+        // Deferred: a dialog opened by the click may take focus first; only reclaim it while the button still holds it.
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (IsActive && Keyboard.FocusedElement is System.Windows.Controls.Primitives.ButtonBase) Focus();
+        }, System.Windows.Threading.DispatcherPriority.Input);
+    }
+
     private bool OwnsActivationKeys(DependencyObject source)
     {
         for (var node = source; node is not null && !ReferenceEquals(node, this); node = node is System.Windows.Media.Visual ? System.Windows.Media.VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
         {
-            if (ReferenceEquals(node, CompareLeftBorder) || ReferenceEquals(node, CompareRightBorder)) return true;
+            if (node is System.Windows.Controls.Primitives.ButtonBase || ReferenceEquals(node, CompareLeftBorder) || ReferenceEquals(node, CompareRightBorder)) return true;
         }
         return false;
     }

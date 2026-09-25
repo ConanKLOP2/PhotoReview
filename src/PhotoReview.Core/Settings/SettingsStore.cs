@@ -41,6 +41,7 @@ public sealed class SettingsStore
     {
         var filePath = path ?? _appPaths.ConfigFile;
         LastLoadRepairs = [];
+        _keepCorruptFile = false;
         try
         {
             if (_fileSystem.FileExists(filePath))
@@ -69,7 +70,7 @@ public sealed class SettingsStore
             {
                 // The corrupt file could not be preserved: keep defaults in memory and do not overwrite the only copy.
                 LogStartupError("Could not back up corrupt config.json, using in-memory defaults for this session", copyEx);
-                _keepCorruptFile = true;
+                _keepCorruptFile = path is null;
                 _current = new AppSettings();
                 Changed?.Invoke(this, _current);
                 return _current;
@@ -78,6 +79,7 @@ public sealed class SettingsStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             LogStartupError("Config.json inaccessible, using in-memory defaults for this session", ex);
+            _keepCorruptFile = path is null; // a briefly locked but valid config must not be replaced by defaults on the next Save
             _current = new AppSettings();
             Changed?.Invoke(this, _current);
             return _current;
@@ -101,6 +103,7 @@ public sealed class SettingsStore
         ArgumentNullException.ThrowIfNull(settings);
         if (_keepCorruptFile)
         {
+            _log.Warn("Settings kept in memory only: config.json is preserved untouched because it could not be read or backed up");
             _current = settings;
             Changed?.Invoke(this, _current);
             return;
