@@ -23,8 +23,6 @@ public sealed class PreloadLifetimeTrackingTests
     {
         public bool HasHeadroom(double maximumLoad, long reserveBytes) => true;
         public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-        public bool IsMemoryPressureHigh() => false;
-        public long GetAvailableMemoryBytes() => 16L * 1024 * 1024 * 1024;
     }
 
     [Fact(DisplayName = "Thousands of navigations (each cancelling the previous preload) leave a bounded number of tracked lifetimes and tasks")]
