@@ -177,5 +177,17 @@ public sealed class SessionStoreTests
         Assert.NotNull(loaded.Skipped);
         Assert.Empty(loaded.Skipped);
     }
-}
 
+    [Theory(DisplayName = "Session file name is the persisted format: SHA-256 of the upper-cased folder without trailing separator (files from older builds still load)")]
+    [InlineData(@"C:\photos\vacation")]
+    [InlineData(@"C:\photos\vacation\")]
+    [InlineData(@"c:\PHOTOS\Vacation/")]
+    public void GetPath_KeepsThePersistedFileNameScheme(string spelling)
+    {
+        var store = CreateStore();
+        var expectedKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(@"C:\PHOTOS\VACATION")));
+
+        Assert.Equal(Path.Combine(_sessionsDir, expectedKey + ".json"), store.GetPath(spelling));
+    }
+}
