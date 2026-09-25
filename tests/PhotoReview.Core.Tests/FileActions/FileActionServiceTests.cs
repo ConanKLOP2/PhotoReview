@@ -92,6 +92,25 @@ public sealed class FileActionServiceTests
         Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
     }
 
+    [Theory(DisplayName = "A rooted destination without a drive (\\Loai-2) is refused at run time, nothing journaled or moved")]
+    [InlineData(FileOperationType.Move, @"\Loai-2")]
+    [InlineData(FileOperationType.Copy, @"\Loai-2")]
+    [InlineData(FileOperationType.Move, "/Loai-2")]
+    public async Task ExecuteAsync_RootedDestinationWithoutDrive_FailsWithoutJournalOrMove(FileOperationType operation, string destination)
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, destination));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionDestinationOutsideSource, result.Error);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(@"C:\Loai-2\a.jpg"));
+        Assert.DoesNotContain(_fs.Events, e => e.Kind is "move" or "copy" or "append");
+        Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
+    }
+
     [Fact]
     public async Task ExecuteAsync_RelativeDestinationInsideSource_Succeeds()
     {
