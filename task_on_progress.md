@@ -1,13 +1,12 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `ebf2bf3` (#82 Q-R17, #83 docs budget, #84 RAM % merged; v2.0.87) | **Branch:** `develop` (decision log + handoff)
+**Updated:** 2026-09-25 | **Base:** master `fa035e6` | **Branch:** `integration/2026-09-25-features` (one PR)
 
-## Now: 9 agent branches → one integration PR (read this first after a new session)
+## Now: integration PR for review round 7 + viewer features + Settings redesign
 
-- **Handoff:** [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md) — the 9 branches (5 features incl. Q-R18, 4 round-7 fix branches), their contracts, the integration + Settings-redesign plan. Agents work in `.claude/worktrees/agent-*`; check `git ls-remote origin` for which branches are pushed.
-- **Branch `develop`:** long-lived decision log (OPEN-DECISIONS, this file, WORK docs). Merge to master by PR from time to time; feature/fix branches still start from master.
-- **User:** review Q-R19 (defaults chosen by Claude); perf run for Q-R17 on F4; GUI checks listed in the WORK doc plus #78 multi-select open, toolbar focus handback (#81), Recovery, Settings journal option, VI wording, Fit first frame (T89), AR04. The real Recycle Bin was found without `$R` files on 2026-09-24 after a subagent mutation run (cause unproven).
-- **Evidence:** [archived review plan](docs/archive/historical/REVIEW-2026-09-25-PLAN.md) · [rounds 3-6](docs/refactoring/REVIEW-2026-09-25-ROUND3-4.md) · [round 2 reports](docs/archive/evidence/review-2026-09-25/round2/).
+- **What:** [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md) — 9 agent branches + Settings redesign + strict i18n-check + flaky-test fix, all merged into `integration/2026-09-25-features`; gate green (1779 tests).
+- **User:** review Q-R19 (defaults chosen by Claude, see OPEN-DECISIONS); GUI checks listed in the WORK doc (Settings pages, click-zoom/kinetic, EXIF line, folder info, Explorer double-click in both instance modes, Recycle restore with hidden extensions, close during a cross-drive Move); perf run for Q-R17 on F4; Native `NativeRecycleBinTests` only if you want (touches the real bin).
+- **After merge:** fast-forward `develop` to master; delete merged agent branches; Release build per CLAUDE.local.md.
 
 ## Status by Group
 
