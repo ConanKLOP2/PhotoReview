@@ -23,9 +23,10 @@ public sealed class AppPaths : IAppPaths
         ArgumentException.ThrowIfNullOrWhiteSpace(localAppData);
 
         var appRoot = Path.Combine(localAppData, "PhotoReview");
-        var hasOverride = !string.IsNullOrWhiteSpace(dataRootOverride);
         // Resolve once: a relative override would otherwise follow the (mutable) current directory at every later use.
-        var overrideRoot = hasOverride ? Path.GetFullPath(dataRootOverride!.Trim()) : null;
+        // An unusable value (e.g. NUL) must not crash startup or logger init: ignore it and use the default root.
+        var overrideRoot = ResolveOverride(dataRootOverride);
+        var hasOverride = overrideRoot is not null;
         var dataRoot = overrideRoot ?? Path.Combine(appRoot, "Data");
 
         // ConfigFile: Giữ nguyên hành vi cũ là nằm tại %LOCALAPPDATA%\PhotoReview\config.json.
@@ -50,6 +51,13 @@ public sealed class AppPaths : IAppPaths
         PreviewCacheDir = Path.Combine(appRoot, "cache");
         ThumbnailCacheDir = Path.Combine(appRoot, "thumbnails");
         WindowPlacementFile = Path.Combine(appRoot, "window-placement.json");
+    }
+
+    private static string? ResolveOverride(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try { return Path.GetFullPath(value.Trim()); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return null; }
     }
 
     /// <summary>
