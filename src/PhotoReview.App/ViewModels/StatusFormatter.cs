@@ -11,19 +11,25 @@ namespace PhotoReview.App.ViewModels;
 public static class StatusFormatter
 {
     /// <summary>
-    /// Định dạng kích thước tệp tin theo các đơn vị B, KB, MB, GB (đơn vị trung lập, không dịch).
+    /// Định dạng kích thước tệp tin theo các đơn vị byte/KB/MB/GB; từ đơn vị lấy từ catalog (<c>unit.*</c>).
     /// </summary>
     public static string FormatFileSize(long bytes)
     {
-        string[] units = ["B", "KB", "MB", "GB"];
         var value = (double)Math.Max(0, bytes);
         var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
+        while (value >= 1024 && unit < 3)
         {
             value /= 1024;
             unit++;
         }
-        return unit == 0 ? $"{value:0} {units[unit]}" : $"{value:0.##} {units[unit]}";
+        var number = value.ToString(unit == 0 ? "0" : "0.##", CultureInfo.CurrentCulture);
+        return unit switch
+        {
+            0 => Tr.UnitSizeByte(number),
+            1 => Tr.UnitSizeKilobyte(number),
+            2 => Tr.UnitSizeMegabyte(number),
+            _ => Tr.UnitSizeGigabyte(number),
+        };
     }
 
     public static string ScanningFolder() => Tr.StatusScanningFolder;

@@ -7,9 +7,9 @@ namespace PhotoReview.App.Tests.ViewModels;
 public sealed class StatusFormatterTests
 {
     [Theory]
-    [InlineData(0, "0 B")]
-    [InlineData(-100, "0 B")]
-    [InlineData(512, "512 B")]
+    [InlineData(0, "0 byte")]
+    [InlineData(-100, "0 byte")]
+    [InlineData(512, "512 byte")]
     [InlineData(1024, "1 KB")]
     [InlineData(1536, "1.5 KB")]
     [InlineData(1048576, "1 MB")]
