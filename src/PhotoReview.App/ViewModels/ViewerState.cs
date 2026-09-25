@@ -128,11 +128,17 @@ public sealed partial class ViewerState : ObservableObject
             if (SourcePixelWidth <= 0 || SourcePixelHeight <= 0) return 0;
             if (!double.IsFinite(MaxImageWidth) || !double.IsFinite(MaxImageHeight) || MaxImageWidth <= 1 || MaxImageHeight <= 1) return 0;
             var dpi = NormalizeDpi(DpiScale);
-            return Math.Min(MaxImageWidth * dpi / SourcePixelWidth, MaxImageHeight * dpi / SourcePixelHeight);
+            var fit = Math.Min(MaxImageWidth * dpi / SourcePixelWidth, MaxImageHeight * dpi / SourcePixelHeight);
+            return double.IsFinite(fit) && fit > 0 ? fit : 0; // an absurd viewport/DPI product must read as "unknown", not Infinity
         }
     }
 
-    private static double NormalizeDpi(double dpiScale) => dpiScale > 0 && double.IsFinite(dpiScale) ? dpiScale : 1.0;
+    /// <summary>Windows scales 100 %..500 %; anything outside a generous range (0, NaN, Infinity, denormals) is a broken reading.</summary>
+    private const double MinPlausibleDpiScale = 0.25;
+    private const double MaxPlausibleDpiScale = 16;
+
+    private static double NormalizeDpi(double dpiScale) =>
+        dpiScale is >= MinPlausibleDpiScale and <= MaxPlausibleDpiScale ? dpiScale : 1.0;
 
     // In Fit, Zoom is 1.0 by convention; the original-relative zoom actually on screen is FitZoom.
     private double StepBase => IsFit && FitZoom > 0 ? FitZoom : Zoom;
@@ -153,6 +159,8 @@ public sealed partial class ViewerState : ObservableObject
     /// </summary>
     public void SetZoom(double value)
     {
+        // NaN survives Math.Clamp and would poison Zoom, ImageWidth/Height and every later step.
+        if (double.IsNaN(value)) return;
         Stretch = ViewerStretchMode.None;
         MaxImageWidth = double.PositiveInfinity;
         MaxImageHeight = double.PositiveInfinity;
@@ -239,7 +247,7 @@ public sealed partial class ViewerState : ObservableObject
     {
         if (!force && Stretch != ViewerStretchMode.Uniform) return;
 
-        if (viewportWidth > 1 && viewportHeight > 1)
+        if (viewportWidth > 1 && viewportHeight > 1 && double.IsFinite(viewportWidth) && double.IsFinite(viewportHeight))
         {
             MaxImageWidth = viewportWidth;
             MaxImageHeight = viewportHeight;
