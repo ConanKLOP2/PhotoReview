@@ -16,6 +16,8 @@ public sealed class SettingsValidator
     public string? ValidateShortcuts(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        // Hand-edited/programmatic settings can hold nulls: report them like any other invalid value instead of throwing.
+        if (settings.Shortcuts is null) return Tr.CoreSettingsShortcutInvalid(nameof(AppSettings.Shortcuts));
         var bindings = new List<(string Name, string Value)>();
         foreach (var property in typeof(ShortcutMappings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
@@ -29,7 +31,7 @@ public sealed class SettingsValidator
         }
         foreach (var action in settings.Actions ?? [])
         {
-            if (string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) || !_keyValidator.IsValidKeyName(action.Shortcut.Trim()))
+            if (action is null || string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) || !_keyValidator.IsValidKeyName(action.Shortcut.Trim()))
                 return Tr.CoreSettingsActionInvalid;
             bindings.Add((Tr.CoreSettingsActionBindingName(action.Name), action.Shortcut.Trim()));
         }
