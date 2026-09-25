@@ -111,6 +111,23 @@ public sealed class ReviewMetricsTests
         Assert.DoesNotContain(snapshot.TopSourceOpens, e => e.Path.EndsWith("img00.jpg", StringComparison.Ordinal));
     }
 
+    [Fact(DisplayName = "The per-path open table stays bounded; repeatedly opened paths and the total survive the trim")]
+    public void SourceOpenTableIsBounded_TopPathsAndTotalSurvive()
+    {
+        var metrics = new ReviewMetrics();
+        for (var n = 0; n < 5; n++) metrics.RecordSourceOpen(@"C:\photos\hot.jpg");
+        for (var n = 0; n < 3; n++) metrics.RecordSourceOpen(@"C:\photos\warm.jpg");
+        var distinct = ReviewMetrics.MaxTrackedSourceOpenPaths * 3;
+        for (var i = 0; i < distinct; i++) metrics.RecordSourceOpen($@"C:\photos\once{i:D5}.jpg");
+
+        var snapshot = metrics.Snapshot();
+
+        Assert.InRange(metrics.TrackedSourceOpenPaths, 1, ReviewMetrics.MaxTrackedSourceOpenPaths);
+        Assert.Equal(5 + 3 + distinct, snapshot.SourceOpenCount);
+        Assert.Equal(new SourceOpenEntry(@"C:\photos\hot.jpg", 5), snapshot.TopSourceOpens[0]);
+        Assert.Equal(new SourceOpenEntry(@"C:\photos\warm.jpg", 3), snapshot.TopSourceOpens[1]);
+    }
+
     [Fact(DisplayName = "StatCount, SessionWriteCount and DecoderFallbackCount accumulate")]
     public void StatSessionWriteAndFallbackCountsAccumulate()
     {

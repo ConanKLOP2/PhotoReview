@@ -27,7 +27,16 @@ public sealed class ReviewMetrics
     private long _statCount;
     private long _sessionWriteCount;
     private long _crossThreadPresentCount;
+    // Per-path open counts behind TopSourceOpens. Bounded (see TrimSourceOpens): a long session over large folders
+    // opens tens of thousands of distinct files, and Snapshot() copies and sorts this table.
     private readonly ConcurrentDictionary<string, long> _sourceOpens = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _sourceOpensTrimGate = new();
+
+    /// <summary>Most distinct paths the per-path open table keeps; past it the least-opened paths are dropped.</summary>
+    public const int MaxTrackedSourceOpenPaths = 4096;
+
+    /// <summary>Distinct paths currently tracked for <see cref="ReviewMetricsSnapshot.TopSourceOpens"/> (test/diagnostic).</summary>
+    internal int TrackedSourceOpenPaths => _sourceOpens.Count;
     private readonly long[] _presentBuckets = new long[PresentBucketLabels.Length];
 
     /// <summary>Upper bounds (ms, inclusive) of the present-latency histogram; the last bucket is unbounded.</summary>
@@ -87,6 +96,22 @@ public sealed class ReviewMetrics
     {
         Interlocked.Increment(ref _sourceOpenCount);
         _sourceOpens.AddOrUpdate(path, 1, (_, count) => count + 1);
+        if (_sourceOpens.Count > MaxTrackedSourceOpenPaths) TrimSourceOpens();
+    }
+
+    // Drops the least-opened paths (ties: arbitrary) down to 3/4 of the cap, so the sort runs once per
+    // MaxTrackedSourceOpenPaths / 4 new paths, not on every open. Paths opened repeatedly -- the ones
+    // TopSourceOpens exists to surface -- survive; SourceOpenCount (the total) is unaffected.
+    private void TrimSourceOpens()
+    {
+        lock (_sourceOpensTrimGate)
+        {
+            if (_sourceOpens.Count <= MaxTrackedSourceOpenPaths) return; // another thread trimmed already
+            var excess = _sourceOpens.Count - MaxTrackedSourceOpenPaths * 3 / 4;
+            // TryRemove(pair) skips a path whose count changed meanwhile: it was just opened again.
+            foreach (var entry in _sourceOpens.ToArray().OrderBy(p => p.Value).Take(excess))
+                _sourceOpens.TryRemove(entry);
+        }
     }
 
     /// <summary>Counts one file-metadata query (stat / exists) issued through the counting file system.</summary>
