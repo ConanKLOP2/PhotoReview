@@ -120,4 +120,81 @@ public sealed partial class MainViewModelNavigationTests
                 $"{context}: skipped [{string.Join(",", vm.Session?.Skipped.Select(Path.GetFileName) ?? [])}], expected [{string.Join(",", model.Skipped)}]");
         }
     }
+
+    [Fact(DisplayName = "Empty folder: every navigation, skip, zoom and file command is a harmless no-op and the state says so")]
+    public async Task EmptyFolder_EveryCommandIsANoOp()
+    {
+        var folder = Path.Combine(_tempDir, "empty_model");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "notes.txt"), "not an image");
+        var (vm, _, _) = CreateViewModel();
+
+        await vm.OpenFolderAsync(folder);
+        await vm.NextAsync();
+        await vm.PreviousAsync();
+        await vm.FirstAsync();
+        await vm.LastImageAsync();
+        await vm.SkipAsync();
+        await vm.RecycleAsync();
+        await vm.RunActionAsync(0);
+        await vm.UndoAsync();
+        vm.ZoomIn();
+        vm.ZoomOut();
+        vm.ZoomActualSize();
+        vm.ToggleCompare();
+
+        Assert.False(vm.HasImages);
+        Assert.Equal(0, vm.TotalFiles);
+        Assert.False(vm.CanNavigateNext);
+        Assert.False(vm.CanNavigatePrevious);
+        Assert.Null(vm.CurrentImage);
+        Assert.False(vm.CurrentHasComparePair);
+        Assert.Empty(vm.Session?.Skipped ?? []);
+        Assert.False(vm.IsFileActionInProgress);
+    }
+
+    [Fact(DisplayName = "Single image: Next/Previous/First/Last stay on it and never advance past the ends")]
+    public async Task SingleImage_NavigationStaysPut()
+    {
+        var folder = Path.Combine(_tempDir, "single_model");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "only.png");
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        for (var i = 0; i < 5; i++)
+        {
+            await vm.NextAsync();
+            await vm.PreviousAsync();
+            await vm.FirstAsync();
+            await vm.LastImageAsync();
+        }
+
+        Assert.Equal(0, vm.CurrentIndex);
+        Assert.Equal(1, vm.TotalFiles);
+        Assert.False(vm.CanNavigateNext);
+        Assert.False(vm.CanNavigatePrevious);
+        Assert.NotNull(vm.CurrentImage);
+    }
+
+    [Fact(DisplayName = "A folder open that arrives after the window closed (forwarded open, drop, undo) is ignored: no exception, no catalog change")]
+    public async Task OpenFolderAfterCloseSession_IsIgnored()
+    {
+        var folder = Path.Combine(_tempDir, "closed_model");
+        var other = Path.Combine(_tempDir, "closed_other");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(other);
+        CreateImageFile(folder, "a.png");
+        CreateImageFile(other, "b.png");
+        CreateImageFile(other, "c.png");
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        vm.CloseSession();
+
+        await vm.OpenFolderAsync(other);
+        await vm.OpenPathAsync(other);
+
+        Assert.Equal(1, vm.TotalFiles);
+        Assert.Equal(Path.Combine(folder, "a.png"), vm.Catalog.Current?.Path);
+    }
 }
