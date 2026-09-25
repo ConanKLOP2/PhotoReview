@@ -385,4 +385,82 @@ public sealed class MainViewModelNavigationTests : IDisposable
 
         public void Dispose() { }
     }
+
+    // Q-R18: the view model consults the instance ownership before every folder open.
+
+    [Fact]
+    public async Task OpenFolderAsync_OwnershipForwards_KeepsCurrentFolderAndShowsStatus()
+    {
+        var a = Path.Combine(_tempDir, "a");
+        var b = Path.Combine(_tempDir, "b");
+        Directory.CreateDirectory(a);
+        Directory.CreateDirectory(b);
+        CreateImageFile(a, "a1.jpg");
+        CreateImageFile(b, "b1.jpg");
+        CreateImageFile(b, "b2.jpg");
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(a);
+        var ownership = new RecordingOwnership { Decision = PhotoReview.Core.Instance.FolderOpenDecision.ForwardedToOtherInstance };
+        vm.FolderOwnership = ownership;
+
+        await vm.OpenFolderAsync(b);
+
+        Assert.Equal(1, vm.TotalFiles);
+        Assert.Contains(a, vm.FolderTitle);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.StatusFolderOpenedInOtherWindow("b"), vm.StatusText);
+        Assert.Empty(ownership.AfterOpens);
+    }
+
+    [Fact]
+    public async Task OpenFolderAsync_OwnershipRefuses_ShowsNoResponseStatus()
+    {
+        var b = Path.Combine(_tempDir, "b");
+        Directory.CreateDirectory(b);
+        CreateImageFile(b, "b1.jpg");
+        var (vm, _, _) = CreateViewModel();
+        vm.FolderOwnership = new RecordingOwnership { Decision = PhotoReview.Core.Instance.FolderOpenDecision.OwnedByOtherInstance };
+
+        await vm.OpenFolderAsync(b);
+
+        Assert.Equal(0, vm.TotalFiles);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.StatusFolderOpenInOtherWindowNoResponse("b"), vm.StatusText);
+    }
+
+    [Fact]
+    public async Task OpenFolderAsync_OwnershipProceeds_ReportsShownFolderAndFinishedOpen()
+    {
+        var a = Path.Combine(_tempDir, "a");
+        var missing = Path.Combine(_tempDir, "missing");
+        Directory.CreateDirectory(a);
+        CreateImageFile(a, "a1.jpg");
+        var (vm, _, _) = CreateViewModel();
+        var ownership = new RecordingOwnership();
+        vm.FolderOwnership = ownership;
+
+        await vm.OpenFolderAsync(a);
+        await vm.OpenFolderAsync(missing); // fails: the window keeps showing A
+
+        Assert.Equal([a, missing], ownership.BeforeOpens);
+        Assert.Equal([a], ownership.Shown);
+        Assert.Equal([(a, (string?)a), (missing, (string?)a)], ownership.AfterOpens);
+        Assert.Equal(1, vm.TotalFiles);
+    }
+
+    private sealed class RecordingOwnership : PhotoReview.Core.Instance.IFolderOwnership
+    {
+        public PhotoReview.Core.Instance.FolderOpenDecision Decision { get; init; } = PhotoReview.Core.Instance.FolderOpenDecision.Proceed;
+        public List<string> BeforeOpens { get; } = [];
+        public List<string> Shown { get; } = [];
+        public List<(string Folder, string? Shown)> AfterOpens { get; } = [];
+
+        public Task<PhotoReview.Core.Instance.FolderOpenDecision> BeforeOpenAsync(string folder, string? initialPath, CancellationToken cancellationToken = default)
+        {
+            BeforeOpens.Add(folder);
+            return Task.FromResult(Decision);
+        }
+
+        public void OnFolderShown(string folder) => Shown.Add(folder);
+
+        public void AfterOpen(string folder, string? shownFolder) => AfterOpens.Add((folder, shownFolder));
+    }
 }

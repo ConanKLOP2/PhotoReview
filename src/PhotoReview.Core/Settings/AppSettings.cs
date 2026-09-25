@@ -52,6 +52,12 @@ public class AppSettings
     /// </summary>
     public bool AllowPermanentDeleteWithoutRecycleBin { get; set; }
 
+    /// <summary>
+    /// Q-R18: one window for everything (default) or one window per folder. Absent in older configs = SingleWindow. Read at
+    /// startup from the settings store BEFORE the instance lock is taken, so a change takes effect at the next start.
+    /// </summary>
+    public InstanceMode InstanceMode { get; set; } = InstanceMode.SingleWindow;
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }

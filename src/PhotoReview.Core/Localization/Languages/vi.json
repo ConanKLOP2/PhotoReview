@@ -472,5 +472,8 @@
   "settings.allowPermanentDelete.label": "Cho phép xóa vĩnh viễn trên ổ đĩa không có Thùng rác",
   "settings.allowPermanentDelete.hint": "Mặc định tắt: thao tác Xóa bị từ chối trên ổ đĩa rời, ổ mạng và ổ không xác định vì các ổ này không có Thùng rác. Khi bật, Xóa sẽ xóa vĩnh viễn tệp sau khi bạn xác nhận. Tệp đã xóa không thể khôi phục, kể cả bằng Hoàn tác.",
   "dialog.confirmPermanentDelete.title": "Xóa vĩnh viễn?",
-  "dialog.confirmPermanentDelete.message": "\"{fileName}\" nằm trên ổ đĩa không có Thùng rác. Tệp sẽ bị xóa VĨNH VIỄN và không thể khôi phục (Hoàn tác cũng không lấy lại được). Bạn có muốn xóa không?"
+  "dialog.confirmPermanentDelete.message": "\"{fileName}\" nằm trên ổ đĩa không có Thùng rác. Tệp sẽ bị xóa VĨNH VIỄN và không thể khôi phục (Hoàn tác cũng không lấy lại được). Bạn có muốn xóa không?",
+  "app.alreadyRunningNoResponse": "Photo Review đang chạy nhưng không phản hồi. Hãy đóng nó rồi thử lại.",
+  "status.folderOpenedInOtherWindow": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác; yêu cầu đã được chuyển sang đó.",
+  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác nhưng cửa sổ đó không phản hồi. Cửa sổ này giữ nguyên thư mục hiện tại."
 }

@@ -402,5 +402,8 @@
   "settings.allowPermanentDelete.label": "CheckBox.Content (default off, Q-R8).",
   "settings.allowPermanentDelete.hint": "TextBlock under the checkbox; warns that deleted files cannot be restored.",
   "dialog.confirmPermanentDelete.title": "ShowConfirmation caption before a permanent delete (drive without Recycle Bin).",
-  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent."
+  "dialog.confirmPermanentDelete.message": "ShowConfirmation text; {fileName} = file name; must say the delete is permanent.",
+  "app.alreadyRunningNoResponse": "Q-R18 SingleWindow mode: IDialogService.ShowMessage at startup when another instance holds the app lock but did not answer the forward pipe. Caption is app.title.",
+  "status.folderOpenedInOtherWindow": "Q-R18 PerFolder mode: status bar text when a folder open was handed to the window that already shows that folder; {folder} = folder name.",
+  "status.folderOpenInOtherWindowNoResponse": "Q-R18 PerFolder mode: status bar text when another window owns the folder but did not answer; this window keeps its folder. {folder} = folder name."
 }
