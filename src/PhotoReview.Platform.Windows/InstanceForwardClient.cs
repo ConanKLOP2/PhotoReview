@@ -38,12 +38,14 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
         var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await using (pipe.ConfigureAwait(false))
         {
+            var written = false;
             try
             {
                 await pipe.ConnectAsync(deadline.Token).ConfigureAwait(false);
                 if (_allowServerForeground) TryAllowForeground(pipe);
                 await pipe.WriteAsync(request, deadline.Token).ConfigureAwait(false);
                 await pipe.FlushAsync(deadline.Token).ConfigureAwait(false);
+                written = true;
 
                 var reply = new byte[16];
                 var length = 0;
@@ -61,7 +63,7 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                return ForwardOutcome.NoInstance;
+                return written ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

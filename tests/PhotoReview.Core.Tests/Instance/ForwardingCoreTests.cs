@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using PhotoReview.Core.Instance;
 
 namespace PhotoReview.Core.Tests.Instance;
@@ -135,6 +135,7 @@ public sealed class ForwardingCoreTests
 
     [Theory(DisplayName = "A second launch exits only when the running instance took the request")]
     [InlineData(ForwardOutcome.Delivered, true)]
+    [InlineData(ForwardOutcome.Unknown, true)]
     [InlineData(ForwardOutcome.Rejected, false)]
     [InlineData(ForwardOutcome.NoInstance, false)]
     public async Task Handoff_ExitsOnlyWhenDelivered(ForwardOutcome outcome, bool expected)

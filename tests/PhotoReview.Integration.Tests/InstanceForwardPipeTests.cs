@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -131,7 +131,22 @@ public sealed class InstanceForwardPipeTests : IDisposable
         Assert.True(await signal.WaitAsync(Timeout));
     }
 
-    [Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]
+    [Fact(DisplayName = "A busy owner that answers after the client's deadline yields Unknown, not NoInstance (Q-R12: no false error dialog)")]
+    public async Task Client_OwnerAnswersTooLate_ReportsUnknown()
+    {
+        var release = new ManualResetEventSlim();
+        var server = new InstanceForwardServer(_pipe, _ => release.Wait(Timeout));
+        _disposables.Add(server);
+        _disposables.Add(release);
+        server.Start();
+
+        var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("slow.jpg")], TimeSpan.FromMilliseconds(400));
+        release.Set();
+
+        Assert.Equal(ForwardOutcome.Unknown, outcome);
+    }
+
+[Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]
     public async Task Client_NoServer_ReportsNoInstance()
     {
         var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("x.jpg")], TimeSpan.FromMilliseconds(300));

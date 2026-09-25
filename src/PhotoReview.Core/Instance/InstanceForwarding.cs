@@ -7,6 +7,8 @@ public enum ForwardOutcome
     Delivered,
     /// <summary>An instance answered but refused the request (invalid or malformed paths).</summary>
     Rejected,
+    /// <summary>Q-R12: the request was written to the owner but its reply did not arrive in time (owner busy). It most likely opens the path; the caller exits without an error dialog.</summary>
+    Unknown,
     /// <summary>Nobody answered in time (stale mutex, or the owner is stuck): fall back to the old behaviour.</summary>
     NoInstance,
 }
