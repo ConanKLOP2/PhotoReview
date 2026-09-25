@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Diagnostics;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Abstractions;
@@ -11,9 +11,14 @@ public class NullLogTests
     {
         var log = NullLog.Instance;
 
-        log.Info("test info");
-        log.Warn("test warn");
-        log.Error("test error", new InvalidOperationException());
+        var thrown = Record.Exception(() =>
+        {
+            log.Info("test info");
+            log.Warn("test warn");
+            log.Error("test error", new InvalidOperationException());
+        });
+
+        Assert.Null(thrown);
     }
 }
 
