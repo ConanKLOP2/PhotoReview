@@ -24,7 +24,7 @@ using Xunit;
 namespace PhotoReview.App.Tests.ViewModels;
 
 [Trait("Category", "HotPath")]
-public sealed class MainViewModelFileActionTests : IDisposable
+public sealed partial class MainViewModelFileActionTests : IDisposable
 {
     private static readonly byte[] ValidPngBytes =
     [
@@ -213,7 +213,12 @@ public sealed class MainViewModelFileActionTests : IDisposable
 
         vm.CloseSession();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => vm.OpenFolderAsync(folder));
+        // No further load starts. A late open (forwarded, dropped, undo) is ignored rather than throwing out of an
+        // async-void handler; the disposed coordinator is only the second line of defence.
+        await vm.OpenFolderAsync(folder);
+
+        Assert.Equal(0, vm.TotalFiles);
+        Assert.Null(vm.Session);
     }
 
     [Fact]

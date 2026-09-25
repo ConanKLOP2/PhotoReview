@@ -23,7 +23,7 @@ using Xunit;
 namespace PhotoReview.App.Tests.ViewModels;
 
 [Trait("Category", "HotPath")]
-public sealed class MainViewModelAdvancedTests : IDisposable
+public sealed partial class MainViewModelAdvancedTests : IDisposable
 {
     private static readonly byte[] ValidPngBytes =
     [
@@ -484,8 +484,12 @@ public sealed class MainViewModelAdvancedTests : IDisposable
     {
         public List<string> RecycledPaths { get; } = [];
 
+        /// <summary>Paths whose recycling fails with an I/O error (a locked file), to exercise partial batch failure.</summary>
+        public HashSet<string> FailingPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         public void SendToRecycleBin(string path)
         {
+            if (FailingPaths.Contains(path)) throw new IOException("locked by another process");
             RecycledPaths.Add(path);
             if (File.Exists(path)) File.Delete(path);
         }
@@ -523,7 +527,8 @@ public sealed class MainViewModelAdvancedTests : IDisposable
 
         public bool ShowConfirmation(string title, string message) => ConfirmationResponse;
         public void ShowMessage(string title, string message) { }
-        public void ShowError(string title, string message) { }
+        public List<(string Title, string Message)> Errors { get; } = [];
+        public void ShowError(string title, string message) => Errors.Add((title, message));
         public string? PickFolder(string? initialFolder = null) => PickedFolderResponse;
         public bool ShowBatchReview(IReadOnlyList<string> paths)
         {
