@@ -95,6 +95,9 @@ public partial class MainWindow : Window
         _ = _viewModel.OpenPathAsync(initialPath);
     }
 
+    /// <summary>Q-R10: opens a path forwarded from a second launch (UI thread).</summary>
+    public Task OpenPathAsync(string path) => _viewModel.OpenPathAsync(path);
+
     private void WireViewModelEvents()
     {
         _viewModel.Viewer.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ViewerState.IsFullscreen)) ApplyFullscreenState(_viewModel.Viewer.IsFullscreen); };

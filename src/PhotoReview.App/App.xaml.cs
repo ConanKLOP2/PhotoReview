@@ -10,7 +10,9 @@ using PhotoReview.App.Diagnostics;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Instance;
 using PhotoReview.Core.IO;
+using PhotoReview.Platform.Windows;
 using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
@@ -18,6 +20,8 @@ namespace PhotoReview.App;
 public partial class App : System.Windows.Application, IDisposable
 {
     private InstanceLock? _instanceLock;
+    private IInstanceForwardServer? _forwardServer;
+    private ForwardedOpenCoalescer? _forwardCoalescer;
     private PerfCsvListener? _perfListener;
     private PerfDispatcherHooks? _perfHooks;
     private IServiceProvider? _services;
@@ -276,14 +280,30 @@ public partial class App : System.Windows.Application, IDisposable
         TaskScheduler.UnobservedTaskException += (_, a) => { LogUnhandledForced("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
         _instanceLock = new InstanceLock(lockFolder, _services.GetRequiredService<ILog>());
+        var forwardPipeName = InstanceForwardPipe.NameFor(lockFolder);
         if (!_instanceLock.IsOwner)
         {
-            _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
+            // Q-R10: hand the request to the instance that already owns this folder instead of showing an error.
+            // No answer within the timeout (stale mutex) keeps the previous behaviour.
+            var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
+            var forwarded = await SecondInstanceHandoff.TryForwardAsync(
+                new InstanceForwardClient(forwardPipeName, _services.GetRequiredService<ILog>(), allowServerForeground: true),
+                existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
+            if (!forwarded)
+            {
+                _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
+            }
             _instanceLock.Dispose();
             _instanceLock = null;
-            Shutdown();
+            Shutdown(0);
             return;
         }
+        // Listen right away: a second launch made while this one is still starting waits for the pipe (up to its timeout).
+        var uiScheduler = _services.GetRequiredService<IUiScheduler>();
+        _forwardCoalescer = new ForwardedOpenCoalescer(
+            path => uiScheduler.Post(() => OpenForwarded(path)), ForwardCoalesceWindow, _services.GetRequiredService<ILog>());
+        _forwardServer = new InstanceForwardServer(forwardPipeName, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>());
+        _forwardServer.Start();
         PhotoReviewPerf.StartupMark("instanceLock");
         var window = _services.GetRequiredService<MainWindow>();
         PhotoReviewPerf.StartupMark("mainWindowConstructed");
@@ -303,6 +323,22 @@ public partial class App : System.Windows.Application, IDisposable
     /// Budget of the startup Explorer prefetch. It starts ~1 s before the folder load asks for it, and
     /// the load still bounds its own wait by its 2 s timeout, so this is 2 s plus that head start.
     /// </summary>
+    /// <summary>Explorer's N launches forward within a short burst; they collapse into one open of the first path.</summary>
+    private static readonly TimeSpan ForwardCoalesceWindow = TimeSpan.FromMilliseconds(750);
+
+    /// <summary>Runs on the UI thread (posted through <see cref="IUiScheduler"/>). No path means "just bring to front".</summary>
+    private void OpenForwarded(string? path)
+    {
+        if (MainWindow is not MainWindow window) return;
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Activate();
+        if (path is null) return;
+        var open = window.OpenPathAsync(path);
+        open.ContinueWith(
+            t => AppLog.Error("Forwarded open failed", t.Exception),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
     private static readonly TimeSpan ExplorerPrefetchTimeout = TimeSpan.FromSeconds(3);
 
     internal static void LogStartupErrorForced(string message, Exception ex)
@@ -329,6 +365,8 @@ public partial class App : System.Windows.Application, IDisposable
         GC.SuppressFinalize(this);
         _services?.GetService<SessionWriter>()?.Flush();
         AppLog.Shutdown();
+        Interlocked.Exchange(ref _forwardServer, null)?.Dispose();
+        Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
         Interlocked.Exchange(ref _instanceLock, null)?.Dispose();
         _perfHooks?.Detach();
         _perfListener?.Dispose();
