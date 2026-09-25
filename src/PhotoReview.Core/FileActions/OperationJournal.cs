@@ -337,8 +337,7 @@ public sealed class OperationJournal
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
                 var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
-                Append(entry);
-                reconciled.Add(entry);
+                if (AppendIfStillPending(entry)) reconciled.Add(entry);
             }
             else if (pending.Type is FileOperationType.Move or FileOperationType.Copy)
             {
@@ -352,11 +351,26 @@ public sealed class OperationJournal
                     ? (!sourceExists && destinationMatches ? JournalState.Committed : JournalState.Failed)
                     : (destinationMatches ? JournalState.Committed : JournalState.Failed);
                 var entry = WithOutcome(pending, state, JournalErrors.PendingUnconfirmed);
-                Append(entry);
-                reconciled.Add(entry);
+                if (AppendIfStillPending(entry)) reconciled.Add(entry);
             }
         }
         return reconciled;
+    }
+
+    // FA-01: the verdict was computed from a stale snapshot; another process sharing this journal may have appended a
+    // terminal entry (Committed/Failed/Dismissed) for the same Id meanwhile. Re-read the latest state under the journal
+    // lock and append only if the operation is still Prepared, so a later Committed is never overwritten by a false Failed.
+    // (Best effort across processes: the check and append are atomic per instance, and the window is a single read.)
+    private bool AppendIfStillPending(JournalEntry outcome)
+    {
+        lock (_gate)
+        {
+            JournalEntry? latest = null;
+            ReadEntries(entry => { if (string.Equals(entry.Id, outcome.Id, StringComparison.Ordinal)) latest = entry; });
+            if (latest is null || latest.State != JournalState.Prepared) return false;
+            Append(outcome);
+            return true;
+        }
     }
 
     // Journal text is invariant (AGENTS.md rule 4): a failure stores its code plus English, never the UI language.
