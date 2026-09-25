@@ -131,7 +131,7 @@ public sealed class MainViewModelFileActionTests : IDisposable
         return filePath;
     }
 
-    private (MainViewModel ViewModel, FileActionService FileActions, UndoService Undo) CreateViewModel(IFileSystem? fs = null)
+    private (MainViewModel ViewModel, FileActionService FileActions, UndoService Undo) CreateViewModel(IFileSystem? fs = null, SessionWriter? sessionWriter = null)
     {
         var activeFs = fs ?? _fileSystem;
         var clock = new SystemClock();
@@ -179,11 +179,29 @@ public sealed class MainViewModelFileActionTests : IDisposable
             _hashService,
             _previewService,
             _thumbnailCache,
-            new SessionWriter(_sessionStore, FileLog.Default),
+            sessionWriter ?? new SessionWriter(_sessionStore, FileLog.Default),
             preloadController: _preloadController,
             naturalComparer: ManagedNaturalComparer.Instance);
 
         return (vm, fileActions, undo);
+    }
+
+    [Fact(DisplayName = "R7-3: CloseSession writes pending state through the bounded shutdown path (writer disposed)")]
+    public void CloseSession_WritesPendingState_AndDisposesWriter()
+    {
+        var folder = Path.Combine(_tempDir, "close_session");
+        Directory.CreateDirectory(folder);
+        var writer = new SessionWriter(_sessionStore, FileLog.Default, delay: (_, _) => new TaskCompletionSource().Task);
+        var (vm, _, _) = CreateViewModel(sessionWriter: writer);
+
+        writer.Update(new SessionState { Folder = folder, CurrentPath = Path.Combine(folder, "a.jpg") });
+        vm.CloseSession();
+        Assert.Equal(Path.Combine(folder, "a.jpg"), _sessionStore.Load(folder).CurrentPath);
+
+        // Disposed (Q-R5 bounded path), not just flushed: a late update after close is not written.
+        writer.Update(new SessionState { Folder = folder, CurrentPath = Path.Combine(folder, "b.jpg") });
+        writer.Flush();
+        Assert.Equal(Path.Combine(folder, "a.jpg"), _sessionStore.Load(folder).CurrentPath);
     }
 
     [Fact]

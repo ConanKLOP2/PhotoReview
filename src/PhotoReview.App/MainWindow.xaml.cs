@@ -207,7 +207,7 @@ public partial class MainWindow : Window
     {
         Localizer.CurrentChanged -= OnLanguageChanged;
         CancelPan();
-        _viewModel.FlushSession();
+        _viewModel.CloseSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         _explorerOrder?.Dispose();
     }

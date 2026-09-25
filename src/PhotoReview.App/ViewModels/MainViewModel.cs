@@ -494,6 +494,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>Writes any debounced session state now (window close, folder change).</summary>
     public void FlushSession() => _sessionWriter?.Flush();
 
+    /// <summary>
+    /// Window close / app exit (Q-R5, R7-3): writes pending session state but waits at most 2 s for a write already
+    /// in flight on a slow disk, then skips it instead of hanging shutdown. Later updates are ignored.
+    /// </summary>
+    public void CloseSession() => _sessionWriter?.Dispose();
+
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 
     private void UpdateFolderTitle(string? folder = null)

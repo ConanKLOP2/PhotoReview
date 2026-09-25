@@ -372,7 +372,7 @@ public partial class App : System.Windows.Application, IDisposable
     public void Dispose()
     {
         GC.SuppressFinalize(this);
-        _services?.GetService<SessionWriter>()?.Flush();
+        _services?.GetService<SessionWriter>()?.Dispose(); // Q-R5: bounded (2 s), not the unbounded Flush
         Interlocked.Exchange(ref _forwardServer, null)?.Dispose();
         Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
         AppLog.Shutdown(); // after the forward server/coalescer so their shutdown warnings still reach the log
