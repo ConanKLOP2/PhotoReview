@@ -11,4 +11,17 @@ public sealed class WindowPlacementServiceTests
     [InlineData(-5, 1)]
     public void NormalizeShowCommand_AcceptsOnlyNormalAndMaximized(int input, int expected)
         => Assert.Equal(expected, WindowPlacementService.NormalizeShowCommand(input));
+
+    [Theory(DisplayName = "R7-10: closing in fullscreen saves the pre-fullscreen state, not the fullscreen Maximized")]
+    [InlineData(System.Windows.WindowState.Normal, 1)]
+    [InlineData(System.Windows.WindowState.Maximized, 3)]
+    public void ResolveShowCommand_InFullscreen_UsesStateBeforeFullscreen(System.Windows.WindowState before, int expected)
+        => Assert.Equal(expected, WindowPlacementService.ResolveShowCommand(3, before));
+
+    [Theory(DisplayName = "R7-10: outside fullscreen the window's own show command is kept (normalized)")]
+    [InlineData(1, 1)]
+    [InlineData(3, 3)]
+    [InlineData(2, 1)]
+    public void ResolveShowCommand_NotFullscreen_NormalizesCurrent(int current, int expected)
+        => Assert.Equal(expected, WindowPlacementService.ResolveShowCommand(current, null));
 }

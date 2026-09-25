@@ -15,16 +15,13 @@ internal static class WindowPlacementService
     private const int ShowNormal = 1;
     private const int ShowMaximized = 3;
 
-    internal static string PlacementPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PhotoReview", "window-placement.json");
-
-    public static void Restore(Window window)
+    /// <param name="placementPath">IAppPaths.WindowPlacementFile (R7-11: never a hard-coded %LOCALAPPDATA% path).</param>
+    public static void Restore(Window window, string placementPath)
     {
         try
         {
-            if (!File.Exists(PlacementPath)) return;
-            var placement = JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(PlacementPath), JsonOptions);
+            if (!File.Exists(placementPath)) return;
+            var placement = JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(placementPath), JsonOptions);
             if (placement is null || !IsVisible(placement.NormalPosition)) return;
 
             placement.Length = Marshal.SizeOf<WindowPlacement>();
@@ -38,7 +35,11 @@ internal static class WindowPlacementService
         }
     }
 
-    public static void Save(Window window)
+    /// <param name="placementPath">IAppPaths.WindowPlacementFile.</param>
+    /// <param name="fullscreenRestoreState">
+    /// R7-10: the state to reopen in when closing from fullscreen (fullscreen itself is a borderless Maximized), or null.
+    /// </param>
+    public static void Save(Window window, string placementPath, WindowState? fullscreenRestoreState = null)
     {
         try
         {
@@ -48,11 +49,11 @@ internal static class WindowPlacementService
             if (!GetWindowPlacement(handle, placement)) { AppLog.Error("Could not read window placement"); return; }
 
             // Never reopen minimized. Closing from the taskbar should restore normally.
-            placement.ShowCommand = NormalizeShowCommand(placement.ShowCommand);
-            Directory.CreateDirectory(Path.GetDirectoryName(PlacementPath)!);
-            var temp = PlacementPath + ".tmp";
+            placement.ShowCommand = ResolveShowCommand(placement.ShowCommand, fullscreenRestoreState);
+            Directory.CreateDirectory(Path.GetDirectoryName(placementPath)!);
+            var temp = placementPath + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(placement, JsonOptions));
-            try { File.Move(temp, PlacementPath, true); }
+            try { File.Move(temp, placementPath, true); }
             catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
         }
         catch (Exception ex)
@@ -66,6 +67,16 @@ internal static class WindowPlacementService
     /// value from a damaged file would otherwise open the window hidden or minimized.
     /// </summary>
     internal static int NormalizeShowCommand(int showCommand) => showCommand == ShowMaximized ? ShowMaximized : ShowNormal;
+
+    /// <summary>
+    /// R7-10: closing in fullscreen reads back as Maximized; save the state the window had before fullscreen instead.
+    /// </summary>
+    internal static int ResolveShowCommand(int showCommand, WindowState? fullscreenRestoreState) => fullscreenRestoreState switch
+    {
+        WindowState.Maximized => ShowMaximized,
+        WindowState.Normal or WindowState.Minimized => ShowNormal,
+        _ => NormalizeShowCommand(showCommand),
+    };
 
     private static bool IsVisible(Rectangle bounds)
     {

@@ -364,6 +364,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>True while a file action or undo is in flight (read-only projection of the gate).</summary>
     public bool IsFileActionInProgress => _fileActionGate.IsHeld;
 
+    /// <summary>R7-7: completes once no file action or undo holds the gate (window close waits for it).</summary>
+    public Task WhenFileActionIdleAsync() => _fileActionGate.WhenReleasedAsync();
+
     /// <summary>
     /// INV-9: a file opened directly is presented before Explorer's view order arrives. Commands that
     /// move away from it (navigation, file actions that advance) wait for that order to be applied or

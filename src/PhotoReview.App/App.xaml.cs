@@ -184,7 +184,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
-            sp.GetRequiredService<IExplorerOrderProvider>()));
+            sp.GetRequiredService<IExplorerOrderProvider>(),
+            sp.GetRequiredService<IAppPaths>()));
     }
 
     /// <summary>
@@ -339,7 +340,8 @@ public partial class App : System.Windows.Application, IDisposable
     private void OpenForwarded(string? path)
     {
         if (MainWindow is not MainWindow window) return;
-        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        // R7-5: SC_RESTORE brings back the pre-minimize state (Maximized / fullscreen), unlike forcing Normal.
+        if (window.WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(window);
         window.Activate();
         if (path is null) return;
         var open = window.OpenPathAsync(path);
