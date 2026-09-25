@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -56,6 +56,20 @@ public sealed class OperationJournalTests : IDisposable
 
     [Fact(DisplayName = "Journal has no pending committed Move")]
     public void JournalHasNoPendingCommittedMove() => Assert.Empty(_journal.ReadPendingOperations());
+
+    [Fact(DisplayName = "A journal line with an unknown Type or State is skipped, not read as a pending Move")]
+    public void UnknownTypeOrState_IsNotReadAsPendingMove()
+    {
+        var bogus = new[]
+        {
+            """{"Id":"bogus-1","Type":"Teleport","State":"Prepared","Source":"C:/x.jpg","Destination":"C:/y.jpg","Size":1,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:00Z"}""",
+            """{"Id":"bogus-2","Type":"Move","State":"Exploded","Source":"C:/x.jpg","Destination":"C:/y.jpg","Size":1,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:00Z"}""",
+            """{"Id":"bogus-3","Source":"C:/x.jpg","Destination":"C:/y.jpg","Size":1,"LastWriteUtc":"2026-01-01T00:00:00Z","TimestampUtc":"2026-01-01T00:00:00Z"}""",
+        };
+        File.AppendAllLines(JournalFile, bogus);
+
+        Assert.Empty(_journal.ReadPendingOperations());
+    }
 
     [Fact(DisplayName = "Journal entries are durably written as JSONL")]
     [Trait("Category", "Integration")]
