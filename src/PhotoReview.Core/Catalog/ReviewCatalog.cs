@@ -339,11 +339,6 @@ public sealed class ReviewCatalog
     }
 
     /// <summary>
-    /// Creates a snapshot array of all paths currently in the catalog.
-    /// </summary>
-    public string[] Snapshot() => _entries.Select(e => e.Path).ToArray();
-
-    /// <summary>
     /// Creates a true copy of all entries (unlike <see cref="Entries"/>, which wraps the live
     /// list). For consumers -- e.g. the background preload scheduler -- that need a stable
     /// snapshot including each entry's cached Length/LastWriteUtc, safe to read off the UI thread.

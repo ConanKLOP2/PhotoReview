@@ -41,7 +41,7 @@ public static class ForwardedPathProtocol
         catch (ArgumentException) { return false; }
 
         var lines = text[..^2].Split('\n');
-        if (lines.Length == 0 || lines[0] != Header) return false;
+        if (lines[0] != Header) return false;
         if (lines.Length - 1 > MaxPaths) return false;
 
         var result = new List<string>(lines.Length - 1);

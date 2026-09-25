@@ -95,8 +95,8 @@ public class ImageSortServiceTests : IDisposable
     [Fact]
     public void NaturalKeyBuildsExpectedOrder()
     {
-        var key1 = ImageSortService.NaturalKey("photo2.jpg");
-        var key2 = ImageSortService.NaturalKey("photo10.jpg");
+        var key1 = ManagedNaturalComparer.BuildNaturalKey("photo2.jpg");
+        var key2 = ManagedNaturalComparer.BuildNaturalKey("photo10.jpg");
         Assert.True(string.Compare(key1, key2, StringComparison.OrdinalIgnoreCase) < 0);
     }
 }
