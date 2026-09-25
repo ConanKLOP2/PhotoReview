@@ -47,6 +47,13 @@ public sealed class SourceBytesCache
         finally { _inFlight.TryRemove(new KeyValuePair<Key, Lazy<Task<byte[]>>>(key, lazy)); }
     }
 
+    /// <summary>
+    /// False for a file this cache could never keep: larger than its whole capacity, or larger than a .NET array can be.
+    /// Callers should stream such a file instead of reading it whole into RAM only to drop it (or, past 2 GB, to fail with an
+    /// <see cref="OverflowException"/>).
+    /// </summary>
+    public bool CanCache(long length) => length <= CapacityBytes && length <= Array.MaxLength;
+
     public void Clear()
     {
         Interlocked.Increment(ref _generation);

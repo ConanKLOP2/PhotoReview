@@ -226,5 +226,8 @@ public sealed class DecoderMutationFuzzTests(ITestOutputHelper output)
 
     [Fact(DisplayName = "Deep run: 50x more mutated images through every decoder (about a minute)")]
     [Trait("Category", "Slow")]
-    public void MutatedImages_DeepRun() => Run(iterationsPerSeed: 3000, rngSeed: 12);
+    public void MutatedImages_DeepRun() => Run(iterationsPerSeed: 3000, rngSeed: DeepSeed(12));
+
+    /// <summary>PHOTOREVIEW_FUZZ_SEED overrides the deep-run seed, so an unattended job can sweep seeds.</summary>
+    internal static int DeepSeed(int fallback) => int.TryParse(Environment.GetEnvironmentVariable("PHOTOREVIEW_FUZZ_SEED"), out var seed) ? seed : fallback;
 }

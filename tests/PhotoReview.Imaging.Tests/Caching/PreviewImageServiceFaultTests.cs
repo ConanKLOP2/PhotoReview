@@ -192,4 +192,83 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         Assert.Empty(failures);
         Assert.InRange(service.CacheCount, 1, 4);
     }
+
+    /// <summary>Decodes with WPF but only after the test says so, so the test can change the source while the decode is "in flight".</summary>
+    private sealed class GatedDecoder(ManualResetEventSlim entered, ManualResetEventSlim release) : IImageDecoder
+    {
+        private readonly WpfBitmapImageDecoder _inner = new();
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            var decoded = _inner.Decode(request); // reads the OLD content first ...
+            entered.Set();
+            if (!release.Wait(TimeSpan.FromSeconds(20))) throw new TimeoutException("test gate never released");
+            return decoded;                       // ... and returns it after the source was replaced
+        }
+
+        public ImageInfo ReadInfo(string path) => _inner.ReadInfo(path);
+    }
+
+    [Fact(DisplayName = "A source replaced while its decode is in flight: the stale pixels are never cached in RAM or persisted to disk, and the next request decodes the new file")]
+    public async Task SourceReplacedDuringDecode_IsNeverCachedOrPersisted()
+    {
+        var path = Path.Combine(_root.Dir("replaced"), "changing.png");
+        await File.WriteAllBytesAsync(path, TestImages.OpaquePng);
+        var diskDir = _root.Dir("replaced-disk");
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: diskDir, decoder: new GatedDecoder(entered, release));
+
+        var pending = service.GetPreviewAsync(path);
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+        // Same size, later timestamp: only the identity check can tell the new file from the old one.
+        await File.WriteAllBytesAsync(path, TestImages.OpaquePng);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(10));
+        release.Set();
+
+        await Assert.ThrowsAsync<IOException>(() => pending);
+        await service.ShutdownPersistWorkersAsync();
+        Assert.Equal(0, service.CacheCount);
+        Assert.Empty(Directory.GetFiles(diskDir, "*.pv4"));
+
+        // The failure is not sticky: the next request keys on the new identity and succeeds (the gate stays open).
+        var service2 = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: diskDir, disableDiskCacheOverride: true, decoder: new GatedDecoder(entered, release));
+        Assert.True((await service2.GetPreviewAsync(path)).PixelWidth > 0);
+        Assert.False(service.HasInflightPreview(path));
+    }
+
+    private sealed class RecordingDecoder : IImageDecoder
+    {
+        private readonly WpfBitmapImageDecoder _inner = new();
+        public bool? SawPreReadBytes { get; private set; }
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            SawPreReadBytes = request.Bytes.HasValue;
+            return _inner.Decode(request);
+        }
+
+        public ImageInfo ReadInfo(string path) => _inner.ReadInfo(path);
+    }
+
+    [Theory(DisplayName = "The source is pre-read into memory only when the source-bytes cache could hold it: a larger file is decoded by streaming, not read whole into RAM just to be dropped")]
+    [InlineData(100_000, true)]
+    [InlineData(60, false)]
+    public async Task OversizedSource_IsNotPreReadIntoMemory(long cacheCapacity, bool expectPreRead)
+    {
+        var path = Path.Combine(_root.Dir("preread-" + cacheCapacity), "big.png");
+        await File.WriteAllBytesAsync(path, TestImages.OpaquePng);
+        Assert.True(new FileInfo(path).Length > 60 && new FileInfo(path).Length < 100_000);
+        var decoder = new RecordingDecoder();
+        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024,
+            diskCacheDirectory: _root.Dir("preread-disk-" + cacheCapacity), disableDiskCacheOverride: true, decoder: decoder,
+            sourceBytesCache: new SourceBytesCache(cacheCapacity));
+
+        var image = await service.GetPreviewAsync(path);
+
+        Assert.True(image.PixelWidth > 0);
+        Assert.Equal(expectPreRead, decoder.SawPreReadBytes);
+    }
 }

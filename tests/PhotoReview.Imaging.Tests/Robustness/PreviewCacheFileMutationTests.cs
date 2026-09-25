@@ -47,7 +47,7 @@ public sealed class PreviewCacheFileMutationTests : IDisposable
 
     [Fact(DisplayName = "Deep run: 10x more mutated .pv4 entries")]
     [Trait("Category", "Slow")]
-    public Task MutatedEntries_DeepRun() => RunMutations(iterations: 3_000, rngSeed: 5);
+    public Task MutatedEntries_DeepRun() => RunMutations(iterations: 3_000, rngSeed: DecoderMutationFuzzTests.DeepSeed(5));
 
     private async Task RunMutations(int iterations, int rngSeed)
     {
