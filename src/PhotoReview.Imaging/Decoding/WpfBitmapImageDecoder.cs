@@ -62,9 +62,6 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
     }
 
-    public static BitmapSource DecodeSource(DecodeRequest request)
-        => DecodeSource(request, ignoreColorProfile: false, out _, out _, out _, out _, out _);
-
     private static BitmapSource DecodeSource(DecodeRequest request, bool ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.

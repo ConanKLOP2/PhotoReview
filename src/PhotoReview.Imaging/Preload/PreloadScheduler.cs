@@ -319,7 +319,7 @@ public sealed class PreloadScheduler : IDisposable
                     var measured = _sizes.MeanBytes(box);
                     var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries.Length, box, sourceBytes, measured);
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(estimated,
-                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
+                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes, _options.MemoryLoadLimit);
                     if (_log.Enabled)
                         _log.Info($"Preload policy: sourceBytes={sourceBytes} images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
                     order = PreloadOrderService.Build(center, entries.Length,

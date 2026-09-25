@@ -78,8 +78,6 @@ public struct TjScalingFactor : IEquatable<TjScalingFactor>
         Denom = denom;
     }
 
-    public double Value => Denom == 0 ? 0 : (double)Num / Denom;
-
     public bool Equals(TjScalingFactor other) => Num == other.Num && Denom == other.Denom;
     public override bool Equals(object? obj) => obj is TjScalingFactor f && Equals(f);
     public override int GetHashCode() => HashCode.Combine(Num, Denom);
@@ -124,12 +122,6 @@ internal static unsafe class TurboJpegNative
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     internal static extern IntPtr tj3GetErrorStr(SafeTurboJpegHandle handle);
-
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int tj3GetErrorCode(SafeTurboJpegHandle handle);
-
-    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern IntPtr tj3GetScalingFactors(out int numScalingFactors);
 
     internal static SafeTurboJpegHandle CreateDecompressor()
     {

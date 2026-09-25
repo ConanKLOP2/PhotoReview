@@ -212,14 +212,6 @@ public sealed class DiskCacheStore
     }
 
     /// <summary>
-    /// Synchronously prunes least-recently-used files in this store's directory down to <see cref="MaxBytes"/>.
-    /// LRU order is <c>LastAccessTimeUtc</c> then <c>CreationTimeUtc</c>: NTFS last-access updates are
-    /// disabled by default on many installs, in which case this degrades to creation-order eviction
-    /// (cache hits do not touch files; a metadata write per hit would cost the hot path).
-    /// </summary>
-    public void Prune() => PruneDirectory(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
-
-    /// <summary>
     /// Static helper: deletes least-recently-used files matching <paramref name="searchPattern"/> until directory size is at or under <paramref name="maxBytes"/>.
     /// </summary>
     public static void PruneDirectory(string directory, string searchPattern, long maxBytes, ILog? log = null, string? companionSuffix = null)
@@ -346,7 +338,4 @@ public sealed class DiskCacheStore
             return false;
         }
     }
-
-    public static bool TryDelete(string path, string? logContext)
-        => TryDelete(path, log: null);
 }

@@ -62,8 +62,6 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
-    public IImageDecoder Decoder => GetDecoder(_currentBackend());
-    public IImageDecoderFactory? DecoderFactory => _decoderFactory;
 
     // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
     // needs its own bound: without one, a preload burst spawns one Task.Run per decoded
@@ -295,13 +293,6 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var isOriginal = IsOriginalLoadingMode();
         return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
-    }
-
-    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public ImageCacheKey GetCurrentCacheKey(FileInfo info)
-    {
-        var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(info, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
     }
 
     public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
@@ -623,7 +614,6 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);
 
-    public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
     public void ClearSourceBytesCache() => _sourceBytesCache?.Clear();
 

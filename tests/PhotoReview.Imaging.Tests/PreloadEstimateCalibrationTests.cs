@@ -58,6 +58,26 @@ public sealed class PreloadEstimateCalibrationTests
         Assert.Equal(ImageCount - 1, target.PreloadedCount);
     }
 
+    [Fact(DisplayName = "The whole-folder decision honours the configured memory-load limit, not a built-in default")]
+    public async Task WholeFolderDecision_UsesConfiguredMemoryLoadLimit()
+    {
+        var target = new InMemoryTarget(new DecodeBox(100, 100), previewBytes: null);
+        var probe = new LoadProbe(currentLoad: 0.85); // above the 0.80 default, below the configured 0.95
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+            new PreloadOptions(WorkerCount: 4, MemoryLoadLimit: 0.95, FullFolderThresholdBytes: Budget),
+            probe, ImmediateUiScheduler.Instance);
+
+        await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(ImageCount - 1, target.PreloadedCount);
+    }
+
+    private sealed class LoadProbe(double currentLoad) : IMemoryProbe
+    {
+        public bool HasHeadroom(double maximumLoad, long reserveBytes) => currentLoad < maximumLoad;
+        public MemorySnapshot? GetSnapshot() => null;
+    }
+
     [Fact(DisplayName = "Whole folder stops adding far images once the cache is 90% full, the window is still preloaded")]
     public async Task WholeFolder_StopsAtCacheFillLimit()
     {
