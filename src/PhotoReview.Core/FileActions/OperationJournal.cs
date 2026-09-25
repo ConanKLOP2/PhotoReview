@@ -38,15 +38,30 @@ public sealed class OperationJournal
     private readonly IClock _clock;
     private readonly object _gate = new();
     private readonly Func<JournalDurability> _durability;
+    private readonly Action<TimeSpan> _appendRetryDelay;
+
+    /// <summary>
+    /// Review r7: two PhotoReview processes (one per folder) share operations.jsonl, and an append holds the file with
+    /// FileShare.Read only for the few milliseconds of its write. A concurrent append therefore gets a sharing violation;
+    /// it is retried a few times with a short, bounded backoff (worst case ~100 ms in total) instead of failing the action.
+    /// </summary>
+    internal const int AppendAttempts = 5;
+    private static readonly TimeSpan AppendRetryStep = TimeSpan.FromMilliseconds(10);
 
     public OperationJournal()
         : this(PhotoReview.Core.AppPaths.FromEnvironment(), new PhysicalFileSystem(), new SystemClock())
     {
     }
 
-    public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock, Func<JournalDurability>? durability = null)
+    /// <param name="appendRetryDelay">
+    /// Wait between append attempts after a sharing/lock violation (default <see cref="Thread.Sleep(TimeSpan)"/>).
+    /// A test seam: it lets a test release a competing handle deterministically instead of racing a timer.
+    /// </param>
+    public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock, Func<JournalDurability>? durability = null,
+        Action<TimeSpan>? appendRetryDelay = null)
     {
         _durability = durability ?? (() => JournalDurability.Fast);
+        _appendRetryDelay = appendRetryDelay ?? Thread.Sleep;
         ArgumentNullException.ThrowIfNull(paths);
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -98,12 +113,8 @@ public sealed class OperationJournal
                 text.Append(JsonSerializer.Serialize(entry)).Append(Environment.NewLine);
             var durable = _durability() == JournalDurability.PowerLossSafe;
             // A crash can leave a partial last line; appending straight after it would glue two records together and lose both.
-            if (!_tailChecked)
-            {
-                if (TailLacksNewline()) text.Insert(0, Environment.NewLine);
-                _tailChecked = true;
-            }
-            using var stream = _fileSystem.OpenAppend(_path, durable);
+            if (!_tailChecked && TailLacksNewline()) text.Insert(0, Environment.NewLine);
+            using var stream = OpenAppendWithRetry(durable);
             var bytes = Encoding.UTF8.GetBytes(text.ToString());
             stream.Write(bytes, 0, bytes.Length);
             // Fast: plain Flush() hands the bytes to the OS before the file operation starts (survives a process crash).
@@ -115,8 +126,30 @@ public sealed class OperationJournal
             {
                 stream.Flush();
             }
+            // Only now does the file end with a newline written by this process; a failed open/write/flush keeps the
+            // check for the next append, which must still repair a partial tail left by a crash (review r7).
+            _tailChecked = true;
         }
     }
+
+    private Stream OpenAppendWithRetry(bool durable)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return _fileSystem.OpenAppend(_path, durable);
+            }
+            catch (IOException ex) when (attempt < AppendAttempts && IsSharingOrLockViolation(ex))
+            {
+                _appendRetryDelay(AppendRetryStep * attempt);
+            }
+        }
+    }
+
+    // ERROR_SHARING_VIOLATION (32) / ERROR_LOCK_VIOLATION (33), surfaced by FileStream as HRESULT 0x80070020 / 0x80070021.
+    private static bool IsSharingOrLockViolation(IOException ex) =>
+        ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
 
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
