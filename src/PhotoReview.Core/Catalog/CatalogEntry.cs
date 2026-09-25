@@ -42,5 +42,5 @@ public sealed record CatalogEntry(string Path)
     private static string RequirePath(string? path) =>
         !string.IsNullOrWhiteSpace(path)
             ? path
-            : throw new ArgumentException("Path cannot be null or whitespace.", nameof(Path));
+            : throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
 }
