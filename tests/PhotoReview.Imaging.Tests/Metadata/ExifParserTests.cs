@@ -76,6 +76,33 @@ public sealed class ExifParserTests
         Assert.Equal("Nikon", ExifParser.TryParseJpeg(JpegWithApp1(tiff))?.CameraMake);
     }
 
+    [Fact(DisplayName = "A half-present last IFD entry (block cut inside it) is not read; the complete entries are")]
+    public void EntryCutByEndOfBlockIsNotRead()
+    {
+        var tiff = Tiff(true, [Ascii(ExifParser.TagModel, "GR")], []); // inline value, no data area
+        // Declare a 2nd entry: Make, ASCII, count 2 -- but the block ends 8 bytes into it (its inline value is missing).
+        tiff[8] = 2;
+        var cut = tiff[..(8 + 2 + 12)].Concat(U16(ExifParser.TagMake, true)).Concat(U16(2, true)).Concat(U32(2, true)).ToArray();
+
+        var summary = ExifParser.TryParseJpeg(JpegWithApp1(cut));
+
+        Assert.Equal("GR", summary?.CameraModel);
+        Assert.Null(summary?.CameraMake);
+    }
+
+    [Fact(DisplayName = "A value that starts inside the block but runs past its end is skipped")]
+    public void ValueRunningPastEndIsSkipped()
+    {
+        var tiff = Tiff(true, [Ascii(ExifParser.TagModel, "EOS R6 Mark II"), Ascii(ExifParser.TagMake, "Canon")], []);
+        // Model (entry #1) now points 3 bytes before the end of the block, with its 15-byte count.
+        Array.Copy(U32((uint)(tiff.Length - 3), true), 0, tiff, 8 + 2 + 8, 4);
+
+        var summary = ExifParser.TryParseJpeg(JpegWithApp1(tiff));
+
+        Assert.Null(summary?.CameraModel);
+        Assert.Equal("Canon", summary?.CameraMake);
+    }
+
     [Fact(DisplayName = "An entry whose value offset or count runs past the block is skipped, not read out of bounds")]
     public void OutOfRangeValueIsSkipped()
     {

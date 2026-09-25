@@ -88,6 +88,34 @@ public sealed class DecoderExifTests : IDisposable
         Assert.Null(decoded.Exif);
     }
 
+    [Theory(DisplayName = "Absent tags are skipped one by one; the present ones are still read")]
+    [MemberData(nameof(Backends))]
+    public void PartialExifKeepsPresentTags(string backend)
+    {
+        var decoded = Create(backend).Decode(new DecodeRequest("p.jpg", new DecodeBox(32, 32), bytes: ExifTestData.EncodeJpegWithPartialExif()));
+
+        Assert.NotNull(decoded.Exif);
+        Assert.Equal("FUJIFILM", decoded.Exif.CameraMake);
+        Assert.Equal(3200, decoded.Exif.Iso);
+        Assert.Null(decoded.Exif.CameraModel);
+        Assert.Null(decoded.Exif.LensModel);
+        Assert.Null(decoded.Exif.ExposureTime);
+    }
+
+    [Fact(DisplayName = "The fallback decoder keeps the EXIF of the backend that actually decoded")]
+    public void FallbackDecoderKeepsExif()
+    {
+        var bytes = ExifTestData.EncodeJpegWithExif();
+        // Primary reports a different backend than registered, so FallbackImageDecoder re-wraps the image.
+        var decoder = new FallbackImageDecoder(new WpfBitmapImageDecoder(), PhotoReview.Core.Model.DecoderBackend.WicDirect, new WicDirectDecoder());
+
+        var decoded = decoder.Decode(new DecodeRequest("x.jpg", new DecodeBox(16, 16), bytes: bytes));
+
+        Assert.Equal(PhotoReview.Core.Model.DecoderBackend.WicDirect, decoded.ActualBackend);
+        Assert.IsNotType<WpfDecodedImage>(decoded);
+        ExifTestData.AssertFullCamera(decoded.Exif);
+    }
+
     [Fact(DisplayName = "The byte parser (TurboJpeg) and the WIC query readers agree on an encoder-written JPEG")]
     public void ParserMatchesWicQueries()
     {

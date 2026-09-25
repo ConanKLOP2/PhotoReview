@@ -83,7 +83,8 @@ public static class ExifParser
         var values = new RawValues();
         var ifd0 = ReadU32(tiff, 4, little);
         var exifIfd = ReadIfd(tiff, ifd0, little, ref values, isExifIfd: false);
-        if (exifIfd is { } exifOffset && exifOffset != ifd0)
+        // Only one level is followed (no recursion), so a hostile pointer back to IFD0 cannot loop.
+        if (exifIfd is { } exifOffset)
             ReadIfd(tiff, exifOffset, little, ref values, isExifIfd: true);
 
         return ExifSummary.Create(

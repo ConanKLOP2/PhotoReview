@@ -74,10 +74,12 @@ public sealed class ExifLineViewModelTests : IDisposable
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "a.jpg"), ValidPngBytes);
         File.WriteAllBytes(Path.Combine(folder, "b.jpg"), ValidPngBytes);
+        File.WriteAllBytes(Path.Combine(folder, "c.jpg"), ValidPngBytes);      // "c.jpg" + "c (1).jpg" = a compare pair
+        File.WriteAllBytes(Path.Combine(folder, "c (1).jpg"), ValidPngBytes);
         using var bGate = new ManualResetEventSlim(false);
         var vm = CreateViewModel(new ExifDecoder(path =>
         {
-            if (path.EndsWith("a.jpg", StringComparison.OrdinalIgnoreCase)) return CanonExif;
+            if (!path.EndsWith("b.jpg", StringComparison.OrdinalIgnoreCase)) return CanonExif;
             Assert.True(bGate.Wait(TimeSpan.FromSeconds(10)));
             return null;
         }));
@@ -113,6 +115,13 @@ public sealed class ExifLineViewModelTests : IDisposable
         vm.Settings.ExifInfoFields = ExifInfoFields.Camera | ExifInfoFields.Lens;
         Assert.Equal(string.Empty, vm.ExifText);
         Assert.False(vm.IsExifLineVisible); // nothing to show: hidden even though ShowExifInfo is on
+        vm.Settings.ExifInfoFields = ExifInfoFields.All;
+
+        await vm.NextAsync(); // a compare pair: two images, the compare status describes them, no single-image line
+
+        Assert.True(vm.Compare.IsVisible || vm.CurrentImage is null);
+        Assert.Equal(string.Empty, vm.ExifText);
+        Assert.False(vm.IsExifLineVisible);
     }
 
     private MainViewModel CreateViewModel(IImageDecoder decoder)

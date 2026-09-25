@@ -29,17 +29,20 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     {
         try
         {
-            var bitmap = DecodeSource(request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
-            return new WpfDecodedImage(bitmap, downscaled, orientation: orientation,
-                originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
+            return DecodeImage(request);
         }
         catch (Exception ex) when (request.IsDownscaleRequested && IsDownscaleFallbackException(ex))
         {
-            var fallbackRequest = new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes);
-            var bitmap = DecodeSource(fallbackRequest, out int orientation, out _, out int originalWidth, out int originalHeight, out var exif);
-            return new WpfDecodedImage(bitmap, downscaled: false, orientation: orientation,
-                originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
+            // Full-resolution retry: same path (and EXIF extraction) as a normal decode, just unconstrained.
+            return DecodeImage(new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes));
         }
+    }
+
+    private static WpfDecodedImage DecodeImage(DecodeRequest request)
+    {
+        var bitmap = DecodeSource(request, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
+        return new WpfDecodedImage(bitmap, downscaled, orientation: orientation,
+            originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
     }
 
     public static BitmapSource DecodeSource(DecodeRequest request)

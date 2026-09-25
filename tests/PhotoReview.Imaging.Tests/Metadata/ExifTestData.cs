@@ -166,5 +166,18 @@ internal static class ExifTestData
         return stream.ToArray();
     }
 
+    /// <summary>Encoder-written JPEG with only Make and ISO: every other tag is absent (per-tag "not found" path).</summary>
+    public static byte[] EncodeJpegWithPartialExif()
+    {
+        var metadata = new BitmapMetadata("jpg");
+        metadata.SetQuery("/app1/ifd/{ushort=271}", "FUJIFILM");
+        metadata.SetQuery("/app1/ifd/exif/{ushort=34855}", (ushort)3200);
+        var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
+        encoder.Frames.Add(BitmapFrame.Create(FixtureGenerator.CreateGradientCheckerboard(64, 48), null, metadata, null));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
     private static ulong Pack(uint numerator, uint denominator) => ((ulong)denominator << 32) | numerator;
 }
