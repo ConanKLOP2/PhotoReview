@@ -440,6 +440,7 @@ public sealed class MainViewModelNavigationTests : IDisposable
         CreateImageFile(Path.Combine(parent, "2024-05-02"), "b.jpg");
         CreateImageFile(Path.Combine(parent, "2024-05-03"), "c.jpg");
         var (vm, _, _) = CreateViewModel();
+        vm.Settings.ShowFolderInfo = true; // off by default (Q-R20): opt in for this folder-info test
 
         await vm.OpenFolderAsync(Path.Combine(parent, "2024-05-02"));
         await vm.InfoOverlay.PendingSiblings.WithTimeout(TimeSpan.FromSeconds(10), "sibling info");

@@ -150,7 +150,7 @@ public sealed class ViewerQuickFeaturesTests
     [Fact]
     public async Task FolderInfo_ShowsPlaceholderWhileSearching_ThenSiblingsWithConfiguredKeys()
     {
-        var settings = new AppSettings();
+        var settings = new AppSettings { ShowFolderInfo = true }; // off by default (Q-R20): opt in for this test
         settings.Shortcuts.PreviousFolder = "F9";
         var finder = new Finder();
         var folder = @"C:\photos\2024-05-02";
@@ -169,7 +169,7 @@ public sealed class ViewerQuickFeaturesTests
     [Fact]
     public async Task FolderInfo_OmitsSideWithoutSiblingOrWithEmptyShortcut()
     {
-        var settings = new AppSettings();
+        var settings = new AppSettings { ShowFolderInfo = true }; // off by default (Q-R20): opt in for this test
         var finder = new Finder();
         var folder = @"C:\photos\b";
         finder.Results[folder] = new SiblingImageFolders(null, @"C:\photos\c");
@@ -188,7 +188,7 @@ public sealed class ViewerQuickFeaturesTests
     [Fact]
     public async Task FolderInfo_ResultForAFolderAlreadyLeft_IsIgnored()
     {
-        var settings = new AppSettings();
+        var settings = new AppSettings { ShowFolderInfo = true }; // off by default (Q-R20): opt in for this test
         var finder = new Finder();
         const string first = @"C:\photos\a";
         const string second = @"C:\photos\b";
@@ -214,7 +214,7 @@ public sealed class ViewerQuickFeaturesTests
     [Fact]
     public async Task FolderInfo_HidingWhileSearching_CancelsAndDropsTheResult()
     {
-        var settings = new AppSettings();
+        var settings = new AppSettings { ShowFolderInfo = true }; // off by default (Q-R20): opt in for this test
         var finder = new Finder();
         const string folder = @"C:\photos\b";
         finder.Results[folder] = new SiblingImageFolders(@"C:\photos\a", null);
