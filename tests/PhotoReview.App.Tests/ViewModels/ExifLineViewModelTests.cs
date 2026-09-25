@@ -89,7 +89,8 @@ public sealed class ExifLineViewModelTests : IDisposable
 
         await vm.OpenFolderAsync(folder);
 
-        Assert.Equal("a.jpg · 6000×4000 · Canon EOS R5 · ISO 400 · 1/250 giây", vm.ExifText);
+        // Default ExifInfoFields excludes FileName/Dimensions: the status line above already shows those.
+        Assert.Equal("Canon EOS R5 · ISO 400 · 1/250 giây", vm.ExifText);
         Assert.True(vm.IsExifLineVisible);
         Assert.Contains(nameof(MainViewModel.ExifText), changed);
         Assert.Equal("Thông tin ảnh: " + vm.ExifText, vm.ExifAutomationName);
