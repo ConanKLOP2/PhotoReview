@@ -48,7 +48,7 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 
 ### Performance and Display Settings
 
-- `DecoderBackend`: Defaults to `Wpf`; can be set to `WicDirect` or `TurboJpeg`. Non-WPF backends automatically fall back to WPF when encountering supported codec errors.
+- `DecoderBackend`: Defaults to `WicDirect` (fastest, see ADR 0001); can be set to `Wpf` or `TurboJpeg`. Non-WPF backends automatically fall back to WPF when encountering supported codec errors.
 - `ScalingQuality`: Defaults to `HighQuality` for visual fidelity; `Linear` reduces rendering overhead during zoom and pan operations.
 - `UseSourceBytesCache`: Defaults to `false`. When enabled, the application keeps source file bytes in RAM with a 16 GiB quota to eliminate repeated disk reads; enable only after measuring real workloads.
 
@@ -125,7 +125,7 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 
 ### Cài đặt hiệu năng và hiển thị
 
-- `DecoderBackend`: `Wpf` mặc định; có thể chọn `WicDirect` hoặc `TurboJpeg`. Backend khác WPF tự fallback về WPF với lỗi codec được hỗ trợ.
+- `DecoderBackend`: `WicDirect` mặc định (nhanh nhất, xem ADR 0001); có thể chọn `Wpf` hoặc `TurboJpeg`. Backend khác WPF tự fallback về WPF với lỗi codec được hỗ trợ.
 - `ScalingQuality`: `HighQuality` mặc định cho chất lượng hiển thị; `Linear` giảm chi phí khi zoom/chuyển khung.
 - `UseSourceBytesCache`: mặc định `false`. Khi bật, ứng dụng giữ byte nguồn trong RAM với quota 16 GiB để giảm đọc đĩa lặp lại; chỉ nên bật sau khi đo trên workload thực.
 

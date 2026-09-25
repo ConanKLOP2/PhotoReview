@@ -34,7 +34,7 @@ Thumbnail có RAM/disk cache và quota riêng. Hủy waiter không nên làm h�
 
 | Setting | Mặc định | Hành vi |
 |---|---|---|
-| `DecoderBackend` | `Wpf` | Chọn `Wpf`, `WicDirect` hoặc `TurboJpeg`. WIC/TurboJPEG fallback về WPF khi gặp lỗi codec được hỗ trợ. Đổi backend khi đang xem sẽ clear cache liên quan và trình diễn lại ảnh hiện tại. |
+| `DecoderBackend` | `WicDirect` | Chọn `Wpf`, `WicDirect` hoặc `TurboJpeg`. WIC/TurboJPEG fallback về WPF khi gặp lỗi codec được hỗ trợ. Đổi backend khi đang xem sẽ clear cache liên quan và trình diễn lại ảnh hiện tại. |
 | `ScalingQuality` | `HighQuality` | `HighQuality` ưu tiên chất lượng scale; `Linear` ưu tiên độ mượt khi zoom/chuyển khung. Không thay đổi pixel decode hoặc cache identity. |
 | `UseSourceBytesCache` | `false` | Bật cache byte nguồn trong RAM. Đây là feature flag; chỉ bật sau khi đo source-open, working set và độ trễ trên folder thật. |
 
