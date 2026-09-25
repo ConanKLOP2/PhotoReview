@@ -77,6 +77,15 @@ The UI ships in English and Vietnamese (Settings → Language; `auto` follows Wi
 | English (`en`) | built in, complete |
 | Tiếng Việt (`vi`) | complete |
 
+**Add your own language (e.g. Chinese) — no build needed:**
+
+1. Settings → pick a language → **Export strings to translate**. This writes `<code>.todo.json` with every missing key, its English text and translator notes.
+2. Create `zh.json` in `%LocalAppData%\PhotoReview\Languages\` (Settings → **Open languages folder**) with a `_meta` block (`"code": "zh"`, `"nativeName": "中文"`, `"plural": "none"` for languages without plural forms) and your translations.
+3. Settings → **Reload translations**, then choose the language under **Language**. Untranslated keys fall back to English, so you can translate gradually.
+4. Share it: open a pull request that adds the file to `src/PhotoReview.Core/Localization/Languages/`; run `tools/i18n-check.ps1` first.
+
+Details, rules and the Vietnamese glossary: [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
 ### Known Limitations
 
 Explorer ordering depends on open folder windows and valid Shell snapshots; fallback ordering is used if Explorer is not ready or if the snapshot encounters an error or timeout. Contract tests do not guarantee GUI behavior, perceived first-image latency, or P95 timings; these conclusions require controlled runtime measurements.
@@ -150,6 +159,15 @@ Gỡ đăng ký:
 ### Ngôn ngữ
 
 Giao diện có English và Tiếng Việt (Cài đặt → Ngôn ngữ; `auto` theo Windows). Chữ nằm trong các file JSON thường, ai cũng sửa hoặc thêm ngôn ngữ được mà không cần build — xem [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
+**Thêm ngôn ngữ của bạn (ví dụ tiếng Trung), không cần build:**
+
+1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm các key còn thiếu, câu English và ghi chú.
+2. Tạo `zh.json` trong `%LocalAppData%\PhotoReview\Languages\` (Cài đặt → **Mở thư mục ngôn ngữ**) có khối `_meta` (`"code": "zh"`, `"nativeName": "中文"`, `"plural": "none"` cho ngôn ngữ không có số nhiều) và bản dịch.
+3. Cài đặt → **Tải lại bản dịch**, rồi chọn ngôn ngữ trong **Ngôn ngữ**. Key chưa dịch tự hiện English nên dịch dần được.
+4. Chia sẻ: mở pull request thêm file vào `src/PhotoReview.Core/Localization/Languages/`; nên chạy `tools/i18n-check.ps1` trước.
+
+Chi tiết, quy tắc và bảng thuật ngữ: [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ### Giới hạn cần biết
 
