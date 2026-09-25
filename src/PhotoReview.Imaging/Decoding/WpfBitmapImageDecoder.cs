@@ -92,8 +92,10 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                     rawHeight = frame.PixelHeight;
                 }
             }
-            catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException)
+            catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or FileFormatException
+                or ArgumentException or OverflowException or InvalidCastException or System.Runtime.InteropServices.COMException)
             {
+                // Header/metadata pre-read only: whatever WIC says about corrupt metadata, the pixel decode below decides.
                 orientation = 1;
                 exif = null;
                 rawWidth = rawHeight = 0;
