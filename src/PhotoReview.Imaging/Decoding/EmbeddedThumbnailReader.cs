@@ -67,8 +67,8 @@ public static class EmbeddedThumbnailReader
             // A transposing orientation (5-8) swaps them, mirroring ExifOrientation.Apply above.
             var frameWidth = frame.PixelWidth;
             var frameHeight = frame.PixelHeight;
-            int originalWidth = orientation is >= 5 and <= 8 ? frameHeight : frameWidth;
-            int originalHeight = orientation is >= 5 and <= 8 ? frameWidth : frameHeight;
+            int originalWidth = ExifOrientation.IsTransposed(orientation) ? frameHeight : frameWidth;
+            int originalHeight = ExifOrientation.IsTransposed(orientation) ? frameWidth : frameHeight;
 
             return new WpfDecodedImage(oriented, downscaled: true, orientation: orientation, actualBackend: DecoderBackend.Wpf,
                 originalWidth: originalWidth, originalHeight: originalHeight);

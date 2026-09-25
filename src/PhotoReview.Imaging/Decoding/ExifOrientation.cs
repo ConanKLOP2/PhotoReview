@@ -50,6 +50,9 @@ public static class ExifOrientation
         }
     }
 
+    /// <summary>True for the orientations (5 to 8) that rotate by 90 degrees and so swap width and height.</summary>
+    public static bool IsTransposed(int orientation) => orientation is >= 5 and <= 8;
+
     /// <summary>
     /// Applies geometric transformations (rotations / flips) to match the specified EXIF orientation.
     /// Returns the original <paramref name="source"/> if orientation is 1 or invalid.

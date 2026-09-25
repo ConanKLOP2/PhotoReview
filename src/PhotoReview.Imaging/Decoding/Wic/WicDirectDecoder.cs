@@ -100,7 +100,7 @@ public sealed class WicDirectDecoder : IImageDecoder
             // Orientation and the photo-information EXIF fields come from one query reader over the metadata
             // this decode parses anyway (no extra read of the stream).
             int orientation = ReadFrameMetadata(frame, request.ApplyOrientation, ExifIfdRootOf(decoder), out var exif);
-            bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
+            bool isTransposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
 
             currentSource = (IWICBitmapSource)frame;
             bool downscaled = false;

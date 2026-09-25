@@ -120,7 +120,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         }
 
         // For transposed orientations (5 to 8), decoded height becomes the final visual width after rotation.
-        bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
+        bool isTransposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
 
         // Original (post-orientation) dimensions reported via IDecodedImage -- mirrors what
         // ExifOrientation.Apply below does to the final bitmap's own pixel dimensions.

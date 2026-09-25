@@ -74,7 +74,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         // Photo information line: parsed from the APP1 segment of the buffer this decode already holds (bounded,
         // never throws) -- no extra file read.
         var exif = ExifParser.TryParseJpeg(bytes);
-        bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
+        bool isTransposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
 
         using var decompressor = TurboJpegNative.CreateDecompressor();
         ConfigureStrictDecoding(decompressor);
