@@ -332,6 +332,42 @@ public sealed class MainViewModelFileActionTests : IDisposable
         Assert.Equal(1, vm.TotalFiles);
     }
 
+    [Fact(DisplayName = "R7-4: a folder switch while the action's Confirm dialog is open cancels the action")]
+    public async Task RunActionAsync_FolderSwitchDuringConfirm_DoesNotExecute()
+    {
+        var folder = Path.Combine(_tempDir, "confirm_switch");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.OnConfirmation = () => _clock.NextFolder(); // a forwarded open ran in the nested loop
+
+        await vm.RunActionAsync(2); // ConfirmRecycle
+
+        Assert.Single(_dialogService.Confirmations);
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.True(File.Exists(img1));
+    }
+
+    [Fact(DisplayName = "R7-4: an image that left the catalog while the Confirm dialog was open is not acted on")]
+    public async Task RunActionAsync_EntryRemovedDuringConfirm_DoesNotExecute()
+    {
+        var folder = Path.Combine(_tempDir, "confirm_removed");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.OnConfirmation = () => _catalog.Remove(img1);
+
+        await vm.RunActionAsync(2); // ConfirmRecycle on 1.jpg
+
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.True(File.Exists(img1));
+    }
+
     [Fact]
     public async Task RunActionAsync_Move_KeepsNextImageCachedAndEvictsOnlyRemovedOne()
     {
@@ -820,9 +856,11 @@ public sealed class MainViewModelFileActionTests : IDisposable
     {
         public bool ConfirmationResponse { get; set; } = true;
         public List<(string Title, string Message)> Confirmations { get; } = [];
+        public Action? OnConfirmation { get; set; }
         public bool ShowConfirmation(string title, string message)
         {
             Confirmations.Add((title, message));
+            OnConfirmation?.Invoke();
             return ConfirmationResponse;
         }
         public void ShowMessage(string title, string message) { }

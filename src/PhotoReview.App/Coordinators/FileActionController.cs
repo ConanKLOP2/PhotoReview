@@ -68,8 +68,14 @@ public sealed class FileActionController
         var permanentPrompt = action.Operation == FileOperationType.Recycle && WillAskPermanentDelete(compareSelectedPath ?? currentPath);
         if (action.Confirm && _dialogService is not null && !permanentPrompt)
         {
+            // R7-4: the dialog runs a nested dispatcher loop (a forwarded open can switch the folder meanwhile),
+            // so re-check state afterwards like the permanent-delete prompt does.
+            var folderBeforeDialog = _clock.CurrentFolder;
+            var target = compareSelectedPath ?? currentPath;
             var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(action.Name));
             if (!ok) return;
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService?.IsBusy == true
+                || (target is not null && _catalog.IndexOf(target) < 0)) return;
         }
 
         if (action.Operation == FileOperationType.Recycle)
