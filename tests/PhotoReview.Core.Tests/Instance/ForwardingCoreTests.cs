@@ -42,6 +42,20 @@ public sealed class ForwardingCoreTests
         Assert.Empty(paths);
     }
 
+    [Theory(DisplayName = "Device, extended and NT-object prefixes in every spelling, and '..' segments, are rejected even when the path exists")]
+    [InlineData(@"\\?\C:\x.jpg")]
+    [InlineData(@"\\.\C:\x.jpg")]
+    [InlineData(@"\??\C:\x.jpg")]
+    [InlineData("//?/C:/x.jpg")]
+    [InlineData("//./C:/x.jpg")]
+    [InlineData(@"C:\fwd\..\a.jpg")]
+    [InlineData("C:/fwd/../a.jpg")]
+    public void Protocol_RejectsHostilePrefixes_EvenIfExists(string path)
+    {
+        Assert.False(ForwardedPathProtocol.TryDecode(Raw("PHOTOREVIEW-OPEN 1\n" + path + "\n\n"), _ => true, out var paths));
+        Assert.Empty(paths);
+    }
+
     [Fact(DisplayName = "Invalid UTF-8, oversized and over-long lists are rejected")]
     public void Protocol_RejectsInvalidUtf8_Oversize_TooMany()
     {

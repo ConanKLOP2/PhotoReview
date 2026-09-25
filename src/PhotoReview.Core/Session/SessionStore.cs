@@ -107,12 +107,18 @@ public sealed class SessionStore
     public string GetPath(string folder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
-        var fullPath = Path.GetFullPath(folder);
-        var root = Path.GetPathRoot(fullPath)!;
-        var canonical = fullPath.Length > root.Length
-            ? fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            : root;
+        var canonical = CanonicalFolder(folder);
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToUpperInvariant())));
         return Path.Combine(_sessionsDir, key + ".json");
+    }
+
+    /// <summary>Full path without a trailing separator (drive roots keep theirs): the identity every spelling of one folder shares.</summary>
+    internal static string CanonicalFolder(string folder)
+    {
+        var fullPath = Path.GetFullPath(folder);
+        var root = Path.GetPathRoot(fullPath)!;
+        return fullPath.Length > root.Length
+            ? fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : root;
     }
 }

@@ -59,7 +59,12 @@ public static class ForwardedPathProtocol
         if (p.Length == 0 || p.Length > MaxPathChars) return false;
         foreach (var c in p) if (char.IsControl(c)) return false;
         // Device / extended-length namespaces are never produced by Explorer's file association and would bypass normalisation.
-        if (p.StartsWith(@"\\?\", StringComparison.Ordinal) || p.StartsWith(@"\\.\", StringComparison.Ordinal)) return false;
+        // Every spelling: "/" is a separator too, and the NT object prefix \??\ reaches the same namespaces.
+        if (p.Length >= 3 && IsSep(p[0]) && (IsSep(p[1]) || p[1] == '?') && p[2] is '?' or '.') return false;
+        // ".." segments would let a forwarded path escape the folder the sender named.
+        foreach (var segment in p.Split('\\', '/')) if (segment == "..") return false;
         return Path.IsPathFullyQualified(p);
     }
+
+    private static bool IsSep(char c) => c is '\\' or '/';
 }

@@ -220,4 +220,36 @@ public sealed class SessionWriterTests
         await writer.WhenIdleAsync(); // faulted with ObjectDisposedException before the fix
         Assert.Equal("a", store.Load(@"C:\photos").CurrentPath);
     }
+
+    [Fact(DisplayName = "A non-IO failure in one folder's write does not lose the other folders in the batch")]
+    public async Task WriteBatch_NonIoException_DoesNotDropRestOfBatch()
+    {
+        var (writer, store) = Create();
+        var badKey = Path.GetFileNameWithoutExtension(store.GetPath(@"C:\bad"));
+        _fs.WriteHook = path => path.Contains(badKey, StringComparison.OrdinalIgnoreCase)
+            ? new NotSupportedException("boom")
+            : null;
+        writer.Update(State(@"C:\bad", "x"));
+        writer.Update(State(@"C:\good", "y"));
+
+        _timer.FireAll();
+        await writer.WhenIdleAsync(); // faulted with NotSupportedException before the fix
+
+        Assert.Equal("y", store.Load(@"C:\good").CurrentPath);
+    }
+
+    [Fact(DisplayName = "Folder spellings that map to one session file share one pending entry: the newest update wins")]
+    public async Task Update_TrailingSeparatorVariants_NewestWins()
+    {
+        var (writer, store) = Create();
+        writer.Update(State(@"C:\a\", "old"));
+        writer.Update(State(@"C:\a", "new"));
+        writer.Update(State(@"C:\A\", "newest"));
+
+        _timer.FireAll();
+        await writer.WhenIdleAsync();
+
+        Assert.Equal(1, _metrics.Snapshot().SessionWriteCount);
+        Assert.Equal("newest", store.Load(@"C:\a").CurrentPath);
+    }
 }
