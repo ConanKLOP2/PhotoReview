@@ -47,9 +47,10 @@ internal static class LocalImageBenchmark
         }
         // Warm-next lookups are sub-millisecond: keep fractional ms (whole-ms timers printed them as 0/1).
         static double Percentile(double[] values, double fraction) => PerfStats.NearestRank(values.Order().ToArray(), fraction * 100.0);
-        Console.WriteLine($"real-images={files.Length} workers={workers} preloadMs={startup.ElapsedMilliseconds} " +
-            $"decodeMedianMs={Percentile(decodeTimes, .5):F2} decodeP95Ms={Percentile(decodeTimes, .95):F2} " +
-            $"warmNextMedianMs={Percentile(nextTimes, .5):F3} warmNextP95Ms={Percentile(nextTimes, .95):F3} " +
-            $"cacheMB={cache.CurrentSize / 1024 / 1024} workingSetMB={Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024}");
+        Console.WriteLine(
+            FormattableString.Invariant($"real-images={files.Length} workers={workers} preloadMs={startup.ElapsedMilliseconds} ") +
+            FormattableString.Invariant($"decodeMedianMs={Percentile(decodeTimes, .5):F2} decodeP95Ms={Percentile(decodeTimes, .95):F2} ") +
+            FormattableString.Invariant($"warmNextMedianMs={Percentile(nextTimes, .5):F3} warmNextP95Ms={Percentile(nextTimes, .95):F3} ") +
+            FormattableString.Invariant($"cacheMB={cache.CurrentSize / 1024 / 1024} workingSetMB={Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024}"));
     }
 }
