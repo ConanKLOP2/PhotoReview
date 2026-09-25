@@ -132,13 +132,20 @@ public sealed class JournalConcurrencyTests : IDisposable
         for (var i = 0; i < 8; i++) disk.AddFile($@"C:\photos\a{i}.jpg", "x");
 
         var start = new Barrier(8);
+        var rejected = 0;
+        var allLosersTurnedAway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var tasks = Enumerable.Range(0, 8).Select(i => Task.Run(async () =>
         {
             start.SignalAndWait();
-            return await service.ExecuteAsync(new FileActionRequest($@"C:\photos\a{i}.jpg", FileOperationType.Move, "sel"));
+            var result = await service.ExecuteAsync(new FileActionRequest($@"C:\photos\a{i}.jpg", FileOperationType.Move, "sel"));
+            if (result.Rejected && Interlocked.Increment(ref rejected) == 7) allLosersTurnedAway.TrySetResult();
+            return result;
         })).ToList();
 
-        await entered.Task; // the winner is inside its Move; the losers were turned away without waiting for it
+        await entered.Task; // the winner is inside its Move
+        // Hold the winner until every other action has been rejected: releasing earlier would let a slow starter
+        // find the gate free and succeed (the test then fails on a loaded machine).
+        await allLosersTurnedAway.Task.WaitAsync(TimeSpan.FromSeconds(30));
         release.SetResult();
         var results = await Task.WhenAll(tasks);
 
