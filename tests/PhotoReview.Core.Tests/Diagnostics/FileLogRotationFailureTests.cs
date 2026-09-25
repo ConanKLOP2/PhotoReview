@@ -61,9 +61,9 @@ public sealed class FileLogRotationFailureTests : IDisposable
     {
         Directory.CreateDirectory(_dir);
         var log = Path.Combine(_dir, "app.log");
-        File.WriteAllBytes(log, new byte[2048]);
+        File.WriteAllBytes(log, new byte[8192]);
 
-        using var file = new FileLog(log, maxLogBytes: 1024) { Enabled = true };
+        using var file = new FileLog(log, maxLogBytes: 4096) { Enabled = true };
         for (var i = 0; i < 20; i++) file.Info("entry-" + i);
         file.Flush();
 
