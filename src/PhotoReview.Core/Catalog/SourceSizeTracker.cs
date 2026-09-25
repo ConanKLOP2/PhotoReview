@@ -55,47 +55,69 @@ public sealed class SourceSizeTracker
     /// </summary>
     public long GetTotal()
     {
+        CatalogEntry[]? observed;
         lock (_gate)
         {
             // Once a preload snapshot has been observed, only that snapshot is read (thread-safe); otherwise the live
             // catalog is read, which is only valid from the thread that owns it.
-            var observed = _observed;
+            observed = _observed;
             var version = observed is null ? _catalog.StructuralVersion : -2;
             if (observed is not null ? !_observedDirty : _cachedVersion == version) return _cachedTotalBytes;
 
-            IReadOnlyList<CatalogEntry> entries = observed ?? _catalog.Entries;
-            _cachedTotalBytes = 0;
-            _fsCallCount = 0;
-
-            foreach (var entry in entries)
+            // Unobserved (single-threaded) mode: the live catalog must be read on the calling thread, so keep the lock.
+            if (observed is null)
             {
-                long size;
-                if (entry.Length.HasValue)
-                {
-                    size = entry.Length.Value;
-                }
-                else
-                {
-                    try
-                    {
-                        size = _fileSystem.GetFileStat(entry.Path)?.Length ?? 0L;
-                        _fsCallCount++;
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                    {
-                        // Runs on the preload thread: a path the file system rejects (odd characters, unsupported
-                        // format) counts as size 0 like an unreadable file instead of faulting the whole preload.
-                        size = 0L;
-                    }
-                }
+                var (total, fsCalls) = Sum(_catalog.Entries);
+                _cachedTotalBytes = total;
+                _fsCallCount = fsCalls;
+                _cachedVersion = version;
+                return total;
+            }
+        }
 
-                _cachedTotalBytes += size;
+        // Observed mode: the snapshot is immutable, so the file-system stats run OUTSIDE the lock. Observe() is called on
+        // the UI thread and must never wait behind stat I/O on the preload thread.
+        var (sum, calls) = Sum(observed);
+        lock (_gate)
+        {
+            _cachedTotalBytes = sum;
+            _fsCallCount = calls;
+            _cachedVersion = -2;
+            if (ReferenceEquals(observed, _observed)) _observedDirty = false;
+        }
+        return sum;
+    }
+
+    private (long Total, int FsCalls) Sum(IReadOnlyList<CatalogEntry> entries)
+    {
+        long total = 0;
+        var fsCalls = 0;
+        foreach (var entry in entries)
+        {
+            long size;
+            if (entry.Length.HasValue)
+            {
+                size = entry.Length.Value;
+            }
+            else
+            {
+                try
+                {
+                    size = _fileSystem.GetFileStat(entry.Path)?.Length ?? 0L;
+                    fsCalls++;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+                {
+                    // Runs on the preload thread: a path the file system rejects (odd characters, unsupported
+                    // format) counts as size 0 like an unreadable file instead of faulting the whole preload.
+                    size = 0L;
+                }
             }
 
-            _cachedVersion = version;
-            if (observed is not null && ReferenceEquals(observed, _observed)) _observedDirty = false;
-            return _cachedTotalBytes;
+            total += size;
         }
+
+        return (total, fsCalls);
     }
 
     /// <summary>
