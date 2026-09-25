@@ -23,6 +23,57 @@ public static class TestImages
     /// <summary>64x64 opaque RGB PNG (color type 2, no alpha channel, no tRNS).</summary>
     public static readonly byte[] OpaquePng = BuildPng(64, 64, hasAlpha: false);
 
+    /// <summary>RGBA PNG (color type 6) whose alpha per pixel comes from <paramref name="alphaAt"/>; colour is a gradient.</summary>
+    public static byte[] BuildRgbaPng(int width, int height, Func<int, int, byte> alphaAt)
+    {
+        var raw = new byte[(1 + width * 4) * height];
+        for (var y = 0; y < height; y++)
+        {
+            var row = y * (1 + width * 4);
+            for (var x = 0; x < width; x++)
+            {
+                var o = row + 1 + x * 4;
+                raw[o] = (byte)(x * 4);
+                raw[o + 1] = (byte)(y * 4);
+                raw[o + 2] = 40;
+                raw[o + 3] = alphaAt(x, y);
+            }
+        }
+        return AssemblePng(width, height, 6, raw, null, null);
+    }
+
+    /// <summary>8-bit palette PNG (color type 3, 16 entries); with <paramref name="translucentPalette"/> a tRNS chunk makes entry 0 transparent.</summary>
+    public static byte[] BuildIndexedPng(int width, int height, bool translucentPalette)
+    {
+        var raw = new byte[(1 + width) * height];
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+                raw[y * (1 + width) + 1 + x] = (byte)((x + y) % 16);
+        var palette = new byte[16 * 3];
+        for (var i = 0; i < 16; i++) { palette[i * 3] = (byte)(i * 16); palette[i * 3 + 1] = (byte)(255 - i * 16); palette[i * 3 + 2] = 90; }
+        return AssemblePng(width, height, 3, raw, palette, translucentPalette ? [0] : null);
+    }
+
+    private static byte[] AssemblePng(int width, int height, byte colorType, byte[] raw, byte[]? palette, byte[]? trns)
+    {
+        using var compressed = new MemoryStream();
+        using (var z = new ZLibStream(compressed, CompressionLevel.Fastest, leaveOpen: true))
+            z.Write(raw);
+        var ihdr = new byte[13];
+        WriteBigEndian(ihdr, 0, width);
+        WriteBigEndian(ihdr, 4, height);
+        ihdr[8] = 8;
+        ihdr[9] = colorType;
+        using var png = new MemoryStream();
+        png.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        WriteChunk(png, "IHDR", ihdr);
+        if (palette is not null) WriteChunk(png, "PLTE", palette);
+        if (trns is not null) WriteChunk(png, "tRNS", trns);
+        WriteChunk(png, "IDAT", compressed.ToArray());
+        WriteChunk(png, "IEND", []);
+        return png.ToArray();
+    }
+
     private static byte[] BuildPng(int width, int height, bool hasAlpha)
     {
         var bytesPerPixel = hasAlpha ? 4 : 3;
