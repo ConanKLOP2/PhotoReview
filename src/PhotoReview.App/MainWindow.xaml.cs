@@ -384,6 +384,8 @@ public partial class MainWindow : Window
             case ReviewCommandType.ZoomOut: _viewModel.ZoomOut(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
             case ReviewCommandType.Previous: await _viewModel.PreviousAsync(); break;
+            case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
+            case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
         }
     }
 

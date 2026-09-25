@@ -78,7 +78,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         INaturalComparer? naturalComparer = null,
         Action? resetCachesAction = null,
         ReviewMetrics? metrics = null,
-        IUiScheduler? uiScheduler = null)
+        IUiScheduler? uiScheduler = null,
+        IFolderPicker? folderPicker = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -103,7 +104,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         Metrics = metrics ?? new ReviewMetrics();
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
-            _naturalComparer, () => Settings, this);
+            _naturalComparer, () => Settings, this,
+            folderPicker: folderPicker, fileSystem: _fileSystem, rememberFolder: RememberMoveCopyFolder);
         _siblingNavigator = new SiblingFolderNavigator(
             _clock, _catalog, _fileSystem, this, () => _currentSession);
         _duplicateController = new DuplicateCleanupController(
@@ -681,5 +683,40 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     void IDuplicateCleanupSink.NotifyNavigationStateChanged()
     {
         NotifyNavigationStateChanged();
+    }
+
+    // ---- "Move to… / Copy to…" ----
+
+    /// <summary>
+    /// "Move to…" (default M): moves the current photo into a folder chosen in the folder picker, or into the last one
+    /// when reuse is on; <paramref name="forcePicker"/> (Shift+key) always asks. Same gate and pipeline as an action profile.
+    /// </summary>
+    public Task MoveToFolderAsync(bool forcePicker = false) => MoveOrCopyToFolderAsync(FileOperationType.Move, forcePicker);
+
+    /// <summary>"Copy to…" (default Y): like <see cref="MoveToFolderAsync"/> but copies.</summary>
+    public Task CopyToFolderAsync(bool forcePicker = false) => MoveOrCopyToFolderAsync(FileOperationType.Copy, forcePicker);
+
+    /// <returns>False when the gate was already held (nothing ran).</returns>
+    private Task<bool> MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker) => _fileActionGate.RunExclusiveAsync(async () =>
+    {
+        await WaitForPendingExplorerOrderAsync();
+        await _fileActionController.MoveOrCopyToFolderAsync(operation, forcePicker, () => (_compare.SelectedPath, _catalog.Current?.Path));
+    });
+
+    /// <summary>Persists the folder a successful Move-to/Copy-to went to, so the picker starts there next time.</summary>
+    private void RememberMoveCopyFolder(FileOperationType operation, string folder)
+    {
+        var settings = Settings;
+        if (operation == FileOperationType.Move) settings.LastMoveToFolder = folder;
+        else settings.LastCopyToFolder = folder;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file operation already succeeded; only the remembered folder is lost (kept in memory for this session).
+            FileLog.Default.Warn("Could not save the last Move-to/Copy-to folder: " + ex.Message);
+        }
     }
 }

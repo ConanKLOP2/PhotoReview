@@ -20,7 +20,9 @@ public enum ReviewCommandType
     ZoomIn,
     ZoomOut,
     Next,
-    Previous
+    Previous,
+    MoveToFolder,
+    CopyToFolder
 }
 
 /// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
@@ -32,13 +34,15 @@ public static class ReviewCommandTypeExtensions
     /// Navigation and zoom keys are deliberately not listed so they keep repeating for fast browsing.
     /// </summary>
     public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
-        type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo;
+        type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo
+            or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder;
 }
 
 /// <summary>
 /// Mô tả một lệnh thực thi sau khi định tuyến từ phím tắt.
 /// </summary>
-public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIndex = -1)
+/// <param name="ForcePicker">"Move to… / Copy to…" pressed with Shift: always open the folder picker, even when the last folder is reused.</param>
+public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIndex = -1, bool ForcePicker = false)
 {
     public static ReviewCommand Fullscreen => new(ReviewCommandType.Fullscreen);
     public static ReviewCommand ExitFullscreen => new(ReviewCommandType.ExitFullscreen);
@@ -56,4 +60,6 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand ZoomOut => new(ReviewCommandType.ZoomOut);
     public static ReviewCommand Next => new(ReviewCommandType.Next);
     public static ReviewCommand Previous => new(ReviewCommandType.Previous);
+    public static ReviewCommand MoveToFolder(bool forcePicker) => new(ReviewCommandType.MoveToFolder, ForcePicker: forcePicker);
+    public static ReviewCommand CopyToFolder(bool forcePicker) => new(ReviewCommandType.CopyToFolder, ForcePicker: forcePicker);
 }

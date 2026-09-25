@@ -472,5 +472,15 @@
   "settings.allowPermanentDelete.label": "Cho phép xóa vĩnh viễn trên ổ đĩa không có Thùng rác",
   "settings.allowPermanentDelete.hint": "Mặc định tắt: thao tác Xóa bị từ chối trên ổ đĩa rời, ổ mạng và ổ không xác định vì các ổ này không có Thùng rác. Khi bật, Xóa sẽ xóa vĩnh viễn tệp sau khi bạn xác nhận. Tệp đã xóa không thể khôi phục, kể cả bằng Hoàn tác.",
   "dialog.confirmPermanentDelete.title": "Xóa vĩnh viễn?",
-  "dialog.confirmPermanentDelete.message": "\"{fileName}\" nằm trên ổ đĩa không có Thùng rác. Tệp sẽ bị xóa VĨNH VIỄN và không thể khôi phục (Hoàn tác cũng không lấy lại được). Bạn có muốn xóa không?"
+  "dialog.confirmPermanentDelete.message": "\"{fileName}\" nằm trên ổ đĩa không có Thùng rác. Tệp sẽ bị xóa VĨNH VIỄN và không thể khôi phục (Hoàn tác cũng không lấy lại được). Bạn có muốn xóa không?",
+  "action.moveToFolder.name": "Di chuyển tới thư mục",
+  "action.copyToFolder.name": "Sao chép tới thư mục",
+  "dialog.moveToFolder.title": "Chọn thư mục để di chuyển ảnh tới",
+  "dialog.copyToFolder.title": "Chọn thư mục để sao chép ảnh tới",
+  "status.movedToFolder": "Đã di chuyển {fileName} tới {folder}",
+  "status.copiedToFolder": "Đã sao chép {fileName} tới {folder}",
+  "status.moveCopyTo.notAbsolute": "Không thực hiện được {actionName}: hãy chọn đường dẫn thư mục đầy đủ (có ký tự ổ đĩa).",
+  "status.moveCopyTo.sameFolder": "Không thực hiện được {actionName}: đó chính là thư mục ảnh đang xem. Hãy chọn thư mục khác.",
+  "status.moveCopyTo.folderMissing": "Không thực hiện được {actionName}: thư mục không tồn tại: {folder}",
+  "status.moveCopyTo.stateChanged": "Không thực hiện được {actionName}: thư mục, ảnh hoặc một thao tác tệp khác đã thay đổi trong lúc hộp thoại chọn thư mục đang mở. Không có gì bị thay đổi."
 }
