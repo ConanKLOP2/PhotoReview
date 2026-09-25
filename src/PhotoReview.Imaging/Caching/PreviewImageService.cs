@@ -728,6 +728,7 @@ public sealed class PreviewImageService : IPreloadTarget
 
     bool IPreloadTarget.TryGetCachedPreview(string path) => TryGetCachedPreview(path, out _);
     bool IPreloadTarget.TryGetCachedPreview(ImageCacheKey key) => TryGetCachedPreview(key, out _);
+    long? IPreloadTarget.CachedPreviewBytes(ImageCacheKey key) => TryGetCachedPreview(key, out var image) ? image.EstimatedBytes : null;
     Task IPreloadTarget.PreloadAsync(string path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
