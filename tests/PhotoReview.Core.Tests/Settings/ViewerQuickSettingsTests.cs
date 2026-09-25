@@ -29,7 +29,8 @@ public sealed class ViewerQuickSettingsTests
 
         Assert.True(settings.ShowInfoOverlay);
         Assert.True(settings.ShowFileInfo);
-        Assert.True(settings.ShowFolderInfo);
+        // Off by default: the window title already shows the current folder name.
+        Assert.False(settings.ShowFolderInfo);
         Assert.Equal("End", settings.Shortcuts.LastImage);
         Assert.Equal("D1", settings.Shortcuts.ZoomActualSize);
         Assert.Equal("I", settings.Shortcuts.ToggleInfoOverlay);
@@ -89,7 +90,7 @@ public sealed class ViewerQuickSettingsTests
         Assert.True(loaded.LoggingEnabled);
         Assert.True(loaded.ShowInfoOverlay);
         Assert.True(loaded.ShowFileInfo);
-        Assert.True(loaded.ShowFolderInfo);
+        Assert.False(loaded.ShowFolderInfo);
         Assert.Equal("End", loaded.Shortcuts.LastImage);
         Assert.Equal("D1", loaded.Shortcuts.ZoomActualSize);
         Assert.Equal("I", loaded.Shortcuts.ToggleInfoOverlay);

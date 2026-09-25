@@ -84,9 +84,10 @@ public class AppSettings
 
     /// <summary>
     /// Bottom-right folder block: current folder and the sibling image folders that PageUp/PageDown would open.
-    /// Absent in older configs = true. When hidden the siblings are not computed at all (no disk I/O).
+    /// Default off (the window title already shows the current folder name); absent in older configs = false.
+    /// When hidden the siblings are not computed at all (no disk I/O).
     /// </summary>
-    public bool ShowFolderInfo { get; set; } = true;
+    public bool ShowFolderInfo { get; set; }
 
     /// <summary>
     /// Shows the photo information line (file name, date taken, dimensions, camera, lens, exposure) under the status line.
@@ -94,8 +95,8 @@ public class AppSettings
     /// </summary>
     public bool ShowExifInfo { get; set; } = true;
 
-    /// <summary>Parts of the photo information line to show; absent in older configs = <see cref="ExifInfoFields.All"/>.</summary>
-    public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.All;
+    /// <summary>Parts of the photo information line to show; absent in older configs = <see cref="ExifInfoFields.Default"/>.</summary>
+    public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.Default;
 
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
@@ -155,8 +156,8 @@ public class AppSettings
     /// <summary>What the plain mouse wheel does over the image; Ctrl+wheel always zooms at the cursor.</summary>
     public MouseWheelAction MouseWheelAction { get; set; } = MouseWheelAction.Zoom;
 
-    /// <summary>A left click (no drag) toggles between Fit and <see cref="ClickZoomPercent"/>, anchored at the cursor.</summary>
-    public bool ClickToZoomEnabled { get; set; } = true;
+    /// <summary>A left click (no drag) toggles between Fit and <see cref="ClickZoomPercent"/>, anchored at the cursor. Default off.</summary>
+    public bool ClickToZoomEnabled { get; set; }
 
     /// <summary>Zoom a click jumps to, in percent of source pixels (ADR 0008), [<see cref="MinClickZoomPercent"/>, <see cref="MaxClickZoomPercent"/>].</summary>
     public int ClickZoomPercent { get; set; } = DefaultClickZoomPercent;

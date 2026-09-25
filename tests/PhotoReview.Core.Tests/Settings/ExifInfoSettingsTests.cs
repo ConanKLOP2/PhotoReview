@@ -25,17 +25,19 @@ public sealed class ExifInfoSettingsTests
     }
 
     [Fact]
-    public void Defaults_ShowEveryField()
+    public void Defaults_ShowEveryFieldExceptFileNameAndDimensions()
     {
         var settings = new AppSettings();
 
         Assert.True(settings.ShowExifInfo);
-        Assert.Equal(ExifInfoFields.All, settings.ExifInfoFields);
+        // FileName and Dimensions are excluded: the status line above already shows the file name and W×H.
+        Assert.Equal(ExifInfoFields.Default, settings.ExifInfoFields);
         Assert.Equal(
-            ExifInfoFields.FileName | ExifInfoFields.DateTaken | ExifInfoFields.Dimensions
-                | ExifInfoFields.Camera | ExifInfoFields.Lens | ExifInfoFields.Iso | ExifInfoFields.FocalLength
-                | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed,
-            ExifInfoFields.All);
+            ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens | ExifInfoFields.Iso
+                | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed,
+            ExifInfoFields.Default);
+        Assert.False(ExifInfoFields.Default.HasFlag(ExifInfoFields.FileName));
+        Assert.False(ExifInfoFields.Default.HasFlag(ExifInfoFields.Dimensions));
     }
 
     [Fact]
@@ -45,7 +47,7 @@ public sealed class ExifInfoSettingsTests
 
         Assert.False(loaded.CompareHashEnabled);
         Assert.True(loaded.ShowExifInfo);
-        Assert.Equal(ExifInfoFields.All, loaded.ExifInfoFields);
+        Assert.Equal(ExifInfoFields.Default, loaded.ExifInfoFields);
     }
 
     [Theory]
@@ -77,13 +79,13 @@ public sealed class ExifInfoSettingsTests
     [Theory]
     [InlineData("\"camera, LENS\"", ExifInfoFields.Camera | ExifInfoFields.Lens)]
     [InlineData("12", ExifInfoFields.Dimensions | ExifInfoFields.Camera)]
-    [InlineData("4095", ExifInfoFields.All)]            // unknown bits dropped
+    [InlineData("4095", ExifInfoFields.All)]                // unknown bits dropped, real bitmask value kept as is
     [InlineData("\"iso, ShutterSpeed\"", ExifInfoFields.Iso | ExifInfoFields.ShutterSpeed)]
-    [InlineData("\"Exposure\"", ExifInfoFields.All)]     // never-shipped grouped name: unknown = default
-    [InlineData("\"Shutter\"", ExifInfoFields.All)]      // unknown name: default, not a failed load
+    [InlineData("\"Exposure\"", ExifInfoFields.Default)]     // never-shipped grouped name: unknown = default
+    [InlineData("\"Shutter\"", ExifInfoFields.Default)]      // unknown name: default, not a failed load
     [InlineData("\"Aperture\"", ExifInfoFields.Aperture)]
-    [InlineData("[1, 2]", ExifInfoFields.All)]
-    [InlineData("null", ExifInfoFields.All)]
+    [InlineData("[1, 2]", ExifInfoFields.Default)]
+    [InlineData("null", ExifInfoFields.Default)]
     [InlineData("\"None\"", ExifInfoFields.None)]
     public void Load_LenientFieldValues(string jsonValue, ExifInfoFields expected)
     {

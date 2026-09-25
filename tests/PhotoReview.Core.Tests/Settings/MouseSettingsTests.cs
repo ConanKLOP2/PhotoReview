@@ -19,13 +19,14 @@ public sealed class MouseSettingsTests
     }
 
     [Fact]
-    public void Defaults_KeepTodaysWheelAndEnableClickZoomAndKinetic()
+    public void Defaults_KeepTodaysWheelAndKinetic_ClickZoomOff()
     {
         var settings = new AppSettings();
 
         Assert.Equal(MouseWheelAction.Zoom, settings.MouseWheelAction);
         Assert.Equal(0, (int)MouseWheelAction.Zoom);
-        Assert.True(settings.ClickToZoomEnabled);
+        // Off by default: the click-to-zoom gesture must be opted into.
+        Assert.False(settings.ClickToZoomEnabled);
         Assert.Equal(100, settings.ClickZoomPercent);
         Assert.True(settings.KineticPanEnabled);
         Assert.Equal(10, AppSettings.MinClickZoomPercent);
@@ -40,7 +41,7 @@ public sealed class MouseSettingsTests
         var loaded = _store.Load();
 
         Assert.Equal(MouseWheelAction.Zoom, loaded.MouseWheelAction);
-        Assert.True(loaded.ClickToZoomEnabled);
+        Assert.False(loaded.ClickToZoomEnabled);
         Assert.Equal(100, loaded.ClickZoomPercent);
         Assert.True(loaded.KineticPanEnabled);
         Assert.Empty(_store.LastLoadRepairs);
