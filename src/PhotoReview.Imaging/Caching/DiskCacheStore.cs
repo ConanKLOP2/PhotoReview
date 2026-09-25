@@ -222,8 +222,9 @@ public sealed class DiskCacheStore
     {
         if (!System.IO.Directory.Exists(directory)) return -1;
 
-        var files = System.IO.Directory.EnumerateFiles(directory, searchPattern)
-            .Select(path => new FileInfo(path)).Where(info => info.Exists)
+        // DirectoryInfo.EnumerateFiles yields FileInfo objects already filled from the directory scan (length, times), so no
+        // per-file stat is needed afterwards.
+        var files = new DirectoryInfo(directory).EnumerateFiles(searchPattern)
             .OrderBy(info => info.LastAccessTimeUtc).ThenBy(info => info.CreationTimeUtc).ToList();
 
         var total = files.Sum(info => info.Length);

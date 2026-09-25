@@ -40,7 +40,7 @@ public sealed class WicDirectDecoder : IImageDecoder
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+            FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.SequentialScan);
 
         var factory = CreateFactory();
         using var managedStream = new ManagedIStream(stream);
