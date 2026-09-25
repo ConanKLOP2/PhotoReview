@@ -49,15 +49,6 @@ internal static class ViewportConvergence
             before.VerticalScrollbarVisibility == after.VerticalScrollbarVisibility;
     }
 
-    /// <summary>Check if a meaningful layout change occurred (viewport or scrollbar visibility changed).</summary>
-    internal static bool HasMeaningfulChange(ViewportSnapshot before, ViewportSnapshot after)
-    {
-        if (!ValidateMeasurements(after).IsValid)
-            return false;
-
-        return !IsStableViewport(before, after);
-    }
-
     /// <summary>Validate that measurements are finite, positive, and usable.</summary>
     internal static ValidationResult ValidateMeasurements(ViewportSnapshot snapshot)
     {
@@ -74,12 +65,6 @@ internal static class ViewportConvergence
             return ValidationResult.InvalidDimensions("ActualImage invalid");
 
         return ValidationResult.Valid();
-    }
-
-    /// <summary>Check if offsets are clamped to zero (or nearly zero after Fit reset).</summary>
-    internal static bool OffsetsAreClamped(ViewportSnapshot snapshot)
-    {
-        return snapshot.HorizontalOffset < Epsilon && snapshot.VerticalOffset < Epsilon;
     }
 
     private static bool IsPositiveFinite(double value) => value > 0 && double.IsFinite(value);

@@ -57,23 +57,6 @@ public class ViewportConvergenceTests
     }
 
     [Fact]
-    public void HasMeaningfulChange_UnchangedViewport_ReturnsFalse()
-    {
-        var snapshot = CreateSnapshot();
-        var result = ViewportConvergence.HasMeaningfulChange(snapshot, snapshot);
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void HasMeaningfulChange_ViewportSizeChanged_ReturnsTrue()
-    {
-        var before = CreateSnapshot(viewport: (800, 600));
-        var after = CreateSnapshot(viewport: (750, 600));
-        var result = ViewportConvergence.HasMeaningfulChange(before, after);
-        Assert.True(result);
-    }
-
-    [Fact]
     public void ValidateMeasurements_ValidSnapshot_ReturnsValid()
     {
         var snapshot = CreateSnapshot(
@@ -119,27 +102,6 @@ public class ViewportConvergenceTests
     }
 
     [Fact]
-    public void OffsetsAreClamped_ZeroOffsets_ReturnsTrue()
-    {
-        var snapshot = CreateSnapshot(offsets: (0, 0));
-        Assert.True(ViewportConvergence.OffsetsAreClamped(snapshot));
-    }
-
-    [Fact]
-    public void OffsetsAreClamped_SubpixelOffsets_ReturnsTrue()
-    {
-        var snapshot = CreateSnapshot(offsets: (0.3, 0.2)); // < Epsilon
-        Assert.True(ViewportConvergence.OffsetsAreClamped(snapshot));
-    }
-
-    [Fact]
-    public void OffsetsAreClamped_SignificantOffset_ReturnsFalse()
-    {
-        var snapshot = CreateSnapshot(offsets: (10, 0));
-        Assert.False(ViewportConvergence.OffsetsAreClamped(snapshot));
-    }
-
-    [Fact]
     public void Convergence_ScrollbarDisappears_ViewportGrows()
     {
         // Scenario: zoom out → scrollbars disappear → viewport grows
@@ -153,8 +115,7 @@ public class ViewportConvergenceTests
             extent: (800, 600), // Image fits
             scrollbarVis: (Visibility.Collapsed, Visibility.Collapsed));
 
-        // Should detect meaningful change
-        Assert.True(ViewportConvergence.HasMeaningfulChange(beforeZoom, afterConverge));
+        // Layout has not converged yet
         Assert.False(ViewportConvergence.IsStableViewport(beforeZoom, afterConverge));
     }
 

@@ -87,7 +87,7 @@ public partial class App : System.Windows.Application, IDisposable
         // 5. Platform Services
         services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();
         services.AddSingleton<IRecycleBin>(_ => WindowsRecycleBin.Instance);
-        services.AddSingleton<IMemoryProbe>(_ => PhysicalMemory.Instance);
+        services.AddSingleton<IMemoryProbe>(sp => new WindowsMemoryProbe(sp.GetRequiredService<ILog>()));
         services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
         services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
         services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
@@ -99,8 +99,7 @@ public partial class App : System.Windows.Application, IDisposable
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>
         {
-            var log = sp.GetService<ILog>();
-            return new ImageDecoderFactory(Composition.DecoderProviders.Create(log), log, sp.GetService<ReviewMetrics>());
+            return new ImageDecoderFactory(Composition.DecoderProviders.Create(), sp.GetService<ILog>(), sp.GetService<ReviewMetrics>());
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,

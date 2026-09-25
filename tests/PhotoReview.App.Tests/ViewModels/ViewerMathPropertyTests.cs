@@ -80,7 +80,7 @@ public sealed class ViewerMathPropertyTests
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void ZoomViewportOffsets_AlwaysFiniteAndInsideTheScrollableRange(int seed)
+    public void ZoomToPointOffsets_AlwaysFiniteAndInsideTheScrollableRange(int seed)
     {
         var rng = new Random(seed);
         for (var i = 0; i < Iterations; i++)
@@ -90,60 +90,12 @@ public sealed class ViewerMathPropertyTests
             var viewW = Finite(rng, 4000);
             var viewH = Finite(rng, 4000);
 
-            var o = MainWindowHelpers.CalculateZoomViewportOffsets(
-                Wild(rng, 8), Wild(rng, 8), Wild(rng), Wild(rng), Wild(rng), Wild(rng), extentW, extentH, viewW, viewH);
+            var o = MainWindowHelpers.CalculateZoomToPointOffsets(
+                new MainWindowHelpers.ZoomImagePoint(Wild(rng, 2), Wild(rng, 2)),
+                Wild(rng), Wild(rng), Wild(rng), Wild(rng), Wild(rng), Wild(rng), Wild(rng), Wild(rng),
+                extentW, extentH, viewW, viewH);
 
             AssertWithinRange(o, extentW, extentH, viewW, viewH);
-        }
-    }
-
-    [Theory]
-    [MemberData(nameof(Seeds))]
-    public void ZoomViewportOffsets_KeepThePointUnderTheMouse_WhenNothingIsClamped(int seed)
-    {
-        var rng = new Random(seed);
-        for (var i = 0; i < Iterations; i++)
-        {
-            var oldZoom = 0.1 + rng.NextDouble() * 7.9;
-            var newZoom = 0.1 + rng.NextDouble() * 7.9;
-            var viewW = 200 + Finite(rng, 1800);
-            var viewH = 200 + Finite(rng, 1000);
-            var mouseX = Finite(rng, viewW);
-            var mouseY = Finite(rng, viewH);
-            var oldH = Finite(rng, 3000);
-            var oldV = Finite(rng, 3000);
-            var extentW = 1_000_000; // never clamps at the far edge
-            var extentH = 1_000_000;
-
-            var o = MainWindowHelpers.CalculateZoomViewportOffsets(oldZoom, newZoom, mouseX, mouseY, oldH, oldV, extentW, extentH, viewW, viewH);
-
-            var wantH = (oldH + mouseX) * newZoom / oldZoom - mouseX;
-            var wantV = (oldV + mouseY) * newZoom / oldZoom - mouseY;
-            if (wantH < 0 || wantV < 0) continue; // clamped at the origin: the anchor cannot be kept there
-            // Image coordinate (offset + mouse) / zoom under the mouse is unchanged.
-            Assert.Equal((oldH + mouseX) / oldZoom, (o.Horizontal + mouseX) / newZoom, 6);
-            Assert.Equal((oldV + mouseY) / oldZoom, (o.Vertical + mouseY) / newZoom, 6);
-        }
-    }
-
-    [Fact]
-    public void ZoomViewportOffsets_ZoomThereAndBack_ReturnsToTheStartingOffset()
-    {
-        var rng = new Random(11);
-        for (var i = 0; i < Iterations; i++)
-        {
-            var zoom = 0.25 + rng.NextDouble() * 3;
-            var factor = 1.1 + rng.NextDouble() * 3;
-            var mouseX = Finite(rng, 1000);
-            var mouseY = Finite(rng, 800);
-            var startH = Finite(rng, 2000);
-            var startV = Finite(rng, 2000);
-
-            var zoomed = MainWindowHelpers.CalculateZoomViewportOffsets(zoom, zoom * factor, mouseX, mouseY, startH, startV, 1e7, 1e7, 1000, 800);
-            var back = MainWindowHelpers.CalculateZoomViewportOffsets(zoom * factor, zoom, mouseX, mouseY, zoomed.Horizontal, zoomed.Vertical, 1e7, 1e7, 1000, 800);
-
-            Assert.Equal(startH, back.Horizontal, 6);
-            Assert.Equal(startV, back.Vertical, 6);
         }
     }
 

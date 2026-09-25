@@ -100,7 +100,8 @@ public partial class RecoveryWindow : Window
         var shown = _rows.Where(row => RecoveryPresenter.Matches(filter, row.Check?.Verdict)).ToList();
         _visible.Clear();
         foreach (var row in shown) _visible.Add(row);
-        foreach (var row in selected.Where(shown.Contains)) EntriesList.SelectedItems.Add(row);
+        var shownSet = shown.ToHashSet(); // List.Contains per selected row is O(selected * shown) on a big journal
+        foreach (var row in selected.Where(shownSet.Contains)) EntriesList.SelectedItems.Add(row);
         SummaryText.Text = _rows.Count == 0 ? Tr.RecoverySummaryEmpty : Tr.RecoverySummaryCount(_rows.Count);
         FilterEmptyText.Visibility = _rows.Count > 0 && shown.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateDetails();
@@ -231,7 +232,8 @@ public partial class RecoveryWindow : Window
             System.Windows.MessageBox.Show(this, ex.Message, Tr.RecoveryDismissFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        _rows.RemoveAll(rows.Contains);
+        var dismissed = rows.ToHashSet(); // RemoveAll(rows.Contains) is O(rows * dismissed)
+        _rows.RemoveAll(dismissed.Contains);
         RefreshEntries();
     }
 

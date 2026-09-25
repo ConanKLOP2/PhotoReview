@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
@@ -18,7 +17,7 @@ namespace PhotoReview.App.Composition;
 /// </summary>
 internal static class DecoderProviders
 {
-    public static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create(ILog? log)
+    public static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create()
     {
         var providers = new List<(DecoderBackend, Func<IImageDecoder>)>
         {

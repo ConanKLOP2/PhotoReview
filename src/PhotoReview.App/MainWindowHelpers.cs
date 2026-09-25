@@ -114,27 +114,6 @@ internal static class MainWindowHelpers
     internal static bool IsBeyondDragThreshold(double totalDeltaX, double totalDeltaY, double minimumHorizontal, double minimumVertical) =>
         Math.Abs(totalDeltaX) >= minimumHorizontal || Math.Abs(totalDeltaY) >= minimumVertical;
 
-    internal static ZoomViewportOffsets CalculateZoomViewportOffsets(
-        double oldZoom,
-        double newZoom,
-        double mouseX,
-        double mouseY,
-        double oldHorizontalOffset,
-        double oldVerticalOffset,
-        double newExtentWidth,
-        double newExtentHeight,
-        double viewportWidth,
-        double viewportHeight)
-    {
-        if (!double.IsFinite(oldZoom) || oldZoom <= 0 || !double.IsFinite(newZoom) || newZoom <= 0)
-            return new(ClampOffset(oldHorizontalOffset, newExtentWidth, viewportWidth), ClampOffset(oldVerticalOffset, newExtentHeight, viewportHeight));
-
-        var ratio = newZoom / oldZoom;
-        var horizontal = (oldHorizontalOffset + Math.Max(0, mouseX)) * ratio - Math.Max(0, mouseX);
-        var vertical = (oldVerticalOffset + Math.Max(0, mouseY)) * ratio - Math.Max(0, mouseY);
-        return new(ClampOffset(horizontal, newExtentWidth, viewportWidth), ClampOffset(vertical, newExtentHeight, viewportHeight));
-    }
-
     private static double ClampOffset(double value, double extent, double viewport)
     {
         var room = extent - viewport;
