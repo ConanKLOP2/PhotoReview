@@ -9,7 +9,7 @@ public class AppPathsTests
 {
     private static readonly string MockLocalAppData = Path.Combine("C:", "Users", "Tester", "AppData", "Local");
     private static readonly string MockAppRoot = Path.Combine(MockLocalAppData, "PhotoReview");
-    private static readonly string MockOverride = Path.Combine("D:", "IsolatedDataRoot");
+    private static readonly string MockOverride = Path.Combine("D:" + Path.DirectorySeparatorChar, "IsolatedDataRoot");
 
     [Fact]
     public void WithoutOverrideResolvesDefaultLayout()
@@ -80,5 +80,24 @@ public class AppPathsTests
         Assert.True(Path.IsPathRooted(paths.PreviewCacheDir));
         Assert.True(Path.IsPathRooted(paths.ThumbnailCacheDir));
         Assert.True(Path.IsPathRooted(paths.WindowPlacementFile));
+    }
+
+    [Fact]
+    public void RelativeOverrideIsResolvedOnceToAFullPath()
+    {
+        var paths = new AppPaths(MockLocalAppData, "rel-data-root");
+        var full = Path.GetFullPath("rel-data-root");
+
+        Assert.Equal(Path.Combine(full, "operations.jsonl"), paths.JournalFile);
+        Assert.Equal(Path.Combine(full, "Sessions"), paths.SessionsDir);
+        Assert.Equal(Path.Combine(full, "logs", "app.log"), paths.LogFile);
+    }
+
+    [Fact]
+    public void OverrideIsTrimmed()
+    {
+        var paths = new AppPaths(MockLocalAppData, "  " + MockOverride + "  ");
+
+        Assert.Equal(Path.Combine(MockOverride, "operations.jsonl"), paths.JournalFile);
     }
 }
