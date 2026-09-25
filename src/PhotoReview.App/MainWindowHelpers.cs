@@ -139,9 +139,9 @@ internal static class MainWindowHelpers
 internal sealed class ForwardingFolderSink(Func<IFolderLoadSink> target) : IFolderLoadSink
 {
     public void ResetCaches() => target().ResetCaches();
-    public void OnCatalogReady(string folder, int count) => target().OnCatalogReady(folder, count);
+    public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => target().OnCatalogReady(folder, count, session);
     public Task PresentAsync(int index, long presentationGeneration) => target().PresentAsync(index, presentationGeneration);
-    public void OnEmpty(string folder) => target().OnEmpty(folder);
+    public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => target().OnEmpty(folder, session);
     public void OnOrderApplied(int count, int currentIndex, bool currentKept) => target().OnOrderApplied(count, currentIndex, currentKept);
     public void OnFilesSkipped(string folder, IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> skipped) => target().OnFilesSkipped(folder, skipped);
     public void OnFailed(string folder, Exception exception) => target().OnFailed(folder, exception);

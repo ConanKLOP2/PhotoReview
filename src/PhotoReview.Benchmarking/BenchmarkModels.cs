@@ -55,7 +55,7 @@ public sealed record BenchmarkSample(string ProfileId, BenchmarkWorkload Workloa
     double ElapsedMilliseconds, bool Correct, string? Error = null);
 
 public sealed record BenchmarkPhaseResult(string ProfileId, BenchmarkWorkload Workload,
-    IReadOnlyList<double> Samples, BenchmarkResultStatus Status, string? Message = null)
+    IReadOnlyList<double> Samples, BenchmarkResultStatus Status, string? Message = null, int? ImagesPerSample = null)
 {
     private readonly Lazy<double[]> _sorted = new(() => Samples.OrderBy(x => x).ToArray());
 
@@ -64,6 +64,17 @@ public sealed record BenchmarkPhaseResult(string ProfileId, BenchmarkWorkload Wo
     public double P95 => BenchmarkStatistics.Percentile(_sorted.Value, .95);
     public double P99 => BenchmarkStatistics.Percentile(_sorted.Value, .99);
     public double Max => Samples.Count == 0 ? 0 : _sorted.Value[^1];
+
+    /// <summary>Images one sample decodes (see <see cref="BenchmarkWorkloadRunner.ImagesPerSample"/>): stamped by the runner,
+    /// otherwise derived from the profile registry so a phase built elsewhere is still comparable.</summary>
+    public int EffectiveImagesPerSample => Math.Max(1, ImagesPerSample
+        ?? (BenchmarkProfiles.Find(ProfileId) is { } profile ? BenchmarkWorkloadRunner.ImagesPerSample(profile, Workload, int.MaxValue) : 1));
+
+    /// <summary>P95 wall time divided by the images in a sample: the like-for-like unit for ranking.</summary>
+    public double P95PerImage => P95 / EffectiveImagesPerSample;
+
+    /// <summary>P50 wall time divided by the images in a sample.</summary>
+    public double P50PerImage => P50 / EffectiveImagesPerSample;
 }
 
 public sealed record BenchmarkReport(string RunId, DateTimeOffset StartedUtc,
@@ -97,10 +108,11 @@ public sealed record BenchmarkBatchSummary(
     public string ToJson() => JsonSerializer.Serialize(this, DefaultOptions);
 }
 
+/// <summary>Ranks by per-image latency: one sample of a parallel workload decodes Workers images, others decode one.</summary>
 public static class BenchmarkRanking
 {
     public static IReadOnlyList<BenchmarkPhaseResult> Rank(IEnumerable<BenchmarkPhaseResult> phases, BenchmarkWorkload workload)
         => phases.Where(x => x.Workload == workload && x.Status is not BenchmarkResultStatus.Fail
                              && x.Status is not BenchmarkResultStatus.InsufficientData)
-                 .OrderBy(x => x.P95).ThenBy(x => x.P50).ToArray();
+                 .OrderBy(x => x.P95PerImage).ThenBy(x => x.P50PerImage).ToArray();
 }

@@ -591,23 +591,39 @@ internal static class PerfSession
 
     // ---- Waiting ---------------------------------------------------------------------------------
 
-    private static async Task<(bool Idle, string How)> WaitIdleAsync(Dispatcher dispatcher, MainWindow window, TimeSpan timeout)
+    private static Task<(bool Idle, string How)> WaitIdleAsync(Dispatcher dispatcher, MainWindow window, TimeSpan timeout) =>
+        WaitIdleCoreAsync(
+            () => window.Metrics.Snapshot(),
+            // PERF-02: the real scheduler state (a missing controller has no preload to wait for).
+            () => window.ViewModel.PreloadController?.IsIdle ?? true,
+            () => !window.IsFileActionInProgress,
+            () => dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle).Task,
+            timeout, pollInterval: TimeSpan.FromMilliseconds(250),
+            stableRequired: TimeSpan.FromSeconds(1), preloadFallbackAfter: TimeSpan.FromSeconds(5));
+
+    /// <summary>
+    /// Idle = metrics unchanged for <paramref name="stableRequired"/>, no file action running and preload idle
+    /// (<paramref name="preloadIdle"/>). If preload never reports idle, metrics stable for
+    /// <paramref name="preloadFallbackAfter"/> still ends the wait, labelled as such.
+    /// </summary>
+    internal static async Task<(bool Idle, string How)> WaitIdleCoreAsync(Func<ReviewMetricsSnapshot> snapshot,
+        Func<bool> preloadIdle, Func<bool> actionIdle, Func<Task> settleUi, TimeSpan timeout, TimeSpan pollInterval,
+        TimeSpan stableRequired, TimeSpan preloadFallbackAfter)
     {
         var sw = Stopwatch.StartNew();
-        var last = window.Metrics.Snapshot();
+        var last = snapshot();
         var stableSince = sw.Elapsed;
         while (sw.Elapsed < timeout)
         {
-            await Task.Delay(250);
-            var now = window.Metrics.Snapshot();
+            await Task.Delay(pollInterval);
+            var now = snapshot();
             if (last is not null && now is not null && !MetricsEquivalent(now, last)) { last = now; stableSince = sw.Elapsed; }
             var stable = sw.Elapsed - stableSince;
-            var preloadDone = true;
-            var actionIdle = !window.IsFileActionInProgress;
-            if (actionIdle && stable >= TimeSpan.FromSeconds(1) && (preloadDone || stable >= TimeSpan.FromSeconds(5)))
+            var preloadDone = preloadIdle();
+            if (actionIdle() && stable >= stableRequired && (preloadDone || stable >= preloadFallbackAfter))
             {
-                await dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-                return (true, $"idle after {sw.ElapsedMilliseconds}ms ({(preloadDone ? "preload done" : "metrics stable 5s")})");
+                await settleUi();
+                return (true, $"idle after {sw.ElapsedMilliseconds}ms ({(preloadDone ? "preload done" : "metrics stable, preload still busy")})");
             }
         }
         return (false, $"TIMEOUT after {sw.ElapsedMilliseconds}ms (continuing)");

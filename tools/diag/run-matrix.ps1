@@ -92,6 +92,12 @@ $FixtureAlias = Split-List $FixtureAlias
 foreach ($m in $Modes) { if ($m -notin 'Fast', 'Preview', 'Original') { throw "Invalid mode '$m' (Fast|Preview|Original)" } }
 foreach ($c in $Conditions) { if ($c -notin 'cold-app', 'cold-diskcache', 'warm', 'cold-os') { throw "Invalid condition '$c' (cold-app|cold-diskcache|warm|cold-os)" } }
 
+# TOOL-03: the 'cold-diskcache' condition clears the cache root of every recorded run; with -SharedAppCache that is the
+# real app's %LOCALAPPDATA%\PhotoReview cache, so it is rejected exactly like -ColdDiskCache -SharedAppCache above.
+if ($SharedAppCache -and $Conditions -contains 'cold-diskcache') {
+    throw "-Conditions cold-diskcache cannot be combined with -SharedAppCache: it would delete the real app's %LOCALAPPDATA%\PhotoReview cache, not a batch-owned one."
+}
+
 # -Profile picks a scenario set + repeat count; an explicitly-passed -Scenarios/-Repeat wins over the profile.
 if ($Profile) {
     $profileScenarios = switch ($Profile) {

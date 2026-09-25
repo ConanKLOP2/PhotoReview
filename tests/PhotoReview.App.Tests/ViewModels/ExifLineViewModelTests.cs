@@ -83,7 +83,7 @@ public sealed class ExifLineViewModelTests : IDisposable
             Assert.True(bGate.Wait(TimeSpan.FromSeconds(10)));
             return null;
         }));
-        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview };
+        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview, ShowExifInfo = true };
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -186,9 +186,9 @@ public sealed class ExifLineViewModelTests : IDisposable
     private sealed class ForwardingFolderLoadSink(Func<IFolderLoadSink> getSink) : IFolderLoadSink
     {
         public void ResetCaches() => getSink().ResetCaches();
-        public void OnCatalogReady(string folder, int count) => getSink().OnCatalogReady(folder, count);
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => getSink().OnCatalogReady(folder, count, session);
         public Task PresentAsync(int index, long presentationGeneration) => getSink().PresentAsync(index, presentationGeneration);
-        public void OnEmpty(string folder) => getSink().OnEmpty(folder);
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => getSink().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => getSink().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => getSink().OnFailed(folder, exception);
     }

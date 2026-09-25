@@ -133,6 +133,25 @@ public sealed class FileLogTests : IDisposable
         Assert.All(markers, m => Assert.Contains(m, content));
     }
 
+    [Fact(DisplayName = "CORE-02: Dispose after a writer join timeout leaves the handles usable so the writer exits cleanly")]
+    public void DisposeWithBlockedWriterDoesNotDisposeHandlesUnderTheWriter()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var log = new FileLog(_logFile);
+        log.DrainHook = () => { if (Thread.CurrentThread.Name == "PhotoReview.LogWriter") gate.Wait(TimeSpan.FromSeconds(30)); };
+        log.Enabled = true; // writer starts and blocks in its first drain
+        log.Info("pending");
+        log.Flush();        // waits (and times out) on _drained, which allocates its kernel handle -- the one Dispose would tear down
+
+        log.Dispose();      // join times out (~2 s) while the writer is still blocked
+        Assert.True(log.IsWriterAlive);
+        Assert.False(log.HandlesReleased, "handles were disposed while the writer still uses them");
+
+        gate.Set();         // writer resumes: Drain's finally sets _drained, loop exits
+        Assert.True(log.WaitWriterExit(10_000), "writer thread did not exit");
+        Assert.True(log.HandlesReleased, "deferred handle release should happen once the writer exits");
+    }
+
     [Fact(DisplayName = "Log file rotates to .1 backup when size threshold is reached")]
     public void LogFileRotatesAtThreshold()
     {

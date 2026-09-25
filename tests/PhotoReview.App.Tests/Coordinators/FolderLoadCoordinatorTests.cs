@@ -27,6 +27,10 @@ public sealed class FolderLoadCoordinatorTests
         public Dictionary<string, byte[]> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> Directories { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int StatCount { get; private set; }
+        /// <summary>Times a session file (under <see cref="FakeAppPaths.SessionsDir"/>) was read.</summary>
+        public int SessionReadCount { get; private set; }
+        /// <summary>Runs on the scan's background thread at the start of a directory listing (used to block a scan).</summary>
+        public Action? OnEnumerateFiles { get; set; }
 
         public bool DirectoryExists(string path) => Directories.Contains(Path.GetFullPath(path));
         public bool FileExists(string path) => Files.ContainsKey(Path.GetFullPath(path));
@@ -52,13 +56,17 @@ public sealed class FolderLoadCoordinatorTests
             throw new NotImplementedException();
         public void WriteAllTextAtomic(string path, string text, bool durable = true) =>
             Files[Path.GetFullPath(path)] = System.Text.Encoding.UTF8.GetBytes(text);
-        public string ReadAllText(string path) =>
-            System.Text.Encoding.UTF8.GetString(Files[Path.GetFullPath(path)]);
+        public string ReadAllText(string path)
+        {
+            if (path.StartsWith(@"C:\data\Sessions", StringComparison.OrdinalIgnoreCase)) SessionReadCount++;
+            return System.Text.Encoding.UTF8.GetString(Files[Path.GetFullPath(path)]);
+        }
         public IEnumerable<string> ReadLines(string path) =>
             ReadAllText(path).Split(LineSeparators, StringSplitOptions.None);
 
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*")
         {
+            OnEnumerateFiles?.Invoke();
             var fullDir = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Files.Keys.Where(k => k.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase) &&
                                          !k.Substring(fullDir.Length).Contains(Path.DirectorySeparatorChar));
@@ -122,13 +130,22 @@ public sealed class FolderLoadCoordinatorTests
         public List<(string Folder, Exception Ex)> Failures { get; } = [];
 
         public void ResetCaches() => ResetCachesCount++;
-        public void OnCatalogReady(string folder, int count) => CatalogReadyCount++;
+        public List<PhotoReview.Core.Session.SessionState> SessionsReceived { get; } = [];
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session)
+        {
+            CatalogReadyCount++;
+            SessionsReceived.Add(session);
+        }
         public Task PresentAsync(int index, long presentationGeneration)
         {
             Presented.Add((index, presentationGeneration));
             return Task.CompletedTask;
         }
-        public void OnEmpty(string folder) => EmptyCount++;
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session)
+        {
+            EmptyCount++;
+            SessionsReceived.Add(session);
+        }
         public bool? LastOrderCurrentKept { get; private set; }
         public void OnOrderApplied(int count, int currentIndex, bool currentKept)
         {
@@ -178,6 +195,70 @@ public sealed class FolderLoadCoordinatorTests
         Assert.Single(_sink.Presented);
         Assert.Equal(0, _sink.Presented[0].Index);
         Assert.Empty(_sink.Failures);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ReadsSessionOnce_AndPassesItToSink()
+    {
+        var folder = @"C:\photos";
+        _fs.CreateDirectory(folder);
+        _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "img1");
+        _sessionStore.Save(new SessionState { Folder = folder, CurrentPath = @"C:\photos\a.jpg" });
+        var readsBefore = _fs.SessionReadCount;
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(1, _fs.SessionReadCount - readsBefore);
+        var received = Assert.Single(_sink.SessionsReceived);
+        Assert.Equal(@"C:\photos\a.jpg", received.CurrentPath);
+    }
+
+    [Fact]
+    public async Task LoadAsync_EmptyFolder_ReadsSessionOnce_AndPassesItToSink()
+    {
+        var folder = @"C:\empty";
+        _fs.CreateDirectory(folder);
+        _sessionStore.Save(new SessionState { Folder = folder, CurrentPath = @"C:\empty\gone.jpg" });
+        var readsBefore = _fs.SessionReadCount;
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(1, _fs.SessionReadCount - readsBefore);
+        // An empty folder raises OnCatalogReady(0) then OnEmpty: both carry the one loaded session.
+        Assert.Equal(2, _sink.SessionsReceived.Count);
+        Assert.Same(_sink.SessionsReceived[0], _sink.SessionsReceived[1]);
+        Assert.Equal(@"C:\empty\gone.jpg", _sink.SessionsReceived[0].CurrentPath);
+    }
+
+    [Fact]
+    public async Task Dispose_DuringBlockedScan_CancelsLoad_AndNoSinkUpdateFollows()
+    {
+        var folder = @"C:\photos";
+        _fs.CreateDirectory(folder);
+        _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "img1");
+        var scanEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseScan = new ManualResetEventSlim(false);
+        _fs.OnEnumerateFiles = () =>
+        {
+            scanEntered.TrySetResult();
+            releaseScan.Wait(); // the scan is blocked until the test lets it go
+        };
+
+        var coordinator = CreateCoordinator();
+        var loadTask = coordinator.LoadAsync(folder);
+        await scanEntered.Task.WaitAsync(Wait.DefaultTimeout);
+
+        coordinator.Dispose(); // what MainWindow.Window_Closed does via MainViewModel.CloseSession
+        releaseScan.Set();
+        await loadTask.WaitAsync(Wait.DefaultTimeout);
+
+        Assert.Equal(0, _sink.ResetCachesCount);
+        Assert.Equal(0, _sink.CatalogReadyCount);
+        Assert.Empty(_sink.Presented);
+        Assert.Empty(_sink.Failures);
+        Assert.Equal(0, _catalog.Count);
     }
 
     [Fact]

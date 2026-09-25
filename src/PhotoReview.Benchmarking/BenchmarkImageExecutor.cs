@@ -23,6 +23,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     private readonly PreviewImageService _previewService;
     private readonly PreloadScheduler _preloadScheduler;
     private readonly string _diskCacheDirectory;
+    private readonly WindowedPreloadTarget _preloadTarget;
     private Task? _lastPreloadTask;
 
     // hasHeadroom defaults to the real OS memory check (production behavior), exactly like
@@ -38,12 +39,16 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
             PerformanceOptions.ImageCacheCapacityBytes, _diskCacheDirectory,
             disableDiskCacheOverride: !profile.DiskCache);
         var catalogEntries = Array.ConvertAll(files, f => new PhotoReview.Core.Catalog.CatalogEntry(f));
-        _preloadScheduler = new PreloadScheduler(_previewService, _metrics, () => catalogEntries, () => totalSourceBytes,
+        // PERF-01: the profile's NextWindow/PreviousWindow/FullFolder must reach the scheduler, otherwise every
+        // named profile ran the same production window policy regardless of what it claims to measure.
+        _preloadTarget = new WindowedPreloadTarget(_previewService, files, profile);
+        _preloadScheduler = new PreloadScheduler(_preloadTarget, _metrics, () => catalogEntries, () => totalSourceBytes,
             options: new PreloadOptions(
                 WorkerCount: profile.Workers,
                 MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
                 ReserveBytes: profile.MemoryReserveBytes,
-                FullFolderThresholdBytes: _previewService.CapacityBytes),
+                // A profile without FullFolder must never escalate to a whole-folder pass, however small the folder.
+                FullFolderThresholdBytes: profile.FullFolder ? _previewService.CapacityBytes : 0),
             memoryProbe: hasHeadroom is null ? WindowsMemoryProbe.Instance : new DelegateMemoryProbe(hasHeadroom),
             uiScheduler: ImmediateUiScheduler.Instance);
     }
@@ -86,7 +91,18 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     /// MainWindow does right after presenting an image, so a later <see cref="DecodeAsync"/>
     /// for a neighboring index can land as a genuine preload hit instead of a cold decode.
     /// </summary>
-    public void WarmPreloadAround(int center) => _lastPreloadTask = _preloadScheduler.PreloadAroundAsync(center);
+    public void WarmPreloadAround(int center)
+    {
+        _preloadTarget.SetCenter(center);
+        _lastPreloadTask = _preloadScheduler.PreloadAroundAsync(center);
+    }
+
+    /// <summary>The scheduler/logging settings this executor really applies for its profile (PERF-01).</summary>
+    public BenchmarkEffectiveConfig EffectiveConfig => new(_profile.Workers, _profile.NextWindow, _profile.PreviousWindow,
+        _profile.FullFolder, _profile.DetailedLogging, _profile.DiskCache);
+
+    /// <summary>Test seam: whether the RAM cache currently holds a preview for this path.</summary>
+    internal bool IsPreviewCached(string path) => _previewService.TryGetCachedPreview(_previewService.GetCurrentCacheKey(path), out _);
 
     /// <summary>Test seam: completes once the pass started by the last <see cref="WarmPreloadAround"/> has finished.</summary>
     internal Task WhenPreloadSettledAsync() => _lastPreloadTask ?? Task.CompletedTask;
@@ -119,4 +135,76 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         try { if (Directory.Exists(_diskCacheDirectory)) Directory.Delete(_diskCacheDirectory, recursive: true); }
         catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
+}
+
+/// <summary>Effective per-profile settings the executor applies (recorded so a report can prove what was measured).</summary>
+public sealed record BenchmarkEffectiveConfig(int Workers, int NextWindow, int PreviousWindow, bool FullFolder,
+    bool DetailedLogging, bool DiskCache);
+
+/// <summary>
+/// Applies a profile's per-run process state (currently detailed logging) around a benchmark run. Shared by the
+/// WPF benchmark window and the CLI so <c>logging-on</c>/<c>logging-off</c> differ in both front ends.
+/// </summary>
+public static class BenchmarkProfileScope
+{
+    /// <summary>Sets logging to <paramref name="profile"/>'s DetailedLogging; disposing restores the previous state.</summary>
+    public static IDisposable ApplyLogging(BenchmarkProfile profile, Func<bool> getEnabled, Action<bool> setEnabled)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(getEnabled);
+        ArgumentNullException.ThrowIfNull(setEnabled);
+        var previous = getEnabled();
+        setEnabled(profile.DetailedLogging);
+        return new Restore(() => setEnabled(previous));
+    }
+
+    private sealed class Restore(Action restore) : IDisposable
+    {
+        private Action? _restore = restore;
+        public void Dispose() => Interlocked.Exchange(ref _restore, null)?.Invoke();
+    }
+}
+
+/// <summary>
+/// Restricts preload to the profile's window around the navigation center by reporting out-of-window
+/// paths as already cached, so the scheduler never queues them. FullFolder profiles are not restricted.
+/// The scheduler's own production window still caps the effective range (the smaller of the two applies).
+/// </summary>
+internal sealed class WindowedPreloadTarget : IPreloadTarget
+{
+    private readonly IPreloadTarget _inner;
+    private readonly Dictionary<string, int> _indexByPath = new(StringComparer.OrdinalIgnoreCase);
+    private readonly bool _fullFolder;
+    private readonly int _next;
+    private readonly int _previous;
+    private int _center;
+
+    public WindowedPreloadTarget(IPreloadTarget inner, string[] files, BenchmarkProfile profile)
+    {
+        _inner = inner;
+        _fullFolder = profile.FullFolder;
+        _next = profile.NextWindow;
+        _previous = profile.PreviousWindow;
+        for (var i = 0; i < files.Length; i++) _indexByPath[System.IO.Path.GetFullPath(files[i])] = i;
+    }
+
+    public void SetCenter(int center) => Volatile.Write(ref _center, center);
+
+    private bool OutsideWindow(string path)
+    {
+        if (_fullFolder || !_indexByPath.TryGetValue(path, out var index)) return false;
+        var delta = index - Volatile.Read(ref _center);
+        return delta > _next || -delta > _previous;
+    }
+
+    public bool TryGetCachedPreview(string path) => OutsideWindow(path) || _inner.TryGetCachedPreview(path);
+    public bool TryGetCachedPreview(ImageCacheKey key) => OutsideWindow(key.Path) || _inner.TryGetCachedPreview(key);
+    public Task PreloadAsync(string path, CancellationToken cancellationToken = default) => _inner.PreloadAsync(path, cancellationToken);
+    public ImageCacheKey GetCurrentCacheKey(string path) => _inner.GetCurrentCacheKey(path);
+    public ImageCacheKey GetCurrentCacheKey(PhotoReview.Core.Catalog.CatalogEntry entry) => _inner.GetCurrentCacheKey(entry);
+    public int CacheCount => _inner.CacheCount;
+    public long CacheBytes => _inner.CacheBytes;
+    public int ActiveViewerDecodes => _inner.ActiveViewerDecodes;
+    public long? CachedPreviewBytes(ImageCacheKey key) => _inner.CachedPreviewBytes(key);
+    public bool HasDiskCachedPreview(ImageCacheKey key) => _inner.HasDiskCachedPreview(key);
 }

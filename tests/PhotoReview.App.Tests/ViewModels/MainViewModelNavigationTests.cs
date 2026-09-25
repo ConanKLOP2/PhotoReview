@@ -464,9 +464,9 @@ public sealed class MainViewModelNavigationTests : IDisposable
         public ForwardingFolderLoadSink(Func<IFolderLoadSink> getSink) => _getSink = getSink;
 
         public void ResetCaches() => _getSink().ResetCaches();
-        public void OnCatalogReady(string folder, int count) => _getSink().OnCatalogReady(folder, count);
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => _getSink().OnCatalogReady(folder, count, session);
         public Task PresentAsync(int index, long presentationGeneration) => _getSink().PresentAsync(index, presentationGeneration);
-        public void OnEmpty(string folder) => _getSink().OnEmpty(folder);
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => _getSink().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => _getSink().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => _getSink().OnFailed(folder, exception);
     }

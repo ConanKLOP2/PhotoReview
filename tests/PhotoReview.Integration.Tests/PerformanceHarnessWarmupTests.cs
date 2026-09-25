@@ -35,15 +35,29 @@ public sealed class PerformanceHarnessWarmupTests : IDisposable
     public async Task DefaultReportIsNotWrittenIntoThePhotoFolder()
     {
         var fixture = PerformanceTestHarness.CreateFixture(_root.Path, 2);
+        var reportDir = Path.Combine(_root.Path, "default-report-dir");
         var filesBefore = Directory.EnumerateFileSystemEntries(fixture).Order().ToArray();
+        // TEST-01: redirect the "default" location into the owned temp root so the shared %TEMP% report is never touched.
+        PerformanceTestHarness.DefaultReportDirectoryOverride = reportDir;
         try
         {
+            var expected = PerformanceTestHarness.DefaultReportPath;
+            Assert.StartsWith(reportDir, expected, StringComparison.OrdinalIgnoreCase);
+
             await PerformanceTestHarness.RunAsync(fixture, 2, workers: 1);
 
             Assert.Equal(filesBefore, Directory.EnumerateFileSystemEntries(fixture).Order().ToArray());
-            Assert.True(File.Exists(PerformanceTestHarness.DefaultReportPath));
-            Assert.False(PerformanceTestHarness.DefaultReportPath.StartsWith(fixture, StringComparison.OrdinalIgnoreCase));
+            Assert.True(File.Exists(expected));
+            Assert.False(expected.StartsWith(fixture, StringComparison.OrdinalIgnoreCase));
         }
-        finally { File.Delete(PerformanceTestHarness.DefaultReportPath); }
+        finally { PerformanceTestHarness.DefaultReportDirectoryOverride = null; }
+    }
+
+    [Fact(DisplayName = "Without an override the default report path is the shared temp location, outside any photo folder")]
+    public void DefaultReportPathWithoutOverrideIsUnderSystemTemp()
+    {
+        Assert.Null(PerformanceTestHarness.DefaultReportDirectoryOverride);
+        Assert.StartsWith(Path.GetTempPath(), PerformanceTestHarness.DefaultReportPath, StringComparison.OrdinalIgnoreCase);
+        Assert.False(PerformanceTestHarness.DefaultReportPath.StartsWith(_root.Path, StringComparison.OrdinalIgnoreCase));
     }
 }

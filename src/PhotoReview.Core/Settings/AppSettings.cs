@@ -16,7 +16,7 @@ public class AppSettings
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
     public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
-    public DecoderBackend DecoderBackend { get; set; } = DecoderBackend.Wpf;
+    public DecoderBackend DecoderBackend { get; set; } = DecoderBackend.WicDirect;
     /// <summary>Preview cache byte budget; only used when physical RAM is unknown (otherwise <see cref="ImageCacheRamPercent"/> wins).</summary>
     public long ImageCacheCapacityBytes { get; set; } = PerformanceOptions.ImageCacheCapacityBytes;
 
@@ -91,9 +91,9 @@ public class AppSettings
 
     /// <summary>
     /// Shows the photo information line (file name, date taken, dimensions, camera, lens, exposure) under the status line.
-    /// Absent in older configs = true. The EXIF values come from the decode that already runs, never an extra file read.
+    /// Default off; absent in older configs = false. The EXIF values come from the decode that already runs, never an extra file read.
     /// </summary>
-    public bool ShowExifInfo { get; set; } = true;
+    public bool ShowExifInfo { get; set; }
 
     /// <summary>Parts of the photo information line to show; absent in older configs = <see cref="ExifInfoFields.Default"/>.</summary>
     public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.Default;

@@ -265,10 +265,13 @@ public sealed class ReviewCatalog
         if (newOrder.Count != _entries.Count) return false;
 
         // Verify exact set match (case-insensitive)
+        // CORE-01: must be a true permutation -- every current path exactly once (a duplicate such as [A,A] for [A,B]
+        // has the right count and only known members, yet would drop B from the catalog).
         var currentSet = new HashSet<string>(_entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in newOrder)
         {
-            if (!currentSet.Contains(path)) return false;
+            if (path is null || !currentSet.Contains(path) || !seen.Add(path)) return false;
         }
 
         var currentPath = Current?.Path;

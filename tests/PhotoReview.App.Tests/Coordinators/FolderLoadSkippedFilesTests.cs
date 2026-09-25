@@ -51,9 +51,9 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         public int CatalogReadyCountAtSkipped { get; private set; } = -1;
         public List<Exception> Failures { get; } = [];
         public void ResetCaches() { }
-        public void OnCatalogReady(string folder, int count) => CatalogReadyCount++;
+        public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => CatalogReadyCount++;
         public Task PresentAsync(int index, long presentationGeneration) => Task.CompletedTask;
-        public void OnEmpty(string folder) { }
+        public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) { }
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) { }
         public void OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped)
         {
