@@ -257,7 +257,11 @@ public sealed class PreloadScheduler : IDisposable
     private async Task RunPreloadSchedulerAsync(CatalogEntry[] entries, CancellationToken cancellationToken)
     {
         var workers = _workerCount;
-        var running = new Dictionary<Task<bool>, string>();
+        var running = new Dictionary<Task<PreloadOutcome>, string>();
+        // Paths in flight, plus paths whose preload failed (corrupt/unreadable/not cached): never retried in
+        // this lifetime. A path whose preview was cached leaves the set when its worker finishes, so if that
+        // preview is evicted later (viewer/compare/zoom decodes sharing the LRU) the next order pass queues it
+        // again. The order enumerator yields each index once, so this cannot re-queue within one pass.
         var queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenVersion = -1L;
         var seenShape = (Direction: 1, Lead: 0);
@@ -357,9 +361,9 @@ public sealed class PreloadScheduler : IDisposable
                     headroom.DecodeQueuedSinceCheck = true;
                     var work = PreloadOneAsync(order.Current, path, key, cancellationToken);
                     // A call that finished synchronously (already cached, or superseded, before any await
-                    // yielded) returns the runtime's cached Task<bool> -- one shared instance per result --
+                    // yielded) can return a runtime-cached, shared Task instance for its result,
                     // so it cannot key `running`: a second one threw and ended the whole scheduler loop.
-                    if (work.IsCompletedSuccessfully) { if (!work.Result) queued.Remove(path); }
+                    if (work.IsCompletedSuccessfully) ForgetUnlessFailed(queued, path, work.Result);
                     else running.Add(work, path);
                     // Yield only after actual queue work; give input/rendering a
                     // chance without limiting every batch to two decodes.
@@ -386,11 +390,9 @@ public sealed class PreloadScheduler : IDisposable
                 if (paused || running.Count == 0) break;
                 var signalled = await Task.WhenAny(running.Keys.Append<Task>(wake)).ConfigureAwait(false);
                 if (ReferenceEquals(signalled, wake)) continue; // woken by a navigation: re-prioritize
-                var finished = (Task<bool>)signalled;
+                var finished = (Task<PreloadOutcome>)signalled;
                 running.Remove(finished, out var finishedPath);
-                // false = dropped before decoding because the user already moved past it: forget it,
-                // so a later order (e.g. the user turning back) can queue it again.
-                if (!await finished.ConfigureAwait(false)) queued.Remove(finishedPath!);
+                ForgetUnlessFailed(queued, finishedPath!, await finished.ConfigureAwait(false));
             }
             // Cancelled (the wake signal can end the wait before any worker finished) or paused for
             // memory: still report completion only once every started worker has unwound, so IsIdle
@@ -415,6 +417,22 @@ public sealed class PreloadScheduler : IDisposable
             await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
         }
         finally { order?.Dispose(); }
+    }
+
+    // Superseded (dropped before decoding because the user moved past it) and Cached (the preview is in the
+    // RAM cache now) are forgotten, so a later order -- the user turning back, or the preview having been
+    // evicted meanwhile -- can queue the path again. Failed stays: retrying a corrupt file on every
+    // navigation would re-read it from disk each time.
+    private static void ForgetUnlessFailed(HashSet<string> queued, string path, PreloadOutcome outcome)
+    {
+        if (outcome != PreloadOutcome.Failed) queued.Remove(path);
+    }
+
+    private enum PreloadOutcome
+    {
+        Cached,
+        Superseded,
+        Failed,
     }
 
     private static async Task DrainWorkersAsync(IEnumerable<Task> workers)
@@ -484,8 +502,10 @@ public sealed class PreloadScheduler : IDisposable
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return DecodeBox.Unbounded; }
     }
 
-    /// <returns>false when the item was dropped as superseded (see <see cref="IsStillWanted"/>).</returns>
-    private async Task<bool> PreloadOneAsync(int index, string path, ImageCacheKey key, CancellationToken cancellationToken)
+    /// <returns><see cref="PreloadOutcome.Superseded"/> when the item was dropped (see <see cref="IsStillWanted"/>),
+    /// <see cref="PreloadOutcome.Cached"/> when its preview is in the RAM cache afterwards, otherwise
+    /// <see cref="PreloadOutcome.Failed"/>.</returns>
+    private async Task<PreloadOutcome> PreloadOneAsync(int index, string path, ImageCacheKey key, CancellationToken cancellationToken)
     {
         // D04 perf: preload work is not tied to a navigation. Setting the AsyncLocal here only
         // affects calls made downstream from this method (DecodeAndCacheAsync), not the caller
@@ -507,13 +527,13 @@ public sealed class PreloadScheduler : IDisposable
             {
                 stopwatch.Stop();
                 if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "skipped", stopwatch.Elapsed.TotalMilliseconds);
-                return true;
+                return PreloadOutcome.Cached;
             }
             if (!IsStillWanted(index))
             {
                 stopwatch.Stop();
                 if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "superseded", stopwatch.Elapsed.TotalMilliseconds);
-                return false;
+                return PreloadOutcome.Superseded;
             }
             try
             {
@@ -537,6 +557,7 @@ public sealed class PreloadScheduler : IDisposable
                     var kind = sourceRead ? "decoded" : isHit ? "hit" : "miss";
                     PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, kind, stopwatch.Elapsed.TotalMilliseconds);
                 }
+                return isHit ? PreloadOutcome.Cached : PreloadOutcome.Failed;
             }
             catch (IOException ex)
             {
@@ -552,7 +573,7 @@ public sealed class PreloadScheduler : IDisposable
                 // rethrowing would end the whole scheduler loop and stall preload at the bad file on every navigation.
                 _log.Error($"Preload failed: {path}", ex);
             }
-            return true;
+            return PreloadOutcome.Failed;
         }
         finally
         {
