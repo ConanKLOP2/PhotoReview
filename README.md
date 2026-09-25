@@ -35,7 +35,7 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact. Verification for self-contained builds uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
 
-**Releasing:** CI tags every merge to `master` (`v2.0.N`). To publish a GitHub Release, run the **Release** workflow (Actions → Release → Run workflow), enter the tag (e.g. `v2.0.93`) and leave *draft* checked: it builds and verifies the framework-dependent zip, attaches it with the exe SHA256 and auto-generated notes, and creates a draft to review before pressing **Publish**.
+**Releasing:** CI tags every merge to `master` (`v2.0.N`) and then automatically creates a **draft** GitHub Release for that tag (framework-dependent zip, exe SHA256, generated notes). Drafts are invisible to the public: review one under Releases and press **Publish** to release it. Delete drafts you do not want. You can also run the **Release** workflow by hand (Actions → Release → Run workflow) for an existing tag that has no release yet.
 
 Note: `Microsoft.CodeAnalysis.CSharp` (Localization generator, `Directory.Packages.props`) must not be newer than the compiler in the installed .NET SDK; upgrade it only together with the SDK.
 
@@ -123,7 +123,7 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 `src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish`. Verification cho self-contained dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
 
-**Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`). Để đăng GitHub Release, chạy workflow **Release** (Actions → Release → Run workflow), nhập tag (ví dụ `v2.0.93`) và để *draft* được chọn: workflow build, kiểm tra zip framework-dependent, đính kèm cùng SHA256 của exe và release notes tự sinh, rồi tạo bản nháp để bạn xem lại trước khi bấm **Publish**.
+**Phát hành:** CI gắn tag cho mỗi lần merge vào `master` (`v2.0.N`) rồi tự tạo một **bản nháp (draft)** GitHub Release cho tag đó (zip framework-dependent, SHA256 của exe, release notes tự sinh). Bản nháp không hiện công khai: vào Releases xem lại rồi bấm **Publish** để phát hành, bản không cần thì xoá. Vẫn có thể chạy tay workflow **Release** (Actions → Release → Run workflow) cho một tag chưa có release.
 
 Lưu ý: `Microsoft.CodeAnalysis.CSharp` (generator Localization, `Directory.Packages.props`) không được mới hơn compiler của .NET SDK đang cài; chỉ nâng cùng lúc với SDK.
 
