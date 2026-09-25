@@ -26,7 +26,7 @@ public sealed class DamagedIccProfileTests
             switch (variant)
             {
                 case 0: bytes.AsSpan(body, 128).Fill(0xFF); break;           // header + tag table garbage
-                case 1: bytes.AsSpan(body + 36, 4).Fill(0); break;           // 'acsp' signature wiped
+                case 1: bytes.AsSpan(body + 36, 4).Clear(); break;           // 'acsp' signature wiped
                 default: bytes.AsSpan(body, 4).Fill(0xFF); break;            // absurd profile size
             }
             File.WriteAllBytes(path, bytes);
