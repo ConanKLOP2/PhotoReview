@@ -12,7 +12,12 @@ namespace PhotoReview.PerfAnalysis;
 /// detail) for one `--perf-analyze` run (D11 spec item 8).</summary>
 public static class PerfAnalyzeReport
 {
-    private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
+    // Groups without complete navs carry NaN percentiles; without this the whole summary.json write throws.
+    private static readonly JsonSerializerOptions DefaultOptions = new()
+    {
+        WriteIndented = true,
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
 
     public static void WriteMarkdown(string path, PerfAnalyze.AnalysisResult result)
     {

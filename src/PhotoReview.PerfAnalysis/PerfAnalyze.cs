@@ -14,6 +14,17 @@ namespace PhotoReview.PerfAnalysis;
 /// </summary>
 public static class PerfAnalyze
 {
+    /// <summary>S3/S4 are the burst scenarios. The key may be "S3@folderAlias": match the scenario part only, so an alias such as "pics3" or a scenario "S30" does not count.</summary>
+    public static bool IsBurstScenario(string scenarioKey)
+    {
+        var name = scenarioKey.AsSpan();
+        var at = name.IndexOf('@');
+        if (at >= 0) name = name[..at];
+        return name.Length >= 2
+            && (name.StartsWith("S3", StringComparison.OrdinalIgnoreCase) || name.StartsWith("S4", StringComparison.OrdinalIgnoreCase))
+            && (name.Length == 2 || !char.IsAsciiDigit(name[2]));
+    }
+
     public sealed class GroupResult
     {
         public required GroupSummary Summary { get; init; }
@@ -131,7 +142,7 @@ public static class PerfAnalyze
         var ramHitFinals = ramHitNavs.Where(n => n.FinalVisualMs is not null).Select(n => n.FinalVisualMs!.Value).OrderBy(v => v).ToList();
         var ramHitFinalP95 = ramHitFinals.Count > 0 ? PerfStats.NearestRank(ramHitFinals, 95) : double.NaN;
         var nonRamHitSharePct = complete.Count > 0 ? 100.0 * (complete.Count - ramHitNavs.Count) / complete.Count : double.NaN;
-        var isBurst = s.Key.Scenario.Contains("S3", StringComparison.OrdinalIgnoreCase) || s.Key.Scenario.Contains("S4", StringComparison.OrdinalIgnoreCase);
+        var isBurst = IsBurstScenario(s.Key.Scenario);
 
         var inputs = complete.Where(n => n.TInputMs is not null).Select(n => n.TInputMs!.Value).OrderBy(v => v).ToList();
         double? tInputP95 = inputs.Count > 0 ? PerfStats.NearestRank(inputs, 95) : null;
