@@ -44,7 +44,11 @@ public sealed class DiskCacheStoreTests : IDisposable
     public void PruneDirectoryToleratesMissingDirectory()
     {
         var missing = _root.Combine("does-not-exist");
-        DiskCacheStore.PruneDirectory(missing, "*.png", maxBytes: 10, logContext: "test");
+
+        var thrown = Record.Exception(() => DiskCacheStore.PruneDirectory(missing, "*.png", maxBytes: 10, logContext: "test"));
+
+        Assert.Null(thrown);
+        Assert.False(Directory.Exists(missing)); // pruning must not create the directory it was asked to trim
     }
 
     [Fact(DisplayName = "PruneDirectory removes preview metadata with evicted PNG and orphan metadata")]
