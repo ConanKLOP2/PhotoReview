@@ -59,6 +59,17 @@ public sealed class FileActionServiceTests
     [Theory]
     [InlineData(FileOperationType.Move)]
     [InlineData(FileOperationType.Copy)]
+    public async Task ExecuteAsync_MissingSource_DoesNotCreateDestinationFolder(FileOperationType operation)
+    {
+        var result = await _service.ExecuteAsync(new FileActionRequest(@"C:\photos\gone.jpg", operation, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.False(_fs.DirectoryExists(@"C:\photos\sel"));
+    }
+
+    [Theory]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
     public async Task ExecuteAsync_RelativeDestinationOutsideSource_FailsWithoutJournalOrMove(FileOperationType operation)
     {
         var source = @"C:\photos\a.jpg";
