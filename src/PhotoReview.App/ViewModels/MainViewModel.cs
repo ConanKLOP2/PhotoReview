@@ -78,7 +78,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         INaturalComparer? naturalComparer = null,
         Action? resetCachesAction = null,
         ReviewMetrics? metrics = null,
-        IUiScheduler? uiScheduler = null)
+        IUiScheduler? uiScheduler = null,
+        IFolderPicker? folderPicker = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -103,9 +104,15 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         Metrics = metrics ?? new ReviewMetrics();
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
-            _naturalComparer, () => Settings, this);
+            _naturalComparer, () => Settings, this,
+            folderPicker: folderPicker, fileSystem: _fileSystem, rememberFolder: RememberMoveCopyFolder);
         _siblingNavigator = new SiblingFolderNavigator(
             _clock, _catalog, _fileSystem, this, () => _currentSession);
+        InfoOverlay = new InfoOverlayViewModel(() => Settings, _siblingNavigator.FindSiblingImageFolders);
+        InfoOverlay.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(InfoOverlayViewModel.IsFileInfoVisible)) OnPropertyChanged(nameof(IsStatusPanelVisible));
+        };
         _duplicateController = new DuplicateCleanupController(
             _clock, _catalog, _fileActionService, _hashService, _fileSystem, _dialogService, _uiScheduler,
             _preloadController, _thumbnailCache, _previewService, this);
@@ -141,8 +148,22 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public AppSettings Settings
     {
         get => _settingsOverride ?? _settingsStore.Current;
-        set => _settingsOverride = value;
+        set
+        {
+            _settingsOverride = value;
+            // Visibility switches and the folder keys shown in the folder line follow the new settings.
+            InfoOverlay.Refresh();
+        }
     }
+
+    /// <summary>On-image info overlays (file block, folder block with sibling folders).</summary>
+    public InfoOverlayViewModel InfoOverlay { get; }
+
+    /// <summary>
+    /// The bottom-left panel is shown when the file info is on, or when there is a skipped-files warning: the warning is
+    /// not "info" and must stay visible even with the overlays hidden.
+    /// </summary>
+    public bool IsStatusPanelVisible => InfoOverlay.IsFileInfoVisible || IsExifLineVisible || HasSkippedEntries;
 
     public string FolderTitle
     {
@@ -191,6 +212,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(SkippedEntries));
         OnPropertyChanged(nameof(HasSkippedEntries));
         OnPropertyChanged(nameof(SkippedWarningText));
+        OnPropertyChanged(nameof(IsStatusPanelVisible));
     }
 
     public object? CurrentImage => _presenter.CurrentImage;
@@ -208,6 +230,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public event Action? CatalogChanged;
 
     public Task FirstImageAsync() => FirstAsync();
+
+    public Task LastImageAsync() => LastAsync();
 
     public bool CurrentHasComparePair =>
         _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.Paths[_catalog.CurrentIndex]);
@@ -231,10 +255,48 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public async Task OpenFolderAsync(string folder, string? initialPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        // Q-R18: every folder open (command line, drop, forwarded, sibling navigation) passes the instance ownership
+        // first. The common case completes synchronously, so this adds no dispatcher yield.
+        var ownership = FolderOwnership;
+        if (ownership is not null)
+        {
+            var decision = await ownership.BeforeOpenAsync(folder, initialPath);
+            if (decision != PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
+            {
+                var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
+                StatusText = decision == PhotoReview.Core.Instance.FolderOpenDecision.ForwardedToOtherInstance
+                    ? Tr.StatusFolderOpenedInOtherWindow(name)
+                    : Tr.StatusFolderOpenInOtherWindowNoResponse(name);
+                NotifyNavigationStateChanged();
+                return;
+            }
+        }
         _statusText = string.Empty;
-        FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
-        await FolderLoadTask;
+        try
+        {
+            FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
+            await FolderLoadTask;
+        }
+        finally
+        {
+            ownership?.AfterOpen(folder, _shownFolder);
+        }
         NotifyNavigationStateChanged();
+    }
+
+    /// <summary>
+    /// Q-R18: single-instance lock/pipe ownership of the shown folder, set by the composition root (App). Null (tests,
+    /// benchmark host) = no instance checks.
+    /// </summary>
+    public PhotoReview.Core.Instance.IFolderOwnership? FolderOwnership { get; set; }
+
+    /// <summary>Q-R18: the folder whose catalog this window shows (set when a load reaches the catalog).</summary>
+    private string? _shownFolder;
+
+    private void OnFolderShown(string folder)
+    {
+        _shownFolder = folder;
+        FolderOwnership?.OnFolderShown(folder);
     }
 
     /// <summary>
@@ -297,6 +359,19 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock.NextInteraction();
         _statusText = string.Empty;
         await _presenter.PresentAsync(0);
+        NotifyNavigationStateChanged();
+    }
+
+    /// <summary>
+    /// Điều hướng tới ảnh cuối cùng trong danh mục (đối xứng với <see cref="FirstAsync"/>). Tăng thế hệ tương tác người dùng.
+    /// </summary>
+    public async Task LastAsync()
+    {
+        await WaitForPendingExplorerOrderAsync();
+        if (_catalog.Count == 0) return;
+        _clock.NextInteraction();
+        _statusText = string.Empty;
+        await _presenter.PresentAsync(_catalog.Count - 1);
         NotifyNavigationStateChanged();
     }
 
@@ -364,6 +439,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>True while a file action or undo is in flight (read-only projection of the gate).</summary>
     public bool IsFileActionInProgress => _fileActionGate.IsHeld;
 
+    /// <summary>R7-7: completes once no file action or undo holds the gate (window close waits for it).</summary>
+    public Task WhenFileActionIdleAsync() => _fileActionGate.WhenReleasedAsync();
+
     /// <summary>
     /// INV-9: a file opened directly is presented before Explorer's view order arrives. Commands that
     /// move away from it (navigation, file actions that advance) wait for that order to be applied or
@@ -385,12 +463,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     private async Task UndoCoreAsync()
     {
-        var result = await _fileActionController.UndoLastAsync(_catalog.Current?.Path);
+        var currentFolder = _currentSession?.Folder;
+        var result = await _fileActionController.UndoLastAsync(currentFolder);
 
-        // Handle Recycle Undo which needs folder change
-        if (result?.Succeeded == true && result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
+        // Recycle undo, or a Move made in a previous folder (R7-2): open the restored file's folder at that file.
+        if (FileActionController.RestoresOutsideFolder(result, currentFolder))
         {
-            var folder = Path.GetDirectoryName(result.Source);
+            var folder = Path.GetDirectoryName(result!.Source);
             if (!string.IsNullOrEmpty(folder))
             {
                 await OpenFolderAsync(folder, result.Source);
@@ -401,6 +480,34 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public void ToggleFit() => _viewerState.ResetFit();
     public void ZoomIn() => _viewerState.ZoomIn();
     public void ZoomOut() => _viewerState.ZoomOut();
+
+    /// <summary>Zoom to 100 % = one source pixel per device pixel (ADR 0008); no-op without an image.</summary>
+    public void ZoomActualSize()
+    {
+        if (!HasImages) return;
+        _viewerState.ZoomToActualSize();
+    }
+
+    /// <summary>
+    /// Shows/hides all on-image info overlays and persists the choice (config.json, through the same SettingsStore.Save
+    /// as the Settings window, on the UI thread: SettingsStore.Changed listeners are UI-affine, ADR 0005).
+    /// </summary>
+    public void ToggleInfoOverlay()
+    {
+        var settings = Settings;
+        settings.ShowInfoOverlay = !settings.ShowInfoOverlay;
+        InfoOverlay.Refresh();
+        NotifyExifLineChanged();
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The overlay still toggles for this session; only persisting failed.
+            AppLog.Error("Could not save the info overlay setting", ex);
+        }
+    }
     public void ToggleFullscreen() => _viewerState.ToggleFullscreen();
     public void ExitFullscreen() => _viewerState.ExitFullscreen();
 
@@ -462,7 +569,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (changed)
         {
             UpdateFolderTitle();
+            InfoOverlay.Refresh();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
+            NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
             var newMode = _settingsStore.Current.LoadingMode;
             var newBackend = _settingsStore.Current.DecoderBackend;
             if (previousMode != newMode || previousBackend != newBackend)
@@ -492,6 +601,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     /// <summary>Writes any debounced session state now (window close, folder change).</summary>
     public void FlushSession() => _sessionWriter?.Flush();
+
+    /// <summary>
+    /// Window close / app exit (Q-R5, R7-3): writes pending session state but waits at most 2 s for a write already
+    /// in flight on a slow disk, then skips it instead of hanging shutdown. Later updates are ignored.
+    /// </summary>
+    public void CloseSession() => _sessionWriter?.Dispose();
 
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 
@@ -524,7 +639,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         UpdateFolderTitle();
         if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
         OnPropertyChanged(nameof(SkippedWarningText));
+        InfoOverlay.Refresh();
         // StatusText is event text (last action); it switches language with the next update.
+        NotifyExifLineChanged();
     }
 
     public void NotifyPresentationChanged() => NotifyNavigationStateChanged();
@@ -538,6 +655,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(TotalFiles));
         OnPropertyChanged(nameof(CurrentImage));
         OnPropertyChanged(nameof(StatusText));
+        NotifyExifLineChanged();
     }
 
     // --- IFolderLoadSink implementation ---
@@ -554,9 +672,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
+        OnFolderShown(folder);
         if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
         SetFolderText(folder, count, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
+        InfoOverlay.SetFolder(folder);
         _statusText = StatusFormatter.IndexOnly(0, count);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
@@ -573,8 +693,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
+        OnFolderShown(folder);
         SetFolderText(folder, 0, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
+        InfoOverlay.SetFolder(folder);
         StatusText = StatusFormatter.NoSupportedImages();
         _presenter.ClearPresentation();
         CatalogChanged?.Invoke();
@@ -681,5 +803,69 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     void IDuplicateCleanupSink.NotifyNavigationStateChanged()
     {
         NotifyNavigationStateChanged();
+    }
+
+    // ---- "Move to… / Copy to…" ----
+
+    /// <summary>
+    /// "Move to…" (default M): moves the current photo into a folder chosen in the folder picker, or into the last one
+    /// when reuse is on; <paramref name="forcePicker"/> (Shift+key) always asks. Same gate and pipeline as an action profile.
+    /// </summary>
+    public Task MoveToFolderAsync(bool forcePicker = false) => MoveOrCopyToFolderAsync(FileOperationType.Move, forcePicker);
+
+    /// <summary>"Copy to…" (default Y): like <see cref="MoveToFolderAsync"/> but copies.</summary>
+    public Task CopyToFolderAsync(bool forcePicker = false) => MoveOrCopyToFolderAsync(FileOperationType.Copy, forcePicker);
+
+    /// <returns>False when the gate was already held (nothing ran).</returns>
+    private Task<bool> MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker) => _fileActionGate.RunExclusiveAsync(async () =>
+    {
+        await WaitForPendingExplorerOrderAsync();
+        await _fileActionController.MoveOrCopyToFolderAsync(operation, forcePicker, () => (_compare.SelectedPath, _catalog.Current?.Path));
+    });
+
+    /// <summary>Persists the folder a successful Move-to/Copy-to went to, so the picker starts there next time.</summary>
+    private void RememberMoveCopyFolder(FileOperationType operation, string folder)
+    {
+        var settings = Settings;
+        if (operation == FileOperationType.Move) settings.LastMoveToFolder = folder;
+        else settings.LastCopyToFolder = folder;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file operation already succeeded; only the remembered folder is lost (kept in memory for this session).
+            FileLog.Default.Warn("Could not save the last Move-to/Copy-to folder: " + ex.Message);
+        }
+    }
+
+    // --- Photo information (EXIF) line under the status line ---
+
+    /// <summary>
+    /// The photo information line for the presented image (<see cref="ExifFormatter"/>, fields from
+    /// <see cref="AppSettings.ExifInfoFields"/>); empty while loading, in compare mode or with nothing shown.
+    /// Independent of <see cref="AppSettings.ShowExifInfo"/> -- see <see cref="IsExifLineVisible"/>.
+    /// </summary>
+    public string ExifText => _presenter.CurrentPhotoInfo is { } info
+        ? ExifFormatter.Format(Settings.ExifInfoFields, info.FileName, info.Width, info.Height, info.Exif,
+            System.Globalization.CultureInfo.CurrentCulture) // display text: user's number/date format
+        : string.Empty;
+
+    /// <summary>
+    /// <see cref="AppSettings.ShowInfoOverlay"/> (master switch, key I) and <see cref="AppSettings.ShowExifInfo"/>, and
+    /// there is something to show.
+    /// </summary>
+    public bool IsExifLineVisible => Settings.ShowInfoOverlay && Settings.ShowExifInfo && ExifText.Length > 0;
+
+    /// <summary>Screen-reader name of the line.</summary>
+    public string ExifAutomationName => Tr.MainExifAutomationName(ExifText);
+
+    private void NotifyExifLineChanged()
+    {
+        OnPropertyChanged(nameof(ExifText));
+        OnPropertyChanged(nameof(IsExifLineVisible));
+        OnPropertyChanged(nameof(ExifAutomationName));
+        OnPropertyChanged(nameof(IsStatusPanelVisible));
     }
 }

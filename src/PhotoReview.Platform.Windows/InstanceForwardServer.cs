@@ -17,11 +17,13 @@ public static class InstanceForwardPipe
     /// Pipe name for the same folder key as <see cref="InstanceLock"/>, additionally scoped by user SID and logon session
     /// (the mutex is session-local, so a pipe of another session must never be mistaken for the owner).
     /// </summary>
-    public static string NameFor(string? folder)
+    public static string NameFor(string? folder) => InstanceKeys.For(InstanceMode.PerFolder, folder).PipeName;
+
+    /// <summary>Q-R18: the pipe paired with <paramref name="mutexName"/>, scoped by user SID and logon session.</summary>
+    internal static string NameForMutex(string mutexName, string prefix)
     {
-        var sid = WindowsIdentity.GetCurrent().User?.Value ?? "nosid";
-        var key = $"{InstanceLock.MutexNameFor(folder)}|{sid}|{System.Diagnostics.Process.GetCurrentProcess().SessionId}";
-        return "PhotoReview.Forward." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+        var key = $"{mutexName}|{InstanceKeys.CurrentUserSid}|{InstanceKeys.CurrentSessionId}";
+        return prefix + ".Forward." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
     }
 
     /// <summary>DACL with a single entry: the current user. No other user, session or service can connect or inject a path.</summary>

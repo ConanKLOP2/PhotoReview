@@ -88,11 +88,10 @@ public sealed class FileActionService
                 if (string.IsNullOrWhiteSpace(request.Destination))
                     throw new IOException(Tr.CoreFileActionNoDestination);
 
-                // Same rule as ActionDestinationPolicy: drive-relative "a:b" is "rooted" to .NET but resolves against that
-                // drive's current directory, i.e. it is neither an explicit absolute path nor inside the photo folder.
-                if (ActionDestinationPolicy.Validate(request.Destination) == ActionDestinationCheck.InvalidChars
-                    && !Path.IsPathFullyQualified(request.Destination)
-                    && request.Destination.Contains(':', StringComparison.Ordinal))
+                // Enforce the whole ActionDestinationPolicy at run time, not only what Settings validated (review r7):
+                // drive-relative "a:b" and rooted-without-drive "\photos" resolve against whatever drive/current
+                // directory the process has, i.e. neither an explicit absolute path nor a folder inside the photo folder.
+                if (ActionDestinationPolicy.Validate(request.Destination) != ActionDestinationCheck.Ok)
                     throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
 
                 var source = request.Source;
@@ -150,7 +149,10 @@ public sealed class FileActionService
                 }
 
                 // Journaled after Prepared: persisted as a code + English, shown via ex.Message (UI language).
-                tx.VerifyDestination(_fileSystem, destinationPath, JournalErrors.VerifySizeChanged);
+                if (request.Operation == FileOperationType.Move)
+                    tx.VerifyMoved(_fileSystem, source, destinationPath, JournalErrors.VerifySizeChanged);
+                else
+                    tx.VerifyDestination(_fileSystem, destinationPath, JournalErrors.VerifySizeChanged);
 
                 _ = tx.Commit(out var journalError);
                 if (journalError is not null)

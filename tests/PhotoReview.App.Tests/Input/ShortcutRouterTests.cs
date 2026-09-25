@@ -143,4 +143,86 @@ public sealed class ShortcutRouterTests
         Assert.Equal(ReviewCommandType.ZoomIn, _router.TryResolve(Key.OemPlus, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Equal(ReviewCommandType.ZoomOut, _router.TryResolve(Key.OemMinus, Key.None, ModifierKeys.None, false, true)?.Type);
     }
-}
+
+    // --- Optional shortcuts: LastImage (End), ZoomActualSize (D1), ToggleInfoOverlay (I); empty = disabled ---
+
+    private static ShortcutRouter DefaultRouter() => new(new AppSettings());
+
+    [Fact]
+    public void LastImage_WhenHasImage_ResolvesToLastImage()
+    {
+        var cmd = DefaultRouter().TryResolve(Key.End, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        Assert.Equal(ReviewCommandType.LastImage, cmd?.Type);
+    }
+
+    [Fact]
+    public void LastImage_WhenNoImage_ReturnsNull_LikeFirstImage()
+    {
+        var router = DefaultRouter();
+        Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+        Assert.Null(router.TryResolve(Key.Home, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+    }
+
+    [Fact]
+    public void ZoomActualSize_WhenHasImage_ResolvesToZoomActualSize()
+    {
+        var cmd = DefaultRouter().TryResolve(Key.D1, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        Assert.Equal(ReviewCommandType.ZoomActualSize, cmd?.Type);
+    }
+
+    [Fact]
+    public void ZoomActualSize_WhenNoImage_ReturnsNull()
+    {
+        Assert.Null(DefaultRouter().TryResolve(Key.D1, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ToggleInfoOverlay_ResolvesWithOrWithoutImage(bool hasImage)
+    {
+        var cmd = DefaultRouter().TryResolve(Key.I, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: hasImage);
+        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, cmd?.Type);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("NotAKey")]
+    [InlineData("1")]
+    public void OptionalShortcuts_EmptyOrUnparseable_AreDisabled(string value)
+    {
+        var settings = new AppSettings();
+        settings.Shortcuts.LastImage = value;
+        settings.Shortcuts.ZoomActualSize = value;
+        settings.Shortcuts.ToggleInfoOverlay = value;
+        var router = new ShortcutRouter(settings);
+
+        Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(Key.I, Key.None, ModifierKeys.None, false, hasImage: true));
+    }
+
+    [Fact]
+    public void OptionalShortcuts_Rebuild_PicksUpCustomKeys()
+    {
+        var settings = new AppSettings();
+        var router = new ShortcutRouter(settings);
+        settings.Shortcuts.LastImage = "F7";
+        settings.Shortcuts.ZoomActualSize = "D0";
+        settings.Shortcuts.ToggleInfoOverlay = "O";
+        router.Rebuild(settings);
+
+        Assert.Equal(ReviewCommandType.LastImage, router.TryResolve(Key.F7, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomActualSize, router.TryResolve(Key.D0, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.O, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, true));
+    }
+
+    [Fact]
+    public void ZoomActualSize_ActionOnTheSameKey_KeepsPriority()
+    {
+        // The fixture binds an action to D1 (an old config): actions are resolved before the zoom group.
+        var cmd = _router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true);
+        Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
+    }}

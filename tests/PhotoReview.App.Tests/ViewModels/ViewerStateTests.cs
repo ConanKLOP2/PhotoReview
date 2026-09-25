@@ -57,10 +57,47 @@ public sealed class ViewerStateTests
         Assert.Equal(double.PositiveInfinity, state.MaxImageWidth);
         Assert.Equal(double.PositiveInfinity, state.MaxImageHeight);
 
+        // feat/mouse-zoom: the absolute range is 10 %..800 % (click-to-zoom range); stepping stays 25 %..400 %.
         state.SetZoom(0.05);
-        Assert.Equal(0.25, state.Zoom);
+        Assert.Equal(0.10, state.Zoom);
 
         state.SetZoom(10.0);
+        Assert.Equal(8.0, state.Zoom);
+    }
+
+    [Theory]
+    [InlineData(1.0, 0.25, 1.25)]
+    [InlineData(3.9, 0.25, 4.0)]    // up: capped at the stepping max
+    [InlineData(1.0, -0.25, 0.75)]
+    [InlineData(0.3, -0.25, 0.25)]  // down: floored at the stepping min
+    [InlineData(0.10, 0.25, 0.35)]  // a 10 % click zoom can step up
+    [InlineData(8.0, -0.25, 4.0)]   // from an 800 % click zoom one step down lands on 400 %
+    [InlineData(5.5, -0.25, 4.0)]
+    public void CalculateStepZoom_StepsWithinTheSteppingRange(double current, double step, double expected)
+    {
+        Assert.Equal(expected, ViewerState.CalculateStepZoom(current, step)!.Value, 6);
+    }
+
+    [Theory]
+    [InlineData(4.0, 0.25)]   // at the stepping max
+    [InlineData(8.0, 0.25)]   // above it: zooming in must not shrink to 400 %
+    [InlineData(0.25, -0.25)] // at the stepping min
+    [InlineData(0.10, -0.25)] // below it: zooming out must not enlarge to 25 %
+    public void CalculateStepZoom_NeverMovesAgainstTheStepDirection(double current, double step)
+    {
+        Assert.Null(ViewerState.CalculateStepZoom(current, step));
+    }
+
+    [Fact]
+    public void ZoomIn_AboveStepRange_KeepsClickZoom()
+    {
+        var state = new ViewerState();
+        state.SetZoom(8.0);
+
+        state.ZoomIn();
+        Assert.Equal(8.0, state.Zoom);
+
+        state.ZoomOut();
         Assert.Equal(4.0, state.Zoom);
     }
 

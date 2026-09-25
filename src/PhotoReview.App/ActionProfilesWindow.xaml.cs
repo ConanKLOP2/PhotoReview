@@ -69,7 +69,27 @@ public partial class ActionProfilesWindow : Window
     {
         SaveCurrent();
         var dialog = new Microsoft.Win32.SaveFileDialog { Filter = Tr.DialogFileFilterJson, FileName = "photoreview-actions.json" };
-        if (dialog.ShowDialog(this) == true)System.IO.File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(Actions, JsonOptions));
+        if (dialog.ShowDialog(this) != true) return;
+        if (TryExport(dialog.FileName, Actions) is { } error)
+            System.Windows.MessageBox.Show(this, error, Tr.DialogExportActionsFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    /// <summary>
+    /// R7-9: writes the actions as JSON; the localized reason on an I/O or access error (it used to escape to
+    /// DispatcherUnhandledException, which marks it handled, so the export failed silently), or null on success.
+    /// </summary>
+    internal static string? TryExport(string path, IEnumerable<ReviewAction> actions)
+    {
+        try
+        {
+            System.IO.File.WriteAllText(path, JsonSerializer.Serialize(actions, JsonOptions));
+            return null;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            AppLog.Error($"Action export failed: {path}", ex);
+            return Tr.DialogExportActionsFailedMessage(ex.Message);
+        }
     }
     private void Apply_Click(object sender, RoutedEventArgs e)
     {

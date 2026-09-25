@@ -131,8 +131,8 @@ public sealed class SourcePresenceTests
     [Fact(DisplayName = "Native window placement restores after Loaded and persists monitor, bounds, and maximized state (source presence: needs a real Window handle)")]
     public void NativeWindowPlacementRestoresAndPersists() =>
         Assert.True(!ProjectSources.MainWindow.Contains("Window_SourceInitialized")
-            && ProjectSources.MainWindow.Contains("WindowPlacementService.Restore(this)")
-            && ProjectSources.MainWindow.Contains("WindowPlacementService.Save(this)")
+            && ProjectSources.MainWindow.Contains("WindowPlacementService.Restore(this, ")
+            && ProjectSources.MainWindow.Contains("WindowPlacementService.Save(this, ")
             && ProjectSources.WindowPlacementService.Contains("GetWindowPlacement")
             && ProjectSources.WindowPlacementService.Contains("SetWindowPlacement"));
 

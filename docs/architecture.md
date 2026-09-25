@@ -104,7 +104,7 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 | INV-3 | Advance một lần trước I/O; không present lại sau action | `MainViewModel`, `ImagePresenter` |
 | INV-4 | Chỉ một file action chạy cùng lúc | `FileActionService`, `UndoService` |
 | INV-5 | Action cũ không sửa catalog/undo sau đổi folder | `MainViewModel`, `GenerationClock`, `ReviewCatalog` |
-| INV-6 | Recycle; journal Prepared → Committed/Failed; startup reconcile | `FileActionService`, `OperationJournal`, `RecoveryRetryService`, `UndoService` |
+| INV-6 | Recycle; journal Prepared → Committed/Failed; startup reconcile | `FileActionService`, `OperationJournal`, `RecoveryRetryService`, `UndoService`, `JournalStartupRecovery` (gọi từ `App` sau instance lock) |
 | INV-7 | Bỏ snapshot Explorer trễ khi catalog đã tương tác/đổi | `FolderLoadCoordinator`, `ReviewCatalog`, `ExplorerSnapshotValidator` |
 | INV-8 | Handle decode dùng share ReadWrite/Delete, SequentialScan và đóng sớm | Các `IImageDecoder`, `ThumbnailCache` |
 | INV-9 | Mở file: present ngay, điều hướng/action chờ snapshot (`PendingOrder`) rồi đi theo thứ tự Explorer; mở folder present fallback trước | `FolderLoadCoordinator`, `MainViewModel` |

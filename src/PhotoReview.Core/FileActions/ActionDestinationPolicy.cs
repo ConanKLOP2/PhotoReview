@@ -40,4 +40,32 @@ public static class ActionDestinationPolicy
 
         return ActionDestinationCheck.Ok;
     }
+
+    /// <summary>
+    /// "Move to… / Copy to…": checks a folder chosen in the folder picker (or reused from the last time) for the photo in
+    /// <paramref name="photoFolder"/>. Same rules as an absolute action destination, plus: it must not be the photo folder
+    /// itself and it must already exist (the picker never creates folders; a remembered one may have been deleted).
+    /// </summary>
+    public static PickedFolderCheck ValidatePickedFolder(string? destination, string photoFolder, Func<string, bool> directoryExists)
+    {
+        ArgumentNullException.ThrowIfNull(photoFolder);
+        ArgumentNullException.ThrowIfNull(directoryExists);
+        if (string.IsNullOrWhiteSpace(destination)) return PickedFolderCheck.Empty;
+        if (Validate(destination) != ActionDestinationCheck.Ok || !Path.IsPathFullyQualified(destination)) return PickedFolderCheck.NotAbsolute;
+
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(destination));
+        var photo = Path.TrimEndingDirectorySeparator(Path.GetFullPath(photoFolder));
+        if (string.Equals(full, photo, StringComparison.OrdinalIgnoreCase)) return PickedFolderCheck.SameAsPhotoFolder;
+        return directoryExists(full) ? PickedFolderCheck.Ok : PickedFolderCheck.Missing;
+    }
+}
+
+/// <summary>Result of <see cref="ActionDestinationPolicy.ValidatePickedFolder"/>.</summary>
+public enum PickedFolderCheck
+{
+    Ok,
+    Empty,
+    NotAbsolute,
+    SameAsPhotoFolder,
+    Missing,
 }

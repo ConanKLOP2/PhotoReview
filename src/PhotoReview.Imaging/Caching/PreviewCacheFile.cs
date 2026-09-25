@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -41,7 +42,10 @@ namespace PhotoReview.Imaging.Caching;
 ///                     entry without a decoder ReadInfo call/extra file open (see
 ///                     PreviewImageService.GetOriginalDimensionsAsync)
 /// offset 20 (4 bytes) original (full source, post-orientation) pixel height
-/// offset 24 ...       payload bytes (currently always a JPEG-encoded frame) to end of file
+/// offset 24 (2 bytes) v7+: length N of the EXIF block (0 = none) -- see <see cref="CurrentVersion"/>
+/// offset 26 (N bytes) v7+: EXIF summary (Metadata.ExifSummaryCodec)
+/// then ...            payload bytes (currently always a JPEG-encoded frame) to end of file
+///                     (v6: the payload starts right at offset 24)
 /// </code>
 /// </remarks>
 public static class PreviewCacheFile
@@ -50,7 +54,17 @@ public static class PreviewCacheFile
     /// preview-v6: bumped from v5 so entries written by builds that flattened alpha (transparent PNG/WebP baked to
     /// opaque black, R2-A-02) are treated as stale and re-decoded once. v5 added the original source dimensions.
     /// </summary>
-    public const int CurrentVersion = 6;
+    /// <remarks>
+    /// preview-v7 (photo information line): after the fixed header comes a 2-byte little-endian length N (0 = no EXIF)
+    /// and N bytes of <see cref="Metadata.ExifSummaryCodec"/> data, then the payload. v6 entries (same header, payload
+    /// straight after it) are still READ, as "no EXIF": re-decoding them from source only to learn EXIF would cost one
+    /// source read per cached image (AGENTS.md priority 1). They are replaced by v7 entries as the cache turns over,
+    /// or at once after "Clear cache". Malformed EXIF bytes in a v7 entry also just mean "no EXIF", never a rejected entry.
+    /// </remarks>
+    public const int CurrentVersion = 7;
+
+    /// <summary>Previous layout, still readable (no EXIF block) -- see <see cref="CurrentVersion"/>.</summary>
+    internal const int NoExifVersion = 6;
 
     /// <summary>JPEG quality chosen by measurement -- see the format decision in the type doc.</summary>
     public const int DefaultJpegQuality = 95;
@@ -65,7 +79,8 @@ public static class PreviewCacheFile
     // PreviewImageService (same assembly) uses this directly; a caller outside the assembly goes
     // through the IDecodedImage-based WriteAtomicallyAsync/ReadAsDecodedImage overloads below,
     // exactly like DiskCacheStore's public IDecodedImage overload vs. its internal BitmapSource one.
-    internal readonly record struct ReadResult(BitmapSource Bitmap, DecoderBackend ActualBackend, int Orientation, long FileBytes, int OriginalWidth, int OriginalHeight);
+    internal readonly record struct ReadResult(BitmapSource Bitmap, DecoderBackend ActualBackend, int Orientation, long FileBytes, int OriginalWidth, int OriginalHeight,
+        ExifSummary? Exif = null);
 
     /// <summary>Public, framework-agnostic entry point: encodes an already-decoded preview.</summary>
     public static Task WriteAtomicallyAsync(IDecodedImage image, string cachePath, int jpegQuality = DefaultJpegQuality, CancellationToken cancellationToken = default)
@@ -73,7 +88,7 @@ public static class PreviewCacheFile
         ArgumentNullException.ThrowIfNull(image);
         if (image.PlatformImage is not BitmapSource bitmap)
             throw new ArgumentException("PlatformImage must be a BitmapSource for the preview cache.", nameof(image));
-        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, jpegQuality, cancellationToken: cancellationToken);
+        return WriteAtomicallyAsync(bitmap, image.ActualBackend, image.Orientation, image.OriginalWidth, image.OriginalHeight, cachePath, jpegQuality, exif: image.Exif, cancellationToken: cancellationToken);
     }
 
     /// <summary>Public, framework-agnostic entry point: reads a v5 entry back as an <see cref="IDecodedImage"/>.</summary>
@@ -81,7 +96,7 @@ public static class PreviewCacheFile
     {
         var result = Read(cachePath);
         return new WpfDecodedImage(result.Bitmap, downscaled: true, orientation: result.Orientation, actualBackend: result.ActualBackend,
-            originalWidth: result.OriginalWidth, originalHeight: result.OriginalHeight);
+            originalWidth: result.OriginalWidth, originalHeight: result.OriginalHeight, exif: result.Exif);
     }
 
     /// <summary>
@@ -101,6 +116,7 @@ public static class PreviewCacheFile
         string cachePath,
         int jpegQuality = DefaultJpegQuality,
         bool opacityVerified = false,
+        ExifSummary? exif = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
@@ -121,11 +137,17 @@ public static class PreviewCacheFile
             var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
             var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
             var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
+            // v7: EXIF block (2-byte length, 0 = none, then the encoded summary) between header and payload.
+            var exifBytes = ExifSummaryCodec.Encode(exif);
+            var exifLength = new byte[2];
+            BinaryPrimitives.WriteUInt16LittleEndian(exifLength, (ushort)exifBytes.Length);
             var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
                 64 * 1024, FileOptions.SequentialScan);
             await using (stream.ConfigureAwait(false))
             {
                 stream.Write(header);
+                stream.Write(exifLength);
+                stream.Write(exifBytes);
                 var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };
                 encoder.Frames.Add(BitmapFrame.Create(bitmap));
                 encoder.Save(stream);
@@ -157,7 +179,7 @@ public static class PreviewCacheFile
             throw new InvalidDataException("Preview cache entry has an invalid header magic.");
 
         var version = header[4];
-        if (version != CurrentVersion)
+        if (version != CurrentVersion && version != NoExifVersion)
             throw new InvalidDataException($"Preview cache entry is version {version.ToString(System.Globalization.CultureInfo.InvariantCulture)}, expected {CurrentVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)}.");
 
         var backendValue = (DecoderBackend)header[5];
@@ -179,8 +201,28 @@ public static class PreviewCacheFile
         if (originalWidth <= 0 || originalHeight <= 0)
             throw new InvalidDataException("Preview cache entry has invalid original dimensions.");
 
+        ExifSummary? exif = null;
+        var exifBlockSize = 0;
+        if (version == CurrentVersion)
+        {
+            if (stream.Length - HeaderSize < 2)
+                throw new InvalidDataException("Preview cache entry has no payload.");
+            Span<byte> exifLength = stackalloc byte[2];
+            stream.ReadExactly(exifLength);
+            var length = BinaryPrimitives.ReadUInt16LittleEndian(exifLength);
+            if (length > ExifSummaryCodec.MaxEncodedLength || length > stream.Length - HeaderSize - 2)
+                throw new InvalidDataException("Preview cache entry has an oversized EXIF block.");
+            if (length > 0)
+            {
+                Span<byte> exifBytes = stackalloc byte[length];
+                stream.ReadExactly(exifBytes);
+                exif = ExifSummaryCodec.Decode(exifBytes); // malformed = no EXIF; the pixels are still good
+            }
+            exifBlockSize = 2 + length;
+        }
+
         var fileBytes = stream.Length;
-        var payloadLength = fileBytes - HeaderSize;
+        var payloadLength = fileBytes - HeaderSize - exifBlockSize;
         if (payloadLength <= 0)
             throw new InvalidDataException("Preview cache entry has no payload.");
 
@@ -210,7 +252,7 @@ public static class PreviewCacheFile
         BitmapSource native = bitmap.Format == targetFormat ? bitmap : new FormatConvertedBitmap(bitmap, targetFormat, null, 0);
         native.Freeze();
 
-        return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight);
+        return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight, exif);
     }
 
     /// <summary>

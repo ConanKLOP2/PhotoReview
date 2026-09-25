@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.TurboJpeg.Native;
 
 namespace PhotoReview.Imaging.TurboJpeg;
@@ -37,6 +38,20 @@ public sealed class TurboJpegDecoder : IImageDecoder
     public IDecodedImage Decode(DecodeRequest request)
     {
         ReadOnlyMemory<byte> bytesMemory = LoadBytes(request);
+        try
+        {
+            return Decode(request, bytesMemory);
+        }
+        catch (Exception ex) when (!request.Bytes.HasValue)
+        {
+            // Read from disk here: hand the bytes to FallbackImageDecoder so it does not read the file again.
+            DecodeFailureSourceBytes.Attach(ex, bytesMemory);
+            throw;
+        }
+    }
+
+    private static WpfDecodedImage Decode(DecodeRequest request, ReadOnlyMemory<byte> bytesMemory)
+    {
         var bytes = bytesMemory.Span;
 
         // Magic byte verification: JPEG SOI marker (0xFF, 0xD8, 0xFF)
@@ -52,6 +67,9 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
 
         int orientation = request.ApplyOrientation ? ReadExifOrientation(bytes) : 1;
+        // Photo information line: parsed from the APP1 segment of the buffer this decode already holds (bounded,
+        // never throws) -- no extra file read.
+        var exif = ExifParser.TryParseJpeg(bytes);
         bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
 
         using var decompressor = TurboJpegNative.CreateDecompressor();
@@ -163,7 +181,8 @@ public sealed class TurboJpegDecoder : IImageDecoder
                     orientation: orientation,
                     actualBackend: DecoderBackend.TurboJpeg,
                     originalWidth: originalWidth,
-                    originalHeight: originalHeight);
+                    originalHeight: originalHeight,
+                    exif: exif);
             }
         }
     }

@@ -37,6 +37,21 @@ public sealed class FileActionGateTests
         Assert.False(gate.IsHeld);
     }
 
+    [Fact(DisplayName = "R7-7: WhenReleasedAsync completes only once the holder releases the gate")]
+    public async Task WhenReleasedAsync_CompletesOnExit()
+    {
+        var gate = new FileActionGate();
+        Assert.True(gate.WhenReleasedAsync().IsCompleted); // not held
+
+        Assert.True(gate.TryEnter());
+        var released = gate.WhenReleasedAsync();
+        Assert.False(released.IsCompleted);
+
+        gate.Exit();
+        await released;
+        Assert.False(gate.IsHeld);
+    }
+
     [Fact]
     public async Task RunExclusiveAsync_ReleasesGate_WhenWorkThrows()
     {

@@ -54,6 +54,9 @@ public sealed class SettingsStore
                 LastLoadRepairs = SettingsNormalizer.Normalize(loaded);
                 if (LastLoadRepairs.Count > 0)
                     _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
+                var disabledShortcuts = SettingsNormalizer.DisableConflictingOptionalShortcuts(loaded);
+                if (disabledShortcuts.Count > 0)
+                    _log.Info("Optional shortcuts disabled because their key is already bound: " + string.Join(", ", disabledShortcuts));
                 _current = loaded;
                 Changed?.Invoke(this, _current);
                 return _current;

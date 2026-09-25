@@ -9,6 +9,9 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.Recycle)]
     [InlineData(ReviewCommandType.RunAction)]
     [InlineData(ReviewCommandType.Undo)]
+    [InlineData(ReviewCommandType.MoveToFolder)]
+    [InlineData(ReviewCommandType.CopyToFolder)]
+    [InlineData(ReviewCommandType.ToggleInfoOverlay)] // flips and saves a setting
     public void FileChangingCommandsIgnoreAutoRepeat(ReviewCommandType type) =>
         Assert.True(type.IgnoresAutoRepeat());
 
@@ -18,6 +21,8 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.ZoomIn)]
     [InlineData(ReviewCommandType.ZoomOut)]
     [InlineData(ReviewCommandType.FirstImage)]
+    [InlineData(ReviewCommandType.LastImage)]
+    [InlineData(ReviewCommandType.ZoomActualSize)]
     [InlineData(ReviewCommandType.Skip)]
     [InlineData(ReviewCommandType.NextFolder)]
     [InlineData(ReviewCommandType.PreviousFolder)]

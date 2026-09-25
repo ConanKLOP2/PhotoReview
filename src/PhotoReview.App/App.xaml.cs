@@ -19,8 +19,7 @@ namespace PhotoReview.App;
 
 public partial class App : System.Windows.Application, IDisposable
 {
-    private InstanceLock? _instanceLock;
-    private IInstanceForwardServer? _forwardServer;
+    private InstanceScope? _instanceScope;
     private ForwardedOpenCoalescer? _forwardCoalescer;
     private PerfCsvListener? _perfListener;
     private PerfDispatcherHooks? _perfHooks;
@@ -99,6 +98,7 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
         services.AddSingleton<PhotoReview.App.Services.ViewportSizeSource>();
         services.AddSingleton<PhotoReview.App.Services.IPresentationObserver>(_ => PhotoReview.App.Services.NullPresentationObserver.Instance);
+        services.AddSingleton<PhotoReview.App.Coordinators.IFolderPicker, PhotoReview.App.Services.WpfFolderPicker>();
 
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>
@@ -184,7 +184,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
-            sp.GetRequiredService<IExplorerOrderProvider>()));
+            sp.GetRequiredService<IExplorerOrderProvider>(),
+            sp.GetRequiredService<IAppPaths>()));
     }
 
     /// <summary>
@@ -288,44 +289,74 @@ public partial class App : System.Windows.Application, IDisposable
         AppDomain.CurrentDomain.UnhandledException += (_, a) => LogUnhandledForced("AppDomain exception", a.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, a) => { LogUnhandledForced("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
-        _instanceLock = new InstanceLock(lockFolder, _services.GetRequiredService<ILog>());
-        var forwardPipeName = InstanceForwardPipe.NameFor(lockFolder);
-        if (!_instanceLock.IsOwner)
-        {
-            // Q-R10: hand the request to the instance that already owns this folder instead of showing an error.
-            // No answer within the timeout (stale mutex) keeps the previous behaviour.
-            var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
-            var forwarded = await SecondInstanceHandoff.TryForwardAsync(
-                new InstanceForwardClient(forwardPipeName, _services.GetRequiredService<ILog>(), allowServerForeground: true),
-                existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
-            if (!forwarded)
-            {
-                _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
-            }
-            _instanceLock.Dispose();
-            _instanceLock = null;
-            Shutdown(0);
-            return;
-        }
-        // Listen right away: a second launch made while this one is still starting waits for the pipe (up to its timeout).
+        // Q-R18: the instance mode comes from the settings loaded above, i.e. before any lock is taken; a change made in
+        // Settings therefore applies at the next start. SingleWindow = one app-wide lock + pipe; PerFolder = the lock and
+        // pipe of the launch folder, which then follow the folder the window shows (see InstanceScope).
         var uiScheduler = _services.GetRequiredService<IUiScheduler>();
         _forwardCoalescer = new ForwardedOpenCoalescer(
             path => uiScheduler.Post(() => OpenForwarded(path)), ForwardCoalesceWindow, _services.GetRequiredService<ILog>());
-        _forwardServer = new InstanceForwardServer(forwardPipeName, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>());
-        _forwardServer.Start();
+        _instanceScope = new InstanceScope(
+            appSettings.InstanceMode, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>(), allowServerForeground: true);
+        // Listen right away (the scope starts the pipe with the lock): a second launch made while this one is still
+        // starting waits for the pipe (up to its timeout).
+        if (!_instanceScope.TryAcquire(lockFolder))
+        {
+            // Q-R10: hand the request to the instance that already owns this folder (or, SingleWindow, the app) instead
+            // of showing an error; with no path the owner just comes to the front. No answer within the timeout (stale
+            // mutex) keeps the previous behaviour.
+            var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
+            var forwarded = await SecondInstanceHandoff.TryForwardAsync(
+                _instanceScope.CreateClient(lockFolder), existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
+            if (!forwarded)
+            {
+                _services.GetRequiredService<IDialogService>().ShowMessage(
+                    PhotoReview.Core.Localization.Tr.AppTitle,
+                    _instanceScope.Mode == PhotoReview.Core.Model.InstanceMode.PerFolder
+                        ? PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance
+                        : PhotoReview.Core.Localization.Tr.AppAlreadyRunningNoResponse);
+            }
+            Interlocked.Exchange(ref _instanceScope, null)?.Dispose();
+            Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
+            Shutdown(0);
+            return;
+        }
         PhotoReviewPerf.StartupMark("instanceLock");
         var window = _services.GetRequiredService<MainWindow>();
+        window.ViewModel.FolderOwnership = _instanceScope;
         PhotoReviewPerf.StartupMark("mainWindowConstructed");
         window.InitializeWithInitialPath(initial ?? initialFolder);
         MainWindow = window;
         window.Show();
         PhotoReviewPerf.StartupMark("windowShown");
+        _ = RecoverJournalAsync(window);
         if (store.LastLoadRepairs.Count > 0)
         {
             _services.GetRequiredService<IDialogService>().ShowMessage(
                 PhotoReview.Core.Localization.Tr.AppTitle,
                 PhotoReview.Core.Localization.Tr.SettingsLoadRepaired(string.Join(", ", store.LastLoadRepairs)));
         }
+    }
+
+    /// <summary>
+    /// INV-6 / ADR 0003 (review r7): reconcile pending journal operations and load the Undo history. Runs after the
+    /// instance lock and after the window is shown; the journal work itself is on the thread pool
+    /// (<see cref="JournalStartupRecovery"/>), so the first image is not delayed. Operations it had to mark Failed are
+    /// reported once, with an offer to open the Recovery window.
+    /// </summary>
+    private async Task RecoverJournalAsync(MainWindow window)
+    {
+        var services = _services!;
+        var failed = await JournalStartupRecovery.RunAsync(
+            services.GetRequiredService<OperationJournal>(),
+            services.GetRequiredService<UndoService>(),
+            services.GetRequiredService<IClock>(),
+            services.GetRequiredService<IUiScheduler>(),
+            services.GetRequiredService<ILog>());
+        if (failed.Count == 0) return;
+        var dialogs = services.GetRequiredService<IDialogService>();
+        if (dialogs.ShowConfirmation(PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedTitle,
+                PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedMessage(failed.Count)))
+            window.ViewModel.ShowRecovery();
     }
 
     /// <summary>
@@ -339,7 +370,8 @@ public partial class App : System.Windows.Application, IDisposable
     private void OpenForwarded(string? path)
     {
         if (MainWindow is not MainWindow window) return;
-        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        // R7-5: SC_RESTORE brings back the pre-minimize state (Maximized / fullscreen), unlike forcing Normal.
+        if (window.WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(window);
         window.Activate();
         if (path is null) return;
         var open = window.OpenPathAsync(path);
@@ -372,11 +404,11 @@ public partial class App : System.Windows.Application, IDisposable
     public void Dispose()
     {
         GC.SuppressFinalize(this);
-        _services?.GetService<SessionWriter>()?.Flush();
-        Interlocked.Exchange(ref _forwardServer, null)?.Dispose();
+        _services?.GetService<SessionWriter>()?.Dispose(); // Q-R5: bounded (2 s), not the unbounded Flush
+        _instanceScope?.StopListening();
         Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
         AppLog.Shutdown(); // after the forward server/coalescer so their shutdown warnings still reach the log
-        Interlocked.Exchange(ref _instanceLock, null)?.Dispose();
+        Interlocked.Exchange(ref _instanceScope, null)?.Dispose();
         _perfHooks?.Detach();
         _perfListener?.Dispose();
         _perfListener = null;

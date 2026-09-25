@@ -25,6 +25,12 @@ public sealed class InMemoryFileSystem : IFileSystem
     public Func<string, string, Exception?>? MoveHook { get; set; }
     public Func<string, string, Exception?>? CopyHook { get; set; }
 
+    /// <summary>
+    /// Simulates a cross-volume MoveFileEx(MOVEFILE_COPY_ALLOWED) that copied the file but could not delete the source
+    /// (read-only / open without FILE_SHARE_DELETE): Move then returns normally and leaves the source in place.
+    /// </summary>
+    public bool MoveLeavesSource { get; set; }
+
     /// <summary>Ordered trace of journal stream opens and file mutations (IO03 ordering/thread tests).</summary>
     public sealed record FsEvent(string Kind, bool Durable, int ThreadId, string Path);
     private readonly List<FsEvent> _events = [];
@@ -125,8 +131,11 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             var writeTime = _fileWriteTimes[srcNorm];
 
-            _files.Remove(srcNorm);
-            _fileWriteTimes.Remove(srcNorm);
+            if (!MoveLeavesSource)
+            {
+                _files.Remove(srcNorm);
+                _fileWriteTimes.Remove(srcNorm);
+            }
 
             _files[dstNorm] = bytes;
             _fileWriteTimes[dstNorm] = writeTime;

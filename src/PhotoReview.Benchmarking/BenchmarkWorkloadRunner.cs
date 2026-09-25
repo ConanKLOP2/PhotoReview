@@ -13,6 +13,26 @@ namespace PhotoReview.Benchmarking;
 /// </summary>
 public static class BenchmarkWorkloadRunner
 {
+    /// <summary>
+    /// Runs one profile end to end with the setup/measure split (R2-F-14): each iteration is prepared by
+    /// <see cref="PrepareIterationAsync"/> (untimed) and only its measure step is sampled. The CLI runner uses
+    /// this so its samples match the WPF window's instead of timing each iteration's own setup I/O.
+    /// </summary>
+    public static Task<BenchmarkReport> RunProfileAsync(string folder, BenchmarkProfile profile,
+        BenchmarkImageExecutor executor, string[] files, Random random, IRecycleBin recycleBin,
+        IProgress<BenchmarkProgress>? progress = null, CancellationToken ct = default) =>
+        RunProfileAsync(folder, profile,
+            (workload, iteration, token) => PrepareIterationAsync(executor, files, profile, workload, iteration, random, recycleBin, token),
+            progress, timeProvider: null, ct);
+
+    /// <summary>Test seam for <see cref="RunProfileAsync(string, BenchmarkProfile, BenchmarkImageExecutor, string[], Random, IRecycleBin, IProgress{BenchmarkProgress}?, CancellationToken)"/>: a fake prepare step and clock.</summary>
+    internal static Task<BenchmarkReport> RunProfileAsync(string folder, BenchmarkProfile profile,
+        Func<BenchmarkWorkload, int, CancellationToken, Task<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>>> prepare,
+        IProgress<BenchmarkProgress>? progress, TimeProvider? timeProvider, CancellationToken ct) =>
+        BenchmarkEngine.RunPreparedAsync(folder, profile,
+            (_, workload, iteration, token) => prepare(workload, iteration, token),
+            progress, timeProvider, ct);
+
     public static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunIterationAsync(
         BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,
         int iteration, Random random, IRecycleBin recycleBin, CancellationToken ct)
@@ -73,7 +93,7 @@ public static class BenchmarkWorkloadRunner
         }
 
         var count = Math.Min(Math.Max(1, profile.Workers), files.Length);
-        var selected = Enumerable.Range(0, count).Select(o => SelectFile(files, workload, iteration + o, random)).ToArray();
+        var selected = Array.ConvertAll(SelectParallelIndices(files.Length, profile, workload, iteration, random), i => files[i]);
         return async () =>
         {
             var results = new bool[selected.Length];
@@ -181,6 +201,13 @@ public static class BenchmarkWorkloadRunner
             foreach (var c in value) hash = hash * 31 + c;
             return hash;
         }
+    }
+
+    /// <summary>File indices one parallel-decode iteration (Random/Sequential/...) decodes; consumes <paramref name="random"/>.</summary>
+    internal static int[] SelectParallelIndices(int fileCount, BenchmarkProfile profile, BenchmarkWorkload workload, int iteration, Random random)
+    {
+        var count = Math.Min(Math.Max(1, profile.Workers), fileCount);
+        return Enumerable.Range(0, count).Select(o => SelectIndex(fileCount, workload, iteration + o, random)).ToArray();
     }
 
     private static string SelectFile(string[] files, BenchmarkWorkload workload, int iteration, Random random) =>

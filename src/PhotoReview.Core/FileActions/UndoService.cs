@@ -16,6 +16,7 @@ public sealed class UndoService
     private readonly IRecycleBin _recycleBin;
     private readonly FileActionService? _fileActionService;
     private readonly Func<string, string, Task>? _moveOverride;
+    private readonly IClock _clock;
 
     private readonly Stack<(string Source, string Destination)> _moveHistory = new();
     // Keep the committed fingerprint next to the in-memory history.  Undo must
@@ -34,13 +35,15 @@ public sealed class UndoService
         IFileSystem fileSystem,
         IRecycleBin recycleBin,
         FileActionService? fileActionService = null,
-        Func<string, string, Task>? moveOverride = null)
+        Func<string, string, Task>? moveOverride = null,
+        IClock? clock = null)
     {
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _recycleBin = recycleBin ?? throw new ArgumentNullException(nameof(recycleBin));
         _fileActionService = fileActionService;
         _moveOverride = moveOverride;
+        _clock = clock ?? new SystemClock();
     }
 
     /// <summary>Số lượng thao tác Move hiện có trong lịch sử hoàn tác.</summary>
@@ -96,17 +99,46 @@ public sealed class UndoService
     {
         _moveHistory.Clear();
         _moveFingerprints.Clear();
-        var committedMoves = _journal.ReadCommittedMoves();
-        foreach (var entry in committedMoves)
+        SeedHistory(ReadStartupHistory());
+    }
+
+    /// <summary>
+    /// Startup, any thread (no in-memory state is touched): the recent committed Moves whose file is still at the
+    /// destination and not back at the source, oldest first. Pass the result to <see cref="SeedHistory"/> on the UI thread.
+    /// </summary>
+    public IReadOnlyList<JournalEntry> ReadStartupHistory()
+    {
+        var history = new List<JournalEntry>();
+        foreach (var entry in _journal.ReadCommittedMoves())
         {
             if (string.IsNullOrEmpty(entry.Destination)) continue;
+            // An undo is journaled as a reverse Move; loading it would turn Ctrl+Z after a restart into a redo.
+            if (entry.Undo == true) continue;
 
             if (_fileSystem.FileExists(entry.Destination) && !_fileSystem.FileExists(entry.Source))
-            {
-                _moveHistory.Push((entry.Source, entry.Destination));
-                _moveFingerprints[entry.Destination] = (entry.Size, entry.LastWriteUtc);
-            }
+                history.Add(entry);
         }
+        return history;
+    }
+
+    /// <summary>
+    /// Adds journal history (oldest first, from <see cref="ReadStartupHistory"/>) BELOW the moves already registered
+    /// in this session, which are newer; a Move registered meanwhile is not added twice. Same thread as
+    /// <see cref="Register"/> (UI).
+    /// </summary>
+    public void SeedHistory(IReadOnlyList<JournalEntry> history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        var sessionMoves = _moveHistory.ToArray(); // newest first
+        var sessionDestinations = new HashSet<string>(sessionMoves.Select(move => move.Destination), StringComparer.OrdinalIgnoreCase);
+        _moveHistory.Clear();
+        foreach (var entry in history)
+        {
+            if (entry.Destination is null || sessionDestinations.Contains(entry.Destination)) continue;
+            _moveHistory.Push((entry.Source, entry.Destination));
+            _moveFingerprints[entry.Destination] = (entry.Size, entry.LastWriteUtc);
+        }
+        for (var i = sessionMoves.Length - 1; i >= 0; i--) _moveHistory.Push(sessionMoves[i]);
     }
 
     /// <summary>
@@ -176,14 +208,38 @@ public sealed class UndoService
                     throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
                 }
 
-                if (_moveOverride is not null)
+                // Review r7 (INV-6): the undo is itself a Move (destination -> source), journaled Prepared -> Committed/
+                // Failed like any other, so a crash mid-undo leaves a pending entry for startup reconcile / Recovery.
+                var tx = new JournalTransaction(_journal, _clock, new JournalEntry(
+                    Guid.NewGuid().ToString("N"),
+                    FileOperationType.Move,
+                    JournalState.Prepared,
+                    move.Destination,
+                    move.Source,
+                    fingerprint.Size,
+                    fingerprint.LastWriteUtc,
+                    _clock.UtcNow,
+                    Undo: true));
+                try
                 {
-                    await _moveOverride(move.Destination, move.Source).ConfigureAwait(false);
+                    await tx.BeginAsync().ConfigureAwait(false);
+                    if (_moveOverride is not null)
+                    {
+                        await _moveOverride(move.Destination, move.Source).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await Task.Run(() => _fileSystem.Move(move.Destination, move.Source)).ConfigureAwait(false);
+                    }
+                    tx.VerifyMoved(_fileSystem, move.Destination, move.Source, JournalErrors.VerifySizeChanged);
                 }
-                else
+                catch (Exception undoFailure)
                 {
-                    await Task.Run(() => _fileSystem.Move(move.Destination, move.Source)).ConfigureAwait(false);
+                    _ = tx.Fail(undoFailure, out _);
+                    throw;
                 }
+                // A failed Committed append does not undo the completed move (same contract as FileActionService).
+                _ = tx.Commit(out _);
                 _lastUndoAction = null;
                 return new UndoResult(true, FileOperationType.Move, move.Source, move.Destination, null);
             }

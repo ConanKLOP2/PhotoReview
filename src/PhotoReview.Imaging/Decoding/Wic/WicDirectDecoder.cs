@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Decoding.Wic;
 
@@ -94,7 +95,9 @@ public sealed class WicDirectDecoder : IImageDecoder
             decoder.GetFrame(0, out frame);
             frame.GetSize(out uint origW, out uint origH);
 
-            int orientation = request.ApplyOrientation ? ReadExifOrientation(frame) : 1;
+            // Orientation and the photo-information EXIF fields come from one query reader over the metadata
+            // this decode parses anyway (no extra read of the stream).
+            int orientation = ReadFrameMetadata(frame, request.ApplyOrientation, ExifIfdRootOf(decoder), out var exif);
             bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
 
             currentSource = (IWICBitmapSource)frame;
@@ -208,7 +211,7 @@ public sealed class WicDirectDecoder : IImageDecoder
             int originalWidth = isTransposed ? (int)origH : (int)origW;
             int originalHeight = isTransposed ? (int)origW : (int)origH;
 
-            return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect, originalWidth, originalHeight);
+            return new WpfDecodedImage(bitmap, downscaled, orientation, DecoderBackend.WicDirect, originalWidth, originalHeight, exif);
         }
         finally
         {
@@ -440,47 +443,60 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
-    private static int ReadExifOrientation(IWICBitmapFrameDecode frame)
+    /// <summary>IFD root of the EXIF block for JPEG/TIFF containers; null (no EXIF read) for anything else.</summary>
+    private static string? ExifIfdRootOf(IWICBitmapDecoder decoder)
     {
+        try
+        {
+            decoder.GetContainerFormat(out Guid container);
+            if (container == WicGuids.GUID_ContainerFormatJpeg) return ExifQueryInterpreter.JpegIfdRoot;
+            if (container == WicGuids.GUID_ContainerFormatTiff) return ExifQueryInterpreter.TiffIfdRoot;
+            return null;
+        }
+        catch (COMException)
+        {
+            return null;
+        }
+    }
+
+    private static int ReadExifOrientation(IWICBitmapFrameDecode frame) =>
+        ReadFrameMetadata(frame, readOrientation: true, exifIfdRoot: null, out _);
+
+    /// <summary>
+    /// Reads the EXIF orientation (when <paramref name="readOrientation"/>) and, when <paramref name="exifIfdRoot"/> is
+    /// set, the photo-information fields through ONE metadata query reader of the frame being decoded -- the same
+    /// metadata block WIC parses for the orientation anyway, so no extra stream read. Never throws: any metadata
+    /// failure gives orientation 1 / no EXIF.
+    /// </summary>
+    private static int ReadFrameMetadata(IWICBitmapFrameDecode frame, bool readOrientation, string? exifIfdRoot, out ExifSummary? exif)
+    {
+        exif = null;
         IWICMetadataQueryReader? reader = null;
         IntPtr pvar = IntPtr.Zero;
         try
         {
             frame.GetMetadataQueryReader(out reader);
-            pvar = Marshal.AllocHGlobal(24);
-
-            // Clear buffer
-            for (var i = 0; i < 24; i++) Marshal.WriteByte(pvar, i, 0);
-
-            try
+            pvar = Marshal.AllocHGlobal(PropVariantSize);
+            ZeroPropVariant(pvar);
+            var orientation = 1;
+            if (readOrientation)
             {
-                reader.GetMetadataByName(ExifOrientationQuery, pvar);
-                int val = ReadVariantInt(pvar);
-                if (val is >= 1 and <= 8) return val;
-            }
-            catch
-            {
-                // Fall back to secondary query
+                var value = ExifQueryInterpreter.AsInteger(QueryValue(reader, ExifOrientationQuery, pvar));
+                if (value is not (>= 1 and <= 8))
+                    value = ExifQueryInterpreter.AsInteger(QueryValue(reader, WindowsOrientationQuery, pvar));
+                if (value is >= 1 and <= 8) orientation = (int)value.Value;
             }
 
-            _ = PropVariantClear(pvar);
-            for (var i = 0; i < 24; i++) Marshal.WriteByte(pvar, i, 0);
-
-            try
+            if (exifIfdRoot is not null)
             {
-                reader.GetMetadataByName(WindowsOrientationQuery, pvar);
-                int val = ReadVariantInt(pvar);
-                if (val is >= 1 and <= 8) return val;
+                var queryReader = reader;
+                exif = ExifQueryInterpreter.Read(name => QueryValue(queryReader, name, pvar), exifIfdRoot);
             }
-            catch
-            {
-                // Ignored
-            }
-
-            return 1;
+            return orientation;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            exif = null;
             return 1;
         }
         finally
@@ -494,17 +510,70 @@ public sealed class WicDirectDecoder : IImageDecoder
         }
     }
 
-    private static int ReadVariantInt(IntPtr pvar)
+    private const int PropVariantSize = 24;
+
+    /// <summary>One metadata query into a managed value (see <see cref="ReadVariant"/>); null when absent or unreadable.</summary>
+    /// <remarks><paramref name="pvar"/> must be zeroed on entry; it is cleared and zeroed again before returning.</remarks>
+    private static object? QueryValue(IWICMetadataQueryReader reader, string name, IntPtr pvar)
     {
-        ushort vt = (ushort)Marshal.ReadInt16(pvar);
-        // VT_UI2 = 18, VT_I2 = 2, VT_UI4 = 19, VT_I4 = 3
-        return vt switch
+        try
         {
-            2 => Marshal.ReadInt16(pvar, 8),
-            18 => (ushort)Marshal.ReadInt16(pvar, 8),
-            3 => Marshal.ReadInt32(pvar, 8),
-            19 => (int)(uint)Marshal.ReadInt32(pvar, 8),
-            _ => 1
+            return reader.GetMetadataByName(name, pvar) < 0 ? null : ReadVariant(pvar);
+        }
+        finally
+        {
+            _ = PropVariantClear(pvar);
+            ZeroPropVariant(pvar);
+        }
+    }
+
+    private static void ZeroPropVariant(IntPtr pvar)
+    {
+        for (var i = 0; i < PropVariantSize; i += 8) Marshal.WriteInt64(pvar, i, 0);
+    }
+
+    /// <summary>
+    /// PROPVARIANT to the managed shapes WPF's BitmapMetadata.GetQuery returns for the same tags (ushort, uint,
+    /// ulong-packed rational, string, first element of a vector), so <see cref="ExifQueryInterpreter"/> serves both.
+    /// </summary>
+    private static object? ReadVariant(IntPtr pvar)
+    {
+        const int data = 8;
+        const ushort vtVector = 0x1000;
+        var vt = (ushort)Marshal.ReadInt16(pvar);
+        switch (vt)
+        {
+            case 2: return Marshal.ReadInt16(pvar, data);              // VT_I2
+            case 3: return Marshal.ReadInt32(pvar, data);              // VT_I4
+            case 17: return Marshal.ReadByte(pvar, data);              // VT_UI1
+            case 18: return (ushort)Marshal.ReadInt16(pvar, data);     // VT_UI2
+            case 19: return (uint)Marshal.ReadInt32(pvar, data);       // VT_UI4
+            case 20: return Marshal.ReadInt64(pvar, data);             // VT_I8 (SRATIONAL)
+            case 21: return (ulong)Marshal.ReadInt64(pvar, data);      // VT_UI8 (RATIONAL)
+            case 30:                                                   // VT_LPSTR (EXIF ASCII)
+            {
+                var text = Marshal.ReadIntPtr(pvar, data);
+                return text == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(text);
+            }
+            case 31:                                                   // VT_LPWSTR
+            {
+                var text = Marshal.ReadIntPtr(pvar, data);
+                return text == IntPtr.Zero ? null : Marshal.PtrToStringUni(text);
+            }
+        }
+
+        if ((vt & vtVector) == 0) return null;
+        // CA* vector: { ULONG cElems; T* pElems } -- only the first element is used.
+        var count = Marshal.ReadInt32(pvar, data);
+        var elements = Marshal.ReadIntPtr(pvar, data + IntPtr.Size);
+        if (count <= 0 || elements == IntPtr.Zero) return null;
+        return (vt & ~vtVector) switch
+        {
+            18 => new[] { (ushort)Marshal.ReadInt16(elements) },
+            19 => new[] { (uint)Marshal.ReadInt32(elements) },
+            20 => new[] { Marshal.ReadInt64(elements) },
+            21 => new[] { (ulong)Marshal.ReadInt64(elements) },
+            _ => null,
         };
     }
 

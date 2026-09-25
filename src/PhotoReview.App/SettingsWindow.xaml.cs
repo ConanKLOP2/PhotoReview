@@ -1,7 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Text.Json;
-using System.Reflection;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.App.Localization;
@@ -24,6 +24,14 @@ public partial class SettingsWindow : Window
     private readonly LocalizationService? _localization;
     public AppSettings Settings { get; }
 
+    /// <summary>Test seam: receives the invalid-destination warning of Save instead of a MessageBox.</summary>
+    internal Action<string>? InvalidSettingsWarning { get; set; }
+
+    /// <summary>Session-only "remember the last opened page" (DR02): resets on process restart, not persisted to disk.</summary>
+    private static string s_lastPageKey = "General";
+
+    private Dictionary<string, (ScrollViewer Scroll, string TitleKey)>? _pages;
+
     public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null)
         : this(store.Current, decoderFactory, localization)
     {
@@ -35,46 +43,72 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _localization = localization;
         VersionText.Text = BuildInfo.Describe(typeof(SettingsWindow).Assembly);
-        Settings = new AppSettings
+        // Structural fix: clone through the same JSON contract used to persist config.json, so every AppSettings
+        // property survives round-tripping through this window -- including ones this window has no control for
+        // yet -- instead of a hand-written field list that silently drops whatever it forgets (the bug this replaces).
+        Settings = AppSettings.Clone(current);
+
+        InitializePages();
+
+        var allShortcutBoxes = new[]
         {
-            UiLanguage = current.UiLanguage,
-            InitialViewMode = current.InitialViewMode,
-            LoadingMode = current.LoadingMode,
-            ImageSortMode = current.ImageSortMode,
-            ScalingQuality = current.ScalingQuality,
-            DecoderBackend = current.DecoderBackend,
-            CompareHashEnabled = current.CompareHashEnabled,
-            CompareSizeEnabled = current.CompareSizeEnabled,
-            LoggingEnabled = current.LoggingEnabled,
-            JournalDurability = current.JournalDurability,
-            AllowPermanentDeleteWithoutRecycleBin = current.AllowPermanentDeleteWithoutRecycleBin,
-            ImageCacheCapacityBytes = current.ImageCacheCapacityBytes,
-            ImageCacheRamPercent = current.ImageCacheRamPercent,
-            MemoryReserveBytes = current.MemoryReserveBytes,
-            PreloadWorkerCount = current.PreloadWorkerCount,
-            PreloadMemoryLoadLimit = current.PreloadMemoryLoadLimit,
-            PreviewDiskCacheCapacityBytes = current.PreviewDiskCacheCapacityBytes,
-            UseSourceBytesCache = current.UseSourceBytesCache,
-            SourceBytesCapacityBytes = current.SourceBytesCapacityBytes,
-            Actions = current.Actions.Select(action => new ReviewAction
-            {
-                Name = action.Name, Shortcut = action.Shortcut, Operation = action.Operation,
-                Destination = action.Destination, Confirm = action.Confirm
-            }).ToList(),
-            Shortcuts = new ShortcutMappings
-            {
-                Next = current.Shortcuts.Next, Previous = current.Shortcuts.Previous,
-                MoveToFolder2 = current.Shortcuts.MoveToFolder2, SendToRecycleBin = current.Shortcuts.SendToRecycleBin,
-                Compare = current.Shortcuts.Compare, NextFolder = current.Shortcuts.NextFolder, PreviousFolder = current.Shortcuts.PreviousFolder,
-                FirstImage = current.Shortcuts.FirstImage, ZoomIn = current.Shortcuts.ZoomIn, ZoomOut = current.Shortcuts.ZoomOut, ToggleFit = current.Shortcuts.ToggleFit,
-                Skip = current.Shortcuts.Skip, Undo = current.Shortcuts.Undo, Fullscreen = current.Shortcuts.Fullscreen
-            }
+            NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
+            ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
+            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText,
         };
-        foreach (var textBox in new[] { NextText, PreviousText, RecycleText, CompareText, NextFolderText, PreviousFolderText, FirstImageText, ZoomInText, ZoomOutText, ToggleFitText, SkipText, UndoText, FullscreenText })
+        foreach (var textBox in allShortcutBoxes)
+        {
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
+            textBox.TextChanged += Shortcut_TextChanged;
+        }
+
         LoadFields();
         ApplyDecoderAvailability(decoderFactory);
         LoadLanguages();
+    }
+
+    // ---- Left navigation: page list, remembers the last page for this process only (DR02) ----
+
+    private void InitializePages()
+    {
+        _pages = new Dictionary<string, (ScrollViewer, string)>(StringComparer.Ordinal)
+        {
+            ["General"] = (GeneralScrollViewer, TrKeys.SettingsNavGeneral),
+            ["Display"] = (DisplayScrollViewer, TrKeys.SettingsNavDisplay),
+            ["Mouse"] = (MouseScrollViewer, TrKeys.SettingsNavMouse),
+            ["Performance"] = (PerformanceScrollViewer, TrKeys.SettingsNavPerformance),
+            ["Shortcuts"] = (ShortcutsScrollViewer, TrKeys.SettingsNavShortcuts),
+            ["Files"] = (FilesScrollViewer, TrKeys.SettingsNavFiles),
+            ["Diagnostics"] = (DiagnosticsScrollViewer, TrKeys.SettingsNavDiagnostics),
+        };
+        var target = _pages.ContainsKey(s_lastPageKey) ? s_lastPageKey : "General";
+        foreach (ListBoxItem item in NavList.Items)
+        {
+            if (Equals(item.Tag, target)) { NavList.SelectedItem = item; break; }
+        }
+        NavList.SelectedItem ??= NavList.Items[0];
+    }
+
+    private void NavList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_pages is null || NavList.SelectedItem is not ListBoxItem { Tag: string key } || !_pages.TryGetValue(key, out var page)) return;
+        s_lastPageKey = key;
+        foreach (var (pageKey, entry) in _pages)
+            entry.Scroll.Visibility = pageKey == key ? Visibility.Visible : Visibility.Collapsed;
+        PageTitleText.Text = Localizer.Current.Get(page.TitleKey);
+        page.Scroll.ScrollToHome();
+    }
+
+    /// <summary>Ctrl+Tab / Ctrl+Shift+Tab cycles pages regardless of which control has focus.</summary>
+    private void SettingsWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Tab || (Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+        var count = NavList.Items.Count;
+        var index = NavList.SelectedIndex;
+        var forward = (Keyboard.Modifiers & ModifierKeys.Shift) == 0;
+        index = ((index + (forward ? 1 : -1)) % count + count) % count;
+        NavList.SelectedIndex = index;
+        e.Handled = true;
     }
 
     private void ApplyDecoderAvailability(IImageDecoderFactory? decoderFactory)
@@ -164,11 +198,11 @@ public partial class SettingsWindow : Window
 
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        SettingsScrollViewer.ScrollToHome();
+        if (NavList.SelectedItem is ListBoxItem { Tag: string key } && _pages is not null && _pages.TryGetValue(key, out var page))
+            page.Scroll.ScrollToHome();
         FocusManager.SetFocusedElement(this, null);
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () =>
         {
-            SettingsScrollViewer.ScrollToVerticalOffset(0);
             Keyboard.ClearFocus();
         });
     }
@@ -179,19 +213,116 @@ public partial class SettingsWindow : Window
         RecycleText.Text = Settings.Shortcuts.SendToRecycleBin;
         CompareText.Text = Settings.Shortcuts.Compare; NextFolderText.Text = Settings.Shortcuts.NextFolder; PreviousFolderText.Text = Settings.Shortcuts.PreviousFolder;
         FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit; SkipText.Text = Settings.Shortcuts.Skip; UndoText.Text = Settings.Shortcuts.Undo; FullscreenText.Text = Settings.Shortcuts.Fullscreen;
+        LastImageText.Text = Settings.Shortcuts.LastImage; ZoomActualSizeText.Text = Settings.Shortcuts.ZoomActualSize; ToggleInfoOverlayText.Text = Settings.Shortcuts.ToggleInfoOverlay;
+        MoveToFolderText.Text = Settings.Shortcuts.MoveToFolder; CopyToFolderText.Text = Settings.Shortcuts.CopyToFolder;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
         ScalingQualityCombo.SelectedIndex = Settings.ScalingQuality == ScalingQuality.Linear ? 1 : 0;
         DecoderBackendCombo.SelectedIndex = Settings.DecoderBackend switch { DecoderBackend.WicDirect => 1, DecoderBackend.TurboJpeg => 2, _ => 0 };
+        InstanceModeCombo.SelectedIndex = Settings.InstanceMode == InstanceMode.PerFolder ? 1 : 0;
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
         AllowPermanentDeleteCheck.IsChecked = Settings.AllowPermanentDeleteWithoutRecycleBin;
         JournalSafeRadio.IsChecked = Settings.JournalDurability == JournalDurability.PowerLossSafe;
         JournalFastRadio.IsChecked = !JournalSafeRadio.IsChecked;
+        ShowInfoOverlayCheck.IsChecked = Settings.ShowInfoOverlay;
+        ShowFileInfoCheck.IsChecked = Settings.ShowFileInfo;
+        ShowFolderInfoCheck.IsChecked = Settings.ShowFolderInfo;
+        MouseWheelActionCombo.SelectedIndex = Settings.MouseWheelAction == MouseWheelAction.Navigate ? 1 : 0;
+        ClickToZoomCheck.IsChecked = Settings.ClickToZoomEnabled;
+        ClickZoomPercentBox.Text = Settings.ClickZoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        KineticPanCheck.IsChecked = Settings.KineticPanEnabled;
+        MoveCopyReuseLastFolderCheck.IsChecked = Settings.MoveCopyReuseLastFolder;
+        ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
+        ExifFieldFileNameCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FileName);
+        ExifFieldDateTakenCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.DateTaken);
+        ExifFieldDimensionsCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Dimensions);
+        ExifFieldCameraCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Camera);
+        ExifFieldLensCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Lens);
+        ExifFieldIsoCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Iso);
+        ExifFieldFocalLengthCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FocalLength);
+        ExifFieldApertureCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Aperture);
+        ExifFieldShutterSpeedCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.ShutterSpeed);
+        UpdateClickZoomEnabled();
+        UpdateShowInfoSubOptionsEnabled();
+        UpdateExifFieldsEnabled();
         LoadRamCache();
+        UpdateDuplicateWarning();
+    }
+
+    private void ClickToZoomCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateClickZoomEnabled();
+
+    private void UpdateClickZoomEnabled() => ClickZoomPercentBox.IsEnabled = ClickToZoomCheck.IsChecked == true;
+
+    private void ShowInfoOverlayCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateShowInfoSubOptionsEnabled();
+
+    private void UpdateShowInfoSubOptionsEnabled()
+    {
+        var enabled = ShowInfoOverlayCheck.IsChecked == true;
+        ShowFileInfoCheck.IsEnabled = enabled;
+        ShowFolderInfoCheck.IsEnabled = enabled;
+    }
+
+    private void ShowExifInfoCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateExifFieldsEnabled();
+
+    /// <summary>The per-field checkboxes only matter when ShowExifInfo is on (and, at runtime, when ShowInfoOverlay is too).</summary>
+    private void UpdateExifFieldsEnabled()
+    {
+        var enabled = ShowExifInfoCheck.IsChecked == true;
+        foreach (var check in ExifFieldChecks) check.IsEnabled = enabled;
+    }
+
+    private IEnumerable<System.Windows.Controls.CheckBox> ExifFieldChecks =>
+    [
+        ExifFieldFileNameCheck, ExifFieldDateTakenCheck, ExifFieldDimensionsCheck, ExifFieldCameraCheck, ExifFieldLensCheck,
+        ExifFieldIsoCheck, ExifFieldFocalLengthCheck, ExifFieldApertureCheck, ExifFieldShutterSpeedCheck,
+    ];
+
+    // ---- Optional shortcuts (ShortcutMappings.OptionalNames): a small "clear" button empties the box. ----
+
+    private void ClearLastImage_Click(object sender, RoutedEventArgs e) => ClearShortcut(LastImageText);
+    private void ClearZoomActualSize_Click(object sender, RoutedEventArgs e) => ClearShortcut(ZoomActualSizeText);
+    private void ClearToggleInfoOverlay_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleInfoOverlayText);
+    private void ClearMoveToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(MoveToFolderText);
+    private void ClearCopyToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(CopyToFolderText);
+
+    private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
+
+    // ---- Live duplicate-shortcut warning (reuses SettingsValidator, the same check Save runs). ----
+
+    private void Shortcut_TextChanged(object sender, TextChangedEventArgs e) => UpdateDuplicateWarning();
+
+    private void UpdateDuplicateWarning()
+    {
+        if (ShortcutDuplicateWarningText is null) return; // can fire while InitializeComponent is still building the tree
+        var probe = BuildProbeSettings();
+        var validator = new SettingsValidator(new WpfKeyNameValidator());
+        var message = validator.ValidateShortcuts(probe);
+        ShortcutDuplicateWarningText.Text = message ?? string.Empty;
+        ShortcutDuplicateWarningText.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>A throwaway settings snapshot from the current text boxes, used only to preview validation live.</summary>
+    private AppSettings BuildProbeSettings()
+    {
+        var probe = new AppSettings
+        {
+            Shortcuts = new ShortcutMappings
+            {
+                Next = NextText.Text, Previous = PreviousText.Text, FirstImage = FirstImageText.Text, LastImage = LastImageText.Text,
+                NextFolder = NextFolderText.Text, PreviousFolder = PreviousFolderText.Text,
+                ZoomIn = ZoomInText.Text, ZoomOut = ZoomOutText.Text, ZoomActualSize = ZoomActualSizeText.Text, ToggleFit = ToggleFitText.Text,
+                Fullscreen = FullscreenText.Text, ToggleInfoOverlay = ToggleInfoOverlayText.Text,
+                Skip = SkipText.Text, Undo = UndoText.Text, Compare = CompareText.Text,
+                MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
+            },
+        };
+        try { probe.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? []; }
+        catch (JsonException) { probe.Actions = []; } // invalid JSON while typing: Save's own check reports that separately
+        return probe;
     }
 
     // ---- RAM%: in-memory cache share of physical RAM ----
@@ -236,7 +367,23 @@ public partial class SettingsWindow : Window
         Settings.PreviewDiskCacheCapacityBytes = PerformanceOptions.PreviewDiskCacheCapacityBytes;
         Settings.UseSourceBytesCache = PerformanceOptions.UseSourceBytesCache;
         Settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;
-        Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = DecoderBackend.Wpf; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default(); LoadFields();
+        Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = DecoderBackend.Wpf; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default();
+        Settings.InstanceMode = InstanceMode.SingleWindow;
+        Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = true;
+        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = true; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true;
+        Settings.MoveCopyReuseLastFolder = false;
+        Settings.ShowExifInfo = true; Settings.ExifInfoFields = ExifInfoFields.All;
+        LoadFields();
+    }
+
+    /// <summary>
+    /// Every "this input is invalid, Save was refused" message goes through here: <see cref="InvalidSettingsWarning"/>
+    /// (a test seam -- also used by callers that want to react to the warning) when set, a real MessageBox otherwise.
+    /// </summary>
+    private void ShowInvalid(string message)
+    {
+        if (InvalidSettingsWarning is { } warn) warn(message);
+        else System.Windows.MessageBox.Show(this, message, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -245,23 +392,58 @@ public partial class SettingsWindow : Window
         var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
         if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
-            System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidShortcuts, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return;
+            ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
+        }
+        // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
+        // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
+        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text };
+        if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
         Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
         Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;
         Settings.DecoderBackend = DecoderBackendCombo.SelectedIndex switch { 1 => DecoderBackend.WicDirect, 2 => DecoderBackend.TurboJpeg, _ => DecoderBackend.Wpf };
         Settings.LoadingMode = LoadingModeCombo.SelectedIndex switch { 1 => LoadingMode.Preview, 2 => LoadingMode.Original, _ => LoadingMode.Fast };
+        Settings.InstanceMode = InstanceModeCombo.SelectedIndex == 1 ? InstanceMode.PerFolder : InstanceMode.SingleWindow;
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
         Settings.AllowPermanentDeleteWithoutRecycleBin = AllowPermanentDeleteCheck.IsChecked == true;
         Settings.JournalDurability = JournalSafeRadio.IsChecked == true ? JournalDurability.PowerLossSafe : JournalDurability.Fast;
         Settings.ImageCacheRamPercent = SelectedRamCachePercent;
+        Settings.ShowInfoOverlay = ShowInfoOverlayCheck.IsChecked == true;
+        Settings.ShowFileInfo = ShowFileInfoCheck.IsChecked == true;
+        Settings.ShowFolderInfo = ShowFolderInfoCheck.IsChecked == true;
+        Settings.MouseWheelAction = MouseWheelActionCombo.SelectedIndex == 1 ? MouseWheelAction.Navigate : MouseWheelAction.Zoom;
+        Settings.ClickToZoomEnabled = ClickToZoomCheck.IsChecked == true;
+        Settings.KineticPanEnabled = KineticPanCheck.IsChecked == true;
+        Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
+        Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;
+        Settings.ExifInfoFields =
+            (ExifFieldFileNameCheck.IsChecked == true ? ExifInfoFields.FileName : ExifInfoFields.None) |
+            (ExifFieldDateTakenCheck.IsChecked == true ? ExifInfoFields.DateTaken : ExifInfoFields.None) |
+            (ExifFieldDimensionsCheck.IsChecked == true ? ExifInfoFields.Dimensions : ExifInfoFields.None) |
+            (ExifFieldCameraCheck.IsChecked == true ? ExifInfoFields.Camera : ExifInfoFields.None) |
+            (ExifFieldLensCheck.IsChecked == true ? ExifInfoFields.Lens : ExifInfoFields.None) |
+            (ExifFieldIsoCheck.IsChecked == true ? ExifInfoFields.Iso : ExifInfoFields.None) |
+            (ExifFieldFocalLengthCheck.IsChecked == true ? ExifInfoFields.FocalLength : ExifInfoFields.None) |
+            (ExifFieldApertureCheck.IsChecked == true ? ExifInfoFields.Aperture : ExifInfoFields.None) |
+            (ExifFieldShutterSpeedCheck.IsChecked == true ? ExifInfoFields.ShutterSpeed : ExifInfoFields.None);
+        if (!int.TryParse(ClickZoomPercentBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var clickZoomPercent)
+            || clickZoomPercent < AppSettings.MinClickZoomPercent || clickZoomPercent > AppSettings.MaxClickZoomPercent)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidClickZoomPercent(AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent));
+            return;
+        }
+        Settings.ClickZoomPercent = clickZoomPercent;
         Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
         Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
         Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();
         Settings.Shortcuts.FirstImage = FirstImageText.Text.Trim(); Settings.Shortcuts.ZoomIn = ZoomInText.Text.Trim(); Settings.Shortcuts.ZoomOut = ZoomOutText.Text.Trim(); Settings.Shortcuts.ToggleFit = ToggleFitText.Text.Trim(); Settings.Shortcuts.Skip = SkipText.Text.Trim(); Settings.Shortcuts.Undo = UndoText.Text.Trim(); Settings.Shortcuts.Fullscreen = FullscreenText.Text.Trim();
+        Settings.Shortcuts.LastImage = LastImageText.Text.Trim(); Settings.Shortcuts.ZoomActualSize = ZoomActualSizeText.Text.Trim(); Settings.Shortcuts.ToggleInfoOverlay = ToggleInfoOverlayText.Text.Trim();
+        Settings.Shortcuts.MoveToFolder = MoveToFolderText.Text.Trim(); Settings.Shortcuts.CopyToFolder = CopyToFolderText.Text.Trim();
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
@@ -272,10 +454,16 @@ public partial class SettingsWindow : Window
             if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
                 throw new JsonException("Two actions use the same shortcut."); // never shown (caught below)
         }
-        catch { System.Windows.MessageBox.Show(this, Tr.DialogSettingsInvalidActionsJson, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        catch { ShowInvalid(Tr.DialogSettingsInvalidActionsJson); return; }
         var validator = new PhotoReview.App.Services.WpfKeyNameValidator();
         var shortcutError = new SettingsValidator(validator).ValidateShortcuts(Settings);
-        if (shortcutError is not null) { System.Windows.MessageBox.Show(this, shortcutError, Tr.DialogSettingsInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (shortcutError is not null) { ShowInvalid(shortcutError); return; }
+        // R7-8: destinations typed in the raw actions JSON get the same check as the Action Profiles editor (CORE-03 / Q-R2).
+        if (ActionProfilesWindow.FindDestinationProblem(Settings.Actions) is { } destinationProblem)
+        {
+            ShowInvalid(destinationProblem);
+            return;
+        }
         if (_localization is not null)
             Settings.UiLanguage = LanguageOptions.ToSetting(LanguageCombo.SelectedItem as LanguageOption, Settings.UiLanguage);
         try

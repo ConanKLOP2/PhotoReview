@@ -111,6 +111,13 @@ public sealed class ImagePresenter
     public int CurrentOriginalHeight { get; private set; }
 
     public string StatusText { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// True when the latest <see cref="PresentAsync"/> found its preview already in the RAM cache, i.e. it showed the
+    /// image straight away instead of the loading status. A language-independent state for probes and tests.
+    /// </summary>
+    public bool LastPresentStartedFromRam { get; private set; }
+
     public bool IsCompareVisible => _compareViewModel.IsVisible;
 
     /// <summary>feat(zoom): on-demand full-resolution decode of the current image while zoomed.</summary>
@@ -125,6 +132,7 @@ public sealed class ImagePresenter
     /// <summary>Clears the displayed frame when the catalog has no images.</summary>
     public void ClearPresentation()
     {
+        CurrentPhotoInfo = null;
         _zoomDetail.Reset();
         UpdateCurrentImage(null);
         _compareViewModel.Clear();
@@ -144,6 +152,7 @@ public sealed class ImagePresenter
     public async Task PresentAsync(int index, bool allowCompare = true)
     {
         if (index < 0 || index >= _catalog.Count) return;
+        LastPresentStartedFromRam = false;
 
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var presentStopwatch = Stopwatch.StartNew();
@@ -183,22 +192,36 @@ public sealed class ImagePresenter
 
         // 2. Stat; file mất thì xóa khỏi catalog và chuyển tiếp
         long perfStat = perf ? Stopwatch.GetTimestamp() : 0;
-        if (!TryGetFileInfo(path, out var initialInfo))
+        if (!TryGetFileStat(path, out var initialStat))
         {
             if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
             await RemoveMissingCatalogItemAsync(path, index, token);
             return;
         }
 
+        // R7-1: the key must describe the file as it is now, not as the folder scan saw it. A photo edited in
+        // another app since the scan kept the old Length/mtime in the catalog, so the viewer served the old
+        // preview from RAM, or decoded and then failed MatchesCurrentSource forever; preload (which reads the
+        // catalog) cached under keys the viewer never asked for. Refresh the entry from the stat just taken
+        // (no extra I/O) and drop the old version's RAM entries (stale disk entries are keyed by length+mtime
+        // and are never served; the disk LRU prunes them).
         var initialEntry = _catalog.Find(path);
-        var initialSize = initialEntry?.Length ?? initialInfo.Length;
-        var currentKey = initialEntry?.Length is not null && initialEntry.LastWriteUtc is not null
+        if (initialEntry is not null && !initialEntry.Matches(initialStat))
+        {
+            if (initialEntry.Length is not null && initialEntry.LastWriteUtc is not null)
+                EvictCachedPath(path);
+            _catalog.UpdateMetadata(path, initialStat.Length, initialStat.LastWriteUtc);
+            initialEntry = _catalog.Find(path);
+        }
+        var initialSize = initialStat.Length;
+        var currentKey = initialEntry is not null
             ? _previewService.GetCurrentCacheKey(initialEntry)
-            : _previewService.GetCurrentCacheKey(initialInfo);
+            : _previewService.GetCurrentCacheKey(path);
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
         var ramReady = _previewService.TryGetCachedPreview(currentKey, out var readyImage);
+        LastPresentStartedFromRam = ramReady;
         var hasInflight = !ramReady && _previewService.HasInflightPreview(currentKey);
         if (perf)
         {
@@ -210,6 +233,9 @@ public sealed class ImagePresenter
             if (_preloadController.TryConsumePreloadedKey(currentKey))
                 _metrics.RecordPreloadHit();
         }
+
+        // Photo information line: never show the previous image's EXIF; a RAM hit already has this image's.
+        CurrentPhotoInfo = ramReady ? PhotoInfo.From(path, readyImage) : null;
 
         var settings = _getSettings();
         var initialStatus = ramReady
@@ -309,6 +335,7 @@ public sealed class ImagePresenter
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
             var uiAssign = Stopwatch.StartNew();
 
+            CurrentPhotoInfo = PhotoInfo.From(path, image);
             UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
 
             long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
@@ -337,6 +364,7 @@ public sealed class ImagePresenter
 
             if (pair is not null && allowCompare)
             {
+                CurrentPhotoInfo = null; // two images: the compare status describes them
                 UpdateCurrentImage(null);
                 var loaded = await _compareViewModel.LoadAsync(
                     pair.Value,
@@ -389,10 +417,10 @@ public sealed class ImagePresenter
 
                 if (!_clock.IsNavigationCurrent(token)) return;
 
-                if (!TryGetFileInfo(path, out var currentInfo)) return;
-                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteTimeUtc))
+                if (!TryGetFileStat(path, out var currentInfo)) return;
+                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
                 {
-                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteTimeUtc);
+                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
                 }
 
                 UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
@@ -430,6 +458,7 @@ public sealed class ImagePresenter
         catch (Exception ex) when (_clock.IsNavigationCurrent(token))
         {
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
+            CurrentPhotoInfo = null;
             UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), ex.Message));
         }
         catch (Exception ex)
@@ -453,6 +482,7 @@ public sealed class ImagePresenter
             var nextIndex = _catalog.Remove(path);
             if (_catalog.Count == 0)
             {
+                CurrentPhotoInfo = null;
                 _zoomDetail.Reset();
                 UpdateCurrentImage(null);
                 _compareViewModel.Clear();
@@ -463,7 +493,7 @@ public sealed class ImagePresenter
             if (nextIndex < 0 || nextIndex >= _catalog.Count) return;
 
             var nextPath = _catalog.PathAt(nextIndex);
-            if (TryGetFileInfo(nextPath, out _))
+            if (TryGetFileStat(nextPath, out _))
             {
                 await PresentAsync(nextIndex);
                 return;
@@ -504,23 +534,40 @@ public sealed class ImagePresenter
         _sink.SetStatusText(status);
     }
 
-    private bool TryGetFileInfo(string path, out FileInfo info)
+    /// <summary>One stat: existence plus the Length/LastWriteUtc the cache key is built from.</summary>
+    private bool TryGetFileStat(string path, out FileStat stat)
     {
         try
         {
-            info = new FileInfo(path);
-            // When an IFileSystem is available, its (counted, mockable) existence check is the
-            // source of truth and FileInfo.Exists below would just be a second, redundant stat.
+            // When an IFileSystem is available, its (counted, mockable) stat is the source of truth.
             if (_fileSystem != null)
             {
-                if (!_fileSystem.FileExists(path)) { info = null!; return false; }
+                if (_fileSystem.GetFileStat(path) is not { } fsStat) { stat = null!; return false; }
+                stat = fsStat;
                 return true;
             }
-            if (!info.Exists) { info = null!; return false; }
+            var info = new FileInfo(path);
+            if (!info.Exists) { stat = null!; return false; }
+            stat = new FileStat(info.Length, info.LastWriteTimeUtc);
             return true;
         }
-        catch (FileNotFoundException) { info = null!; return false; }
-        catch (DirectoryNotFoundException) { info = null!; return false; }
-        catch { info = null!; return false; }
+        catch { stat = null!; return false; }
+    }
+
+    /// <summary>
+    /// What the photo information line describes: the presented image's file name, original size and the EXIF its
+    /// decoder (or preview disk-cache entry) carried -- null while loading, in compare mode or with nothing shown.
+    /// Set before the sink notification of the same step, so bindings refreshed by it already see the new value.
+    /// </summary>
+    public PhotoInfo? CurrentPhotoInfo { get; private set; }
+}
+
+/// <summary>Input of the photo information line (see <see cref="ImagePresenter.CurrentPhotoInfo"/>).</summary>
+public sealed record PhotoInfo(string FileName, int Width, int Height, PhotoReview.Imaging.Metadata.ExifSummary? Exif)
+{
+    public static PhotoInfo From(string path, PhotoReview.Imaging.Decoding.IDecodedImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return new PhotoInfo(Path.GetFileName(path), image.OriginalWidth, image.OriginalHeight, image.Exif);
     }
 }

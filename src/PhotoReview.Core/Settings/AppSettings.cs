@@ -52,6 +52,51 @@ public class AppSettings
     /// </summary>
     public bool AllowPermanentDeleteWithoutRecycleBin { get; set; }
 
+    /// <summary>
+    /// "Move to…": the folder the last Move-to went to; the folder picker starts there. Absent in older configs = null
+    /// (the picker starts at the photo folder's parent).
+    /// </summary>
+    public string? LastMoveToFolder { get; set; }
+
+    /// <summary>"Copy to…": the folder the last Copy-to went to; the folder picker starts there. Absent = null.</summary>
+    public string? LastCopyToFolder { get; set; }
+
+    /// <summary>
+    /// When true and the last Move-to/Copy-to folder still exists, the shortcut acts on it immediately without the folder
+    /// picker (Shift+shortcut still opens the picker). Default false.
+    /// </summary>
+    public bool MoveCopyReuseLastFolder { get; set; }
+
+    /// <summary>
+    /// Q-R18: one window for everything (default) or one window per folder. Absent in older configs = SingleWindow. Read at
+    /// startup from the settings store BEFORE the instance lock is taken, so a change takes effect at the next start.
+    /// </summary>
+    public InstanceMode InstanceMode { get; set; } = InstanceMode.SingleWindow;
+
+    /// <summary>
+    /// Master switch for the on-image info overlays (<see cref="ShowFileInfo"/>, <see cref="ShowFolderInfo"/>).
+    /// Flipped at runtime by <see cref="ShortcutMappings.ToggleInfoOverlay"/> and persisted. Absent in older configs = true.
+    /// </summary>
+    public bool ShowInfoOverlay { get; set; } = true;
+
+    /// <summary>Bottom-left file status block (position/count, size, name, dimensions). Absent in older configs = true.</summary>
+    public bool ShowFileInfo { get; set; } = true;
+
+    /// <summary>
+    /// Bottom-right folder block: current folder and the sibling image folders that PageUp/PageDown would open.
+    /// Absent in older configs = true. When hidden the siblings are not computed at all (no disk I/O).
+    /// </summary>
+    public bool ShowFolderInfo { get; set; } = true;
+
+    /// <summary>
+    /// Shows the photo information line (file name, date taken, dimensions, camera, lens, exposure) under the status line.
+    /// Absent in older configs = true. The EXIF values come from the decode that already runs, never an extra file read.
+    /// </summary>
+    public bool ShowExifInfo { get; set; } = true;
+
+    /// <summary>Parts of the photo information line to show; absent in older configs = <see cref="ExifInfoFields.All"/>.</summary>
+    public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.All;
+
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
     public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }
@@ -73,6 +118,19 @@ public class AppSettings
 
     public static void Save(AppSettings settings) => Saver?.Invoke(settings);
 
+    /// <summary>
+    /// Deep-clones <paramref name="source"/> by round-tripping it through the same JSON contract as disk storage
+    /// (<see cref="AppSettingsJsonContext"/>), so every property is copied automatically -- including ones a caller
+    /// (e.g. the Settings window) has no control for yet. Prefer this over hand-copying fields one by one: a
+    /// hand-copy silently drops any property the copier forgot, which is exactly the bug this method replaces.
+    /// </summary>
+    public static AppSettings Clone(AppSettings source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var json = JsonSerializer.Serialize(source, AppSettingsJsonContext.Default.AppSettings);
+        return JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+    }
+
     private static readonly SettingsValidator FallbackValidator = new(new SimpleKeyNameValidator());
 
     public static string? ValidateShortcuts(AppSettings settings) =>
@@ -82,4 +140,27 @@ public class AppSettings
     {
         public bool IsValidKeyName(string keyName) => !string.IsNullOrWhiteSpace(keyName);
     }
+
+    // ---- Mouse / zoom (feat/mouse-zoom). Absent in older configs = these defaults; no migration step. ----
+
+    /// <summary>Smallest accepted <see cref="ClickZoomPercent"/>.</summary>
+    public const int MinClickZoomPercent = 10;
+
+    /// <summary>Largest accepted <see cref="ClickZoomPercent"/>.</summary>
+    public const int MaxClickZoomPercent = 800;
+
+    /// <summary>Default <see cref="ClickZoomPercent"/>: 100 % = one source pixel per device pixel (ADR 0008).</summary>
+    public const int DefaultClickZoomPercent = 100;
+
+    /// <summary>What the plain mouse wheel does over the image; Ctrl+wheel always zooms at the cursor.</summary>
+    public MouseWheelAction MouseWheelAction { get; set; } = MouseWheelAction.Zoom;
+
+    /// <summary>A left click (no drag) toggles between Fit and <see cref="ClickZoomPercent"/>, anchored at the cursor.</summary>
+    public bool ClickToZoomEnabled { get; set; } = true;
+
+    /// <summary>Zoom a click jumps to, in percent of source pixels (ADR 0008), [<see cref="MinClickZoomPercent"/>, <see cref="MaxClickZoomPercent"/>].</summary>
+    public int ClickZoomPercent { get; set; } = DefaultClickZoomPercent;
+
+    /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
+    public bool KineticPanEnabled { get; set; } = true;
 }

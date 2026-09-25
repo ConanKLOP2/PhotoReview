@@ -88,6 +88,9 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     /// </summary>
     public void WarmPreloadAround(int center) => _lastPreloadTask = _preloadScheduler.PreloadAroundAsync(center);
 
+    /// <summary>Test seam: completes once the pass started by the last <see cref="WarmPreloadAround"/> has finished.</summary>
+    internal Task WhenPreloadSettledAsync() => _lastPreloadTask ?? Task.CompletedTask;
+
     public async ValueTask DisposeAsync()
     {
         // Cancel first so the last WarmPreloadAround call (fire-and-forget by design —

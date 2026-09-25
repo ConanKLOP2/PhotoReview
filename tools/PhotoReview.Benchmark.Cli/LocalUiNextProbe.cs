@@ -1,23 +1,56 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App;
 using PhotoReview.App.Composition;
 using PhotoReview.App.Services;
+using PhotoReview.Core.Abstractions;
 
 internal static class LocalUiNextProbe
 {
-    public static async Task RunAsync(string folder)
+    /// <summary>
+    /// <c>--ui-next-probe &lt;folder&gt; [--cache-dir DIR]</c>. Like <c>--perf-session</c>, the session resume, journal
+    /// and log go to a temporary data root (PHOTOREVIEW_DATA_ROOT) deleted at exit, and the preview/thumbnail disk
+    /// caches go to a temporary directory too unless <c>--cache-dir</c> names one -- so the probe never overwrites the
+    /// user's real session, journal, log or preview cache.
+    /// </summary>
+    public static async Task RunAsync(string folder, string? cacheDir = null)
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "PhotoReview-UiNextProbe-" + Guid.NewGuid().ToString("N"));
+        var dataRoot = Path.Combine(tempRoot, "data");
+        var cacheRoot = cacheDir is null ? Path.Combine(tempRoot, "cache") : Path.GetFullPath(cacheDir);
+        Directory.CreateDirectory(dataRoot);
+        // Must be set before any AppSettings/journal/session/log object exists.
+        Environment.SetEnvironmentVariable(PhotoReview.Core.AppPaths.DataRootEnvironmentVariable, dataRoot);
+        try
+        {
+            await RunProbeAsync(folder, cacheRoot);
+        }
+        finally
+        {
+            AppLog.Shutdown(); // the log lives under the temp data root
+            try { Directory.Delete(tempRoot, recursive: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"WARNING: could not delete {tempRoot}: {ex.Message}");
+            }
+        }
+    }
+
+    private static async Task RunProbeAsync(string folder, string cacheRoot)
     {
         // D06: runs on the shared WpfTestHost, which fixes the icon pack URI, starts the perf CSV
         // listener when PHOTOREVIEW_PERF_TRACE is set and attaches the dispatcher hooks.
         var result = await WpfTestHost.RunAsync(async _ =>
         {
             MainWindow? window = null;
-            // AR02c: production DI graph (AppHost.BuildServices == App.ConfigureServices, no test-root
-            // overrides), so --ui-next-probe measures the shipped preload/cache/decoder configuration (F2).
-            using var services = AppHost.BuildServices();
+            // AR02c: production DI graph (AppHost.BuildServices == App.ConfigureServices), so --ui-next-probe
+            // measures the shipped preload/cache/decoder configuration (F2). The one override moves the disk
+            // caches off the real %LOCALAPPDATA%\PhotoReview\{cache,thumbnails} (see CacheDirOverrideAppPaths).
+            using var services = AppHost.BuildServices(overrides =>
+                overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(PhotoReview.Core.AppPaths.FromEnvironment(), cacheRoot)));
             try
             {
                 var settingsStore = services.GetRequiredService<SettingsStore>();
@@ -50,11 +83,13 @@ internal static class LocalUiNextProbe
                     await Task.Delay(100);
                 }
                 if (!ready) throw new TimeoutException("Next image did not reach RAM cache");
+                var presenter = window.ViewModel.Presenter;
                 var show = window.ShowImageAsync(1);
                 var status = ((TextBlock)window.FindName("StatusText")!).Text;
-                if (status.Contains("Đang tải", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException($"Warm Next showed loading: {status}");
                 await show;
+                // State, not UI text: the loading status is shown exactly when the preview was not in RAM.
+                if (!presenter.LastPresentStartedFromRam)
+                    throw new InvalidOperationException($"Warm Next showed loading: {status}");
                 var index = window.CurrentIndex;
                 if (index != 1) throw new InvalidOperationException($"Warm Next selected wrong index: {index}");
                 var sampleCount = Math.Min(30, files.Count);
@@ -85,10 +120,10 @@ internal static class LocalUiNextProbe
                     var sw = Stopwatch.StartNew();
                     show = window.ShowImageAsync(sample);
                     status = ((TextBlock)window.FindName("StatusText")!).Text;
-                    if (status.Contains("Đang tải", StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidOperationException($"Warm navigation showed loading at {sample + 1}: {status}");
                     await show;
                     durations[sample] = sw.ElapsedMilliseconds;
+                    if (!presenter.LastPresentStartedFromRam)
+                        throw new InvalidOperationException($"Warm navigation showed loading at {sample + 1}: {status}");
                     index = window.CurrentIndex;
                     if (index != sample) throw new InvalidOperationException($"Navigation selected {index}, expected {sample}");
                     if ((sample + 1) % 10 == 0) Console.WriteLine($"WPF navigation progress: {sample + 1}/{sampleCount}");

@@ -34,8 +34,8 @@ internal static class TestAppHost
         {
             if (hooks?.Explorer is { } explorerOrder)
                 services.AddSingleton(explorerOrder);
-            if (hooks?.RecycleBin is { } recycleBin)
-                services.AddSingleton(recycleBin);
+            // Never the real WindowsRecycleBin: a test that deletes must pass its own bin (TestHostHooks.RecycleBin).
+            services.AddSingleton(hooks?.RecycleBin ?? ThrowingRecycleBin.Instance);
             if (hooks?.OnPresented is { } onPresented)
                 services.AddSingleton<IPresentationObserver>(new DelegatePresentationObserver(onPresented));
             if (hooks?.MoveOverride is { } moveOverride)
@@ -45,6 +45,8 @@ internal static class TestAppHost
         });
 
         var window = sp.GetRequiredService<MainWindow>();
+        // R7-11: never restore or overwrite the user's real window-placement.json from a test window.
+        window.SuppressWindowPlacement();
         window.Closed += (_, _) => sp.Dispose();
         window.InitializeWithInitialPath(initialPath);
         return window;
@@ -88,6 +90,21 @@ internal sealed class DelegatePresentationObserver(Action<string> onPresented) :
 internal sealed class DelegateMoveOverride(Func<string, string, Task> moveAsync) : IMoveOverride
 {
     public Task MoveAsync(string source, string destination) => moveAsync(source, destination);
+}
+
+/// <summary>
+/// Default <see cref="IRecycleBin"/> of <see cref="TestAppHost.CreateMainWindow"/>: fails loudly instead of letting a test
+/// send files to (or restore from) the user's real Recycle Bin.
+/// </summary>
+internal sealed class ThrowingRecycleBin : IRecycleBin
+{
+    public static readonly IRecycleBin Instance = new ThrowingRecycleBin();
+
+    public void SendToRecycleBin(string path) =>
+        throw new InvalidOperationException($"Test used the Recycle Bin without passing TestHostHooks.RecycleBin: {path}");
+
+    public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) =>
+        throw new InvalidOperationException($"Test used the Recycle Bin without passing TestHostHooks.RecycleBin: {originalPath}");
 }
 
 /// <summary>Used only when a test opts out of preload via <see cref="TestHostHooks.DisablePreload"/>.</summary>

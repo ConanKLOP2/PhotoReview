@@ -30,8 +30,18 @@ public enum ViewerStretchMode
 /// </remarks>
 public sealed partial class ViewerState : ObservableObject
 {
-    public const double MinZoom = 0.25;
-    public const double MaxZoom = 4.0;
+    /// <summary>Absolute zoom range accepted by <see cref="SetZoom"/> (click-to-zoom allows 10 %..800 %).</summary>
+    public const double MinZoom = 0.10;
+    public const double MaxZoom = 8.0;
+
+    /// <summary>
+    /// Range reached by stepping (wheel / zoom in / zoom out): 0.25 steps between 25 % and 400 %, as before
+    /// click-to-zoom widened <see cref="MinZoom"/>/<see cref="MaxZoom"/>. A step never moves the zoom in the
+    /// opposite direction: zooming in above <see cref="MaxStepZoom"/> does nothing and zooming out from there
+    /// lands on <see cref="MaxStepZoom"/> (so 800 % is one step from 400 %, not sixteen).
+    /// </summary>
+    public const double MinStepZoom = 0.25;
+    public const double MaxStepZoom = 4.0;
     public const double ZoomStep = 0.25;
 
     [ObservableProperty]
@@ -160,10 +170,19 @@ public sealed partial class ViewerState : ObservableObject
     /// <summary>Original-relative zoom currently applied, or null in Fit.</summary>
     public double? EffectiveZoom => IsFit ? null : Zoom;
 
+    /// <summary>Original-relative zoom of "actual size": one source pixel per device pixel (ADR 0008).</summary>
+    public const double ActualSizeZoom = 1.0;
+
+    /// <summary>
+    /// Zooms to 100 % = one source pixel per device pixel (ADR 0008). Leaves Fit even when the Fit zoom happens to
+    /// be 1.0, and raises <see cref="ZoomModeChanged"/> so the current image's original is decoded on demand.
+    /// </summary>
+    public void ZoomToActualSize() => SetZoom(ActualSizeZoom);
+
     /// <summary>
     /// Tăng mức zoom thêm 0.25 (tối đa 4.0).
     /// </summary>
-    public void ZoomIn() => SetZoom(StepBase + ZoomStep);
+    public void ZoomIn() => StepZoom(ZoomStep);
 
     /// <summary>
     /// Giảm mức zoom bớt 0.25 (tối thiểu 0.25).
@@ -171,14 +190,27 @@ public sealed partial class ViewerState : ObservableObject
     public void ZoomOut() => StepZoom(-ZoomStep);
 
     /// <summary>
-    /// A step down from Fit must never end up larger than Fit: when the fit zoom is already below <see cref="MinZoom"/>
-    /// (huge originals), clamping to <see cref="MinZoom"/> would enlarge the image, so do nothing.
+    /// A step never moves the zoom against its direction: a step down from Fit (or from a click zoom) that is
+    /// already below <see cref="MinStepZoom"/> (huge originals) does nothing instead of enlarging, and a step up
+    /// from above <see cref="MaxStepZoom"/> does nothing instead of shrinking.
     /// </summary>
     private void StepZoom(double step)
     {
-        var next = StepBase + step;
-        if (step < 0 && IsFit && FitZoom < MinZoom) return;
-        SetZoom(next);
+        var next = CalculateStepZoom(StepBase, step);
+        if (next is { } value) SetZoom(value);
+    }
+
+    /// <summary>Pure step rule behind <see cref="ZoomIn"/>/<see cref="ZoomOut"/>/<see cref="WheelZoom"/>; null = no change.</summary>
+    internal static double? CalculateStepZoom(double current, double step)
+    {
+        if (step > 0)
+        {
+            if (current >= MaxStepZoom - 0.0005) return null;
+            return Math.Min(current + step, MaxStepZoom);
+        }
+        if (current <= MinStepZoom + 0.0005) return null;
+        if (current > MaxStepZoom) return MaxStepZoom;
+        return Math.Max(current + step, MinStepZoom);
     }
 
     /// <summary>

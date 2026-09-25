@@ -487,6 +487,47 @@ public class CompositionRootTests
         return ((Func<PreloadScheduler>)factoryField!.GetValue(controller)!)();
     }
 
+    [Fact(DisplayName = "R7-11: MainWindow's window-placement file comes from IAppPaths, not a hard-coded %LOCALAPPDATA% path")]
+    public void ConfigureServices_MainWindowPlacementFile_ComesFromAppPaths()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview_Placement_" + Guid.NewGuid().ToString("N"));
+        var paths = new PhotoReview.Core.AppPaths(root);
+        string? placementFile = null;
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                if (System.Windows.Application.Current is null)
+                    _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+                try
+                {
+                    System.Windows.Application.ResourceAssembly = typeof(MainWindow).Assembly;
+                }
+                catch
+                {
+                    var appField = typeof(System.Windows.Application).GetField("_resourceAssembly", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                    appField?.SetValue(null, typeof(MainWindow).Assembly);
+                }
+
+                var services = new ServiceCollection();
+                App.ConfigureServices(services);
+                services.AddSingleton<IAppPaths>(paths);
+                using var provider = services.BuildServiceProvider();
+                placementFile = provider.GetRequiredService<MainWindow>().PlacementFile;
+            }
+            catch (Exception ex) { threadException = ex; }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "STA MainWindow resolution timed out.");
+        Assert.Null(threadException);
+        Assert.Equal(paths.WindowPlacementFile, placementFile);
+        Assert.StartsWith(root, placementFile, StringComparison.OrdinalIgnoreCase);
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch (IOException) { }
+    }
+
     [Fact]
     public void ConfigureServices_ResolvesMainWindow_OnStaThread()
     {

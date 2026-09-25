@@ -276,6 +276,17 @@ Invoke-Gate 'Check documentation links' {
     & (Join-Path $PSScriptRoot 'check-doc-links.ps1')
 }
 
+# L10: the strict JSON validator (comments/trailing commas/duplicate keys) behaves as intended, proven
+# in-memory before it is trusted against real files (same gate as CI's "Check translation catalogs" step).
+Invoke-Gate 'Check translation catalogs (self-test)' {
+    & (Join-Path $PSScriptRoot 'i18n-check.ps1') -SelfTest
+}
+
+# L10: translation catalogs are valid (same gate as CI's "Check translation catalogs" step)
+Invoke-Gate 'Check translation catalogs' {
+    & (Join-Path $PSScriptRoot 'i18n-check.ps1')
+}
+
 # R2-F-15: the former smoke-test.ps1 / fault-injection-test.ps1 gates only exercised .NET file primitives (no
 # PhotoReview code could make them fail) and put an item in the real Recycle Bin on every run, so they were removed.
 # File-action safety (move/copy/recycle, destination conflict, IO failure, journal states, recovery) is covered by

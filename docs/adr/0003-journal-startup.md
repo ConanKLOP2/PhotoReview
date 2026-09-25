@@ -36,3 +36,16 @@ Undo history older than the latest 200 committed Moves is not restored at
 startup. Pending operations are still fully discovered and reconciled. If the
 product later requires an unbounded Undo history, this ADR must be revisited in
 favour of compaction or an indexed journal.
+
+## Wiring (review r7, 2026-09-25)
+
+T46d (commit 9a5f7b8) removed the only caller of the reconcile and of
+`UndoService.LoadFromJournal`. It is restored as `JournalStartupRecovery.RunAsync`,
+started from `App` startup after the instance lock is taken and the window is
+shown. The journal scan and file checks run on the thread pool; only the Undo
+history is seeded on the UI thread, below Moves the user already made. Pending
+entries stamped after startup began (this process's own in-flight actions) are
+not reconciled. Entries marked Failed are reported once with an offer to open
+the Recovery window. Known limit: a Prepared entry of ANOTHER running instance
+(different folder, same journal) that is mid-flight at that moment can be
+marked Failed; the entry then shows in Recovery with its real file state.

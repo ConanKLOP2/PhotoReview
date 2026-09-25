@@ -27,7 +27,13 @@ public sealed class FileActionController
     private readonly INaturalComparer _naturalComparer;
     private readonly Func<AppSettings> _getSettings;
     private readonly IFileActionSink _sink;
+    private readonly IFolderPicker? _folderPicker;
+    private readonly Func<string, bool> _directoryExists;
+    private readonly Action<FileOperationType, string>? _rememberFolder;
 
+    /// <param name="folderPicker">"Move to… / Copy to…" folder picker; null disables those commands unless the last folder is reused.</param>
+    /// <param name="fileSystem">Used to check that a picked or remembered folder exists (defaults to the real disk).</param>
+    /// <param name="rememberFolder">Persists the folder a successful Move-to/Copy-to went to (settings LastMoveToFolder/LastCopyToFolder).</param>
     public FileActionController(
         ReviewCatalog catalog,
         GenerationClock clock,
@@ -37,8 +43,14 @@ public sealed class FileActionController
         IPreloadController? preloadController,
         INaturalComparer naturalComparer,
         Func<AppSettings> getSettings,
-        IFileActionSink sink)
+        IFileActionSink sink,
+        IFolderPicker? folderPicker = null,
+        IFileSystem? fileSystem = null,
+        Action<FileOperationType, string>? rememberFolder = null)
     {
+        _folderPicker = folderPicker;
+        _directoryExists = fileSystem is not null ? fileSystem.DirectoryExists : Directory.Exists;
+        _rememberFolder = rememberFolder;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _fileActionService = fileActionService;
@@ -68,8 +80,14 @@ public sealed class FileActionController
         var permanentPrompt = action.Operation == FileOperationType.Recycle && WillAskPermanentDelete(compareSelectedPath ?? currentPath);
         if (action.Confirm && _dialogService is not null && !permanentPrompt)
         {
+            // R7-4: the dialog runs a nested dispatcher loop (a forwarded open can switch the folder meanwhile),
+            // so re-check state afterwards like the permanent-delete prompt does.
+            var folderBeforeDialog = _clock.CurrentFolder;
+            var target = compareSelectedPath ?? currentPath;
             var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(action.Name));
             if (!ok) return;
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService?.IsBusy == true
+                || (target is not null && _catalog.IndexOf(target) < 0)) return;
         }
 
         if (action.Operation == FileOperationType.Recycle)
@@ -102,16 +120,17 @@ public sealed class FileActionController
         && _fileActionService is not null
         && _fileActionService.LacksRecycleBin(source);
 
-    private async Task ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
+    /// <returns>True when the file operation succeeded and the folder is still the current one.</returns>
+    private async Task<bool> ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
     {
-        if (_catalog.Count == 0) return;
-        if (_fileActionService is null) return;
+        if (_catalog.Count == 0) return false;
+        if (_fileActionService is null) return false;
 
         // INV-4: Gate bận
-        if (_fileActionService.IsBusy) return;
+        if (_fileActionService.IsBusy) return false;
 
         var source = compareSelectedPath ?? currentPath;
-        if (string.IsNullOrEmpty(source)) return;
+        if (string.IsNullOrEmpty(source)) return false;
 
         // Q-R8: permanent delete only with the setting on AND an explicit "this is permanent" confirmation every time.
         // Without a dialog service nothing can be confirmed, so nothing is deleted. Setting off: the request stays
@@ -123,8 +142,8 @@ public sealed class FileActionController
             var folderBeforeDialog = _clock.CurrentFolder;
             if (_dialogService is null
                 || !_dialogService.ShowConfirmation(Tr.DialogConfirmPermanentDeleteTitle, Tr.DialogConfirmPermanentDeleteMessage(Path.GetFileName(source))))
-                return;
-            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return;
+                return false;
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
             allowPermanent = true;
         }
 
@@ -160,7 +179,7 @@ public sealed class FileActionController
             // Stale Folder Guard: Nếu người dùng đã đổi thư mục trong khi I/O đang chạy, bỏ qua
             if (!_clock.IsFolderCurrent(folderGen))
             {
-                return;
+                return false;
             }
 
             if (result.Succeeded)
@@ -176,17 +195,17 @@ public sealed class FileActionController
                 {
                     _sink.SetStatusText(StatusFormatter.CopiedTo(Path.GetFileName(result.DestinationPath)));
                 }
+                return true;
             }
-            else
-            {
-                // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
-                if (isRemove && sourceIndex >= 0)
-                {
-                    _catalog.Restore(source, sourceIndex);
-                }
 
-                _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, result.Error));
+            // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
+            if (isRemove && sourceIndex >= 0)
+            {
+                _catalog.Restore(source, sourceIndex);
             }
+
+            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, result.Error));
+            return false;
         }
         finally
         {
@@ -194,7 +213,8 @@ public sealed class FileActionController
         }
     }
 
-    public async Task<UndoResult?> UndoLastAsync(string? currentPath)
+    /// <param name="currentFolder">The folder open when the undo started; a Move restored elsewhere is not inserted here.</param>
+    public async Task<UndoResult?> UndoLastAsync(string? currentFolder)
     {
         if (_undoService is null) return null;
 
@@ -209,7 +229,10 @@ public sealed class FileActionController
 
         if (!_clock.IsFolderCurrent(folderGen)) return result;
 
-        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
+        // R7-2: a Move made in another folder is restored there, not into this folder's catalog; the caller opens
+        // that folder at the restored file, as for a Recycle undo (see RestoresOutsideFolder).
+        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
+            && IsInFolder(result.Source, currentFolder))
         {
             _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
             _sink.OnCatalogChanged(null);
@@ -228,5 +251,112 @@ public sealed class FileActionController
 
         _sink.NotifyNavigationStateChanged();
         return result;
+    }
+
+    /// <summary>
+    /// "Move to… / Copy to…": asks for a destination folder (or reuses the last one when
+    /// <see cref="AppSettings.MoveCopyReuseLastFolder"/> is on, the folder still exists and <paramref name="forcePicker"/> is
+    /// false), validates it like an absolute action destination, then runs the same pipeline as an action profile
+    /// (journal, undo for Move, catalog/preload updates, status and error texts). The caller holds the file-action gate.
+    /// </summary>
+    /// <param name="getSource">Reads the photo to act on (compare selection or current image) live, so it can be re-read
+    /// after the modal picker returns.</param>
+    public async Task MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker, Func<(string? CompareSelectedPath, string? CurrentPath)> getSource)
+    {
+        if (operation is not (FileOperationType.Move or FileOperationType.Copy))
+            throw new ArgumentOutOfRangeException(nameof(operation), operation, "Only Move and Copy have a destination folder.");
+        ArgumentNullException.ThrowIfNull(getSource);
+        if (_catalog.Count == 0 || _fileActionService is null || _fileActionService.IsBusy) return;
+
+        var (compareSelectedPath, currentPath) = getSource();
+        var source = compareSelectedPath ?? currentPath;
+        if (string.IsNullOrEmpty(source)) return;
+        var photoFolder = Path.GetDirectoryName(source);
+        if (string.IsNullOrEmpty(photoFolder)) return;
+
+        var isMove = operation == FileOperationType.Move;
+        var actionName = isMove ? Tr.ActionMoveToFolderName : Tr.ActionCopyToFolderName;
+        var settings = _getSettings();
+        var lastFolder = isMove ? settings.LastMoveToFolder : settings.LastCopyToFolder;
+        var lastUsable = ActionDestinationPolicy.ValidatePickedFolder(lastFolder, photoFolder, _directoryExists) == PickedFolderCheck.Ok;
+
+        string? destination;
+        if (settings.MoveCopyReuseLastFolder && !forcePicker && lastUsable)
+        {
+            destination = lastFolder;
+        }
+        else
+        {
+            if (_folderPicker is null) return;
+            var initialFolder = lastFolder is not null && _directoryExists(lastFolder) ? lastFolder : Path.GetDirectoryName(photoFolder) ?? photoFolder;
+
+            // The picker runs a nested dispatcher loop: a forwarded open can switch the folder, and anything that still
+            // reaches the view model (not the gate holder) can change the photo or start a file operation meanwhile.
+            var folderBeforeDialog = _clock.CurrentFolder;
+            destination = _folderPicker.PickFolder(isMove ? Tr.DialogMoveToFolderTitle : Tr.DialogCopyToFolderTitle, initialFolder);
+            if (destination is null) return; // cancelled: no-op
+
+            var (compareAfter, currentAfter) = getSource();
+            if (_clock.CurrentFolder != folderBeforeDialog
+                || _fileActionService.IsBusy
+                || !string.Equals(compareAfter ?? currentAfter, source, StringComparison.OrdinalIgnoreCase)
+                || _catalog.IndexOf(source) < 0)
+            {
+                _sink.SetStatusText(Tr.StatusMoveCopyToStateChanged(actionName));
+                return;
+            }
+        }
+
+        switch (ActionDestinationPolicy.ValidatePickedFolder(destination, photoFolder, _directoryExists))
+        {
+            case PickedFolderCheck.Ok:
+                break;
+            case PickedFolderCheck.SameAsPhotoFolder:
+                _sink.SetStatusText(Tr.StatusMoveCopyToSameFolder(actionName));
+                return;
+            case PickedFolderCheck.Missing:
+                _sink.SetStatusText(Tr.StatusMoveCopyToFolderMissing(actionName, destination));
+                return;
+            default:
+                _sink.SetStatusText(Tr.StatusMoveCopyToNotAbsolute(actionName));
+                return;
+        }
+
+        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(destination!));
+        if (!await ExecuteFileActionCoreAsync(actionName, operation, folder, compareSelectedPath, currentPath)) return;
+
+        if (!string.Equals(folder, lastFolder, StringComparison.OrdinalIgnoreCase)) _rememberFolder?.Invoke(operation, folder);
+        if (_catalog.Count > 0)
+        {
+            var fileName = Path.GetFileName(source);
+            _sink.SetStatusText(isMove ? Tr.StatusMovedToFolder(fileName, folder) : Tr.StatusCopiedToFolder(fileName, folder));
+        }
+    }
+
+    /// <summary>
+    /// R7-2: a successful undo whose restored file is not in <paramref name="currentFolder"/> -- a Recycle (always
+    /// reloaded) or a Move made in a previous folder -- so the caller opens the file's folder at that file.
+    /// </summary>
+    public static bool RestoresOutsideFolder(UndoResult? result, string? currentFolder) =>
+        result is { Succeeded: true } && !string.IsNullOrEmpty(result.Source)
+        && (result.Operation == FileOperationType.Recycle
+            || (result.Operation == FileOperationType.Move && !IsInFolder(result.Source, currentFolder)));
+
+    private static bool IsInFolder(string path, string? folder)
+    {
+        if (string.IsNullOrEmpty(folder)) return false;
+        var parent = Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(parent)) return false;
+        try
+        {
+            return string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 }

@@ -59,6 +59,31 @@ public sealed class RecoveryRetryServiceTests
         Assert.True(_fs.FileExists(dest));
     }
 
+    [Fact(DisplayName = "Retried Move that copied but left the source is a failure (MoveSourceNotRemoved), both copies kept")]
+    public async Task RetryMove_SourceStillExistsAfterMove_FailsWithDistinctCode()
+    {
+        var source = @"C:\photos\a.jpg";
+        var dest = @"D:\sorted\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        _fs.MoveLeavesSource = true;
+
+        var failed = new JournalEntry("op-1", FileOperationType.Move, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionMoveSourceNotRemoved, result.Message);
+        Assert.Equal(JournalState.Failed, result.Entry!.State);
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, result.Entry.ErrorCode);
+        Assert.True(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(dest));
+        var latest = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, latest.ErrorCode);
+        Assert.Empty(_journal.ReadCommittedMoves());
+    }
+
     [Fact(DisplayName = "RetryMoveOrCopyAsync executes Copy successfully leaving source")]
     public async Task RetryCopy_Success()
     {

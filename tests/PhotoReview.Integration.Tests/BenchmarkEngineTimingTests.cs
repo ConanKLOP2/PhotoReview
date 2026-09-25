@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Benchmarking;
+using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Integration.Tests;
 
@@ -50,5 +51,68 @@ public sealed class BenchmarkEngineTimingTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    [Fact(DisplayName = "The profile runner the CLI uses times only the measure step, never the iteration's setup")]
+    public async Task RunProfileAsync_SamplesExcludeSetupTime()
+    {
+        var clock = new ManualTimeProvider();
+        using var root = new TempRoot("bench-profile-timing");
+        var profile = BenchmarkProfiles.Find("action-move")! with { Iterations = 2, WarmupCount = 1 };
+        var prepared = 0;
+
+        var report = await BenchmarkWorkloadRunner.RunProfileAsync(root.Path, profile,
+            (workload, iteration, _) =>
+            {
+                Assert.Equal(profile.Workload, workload);
+                prepared++;
+                clock.Advance(TimeSpan.FromMilliseconds(700)); // scratch copy / cold-cache eviction
+                return Task.FromResult<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>>(() =>
+                {
+                    clock.Advance(TimeSpan.FromMilliseconds(20));
+                    return Task.FromResult<(bool, ReviewMetricsSnapshot?)>((true, null));
+                });
+            },
+            progress: null, clock, CancellationToken.None);
+
+        Assert.Equal([20d, 20d], Assert.Single(report.Phases).Samples);
+        Assert.Equal(3, prepared); // warm-up + 2 timed iterations
+    }
+
+    private static ReviewMetricsSnapshot Cumulative(int calls) =>
+        new(CacheHits: calls * 2, CacheMisses: calls, SourceBytesRead: calls * 1000, SourceReads: calls * 5,
+            DecodeMilliseconds: calls * 7, PresentedImages: 0, PresentMilliseconds: 0)
+        {
+            PreloadHits = calls * 3,
+            DiskCacheHits = calls,
+            SourceOpenCount = calls * 5,
+            TopSourceOpens = [new SourceOpenEntry("a.jpg", calls * 5)],
+        };
+
+    [Fact(DisplayName = "Report metrics cover the measured iterations only, not the warm-up ones")]
+    public async Task RunPreparedAsync_MetricsExcludeWarmup()
+    {
+        using var root = new TempRoot("bench-warmup-metrics");
+        var profile = BenchmarkProfiles.Find("action-move")! with { Iterations = 3, WarmupCount = 2 };
+        var calls = 0;
+
+        // Like BenchmarkImageExecutor.Metrics, every step reports the executor's cumulative totals.
+        var report = await BenchmarkEngine.RunPreparedAsync(root.Path, profile,
+            (_, _, _, _) => Task.FromResult<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>>(() =>
+            {
+                calls++;
+                return Task.FromResult<(bool, ReviewMetricsSnapshot?)>((true, Cumulative(calls)));
+            }));
+
+        Assert.Equal(5, calls);
+        var metrics = Assert.IsType<ReviewMetricsSnapshot>(report.Metrics);
+        Assert.Equal(15, metrics.SourceReads);
+        Assert.Equal(6, metrics.CacheHits);
+        Assert.Equal(3, metrics.CacheMisses);
+        Assert.Equal(3000, metrics.SourceBytesRead);
+        Assert.Equal(9, metrics.PreloadHits);
+        Assert.Equal(3, metrics.DiskCacheHits);
+        Assert.Equal(15, metrics.SourceOpenCount);
+        Assert.Equal(15, Assert.Single(metrics.TopSourceOpens).Count);
     }
 }

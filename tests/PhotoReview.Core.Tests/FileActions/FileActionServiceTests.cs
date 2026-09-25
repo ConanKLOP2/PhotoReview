@@ -92,6 +92,57 @@ public sealed class FileActionServiceTests
         Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
     }
 
+    [Theory(DisplayName = "A rooted destination without a drive (\\Loai-2) is refused at run time, nothing journaled or moved")]
+    [InlineData(FileOperationType.Move, @"\Loai-2")]
+    [InlineData(FileOperationType.Copy, @"\Loai-2")]
+    [InlineData(FileOperationType.Move, "/Loai-2")]
+    public async Task ExecuteAsync_RootedDestinationWithoutDrive_FailsWithoutJournalOrMove(FileOperationType operation, string destination)
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, destination));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionDestinationOutsideSource, result.Error);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(@"C:\Loai-2\a.jpg"));
+        Assert.DoesNotContain(_fs.Events, e => e.Kind is "move" or "copy" or "append");
+        Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
+    }
+
+    [Fact(DisplayName = "Cross-volume Move that copied but could not delete the source fails with MoveSourceNotRemoved and keeps both copies")]
+    public async Task ExecuteAsync_MoveLeavesSource_FailsWithDistinctCodeAndKeepsBoth()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        _fs.MoveLeavesSource = true;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"D:\Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionMoveSourceNotRemoved, result.Error);
+        Assert.True(result.JournalPersisted);
+        Assert.True(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(@"D:\Backup\a.jpg"));
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, failed.ErrorCode);
+        Assert.Equal(JournalErrors.EnglishText(JournalErrors.MoveSourceNotRemoved), failed.Error);
+        Assert.Empty(_journal.ReadCommittedMoves());
+    }
+
+    [Fact(DisplayName = "Copy is unaffected by the Move source check (source is expected to stay)")]
+    public async Task ExecuteAsync_Copy_SourceStays_Succeeds()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, @"D:\Backup"));
+
+        Assert.True(result.Succeeded);
+        Assert.True(_fs.FileExists(source));
+    }
+
     [Fact]
     public async Task ExecuteAsync_RelativeDestinationInsideSource_Succeeds()
     {

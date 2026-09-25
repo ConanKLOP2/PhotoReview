@@ -160,6 +160,53 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.Equal(2, _preloadController.NotifyNavigationCalls.Count);
     }
 
+    [Fact(DisplayName = "R7-1: a photo rewritten after the folder scan is shown as it is now, not from the stale cache key")]
+    public async Task PresentAsync_WhenFileRewrittenAfterScan_PresentsNewContentAndRefreshesCatalog()
+    {
+        var path = Path.Combine(_tempDir, "edited.png");
+        File.WriteAllBytes(path, CreatePng(1, 1));
+        var scanTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, scanTime);
+        var scanned = new FileInfo(path);
+        _catalog.Reset([new CatalogEntry(path).WithMetadata(scanned.Length, scanned.LastWriteTimeUtc)]);
+
+        var presenter = CreatePresenter();
+        await presenter.PresentAsync(0);
+        Assert.Equal(1, presenter.CurrentOriginalWidth);
+
+        // Edited in another app: different size and mtime, catalog still holds the scan's metadata.
+        File.WriteAllBytes(path, CreatePng(3, 2));
+        var editTime = scanTime.AddHours(1);
+        File.SetLastWriteTimeUtc(path, editTime);
+        var edited = new FileInfo(path);
+        Assert.NotEqual(scanned.Length, edited.Length);
+
+        await presenter.PresentAsync(0);
+
+        Assert.Equal(3, presenter.CurrentOriginalWidth);
+        Assert.Equal(2, presenter.CurrentOriginalHeight);
+        var entry = _catalog.Find(path);
+        Assert.NotNull(entry);
+        Assert.Equal(edited.Length, entry!.Length);
+        Assert.Equal(editTime, entry.LastWriteUtc);
+        // The old version's RAM entry is gone: only the new key is cached for this path.
+        Assert.Equal(1, _previewService.CacheCount);
+    }
+
+    private static byte[] CreatePng(int width, int height)
+    {
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        Array.Fill(pixels, (byte)0x80);
+        var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(
+            width, height, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
     [Fact]
     public async Task PresentAsync_WhenAllFilesMissing_EmitsNoImagesRemaining()
     {
@@ -319,6 +366,26 @@ public sealed class ImagePresenterTests : IDisposable
         Assert.Equal(1, _metrics.Snapshot().PreloadHits);
         Assert.Contains(f1, _sink.PresentedPaths);
         Assert.NotNull(presenter.CurrentImage);
+    }
+
+    [Fact(DisplayName = "LastPresentStartedFromRam reports whether a present found its preview in RAM (the probe's language-independent loading check)")]
+    public async Task PresentAsync_LastPresentStartedFromRam_TracksRamHit()
+    {
+        var f1 = CreateFakeImageFile("state1.jpg");
+        var f2 = CreateFakeImageFile("state2.jpg");
+        _catalog.Reset([f1, f2]);
+        await _previewService.GetPreviewAsync(f2);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0); // cold: shows the loading status first
+        Assert.False(presenter.LastPresentStartedFromRam);
+
+        await presenter.PresentAsync(1); // warm: shown straight from RAM
+        Assert.True(presenter.LastPresentStartedFromRam);
+
+        _previewService.EvictCachedPath(f1, _ => { });
+        await presenter.PresentAsync(0); // cold again: the previous present's true must not leak
+        Assert.False(presenter.LastPresentStartedFromRam);
     }
 
     [Fact]

@@ -62,6 +62,7 @@ public static class SettingsNormalizer
         if (!Enum.IsDefined(settings.ScalingQuality)) { settings.ScalingQuality = ScalingQuality.HighQuality; fixedNames.Add(nameof(AppSettings.ScalingQuality)); }
         if (!Enum.IsDefined(settings.DecoderBackend)) { settings.DecoderBackend = DecoderBackend.Wpf; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
         if (!Enum.IsDefined(settings.JournalDurability)) { settings.JournalDurability = JournalDurability.Fast; fixedNames.Add(nameof(AppSettings.JournalDurability)); }
+        if (!Enum.IsDefined(settings.InstanceMode)) { settings.InstanceMode = InstanceMode.SingleWindow; fixedNames.Add(nameof(AppSettings.InstanceMode)); }
 
         if (settings.Actions is { } actions)
         {
@@ -80,6 +81,65 @@ public static class SettingsNormalizer
             }
             if (removed > 0 || invalidOperation) fixedNames.Add(nameof(AppSettings.Actions));
         }
+
+        if (settings.Shortcuts is { } shortcuts)
+        {
+            // Optional shortcuts: an explicit null in a hand-edited file means "disabled", like "".
+            shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
+            shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";
+            shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
+        }
+
+        // feat/mouse-zoom
+        if (!Enum.IsDefined(settings.MouseWheelAction)) { settings.MouseWheelAction = MouseWheelAction.Zoom; fixedNames.Add(nameof(AppSettings.MouseWheelAction)); }
+        var clickZoom = Math.Clamp(settings.ClickZoomPercent, AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent);
+        if (clickZoom != settings.ClickZoomPercent)
+        {
+            settings.ClickZoomPercent = clickZoom;
+            fixedNames.Add(nameof(AppSettings.ClickZoomPercent));
+        }
         return fixedNames;
+    }
+
+    /// <summary>
+    /// The optional shortcuts (<see cref="ShortcutMappings.OptionalNames"/>) were added after users had already bound
+    /// their own actions: a config written before them loads their defaults (End, D1, I, M, Y), which may already belong to an
+    /// action or another shortcut. Such an optional shortcut is disabled (set to empty) so the existing binding keeps
+    /// working and the settings stay valid for <see cref="SettingsValidator"/>. Returns the names of the disabled shortcuts.
+    /// </summary>
+    public static IReadOnlyList<string> DisableConflictingOptionalShortcuts(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var disabled = new List<string>();
+        if (settings.Shortcuts is not { } shortcuts) return disabled;
+
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Take(string? key)
+        {
+            if (!string.IsNullOrWhiteSpace(key)) taken.Add(key.Trim());
+        }
+        // Same set the validator checks (MoveToFolder2 is a legacy alias owned by the actions).
+        Take(shortcuts.Next); Take(shortcuts.Previous); Take(shortcuts.SendToRecycleBin); Take(shortcuts.Compare);
+        Take(shortcuts.NextFolder); Take(shortcuts.PreviousFolder); Take(shortcuts.FirstImage); Take(shortcuts.ZoomIn);
+        Take(shortcuts.ZoomOut); Take(shortcuts.ToggleFit); Take(shortcuts.Skip); Take(shortcuts.Undo); Take(shortcuts.Fullscreen);
+        foreach (var action in settings.Actions ?? []) Take(action?.Shortcut);
+
+        string Resolve(string name, string? value)
+        {
+            var key = value?.Trim() ?? "";
+            if (key.Length == 0) return "";
+            if (!taken.Add(key))
+            {
+                disabled.Add(name);
+                return "";
+            }
+            return key;
+        }
+        shortcuts.LastImage = Resolve(nameof(ShortcutMappings.LastImage), shortcuts.LastImage);
+        shortcuts.ZoomActualSize = Resolve(nameof(ShortcutMappings.ZoomActualSize), shortcuts.ZoomActualSize);
+        shortcuts.ToggleInfoOverlay = Resolve(nameof(ShortcutMappings.ToggleInfoOverlay), shortcuts.ToggleInfoOverlay);
+        shortcuts.MoveToFolder = Resolve(nameof(ShortcutMappings.MoveToFolder), shortcuts.MoveToFolder);
+        shortcuts.CopyToFolder = Resolve(nameof(ShortcutMappings.CopyToFolder), shortcuts.CopyToFolder);
+        return disabled;
     }
 }
