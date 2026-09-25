@@ -114,8 +114,16 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<SourceBytesCachePolicy>(sp =>
         {
             var settings = sp.GetRequiredService<SettingsStore>().Current;
-            return new SourceBytesCachePolicy(
-                settings.UseSourceBytesCache ? new SourceBytesCache(settings.SourceBytesCapacityBytes) : null);
+            if (!settings.UseSourceBytesCache) return new SourceBytesCachePolicy(null);
+            // RAM%: the source-bytes cache must leave the preload window to the preview cache inside the user's share.
+            var sourceBytes = RamBudgetPolicy.SourceBytesForPercent(
+                settings.SourceBytesCapacityBytes, settings.ImageCacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes());
+            if (sourceBytes <= 0)
+            {
+                sp.GetService<ILog>()?.Warn("Source-bytes cache disabled: the RAM cache share leaves no room beyond the preview preload window.");
+                return new SourceBytesCachePolicy(null);
+            }
+            return new SourceBytesCachePolicy(new SourceBytesCache(sourceBytes));
         });
 
         services.AddSingleton<PreviewStateContext>();
@@ -139,7 +147,8 @@ public partial class App : System.Windows.Application, IDisposable
                 decoderFactory: sp.GetRequiredService<IImageDecoderFactory>(),
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>(),
-                sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache);
+                sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache,
+                cacheRamPercent: settingsStore.Current.ImageCacheRamPercent);
         });
 
         services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>

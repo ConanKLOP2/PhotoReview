@@ -17,7 +17,14 @@ public class AppSettings
     public bool CompareSizeEnabled { get; set; } = true;
     public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
     public DecoderBackend DecoderBackend { get; set; } = DecoderBackend.Wpf;
+    /// <summary>Preview cache byte budget; only used when physical RAM is unknown (otherwise <see cref="ImageCacheRamPercent"/> wins).</summary>
     public long ImageCacheCapacityBytes { get; set; } = PerformanceOptions.ImageCacheCapacityBytes;
+
+    /// <summary>
+    /// In-memory preview (+ source-bytes) cache budget as a percent of physical RAM, [system minimum, 90]. Absent in older
+    /// configs, so they load with the default 50 %. Applied when the cache is created, i.e. after a restart.
+    /// </summary>
+    public int ImageCacheRamPercent { get; set; } = PerformanceOptions.ImageCacheRamPercent;
     public long MemoryReserveBytes { get; set; } = PerformanceOptions.MemoryReserveBytes;
     public int PreloadWorkerCount { get; set; } = PerformanceOptions.PreloadWorkerCount;
     public double PreloadMemoryLoadLimit { get; set; } = PerformanceOptions.PreloadMemoryLoadLimit;

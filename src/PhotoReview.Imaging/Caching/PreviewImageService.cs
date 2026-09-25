@@ -93,10 +93,11 @@ public sealed class PreviewImageService : IPreloadTarget
         Func<DecoderBackend>? currentBackend = null,
         IImageDecoderFactory? decoderFactory = null,
         SourceBytesCache? sourceBytesCache = null,
-        int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity)
+        int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
+        int? cacheRamPercent = null)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity)
+            originalDimensionsCapacity, cacheRamPercent)
     {
     }
 
@@ -123,7 +124,8 @@ public sealed class PreviewImageService : IPreloadTarget
         Func<DecoderBackend>? currentBackend = null,
         IImageDecoderFactory? decoderFactory = null,
         SourceBytesCache? sourceBytesCache = null,
-        int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity)
+        int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
+        int? cacheRamPercent = null)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
@@ -141,15 +143,11 @@ public sealed class PreviewImageService : IPreloadTarget
         _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
         _originalDimensions = new BoundedLruCache<ImageCacheKey, (int Width, int Height)>(
             originalDimensionsCapacity, _ => 1);
-        // IMG-11: clamp to half of physical RAM and log what is actually in effect.
-        var requestedCapacity = capacityBytes;
-        capacityBytes = RamBudgetPolicy.ClampPreviewToPhysicalMemory(
-            capacityBytes, RamBudgetPolicy.GetPhysicalMemoryBytes(), sourceBytesCache?.CapacityBytes ?? 0);
+        // IMG-11: clamp to the user's share of physical RAM (or half of it without a percent) and log what is in effect.
+        capacityBytes = ResolveCapacity(capacityBytes, cacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes(),
+            sourceBytesCache?.CapacityBytes, out var budgetLine);
         CapacityBytes = capacityBytes;
-        _log.Info($"Memory budgets: preview cache {capacityBytes / (1024 * 1024)} MiB"
-            + (capacityBytes != requestedCapacity ? $" (clamped from {requestedCapacity / (1024 * 1024)} MiB to 50% of physical RAM)" : "")
-            + (sourceBytesCache is null ? ", source-bytes cache off" : $", source-bytes cache {sourceBytesCache.CapacityBytes / (1024 * 1024)} MiB")
-            + ".");
+        _log.Info(budgetLine);
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
             capacityBytes, image => image.EstimatedBytes);
         // Two workers: enough to keep the disk-cache warm without letting persistence
@@ -161,6 +159,40 @@ public sealed class PreviewImageService : IPreloadTarget
         _persistWorkers = new Task[PersistWorkerCount];
         for (var i = 0; i < PersistWorkerCount; i++) _persistWorkers[i] = RunPersistWorkerAsync();
         ScheduleLegacyCacheCleanup();
+    }
+
+    /// <summary>
+    /// Effective preview-cache capacity plus the start-up "Memory budgets" log line. With a <paramref name="ramPercent"/>
+    /// and known RAM, the budget is that percent (clamped to [system minimum, 90]) minus the source-bytes cache; otherwise
+    /// <paramref name="requestedBytes"/> clamped to half of physical RAM (IMG-11, R2-A-06).
+    /// </summary>
+    internal static long ResolveCapacity(long requestedBytes, int? ramPercent, long physicalBytes, long? sourceBytesCapacity,
+        out string logLine)
+    {
+        const long mib = 1024 * 1024;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var source = sourceBytesCapacity ?? 0;
+        var sourcePart = sourceBytesCapacity is null
+            ? ", source-bytes cache off"
+            : string.Create(inv, $", source-bytes cache {source / mib} MiB");
+        if (ramPercent is { } requestedPercent && physicalBytes > 0)
+        {
+            var percent = RamBudgetPolicy.ClampCachePercent(requestedPercent, physicalBytes);
+            var capacity = RamBudgetPolicy.PreviewBytesForPercent(percent, physicalBytes, source);
+            var clampPart = percent != requestedPercent
+                ? string.Create(inv, $" (requested {requestedPercent}% clamped to {percent}%; allowed {RamBudgetPolicy.MinimumCachePercent(physicalBytes)}-{PhotoReview.Core.Settings.PerformanceOptions.MaxImageCacheRamPercent}%)")
+                : "";
+            logLine = string.Create(inv,
+                $"Memory budgets: preview cache {capacity / mib} MiB; cache share {percent}% of {physicalBytes / mib} MiB physical RAM = {RamBudgetPolicy.BytesForPercent(percent, physicalBytes) / mib} MiB for preview + source-bytes{clampPart}{sourcePart}.");
+            return capacity;
+        }
+
+        var clamped = Math.Max(1, RamBudgetPolicy.ClampPreviewToPhysicalMemory(requestedBytes, physicalBytes, source));
+        var reason = physicalBytes <= 0 ? " (physical RAM unknown: byte budget used)" : "";
+        logLine = string.Create(inv, $"Memory budgets: preview cache {clamped / mib} MiB{reason}")
+            + (clamped != requestedBytes ? string.Create(inv, $" (clamped from {requestedBytes / mib} MiB to 50% of physical RAM)") : "")
+            + sourcePart + ".";
+        return clamped;
     }
 
     // perf(cache): bumping the cache key/file version (preview-v3 -> v4, ".png"+".meta" ->
