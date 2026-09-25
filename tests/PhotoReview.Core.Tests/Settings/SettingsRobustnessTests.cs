@@ -266,6 +266,33 @@ public sealed class SettingsRobustnessTests : IDisposable
         Assert.Equal(250, s.ClickZoomPercent);
     }
 
+    [Fact(DisplayName = "Comments and trailing commas in a hand-edited config are accepted, not treated as corruption")]
+    public void Load_CommentsAndTrailingCommas_Accepted()
+    {
+        var s = LoadJson("""
+            {
+              // my tweaks
+              "ConfigVersion": 3,
+              "LoggingEnabled": true, /* on */
+              "Actions": [ { "Name": "Mine", "Shortcut": "F9", "Operation": "Copy", "Destination": "D", }, ],
+              "ClickZoomPercent": "abc", // salvaged path must accept comments too
+            }
+            """);
+
+        Assert.True(s.LoggingEnabled);
+        Assert.Equal("Mine", Assert.Single(s.Actions).Name);
+        Assert.Equal(AppSettings.DefaultClickZoomPercent, s.ClickZoomPercent);
+    }
+
+    [Fact(DisplayName = "A commented, comma-trailing but otherwise valid config leaves no .corrupt backup")]
+    public void Load_CommentedValidConfig_NoBackup()
+    {
+        var s = LoadJson("{ /* c */ \"ConfigVersion\": 3, \"ClickZoomPercent\": 250, }");
+
+        Assert.Equal(250, s.ClickZoomPercent);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(_paths.ConfigFile)!, "*.corrupt-*"));
+    }
+
     [Fact(DisplayName = "Concurrent Save and Load never observe a torn config.json")]
     public async Task ConcurrentSaveAndLoad_NeverTorn()
     {

@@ -159,7 +159,7 @@ public sealed class SettingsStore
         unusable = bad;
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
             var typeInfo = AppSettingsJsonContext.Default.AppSettings;
             foreach (var element in doc.RootElement.EnumerateObject())

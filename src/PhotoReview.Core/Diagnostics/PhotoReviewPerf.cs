@@ -241,14 +241,12 @@ public sealed class PhotoReviewPerf : EventSource
         if (IsEnabled()) WriteEvent(27, gen, phase, value, detail);
     }
 
-    private static DateTime? _processStartUtc;
+    // Lazy<T>: a plain `DateTime? ??=` cache is a 16-byte struct written without synchronization, so a concurrent first
+    // call could read HasValue = true with zero ticks and report a startup time of two thousand years.
+    private static readonly Lazy<DateTime> ProcessStartUtc = new(ReadProcessStartUtc);
 
     /// <summary>Milliseconds elapsed since the OS started this process (wall clock, ~1 ms resolution).</summary>
-    public static double MsSinceProcessStart()
-    {
-        var start = _processStartUtc ??= ReadProcessStartUtc();
-        return (DateTime.UtcNow - start).TotalMilliseconds;
-    }
+    public static double MsSinceProcessStart() => (DateTime.UtcNow - ProcessStartUtc.Value).TotalMilliseconds;
 
     private static DateTime ReadProcessStartUtc()
     {
