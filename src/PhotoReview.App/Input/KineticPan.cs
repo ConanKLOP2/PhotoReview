@@ -158,8 +158,8 @@ internal struct KineticScroller
     {
         var target = Finite(offset) + velocity * travel;
         var clamped = Math.Clamp(target, 0, max);
-        // Stopped at an edge, or already there and still pushing into it.
-        hitEdge = velocity != 0 && (clamped != target || (velocity < 0 && clamped <= 0) || (velocity > 0 && clamped >= max));
+        // Stopped at an edge (also when already there and still pushing into it: the target is then past it).
+        hitEdge = velocity != 0 && clamped != target;
         return clamped;
     }
 

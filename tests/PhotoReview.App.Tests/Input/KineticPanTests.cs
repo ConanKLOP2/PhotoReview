@@ -98,6 +98,10 @@ public sealed class KineticPanTests
 
         Assert.Equal(-2, scroller.VelocityX, 6);
         Assert.Equal(KineticScroller.MaxVelocity, scroller.VelocityY, 6);
+
+        Assert.True(scroller.Start(100, 1));
+        Assert.Equal(-KineticScroller.MaxVelocity, scroller.VelocityX, 6);
+        Assert.Equal(-1, scroller.VelocityY, 6);
     }
 
     [Fact]
