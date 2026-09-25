@@ -21,6 +21,9 @@ public static class PerformanceOptions
     public const int MinImageCacheRamPercent = 1;
     public const long MemoryReserveBytes = 2L * 1024 * 1024 * 1024;
     public const int PreloadWorkerCount = 8;
+
+    /// <summary>Upper bound accepted for a hand-edited <c>PreloadWorkerCount</c>: each worker holds a decoded image, so a huge value is a memory bomb.</summary>
+    public const int MaxPreloadWorkerCount = 64;
     public const double PreloadMemoryLoadLimit = 0.90;
     public const long PreviewDiskCacheCapacityBytes = 4L * 1024 * 1024 * 1024;
     public const bool UseSourceBytesCache = false;

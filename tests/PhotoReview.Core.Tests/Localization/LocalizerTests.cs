@@ -538,7 +538,9 @@ public sealed class LocalizerTests
     {
         var localizer = Localizer.Create(English, []);
 
-        Assert.Equal(expected, localizer.FormatPlural("files", count, new LocArg("count", count)));
+        // The count is UI text, so it follows the regional number format (e.g. Arabic prefixes the minus sign).
+        var regional = expected.Replace(count.ToString(CultureInfo.InvariantCulture), count.ToString(CultureInfo.CurrentCulture), StringComparison.Ordinal);
+        Assert.Equal(regional, localizer.FormatPlural("files", count, new LocArg("count", count)));
     }
 
     [Theory]

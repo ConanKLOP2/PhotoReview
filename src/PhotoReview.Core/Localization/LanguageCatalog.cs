@@ -107,7 +107,11 @@ public sealed class LanguageCatalog
                     warnings.Add($"{source}: '{property.Name}' is not a string, ignored");
                     continue;
                 }
-                entries[property.Name] = property.Value.GetString()!;
+                if (!entries.TryAdd(property.Name, property.Value.GetString()!))
+                {
+                    warnings.Add($"{source}: duplicate key '{property.Name}', the last value is used");
+                    entries[property.Name] = property.Value.GetString()!;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(code) || !IsValidCode(code))
@@ -138,7 +142,14 @@ public sealed class LanguageCatalog
                 case "name" when p.Value.ValueKind == JsonValueKind.String: name = p.Value.GetString(); break;
                 case "nativeName" when p.Value.ValueKind == JsonValueKind.String: nativeName = p.Value.GetString(); break;
                 case "plural" when p.Value.ValueKind == JsonValueKind.String:
-                    plural = string.Equals(p.Value.GetString(), "none", StringComparison.OrdinalIgnoreCase) ? PluralRule.None : PluralRule.OneOther;
+                    var rule = p.Value.GetString();
+                    if (string.Equals(rule, "none", StringComparison.OrdinalIgnoreCase)) plural = PluralRule.None;
+                    else
+                    {
+                        plural = PluralRule.OneOther;
+                        if (!string.Equals(rule, "one-other", StringComparison.OrdinalIgnoreCase))
+                            warnings.Add($"{source}: unknown _meta.plural '{rule}', using one-other (valid: one-other, none)");
+                    }
                     break;
                 case "authors" when p.Value.ValueKind == JsonValueKind.Array:
                     foreach (var a in p.Value.EnumerateArray())

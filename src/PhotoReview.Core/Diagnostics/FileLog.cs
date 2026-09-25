@@ -66,7 +66,7 @@ public sealed class FileLog : ILog, IDisposable
             else
             {
                 _enabled = false;
-                _signal.Set();
+                Signal();
                 Flush();
             }
         }
@@ -89,15 +89,22 @@ public sealed class FileLog : ILog, IDisposable
     private void Flush(int timeoutMs)
     {
         var remaining = timeoutMs;
-        while (((!_queue.IsEmpty && !_lastDrainFailed) || _writing) && remaining > 0)
+        while (((!_queue.IsEmpty && !_lastDrainFailed) || _writing) && remaining > 0 && !HandlesReleased)
         {
-            _signal.Set();
+            try { _signal.Set(); } catch (ObjectDisposedException) { return; } // disposed under us: nothing left to wait for
             var start = Environment.TickCount64;
             // _drained can be set while an entry is already (or about to be) queued: the writer's empty-queue Drain may run
             // between Write's Reset and Enqueue. Waiting on a set event returns at once and would burn the whole budget in a
             // spin, returning before the entry is written, so back off briefly and re-check the real condition instead.
-            if (_drained.IsSet) Thread.Sleep(1);
-            else _drained.Wait(remaining);
+            try
+            {
+                if (_drained.IsSet) Thread.Sleep(1);
+                else _drained.Wait(remaining);
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
             remaining -= (int)Math.Max(1, Environment.TickCount64 - start);
         }
     }
@@ -106,7 +113,7 @@ public sealed class FileLog : ILog, IDisposable
     {
         _stopping = true;
         _enabled = false;
-        _signal.Set();
+        Signal();
         // One shared 2 s budget for join + flush (was up to 4 s on the UI thread).
         var start = Environment.TickCount64;
         _writer?.Join(2000);
@@ -148,6 +155,9 @@ public sealed class FileLog : ILog, IDisposable
     {
         lock (_sync)
         {
+            // Enabling a disposed log must be a no-op: a new writer thread would wait on the released handles and
+            // die with an unhandled ObjectDisposedException, taking the process down.
+            if (_disposed || HandlesReleased) return;
             _stopping = false;
             _enabled = true;
             if (_writer is null || !_writer.IsAlive)
@@ -165,15 +175,28 @@ public sealed class FileLog : ILog, IDisposable
     private void Write(string level, string message, Exception? exception)
     {
         if (!_enabled || _stopping) return;
-        _drained.Reset();
-        _lastDrainFailed = false;
-        _queue.Enqueue(new Entry(level, message, exception, DateTime.Now, Environment.CurrentManagedThreadId));
-        if (Interlocked.Increment(ref _queuedCount) > MaxQueuedEntries && _queue.TryDequeue(out _))
+        try
         {
-            Interlocked.Decrement(ref _queuedCount);
-            Interlocked.Increment(ref _dropped);
+            _drained.Reset();
+            _lastDrainFailed = false;
+            _queue.Enqueue(new Entry(level, message, exception, DateTime.Now, Environment.CurrentManagedThreadId));
+            if (Interlocked.Increment(ref _queuedCount) > MaxQueuedEntries && _queue.TryDequeue(out _))
+            {
+                Interlocked.Decrement(ref _queuedCount);
+                Interlocked.Increment(ref _dropped);
+            }
+            _signal.Set();
         }
-        _signal.Set();
+        catch (ObjectDisposedException)
+        {
+            // Dispose released the wait handles between the _enabled check above and here: logging must never throw
+            // into the caller, and the entry is moot because the log is closed.
+        }
+    }
+
+    private void Signal()
+    {
+        try { _signal.Set(); } catch (ObjectDisposedException) { /* already disposed: nothing to wake */ }
     }
 
     private void WriterLoop()
@@ -203,7 +226,15 @@ public sealed class FileLog : ILog, IDisposable
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             if (NeedsRotation(path))
             {
-                Rotate(path);
+                try
+                {
+                    Rotate(path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The backup is read-only or held open (antivirus, an editor): keep appending to the current file rather than
+                    // failing every drain, which would silence the log for the rest of the session. Rotation is retried next drain.
+                }
             }
 
             using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 65536, FileOptions.SequentialScan);
@@ -212,7 +243,8 @@ public sealed class FileLog : ILog, IDisposable
             {
                 Interlocked.Decrement(ref _queuedCount);
                 _lastDrainFailed = false;
-                writer.WriteLine($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}" + (e.Exception is null ? "" : $"\n{e.Exception}"));
+                // Machine-read log (AGENTS.md rule 4): invariant culture, else a th-TH/ar-SA/fa-IR machine writes Buddhist/Hijri years.
+                writer.WriteLine(FormattableString.Invariant($"{e.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{e.Level}] [T{e.ThreadId}] {e.Message}") + (e.Exception is null ? "" : "\n" + e.Exception));
             }
         }
         catch
