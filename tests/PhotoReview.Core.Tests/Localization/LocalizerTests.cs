@@ -543,6 +543,26 @@ public sealed class LocalizerTests
         Assert.Equal(regional, localizer.FormatPlural("files", count, new LocArg("count", count)));
     }
 
+    [Theory(DisplayName = "FormatPlural under a pinned en-US culture gives the literal text (oracle independent of the machine culture)")]
+    [InlineData(0, "0 files")]
+    [InlineData(1, "1 file")]
+    [InlineData(2, "2 files")]
+    [InlineData(-1, "-1 files")]
+    [InlineData(1234, "1234 files")]
+    public void FormatPlural_PinnedCulture_LiteralExpectation(long count, string expected)
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+            Assert.Equal(expected, Localizer.Create(English, []).FormatPlural("files", count, new LocArg("count", count)));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

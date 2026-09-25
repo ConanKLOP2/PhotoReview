@@ -128,4 +128,79 @@ public sealed class SettingsStoreFailureTests
         Assert.True(loaded.LoggingEnabled);
         Assert.Equal(original, _fs.ReadAllText(_paths.ConfigFile));
     }
+
+    [Fact(DisplayName = "Salvage keeps a customised Actions list and Shortcuts object while resetting only the mistyped value")]
+    public void Load_MistypedValue_KeepsNestedCollections()
+    {
+        _fs.AddFile(_paths.ConfigFile, """
+            {"ConfigVersion":3,"ClickZoomPercent":"abc",
+             "Actions":[{"Name":"Keep","Shortcut":"K","Operation":"Copy","Destination":"Keepers","Confirm":true}],
+             "Shortcuts":{"Next":"N","Previous":"P"}}
+            """);
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.Contains(nameof(AppSettings.ClickZoomPercent), store.LastLoadRepairs);
+        Assert.DoesNotContain(nameof(AppSettings.Actions), store.LastLoadRepairs);
+        var action = Assert.Single(loaded.Actions);
+        Assert.Equal("Keep", action.Name);
+        Assert.Equal("Keepers", action.Destination);
+        Assert.Equal(FileOperationType.Copy, action.Operation);
+        Assert.True(action.Confirm);
+        Assert.Equal("N", loaded.Shortcuts.Next);
+        Assert.Equal("P", loaded.Shortcuts.Previous);
+    }
+
+    [Fact(DisplayName = "Salvage with a bad element inside Actions resets only Actions and reports it; Shortcuts and other values stay")]
+    public void Load_BadElementInsideActions_ResetsOnlyActions()
+    {
+        _fs.AddFile(_paths.ConfigFile, """
+            {"ConfigVersion":3,"LoggingEnabled":true,
+             "Actions":[{"Name":"Ok","Shortcut":"K"},{"Name":5,"Shortcut":{"x":1}}],
+             "Shortcuts":{"Next":"N"}}
+            """);
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.True(loaded.LoggingEnabled);
+        Assert.Equal("N", loaded.Shortcuts.Next);
+        Assert.Contains(nameof(AppSettings.Actions), store.LastLoadRepairs);
+        Assert.NotEmpty(loaded.Actions);
+    }
+
+    [Fact(DisplayName = "Salvage with a bad value inside Shortcuts resets only Shortcuts and keeps the Actions list")]
+    public void Load_BadValueInsideShortcuts_ResetsOnlyShortcuts()
+    {
+        _fs.AddFile(_paths.ConfigFile, """
+            {"ConfigVersion":3,
+             "Actions":[{"Name":"Keep","Shortcut":"K"}],
+             "Shortcuts":{"Next":["not","a","string"]}}
+            """);
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.Contains(nameof(AppSettings.Shortcuts), store.LastLoadRepairs);
+        Assert.Equal(new ShortcutMappings().Next, loaded.Shortcuts.Next);
+        Assert.Equal("Keep", Assert.Single(loaded.Actions).Name);
+    }
+
+    [Fact(DisplayName = "A blank mandatory shortcut whose default is taken by an action is repaired and reported, and the clash surfaces in validation (not silently)")]
+    public void Load_BlankShortcutWhoseDefaultIsTaken_ClashIsReportedByValidation()
+    {
+        _fs.AddFile(_paths.ConfigFile, """
+            {"ConfigVersion":3,"Shortcuts":{"Next":""},
+             "Actions":[{"Name":"Mine","Shortcut":"Right"}]}
+            """);
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.Contains(nameof(AppSettings.Shortcuts), store.LastLoadRepairs);
+        Assert.Equal(new ShortcutMappings().Next, loaded.Shortcuts.Next);
+        Assert.Equal("Right", Assert.Single(loaded.Actions).Shortcut); // the user's action binding is never touched
+        Assert.NotNull(AppSettings.ValidateShortcuts(loaded)); // the settings dialog refuses to save until the user resolves it
+    }
 }
