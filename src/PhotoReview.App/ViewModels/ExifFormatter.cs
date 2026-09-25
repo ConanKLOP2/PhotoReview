@@ -32,23 +32,39 @@ public static class ExifFormatter
         if (fields.HasFlag(ExifInfoFields.FileName) && !string.IsNullOrWhiteSpace(fileName))
             parts.Add(fileName);
         if (fields.HasFlag(ExifInfoFields.DateTaken) && exif?.DateTaken is { } date)
-            parts.Add(date.ToString("g", provider));
+            parts.Add(FormatDate(date, provider));
         if (fields.HasFlag(ExifInfoFields.Dimensions) && width > 0 && height > 0)
             parts.Add(Tr.ExifDimensions(width.ToString(provider), height.ToString(provider)));
         if (fields.HasFlag(ExifInfoFields.Camera) && CameraText(exif?.CameraMake, exif?.CameraModel) is { } camera)
             parts.Add(camera);
         if (fields.HasFlag(ExifInfoFields.Lens) && exif?.LensModel is { } lens)
             parts.Add(lens);
-        if (fields.HasFlag(ExifInfoFields.Iso) && exif?.Iso is { } iso)
+        if (fields.HasFlag(ExifInfoFields.Iso) && exif?.Iso is > 0 and var iso)
             parts.Add(Tr.ExifIso(iso.ToString(provider)));
-        if (fields.HasFlag(ExifInfoFields.FocalLength) && exif?.FocalLength is { } focal)
+        if (fields.HasFlag(ExifInfoFields.FocalLength) && exif?.FocalLength is { Value: > 0 } focal)
             parts.Add(Tr.ExifFocalLength(focal.Value.ToString("0.#", provider)));
-        if (fields.HasFlag(ExifInfoFields.Aperture) && exif?.FNumber is { } aperture)
+        if (fields.HasFlag(ExifInfoFields.Aperture) && exif?.FNumber is { Value: > 0 } aperture)
             parts.Add(Tr.ExifAperture(aperture.Value.ToString("0.#", provider)));
         if (fields.HasFlag(ExifInfoFields.ShutterSpeed) && ShutterText(exif?.ExposureTime, provider) is { } shutter)
             parts.Add(shutter);
 
         return string.Join(Separator, parts);
+    }
+
+    /// <summary>
+    /// A camera clock can hold any date, but some display calendars (Hijri Um al-Qura for ar-SA, Thai and others) accept
+    /// only a range and throw for the rest; one bad EXIF date must not blank the whole line.
+    /// </summary>
+    private static string FormatDate(DateTime date, IFormatProvider provider)
+    {
+        try
+        {
+            return date.ToString("g", provider);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return date.ToString("g", CultureInfo.InvariantCulture);
+        }
     }
 
     /// <summary>
