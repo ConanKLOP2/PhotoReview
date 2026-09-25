@@ -62,6 +62,7 @@ public static class PerfAnalyze
         var groupFolder = new Dictionary<GroupKey, List<FolderGenSummary>>();
         var groupStartup = new Dictionary<GroupKey, List<Dictionary<string, double>>>();
         var groupMetas = new Dictionary<GroupKey, List<RunFileMeta>>();
+        var groupDropped = new Dictionary<GroupKey, long>();
 
         foreach (var path in csvFiles)
         {
@@ -90,6 +91,7 @@ public static class PerfAnalyze
             Add(groupFolder, key).AddRange(analysis.FolderGens);
             if (analysis.Startup.Count > 0) Add(groupStartup, key).Add(analysis.Startup);
             Add(groupMetas, key).Add(meta);
+            groupDropped[key] = groupDropped.GetValueOrDefault(key) + file.DroppedRows;
         }
 
         var summaries = groupNavs.Keys
@@ -99,7 +101,8 @@ public static class PerfAnalyze
         foreach (var s in summaries)
         {
             var metas = groupMetas[s.Key];
-            s.PreloadWorkers = metas.Select(m => m.PreloadWorkers).FirstOrDefault(w => w.HasValue);
+            s.PreloadWorkers = s.Key.PreloadWorkers; // the key is built from the same per-file value, so every meta in the group agrees
+            s.DroppedRows = groupDropped.GetValueOrDefault(s.Key);
             s.GcTimePercent = AverageOrNull(metas.Select(m => m.GcTimePercent));
             s.FrameTimeP95Ms = AverageOrNull(metas.Select(m => m.FrameTimeP95Ms));
             s.PreloadItems.AddRange(groupPreload.GetValueOrDefault(s.Key, []));
@@ -118,7 +121,12 @@ public static class PerfAnalyze
         }
 
         var result = new AnalysisResult { CsvFileCount = csvFiles.Count };
-        result.Groups.AddRange(results.OrderBy(r => r.Summary.Key.ToString(), StringComparer.Ordinal));
+        // Numeric worker order ("workers=2" before "workers=10"); a text sort of Key.ToString() would put 10 first.
+        result.Groups.AddRange(results
+            .OrderBy(r => r.Summary.Key.Scenario, StringComparer.Ordinal)
+            .ThenBy(r => r.Summary.Key.Mode, StringComparer.Ordinal)
+            .ThenBy(r => r.Summary.Key.Cond, StringComparer.Ordinal)
+            .ThenBy(r => r.Summary.Key.PreloadWorkers ?? -1));
         result.SummaryMdPath = Path.Combine(runDir, "summary.md");
         result.SummaryJsonPath = Path.Combine(runDir, "summary.json");
         PerfAnalyzeReport.WriteMarkdown(result.SummaryMdPath, result);

@@ -15,7 +15,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
     var reportDirectory = outputOverride is { Length: > 0 } ? Path.GetFullPath(outputOverride) : Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
     Directory.CreateDirectory(reportDirectory);
-    var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
+    var supported = ImageFileTypes.SupportedExtensions;
     var allFiles = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
         .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p, StringComparer.Ordinal)
         .ToArray();
@@ -26,7 +26,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
     var files = allFiles.Where(p => supported.Contains(Path.GetExtension(p))).Take(64).ToArray();
     if (files.Length == 0) throw new InvalidOperationException("Benchmark folder contains no supported images");
-    var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
+    var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0L; } });
     var reports = new List<BenchmarkReport>();
     var outcomes = new List<BenchmarkPhaseResult>();
     var manifest = new BenchmarkDatasetManifest(Path.GetFullPath(folder),
@@ -124,13 +124,19 @@ if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
 
 if (args.Length >= 2 && args[0] == "--perf-analyze")
 {
-    string? rulesPath = null;
-    for (var i = 2; i + 1 < args.Length; i++)
+    PerfAnalyze.AnalysisResult analysis;
+    try
     {
-        if (args[i] == "--rules") rulesPath = args[i + 1];
+        var rulesPath = BenchmarkCliArguments.ParsePerfAnalyzeRules(args);
+        analysis = await PerfAnalyze.RunAsync(args[1], rulesPath);
     }
-    var analysis = await PerfAnalyze.RunAsync(args[1], rulesPath);
-    Console.WriteLine($"PERF-ANALYZE: {analysis.CsvFileCount} file, {analysis.Groups.Count} nhóm");
+    catch (Exception ex) when (ex is ArgumentException or IOException or InvalidOperationException or System.Text.Json.JsonException)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+        return;
+    }
+    Console.WriteLine($"PERF-ANALYZE: {analysis.CsvFileCount} file, {analysis.Groups.Count} groups");
     Console.WriteLine($"REPORT: {analysis.SummaryMdPath}");
     Console.WriteLine($"REPORT: {analysis.SummaryJsonPath}");
     return;
@@ -165,8 +171,7 @@ if (args.Length == 2 && args[0] == "--explorer-probe")
 {
     var probe = await new ExplorerOrderService().TryGetSnapshotAsync(args[1], TimeSpan.FromSeconds(5), CancellationToken.None);
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(probe, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-    var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff" };
-    var scanned = Directory.EnumerateFiles(args[1]).Where(path => supported.Contains(Path.GetExtension(path))).ToArray();
+    var scanned = Directory.EnumerateFiles(args[1]).Where(ImageFileTypes.IsSupported).ToArray();
     var accepted = ExplorerSnapshotValidator.TryValidate(probe, scanned, out var ordered, out var reason);
     Console.WriteLine($"VALIDATOR: accepted={accepted}, scanned={scanned.Length}, ordered={ordered.Count}, reason={reason ?? "none"}");
     return;

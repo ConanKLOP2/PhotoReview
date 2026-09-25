@@ -191,6 +191,9 @@ public sealed class GroupSummary
     public int PreloadCancelCount { get; set; }
     public List<DispatcherLongOpRow> DispatcherLongOps { get; } = [];
     public int DispatcherLongOpsBeforeStartCount { get; set; }
+
+    /// <summary>Sum of the "# dropped=N" trailers of this group's perf-*.csv files: events the listener lost (queue overflow), so the numbers above are incomplete when this is above 0.</summary>
+    public long DroppedRows { get; set; }
     public List<FolderGenSummary> FolderGens { get; } = [];
 
     /// <summary>perf(startup): one entry per perf-*.csv that has Startup rows (phase -> ms since process start).</summary>
