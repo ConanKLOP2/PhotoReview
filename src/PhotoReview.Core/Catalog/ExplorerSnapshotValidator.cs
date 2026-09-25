@@ -6,11 +6,35 @@ public static class ExplorerSnapshotValidator
 {
     public static bool TryValidate(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)
     {
+        try
+        {
+            return TryValidateCore(snapshot, scannedFiles, out ordered, out reason);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException)
+        {
+            // The snapshot comes from COM (Explorer): a null/blank folder, a null path list or a path the file system
+            // rejects (NUL, too long) is an invalid snapshot, never a crash of the folder load.
+            ordered = [];
+            reason = ExplorerReason.IncompleteSnapshot;
+            return false;
+        }
+    }
+
+    private static bool TryValidateCore(ExplorerViewSnapshot snapshot, IReadOnlyCollection<string> scannedFiles, out IReadOnlyList<string> ordered, out string? reason)
+    {
         ordered = [];
         reason = null;
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(scannedFiles);
         if (snapshot.Status != ExplorerOrderStatus.Available)
         {
             reason = snapshot.Reason ?? snapshot.Status.ToString();
+            return false;
+        }
+
+        if (snapshot.OrderedPaths is null)
+        {
+            reason = ExplorerReason.IncompleteSnapshot;
             return false;
         }
 
