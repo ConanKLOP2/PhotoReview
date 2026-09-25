@@ -104,7 +104,6 @@ public sealed class ErrorTextLocalizationTests : IDisposable
         public string? LastStatus { get; private set; }
         public void SetStatusText(string status) => LastStatus = status;
         public Task OpenFolderAsync(string folder, string? initialPath = null) => Task.CompletedTask;
-        public void NotifyNavigationStateChanged() { }
     }
 
     private sealed class InlineUiScheduler : IUiScheduler

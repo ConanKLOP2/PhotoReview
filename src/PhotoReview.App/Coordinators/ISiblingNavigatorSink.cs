@@ -12,7 +12,4 @@ public interface ISiblingNavigatorSink
 
     /// <summary>Yêu cầu mở thư mục ảnh.</summary>
     Task OpenFolderAsync(string folder, string? initialPath = null);
-
-    /// <summary>Thông báo cần cập nhật trạng thái điều hướng (button states, v.v).</summary>
-    void NotifyNavigationStateChanged();
 }
