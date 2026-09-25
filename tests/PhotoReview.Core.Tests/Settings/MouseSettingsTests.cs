@@ -55,7 +55,7 @@ public sealed class MouseSettingsTests
     [InlineData(100000, 800)]
     public void Load_OutOfRangeClickZoom_IsClampedAndReported(int stored, int expected)
     {
-        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, $$"""{ "ConfigVersion": 3, "ClickZoomPercent": {{stored}} }""");
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, string.Create(System.Globalization.CultureInfo.InvariantCulture, $$"""{ "ConfigVersion": 3, "ClickZoomPercent": {{stored}} }"""));
 
         var loaded = _store.Load();
 

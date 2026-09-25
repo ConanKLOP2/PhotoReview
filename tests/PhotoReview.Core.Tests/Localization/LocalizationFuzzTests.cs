@@ -94,7 +94,7 @@ public sealed partial class LocalizationFuzzTests
 
         var text = t.Render([new LocArg("a", null), new LocArg("b", new NullToString()), new LocArg("c", decimal.MinValue)]);
 
-        Assert.StartsWith("[] [] [-79", text, StringComparison.Ordinal);
+        Assert.Equal("[] [] [" + decimal.MinValue.ToString(null, CultureInfo.CurrentCulture) + "]", text);
     }
 
     private sealed class NullToString

@@ -21,6 +21,7 @@ public sealed class LocalizerConcurrencyTests : IDisposable
         using var stop = new CancellationTokenSource();
         var bad = new List<string>();
         var swaps = 0;
+        Localizer.SetCurrent(english); // the test host starts with Vietnamese: pin a known value before readers start
 
         var swapper = Task.Run(() =>
         {
