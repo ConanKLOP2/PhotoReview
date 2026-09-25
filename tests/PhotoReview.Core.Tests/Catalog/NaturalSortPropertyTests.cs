@@ -99,7 +99,7 @@ public sealed class NaturalSortPropertyTests
         var r = new Random(seed);
         // Same file name in different folders and different sizes exercise the stable tie-breaking too.
         var entries = Enumerable.Range(0, 600)
-            .Select(i => new CatalogEntry(@"C:" + r.Next(3) + @"\" + RandomName(r)).WithMetadata(r.Next(0, 6), DateTime.UtcNow))
+            .Select(i => new CatalogEntry(@"C:\f" + r.Next(3) + @"\" + RandomName(r)).WithMetadata(r.Next(0, 6), DateTime.UtcNow))
             .ToList();
         var paths = entries.Select(e => e.Path).ToList();
 
