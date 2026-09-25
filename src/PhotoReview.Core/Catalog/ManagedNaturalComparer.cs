@@ -1,5 +1,4 @@
-using System.Globalization;
-using System.Text;
+using System.Buffers;
 using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core.Catalog;
@@ -11,6 +10,12 @@ namespace PhotoReview.Core.Catalog;
 public sealed class ManagedNaturalComparer : INaturalComparer
 {
     public static readonly ManagedNaturalComparer Instance = new();
+
+    /// <summary>Width of the zero-padded digit-count prefix in a key (the former <c>ToString("D10")</c>).</summary>
+    private const int LengthPrefixWidth = 10;
+
+    /// <summary>Keys up to this many chars are built on the stack while comparing; longer ones rent from the array pool.</summary>
+    private const int StackKeyChars = 256;
 
     public int Compare(string? x, string? y)
     {
@@ -29,13 +34,31 @@ public sealed class ManagedNaturalComparer : INaturalComparer
             return 1;
         }
 
-        var keyX = BuildNaturalKey(x);
-        var keyY = BuildNaturalKey(y);
-
-        var cmp = string.Compare(keyX, keyY, StringComparison.OrdinalIgnoreCase);
-        if (cmp != 0)
+        // Both keys are built into stack/pooled buffers: sorting or scanning N names no longer allocates two
+        // StringBuilders + two strings per comparison. The comparison itself is unchanged.
+        var lengthX = KeyLength(x);
+        var lengthY = KeyLength(y);
+        char[]? rentedX = null;
+        char[]? rentedY = null;
+        try
         {
-            return cmp;
+            Span<char> stackX = stackalloc char[lengthX <= StackKeyChars ? lengthX : 0];
+            Span<char> stackY = stackalloc char[lengthY <= StackKeyChars ? lengthY : 0];
+            var keyX = lengthX <= StackKeyChars ? stackX : (rentedX = ArrayPool<char>.Shared.Rent(lengthX)).AsSpan(0, lengthX);
+            var keyY = lengthY <= StackKeyChars ? stackY : (rentedY = ArrayPool<char>.Shared.Rent(lengthY)).AsSpan(0, lengthY);
+            WriteKey(x, keyX);
+            WriteKey(y, keyY);
+
+            var cmp = keyX.CompareTo(keyY, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0)
+            {
+                return cmp;
+            }
+        }
+        finally
+        {
+            if (rentedX is not null) ArrayPool<char>.Shared.Return(rentedX);
+            if (rentedY is not null) ArrayPool<char>.Shared.Return(rentedY);
         }
 
         var caseInsensitiveCmp = string.Compare(x, y, StringComparison.OrdinalIgnoreCase);
@@ -54,29 +77,67 @@ public sealed class ManagedNaturalComparer : INaturalComparer
             return string.Empty;
         }
 
-        var sb = new StringBuilder(name.Length + 16);
+        return string.Create(KeyLength(name), name, static (span, source) => WriteKey(source, span));
+    }
+
+    /// <summary>Exact length of <see cref="BuildNaturalKey"/> for <paramref name="name"/>: one char per non-digit, 10 + digits + 1 per digit run.</summary>
+    private static int KeyLength(string name)
+    {
+        var length = 0;
         for (var i = 0; i < name.Length;)
         {
             if (char.IsDigit(name[i]))
             {
                 var start = i;
-                while (i < name.Length && char.IsDigit(name[i]))
-                {
-                    i++;
-                }
-
-                var digits = name.Substring(start, i - start).TrimStart('0');
-                sb.Append(digits.Length.ToString("D10", CultureInfo.InvariantCulture));
-                sb.Append(digits);
-                sb.Append('\0');
+                while (i < name.Length && char.IsDigit(name[i])) i++;
+                length += LengthPrefixWidth + SignificantDigits(name, start, i) + 1;
             }
             else
             {
-                sb.Append(char.ToLowerInvariant(name[i]));
+                length++;
                 i++;
             }
         }
 
-        return sb.ToString();
+        return length;
+    }
+
+    /// <summary>Digits of the run [start, end) after trimming leading ASCII '0' (an all-zero run has none).</summary>
+    private static int SignificantDigits(string name, int start, int end)
+    {
+        while (start < end && name[start] == '0') start++;
+        return end - start;
+    }
+
+    private static void WriteKey(string name, Span<char> destination)
+    {
+        var o = 0;
+        for (var i = 0; i < name.Length;)
+        {
+            if (char.IsDigit(name[i]))
+            {
+                var start = i;
+                while (i < name.Length && char.IsDigit(name[i])) i++;
+                while (start < i && name[start] == '0') start++;
+                var count = i - start;
+
+                // Zero-padded decimal digit count, LengthPrefixWidth wide (counts stay far below 10^10).
+                for (var p = o + LengthPrefixWidth - 1; p >= o; p--)
+                {
+                    destination[p] = (char)('0' + (count % 10));
+                    count /= 10;
+                }
+
+                o += LengthPrefixWidth;
+                name.AsSpan(start, i - start).CopyTo(destination[o..]);
+                o += i - start;
+                destination[o++] = '\0';
+            }
+            else
+            {
+                destination[o++] = char.ToLowerInvariant(name[i]);
+                i++;
+            }
+        }
     }
 }
