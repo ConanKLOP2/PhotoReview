@@ -96,6 +96,15 @@ public sealed class DuplicateCleanupController
             return;
         }
 
+        // Q-R14: batch cleanup never deletes permanently. Say so once, up front, instead of one refusal per file after the confirmation.
+        var withoutBin = remove.FirstOrDefault(_fileActionService.LacksRecycleBin);
+        if (withoutBin is not null)
+        {
+            _sink.SetStatusText(StatusFormatter.BatchCanceled());
+            _dialogService?.ShowError(Tr.DialogBatchErrorsTitle, Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(withoutBin)));
+            return;
+        }
+
         if (_dialogService is not null)
         {
             var confirmed = false;
