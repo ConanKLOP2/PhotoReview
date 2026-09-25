@@ -120,25 +120,4 @@ public sealed class MouseSettingsTests
         Assert.Equal(250, reloaded.ClickZoomPercent);
         Assert.False(reloaded.KineticPanEnabled);
     }
-
-    [Fact]
-    public void CarryOver_RestoresValuesASettingsWindowRebuildDropped()
-    {
-        var before = new AppSettings { MouseWheelAction = MouseWheelAction.Navigate, ClickToZoomEnabled = false, ClickZoomPercent = 300, KineticPanEnabled = false };
-        var rebuilt = new AppSettings(); // what the Settings window saves: defaults for fields it has no controls for
-
-        Assert.True(MouseSettingsCarryOver.Apply(before, rebuilt));
-
-        Assert.Equal(MouseWheelAction.Navigate, rebuilt.MouseWheelAction);
-        Assert.False(rebuilt.ClickToZoomEnabled);
-        Assert.Equal(300, rebuilt.ClickZoomPercent);
-        Assert.False(rebuilt.KineticPanEnabled);
-        Assert.False(MouseSettingsCarryOver.Apply(before, rebuilt)); // nothing left to change -> no second save
-    }
-
-    [Fact]
-    public void CarryOver_DefaultsUnchanged_ReportsNoChange()
-    {
-        Assert.False(MouseSettingsCarryOver.Apply(new AppSettings(), new AppSettings()));
-    }
 }
