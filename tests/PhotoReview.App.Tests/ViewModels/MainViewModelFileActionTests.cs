@@ -315,6 +315,123 @@ public sealed class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
+    public async Task RunActionAsync_Move_KeepsNextImageCachedAndEvictsOnlyRemovedOne()
+    {
+        var folder = Path.Combine(_tempDir, "evict_album");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        var img2 = CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        // The next image is already warm (as after a preload) before the action key is pressed.
+        await _previewService.GetPreviewAsync(img2);
+        Assert.True(_previewService.TryGetCachedPreview(img2, out _));
+        Assert.True(_previewService.TryGetCachedPreview(img1, out _));
+        var sourceReadsBefore = _metrics.Snapshot().SourceReads;
+
+        await vm.RunActionAsync(0); // Move img1 -> Sorted; img2 becomes current
+        await _sink.WaitForPresentationCountAsync(2, TimeSpan.FromSeconds(5));
+
+        Assert.False(_previewService.TryGetCachedPreview(img1, out _));
+        Assert.True(_previewService.TryGetCachedPreview(img2, out _));
+        // Presenting the next image must be served from RAM: no new source read (R2-F-02).
+        Assert.Equal(sourceReadsBefore, _metrics.Snapshot().SourceReads);
+    }
+
+    [Fact]
+    public async Task OpenFolder_CancelsRunningPreloadBeforePreloadingNewCatalog()
+    {
+        var folderA = Path.Combine(_tempDir, "preload_a");
+        var folderB = Path.Combine(_tempDir, "preload_b");
+        Directory.CreateDirectory(folderA);
+        Directory.CreateDirectory(folderB);
+        CreateImageFile(folderA, "a1.jpg");
+        CreateImageFile(folderA, "a2.jpg");
+        CreateImageFile(folderB, "b1.jpg");
+        CreateImageFile(folderB, "b2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folderA);
+        _preloadController.Events.Clear();
+
+        await vm.OpenFolderAsync(folderB);
+
+        // A loop started for folder A holds A's entries; it must be stopped before B is preloaded (R2-F-01).
+        var cancelAt = _preloadController.Events.IndexOf("cancel");
+        var preloadAt = _preloadController.Events.FindIndex(e => e.StartsWith("preload:", StringComparison.Ordinal));
+        Assert.True(cancelAt >= 0, "Opening another folder did not cancel the running preload.");
+        Assert.True(preloadAt < 0 || cancelAt < preloadAt, "Preload for the new folder started before the old loop was cancelled.");
+    }
+
+    [Fact]
+    public async Task ExplorerOrderApplied_CancelsPreloadBeforeRecentering()
+    {
+        var folder = Path.Combine(_tempDir, "order_album");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _preloadController.Events.Clear();
+
+        ((IFolderLoadSink)vm).OnOrderApplied(2, 0, currentKept: true);
+
+        Assert.Equal(["cancel", "preload:0"], _preloadController.Events);
+    }
+
+    [Fact]
+    public async Task RunActionAsync_AfterSettingsSaved_UsesSavedProfiles()
+    {
+        var folder = Path.Combine(_tempDir, "saved_settings_album");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+        CreateImageFile(folder, "2.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        // Simulates Settings > Save: the window saves a NEW AppSettings instance (R2-F-03).
+        _settingsStore.Save(new AppSettings
+        {
+            LoadingMode = LoadingMode.Preview,
+            Actions = [new ReviewAction { Name = "MoveElsewhere", Operation = FileOperationType.Move, Destination = "NewDest", Confirm = true }]
+        });
+        _dialogService.ConfirmationResponse = true;
+
+        await vm.RunActionAsync(0);
+
+        Assert.True(File.Exists(Path.Combine(folder, "NewDest", "1.jpg")));
+        Assert.False(File.Exists(Path.Combine(folder, "Sorted", "1.jpg")));
+        Assert.False(File.Exists(img1));
+    }
+
+    [Fact]
+    public async Task RunActionAsync_AfterSettingsSavedWithConfirm_AsksForConfirmation()
+    {
+        var folder = Path.Combine(_tempDir, "saved_confirm_album");
+        Directory.CreateDirectory(folder);
+        var img1 = CreateImageFile(folder, "1.jpg");
+
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+
+        _settingsStore.Save(new AppSettings
+        {
+            LoadingMode = LoadingMode.Preview,
+            Actions = [new ReviewAction { Name = "MoveElsewhere", Operation = FileOperationType.Move, Destination = "NewDest", Confirm = true }]
+        });
+        _dialogService.ConfirmationResponse = false;
+
+        await vm.RunActionAsync(0);
+
+        Assert.True(File.Exists(img1));
+        Assert.Equal(1, vm.TotalFiles);
+    }
+
+    [Fact]
     public async Task RunActionAsync_WhenFolderSwitchedDuringIo_IgnoresCompletion()
     {
         var folder1 = Path.Combine(_tempDir, "album_stale1");
@@ -677,9 +794,10 @@ public sealed class MainViewModelFileActionTests : IDisposable
     private sealed class TestPreloadController : IPreloadController
     {
         public int CancelCount { get; private set; }
-        public Task PreloadAroundAsync(int center) => Task.CompletedTask;
+        public List<string> Events { get; } = [];
+        public Task PreloadAroundAsync(int center) { Events.Add("preload:" + center); return Task.CompletedTask; }
         public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
-        public void Cancel() => CancelCount++;
+        public void Cancel() { CancelCount++; Events.Add("cancel"); }
         public void RemovePreloadedKeysForPath(string normalizedPath) { }
         public void ClearPreloadedKeys() { }
     }

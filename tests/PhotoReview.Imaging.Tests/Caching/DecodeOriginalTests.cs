@@ -97,6 +97,50 @@ public sealed class DecodeOriginalTests : IAsyncLifetime
         Assert.True(request.Box.IsUnbounded);
     }
 
+    [Fact]
+    public async Task DecodeOriginal_RunsAtMostOneFullResolutionDecodeAtATime_AndDropsCancelledWaiters()
+    {
+        var first = Path.Combine(_root, "g1.jpg");
+        var second = Path.Combine(_root, "g2.jpg");
+        File.WriteAllBytes(first, [1, 2, 3]);
+        File.WriteAllBytes(second, [1, 2, 3]);
+        var decoder = new BlockingDecoder();
+        var service = CreateService(decoder);
+        using var cts = new CancellationTokenSource();
+
+        var firstTask = service.DecodeOriginalAsync(first, service.GetCurrentCacheKey(first), CancellationToken.None);
+        Assert.True(decoder.FirstEntered.Wait(TimeSpan.FromSeconds(10)), "the first decode never started");
+        var secondTask = service.DecodeOriginalAsync(second, service.GetCurrentCacheKey(second), cts.Token);
+
+        // Negative wait: with the gate the second decode must not reach the decoder while the first one is running.
+        Assert.False(decoder.SecondEntered.Wait(TimeSpan.FromMilliseconds(300)), "a second full-resolution decode started concurrently");
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => secondTask);
+
+        decoder.Release.Set();
+        await firstTask;
+        Assert.Equal(1, decoder.Started);
+    }
+
+    private sealed class BlockingDecoder : IImageDecoder
+    {
+        private int _started;
+        public ManualResetEventSlim FirstEntered { get; } = new(false);
+        public ManualResetEventSlim SecondEntered { get; } = new(false);
+        public ManualResetEventSlim Release { get; } = new(false);
+        public int Started => Volatile.Read(ref _started);
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            var n = Interlocked.Increment(ref _started);
+            (n == 1 ? FirstEntered : SecondEntered).Set();
+            Release.Wait(TimeSpan.FromSeconds(30));
+            return new FakeImage();
+        }
+
+        public ImageInfo ReadInfo(string path) => new(10, 10);
+    }
+
     private sealed class CountingDecoder : IImageDecoder
     {
         public ConcurrentQueue<DecodeRequest> Requests { get; } = new();

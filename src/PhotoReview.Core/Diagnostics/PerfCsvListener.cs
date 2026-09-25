@@ -259,9 +259,12 @@ public sealed class PerfCsvListener : EventListener, IDisposable
         try { _writer?.Flush(); } catch { /* best effort */ }
     }
 
-    private static string CsvEscape(string value)
+    // R2-F-32: the analyzer reads the file line by line, so a quoted embedded newline would split one row into two
+    // malformed ones. Line breaks are therefore flattened to a space (quotes/commas are still RFC-4180 escaped).
+    internal static string CsvEscape(string value)
     {
         if (value.Length == 0) return value;
+        if (value.AsSpan().IndexOfAny('\r', '\n') >= 0) value = value.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
         if (value.IndexOfAny([',', '"', '\n', '\r']) < 0) return value;
         return "\"" + value.Replace("\"", "\"\"") + "\"";
     }

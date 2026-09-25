@@ -29,13 +29,6 @@ public sealed class MainWindowExplorerOrderTests
     /// <summary>Upper bound for a wait that is expected to succeed quickly.</summary>
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(10);
 
-    /// <summary>
-    /// How long a "this must never happen" wait keeps pumping the dispatcher before it counts as
-    /// proof. Everything ruled out this way is at most a couple of dispatcher continuations past a
-    /// signal the test already observed, so a second is far more than it would need.
-    /// </summary>
-    private static readonly TimeSpan NeverWindow = TimeSpan.FromSeconds(1);
-
     private static readonly string[] Names = ["a.png", "b.png", "c.png", "d.png"];
 
     /// <summary>INV-9b: the fallback frame precedes the snapshot, the reordered frame follows it.</summary>
@@ -78,8 +71,9 @@ public sealed class MainWindowExplorerOrderTests
 
                 fake.Release();
                 Assert.True(await StaTestHost.WaitForAsync(() => fake.HasReturned, Settle), "The fake snapshot never completed.");
+                await SettledAsync(opened, presented);
                 Assert.False(
-                    await StaTestHost.WaitForAsync(() => opened.ViewModel.IsExplorerOrderApplied, NeverWindow),
+                    opened.ViewModel.IsExplorerOrderApplied,
                     $"The late snapshot reordered a catalog the user had already interacted with. {Diagnose(opened, presented)}");
 
                 // Behavioural proof that the catalog order is untouched: after b.png the next image
@@ -133,9 +127,9 @@ public sealed class MainWindowExplorerOrderTests
                 // Next before the order is known must not step through the fallback order (and, via
                 // INV-7, throw the Explorer order away): it waits for the snapshot.
                 PressNext(opened);
-                Assert.False(
-                    await StaTestHost.WaitForAsync(() => presented.Count > 1, NeverWindow),
-                    $"Next navigated before the Explorer order was known. {Diagnose(opened, presented)}");
+                // Next parks on the still-gated order; the end-state asserts below (presented order and
+                // snapshotHadReturned == [false, true]) prove it did not navigate before the order was known.
+                Assert.Single(presented);
 
                 fake.Release();
                 // The snapshot really was usable: it reindexed the catalog...
@@ -144,8 +138,9 @@ public sealed class MainWindowExplorerOrderTests
                     Diagnose(opened, presented));
                 // ...and the pending Next then went to the Explorer-order neighbour.
                 Assert.True(await StaTestHost.WaitForAsync(() => presented.Count >= 2, Settle), Diagnose(opened, presented));
+                await SettledAsync(opened, presented);
                 Assert.False(
-                    await StaTestHost.WaitForAsync(() => presented.Count > 2, NeverWindow),
+                    presented.Count > 2,
                     $"Applying the Explorer order re-presented the opened file. {Diagnose(opened, presented)}");
             });
         }
@@ -202,8 +197,9 @@ public sealed class MainWindowExplorerOrderTests
                     await StaTestHost.WaitForAsync(
                         () => opened.FolderText.Text.EndsWith($"  ({Names.Length} ảnh) {ExplorerApplied}", StringComparison.Ordinal), Settle),
                     Diagnose(opened, presented));
+                await SettledAsync(opened, presented);
                 Assert.False(
-                    await StaTestHost.WaitForAsync(() => presented.Count > 2, NeverWindow),
+                    presented.Count > 2,
                     $"Applying the Explorer order presented more than one extra frame. {Diagnose(opened, presented)}");
             });
         }
@@ -256,6 +252,15 @@ public sealed class MainWindowExplorerOrderTests
 
     private static MainWindow Open(string folder, FakeExplorerOrderProvider fake, List<string> presented)
         => TestAppHost.CreateMainWindow(folder, new TestHostHooks { Explorer = fake, OnPresented = presented.Add });
+
+    /// <summary>
+    /// Waits (pumping the dispatcher, normal timeout) until the folder load has finished, i.e. the Explorer
+    /// order has been applied, ignored or given up on. Negative asserts are made once after this signal, never
+    /// after a wall-clock window.
+    /// </summary>
+    private static async Task SettledAsync(MainWindow window, List<string> presented)
+        => Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.FolderLoadTask.IsCompleted, Settle),
+            "The folder load never settled. " + Diagnose(window, presented));
 
     private static async Task CloseAsync(MainWindow? window)
     {

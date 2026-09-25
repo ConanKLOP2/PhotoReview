@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
@@ -14,6 +15,9 @@ namespace PhotoReview.Imaging.Decoding;
 public sealed class ImageDecoderFactory : IImageDecoderFactory
 {
     private readonly Dictionary<DecoderBackend, Func<IImageDecoder>> _registry;
+    // IMG-08: decoders are stateless/shareable, so build each backend's (primary + Wpf fallback +
+    // FallbackImageDecoder) once instead of on every Create call.
+    private readonly ConcurrentDictionary<DecoderBackend, IImageDecoder> _created = new();
     private readonly ILog _log;
     private readonly ReviewMetrics? _metrics;
 
@@ -56,7 +60,9 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
 
     public bool IsRegistered(DecoderBackend backend) => _registry.ContainsKey(backend);
 
-    public IImageDecoder Create(DecoderBackend backend)
+    public IImageDecoder Create(DecoderBackend backend) => _created.GetOrAdd(backend, BuildDecoder);
+
+    private IImageDecoder BuildDecoder(DecoderBackend backend)
     {
         if (backend == DecoderBackend.Wpf)
         {

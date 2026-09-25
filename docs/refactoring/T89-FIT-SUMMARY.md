@@ -13,4 +13,4 @@ Problem statement, root causes (C1–C3), and the full acceptance-criteria list 
 ## See Also
 
 - **OC07:** Display state refinements (related)
-- **ST08/ST09:** Controller extraction (blocked on OC14, not T89)
+- **ST08/ST09:** Controller extraction (done in #73, not T89)

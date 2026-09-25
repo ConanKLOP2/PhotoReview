@@ -43,7 +43,7 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
                 WorkerCount: profile.Workers,
                 MemoryLoadLimit: PerformanceOptions.PreloadMemoryLoadLimit,
                 ReserveBytes: profile.MemoryReserveBytes,
-                FullFolderThresholdBytes: PerformanceOptions.ImageCacheCapacityBytes),
+                FullFolderThresholdBytes: _previewService.CapacityBytes),
             memoryProbe: hasHeadroom is null ? WindowsMemoryProbe.Instance : new DelegateMemoryProbe(hasHeadroom),
             uiScheduler: ImmediateUiScheduler.Instance);
     }

@@ -7,18 +7,9 @@
         The default (Aero) templates of GroupBox/Button/ComboBox/ScrollBar draw light chrome that
         clashes with the dark window background, so those get small templates of their own.
     -->
-    <SolidColorBrush x:Key="Dark.Text" Color="#E5E5E5"/>
-    <SolidColorBrush x:Key="Dark.TextStrong" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="Dark.TextMuted" Color="#9A9A9A"/>
-    <SolidColorBrush x:Key="Dark.Input" Color="#252525"/>
-    <SolidColorBrush x:Key="Dark.Panel" Color="#1E1E1E"/>
-    <SolidColorBrush x:Key="Dark.Border" Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="Dark.BorderStrong" Color="#5A5A5A"/>
-    <SolidColorBrush x:Key="Dark.Button" Color="#2D2D2D"/>
-    <SolidColorBrush x:Key="Dark.ButtonHover" Color="#383838"/>
-    <SolidColorBrush x:Key="Dark.ButtonPressed" Color="#444444"/>
-    <SolidColorBrush x:Key="Dark.Accent" Color="#3A7BD5"/>
-    <SolidColorBrush x:Key="Dark.AccentHover" Color="#4A8BE5"/>
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
 
     <Style TargetType="TextBlock">
         <Setter Property="Foreground" Value="{StaticResource Dark.Text}"/>

@@ -191,7 +191,11 @@ public sealed class ThumbnailCache : IDisposable
                 // freshly-written file for a cache generation that was just cleared.
                 DiskCacheStore.TryDelete(cachePath);
             }
-            else PruneDiskCache();
+            else
+            {
+                _diskStore.NoteWritten(cachePath);
+                PruneDiskCache();
+            }
         }
         catch (IOException ex) { _log.Error($"Disk thumbnail write failed: {cachePath}", ex); }
         catch (UnauthorizedAccessException ex) { _log.Error($"Disk thumbnail write failed: {cachePath}", ex); }

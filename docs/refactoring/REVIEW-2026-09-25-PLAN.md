@@ -48,12 +48,12 @@ Each row is one PR based on `master`, at most about one day of work.
 
 | Wave | Branch | Findings | Effort | Must wait for | Parallel with | State |
 |---|---|---|---|---|---|---|
-| **1a** Core/Platform safety | `fix/review-w1a-core-safety` | CORE-06, CORE-01, CORE-02, CORE-05 | ~1 d | Q-R5 (default is fine) | 1b, 2b, 3 | Ready |
-| **1b** Imaging alpha + preload | `fix/review-w1b-imaging-alpha` | IMG-01, IMG-05, IMG-03 | ~½ d | Q-R1 | 1a, 2a, 2b, 3 | Ready once Q-R1 is answered |
-| **1c** Action destination policy | `fix/review-w1c-action-destination` | CORE-03 | ~½ d | Q-R2, L12 merged | 1a, 1b, 2b | Blocked |
+| **1a** Core/Platform safety | `fix/review-w1a-core-safety` | CORE-06, CORE-01, CORE-02, CORE-05 | ~1 d | Q-R5 (default is fine) | 1b, 2b, 3 | In progress on `review/2026-09-25-integration` |
+| **1b** Imaging alpha + preload | `fix/review-w1b-imaging-alpha` | IMG-01, IMG-05, IMG-03 | ~½ d | Q-R1 | 1a, 2a, 2b, 3 | In progress on `review/2026-09-25-integration` (Q-R1 = a) |
+| **1c** Action destination policy | `fix/review-w1c-action-destination` | CORE-03 | ~½ d | Q-R2, L12 merged | 1a, 1b, 2b | Ready (Q-R2 = a; L12 merged #74) |
 | **2a** CI + architecture rules | `test/review-w2a-ci-rules` | CA2007 rule (CORE-01/DOC-06), TEST-09, TEST-01, TEST-10, TEST-02, TOOL-01, TOOL-04, HYG-08 | ~1 d | **1a merged** (CA2007 needs UndoService fixed), Q-R3 | 1b, 1c, 3 | After 1a |
-| **2b** Deterministic tests + coverage | `test/review-w2b-determinism` | TEST-04, TEST-05, TEST-06, TEST-03 | ~1 d | — | 1a, 1b, 1c, 3 | Ready |
-| **3** Docs single source of truth | `docs/review-w3-status-adrs` | DOC-01 (rest), DOC-02, DOC-03, DOC-09, DOC-10, DOC-13, DOC-04, DOC-05 (ADR 0008), DOC-14, DOC-08, DOC-12, TOOL-03, TEST-07 (AGENTS part) | ~1 d | **#72 and #73 merged**; 2a merged for TOOL-03/TEST-07 text | all code waves | Blocked |
+| **2b** Deterministic tests + coverage | `test/review-w2b-determinism` | TEST-04, TEST-05, TEST-06, TEST-03 | ~1 d | — | 1a, 1b, 1c, 3 | In progress on `review/2026-09-25-integration` |
+| **3** Docs single source of truth | `docs/review-w3-status-adrs` | DOC-01 (rest), DOC-02, DOC-03, DOC-09, DOC-10, DOC-13, DOC-04, DOC-05 (ADR 0008), DOC-14, DOC-08, DOC-12, TOOL-03, TEST-07 (AGENTS part) | ~1 d | **#72 and #73 merged**; 2a merged for TOOL-03/TEST-07 text | all code waves | Done on `review/w3` (AGENTS.md filter line left for 2a) |
 | **4** Accessibility + theme tokens | `feat/review-w4-a11y-theme` | APP-01, APP-02, APP-03 | ~1 d | 1c (shares `ActionProfilesWindow`), L12 if new keys, Q-R6 | 1a, 1b, 2a, 2b, 3 | After 1c |
 | **5a** Tooling/repo hygiene | `chore/review-w5a-hygiene` | HYG-01/02/03/05/06/07/10, HYG-04, TOOL-02, APP-04 | ~½ d | Q-R4, #73 (APP-04) | 5b, 5c | Later |
 | **5b** Imaging nits/perf | `perf/review-w5b-imaging` | IMG-02, IMG-04, IMG-07, IMG-08, IMG-09, IMG-10, IMG-11 | ~1 d | 1b merged (same files) | 5a, 5c | Later |

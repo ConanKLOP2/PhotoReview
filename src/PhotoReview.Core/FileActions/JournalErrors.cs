@@ -25,12 +25,16 @@ public static class JournalErrors
     /// <summary>After a recovery retry the destination check failed.</summary>
     public const string RetryVerifyFailed = "RetryVerifyFailed";
 
+    /// <summary>A relative Move/Copy destination resolved outside the source folder; rejected before anything is journaled.</summary>
+    public const string DestinationOutsideSource = "DestinationOutsideSource";
+
     private static readonly FrozenDictionary<string, string> s_keys = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [SourceStillExistsAfterRecovery] = TrKeys.CoreJournalSourceStillExists,
         [PendingUnconfirmed] = TrKeys.CoreJournalPendingUnconfirmed,
         [VerifySizeChanged] = TrKeys.CoreFileActionVerifyFailedSizeChanged,
         [RetryVerifyFailed] = TrKeys.CoreRecoveryVerifyFailed,
+        [DestinationOutsideSource] = TrKeys.CoreFileActionDestinationOutsideSource,
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>True when <paramref name="code"/> is a code this build knows how to describe.</summary>

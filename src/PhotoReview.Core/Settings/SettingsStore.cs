@@ -15,6 +15,12 @@ public sealed class SettingsStore
     private AppSettings _current;
 
     public AppSettings Current => _current;
+
+    /// <summary>
+    /// Names of the settings the last <see cref="Load"/> had to reset because <c>config.json</c> held unusable values
+    /// (R2-F-04); empty when the file was valid. The app shows a one-time warning for them.
+    /// </summary>
+    public IReadOnlyList<string> LastLoadRepairs { get; private set; } = [];
     public event EventHandler<AppSettings>? Changed;
 
     public SettingsStore(
@@ -33,6 +39,7 @@ public sealed class SettingsStore
     public AppSettings Load(string? path = null)
     {
         var filePath = path ?? _appPaths.ConfigFile;
+        LastLoadRepairs = [];
         try
         {
             if (_fileSystem.FileExists(filePath))
@@ -42,6 +49,9 @@ public sealed class SettingsStore
                 Migrate(loaded);
                 loaded.Shortcuts ??= ShortcutMappings.Default();
                 loaded.Actions ??= ReviewAction.Defaults();
+                LastLoadRepairs = SettingsNormalizer.Normalize(loaded);
+                if (LastLoadRepairs.Count > 0)
+                    _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
                 _current = loaded;
                 Changed?.Invoke(this, _current);
                 return _current;

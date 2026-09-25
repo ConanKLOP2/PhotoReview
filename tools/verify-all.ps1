@@ -4,9 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$RequireSelfContained,
     [string]$ReleaseDirectory = '',
-    [switch]$Stress,
     [switch]$Native,
-    [switch]$Integration,
     [switch]$Slow,
     [switch]$All,
     [switch]$TestReport,
@@ -16,9 +14,8 @@ param(
 
 # Usage examples:
 # ./verify-all.ps1                    # Default: HotPath only (~2-3 min)
-# ./verify-all.ps1 -Stress             # Include race-condition tests
 # ./verify-all.ps1 -Slow               # Include 10+ second tests
-# ./verify-all.ps1 -Stress -Slow       # Extended local run
+# ./verify-all.ps1 -Native             # Include real-OS tests (Recycle Bin, shell)
 # ./verify-all.ps1 -All                # Everything (CI+local exhaustive)
 # ./verify-all.ps1 -TestReport         # Print test timing report (requires running tests)
 
@@ -28,14 +25,13 @@ $solution = Join-Path $root 'PhotoReview.slnx'
 $appProject = Join-Path $root 'src\PhotoReview.App\PhotoReview.App.csproj'
 
 # Build filter string dynamically
-# NOTE: This filter is verified to match .github/workflows/ci.yml (TS09 verification)
+# NOTE: This filter is verified to match TEST_FILTER in .github/workflows/ci.yml and AGENTS.md > Tests.
+# Category=Integration tests are not excluded (Q-R3); an extra pass below runs them even when their class is Slow.
 # xUnit uses & (not AND) to join filter conditions
 $filter = "Category!=Manual"  # Always exclude Manual
 if (-not $All) {
-    if (-not $Stress) { $filter += "&Category!=Stress" }
     if (-not $Native) { $filter += "&Category!=Native" }
     if (-not $Slow) { $filter += "&Category!=Slow" }
-    if (-not $Integration) { $filter += "&Category!=Integration" }
 }
 if ([string]::IsNullOrWhiteSpace($ReleaseDirectory)) {
     # Matches the framework-dependent artifact path documented in README.md/AGENTS.md
@@ -50,6 +46,12 @@ function Publish-ReleaseDirectory([string]$Directory, [bool]$SelfContained) {
     # Wiping first stops verify-release.ps1 from confirming a stale artifact left
     # over from an earlier publish (different code, coincidentally matching
     # FileVersion) as if it were this run's build.
+    # Guard: only ever wipe a directory that is unmistakably a publish output (a stray -ReleaseDirectory such
+    # as '.' or the repo root must never be deleted recursively).
+    $leaf = Split-Path -Leaf ([System.IO.Path]::GetFullPath($Directory).TrimEnd([char]92, [char]47))
+    if ($leaf -notin @('publish', 'PhotoReview-self-contained')) {
+        throw "Refusing to wipe '$Directory': the release directory name must be 'publish' or 'PhotoReview-self-contained'."
+    }
     if (Test-Path -LiteralPath $Directory) { Remove-Item -LiteralPath $Directory -Recurse -Force }
     $publishArgs = @($appProject, '-c', $Configuration, '-o', $Directory, '--nologo')
     if ($SelfContained) { $publishArgs += @('--self-contained', 'true', '-r', 'win-x64') }
@@ -62,10 +64,10 @@ function Find-TrxFiles {
 
     $trxFiles = @()
     foreach ($testProject in $TestProjects) {
-        $projectPath = Join-Path $root "tests\$testProject"
-        $objPath = Join-Path $projectPath "obj\$Configuration"
-        if (Test-Path -LiteralPath $objPath) {
-            $trxFiles += @(Get-ChildItem -LiteralPath $objPath -Filter "*.trx" -Recurse -ErrorAction SilentlyContinue)
+        # dotnet test is invoked with --results-directory (see the test loop below), so .trx files land here.
+        $resultsPath = Join-Path $root "TestResults\$testProject"
+        if (Test-Path -LiteralPath $resultsPath) {
+            $trxFiles += @(Get-ChildItem -LiteralPath $resultsPath -Filter "*.trx" -Recurse -ErrorAction SilentlyContinue)
         }
     }
     return $trxFiles
@@ -166,10 +168,10 @@ function Generate-TestReport {
         $status = if ($duration -le 60) { "PASS" } else { "WARN" }
         $color = if ($status -eq "PASS") { "Green" } else { "Yellow" }
 
-        Write-Host "  $project`: ${duration:F2}s [$status]" -ForegroundColor $color
+        Write-Host "  $project`: $("{0:F2}" -f $duration)s [$status]" -ForegroundColor $color
 
         if ($status -eq "WARN") {
-            $projectWarnings += "$project exceeds 60s threshold (${duration:F2}s)"
+            $projectWarnings += "$project exceeds 60s threshold ($("{0:F2}" -f $duration)s)"
         }
     }
 
@@ -241,9 +243,22 @@ foreach ($testProject in $testProjects) {
             '--blame-hang-dump-type', 'none'
         )
         if ($TestReport) {
-            $testArgs += @('--logger', "trx;LogFileName=$testProject.trx")
+            $testArgs += @('--logger', "trx;LogFileName=$testProject.trx", '--results-directory', (Join-Path $root "TestResults\$testProject"))
         }
         dotnet test @testArgs
+    }
+}
+
+# Q-R3: same guarantee as CI's "Run Integration-category tests that the main filter skips" step, so
+# Integration-trait tests whose class is also Slow are never silently skipped by the default gate.
+# Only Integration+Slow is run here (the rest already ran above), in every test project (R2-A-12).
+if (-not $All -and -not $Slow) {
+    foreach ($testProject in $testProjects) {
+        Invoke-Gate "Run xUnit (Category=Integration&Slow): $testProject" {
+            dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo `
+                --filter 'Category=Integration&Category=Slow&Category!=Manual&Category!=Native' `
+                --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        }
     }
 }
 
@@ -262,12 +277,10 @@ Invoke-Gate 'Check documentation links' {
     & (Join-Path $PSScriptRoot 'check-doc-links.ps1')
 }
 
-Invoke-Gate 'Run file-operation smoke test' {
-    & (Join-Path $PSScriptRoot 'smoke-test.ps1')
-}
-Invoke-Gate 'Run fault-injection safety test' {
-    & (Join-Path $PSScriptRoot 'fault-injection-test.ps1')
-}
+# R2-F-15: the former smoke-test.ps1 / fault-injection-test.ps1 gates only exercised .NET file primitives (no
+# PhotoReview code could make them fail) and put an item in the real Recycle Bin on every run, so they were removed.
+# File-action safety (move/copy/recycle, destination conflict, IO failure, journal states, recovery) is covered by
+# FileActionServiceTests / UndoServiceTests / journal tests in the test step above.
 Invoke-Gate 'Publish framework-dependent release' {
     Publish-ReleaseDirectory -Directory $ReleaseDirectory -SelfContained $false
 }

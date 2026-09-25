@@ -23,6 +23,19 @@ public sealed class BenchmarkProfileTests
             BenchmarkWorkload.Sequential).Count > 0);
 }
 
+/// <summary>R2-F-21: a whole-registry benchmark run must not include profiles that always fail.</summary>
+public sealed class BenchmarkRunnableProfileTests
+{
+    [Fact]
+    public void Runnable_ExcludesUnimplementedAndCorrectnessOnlyProfiles()
+    {
+        Assert.DoesNotContain(BenchmarkProfiles.Runnable, p => p.Id is "explorer-reindex" or "cache-recovery");
+        Assert.DoesNotContain(BenchmarkProfiles.Runnable, p => p.CorrectnessOnly);
+        Assert.Contains(BenchmarkProfiles.Runnable, p => p.Id == "recommended-auto");
+        Assert.Contains(BenchmarkProfiles.All, p => p.Id == "cache-recovery" && BenchmarkProfiles.IsNotImplemented(p));
+    }
+}
+
 /// <summary>Relative performance harness probe.</summary>
 [Trait("Category", "Slow")]
 public sealed class PerformanceHarnessTests : IDisposable

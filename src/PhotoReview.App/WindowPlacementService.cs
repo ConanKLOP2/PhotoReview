@@ -13,7 +13,6 @@ namespace PhotoReview.App;
 internal static class WindowPlacementService
 {
     private const int ShowNormal = 1;
-    private const int ShowMinimized = 2;
     private const int ShowMaximized = 3;
 
     internal static string PlacementPath => Path.Combine(
@@ -29,7 +28,7 @@ internal static class WindowPlacementService
             if (placement is null || !IsVisible(placement.NormalPosition)) return;
 
             placement.Length = Marshal.SizeOf<WindowPlacement>();
-            if (placement.ShowCommand == ShowMinimized) placement.ShowCommand = ShowNormal;
+            placement.ShowCommand = NormalizeShowCommand(placement.ShowCommand);
             var handle = new WindowInteropHelper(window).Handle;
             if (handle != IntPtr.Zero) SetWindowPlacement(handle, placement);
         }
@@ -49,7 +48,7 @@ internal static class WindowPlacementService
             if (!GetWindowPlacement(handle, placement)) { AppLog.Error("Could not read window placement"); return; }
 
             // Never reopen minimized. Closing from the taskbar should restore normally.
-            if (placement.ShowCommand == ShowMinimized) placement.ShowCommand = ShowNormal;
+            placement.ShowCommand = NormalizeShowCommand(placement.ShowCommand);
             Directory.CreateDirectory(Path.GetDirectoryName(PlacementPath)!);
             var temp = PlacementPath + ".tmp";
             File.WriteAllText(temp, JsonSerializer.Serialize(placement, JsonOptions));
@@ -61,6 +60,12 @@ internal static class WindowPlacementService
             AppLog.Error("Could not save window placement", ex);
         }
     }
+
+    /// <summary>
+    /// R2-F-26: only "normal" and "maximized" are meaningful restore states. Minimized, hidden (SW_HIDE) or any other
+    /// value from a damaged file would otherwise open the window hidden or minimized.
+    /// </summary>
+    internal static int NormalizeShowCommand(int showCommand) => showCommand == ShowMaximized ? ShowMaximized : ShowNormal;
 
     private static bool IsVisible(Rectangle bounds)
     {

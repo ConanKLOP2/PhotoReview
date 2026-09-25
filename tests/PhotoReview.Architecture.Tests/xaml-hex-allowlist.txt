@@ -1,0 +1,3 @@
+# XamlThemeRulesTests.NoHexColorLiteralsOutsideTheme: justified hex colour literals in XAML outside
+# src/PhotoReview.App/Themes/. Format: relative/path.xaml|#RRGGBB (one line per exception, with a reason
+# comment above it). Prefer a named Dark.* brush in Themes/DarkPalette.xaml. Currently empty.

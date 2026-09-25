@@ -33,7 +33,9 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 .\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
-`src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact. Verification for self-contained builds or smoke/fault-injection tests uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
+`src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) is the only supported release folder; CI builds it and uploads it as the `release-publish` artifact. Verification for self-contained builds uses separate scripts and paths in `tools/`; a successful build/test pass does not replace runtime benchmarks or GUI acceptance testing.
+
+Note: `Microsoft.CodeAnalysis.CSharp` (Localization generator, `Directory.Packages.props`) must not be newer than the compiler in the installed .NET SDK; upgrade it only together with the SDK.
 
 ### Benchmarks
 
@@ -55,13 +57,13 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 Register "Open with" for `.jpg`, `.jpeg`, and `.png`:
 
 ```powershell
-.\outputs\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
+.\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
 ```
 
 Unregister:
 
 ```powershell
-.\outputs\uninstall-photo-review-association.ps1
+.\deploy\uninstall-photo-review-association.ps1
 ```
 
 ### Languages
@@ -108,7 +110,9 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 .\tools\verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 ```
 
-`src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish`. Verification cho self-contained hoặc smoke/fault-injection dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
+`src/PhotoReview.App/bin/Release/net10.0-windows/publish` (framework-dependent) là thư mục release duy nhất được hỗ trợ; CI build và upload thư mục này thành artifact `release-publish`. Verification cho self-contained dùng scripts và đường dẫn riêng trong `tools/`; một lần build/test thành công không thay thế benchmark hoặc GUI acceptance.
+
+Lưu ý: `Microsoft.CodeAnalysis.CSharp` (generator Localization, `Directory.Packages.props`) không được mới hơn compiler của .NET SDK đang cài; chỉ nâng cùng lúc với SDK.
 
 ### Benchmark
 
@@ -130,13 +134,13 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 Đăng ký Open With cho `.jpg`, `.jpeg`, `.png`:
 
 ```powershell
-.\outputs\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'
+.\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'
 ```
 
 Gỡ đăng ký:
 
 ```powershell
-.\outputs\uninstall-photo-review-association.ps1
+.\deploy\uninstall-photo-review-association.ps1
 ```
 
 ### Ngôn ngữ

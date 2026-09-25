@@ -69,8 +69,7 @@ public sealed class FileActionService
         }
 
         var operationId = Guid.NewGuid().ToString("N");
-        var prepared = false;
-        var mutationCompleted = false;
+        JournalTransaction? tx = null;
         string? destinationPath = null;
         long sourceSize = 0;
         var sourceLastWriteUtc = DateTime.MinValue;
@@ -82,6 +81,13 @@ public sealed class FileActionService
                 if (string.IsNullOrWhiteSpace(request.Destination))
                     throw new IOException(Tr.CoreFileActionNoDestination);
 
+                // Same rule as ActionDestinationPolicy: drive-relative "a:b" is "rooted" to .NET but resolves against that
+                // drive's current directory, i.e. it is neither an explicit absolute path nor inside the photo folder.
+                if (ActionDestinationPolicy.Validate(request.Destination) == ActionDestinationCheck.InvalidChars
+                    && !Path.IsPathFullyQualified(request.Destination)
+                    && request.Destination.Contains(':', StringComparison.Ordinal))
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+
                 var source = request.Source;
                 var destinationFolder = Path.IsPathRooted(request.Destination)
                     ? request.Destination
@@ -92,6 +98,10 @@ public sealed class FileActionService
 
                 if (IsSamePath(destinationFolder, sourceFolder))
                     throw new IOException(Tr.CoreFileActionSameFolder);
+
+                if (!Path.IsPathRooted(request.Destination)
+                    && !destinationFolder.StartsWith(sourceFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
 
                 _fileSystem.CreateDirectory(destinationFolder);
                 destinationPath = Path.Combine(destinationFolder, Path.GetFileName(source));
@@ -105,7 +115,7 @@ public sealed class FileActionService
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
-                await AppendPreparedAsync(new JournalEntry(
+                tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,
                     request.Operation,
                     JournalState.Prepared,
@@ -113,8 +123,8 @@ public sealed class FileActionService
                     destinationPath,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow)).ConfigureAwait(false);
-                prepared = true;
+                    _clock.UtcNow));
+                await tx.BeginAsync().ConfigureAwait(false);
 
                 if (request.Operation == FileOperationType.Copy)
                 {
@@ -132,32 +142,15 @@ public sealed class FileActionService
                     }
                 }
 
-                var destStat = _fileSystem.GetFileStat(destinationPath);
-                if (destStat is null || destStat.Length != sourceSize)
-                {
-                    // Journaled after `prepared`: persisted as a code + English, shown via ex.Message (UI language).
-                    throw new JournalCodedException(JournalErrors.VerifySizeChanged);
-                }
-                mutationCompleted = true;
+                // Journaled after Prepared: persisted as a code + English, shown via ex.Message (UI language).
+                tx.VerifyDestination(_fileSystem, destinationPath, JournalErrors.VerifySizeChanged);
 
-                var committed = new JournalEntry(
-                    operationId,
-                    request.Operation,
-                    JournalState.Committed,
-                    source,
-                    destinationPath,
-                    sourceSize,
-                    sourceLastWriteUtc,
-                    _clock.UtcNow);
-                try
-                {
-                    _journal.Append(committed);
-                }
-                catch (Exception journalException)
+                _ = tx.Commit(out var journalError);
+                if (journalError is not null)
                 {
                     return new FileActionResult(true, request.Operation, source, destinationPath,
                         sourceSize, sourceLastWriteUtc, null, JournalPersisted: false,
-                        JournalError: journalException.Message);
+                        JournalError: journalError);
                 }
 
                 return new FileActionResult(
@@ -178,7 +171,7 @@ public sealed class FileActionService
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
 
-                await AppendPreparedAsync(new JournalEntry(
+                tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,
                     FileOperationType.Recycle,
                     JournalState.Prepared,
@@ -186,30 +179,18 @@ public sealed class FileActionService
                     null,
                     sourceSize,
                     sourceLastWriteUtc,
-                    _clock.UtcNow)).ConfigureAwait(false);
-                prepared = true;
+                    _clock.UtcNow));
+                await tx.BeginAsync().ConfigureAwait(false);
 
                 await Task.Run(() => _recycleBin.SendToRecycleBin(source), cancellationToken).ConfigureAwait(false);
-                mutationCompleted = true;
+                tx.MarkMutationCompleted();
 
-                var committed = new JournalEntry(
-                    operationId,
-                    FileOperationType.Recycle,
-                    JournalState.Committed,
-                    source,
-                    null,
-                    sourceSize,
-                    sourceLastWriteUtc,
-                    _clock.UtcNow);
-                try
-                {
-                    _journal.Append(committed);
-                }
-                catch (Exception journalException)
+                _ = tx.Commit(out var journalError);
+                if (journalError is not null)
                 {
                     return new FileActionResult(true, FileOperationType.Recycle, source, null,
                         sourceSize, sourceLastWriteUtc, null, JournalPersisted: false,
-                        JournalError: journalException.Message);
+                        JournalError: journalError);
                 }
 
                 return new FileActionResult(
@@ -229,28 +210,8 @@ public sealed class FileActionService
         catch (Exception ex)
         {
             string? journalError = null;
-            if (prepared)
-            {
-                try
-                {
-                    var (errorCode, errorText) = JournalErrors.ForJournal(ex);
-                    _journal.Append(new JournalEntry(
-                    operationId,
-                    request.Operation,
-                    JournalState.Failed,
-                    request.Source,
-                    destinationPath,
-                    sourceSize,
-                    sourceLastWriteUtc,
-                    _clock.UtcNow,
-                        errorText,
-                        errorCode));
-                }
-                catch (Exception journalException)
-                {
-                    journalError = journalException.Message;
-                }
-            }
+            _ = tx?.Fail(ex, out journalError);
+            var mutationCompleted = tx?.MutationCompleted ?? false;
 
             return new FileActionResult(
                 Succeeded: mutationCompleted,
@@ -267,20 +228,6 @@ public sealed class FileActionService
         {
             End();
         }
-    }
-
-    // ADR 0007 J-D: in PowerLossSafe mode the Prepared record costs a WriteThrough + Flush(true) (~2 ms, tail > 15 ms),
-    // so it is written on a pool thread and awaited: the mutation still starts only after Prepared is durable, and the
-    // rest of ExecuteAsync (mutation + Committed) already continues off the caller's thread (ConfigureAwait(false)).
-    // Fast mode keeps the ~0.4 ms cache write inline -- a thread hop would cost more than the write.
-    private Task AppendPreparedAsync(JournalEntry prepared)
-    {
-        if (_journal.Durability != JournalDurability.PowerLossSafe)
-        {
-            _journal.Append(prepared);
-            return Task.CompletedTask;
-        }
-        return Task.Run(() => _journal.Append(prepared));
     }
 
     private static bool IsSamePath(string first, string second)

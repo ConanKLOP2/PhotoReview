@@ -44,6 +44,13 @@ public static class BenchmarkProfileValidation
 public delegate Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> BenchmarkWorkloadExecutor(
     BenchmarkProfile profile, BenchmarkWorkload workload, int iteration, CancellationToken cancellationToken);
 
+/// <summary>
+/// Two-step executor (R2-F-14): the returned task prepares one iteration (untimed setup such as copying a scratch file or
+/// evicting caches) and yields the measure step; only that step is timed.
+/// </summary>
+public delegate Task<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>> BenchmarkPreparedWorkloadExecutor(
+    BenchmarkProfile profile, BenchmarkWorkload workload, int iteration, CancellationToken cancellationToken);
+
 public sealed record BenchmarkSample(string ProfileId, BenchmarkWorkload Workload,
     double ElapsedMilliseconds, bool Correct, string? Error = null);
 

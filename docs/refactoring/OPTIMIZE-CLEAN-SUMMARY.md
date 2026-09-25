@@ -1,6 +1,6 @@
 # OC — Optimize & Clean (Summary)
 
-**Status:** OC01–OC11 DONE (OC11 via the perf series #39–#48). OC14 PARTIAL, re-scoped to "Undo gate location" (Q-AR5) — critical blocker for ST08/09/OC15-18 (no longer WD, see ADR 0005/AR04). OC12/OC13, OC15-18 pending.
+**Status:** per-group status is in [`docs/ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) (single source). This file keeps the OC task detail only. OC14 merged (#64); OC15-18 merged (#73, OC18 Fit GUI check under T89).
 
 Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`](../archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md) · [`../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md`](../archive/historical/OPTIMIZE-CLEAN-PLAN-2026-09-20.md)
 
@@ -20,17 +20,8 @@ Full historical details archived: [`docs/archive/future/DOCS-TOKEN-DIET-PLAN-202
 | OC10 | Perf analysis grouping | ✅ DONE | PerfAnalyze | Group by worker/condition; R-CONT sane |
 | OC11 | Decode/RAM optimization | ✅ DONE | SourceBytesCache, decoder adapters | Done via the perf series #39–#48 |
 | OC12-OC13 | TBD | 🔄 TODO | — | — |
-| **OC14** | **Undo unification (Ctrl+Z)** | **🔄 PARTIAL, re-scoped (Q-AR5)** | **UndoService, file-action sources** | **Re-scoped to "Undo gate location"; mutual exclusion done, semantics tests refactored** |
-| OC15-OC18 | UI cleanup, viewport unify | 🔄 BLOCKED | — | Blocked on OC14 |
-
-## Critical Path
-
-**OC14 (Undo gate location)** blocks:
-- ST08 (FileActionController extraction)
-- ST09 (DuplicateCleanupController extraction)
-- OC15–OC18 (dependent on resolved Ctrl+Z semantics)
-
-WD tasks no longer depend on OC14 (see ADR 0005 / AR04, #37): WD01 done, WD02–06 closed 2026-09-23 (Q-AR5).
+| **OC14** | **Undo unification (Ctrl+Z)** | ✅ DONE (#64) | UndoService, `FileActionGate` in MainViewModel | Re-scoped to "Undo gate location" (Q-AR5); mutual exclusion done, semantics tests refactored |
+| OC15-OC18 | UI cleanup, viewport unify | ✅ DONE (#73) | MainWindow*, pan threshold | OC16 n/a, OC17 already done; OC18 Fit check under T89 (user) |
 
 ## Key Concerns Resolved
 

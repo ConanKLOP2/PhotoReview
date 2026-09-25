@@ -75,8 +75,8 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         var retryService = serviceProvider.GetService<RecoveryRetryService>();
         if (journal is null) return;
 
-        var entries = journal.ReadPendingOperations().Concat(journal.ReadFailedOperations()).ToList();
-        Func<JournalEntry, RecoveryRetryResult>? retry = retryService is not null ? retryService.RetryMoveOrCopy : null;
+        var entries = journal.ReadPendingAndFailedOperations().ToList(); // R2-F-17: one journal pass
+        Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is not null ? entry => retryService.RetryMoveOrCopyAsync(entry) : null;
         var window = new RecoveryWindow(entries, retry, dismissed => journal.Dismiss(dismissed), serviceProvider.GetService<IFileSystem>())
         {
             Owner = System.Windows.Application.Current?.MainWindow

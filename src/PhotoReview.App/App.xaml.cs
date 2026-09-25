@@ -143,12 +143,13 @@ public partial class App : System.Windows.Application, IDisposable
             {
                 var settingsStore = sp.GetRequiredService<SettingsStore>();
                 var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
+                var previewService = sp.GetRequiredService<PreviewImageService>();
                 return new PreloadScheduler(
-                sp.GetRequiredService<PreviewImageService>(),
+                previewService,
                 sp.GetRequiredService<ReviewMetrics>(),
                 getEntries,
                 getTotalBytes,
-                fullFolderRamThresholdBytes: sp.GetRequiredService<SettingsStore>().Current.ImageCacheCapacityBytes,
+                fullFolderRamThresholdBytes: previewService.CapacityBytes, // effective (clamped) budget, R2-A-05
                 memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
                 workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,
@@ -186,6 +187,36 @@ public partial class App : System.Windows.Application, IDisposable
 
     private async void App_Startup(object sender, StartupEventArgs e)
     {
+        // R2-F-04: this is an async void handler installed before the unhandled-exception hooks exist, and the default
+        // ShutdownMode only ends the process when the last window closes. Any fault here used to leave a windowless
+        // process holding the instance mutex, so it is caught and turned into a message plus a clean shutdown.
+        try
+        {
+            await StartupCoreAsync(e);
+        }
+        catch (Exception ex)
+        {
+            FailStartup(ex);
+        }
+    }
+
+    private void FailStartup(Exception ex)
+    {
+        try { LogStartupErrorForced("Startup failed", ex); } catch { /* logging must not block the shutdown */ }
+        try
+        {
+            // The service provider may itself be the thing that failed, so fall back to a fresh dialog service.
+            (_services?.GetService<IDialogService>() ?? new PhotoReview.App.Services.WpfDialogService(_services!)).ShowError(
+                PhotoReview.Core.Localization.Tr.AppTitle,
+                PhotoReview.Core.Localization.Tr.AppStartupFailed(ex.Message));
+        }
+        catch { /* no UI available: still shut down below */ }
+        try { Dispose(); } catch { /* release what we can; the process exits next */ }
+        Shutdown(1);
+    }
+
+    private async Task StartupCoreAsync(StartupEventArgs e)
+    {
         // perf(startup): the CSV listener depends on nothing but the environment, so it starts first
         // and the Startup milestones below (msSinceProcessStart) cover services/settings/window too.
         _perfListener = PerfCsvListener.TryStartFromEnvironment();
@@ -197,7 +228,7 @@ public partial class App : System.Windows.Application, IDisposable
 
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
-        var lockFolder = initial is not null ? Path.GetDirectoryName(initial) : initialFolder;
+        var lockFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder; // R2-F-08: a relative file argument has an empty directory name
         // perf(startup): Explorer's view order is the slowest part of opening a photo (~1-2 s of
         // cross-process COM for a large folder). Start it now, in parallel with settings, window
         // construction and Show(); the folder load joins this query instead of starting its own.
@@ -238,11 +269,13 @@ public partial class App : System.Windows.Application, IDisposable
             _perfHooks = PerfDispatcherHooks.Attach(Dispatcher);
             PerfDispatcherHooks.TraceDiagMode();
         }
-        DispatcherUnhandledException += (_, a) => { AppLog.Error("Dispatcher exception", a.Exception); a.Handled = true; };
-        AppDomain.CurrentDomain.UnhandledException += (_, a) => AppLog.Error("AppDomain exception", a.ExceptionObject as Exception);
-        TaskScheduler.UnobservedTaskException += (_, a) => { AppLog.Error("Unobserved task exception", a.Exception); a.SetObserved(); };
+        // R2-F-12: these are crash reports, so they are recorded (and flushed) even while logging is off;
+        // otherwise the swallowed exception, or a fatal one before the process dies, leaves no trace.
+        DispatcherUnhandledException += (_, a) => { LogUnhandledForced("Dispatcher exception", a.Exception); a.Handled = true; };
+        AppDomain.CurrentDomain.UnhandledException += (_, a) => LogUnhandledForced("AppDomain exception", a.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, a) => { LogUnhandledForced("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
-        _instanceLock = new InstanceLock(lockFolder);
+        _instanceLock = new InstanceLock(lockFolder, _services.GetRequiredService<ILog>());
         if (!_instanceLock.IsOwner)
         {
             _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
@@ -258,6 +291,12 @@ public partial class App : System.Windows.Application, IDisposable
         MainWindow = window;
         window.Show();
         PhotoReviewPerf.StartupMark("windowShown");
+        if (store.LastLoadRepairs.Count > 0)
+        {
+            _services.GetRequiredService<IDialogService>().ShowMessage(
+                PhotoReview.Core.Localization.Tr.AppTitle,
+                PhotoReview.Core.Localization.Tr.SettingsLoadRepaired(string.Join(", ", store.LastLoadRepairs)));
+        }
     }
 
     /// <summary>
@@ -273,6 +312,16 @@ public partial class App : System.Windows.Application, IDisposable
         AppLog.Error(message, ex);
         AppLog.Flush();
         AppLog.Enabled = wasEnabled;
+    }
+
+    /// <summary>R2-F-12: records an unhandled exception even when logging is disabled and flushes before returning.</summary>
+    internal static void LogUnhandledForced(string message, object? exceptionObject)
+    {
+        try
+        {
+            LogStartupErrorForced(message, exceptionObject as Exception ?? new InvalidOperationException(exceptionObject?.ToString() ?? "unknown exception object"));
+        }
+        catch { /* a failing logger must not turn a handled crash into another crash */ }
     }
 
     public void Dispose()

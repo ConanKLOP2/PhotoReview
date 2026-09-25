@@ -1,0 +1,104 @@
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
+
+namespace PhotoReview.Core.FileActions;
+
+/// <summary>
+/// Shared Prepared -> mutate -> verify -> Committed/Failed journal sequence (CORE-07), used by
+/// <see cref="FileActionService"/> and <see cref="RecoveryRetryService"/> so a fix applies to both.
+/// Not thread-safe: one instance per operation.
+/// </summary>
+internal sealed class JournalTransaction
+{
+    private readonly OperationJournal _journal;
+    private readonly IClock _clock;
+    private readonly JournalEntry _prepared;
+    private readonly bool _failWithoutPrepared;
+
+    /// <param name="failWithoutPrepared">
+    /// Retry semantics: an existing Failed record is being re-attempted, so a failure is journaled even when the
+    /// Prepared append itself failed (the caller then reports JournalPersisted=false).
+    /// </param>
+    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, bool failWithoutPrepared = false)
+    {
+        _failWithoutPrepared = failWithoutPrepared;
+        _journal = journal;
+        _clock = clock;
+        _prepared = prepared;
+    }
+
+    /// <summary>True once the Prepared record was appended (a Failed record is only written after this).</summary>
+    public bool IsPrepared { get; private set; }
+
+    /// <summary>True once the file mutation was verified; from then on the operation counts as succeeded.</summary>
+    public bool MutationCompleted { get; private set; }
+
+    // ADR 0007 J-D: in PowerLossSafe mode the Prepared record costs a WriteThrough + Flush(true) (~2 ms, tail > 15 ms),
+    // so it is written on a pool thread and awaited: the mutation still starts only after Prepared is durable, and the
+    // rest of the caller (mutation + Committed) already continues off the caller's thread (ConfigureAwait(false)).
+    // Fast mode keeps the ~0.4 ms cache write inline -- a thread hop would cost more than the write.
+    public Task BeginAsync()
+    {
+        if (_journal.Durability != JournalDurability.PowerLossSafe)
+        {
+            Begin();
+            return Task.CompletedTask;
+        }
+        return Task.Run(Begin);
+    }
+
+    public void Begin()
+    {
+        _journal.Append(_prepared);
+        IsPrepared = true;
+    }
+
+    /// <summary>Throws <see cref="JournalCodedException"/> (<paramref name="errorCode"/>) unless the destination has the prepared size.</summary>
+    public void VerifyDestination(IFileSystem fileSystem, string destination, string errorCode)
+    {
+        var stat = fileSystem.GetFileStat(destination);
+        if (stat is null || stat.Length != _prepared.Size)
+            throw new JournalCodedException(errorCode);
+        MutationCompleted = true;
+    }
+
+    /// <summary>For operations with nothing to verify (Recycle).</summary>
+    public void MarkMutationCompleted() => MutationCompleted = true;
+
+    /// <summary>Appends Committed. A journal failure does not undo the mutation: it is returned in <paramref name="journalError"/>.</summary>
+    public JournalEntry Commit(out string? journalError)
+    {
+        var committed = _prepared with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow };
+        try
+        {
+            _journal.Append(committed);
+            journalError = null;
+        }
+        catch (Exception journalException)
+        {
+            journalError = journalException.Message;
+        }
+        return committed;
+    }
+
+    /// <summary>
+    /// Appends Failed for <paramref name="failure"/> when Prepared was written. Returns the record (null when none was
+    /// due) and the journal error message if the append itself failed.
+    /// </summary>
+    public JournalEntry? Fail(Exception failure, out string? journalError)
+    {
+        journalError = null;
+        if (!IsPrepared && !_failWithoutPrepared) return null;
+        var (errorCode, errorText) = JournalErrors.ForJournal(failure);
+        var failed = _prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
+        try
+        {
+            _journal.Append(failed);
+        }
+        catch (Exception journalException)
+        {
+            journalError = journalException.Message;
+        }
+        return failed;
+    }
+}

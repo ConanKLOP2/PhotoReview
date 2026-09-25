@@ -1,5 +1,5 @@
 using System.IO;
-using Microsoft.VisualBasic.FileIO;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 
 namespace PhotoReview.Benchmarking;
@@ -15,9 +15,22 @@ public static class BenchmarkWorkloadRunner
 {
     public static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunIterationAsync(
         BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,
-        int iteration, Random random, CancellationToken ct)
+        int iteration, Random random, IRecycleBin recycleBin, CancellationToken ct)
     {
-        if (workload == BenchmarkWorkload.Correctness && profile.Id is "explorer-reindex" or "cache-recovery")
+        var measure = await PrepareIterationAsync(executor, files, profile, workload, iteration, random, recycleBin, ct).ConfigureAwait(false);
+        return await measure().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// R2-F-14: does the untimed setup of one iteration (scratch-file copy, cold-cache eviction) and returns the measure
+    /// step, which is the only part <see cref="BenchmarkEngine.RunPreparedAsync"/> times. The measure step must be invoked
+    /// exactly once: for file-action iterations it also removes the scratch files.
+    /// </summary>
+    public static async Task<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>> PrepareIterationAsync(
+        BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, BenchmarkWorkload workload,
+        int iteration, Random random, IRecycleBin recycleBin, CancellationToken ct)
+    {
+        if (BenchmarkProfiles.IsNotImplemented(profile))
         {
             // These profiles would otherwise just decode a plain sequential file with no
             // check of Explorer native order or of cache clear/rebuild behavior, so they
@@ -30,14 +43,17 @@ public static class BenchmarkWorkloadRunner
         }
 
         if (workload == BenchmarkWorkload.FileAction)
-            return await RunFileActionAsync(executor, files, profile, iteration, ct).ConfigureAwait(false);
+            return await PrepareFileActionAsync(executor, files, profile, iteration, recycleBin, ct).ConfigureAwait(false);
 
         if (workload == BenchmarkWorkload.FirstFrame)
         {
             var path = SelectFile(files, workload, iteration, random);
-            executor.EvictForColdDecode(path);
-            var image = await executor.DecodeAsync(path, ct).ConfigureAwait(false);
-            return (image.PixelWidth > 0 && image.PixelHeight > 0, executor.Metrics);
+            executor.EvictForColdDecode(path); // untimed: clearing the disk cache is not part of the first frame
+            return async () =>
+            {
+                var image = await executor.DecodeAsync(path, ct).ConfigureAwait(false);
+                return (image.PixelWidth > 0 && image.PixelHeight > 0, executor.Metrics);
+            };
         }
 
         if (workload is BenchmarkWorkload.Preload or BenchmarkWorkload.WarmNext)
@@ -48,84 +64,108 @@ public static class BenchmarkWorkloadRunner
             // WarmPreloadAround call below -- the actual thing these two workloads exist to
             // measure.
             var center = SelectIndex(files.Length, workload, iteration, random);
-            var image = await executor.DecodeAsync(files[center], ct).ConfigureAwait(false);
-            executor.WarmPreloadAround(center);
-            return (image.PixelWidth > 0 && image.PixelHeight > 0, executor.Metrics);
+            return async () =>
+            {
+                var image = await executor.DecodeAsync(files[center], ct).ConfigureAwait(false);
+                executor.WarmPreloadAround(center);
+                return (image.PixelWidth > 0 && image.PixelHeight > 0, executor.Metrics);
+            };
         }
 
         var count = Math.Min(Math.Max(1, profile.Workers), files.Length);
         var selected = Enumerable.Range(0, count).Select(o => SelectFile(files, workload, iteration + o, random)).ToArray();
-        var results = new bool[selected.Length];
-        await Parallel.ForEachAsync(Enumerable.Range(0, selected.Length),
-            new ParallelOptions { MaxDegreeOfParallelism = count, CancellationToken = ct },
-            async (idx, ct2) =>
-            {
-                var image = await executor.DecodeAsync(selected[idx], ct2).ConfigureAwait(false);
-                results[idx] = image.PixelWidth > 0 && image.PixelHeight > 0;
-            }).ConfigureAwait(false);
-        return (results.All(r => r), executor.Metrics);
+        return async () =>
+        {
+            var results = new bool[selected.Length];
+            await Parallel.ForEachAsync(Enumerable.Range(0, selected.Length),
+                new ParallelOptions { MaxDegreeOfParallelism = count, CancellationToken = ct },
+                async (idx, ct2) =>
+                {
+                    var image = await executor.DecodeAsync(selected[idx], ct2).ConfigureAwait(false);
+                    results[idx] = image.PixelWidth > 0 && image.PixelHeight > 0;
+                }).ConfigureAwait(false);
+            return (results.All(r => r), executor.Metrics);
+        };
     }
 
-    private static async Task<(bool Correct, ReviewMetricsSnapshot? Metrics)> RunFileActionAsync(
-        BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, int iteration, CancellationToken ct)
+    private static async Task<Func<Task<(bool Correct, ReviewMetricsSnapshot? Metrics)>>> PrepareFileActionAsync(
+        BenchmarkImageExecutor executor, string[] files, BenchmarkProfile profile, int iteration, IRecycleBin recycleBin, CancellationToken ct)
     {
         var temp = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Action-" + Guid.NewGuid().ToString("N") + ".bin");
         var moved = temp + ".moved";
         var copied = temp + ".copy";
-        try
-        {
-            await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], ct), ct).ConfigureAwait(false);
-            // Start the real decode before mutating the file.  Awaiting it here would
-            // turn this workload into "decode then action" and could never expose the
-            // move/delete/copy lifetime race that these profiles are intended to measure.
-            // DecodeAsync queues the production decode on its worker, so the mutation is
-            // deliberately issued while that operation is in flight; awaiting the task
-            // afterwards keeps the result and failure semantics observable to the engine.
-            var decodeTask = executor.DecodeAsync(temp, ct);
-            // Each action profile performs the operation its name promises instead of every
-            // Move/Delete/Copy/Interleaved profile running the same move+delete regardless of Id.
-            var op = profile.Id switch
-            {
-                "action-delete" => "delete",
-                "action-copy" => "copy",
-                "action-interleaved" => (iteration % 3) switch { 0 => "move", 1 => "delete", _ => "copy" },
-                _ => "move",
-            };
-            switch (op)
-            {
-                case "move": File.Move(temp, moved); File.Delete(moved); break;
-                // Disposable per-iteration benchmark fixtures: permanent delete instead of
-                // Recycle Bin, which would otherwise accumulate one item per iteration in the
-                // user's real Recycle Bin every time this runs.
-                case "delete": FileSystem.DeleteFile(temp, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin); break;
-                case "copy": File.Copy(temp, copied, overwrite: true); break;
-            }
-            // A delete or move can legitimately win the race before the decoder opens
-            // the file.  That is the behavior this workload is measuring; consume the
-            // task and report the filesystem contract below instead of converting the
-            // expected race into an unhandled benchmark exception.  Cancellation still
-            // propagates so a cancelled run cannot be reported as a successful action.
-            try
-            {
-                _ = await decodeTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (IOException) { }
-            // The correctness check must match what each operation promises: move/delete
-            // must remove the source, copy must leave it in place.
-            var sourceExistsAfter = File.Exists(temp);
-            var expectedSourceExists = op == "copy";
-            return (sourceExistsAfter == expectedSourceExists, executor.Metrics);
-        }
-        finally
+        void Cleanup()
         {
             try { if (File.Exists(temp)) File.Delete(temp); } catch { /* best-effort cleanup of benchmark temp file */ }
             try { if (File.Exists(moved)) File.Delete(moved); } catch { /* best-effort cleanup of benchmark temp file */ }
             try { if (File.Exists(copied)) File.Delete(copied); } catch { /* best-effort cleanup of benchmark temp file */ }
         }
+        try
+        {
+            // Untimed setup: a full read + write of the source photo (R2-F-14).
+            await File.WriteAllBytesAsync(temp, await File.ReadAllBytesAsync(files[iteration % files.Length], ct), ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            Cleanup();
+            throw;
+        }
+
+        return async () =>
+        {
+            try
+            {
+                // Start the real decode before mutating the file.  Awaiting it here would
+                // turn this workload into "decode then action" and could never expose the
+                // move/delete/copy lifetime race that these profiles are intended to measure.
+                // DecodeAsync queues the production decode on its worker, so the mutation is
+                // deliberately issued while that operation is in flight; awaiting the task
+                // afterwards keeps the result and failure semantics observable to the engine.
+                var decodeTask = executor.DecodeAsync(temp, ct);
+                // Each action profile performs the operation its name promises instead of every
+                // Move/Delete/Copy/Interleaved profile running the same move+delete regardless of Id.
+                var op = profile.Id switch
+                {
+                    "action-delete" => "delete",
+                    "action-copy" => "copy",
+                    "action-interleaved" => (iteration % 3) switch { 0 => "move", 1 => "delete", _ => "copy" },
+                    _ => "move",
+                };
+                switch (op)
+                {
+                    case "move": File.Move(temp, moved); File.Delete(moved); break;
+                    // The bin is injected: production passes WindowsRecycleBin (the real "Delete" action
+                    // path); tests pass a fake so the gate never touches the user's real Recycle Bin.
+                    case "delete": recycleBin.SendToRecycleBin(temp); break;
+                    case "copy": File.Copy(temp, copied, overwrite: true); break;
+                }
+                // A delete or move can legitimately win the race before the decoder opens
+                // the file.  That is the behavior this workload is measuring; consume the
+                // task and report the filesystem contract below instead of converting the
+                // expected race into an unhandled benchmark exception.  Cancellation still
+                // propagates so a cancelled run cannot be reported as a successful action.
+                try
+                {
+                    _ = await decodeTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (IOException) { }
+                // A delete/move racing the decoder's open surfaces as "access denied" while the file is pending delete.
+                catch (UnauthorizedAccessException) { }
+                // The correctness check must match what each operation promises: move/delete
+                // must remove the source, copy must leave it in place.
+                var sourceExistsAfter = File.Exists(temp);
+                var expectedSourceExists = op == "copy";
+                return (sourceExistsAfter == expectedSourceExists, executor.Metrics);
+            }
+            finally
+            {
+                Cleanup();
+            }
+        };
     }
 
     // string.GetHashCode() is randomized per process by design in .NET, so seeding with it

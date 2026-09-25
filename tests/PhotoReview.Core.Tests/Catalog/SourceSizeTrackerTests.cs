@@ -28,6 +28,29 @@ public class SourceSizeTrackerTests
         Assert.Equal(0, tracker.LastFsCallCount);
     }
 
+    [Fact(DisplayName = "After Observe, GetTotal sums the observed snapshot and never reads the live catalog (R2-F-11)")]
+    public void GetTotal_AfterObserve_UsesSnapshotNotLiveCatalog()
+    {
+        var catalog = new ReviewCatalog();
+        var fs = new CountingFileSystem(new PhysicalFileSystem(), new ReviewMetrics());
+        var tracker = new SourceSizeTracker(catalog, fs);
+        catalog.Reset(["file1", "file2"]);
+        catalog.UpdateMetadata("file1", 100L, DateTime.UtcNow);
+        catalog.UpdateMetadata("file2", 200L, DateTime.UtcNow);
+
+        tracker.Observe(catalog.EntriesSnapshot());
+        Assert.Equal(300L, tracker.GetTotal());
+
+        // The UI thread now changes the live catalog; the preload thread must keep seeing its own snapshot.
+        catalog.Reset(["other"]);
+        catalog.UpdateMetadata("other", 5L, DateTime.UtcNow);
+        Assert.Equal(300L, tracker.GetTotal());
+
+        // A new preload lifetime observes a new snapshot.
+        tracker.Observe(catalog.EntriesSnapshot());
+        Assert.Equal(5L, tracker.GetTotal());
+    }
+
     [Fact]
     public void GetTotal_PartialMetadata_CallsFsForMissing()
     {

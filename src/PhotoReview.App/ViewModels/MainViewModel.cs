@@ -103,7 +103,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         Metrics = metrics ?? new ReviewMetrics();
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
-            _naturalComparer, Settings, this);
+            _naturalComparer, () => Settings, this);
         _siblingNavigator = new SiblingFolderNavigator(
             _clock, _catalog, _fileSystem, this, () => _currentSession);
         _duplicateController = new DuplicateCleanupController(
@@ -219,6 +219,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    /// <summary>Latest folder load, including its Explorer-order apply/ignore; completes when the order is settled (tests await it instead of a wall-clock window).</summary>
+    internal Task FolderLoadTask { get; private set; } = Task.CompletedTask;
+
     /// <summary>
     /// Mở thư mục ảnh và nạp danh mục ảnh.
     /// </summary>
@@ -226,7 +229,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         _statusText = string.Empty;
-        await _folderCoordinator.LoadAsync(folder, initialPath);
+        FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
+        await FolderLoadTask;
         NotifyNavigationStateChanged();
     }
 
@@ -305,7 +309,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var currentPath = _catalog.PathAt(_catalog.CurrentIndex);
         if (_currentSession != null)
         {
-            _currentSession.Skipped.Add(currentPath);
+            // R2-F-10: no duplicates -- skipping the same image again must not grow the persisted session file.
+            if (!_currentSession.Skipped.Contains(currentPath, StringComparer.OrdinalIgnoreCase))
+                _currentSession.Skipped.Add(currentPath);
             _currentSession.UpdatedUtc = DateTime.UtcNow;
             PersistSession(_currentSession);
         }
@@ -412,8 +418,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Tìm kiếm và xử lý các ảnh trùng lặp theo hash nội dung.
     /// </summary>
-    public async Task RemoveDuplicatesAsync(bool removeNumbered) =>
-        await _duplicateController.RemoveDuplicatesAsync(removeNumbered);
+    public Task RemoveDuplicatesAsync(bool removeNumbered) =>
+        // R2-F-20: same gate as Recycle/Move/Undo, so a second click during hashing/review and interleaved file actions are no-ops.
+        _fileActionGate.RunExclusiveAsync(() => _duplicateController.RemoveDuplicatesAsync(removeNumbered));
 
     /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
@@ -461,7 +468,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 if (previousBackend != newBackend)
                 {
                     _previewService?.ClearCache();
-                    _previewService?.ClearDisk();
+                    // R2-F-16: the directory delete must not run on the UI thread (the RAM cache above is already cleared).
+                    var previewService = _previewService;
+                    if (previewService is not null) _ = Task.Run(previewService.ClearDisk);
                     _preloadController?.ClearPreloadedKeys();
                 }
                 if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
@@ -537,6 +546,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     void IFolderLoadSink.OnCatalogReady(string folder, int count)
     {
+        // The running preload loop holds a snapshot of the PREVIOUS catalog; stop it so the next
+        // PreloadAroundAsync starts a fresh lifetime over the new entries (R2-F-01).
+        _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
         if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
@@ -555,6 +567,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     void IFolderLoadSink.OnEmpty(string folder)
     {
+        _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
         SetFolderText(folder, 0, explorerOrderApplied: false);
@@ -579,6 +592,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // The current image keeps its place but its neighbours are now the Explorer-order ones:
         // re-center preload on its new index (a file opened directly is presented before the
         // order is applied, so preload started around the fallback neighbours).
+        // The loop still walks the pre-order snapshot: cancel it so the fresh lifetime sees the new order (R2-F-01).
+        _preloadController?.Cancel();
         if (currentKept && currentIndex >= 0) _ = _preloadController?.PreloadAroundAsync(currentIndex);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
@@ -601,12 +616,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         StatusText = status;
     }
 
-    void IFileActionSink.OnCatalogChanged()
+    void IFileActionSink.OnCatalogChanged(string? removedPath)
     {
         CatalogChanged?.Invoke();
-        if (_catalog.Current?.Path is { } path)
+        // Only the removed file leaves the cache; the new Current is the next image the user is about
+        // to see and is usually already preloaded (R2-F-02).
+        if (removedPath is not null)
         {
-            _presenter.EvictCachedPath(path);
+            _presenter.EvictCachedPath(removedPath);
         }
         _compare.Clear();
     }

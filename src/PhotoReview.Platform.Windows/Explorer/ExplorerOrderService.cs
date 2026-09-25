@@ -61,6 +61,9 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             return completion.Task;
         }
 
+        /// <summary>R2-F-30: Dispose runs on the UI thread at window close; the pump is a background thread, so a stuck COM call is abandoned quickly instead of freezing the close for seconds.</summary>
+        private static readonly TimeSpan ShutdownJoinTimeout = TimeSpan.FromMilliseconds(200);
+
         private int _disposed;
 
         public void Dispose()
@@ -72,10 +75,10 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             // second call's CompleteAdding()/Dispose() against an already-disposed BlockingCollection.
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             _queue.CompleteAdding();
-            if (_thread.Join(TimeSpan.FromSeconds(5)))
+            if (_thread.Join(ShutdownJoinTimeout))
                 _queue.Dispose();
             else
-                _log.Error("Explorer STA pump thread did not exit within 5s; leaking queue instead of risking ObjectDisposedException on a stuck COM call");
+                _log.Error("Explorer STA pump thread did not exit within 200 ms; leaking queue instead of risking ObjectDisposedException on a stuck COM call");
         }
     }
 

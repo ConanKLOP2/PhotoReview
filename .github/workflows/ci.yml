@@ -12,6 +12,10 @@ on:
       - refactor/**
   workflow_dispatch:
 
+# Least privilege: build/test/publish only reads; tag-version below overrides with contents: write.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.ref }}
   # Never cancel master runs: each merge is a version (2.0.N) that must be built and tagged.
@@ -20,6 +24,9 @@ concurrency:
 jobs:
   build-test-publish:
     runs-on: windows-latest
+    env:
+      # Single source of truth for the test gate; must equal the filter line in AGENTS.md > Tests.
+      TEST_FILTER: "Category!=Manual&Category!=Native&Category!=Slow"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,6 +72,8 @@ jobs:
         run: |
           $v = (Get-Item 'src/PhotoReview.App/bin/Release/net10.0-windows/PhotoReview.App.dll').VersionInfo.ProductVersion
           Write-Host "PhotoReview $v"
+          # R2-F-18: a build without git history is versioned 2.0.0-nogit; never let that reach the tag/artifact steps.
+          if ($v -match '-nogit' -or $v -notmatch '\+[0-9a-fA-F]+') { Write-Error "Build has no git commit identity: $v"; exit 1 }
           "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.
@@ -72,27 +81,44 @@ jobs:
         shell: powershell
         run: ./tools/i18n-check.ps1
 
-      # CI runs HotPath tests only (fast, mocked deps)
-      # Stress/Native/Slow/Integration tests run locally only (optional via -Stress, -Native, -Slow, -Integration)
-      # NOTE: Filter below is verified to match tools/verify-all.ps1 (TS09 verification)
+      # CI runs the HotPath tests plus the Category=Integration tests (fast, mocked deps, no real
+      # Recycle Bin); Native/Slow/Manual run locally only (verify-all.ps1 -Native/-Slow).
+      # NOTE: TEST_FILTER (job env) is verified to match tools/verify-all.ps1 and AGENTS.md > Tests.
       # Parallel execution via Start-Job was tried and reverted: windows-latest runners
       # only have 2 vCPUs, so 5 concurrent dotnet test processes just contended for CPU
       # instead of running faster (measured 28s parallel vs 26s sequential), while adding
       # real fragility (job working-directory bug, unreliable exit-code propagation).
       - name: Run Architecture tests (HotPath)
-        run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        shell: pwsh
+        run: dotnet test tests/PhotoReview.Architecture.Tests/PhotoReview.Architecture.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run Core tests (HotPath)
-        run: dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        shell: pwsh
+        run: dotnet test tests/PhotoReview.Core.Tests/PhotoReview.Core.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run Imaging tests (HotPath)
-        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        shell: pwsh
+        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run Integration tests (HotPath)
-        run: dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        shell: pwsh
+        run: dotnet test tests/PhotoReview.Integration.Tests/PhotoReview.Integration.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
 
       - name: Run App tests (HotPath)
-        run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "Category!=Manual&Category!=Stress&Category!=Native&Category!=Slow&Category!=Integration" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+        shell: pwsh
+        run: dotnet test tests/PhotoReview.App.Tests/PhotoReview.App.Tests.csproj -c Release --no-build --filter "$env:TEST_FILTER" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+
+      # Q-R3: the tests tagged Category=Integration always run in CI, even when their class also carries
+      # another exclusion trait (Slow), so a filter change can never silently drop them again. Only the
+      # Integration+Slow tests are missing from the main filter, so only those run here (no double run, R2-A-12),
+      # in every test project.
+      - name: Run Integration-category tests that the main filter skips (Slow)
+        shell: pwsh
+        run: |
+          foreach ($project in 'PhotoReview.Architecture.Tests', 'PhotoReview.Core.Tests', 'PhotoReview.Imaging.Tests', 'PhotoReview.Integration.Tests', 'PhotoReview.App.Tests') {
+            dotnet test "tests/$project/$project.csproj" -c Release --no-build --filter "Category=Integration&Category=Slow&Category!=Manual&Category!=Native" --logger "trx;LogFileName=$project.integration-slow.trx" --results-directory TestResults --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+            if ($LASTEXITCODE -ne 0) { throw "Integration+Slow tests failed in $project (exit $LASTEXITCODE)" }
+          }
 
       - name: Publish Release
         # --no-restore: the App project was already restored as part of the

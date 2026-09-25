@@ -22,7 +22,7 @@ Historical commits, validation details, and detailed task status from 2026-09-20
 - **Remaining:** TS05-TS10 (profiling/optimization work)
 
 ### TC00: Test Cleanup Baseline
-- **Baseline:** [TC00-BASELINE-REPORT.md](../refactoring/TC00-BASELINE-REPORT.md) — 4 PASS with 0 flakes, established 2026-09-21
+- **Baseline:** [TC00-BASELINE-REPORT.md](historical/TC00-BASELINE-REPORT.md) — 4 PASS with 0 flakes, established 2026-09-21
 - **Status:** TC01-TC11 not started; awaiting TS10 re-audit
 
 ### Code Review Sessions

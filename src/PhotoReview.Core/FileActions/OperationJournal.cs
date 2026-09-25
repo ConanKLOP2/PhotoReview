@@ -118,53 +118,98 @@ public sealed class OperationJournal
         return entries;
     }
 
+    // CORE-08: every pass reads only the not-yet-parsed prefix [start, boundary) and parses it once, so a Move-sparse
+    // journal costs O(file) instead of re-parsing the tail on each window doubling. `boundary` always sits on a line
+    // start: the head line of a pass may be cut mid-line, so it is left for the next (earlier) pass to complete.
     private static List<JournalEntry> ReadCommittedMovesReverse(Stream stream)
     {
         if (!stream.CanSeek)
             return [];
 
-        var window = 256 * 1024;
+        var length = stream.Length;
+        var boundary = length;
+        var window = 256L * 1024;
+        var collected = new List<JournalEntry>(StartupCommittedMoveLimit); // file (ascending) order
         while (true)
         {
-            var start = Math.Max(0, stream.Length - window);
+            var start = Math.Max(0, length - window);
+            var buffer = new byte[(int)(boundary - start)];
             stream.Seek(start, SeekOrigin.Begin);
-            var buffer = new byte[(int)(stream.Length - start)];
-            var read = stream.Read(buffer, 0, buffer.Length);
-            var entries = new List<JournalEntry>(StartupCommittedMoveLimit);
+            stream.ReadExactly(buffer);
+
             var lineStart = 0;
-            for (var i = 0; i <= read; i++)
+            var newBoundary = boundary;
+            if (start > 0)
             {
-                if (i != read && buffer[i] is not (byte)'\n') continue;
-                var length = i - lineStart;
-                if (length > 0 && buffer[lineStart + length - 1] == '\r') length--;
-                if (length > 0)
+                var firstNewline = Array.IndexOf(buffer, (byte)'\n');
+                if (firstNewline < 0)
                 {
-                    try
-                    {
-                        var entry = JsonSerializer.Deserialize<JournalEntry>(buffer.AsSpan(lineStart, length));
-                        if (entry is { Type: FileOperationType.Move, State: JournalState.Committed })
-                            entries.Add(entry);
-                    }
-                    catch (JsonException) { }
+                    // One line longer than the window: nothing parseable yet, widen and re-read the same prefix.
+                    window *= 2;
+                    continue;
                 }
-                lineStart = i + 1;
+                lineStart = firstNewline + 1;
+                newBoundary = start + lineStart;
             }
 
-            if (entries.Count >= StartupCommittedMoveLimit || start == 0)
+            var chunk = ParseCommittedMoves(buffer, lineStart);
+            collected.InsertRange(0, chunk);
+
+            if (collected.Count >= StartupCommittedMoveLimit || start == 0)
             {
-                return entries.Count <= StartupCommittedMoveLimit
-                    ? entries
-                    : entries.Skip(entries.Count - StartupCommittedMoveLimit).ToList();
+                return collected.Count <= StartupCommittedMoveLimit
+                    ? collected
+                    : collected.GetRange(collected.Count - StartupCommittedMoveLimit, StartupCommittedMoveLimit);
             }
+            boundary = newBoundary;
             window *= 2;
         }
     }
+
+    private static List<JournalEntry> ParseCommittedMoves(byte[] buffer, int offset)
+    {
+        var entries = new List<JournalEntry>();
+        var remaining = buffer.AsSpan(offset);
+        while (!remaining.IsEmpty)
+        {
+            var newline = remaining.IndexOf((byte)'\n'); // vectorized: the line split must not dominate a 25 MB scan
+            var line = newline < 0 ? remaining : remaining[..newline];
+            remaining = newline < 0 ? default : remaining[(newline + 1)..];
+            if (!line.IsEmpty && line[^1] == '\r') line = line[..^1];
+            // Perf (CORE-08): a compact-written Recycle/Copy line cannot be a Move, so skip its JSON parse. The exact
+            // token never occurs inside a string value (there quotes are escaped as \"), so a Move line is never skipped.
+            if (line.IsEmpty || IsRecycleOrCopyLine(line)) continue;
+            try
+            {
+                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                if (entry is { Type: FileOperationType.Move, State: JournalState.Committed })
+                    entries.Add(entry);
+            }
+            catch (JsonException) { }
+        }
+        return entries;
+    }
+
+    private static bool IsRecycleOrCopyLine(ReadOnlySpan<byte> line) =>
+        line.IndexOf("\"Type\":\"Recycle\""u8) >= 0 || line.IndexOf("\"Type\":\"Copy\""u8) >= 0;
 
     public IReadOnlyList<JournalEntry> ReadPendingOperations() =>
         ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Prepared).ToList();
 
     public IReadOnlyList<JournalEntry> ReadFailedOperations() =>
         ComputeLatestEntries().Values.Where(entry => entry.State == JournalState.Failed).ToList();
+
+    /// <summary>
+    /// R2-F-17: the Recovery window's list (pending first, then failed) from ONE pass over the journal,
+    /// instead of one full parse for <see cref="ReadPendingOperations"/> and another for <see cref="ReadFailedOperations"/>.
+    /// </summary>
+    public IReadOnlyList<JournalEntry> ReadPendingAndFailedOperations()
+    {
+        var latest = ComputeLatestEntries().Values;
+        return latest.Where(entry => entry.State == JournalState.Prepared)
+            .Concat(latest.Where(entry => entry.State == JournalState.Failed))
+            .ToList();
+    }
 
     // Retries append a new Prepared/Committed/Failed entry under the SAME Id as the
     // attempt they're retrying (RecoveryRetryService.RetryMoveOrCopy), so an Id's
@@ -190,7 +235,8 @@ public sealed class OperationJournal
                 try
                 {
                     var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                    if (entry is not null) handle(entry);
+                    // Valid JSON can still lack required members (records do not enforce them); skip such lines.
+                    if (entry is not null && !string.IsNullOrEmpty(entry.Id) && entry.Source is not null) handle(entry);
                 }
                 catch (JsonException) { }
             }

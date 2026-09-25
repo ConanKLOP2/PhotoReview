@@ -10,7 +10,7 @@ Quick reference for finding documentation by purpose. Read-tier guides which fil
 | **docs/ACTIVE-TASKS.md** | Consolidated open tasks across all groups | T0, always |
 | **docs/architecture.md** | System design, code map, component ownership | T1, any area |
 | **docs/APP-MECHANISMS-VI.md** | Core flow descriptions (Vietnamese) | T1, app flow |
-| **docs/adr/*.md** | Architecture decisions 0001-0007 | T1, relevant area |
+| **docs/adr/*.md** | Architecture decisions 0001-0008 | T1, relevant area |
 | **docs/refactoring/I18N-PLAN.md** | Multi-language design, L00–L12 tasks, Q-L decisions | T1, UI text |
 | **docs/TRANSLATING.md** | Adding/fixing a language (JSON catalogs) | T1, translations |
 | **docs/refactoring/ARCH-REVIEW-SUMMARY.md** | AR review 2026-09-23: findings F1-F9, task order | T1, AR tasks |
@@ -19,7 +19,6 @@ Quick reference for finding documentation by purpose. Read-tier guides which fil
 | **docs/refactoring/REFACTOR-STATUS.md** | OC/ST consolidated status | T1, refactoring |
 | **docs/refactoring/PERF-STATUS.md** | Perf baselines (AR02e, perf night) | T1, perf diagnosis |
 | **docs/refactoring/OPEN-DECISIONS.md** | Q-* decision registry (mostly resolved) | T1, decision lookup |
-| **docs/refactoring/TC00-BASELINE-REPORT.md** | TC baseline test metrics | T1, test cleanup context |
 | **docs/refactoring/OPTIMIZE-CLEAN-SUMMARY.md** | OC task status & blockers | T1, OC tasks |
 | **docs/refactoring/TEST-CLEANUP-SUMMARY.md** | TC status (DONE); pointer to archive | T1, test cleanup |
 | **docs/refactoring/TEST-SPEED-SUMMARY.md** | TS completed work, remaining tasks | T1, test speed |

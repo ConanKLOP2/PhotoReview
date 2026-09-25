@@ -24,7 +24,16 @@ public sealed class WindowsRecycleBin : IRecycleBin
     public void SendToRecycleBin(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        // R2-F-05: removable drives and network shares have no Recycle Bin. FileSystem.DeleteFile with
+        // OnlyErrorDialogs maps to SHFileOperation FOF_ALLOWUNDO | FOF_NOCONFIRMATION, which then deletes such a file
+        // PERMANENTLY without the usual prompt, while the journal would record a successful "recycle". Refuse instead;
+        // fixed drives take exactly the same call as before.
+        if (!RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType))
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(path)));
         FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        // A cancelled/aborted shell operation returns without an exception; never report success for a file still in place.
+        if (File.Exists(path))
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
     }
 
     public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
@@ -41,11 +50,12 @@ public sealed class WindowsRecycleBin : IRecycleBin
             if (recycle is null) return false;
             dynamic recycleDynamic = recycle;
             object? items = recycleDynamic.Items();
+            var candidates = new List<(object Item, RecycleCandidate Candidate)>();
             try
             {
-                var candidates = new List<(object Item, RecycleCandidate Candidate)>();
                 foreach (dynamic item in (IEnumerable)items!)
                 {
+                    var kept = false;
                     try
                     {
                         var deletedFrom = (string?)item.ExtendedProperty("System.Recycle.DeletedFrom");
@@ -61,40 +71,57 @@ public sealed class WindowsRecycleBin : IRecycleBin
                         var localReading = DateTime.SpecifyKind(shellTime, DateTimeKind.Local).ToUniversalTime();
                         var candidate = new RecycleCandidate(deletedFrom, name, size, utcReading, localReading);
                         if (RecycleCandidateSelector.IsMatch(candidate, originalPath, expectedSize, expectedLastWriteUtc))
+                        {
                             candidates.Add((item, candidate));
+                            kept = true;
+                        }
                     }
                     catch (Exception ex) when (ex is COMException or InvalidCastException or FormatException)
                     {
                         _log.Error("Recycle Bin item inspection failed", ex);
                     }
+                    finally
+                    {
+                        // Only the selected candidate is needed later; every other shell item wrapper is released now.
+                        if (!kept) Release(item);
+                    }
                 }
 
                 if (candidates.Count != 1) return false;
                 var selected = candidates[0].Item;
+                dynamic selectedItem = selected;
+                var restoredVerb = false;
+                object? verbs = selectedItem.Verbs();
                 try
                 {
-                    dynamic item = selected;
-                        var restoredVerb = false;
-                        foreach (dynamic verb in (IEnumerable)item.Verbs())
-                        {
-                            var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
+                    foreach (dynamic verb in (IEnumerable)verbs!)
+                    {
+                        var verbName = ((string?)verb.Name ?? string.Empty).Trim().ToLowerInvariant().Replace("&", string.Empty);
                             // Matched against the WINDOWS shell's verb name ("Restore" / Vietnamese "Khôi phục" /
                             // German "Wiederherstellen"), which follows the OS display language, not our UI catalogs.
                             // "khôi" must stay Vietnamese (I18N ADR 0006; allowlisted in localization-allowlist.txt).
                             if (!verbName.Contains("restore", StringComparison.OrdinalIgnoreCase) &&
                                 !verbName.Contains("khôi", StringComparison.OrdinalIgnoreCase) &&
-                                !verbName.Contains("wiederher", StringComparison.OrdinalIgnoreCase)) continue;
-                            verb.DoIt();
-                            restoredVerb = true;
-                            Release(verb);
-                            break;
+                                !verbName.Contains("wiederher", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Release(verb); // not the restore verb
+                            continue;
                         }
-                        if (!restoredVerb) item.InvokeVerb("Restore");
-                    return WaitForRestore(originalPath, expectedLastWriteUtc);
+                        try { verb.DoIt(); }
+                        finally { Release(verb); }
+                        restoredVerb = true;
+                        break;
+                    }
                 }
-                finally { foreach (var candidate in candidates) Release(candidate.Item); }
+                finally { Release(verbs); }
+                if (!restoredVerb) selectedItem.InvokeVerb("Restore");
+                return WaitForRestore(originalPath, expectedLastWriteUtc);
             }
-            finally { Release(items); }
+            finally
+            {
+                foreach (var candidate in candidates) Release(candidate.Item);
+                Release(items);
+            }
         }
         catch (Exception ex)
         {
@@ -124,6 +151,39 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private static void Release(object? value)
     {
         if (value is not null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
+    }
+}
+
+/// <summary>
+/// Decides whether the shell can really recycle a path (R2-F-05). Only local fixed drives have a Recycle Bin that
+/// <c>SHFileOperation</c> uses without warning; removable, network, optical, RAM and unknown volumes delete permanently.
+/// </summary>
+internal static class RecycleEligibility
+{
+    private const string ExtendedPrefix = @"\\?\";
+    private const string UncPrefix = @"\\";
+
+    /// <summary>True only when <paramref name="driveTypeOf"/> reports <see cref="DriveType.Fixed"/> for the path's drive root; UNC paths and unknown roots are refused.</summary>
+    internal static bool CanRecycle(string path, Func<string, DriveType?> driveTypeOf)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(driveTypeOf);
+        string full;
+        try { full = Path.GetFullPath(path); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+
+        // \\?\C:\dir\file -> C:\dir\file; \\server\share and \\?\UNC\... stay UNC and are refused.
+        if (full.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && full.Length >= 6 && full[5] == ':') full = full[4..];
+        if (full.StartsWith(UncPrefix, StringComparison.Ordinal)) return false;
+        var root = Path.GetPathRoot(full);
+        if (string.IsNullOrEmpty(root)) return false;
+        return driveTypeOf(root) == DriveType.Fixed;
+    }
+
+    internal static DriveType? QueryDriveType(string root)
+    {
+        try { return new DriveInfo(root).DriveType; }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException) { return null; }
     }
 }
 

@@ -309,41 +309,57 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
     }
 
-    public static bool HasEmbeddedIccProfile(ReadOnlySpan<byte> jpeg)
+    /// <summary>
+    /// Shared JPEG marker walker (IMG-07): yields the next marker segment's marker byte and payload
+    /// (after the 2-byte length), skipping standalone markers. Returns false at SOS, on a malformed
+    /// or truncated segment, or at the end of the header area. Start with <paramref name="offset"/> = 2
+    /// (just past SOI).
+    /// </summary>
+    private static bool TryReadSegment(
+        ReadOnlySpan<byte> jpeg, ref int offset, out byte marker, out ReadOnlySpan<byte> payload)
     {
-        if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return false;
-
-        int offset = 2;
+        marker = 0;
+        payload = default;
         while (offset + 4 <= jpeg.Length)
         {
-            if (jpeg[offset] != 0xFF) break;
+            if (jpeg[offset] != 0xFF) return false;
 
-            byte marker = jpeg[offset + 1];
+            marker = jpeg[offset + 1];
             if (marker is 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
             {
                 offset += 2;
                 continue;
             }
-            if (marker == 0xDA) break; // SOS marker reached
+            if (marker == 0xDA) return false; // SOS marker reached
 
             int length = (jpeg[offset + 2] << 8) | jpeg[offset + 3];
-            if (length < 2 || offset + 2 + length > jpeg.Length) break;
+            if (length < 2 || offset + 2 + length > jpeg.Length) return false;
 
-            // Marker APP2 (0xE2)
-            if (marker == 0xE2)
-            {
-                var payload = jpeg.Slice(offset + 4, length - 2);
-                if (payload.Length >= 12 &&
-                    payload[0] == (byte)'I' && payload[1] == (byte)'C' && payload[2] == (byte)'C' &&
-                    payload[3] == (byte)'_' && payload[4] == (byte)'P' && payload[5] == (byte)'R' &&
-                    payload[6] == (byte)'O' && payload[7] == (byte)'F' && payload[8] == (byte)'I' &&
-                    payload[9] == (byte)'L' && payload[10] == (byte)'E' && payload[11] == 0)
-                {
-                    return true;
-                }
-            }
-
+            payload = jpeg.Slice(offset + 4, length - 2);
             offset += 2 + length;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool HasEmbeddedIccProfile(ReadOnlySpan<byte> jpeg)
+    {
+        if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return false;
+
+        int offset = 2;
+        while (TryReadSegment(jpeg, ref offset, out byte marker, out var payload))
+        {
+            // Marker APP2 (0xE2)
+            if (marker == 0xE2 &&
+                payload.Length >= 12 &&
+                payload[0] == (byte)'I' && payload[1] == (byte)'C' && payload[2] == (byte)'C' &&
+                payload[3] == (byte)'_' && payload[4] == (byte)'P' && payload[5] == (byte)'R' &&
+                payload[6] == (byte)'O' && payload[7] == (byte)'F' && payload[8] == (byte)'I' &&
+                payload[9] == (byte)'L' && payload[10] == (byte)'E' && payload[11] == 0)
+            {
+                return true;
+            }
         }
 
         return false;
@@ -354,35 +370,16 @@ public sealed class TurboJpegDecoder : IImageDecoder
         if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return 1;
 
         int offset = 2;
-        while (offset + 4 <= jpeg.Length)
+        while (TryReadSegment(jpeg, ref offset, out byte marker, out var payload))
         {
-            if (jpeg[offset] != 0xFF) break;
-
-            byte marker = jpeg[offset + 1];
-            if (marker is 0xD8 or 0xD9 or (>= 0xD0 and <= 0xD7))
-            {
-                offset += 2;
-                continue;
-            }
-            if (marker == 0xDA) break;
-
-            int length = (jpeg[offset + 2] << 8) | jpeg[offset + 3];
-            if (length < 2 || offset + 2 + length > jpeg.Length) break;
-
             // Marker APP1 (0xE1)
-            if (marker == 0xE1)
+            if (marker == 0xE1 &&
+                payload.Length >= 14 &&
+                payload[0] == (byte)'E' && payload[1] == (byte)'x' && payload[2] == (byte)'i' &&
+                payload[3] == (byte)'f' && payload[4] == 0 && payload[5] == 0)
             {
-                var payload = jpeg.Slice(offset + 4, length - 2);
-                if (payload.Length >= 14 &&
-                    payload[0] == (byte)'E' && payload[1] == (byte)'x' && payload[2] == (byte)'i' &&
-                    payload[3] == (byte)'f' && payload[4] == 0 && payload[5] == 0)
-                {
-                    var tiff = payload.Slice(6);
-                    return ParseTiffOrientation(tiff);
-                }
+                return ParseTiffOrientation(payload.Slice(6));
             }
-
-            offset += 2 + length;
         }
 
         return 1;

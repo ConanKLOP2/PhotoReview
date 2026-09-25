@@ -56,6 +56,66 @@ public sealed class FileActionServiceTests
         _service = new FileActionService(_journal, _fs, _clock, _recycleBin);
     }
 
+    [Theory]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
+    public async Task ExecuteAsync_RelativeDestinationOutsideSource_FailsWithoutJournalOrMove(FileOperationType operation)
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, @"..\outside"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionDestinationOutsideSource, result.Error);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(@"C:\outside\a.jpg"));
+        Assert.DoesNotContain(_fs.Events, e => e.Kind is "move" or "copy" or "append");
+        Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
+        Assert.Empty(_journal.ReadFailedOperations());
+    }
+
+    [Theory]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
+    public async Task ExecuteAsync_DriveRelativeDestination_FailsWithoutJournalOrMove(FileOperationType operation)
+    {
+        var source = @"C:\photos.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, "D:Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionDestinationOutsideSource, result.Error);
+        Assert.True(_fs.FileExists(source));
+        Assert.DoesNotContain(_fs.Events, e => e.Kind is "move" or "copy" or "append");
+        Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RelativeDestinationInsideSource_Succeeds()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"sub\deeper"));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(@"C:\photos\sub\deeper\a.jpg", result.DestinationPath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AbsoluteDestinationOutsideSource_StaysAllowed()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"D:\Backup"));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(@"D:\Backup\a.jpg", result.DestinationPath);
+    }
+
     [Fact]
     public async Task ExecuteAsync_Move_Success()
     {

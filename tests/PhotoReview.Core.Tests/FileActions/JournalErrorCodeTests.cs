@@ -169,7 +169,7 @@ public sealed class JournalErrorCodeTests : IDisposable
     }
 
     [Fact]
-    public void CoreMessages_English()
+    public async Task CoreMessages_English()
     {
         Localizer.SetCurrent(TestLocalization.English);
 
@@ -179,7 +179,7 @@ public sealed class JournalErrorCodeTests : IDisposable
         settings.Shortcuts.Next = "Nope";
         Assert.Equal("Shortcut Next is not valid.", new SettingsValidator(new AllKeysValid()).ValidateShortcuts(settings));
 
-        var retry = new RecoveryRetryService(_journal, _fs, _clock).RetryMoveOrCopy(
+        var retry = await new RecoveryRetryService(_journal, _fs, _clock).RetryMoveOrCopyAsync(
             new JournalEntry("r", FileOperationType.Recycle, JournalState.Failed, @"C:\photos\a.jpg", null, 1, _clock.UtcNow, _clock.UtcNow));
         Assert.Equal("Only Move/Copy can be retried; Recycle Bin operations are not retried automatically.", retry.Message);
     }

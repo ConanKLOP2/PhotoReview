@@ -23,6 +23,22 @@ public sealed class DiskCacheStore
     private int _pruneScheduled;
     private int _prunePending;
 
+    // IMG-10: incremental size tracking so a prune pass does not re-enumerate (and stat) every file
+    // of a large cache directory when it is clearly under quota. -1 = unknown (forces a full scan,
+    // which is also what happens for a store nobody reports writes to). Guarded by _sizeGate.
+    // Errors always err on the high side (an overwrite or an external delete is counted as growth),
+    // which only costs one extra full scan; a full scan is also forced every FullScanEvery skipped
+    // passes so drift from other processes/writers cannot accumulate unbounded.
+    private const int FullScanEvery = 256;
+    private readonly object _sizeGate = new();
+    private long _trackedBytes = -1;
+    private long _notedDuringScan;
+    private int _skippedPasses;
+    private int _fullScanCount;
+
+    /// <summary>Number of full directory enumerations performed so far (test/diagnostic).</summary>
+    internal int FullScanCount => Volatile.Read(ref _fullScanCount);
+
     public string Directory => _directory;
     public string SearchPattern => _searchPattern;
     public long MaxBytes => _maxBytes;
@@ -81,8 +97,9 @@ public sealed class DiskCacheStore
             // leaves a half-written file at cachePath). WriteThrough/Flush(true) forced every write
             // through to physical disk before the rename, which only slows down cache writes for a
             // durability guarantee this data doesn't need (a lost write is just a future cache miss).
-            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan))
+            var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                64 * 1024, FileOptions.SequentialScan);
+            await using (stream.ConfigureAwait(false))
             {
                 encoder.Save(stream);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -92,6 +109,23 @@ public sealed class DiskCacheStore
         finally
         {
             TryDelete(temporaryPath, log);
+        }
+    }
+
+    /// <summary>
+    /// Reports that a file was just persisted into this store's directory so the quota check can
+    /// track size incrementally instead of re-scanning the directory on every pass.
+    /// </summary>
+    public void NoteWritten(string path)
+    {
+        long length;
+        try { length = new FileInfo(path).Length; }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        lock (_sizeGate)
+        {
+            _notedDuringScan += length;
+            if (_trackedBytes >= 0) _trackedBytes += length;
         }
     }
 
@@ -119,7 +153,7 @@ public sealed class DiskCacheStore
                 Volatile.Write(ref _prunePending, 0);
                 try
                 {
-                    PruneDirectory(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
+                    RunPrunePass();
                 }
                 catch (IOException ex)
                 {
@@ -141,6 +175,25 @@ public sealed class DiskCacheStore
         });
     }
 
+    private void RunPrunePass()
+    {
+        lock (_sizeGate)
+        {
+            if (_trackedBytes >= 0 && _trackedBytes <= _maxBytes && ++_skippedPasses < FullScanEvery) return;
+            _skippedPasses = 0;
+            _notedDuringScan = 0;
+        }
+
+        Interlocked.Increment(ref _fullScanCount);
+        var remaining = PruneDirectoryCore(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
+        lock (_sizeGate)
+        {
+            // Writes noted while the scan ran may or may not have been enumerated; counting them again
+            // only over-estimates (safe), never under-estimates.
+            _trackedBytes = remaining < 0 ? -1 : remaining + _notedDuringScan;
+        }
+    }
+
     /// <summary>
     /// Waits until no prune pass is scheduled or running for this store, or <paramref name="timeout"/> elapses.
     /// </summary>
@@ -156,6 +209,9 @@ public sealed class DiskCacheStore
 
     /// <summary>
     /// Synchronously prunes least-recently-used files in this store's directory down to <see cref="MaxBytes"/>.
+    /// LRU order is <c>LastAccessTimeUtc</c> then <c>CreationTimeUtc</c>: NTFS last-access updates are
+    /// disabled by default on many installs, in which case this degrades to creation-order eviction
+    /// (cache hits do not touch files; a metadata write per hit would cost the hot path).
     /// </summary>
     public void Prune() => PruneDirectory(_directory, _searchPattern, _maxBytes, _log, _companionSuffix);
 
@@ -163,8 +219,12 @@ public sealed class DiskCacheStore
     /// Static helper: deletes least-recently-used files matching <paramref name="searchPattern"/> until directory size is at or under <paramref name="maxBytes"/>.
     /// </summary>
     public static void PruneDirectory(string directory, string searchPattern, long maxBytes, ILog? log = null, string? companionSuffix = null)
+        => PruneDirectoryCore(directory, searchPattern, maxBytes, log, companionSuffix);
+
+    /// <summary>Prunes and returns the bytes remaining, or -1 when the directory does not exist.</summary>
+    private static long PruneDirectoryCore(string directory, string searchPattern, long maxBytes, ILog? log, string? companionSuffix)
     {
-        if (!System.IO.Directory.Exists(directory)) return;
+        if (!System.IO.Directory.Exists(directory)) return -1;
 
         var files = System.IO.Directory.EnumerateFiles(directory, searchPattern)
             .Select(path => new FileInfo(path)).Where(info => info.Exists)
@@ -191,6 +251,8 @@ public sealed class DiskCacheStore
                 if (!File.Exists(imagePath)) TryDelete(companion, log);
             }
         }
+
+        return total;
     }
 
     public static void PruneDirectory(string directory, string searchPattern, long maxBytes, string? logContext, string? companionSuffix = null)
@@ -199,7 +261,11 @@ public sealed class DiskCacheStore
     /// <summary>
     /// Removes every file matching this store's pattern in its directory.
     /// </summary>
-    public void ClearDirectory() => ClearDirectory(_directory, _searchPattern, _log);
+    public void ClearDirectory()
+    {
+        ClearDirectory(_directory, _searchPattern, _log);
+        lock (_sizeGate) { _trackedBytes = -1; _notedDuringScan = 0; }
+    }
 
     /// <summary>
     /// Static helper to remove matching files in a directory.

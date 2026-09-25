@@ -41,7 +41,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
         {
             // Reuses the WPF benchmark workload so CLI profiles exercise their real behavior.
             var report = await BenchmarkEngine.RunAsync(folder, profile,
-                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, token),
+                (_, workload, iteration, token) => BenchmarkWorkloadRunner.RunIterationAsync(imageExecutor, files, profile, workload, iteration, random, PhotoReview.Platform.Windows.WindowsRecycleBin.Instance, token),
                 new Progress<BenchmarkProgress>(p => Console.WriteLine($"  {p.ProfileId}: {p.Completed}/{p.Total} {p.Message}")));
             reports.Add(report);
             outcomes.Add(report.Phases[0]);
@@ -83,7 +83,7 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
     var benchmarkFolder = args[1];
     var requested = args[0] switch
     {
-        "--benchmark-all" => BenchmarkProfiles.All.Where(p => !p.CorrectnessOnly).ToArray(),
+        "--benchmark-all" => BenchmarkProfiles.Runnable.ToArray(),
         "--benchmark-actions" => BenchmarkProfiles.All.Where(p => p.Workload == BenchmarkWorkload.FileAction).ToArray(),
         _ => (args.Length >= 3
             ? args[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

@@ -127,9 +127,9 @@ public partial class BenchmarkWindow : Window, IDisposable
                     // preload warm-up) lives in BenchmarkWorkloadRunner and is shared with the
                     // CLI runner (PhotoReview.Benchmark.Cli/Program.cs) so both front ends exercise the
                     // same real behavior instead of the CLI running a decode-only stand-in.
-                    var report = await BenchmarkEngine.RunAsync(FolderText.Text, profile,
-                        (_, workload, iteration, ct) => BenchmarkWorkloadRunner.RunIterationAsync(executor, files, profile, workload, iteration, random, ct),
-                        progress, _cts.Token);
+                    var report = await BenchmarkEngine.RunPreparedAsync(FolderText.Text, profile,
+                        (_, workload, iteration, ct) => BenchmarkWorkloadRunner.PrepareIterationAsync(executor, files, profile, workload, iteration, random, PhotoReview.Platform.Windows.WindowsRecycleBin.Instance, ct),
+                        progress, cancellationToken: _cts.Token);
                     sessionReports.Add(report);
                     foreach (var phase in report.Phases) _rows.Add(new BenchmarkResultRow(profile, phase));
                     RecomputeBest();

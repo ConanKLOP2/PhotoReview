@@ -260,6 +260,7 @@ public sealed class PreloadScheduler : IDisposable
         var seenShape = (Direction: 1, Lead: 0);
         IEnumerator<int>? order = null;
         var examinedSinceYield = 0;
+        var headroom = new HeadroomProbeState();
         var paused = false;
         try
         {
@@ -296,9 +297,10 @@ public sealed class PreloadScheduler : IDisposable
                 while (running.Count < limit && order!.MoveNext())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    // GlobalMemoryStatusEx is a syscall; only re-check on the same
-                    // cadence as the progress log below, not on every candidate.
-                    if (examinedSinceYield == 0 && !HasPreloadHeadroom())
+                    // IMG-03: GlobalMemoryStatusEx is a syscall, so the probe is cached; it is re-run
+                    // when a decode was queued since the last check (memory use changed) or after 50 ms,
+                    // so a burst never commits up to `workers` decodes past the limit on a stale answer.
+                    if (!HasPreloadHeadroomCached(ref headroom))
                     {
                         // GlobalMemoryStatusEx is a syscall: only taken when either the plain
                         // log or the perf trace will actually consume it.
@@ -322,6 +324,7 @@ public sealed class PreloadScheduler : IDisposable
                     var key = _target.GetCurrentCacheKey(entry);
                     if (_target.TryGetCachedPreview(key)) continue;
                     queued.Add(path);
+                    headroom.DecodeQueuedSinceCheck = true;
                     running.Add(PreloadOneAsync(order.Current, path, key, cancellationToken), path);
                     // Yield only after actual queue work; give input/rendering a
                     // chance without limiting every batch to two decodes.
@@ -381,6 +384,29 @@ public sealed class PreloadScheduler : IDisposable
         try { await Task.WhenAll(workers).ConfigureAwait(false); }
         catch (OperationCanceledException) { }
         catch (Exception) { }
+    }
+
+    private struct HeadroomProbeState
+    {
+        public bool Value;
+        public long Tick;
+        public bool Checked;
+        public bool DecodeQueuedSinceCheck;
+    }
+
+    private const long HeadroomRecheckMs = 50;
+
+    private bool HasPreloadHeadroomCached(ref HeadroomProbeState state)
+    {
+        var now = Environment.TickCount64;
+        if (!state.Checked || state.DecodeQueuedSinceCheck || now - state.Tick > HeadroomRecheckMs)
+        {
+            state.Value = HasPreloadHeadroom();
+            state.Tick = now;
+            state.Checked = true;
+            state.DecodeQueuedSinceCheck = false;
+        }
+        return state.Value;
     }
 
     private bool HasPreloadHeadroom() => _memoryProbe.HasHeadroom(_options.MemoryLoadLimit, _options.ReserveBytes);

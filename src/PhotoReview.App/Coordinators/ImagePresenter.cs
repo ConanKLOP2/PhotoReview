@@ -231,6 +231,14 @@ public sealed class ImagePresenter
             // starts) when a newer navigation supersedes this one; see GetViewerPreviewAsync.
             var previewTask = ramReady ? null : _previewService.GetViewerPreviewAsync(path, currentKey,
                 viewerDecodeCts.Token, _preloadController.GetViewerDecodeDelay());
+            // R2-F-29: a superseded navigation returns without awaiting previewTask; observe a later fault here so it
+            // is not reported context-free by TaskScheduler.UnobservedTaskException at GC time. Awaiting it below
+            // still throws as before (a continuation does not consume the exception).
+            _ = previewTask?.ContinueWith(
+                t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
 
             // 4. Nếu mode Preview, chưa có trong RAM và chưa in-flight: chạy song song thumbnail và
             // preview, hiển thị bất kỳ cái nào xong trước. Nếu preview thắng, bỏ qua thumbnail hoàn
@@ -435,21 +443,32 @@ public sealed class ImagePresenter
     /// </summary>
     public async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
     {
-        if (!_clock.IsNavigationCurrent(token)) return;
-
-        var nextIndex = _catalog.Remove(path);
-        if (_catalog.Count == 0)
+        // R2-F-07: iterative. Each missing file used to call PresentAsync, which found the next one missing and
+        // recursed; every call completes synchronously, so N consecutive missing files (an ejected card or a dropped
+        // share) meant N nested async frames on the UI thread. Skip the run of missing files here and present once.
+        while (true)
         {
-            _zoomDetail.Reset();
-            UpdateCurrentImage(null);
-            _compareViewModel.Clear();
-            UpdateStatus(StatusFormatter.NoImagesRemaining());
-            return;
-        }
+            if (!_clock.IsNavigationCurrent(token)) return;
 
-        if (nextIndex >= 0)
-        {
-            await PresentAsync(nextIndex);
+            var nextIndex = _catalog.Remove(path);
+            if (_catalog.Count == 0)
+            {
+                _zoomDetail.Reset();
+                UpdateCurrentImage(null);
+                _compareViewModel.Clear();
+                UpdateStatus(StatusFormatter.NoImagesRemaining());
+                return;
+            }
+
+            if (nextIndex < 0 || nextIndex >= _catalog.Count) return;
+
+            var nextPath = _catalog.PathAt(nextIndex);
+            if (TryGetFileInfo(nextPath, out _))
+            {
+                await PresentAsync(nextIndex);
+                return;
+            }
+            path = nextPath;
         }
     }
 

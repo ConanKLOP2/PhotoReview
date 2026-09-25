@@ -161,12 +161,18 @@ public sealed class DuplicateCleanupController
         }
 
         _preloadController?.Cancel();
-        _thumbnailCache?.ClearDisk();
+        // RAM first (cheap, and it also bumps the epochs so in-flight writers stop persisting) ...
         _thumbnailCache?.ClearMemory();
         _previewService?.ClearCache();
-        _previewService?.ClearDisk();
+        // R2-F-16: "Clear cache" also has to drop the source-bytes RAM cache (up to 16 GB when that option is on).
+        _previewService?.ClearSourceBytesCache();
         _preloadController?.ClearPreloadedKeys();
+        // ... then the directory deletes (up to the multi-GB disk quota, thousands of files) off the UI thread.
+        await Task.Run(() =>
+        {
+            _thumbnailCache?.ClearDisk();
+            _previewService?.ClearDisk();
+        });
         _sink.SetStatusText(StatusFormatter.CacheCleared());
-        await Task.CompletedTask;
     }
 }

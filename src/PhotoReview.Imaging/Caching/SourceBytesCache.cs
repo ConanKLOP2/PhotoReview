@@ -13,12 +13,24 @@ public sealed class SourceBytesCache
 
     public SourceBytesCache(long capacityBytes)
     {
+        // IMG-11/R2-A-06: never claim more than 20% of physical RAM (so it cannot starve the preview cache).
+        CapacityBytes = PhotoReview.Imaging.Preload.RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(
+            capacityBytes, PhotoReview.Imaging.Preload.RamBudgetPolicy.GetPhysicalMemoryBytes());
+        capacityBytes = CapacityBytes;
         _cache = new BoundedLruCache<Key, byte[]>(capacityBytes, bytes => bytes.LongLength);
     }
 
+    /// <summary>Effective (post-clamp) capacity in bytes.</summary>
+    public long CapacityBytes { get; }
     public long CurrentSize => _cache.CurrentSize;
     public int Count => _cache.Count;
 
+    /// <summary>
+    /// Returns the source bytes, reading the file if it is not cached yet.
+    /// WARNING: this blocks the calling thread until the read completes (it waits on a thread-pool
+    /// task). Call it only from a worker or dedicated decode thread -- never from a UI or other
+    /// <c>SynchronizationContext</c>-bound thread (IMG-09).
+    /// </summary>
     public byte[] GetOrRead(string path)
     {
         var key = CreateKey(path);

@@ -19,6 +19,7 @@ public sealed class SessionState
 public sealed class SessionStore
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly TimeSpan StaleTempAge = TimeSpan.FromDays(1);
     private readonly string _sessionsDir;
     private readonly IFileSystem _fileSystem;
     private readonly ReviewMetrics? _metrics;
@@ -34,6 +35,30 @@ public sealed class SessionStore
         ArgumentNullException.ThrowIfNull(paths);
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _sessionsDir = paths.SessionsDir;
+        SweepStaleTempFiles(DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// R2-F-34: an atomic write killed between creating <c>*.tmp</c> and the rename leaves the temp file behind for good.
+    /// Removes temp files older than a day (a live writer's temp file is milliseconds old); best effort, never throws.
+    /// </summary>
+    internal int SweepStaleTempFiles(DateTime utcNow)
+    {
+        var removed = 0;
+        try
+        {
+            foreach (var temp in _fileSystem.EnumerateFiles(_sessionsDir, "*.tmp").ToList())
+            {
+                if (_fileSystem.GetFileStat(temp) is { } stat && utcNow - stat.LastWriteUtc > StaleTempAge)
+                {
+                    _fileSystem.Delete(temp);
+                    removed++;
+                }
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return removed;
     }
 
     public SessionState Load(string folder)
@@ -52,6 +77,7 @@ public sealed class SessionStore
                     {
                         state.Folder = folder;
                     }
+                    state.Skipped ??= [];
                     return state;
                 }
             }

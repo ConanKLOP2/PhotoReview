@@ -23,6 +23,18 @@ public enum ReviewCommandType
     Previous
 }
 
+/// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
+public static class ReviewCommandTypeExtensions
+{
+    /// <summary>
+    /// True for commands that change files (Recycle, action profiles, Undo): holding the key must not repeat
+    /// them, otherwise photos are sent away faster than they can be looked at (R2-F-06).
+    /// Navigation and zoom keys are deliberately not listed so they keep repeating for fast browsing.
+    /// </summary>
+    public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
+        type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo;
+}
+
 /// <summary>
 /// Mô tả một lệnh thực thi sau khi định tuyến từ phím tắt.
 /// </summary>

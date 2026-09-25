@@ -30,3 +30,7 @@ dotnet_diagnostic.CA1707.severity = none
 
 [*.{csproj,props,slnx,json,yml}]
 indent_size = 2
+
+# ADR 0005 rule 2: Core/Imaging/Platform never resume on a captured context (review 2026-09-25, CORE-01)
+[src/PhotoReview.{Core,Imaging,Imaging.TurboJpeg,Platform.Windows}/**.cs]
+dotnet_diagnostic.CA2007.severity = error

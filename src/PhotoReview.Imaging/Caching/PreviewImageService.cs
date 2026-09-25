@@ -22,8 +22,14 @@ namespace PhotoReview.Imaging.Caching;
 public sealed class PreviewImageService : IPreloadTarget
 {
     private readonly BoundedLruCache<ImageCacheKey, IDecodedImage> _cache;
+    // Single-token channel = async cancellable gate (same non-disposable pattern as _viewerSlots).
+    private readonly Channel<byte> _originalDecodeGate = CreateSlotTokens(1);
     private readonly ConcurrentDictionary<(ImageCacheKey Key, long Epoch), Lazy<Task<IDecodedImage>>> _previewLoads = new();
-    private readonly ConcurrentDictionary<ImageCacheKey, (int Width, int Height)> _originalDimensions = new();
+    // IMG-02: bounded (entry-count LRU; each entry is a key plus two ints) so a multi-day session over
+    // very large libraries cannot grow this for the life of the process.
+    private readonly BoundedLruCache<ImageCacheKey, (int Width, int Height)> _originalDimensions;
+    /// <summary>Default entry cap for the original-dimensions cache.</summary>
+    public const int DefaultOriginalDimensionsCapacity = 200_000;
     private readonly object _cacheLifecycleGate = new();
     private long _cacheEpoch;
     private readonly ReviewMetrics _metrics;
@@ -31,6 +37,9 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly Func<DecodeBox> _targetDecodeBox;
     private readonly string _diskCacheDirectory;
     private readonly long _diskCacheCapacityBytes;
+
+    /// <summary>Effective (post-clamp) RAM budget of the preview cache; use it for full-folder preload decisions.</summary>
+    public long CapacityBytes { get; }
     private readonly DiskCacheStore _diskStore;
     private readonly Func<DecoderBackend> _currentBackend;
     private readonly IImageDecoderFactory? _decoderFactory;
@@ -83,9 +92,11 @@ public sealed class PreviewImageService : IPreloadTarget
         ILog? log = null,
         Func<DecoderBackend>? currentBackend = null,
         IImageDecoderFactory? decoderFactory = null,
-        SourceBytesCache? sourceBytesCache = null)
+        SourceBytesCache? sourceBytesCache = null,
+        int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
-            diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache)
+            diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
+            originalDimensionsCapacity)
     {
     }
 
@@ -111,7 +122,8 @@ public sealed class PreviewImageService : IPreloadTarget
         ILog? log = null,
         Func<DecoderBackend>? currentBackend = null,
         IImageDecoderFactory? decoderFactory = null,
-        SourceBytesCache? sourceBytesCache = null)
+        SourceBytesCache? sourceBytesCache = null,
+        int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
@@ -127,6 +139,17 @@ public sealed class PreviewImageService : IPreloadTarget
         _decoderFactory = decoderFactory;
         _sourceBytesCache = sourceBytesCache;
         _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
+        _originalDimensions = new BoundedLruCache<ImageCacheKey, (int Width, int Height)>(
+            originalDimensionsCapacity, _ => 1);
+        // IMG-11: clamp to half of physical RAM and log what is actually in effect.
+        var requestedCapacity = capacityBytes;
+        capacityBytes = RamBudgetPolicy.ClampPreviewToPhysicalMemory(
+            capacityBytes, RamBudgetPolicy.GetPhysicalMemoryBytes(), sourceBytesCache?.CapacityBytes ?? 0);
+        CapacityBytes = capacityBytes;
+        _log.Info($"Memory budgets: preview cache {capacityBytes / (1024 * 1024)} MiB"
+            + (capacityBytes != requestedCapacity ? $" (clamped from {requestedCapacity / (1024 * 1024)} MiB to 50% of physical RAM)" : "")
+            + (sourceBytesCache is null ? ", source-bytes cache off" : $", source-bytes cache {sourceBytesCache.CapacityBytes / (1024 * 1024)} MiB")
+            + ".");
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
             capacityBytes, image => image.EstimatedBytes);
         // Two workers: enough to keep the disk-cache warm without letting persistence
@@ -203,6 +226,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 }
                 // Coalesced per directory in DiskCacheStore: concurrent preload workers
                 // persisting several previews at once must not each scan the whole directory.
+                _diskStore.NoteWritten(request.CachePath);
                 _diskStore.SchedulePrune();
             }
             catch (Exception ex)
@@ -214,6 +238,9 @@ public sealed class PreviewImageService : IPreloadTarget
             }
         }
     }
+
+    /// <summary>Entries in the original-dimensions LRU (test/diagnostic only).</summary>
+    public int KnownOriginalDimensionsCount => _originalDimensions.Count;
 
     public int CacheCount => _cache.Count;
     public long CacheBytes => _cache.CurrentSize;
@@ -446,7 +473,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // later GetOriginalDimensionsAsync for the same source (e.g. ImagePresenter showing
         // "WxH" in the status bar) never needs its own decoder ReadInfo call/file open, as long
         // as the image was already decoded once -- including by a background preload.
-        _originalDimensions[ImageCacheKey.CreateOriginal(key)] = (decodedImage.OriginalWidth, decodedImage.OriginalHeight);
+        _originalDimensions.Set(ImageCacheKey.CreateOriginal(key), (decodedImage.OriginalWidth, decodedImage.OriginalHeight));
 
         // Only cache previews that actually decoded at the downscaled target width: a
         // fallback to full-resolution (see DecodeWithFallback) must never be persisted under the
@@ -463,7 +490,8 @@ public sealed class PreviewImageService : IPreloadTarget
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
         if (!_disableDiskCache && sourceRead &&
-            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
+            decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp &&
+            !PreviewCacheFile.HasAlpha(bmp)) // IMG-01/Q-R1: the JPEG cache would flatten transparency to black
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight);
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
@@ -512,9 +540,11 @@ public sealed class PreviewImageService : IPreloadTarget
     public void EvictCachedPath(string path, Action<string>? alsoInvalidate = null)
     {
         var normalized = Path.GetFullPath(path).ToUpperInvariant();
+        // No epoch bump: this drops one path only. Bumping would also discard every in-flight
+        // preload/viewer decode of OTHER paths (R2-F-02). A decode of this path that is still in flight
+        // may publish one stale entry; keys include length+mtime so it is never served for a new file.
         lock (_cacheLifecycleGate)
         {
-            _cacheEpoch++;
             _cache.RemoveWhere(key => string.Equals(key.Path, normalized, StringComparison.Ordinal));
             alsoInvalidate?.Invoke(normalized);
         }
@@ -591,7 +621,7 @@ public sealed class PreviewImageService : IPreloadTarget
     /// -- seeded by any earlier decode, viewer or preload -- without touching the file.
     /// </summary>
     public bool TryGetKnownOriginalDimensions(ImageCacheKey currentKey, out (int Width, int Height) dimensions) =>
-        _originalDimensions.TryGetValue(ImageCacheKey.CreateOriginal(currentKey), out dimensions);
+        _originalDimensions.TryGet(ImageCacheKey.CreateOriginal(currentKey), out dimensions);
 
     /// <summary>
     /// feat(zoom) (option A for #43): full-resolution decode of one source for the zoomed viewer.
@@ -606,11 +636,25 @@ public sealed class PreviewImageService : IPreloadTarget
     /// </summary>
     /// <param name="sourceKey">Any key for the source (typically the displayed preview's); its
     /// original-mode twin is derived without re-stating the file.</param>
-    public Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
+    public async Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = ImageCacheKey.CreateOriginal(sourceKey);
-        if (_cache.TryGet(key, out var cached)) return Task.FromResult(cached);
+        if (_cache.TryGet(key, out var cached)) return cached;
+        // R2-F-13: at most one full-resolution decode (24-100 MP, ~100+ MB each) runs at a time. Paging quickly at
+        // 100 % used to start one dedicated thread per image; now superseded requests wait here and are dropped on
+        // cancellation before they ever allocate.
+        await _originalDecodeGate.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return await DecodeOriginalOnDedicatedThreadAsync(path, key, cancellationToken).ConfigureAwait(false);
+        }
+        finally { _originalDecodeGate.Writer.TryWrite(0); }
+    }
+
+    private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
+    {
         return Task.Factory.StartNew(() =>
         {
             // Last point where a superseded request can be dropped (see summary).
@@ -621,7 +665,7 @@ public sealed class PreviewImageService : IPreloadTarget
             var decoded = DecodeFromSource(path, key.Backend, DecodeBox.Unbounded, perf,
                 perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
             if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed during decode: {path}");
-            _originalDimensions[key] = (decoded.OriginalWidth, decoded.OriginalHeight);
+            _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
             _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
             return decoded;
             // RunContinuationsAsynchronously: the dedicated thread exits right after the decode
@@ -638,7 +682,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public async Task<(int Width, int Height)> GetOriginalDimensionsAsync(string path, ImageCacheKey currentKey)
     {
         var key = ImageCacheKey.CreateOriginal(currentKey);
-        if (_originalDimensions.TryGetValue(key, out var dimensions)) return dimensions;
+        if (_originalDimensions.TryGet(key, out var dimensions)) return dimensions;
         // Only reached when nothing decoded so far (viewer or preload) has told us this source's
         // original dimensions -- see the seeding in DecodeAndCacheAsync. ReadInfo below genuinely
         // opens the file (a header-only read), so it counts as a source open like any other.
@@ -646,7 +690,7 @@ public sealed class PreviewImageService : IPreloadTarget
         var info = await Task.Run(() => GetDecoder(key.Backend).ReadInfo(path)).ConfigureAwait(false);
         dimensions = (info.Width, info.Height);
         if (!key.MatchesCurrentSource()) throw new IOException($"Image source changed while reading dimensions: {path}");
-        _originalDimensions[key] = dimensions;
+        _originalDimensions.Set(key, dimensions);
         return dimensions;
     }
 

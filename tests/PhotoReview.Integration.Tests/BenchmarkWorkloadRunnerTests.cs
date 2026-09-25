@@ -1,6 +1,7 @@
 using PhotoReview.Benchmarking;
 using System.IO;
 using PhotoReview.App;
+using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Integration.Tests;
 
@@ -13,6 +14,21 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 {
     private readonly TempRoot _root = new("benchmark-workload-runner");
     private readonly List<BenchmarkImageExecutor> _executors = [];
+    private readonly RecordingRecycleBin _bin = new();
+
+    /// <summary>Stands in for the user's real Recycle Bin (TEST-10): records the call and removes the file like a real send would.</summary>
+    private sealed class RecordingRecycleBin : IRecycleBin
+    {
+        public List<string> Sent { get; } = [];
+
+        public void SendToRecycleBin(string path)
+        {
+            Sent.Add(path);
+            File.Delete(path);
+        }
+
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
+    }
 
     public void Dispose()
     {
@@ -40,7 +56,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
 
         var (correct, metrics) = await BenchmarkWorkloadRunner.RunIterationAsync(
             executor, files, profile, BenchmarkWorkload.FileAction, iteration: 0,
-            BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id), CancellationToken.None);
+            BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id), _bin, CancellationToken.None);
 
         // RunFileActionAsync's own correctness check already fails if the wrong op ran
         // (e.g. delete's op left the source in place, or copy's op removed it), so a true
@@ -49,6 +65,25 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         Assert.NotNull(metrics);
         // The action profile must operate on a scratch copy, never the catalog file itself.
         Assert.True(File.Exists(files[0]));
+        // Only the delete profile goes through the (injected) Recycle Bin, exactly once per iteration.
+        Assert.Equal(profileId == "action-delete" ? 1 : 0, _bin.Sent.Count);
+    }
+
+    [Fact(DisplayName = "PrepareIterationAsync does the file-action setup but defers the action itself to the timed measure step (R2-F-14)")]
+    public async Task PrepareIterationAsync_FileAction_ActionRunsOnlyInMeasureStep()
+    {
+        var profile = BenchmarkProfiles.Find("action-delete")!;
+        var files = new[] { _root.File("prepare-source.png", TestImages.PreviewPng) };
+        var executor = NewExecutor(profile, files, new FileInfo(files[0]).Length);
+
+        var measure = await BenchmarkWorkloadRunner.PrepareIterationAsync(
+            executor, files, profile, BenchmarkWorkload.FileAction, iteration: 0,
+            BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id), _bin, CancellationToken.None);
+
+        Assert.Empty(_bin.Sent); // setup only: the timed action has not run
+        var (correct, _) = await measure();
+        Assert.True(correct);
+        Assert.Single(_bin.Sent);
     }
 
     [Fact(DisplayName = "The interleaved action profile cycles move, delete, copy across iterations and matches each op's expected source state")]
@@ -63,9 +98,12 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
         for (var iteration = 0; iteration < 3; iteration++)
         {
             var (correct, _) = await BenchmarkWorkloadRunner.RunIterationAsync(
-                executor, files, profile, BenchmarkWorkload.FileAction, iteration, random, CancellationToken.None);
+                executor, files, profile, BenchmarkWorkload.FileAction, iteration, random, _bin, CancellationToken.None);
             Assert.True(correct, $"iteration {iteration} (op {iteration % 3}) did not match its expected source state");
         }
+
+        // Iterations 0..2 map to move, delete, copy: exactly one of them is a delete.
+        Assert.Single(_bin.Sent);
     }
 
     [Fact(DisplayName = "CreateSeededRandom produces the same sequence for the same profile id across separate calls")]
@@ -93,7 +131,7 @@ public sealed class BenchmarkWorkloadRunnerTests : IDisposable
             var random = BenchmarkWorkloadRunner.CreateSeededRandom(profile.Id);
             for (var iteration = 0; iteration < 10; iteration++)
                 await BenchmarkWorkloadRunner.RunIterationAsync(
-                    executor, files, profile, BenchmarkWorkload.Random, iteration, random, CancellationToken.None);
+                    executor, files, profile, BenchmarkWorkload.Random, iteration, random, _bin, CancellationToken.None);
             // Cache hit/miss pattern (and so this count) depends entirely on the random
             // index sequence, so it only matches across runs if that sequence is identical.
             return executor.Metrics.SourceReads;

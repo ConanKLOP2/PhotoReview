@@ -165,5 +165,57 @@ public sealed class SessionWriterTests
 
         Assert.Equal("x", store.Load(@"C:\photos").CurrentPath);
     }
-}
 
+    [Fact(DisplayName = "Dispose returns within its bound while a write is in flight and skips the last write")]
+    public async Task Dispose_ReturnsWithinBound_WhenWriteInFlight()
+    {
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var (writer, store) = Create();
+        _fs.WriteHook = _ =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(60));
+            return null;
+        };
+
+        writer.Update(State(@"C:\photos", "a"));
+        _timer.FireAll();
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "the debounced write never started");
+        writer.Update(State(@"C:\photos", "b")); // pending while the write for "a" is blocked
+
+        var dispose = Task.Run(writer.Dispose);
+        var completed = await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(20)));
+        release.Set();
+        Assert.Same(dispose, completed);
+
+        await dispose;
+        await writer.WhenIdleAsync();
+        _fs.WriteHook = null;
+        Assert.Equal("a", store.Load(@"C:\photos").CurrentPath); // "b" was skipped, not written
+        writer.Dispose(); // double Dispose is a no-op
+    }
+
+    [Fact(DisplayName = "Dispose while the timer thread holds a drained batch does not lose that write (R2-A-04)")]
+    public async Task Dispose_WhileTimerHoldsDrainedBatch_StillWritesIt()
+    {
+        using var drained = new ManualResetEventSlim(false);
+        using var proceed = new ManualResetEventSlim(false);
+        var (writer, store) = Create();
+        writer.AfterDrainForTests = () =>
+        {
+            drained.Set();
+            proceed.Wait(TimeSpan.FromSeconds(30));
+        };
+        writer.Update(State(@"C:\photos", "a"));
+        _timer.FireAll();
+        Assert.True(drained.Wait(TimeSpan.FromSeconds(10)), "the timer never drained its batch");
+
+        writer.AfterDrainForTests = null;
+        writer.Dispose(); // nothing pending, no write in flight: previously disposed the semaphore here
+        proceed.Set();
+
+        await writer.WhenIdleAsync(); // faulted with ObjectDisposedException before the fix
+        Assert.Equal("a", store.Load(@"C:\photos").CurrentPath);
+    }
+}

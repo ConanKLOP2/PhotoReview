@@ -94,6 +94,7 @@ StyleCopReport.xml
 *.tmp
 *.tmp_proj
 *_wpftmp.csproj
+# Ignore all logs except the one committed diagnostic sample (tools/diag/samples) used by docs/tests.
 *.log
 !tools/diag/samples/applog-sample.log
 *.vspscc
@@ -374,8 +375,6 @@ FodyWeavers.xsd
 # Stale/half-built local release copies (only src/PhotoReview.App/bin/.../publish is supported; see README)
 /outputs/release/
 
-# Stray local assistant report copy (content lives in docs/refactoring/ARCH-REVIEW-SUMMARY.md)
-/Claude outputs/
 
 # Performance diagnosis artifacts: raw traces, raw per-run CSVs, local-only mappings
 *.pml

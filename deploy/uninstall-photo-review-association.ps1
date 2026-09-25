@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $progId = 'PhotoReview.App'
 $classes = 'HKCU:\Software\Classes'
 
-foreach ($extension in '.jpg', '.jpeg', '.png') {
+foreach ($extension in '.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tif', '.tiff') {
     $openWith = Join-Path $classes "$extension\OpenWithProgids"
     if (Test-Path -LiteralPath $openWith) {
         Remove-ItemProperty -LiteralPath $openWith -Name $progId -ErrorAction SilentlyContinue

@@ -65,3 +65,9 @@ Phân biệt quan trọng: **process crash không làm mất dữ liệu đã gh
 - Session: file rỗng/hỏng ⇒ load trả về "không có session"; atomic round-trip; temp cleanup.
 - Enumeration: thư mục có file bị từ chối quyền (tạo bằng ACL trong test) ⇒ catalog thiếu đúng số file, cảnh báo được phát, tổng số đúng.
 - Perf: đo lại latency thao tác Move/Recycle (P50/P95) trước/sau cho cả hai chế độ.
+
+## Triển khai (cập nhật 2026-09-24)
+
+- **IO03** (journal: chế độ Fast mặc định / Power-loss safe, ghi ngoài UI thread): PR #65, merge `0a331de`.
+- **IO04 + IO05** (session không fsync, giữ atomic; enumeration bỏ qua file không đọc được kèm cảnh báo): PR #66, merge `5c12231`.
+- Quy tắc tạm trong `task_on_progress.md` đã được thay bằng hợp đồng này; các thay đổi độ bền sau này chỉ theo ADR này.

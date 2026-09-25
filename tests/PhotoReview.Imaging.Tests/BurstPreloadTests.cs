@@ -276,18 +276,30 @@ public sealed class BurstPreloadSchedulerTests : IDisposable
     public async Task ViewerDecoding_CapsPreloadStarts()
     {
         var cap = Math.Min(8, Math.Max(2, Environment.ProcessorCount / 3));
+        var workers = cap + 2; // strictly above the cap, so a broken cap cannot hide behind the worker count
         using var target = new GatedTarget(blockAll: true) { ActiveViewerDecodes = 1 };
-        using var scheduler = Create(target, workers: 8);
+        using var scheduler = Create(target, workers: workers);
 
         _ = scheduler.PreloadAroundAsync(0);
-        for (var i = 0; i < cap; i++) await target.NextStartAsync();
-        await Task.Delay(100);
-        Assert.Equal(cap, target.Started.Count);
+        string first = "";
+        for (var i = 0; i < cap; i++)
+        {
+            var started = await target.NextStartAsync();
+            if (i == 0) first = started;
+        }
+
+        // Deterministic "nothing more starts": finish one worker. That wakes the scheduler loop, which
+        // re-evaluates its limit and refills exactly the freed slot. Observing that one refill start is
+        // the causal proof the loop already passed its capped fill (no wall-clock wait): with the cap
+        // broken, workers - cap extra starts would already be queued and Started would exceed cap + 1.
+        target.Release(first);
+        await target.NextStartAsync();
+        Assert.Equal(cap + 1, target.Started.Count);
 
         target.ActiveViewerDecodes = 0;
         scheduler.NotifyNavigation(0); // wakes the loop; the viewer is idle again
-        for (var i = cap; i < 8; i++) await target.NextStartAsync();
-        Assert.Equal(8, target.Started.Count);
+        for (var i = cap; i < workers; i++) await target.NextStartAsync();
+        Assert.Equal(workers + 1, target.Started.Count); // cap + 1 so far, plus the workers - cap that the wake ramped up
         target.ReleaseAll();
     }
 

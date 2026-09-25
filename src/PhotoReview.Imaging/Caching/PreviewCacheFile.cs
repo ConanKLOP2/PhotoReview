@@ -46,8 +46,11 @@ namespace PhotoReview.Imaging.Caching;
 /// </remarks>
 public static class PreviewCacheFile
 {
-    /// <summary>preview-v5: bumped from v4 (preview-v4) to add the original source dimensions.</summary>
-    public const int CurrentVersion = 5;
+    /// <summary>
+    /// preview-v6: bumped from v5 so entries written by builds that flattened alpha (transparent PNG/WebP baked to
+    /// opaque black, R2-A-02) are treated as stale and re-decoded once. v5 added the original source dimensions.
+    /// </summary>
+    public const int CurrentVersion = 6;
 
     /// <summary>JPEG quality chosen by measurement -- see the format decision in the type doc.</summary>
     public const int DefaultJpegQuality = 95;
@@ -101,6 +104,8 @@ public static class PreviewCacheFile
     {
         ArgumentNullException.ThrowIfNull(bitmap);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
+        // IMG-01: JPEG cannot carry alpha; refuse so a future caller cannot silently flatten transparency.
+        if (HasAlpha(bitmap)) throw new ArgumentException("Bitmaps with an alpha channel cannot be stored in the JPEG preview cache.", nameof(bitmap));
         if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -114,8 +119,9 @@ public static class PreviewCacheFile
             var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
             var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
             var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
-            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan))
+            var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                64 * 1024, FileOptions.SequentialScan);
+            await using (stream.ConfigureAwait(false))
             {
                 stream.Write(header);
                 var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };
@@ -203,6 +209,29 @@ public static class PreviewCacheFile
         native.Freeze();
 
         return new ReadResult(native, backendValue, orientation, fileBytes, originalWidth, originalHeight);
+    }
+
+    /// <summary>
+    /// True when <paramref name="bmp"/> can carry transparency (alpha pixel format, or an indexed
+    /// format whose palette has a non-opaque color). Such previews must not go through the JPEG cache.
+    /// </summary>
+    /// <summary>Framework-agnostic form of <see cref="HasAlpha(BitmapSource)"/> for a decoded preview.</summary>
+    public static bool HasAlpha(IDecodedImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        return image.PlatformImage is BitmapSource bitmap && HasAlpha(bitmap);
+    }
+
+    internal static bool HasAlpha(BitmapSource bmp)
+    {
+        ArgumentNullException.ThrowIfNull(bmp);
+        var format = bmp.Format;
+        if (format == PixelFormats.Bgra32 || format == PixelFormats.Pbgra32 || format == PixelFormats.Rgba64
+            || format == PixelFormats.Prgba64 || format == PixelFormats.Rgba128Float || format == PixelFormats.Prgba128Float)
+            return true;
+        if (format == PixelFormats.Indexed1 || format == PixelFormats.Indexed2 || format == PixelFormats.Indexed4 || format == PixelFormats.Indexed8)
+            return bmp.Palette?.Colors.Any(c => c.A < 255) == true;
+        return false;
     }
 
     private static byte[] BuildHeader(DecoderBackend actualBackend, int orientation, int width, int height, int originalWidth, int originalHeight)

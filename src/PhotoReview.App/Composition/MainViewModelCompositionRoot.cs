@@ -55,7 +55,14 @@ internal static class MainViewModelCompositionRoot
         {
             var sourceSizeTracker = new SourceSizeTracker(catalog, fs);
             var preloadScheduler = schedulerFactory(
-                catalog.EntriesSnapshot,
+                () =>
+                {
+                    // R2-F-11: taken on the UI thread; the tracker then sums this snapshot on the preload thread
+                    // instead of enumerating the live catalog there.
+                    var snapshot = catalog.EntriesSnapshot();
+                    sourceSizeTracker.Observe(snapshot);
+                    return snapshot;
+                },
                 sourceSizeTracker.GetTotal);
             preloadController = new PreloadControllerAdapter(() => preloadScheduler);
         }

@@ -1,15 +1,25 @@
 # Open Decisions
 
-Consolidation of pending decisions (Q-*) across active task groups.
+Consolidation of decisions (Q-*) across task groups. Status of task groups: [`docs/ACTIVE-TASKS.md`](../ACTIVE-TASKS.md).
 
 | ID | Group | Question | Status | Plan |
 |---|---|---|---|---|
-| Q-OC15 | OC | UI pattern cleanup scope? | 🔄 WAITING OC14 | [`OPTIMIZE-CLEAN-SUMMARY.md`](OPTIMIZE-CLEAN-SUMMARY.md) |
+| Q-OC15 | OC | UI pattern cleanup scope? | ✅ Done in #73 (OC15-18) | [`OPTIMIZE-CLEAN-SUMMARY.md`](OPTIMIZE-CLEAN-SUMMARY.md) |
+| Q-Z1 | Zoom | 100 % = preview pixels or source pixels? | ✅ Option A: 1 source pixel, original decoded on demand (#43 + #47), 2026-09-24 | [ADR 0008](../adr/0008-zoom-source-pixel.md) |
+| Q-R1 | Review | Transparent images in the preview disk cache (IMG-01) | ✅ ACCEPTED 2026-09-24 — (a) never persist previews with alpha | [`REVIEW-2026-09-25-PLAN.md`](REVIEW-2026-09-25-PLAN.md) §6 |
+| Q-R2 | Review | Where can an action destination point (CORE-03) | ✅ ACCEPTED 2026-09-24 — (a) relative paths stay inside the photo folder, absolute allowed; checked at save and run time | same |
+| Q-R3 | Review | Run the 6 Integration tests in CI; keep `Stress`? | ✅ ACCEPTED 2026-09-24 — (a) run them in CI, drop the `Stress` category | same |
+| Q-R4 | Review | `outputs/` folder (HYG-06) | ✅ ACCEPTED 2026-09-24 — (a) move scripts and example config to `deploy/`, update README | same |
+| Q-R5 | Review | Session write at shutdown on a slow disk (CORE-02) | ✅ ACCEPTED 2026-09-24 — (a) wait up to 2 s, then skip the last write | same |
+| Q-R6 | Review | Accessibility scope (APP-01/02) | ✅ ACCEPTED 2026-09-24 — (a) user-facing windows (Main, Settings, Action Profiles, Recovery, Batch Review); Benchmark/Diagnostics best-effort | same |
+| Q-R7 | Review r2 | Opaque PNG/WebP previews are never disk-cached (`Pbgra32`, R2-A-03) | 🔄 PROPOSED — default (a) scan alpha on the downscaled bitmap, cache only when no pixel has A<255; (b) lossless PNG payload; (c) keep as is | [round2/adversarial.md](../archive/evidence/review-2026-09-25/round2/adversarial.md) |
+| Q-R8 | Review r2 | Recycle on removable/network/UNC drives (R2-F-05): fixed drives unchanged; other drives are now refused (file kept) because Windows deletes there permanently | 🔄 PROPOSED — default: refuse with a message; alternative: ask "delete permanently?" | [round2/fresh.md](../archive/evidence/review-2026-09-25/round2/fresh.md) |
+| Q-R9 | Review r2 | TEST-03 Recycle Bin orphan sweep | ❌ DECLINED 2026-09-25 — a sweep deletes items from the real bin (a subagent mutation run left the bin without `$R` files); tests only clean their own items, the user empties the bin | — |
+| Q-R10 | Review r2 | Opening another photo from Explorer while the app is running (R2-F-09): forward the path to the running instance (needs a named-pipe IPC) or keep the current message | 🔄 PROPOSED — default: implement forwarding in a separate change | [round2/fresh.md](../archive/evidence/review-2026-09-25/round2/fresh.md) |
+| Q-R11 | Review r2 | Session resume is discarded when Explorer order applies (R2-F-10; intentional per 3943fb6); benchmark profiles run with disk cache off (R2-F-22); dead knob `MemoryReserveBytes`, 0.80 vs 0.90 headroom (R2-F-33); per-solution version computation (R2-F-35) | 🔄 OPEN — no default change; product/measurement needed | same |
 
-**Legend:** ✅ Decided · 🔄 Pending · ⏸ Blocked
+**Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 
-**Most critical blocker:** OC14 (kept, re-scoped to "Undo gate location") — still blocks ST08/ST09 and OC15-18. WD01 is unblocked (Q-AR2 = yes, AR04 implements it); WD03-06 closed 2026-09-23 (Q-AR5, no known dialog bug).
+Q-R1..Q-R6: the user answered "follow the recommendation" on 2026-09-24; all implemented on `review/2026-09-25-integration` (one PR, not yet merged). Q-R7..Q-R11 come from round 2 (2026-09-25); answer when convenient.
 
-**All Q-D1..D4, Q-ST1..4, Q-T1..4, Q-OC14, Q-S3, Q-AR1..5, Q-L1..L8, Q-IO1, Q-Z1 are decided** — full table (30 rows, resolution + rationale link per row) archived in [`archive/OPEN-DECISIONS-detail.md`](archive/OPEN-DECISIONS-detail.md). Open work: Q-OC15 above, IO03–IO05 (ADR 0007), OC14, DT10; T89 GUI acceptance by the user.
-
-See [`docs/ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) for current task status.
+**All Q-D1..D4, Q-ST1..4, Q-T1..4, Q-OC14, Q-S3, Q-AR1..5, Q-L1..L8, Q-IO1, Q-Z1 are decided** — full table (30 rows, resolution + rationale link per row) archived in [`archive/OPEN-DECISIONS-detail.md`](archive/OPEN-DECISIONS-detail.md). T89 GUI acceptance stays with the user.

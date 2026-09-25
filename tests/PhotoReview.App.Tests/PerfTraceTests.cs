@@ -229,7 +229,7 @@ public sealed class PerfTraceTests : IDisposable
     [Fact(DisplayName = "A RAM miss served from the preview disk cache emits DiskCacheRead")]
     public async Task DiskCacheHitEmitsDiskCacheRead()
     {
-        var image = _root.File("disk/disk.png", TestImages.PreviewPng);
+        var image = _root.File("disk/disk.png", TestImages.OpaquePng);
         var diskCache = _root.Dir("disk-cache");
         var service = CreatePreviewService(diskCache);
         var pathId = PhotoReviewPerf.PathId(image);

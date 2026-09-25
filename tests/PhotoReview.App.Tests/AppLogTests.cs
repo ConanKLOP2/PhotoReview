@@ -81,6 +81,18 @@ public sealed class AppLogTests : IDisposable
         Assert.Equal(logContents, File.ReadAllText(AppLog.FilePath));
     }
 
+    [Fact(DisplayName = "Unhandled exceptions are recorded and flushed even while logging is off")]
+    public void UnhandledExceptionsAreRecordedWhileLoggingIsOff()
+    {
+        Assert.False(AppLog.Enabled);
+        App.LogUnhandledForced("crash-marker", new InvalidOperationException("boom-detail"));
+        // No FlushAppLog(): the helper itself must have flushed.
+        var text = File.ReadAllText(AppLog.FilePath);
+        Assert.Contains("crash-marker", text, StringComparison.Ordinal);
+        Assert.Contains("boom-detail", text, StringComparison.Ordinal);
+        Assert.False(AppLog.Enabled);
+    }
+
     [Fact(DisplayName = "Concurrent logging preserves every entry")]
     public void ConcurrentLoggingPreservesEveryEntry()
     {

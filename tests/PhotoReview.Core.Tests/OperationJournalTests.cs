@@ -430,6 +430,132 @@ public sealed class OperationJournalUnitTests
         }
     }
 
+    [Theory(DisplayName = "Reverse reader returns exactly the last <=200 committed Moves across window doublings (CORE-08)")]
+    [InlineData(37)]  // dense: a single 256 KB window already holds > 200 Moves
+    [InlineData(400)] // sparse: needs several doublings, each head line cut mid-line
+    [InlineData(5000)] // fewer than 200 Moves overall: reads back to the start of the file
+    public void LargeJournal_ReadCommittedMoves_ReturnsLastMovesAcrossWindows(int movePeriod)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview-C08b-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "operations.jsonl");
+        try
+        {
+            const int totalEntries = 20_000; // ~4.5 MB: over the 1 MB full-scan threshold
+            var tsText = _clock.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            var expected = new List<string>();
+            using (var writer = new StreamWriter(path, false, new UTF8Encoding(false), 256 * 1024))
+            {
+                for (var i = 0; i < totalEntries; i++)
+                {
+                    var id = "e-" + i.ToString(CultureInfo.InvariantCulture);
+                    var isMove = i % movePeriod == 0;
+                    if (isMove) expected.Add(id);
+                    writer.Write(
+                        "{\"Id\":\"" + id + "\",\"Type\":\"" + (isMove ? "Move" : "Recycle") +
+                        "\",\"State\":\"Committed\",\"Source\":\"C:\\\\photos\\\\s-" + id +
+                        ".jpg\",\"Destination\":null,\"Size\":1,\"LastWriteUtc\":\"" + tsText + "\",\"TimestampUtc\":\"" + tsText +
+                        "\",\"Error\":null}\n");
+                }
+            }
+
+            var journal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+
+            Assert.Equal(expected.TakeLast(200), journal.ReadCommittedMoves().Select(e => e.Id));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact(DisplayName = "Move-sparse large journal: reverse reader reads and parses each byte once (CORE-08, ADR 0003)")]
+    [Trait("Category", "Slow")]
+    public void LargeMoveSparseJournal_ReadCommittedMoves_ParsesEachByteOnce()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview-C08-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "operations.jsonl");
+        try
+        {
+            const int totalEntries = 100_000;
+            const int movePeriod = 1_000; // 1 Move per 1,000 Recycle: far fewer than the 200-entry limit, so the whole file is needed
+            var tsText = _clock.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            using (var writer = new StreamWriter(path, false, new UTF8Encoding(false), 256 * 1024))
+            {
+                for (var i = 0; i < totalEntries; i++)
+                {
+                    var id = i.ToString(CultureInfo.InvariantCulture);
+                    var isMove = i % movePeriod == 0;
+                    writer.Write(
+                        "{\"Id\":\"e-" + id + "\",\"Type\":\"" + (isMove ? "Move" : "Recycle") +
+                        "\",\"State\":\"Committed\",\"Source\":\"C:\\\\photos\\\\source-" + (isMove ? "\\\"Type\\\":\\\"Recycle\\\"-" : "") + id + // Move paths embed the skip token (JSON-escaped): must not be skipped
+                        ".jpg\",\"Destination\":" + (isMove ? "\"C:\\\\photos\\\\dest-" + id + ".jpg\"" : "null") +
+                        ",\"Size\":" + id + ",\"LastWriteUtc\":\"" + tsText + "\",\"TimestampUtc\":\"" + tsText +
+                        "\",\"Error\":null}\n");
+                }
+            }
+
+            var fileLength = new FileInfo(path).Length;
+            // Timed on the plain file system (the counting wrapper scans every byte itself); bytes counted in a second read.
+            var timedJournal = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+            _ = timedJournal.ReadCommittedMoves(); // warm-up: JIT + OS file cache, as in a real second launch
+            var watch = Stopwatch.StartNew();
+            var entries = timedJournal.ReadCommittedMoves();
+            watch.Stop();
+
+            var boundedFileSystem = new BoundedReadFileSystem(new PhysicalFileSystem());
+            var journal = new OperationJournal(new FakeAppPaths(path), boundedFileSystem, _clock);
+            Assert.Equal(entries.Select(e => e.Id), journal.ReadCommittedMoves().Select(e => e.Id));
+
+            Assert.Equal(totalEntries / movePeriod, entries.Count);
+            Assert.Equal("e-0", entries[0].Id);
+            Assert.Equal("e-99000", entries[^1].Id);
+
+            // Doubling windows that each re-read the tail would read ~2x the file; reading only the new prefix reads it once.
+            Assert.True(boundedFileSystem.TotalBytesRead <= fileLength + 8 * 1024,
+                $"Read {boundedFileSystem.TotalBytesRead} bytes of a {fileLength}-byte journal (each byte must be read once).");
+            Assert.True(watch.ElapsedMilliseconds < 100,
+                $"Move-sparse tail read took {watch.ElapsedMilliseconds} ms (ADR 0003 budget: 100 ms).");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact(DisplayName = "Recovery list (pending + failed) parses the journal once, not once per state (R2-F-17)")]
+    public void ReadPendingAndFailedOperations_ParsesJournalOnce()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "PhotoReview-F17-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "operations.jsonl");
+        try
+        {
+            var seed = new OperationJournal(new FakeAppPaths(path), new PhysicalFileSystem(), _clock);
+            JournalEntry Entry(string id, JournalState state) => new(id, FileOperationType.Move, state, "C:\\a\\" + id + ".jpg", "C:\\b\\" + id + ".jpg",
+                4, _clock.UtcNow, _clock.UtcNow);
+            seed.Append(Entry("done", JournalState.Prepared));
+            seed.Append(Entry("done", JournalState.Committed));
+            seed.Append(Entry("stuck", JournalState.Prepared));
+            seed.Append(Entry("broken", JournalState.Prepared));
+            seed.Append(Entry("broken", JournalState.Failed));
+            var fileLength = new FileInfo(path).Length;
+
+            var counting = new BoundedReadFileSystem(new PhysicalFileSystem());
+            var journal = new OperationJournal(new FakeAppPaths(path), counting, _clock);
+            var list = journal.ReadPendingAndFailedOperations();
+
+            Assert.Equal(["stuck", "broken"], list.Select(e => e.Id));
+            Assert.True(counting.TotalBytesRead <= fileLength,
+                $"Read {counting.TotalBytesRead} bytes of a {fileLength}-byte journal (one pass expected).");
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>
     /// TS05: wraps <see cref="IFileSystem.OpenReadShared"/> to count bytes actually read and an
     /// approximate line count (newline bytes seen), so the bounded-tail-read contract can be

@@ -241,4 +241,53 @@ public sealed class SettingsStoreTests
         Assert.Equal("D", loaded.Shortcuts.Next);
         Assert.Equal(FileOperationType.Copy, Assert.Single(loaded.Actions).Operation);
     }
+
+    private static readonly string[] ExpectedRepairs =
+        ["ImageCacheCapacityBytes", "SourceBytesCapacityBytes", "PreloadWorkerCount", "PreloadMemoryLoadLimit", "Actions"];
+
+    [Fact(DisplayName = "Load resets unusable numeric values and null actions to safe defaults and reports them (R2-F-04)")]
+    public void Load_WhenConfigHoldsUnusableValues_ResetsThemAndReportsRepairs()
+    {
+        var json = """
+        {
+            "ImageCacheCapacityBytes": 0,
+            "SourceBytesCapacityBytes": -5,
+            "PreloadWorkerCount": -1,
+            "PreloadMemoryLoadLimit": 7.5,
+            "Actions": [null, { "Name": "Keep", "Shortcut": "F9", "Operation": "Move", "Destination": "K" }]
+        }
+        """;
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, json);
+
+        var loaded = _store.Load();
+
+        Assert.Equal(PerformanceOptions.ImageCacheCapacityBytes, loaded.ImageCacheCapacityBytes);
+        Assert.Equal(PerformanceOptions.SourceBytesCapacityBytes, loaded.SourceBytesCapacityBytes);
+        Assert.Equal(PerformanceOptions.PreloadWorkerCount, loaded.PreloadWorkerCount);
+        Assert.Equal(PerformanceOptions.PreloadMemoryLoadLimit, loaded.PreloadMemoryLoadLimit);
+        var action = Assert.Single(loaded.Actions);
+        Assert.Equal("Keep", action.Name);
+        Assert.Equal(ExpectedRepairs.Order(), _store.LastLoadRepairs.Order());
+    }
+
+    [Fact(DisplayName = "Load of a valid config reports no repairs")]
+    public void Load_WhenConfigIsValid_ReportsNoRepairs()
+    {
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, "{ \"LoggingEnabled\": true }");
+
+        _store.Load();
+
+        Assert.Empty(_store.LastLoadRepairs);
+    }
+
+    [Fact(DisplayName = "Normalize resets an out-of-range enum value")]
+    public void Normalize_WhenEnumIsOutOfRange_ResetsToDefault()
+    {
+        var settings = new AppSettings { LoadingMode = (LoadingMode)99 };
+
+        var repaired = SettingsNormalizer.Normalize(settings);
+
+        Assert.Equal(LoadingMode.Preview, settings.LoadingMode);
+        Assert.Equal(nameof(AppSettings.LoadingMode), Assert.Single(repaired));
+    }
 }

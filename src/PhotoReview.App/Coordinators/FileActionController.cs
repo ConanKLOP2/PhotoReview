@@ -25,7 +25,7 @@ public sealed class FileActionController
     private readonly IDialogService? _dialogService;
     private readonly IPreloadController? _preloadController;
     private readonly INaturalComparer _naturalComparer;
-    private readonly AppSettings _settings;
+    private readonly Func<AppSettings> _getSettings;
     private readonly IFileActionSink _sink;
 
     public FileActionController(
@@ -36,7 +36,7 @@ public sealed class FileActionController
         IDialogService? dialogService,
         IPreloadController? preloadController,
         INaturalComparer naturalComparer,
-        AppSettings settings,
+        Func<AppSettings> getSettings,
         IFileActionSink sink)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -46,14 +46,15 @@ public sealed class FileActionController
         _dialogService = dialogService;
         _preloadController = preloadController;
         _naturalComparer = naturalComparer ?? throw new ArgumentNullException(nameof(naturalComparer));
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _getSettings = getSettings ?? throw new ArgumentNullException(nameof(getSettings));
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
     }
 
     public async Task RunActionAsync(int index, string? compareSelectedPath, string? currentPath)
     {
         if (_catalog.Count == 0) return;
-        var actions = _settings.Actions;
+        // Read at use time: Settings > Save replaces the AppSettings instance (R2-F-03).
+        var actions = _getSettings().Actions;
         if (index < 0 || index >= actions.Count) return;
 
         var action = actions[index];
@@ -114,7 +115,7 @@ public sealed class FileActionController
         if (isRemove)
         {
             nextIndex = _catalog.Remove(source);
-            _sink.OnCatalogChanged();
+            _sink.OnCatalogChanged(source);
 
             // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
             if (nextIndex >= 0)
@@ -187,7 +188,7 @@ public sealed class FileActionController
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source))
         {
             _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
-            _sink.OnCatalogChanged();
+            _sink.OnCatalogChanged(null);
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
             {
