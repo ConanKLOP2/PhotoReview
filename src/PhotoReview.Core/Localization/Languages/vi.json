@@ -482,5 +482,8 @@
   "status.moveCopyTo.notAbsolute": "Không thực hiện được {actionName}: hãy chọn đường dẫn thư mục đầy đủ (có ký tự ổ đĩa).",
   "status.moveCopyTo.sameFolder": "Không thực hiện được {actionName}: đó chính là thư mục ảnh đang xem. Hãy chọn thư mục khác.",
   "status.moveCopyTo.folderMissing": "Không thực hiện được {actionName}: thư mục không tồn tại: {folder}",
-  "status.moveCopyTo.stateChanged": "Không thực hiện được {actionName}: thư mục, ảnh hoặc một thao tác tệp khác đã thay đổi trong lúc hộp thoại chọn thư mục đang mở. Không có gì bị thay đổi."
+  "status.moveCopyTo.stateChanged": "Không thực hiện được {actionName}: thư mục, ảnh hoặc một thao tác tệp khác đã thay đổi trong lúc hộp thoại chọn thư mục đang mở. Không có gì bị thay đổi.",
+  "app.alreadyRunningNoResponse": "Photo Review đang chạy nhưng không phản hồi. Hãy đóng nó rồi thử lại.",
+  "status.folderOpenedInOtherWindow": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác; yêu cầu đã được chuyển sang đó.",
+  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác nhưng cửa sổ đó không phản hồi. Cửa sổ này giữ nguyên thư mục hiện tại."
 }

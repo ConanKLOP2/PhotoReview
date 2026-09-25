@@ -233,10 +233,48 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public async Task OpenFolderAsync(string folder, string? initialPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        // Q-R18: every folder open (command line, drop, forwarded, sibling navigation) passes the instance ownership
+        // first. The common case completes synchronously, so this adds no dispatcher yield.
+        var ownership = FolderOwnership;
+        if (ownership is not null)
+        {
+            var decision = await ownership.BeforeOpenAsync(folder, initialPath);
+            if (decision != PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
+            {
+                var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
+                StatusText = decision == PhotoReview.Core.Instance.FolderOpenDecision.ForwardedToOtherInstance
+                    ? Tr.StatusFolderOpenedInOtherWindow(name)
+                    : Tr.StatusFolderOpenInOtherWindowNoResponse(name);
+                NotifyNavigationStateChanged();
+                return;
+            }
+        }
         _statusText = string.Empty;
-        FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
-        await FolderLoadTask;
+        try
+        {
+            FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
+            await FolderLoadTask;
+        }
+        finally
+        {
+            ownership?.AfterOpen(folder, _shownFolder);
+        }
         NotifyNavigationStateChanged();
+    }
+
+    /// <summary>
+    /// Q-R18: single-instance lock/pipe ownership of the shown folder, set by the composition root (App). Null (tests,
+    /// benchmark host) = no instance checks.
+    /// </summary>
+    public PhotoReview.Core.Instance.IFolderOwnership? FolderOwnership { get; set; }
+
+    /// <summary>Q-R18: the folder whose catalog this window shows (set when a load reaches the catalog).</summary>
+    private string? _shownFolder;
+
+    private void OnFolderShown(string folder)
+    {
+        _shownFolder = folder;
+        FolderOwnership?.OnFolderShown(folder);
     }
 
     /// <summary>
@@ -556,6 +594,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
+        OnFolderShown(folder);
         if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
         SetFolderText(folder, count, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
@@ -575,6 +614,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _preloadController?.Cancel();
         _sessionWriter?.Flush();
         _currentSession = _sessionStore.Load(folder);
+        OnFolderShown(folder);
         SetFolderText(folder, 0, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
         StatusText = StatusFormatter.NoSupportedImages();

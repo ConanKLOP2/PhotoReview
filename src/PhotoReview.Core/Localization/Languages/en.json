@@ -488,5 +488,8 @@
   "status.moveCopyTo.notAbsolute": "Could not run {actionName}: choose a full folder path (with a drive letter).",
   "status.moveCopyTo.sameFolder": "Could not run {actionName}: that is the photo folder itself. Choose another folder.",
   "status.moveCopyTo.folderMissing": "Could not run {actionName}: the folder does not exist: {folder}",
-  "status.moveCopyTo.stateChanged": "Could not run {actionName}: the folder, the photo or another file operation changed while the folder dialog was open. Nothing was changed."
+  "status.moveCopyTo.stateChanged": "Could not run {actionName}: the folder, the photo or another file operation changed while the folder dialog was open. Nothing was changed.",
+  "app.alreadyRunningNoResponse": "Photo Review is already running but did not respond. Close it and try again.",
+  "status.folderOpenedInOtherWindow": "\"{folder}\" is open in another Photo Review window; the request was sent there.",
+  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" is open in another Photo Review window that did not respond. This window keeps the current folder."
 }

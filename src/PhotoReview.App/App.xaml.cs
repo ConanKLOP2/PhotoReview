@@ -19,8 +19,7 @@ namespace PhotoReview.App;
 
 public partial class App : System.Windows.Application, IDisposable
 {
-    private InstanceLock? _instanceLock;
-    private IInstanceForwardServer? _forwardServer;
+    private InstanceScope? _instanceScope;
     private ForwardedOpenCoalescer? _forwardCoalescer;
     private PerfCsvListener? _perfListener;
     private PerfDispatcherHooks? _perfHooks;
@@ -289,33 +288,40 @@ public partial class App : System.Windows.Application, IDisposable
         AppDomain.CurrentDomain.UnhandledException += (_, a) => LogUnhandledForced("AppDomain exception", a.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, a) => { LogUnhandledForced("Unobserved task exception", a.Exception); a.SetObserved(); };
         Exit += (_, _) => Dispose();
-        _instanceLock = new InstanceLock(lockFolder, _services.GetRequiredService<ILog>());
-        var forwardPipeName = InstanceForwardPipe.NameFor(lockFolder);
-        if (!_instanceLock.IsOwner)
-        {
-            // Q-R10: hand the request to the instance that already owns this folder instead of showing an error.
-            // No answer within the timeout (stale mutex) keeps the previous behaviour.
-            var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
-            var forwarded = await SecondInstanceHandoff.TryForwardAsync(
-                new InstanceForwardClient(forwardPipeName, _services.GetRequiredService<ILog>(), allowServerForeground: true),
-                existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
-            if (!forwarded)
-            {
-                _services.GetRequiredService<IDialogService>().ShowMessage(PhotoReview.Core.Localization.Tr.AppTitle, PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance);
-            }
-            _instanceLock.Dispose();
-            _instanceLock = null;
-            Shutdown(0);
-            return;
-        }
-        // Listen right away: a second launch made while this one is still starting waits for the pipe (up to its timeout).
+        // Q-R18: the instance mode comes from the settings loaded above, i.e. before any lock is taken; a change made in
+        // Settings therefore applies at the next start. SingleWindow = one app-wide lock + pipe; PerFolder = the lock and
+        // pipe of the launch folder, which then follow the folder the window shows (see InstanceScope).
         var uiScheduler = _services.GetRequiredService<IUiScheduler>();
         _forwardCoalescer = new ForwardedOpenCoalescer(
             path => uiScheduler.Post(() => OpenForwarded(path)), ForwardCoalesceWindow, _services.GetRequiredService<ILog>());
-        _forwardServer = new InstanceForwardServer(forwardPipeName, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>());
-        _forwardServer.Start();
+        _instanceScope = new InstanceScope(
+            appSettings.InstanceMode, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>(), allowServerForeground: true);
+        // Listen right away (the scope starts the pipe with the lock): a second launch made while this one is still
+        // starting waits for the pipe (up to its timeout).
+        if (!_instanceScope.TryAcquire(lockFolder))
+        {
+            // Q-R10: hand the request to the instance that already owns this folder (or, SingleWindow, the app) instead
+            // of showing an error; with no path the owner just comes to the front. No answer within the timeout (stale
+            // mutex) keeps the previous behaviour.
+            var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
+            var forwarded = await SecondInstanceHandoff.TryForwardAsync(
+                _instanceScope.CreateClient(lockFolder), existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
+            if (!forwarded)
+            {
+                _services.GetRequiredService<IDialogService>().ShowMessage(
+                    PhotoReview.Core.Localization.Tr.AppTitle,
+                    _instanceScope.Mode == PhotoReview.Core.Model.InstanceMode.PerFolder
+                        ? PhotoReview.Core.Localization.Tr.FolderAlreadyOpenInOtherInstance
+                        : PhotoReview.Core.Localization.Tr.AppAlreadyRunningNoResponse);
+            }
+            Interlocked.Exchange(ref _instanceScope, null)?.Dispose();
+            Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
+            Shutdown(0);
+            return;
+        }
         PhotoReviewPerf.StartupMark("instanceLock");
         var window = _services.GetRequiredService<MainWindow>();
+        window.ViewModel.FolderOwnership = _instanceScope;
         PhotoReviewPerf.StartupMark("mainWindowConstructed");
         window.InitializeWithInitialPath(initial ?? initialFolder);
         MainWindow = window;
@@ -374,10 +380,10 @@ public partial class App : System.Windows.Application, IDisposable
     {
         GC.SuppressFinalize(this);
         _services?.GetService<SessionWriter>()?.Flush();
-        Interlocked.Exchange(ref _forwardServer, null)?.Dispose();
+        _instanceScope?.StopListening();
         Interlocked.Exchange(ref _forwardCoalescer, null)?.Dispose();
         AppLog.Shutdown(); // after the forward server/coalescer so their shutdown warnings still reach the log
-        Interlocked.Exchange(ref _instanceLock, null)?.Dispose();
+        Interlocked.Exchange(ref _instanceScope, null)?.Dispose();
         _perfHooks?.Detach();
         _perfListener?.Dispose();
         _perfListener = null;
