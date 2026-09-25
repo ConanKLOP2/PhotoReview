@@ -26,6 +26,8 @@ public static class PerfAnalyzeReport
         sb.AppendLine();
         sb.AppendLine(FormattableString.Invariant($"- perf-*.csv files: {result.CsvFileCount}"));
         sb.AppendLine(FormattableString.Invariant($"- Groups (scenario/mode/cond/workers): {result.Groups.Count}"));
+        foreach (var g in result.Groups.Where(g => g.Summary.DroppedRows > 0))
+            sb.AppendLine(FormattableString.Invariant($"- WARNING: {Escape(g.Summary.Key.ToString())}: dropped {g.Summary.DroppedRows} events (listener queue overflow); percentiles and counts for this group are incomplete"));
         sb.AppendLine();
 
         sb.AppendLine("## Navigation groups (scenario/mode/cond/workers)");
@@ -36,7 +38,7 @@ public static class PerfAnalyzeReport
         {
             var s = g.Summary;
             sb.AppendLine(FormattableString.Invariant(
-                $"| {s.Key} | {s.Count} | {s.Incomplete} | {Ms(s.FirstP50)} | {Ms(s.FirstP95)} | {Ms(s.FirstMax)} | {Ms(s.FinalP50)} | {Ms(s.FinalP95)} | {Ms(s.FinalMax)} | {Ms(s.RenderedFrameP50)} | {Ms(s.RenderedFrameP95)} | {Ms(s.RenderedFrameMax)} | {Pct(s.HitRate)} | {(s.LowSampleWarning ? "N<20" : "")} |"));
+                $"| {Escape(s.Key.ToString())} | {s.Count} | {s.Incomplete} | {Ms(s.FirstP50)} | {Ms(s.FirstP95)} | {Ms(s.FirstMax)} | {Ms(s.FinalP50)} | {Ms(s.FinalP95)} | {Ms(s.FinalMax)} | {Ms(s.RenderedFrameP50)} | {Ms(s.RenderedFrameP95)} | {Ms(s.RenderedFrameMax)} | {Pct(s.HitRate)} | {(s.LowSampleWarning ? "N<20" : "")} |"));
         }
         sb.AppendLine();
 
@@ -46,7 +48,7 @@ public static class PerfAnalyzeReport
         sb.AppendLine("|---|---|---:|");
         foreach (var g in result.Groups)
         foreach (var (kind, count) in g.Summary.KindCounts.OrderByDescending(kv => kv.Value))
-            sb.AppendLine(FormattableString.Invariant($"| {g.Summary.Key} | {kind} | {count} |"));
+            sb.AppendLine(FormattableString.Invariant($"| {Escape(g.Summary.Key.ToString())} | {Escape(kind)} | {count} |"));
         sb.AppendLine();
 
         sb.AppendLine("## Phase share in the slowest 10% of navigations (mean t_x/finalVisual)");
@@ -55,7 +57,7 @@ public static class PerfAnalyzeReport
         sb.AppendLine("|---|---|---:|");
         foreach (var g in result.Groups)
         foreach (var (phase, share) in g.Summary.SlowestPhaseShare.OrderByDescending(kv => kv.Value))
-            sb.AppendLine(FormattableString.Invariant($"| {g.Summary.Key} | {phase} | {Pct(share)} |"));
+            sb.AppendLine(FormattableString.Invariant($"| {Escape(g.Summary.Key.ToString())} | {Escape(phase)} | {Pct(share)} |"));
         sb.AppendLine();
 
         sb.AppendLine("## Preload");
@@ -68,7 +70,7 @@ public static class PerfAnalyzeReport
             var queueWaits = s.PreloadItems.Select(p => p.QueueWaitMs).OrderBy(v => v).ToList();
             var decodeMs = s.PreloadItems.Where(p => p.Kind == "decoded").Select(p => p.Ms).OrderBy(v => v).ToList();
             sb.AppendLine(FormattableString.Invariant(
-                $"| {s.Key} | {(s.PreloadWorkers?.ToString(CultureInfo.InvariantCulture) ?? "?")} | {s.PreloadItems.Count} | {s.PreloadPausedCount} | {s.PreloadCancelCount} | {Ms(PercentileOrNaN(queueWaits, 50))} | {Ms(PercentileOrNaN(queueWaits, 95))} | {Ms(PercentileOrNaN(decodeMs, 50))} | {Ms(PercentileOrNaN(decodeMs, 95))} |"));
+                $"| {Escape(s.Key.ToString())} | {(s.PreloadWorkers?.ToString(CultureInfo.InvariantCulture) ?? "?")} | {s.PreloadItems.Count} | {s.PreloadPausedCount} | {s.PreloadCancelCount} | {Ms(PercentileOrNaN(queueWaits, 50))} | {Ms(PercentileOrNaN(queueWaits, 95))} | {Ms(PercentileOrNaN(decodeMs, 50))} | {Ms(PercentileOrNaN(decodeMs, 95))} |"));
         }
         sb.AppendLine();
 
@@ -85,9 +87,9 @@ public static class PerfAnalyzeReport
             var top5 = s.DispatcherLongOps.GroupBy(d => d.Name)
                 .Select(gr => (Name: gr.Key, Count: gr.Count(), Total: gr.Sum(x => x.Ms)))
                 .OrderByDescending(x => x.Total).Take(5)
-                .Select(x => FormattableString.Invariant($"{x.Name}×{x.Count} ({x.Total:F1}ms)"));
+                .Select(x => FormattableString.Invariant($"{Escape(x.Name)}×{x.Count} ({x.Total:F1}ms)"));
             sb.AppendLine(FormattableString.Invariant(
-                $"| {s.Key} | {s.DispatcherLongOps.Count} | {s.DispatcherLongOpsBeforeStartCount} | {s.DispatcherLongOps.Sum(d => d.Ms):F1} | {string.Join("; ", top5)} |"));
+                $"| {Escape(s.Key.ToString())} | {s.DispatcherLongOps.Count} | {s.DispatcherLongOpsBeforeStartCount} | {s.DispatcherLongOps.Sum(d => d.Ms):F1} | {string.Join("; ", top5)} |"));
         }
         sb.AppendLine();
 
@@ -98,7 +100,7 @@ public static class PerfAnalyzeReport
         foreach (var g in result.Groups)
         foreach (var f in g.Summary.FolderGens.OrderBy(f => f.Gen))
             sb.AppendLine(FormattableString.Invariant(
-                $"| {g.Summary.Key} | {f.Gen} | {Ms(f.T1CatalogReadyMs)} | {Ms(f.T2Ms)} | {f.T3Phase} | {Ms(f.T3Ms)} |"));
+                $"| {Escape(g.Summary.Key.ToString())} | {f.Gen} | {Ms(f.T1CatalogReadyMs)} | {Ms(f.T2Ms)} | {Escape(f.T3Phase)} | {Ms(f.T3Ms)} |"));
         sb.AppendLine();
 
         sb.AppendLine("## Startup (ms since process start, median across runs)");
@@ -108,7 +110,7 @@ public static class PerfAnalyzeReport
         foreach (var g in result.Groups)
         foreach (var phase in StartupPhases(g.Summary))
             sb.AppendLine(FormattableString.Invariant(
-                $"| {g.Summary.Key} | {phase.Phase} | {phase.Median:F1} | {phase.Min:F1} | {phase.Max:F1} | {phase.Count} |"));
+                $"| {Escape(g.Summary.Key.ToString())} | {Escape(phase.Phase)} | {phase.Median:F1} | {phase.Min:F1} | {phase.Max:F1} | {phase.Count} |"));
         sb.AppendLine();
 
         sb.AppendLine("## Decision rules (rules.json)");
@@ -118,7 +120,7 @@ public static class PerfAnalyzeReport
         foreach (var g in result.Groups)
         foreach (var r in g.Rules)
             sb.AppendLine(FormattableString.Invariant(
-                $"| {g.Summary.Key} | {r.Rule} | {(r.Triggered is null ? "N/A" : r.Triggered.Value ? "yes" : "no")} | {Escape(r.Evidence)} | {Escape(r.Note ?? "")} |"));
+                $"| {Escape(g.Summary.Key.ToString())} | {Escape(r.Rule)} | {(r.Triggered is null ? "N/A" : r.Triggered.Value ? "yes" : "no")} | {Escape(r.Evidence)} | {Escape(r.Note ?? "")} |"));
 
         File.WriteAllText(path, sb.ToString());
     }
@@ -137,6 +139,7 @@ public static class PerfAnalyzeReport
                 count = g.Summary.Count,
                 incomplete = g.Summary.Incomplete,
                 lowSampleWarning = g.Summary.LowSampleWarning,
+                droppedRows = g.Summary.DroppedRows,
                 firstVisualMs = new { p50 = g.Summary.FirstP50, p95 = g.Summary.FirstP95, max = g.Summary.FirstMax },
                 finalVisualMs = new { p50 = g.Summary.FinalP50, p95 = g.Summary.FinalP95, max = g.Summary.FinalMax },
                 renderedFrameMs = new { p50 = g.Summary.RenderedFrameP50, p95 = g.Summary.RenderedFrameP95, max = g.Summary.RenderedFrameMax },
@@ -180,5 +183,5 @@ public static class PerfAnalyzeReport
 
     private static string Ms(double? value) => value is null || double.IsNaN(value.Value) ? "N/A" : value.Value.ToString("F1", CultureInfo.InvariantCulture);
     private static string Pct(double value) => double.IsNaN(value) ? "N/A" : (value * 100).ToString("F1", CultureInfo.InvariantCulture) + "%";
-    private static string Escape(string value) => value.Replace("|", "\\|").Replace("\n", " ");
+    private static string Escape(string value) => value.Replace("|", "\\|").Replace("\r", " ").Replace("\n", " ");
 }

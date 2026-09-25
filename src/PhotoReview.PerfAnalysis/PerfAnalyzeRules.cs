@@ -42,6 +42,10 @@ public sealed record RuleResult(string Rule, bool? Triggered, string Evidence, s
 /// </summary>
 public static class PerfRules
 {
+    /// <summary>"12.3ms", or "N/A" for an absent/NaN value (a null or NaN must never print as empty text or "NaN" in evidence).</summary>
+    private static string FmtMs(double? value) =>
+        value is { } v && !double.IsNaN(v) ? FormattableString.Invariant($"{v:F1}ms") : "N/A";
+
     /// <summary>R-IO: in the SourceMiss group, (t_open+t_read) share of finalVisual is high, or the
     /// source is opened too many times per image. t_open is never emitted by the current app (no
     /// call site yet) and t_read only exists under PHOTOREVIEW_DIAG_PREREAD, so this is N/A when
@@ -92,7 +96,7 @@ public static class PerfRules
 
         var evidence =
             FormattableString.Invariant($"avg((t_input+t_assign+t_render)/finalVisual)={(avgShare is { } sv ? FormattableString.Invariant($"{sv:F1}%") : "N/A")} ") +
-            FormattableString.Invariant($"(threshold {sharePct}%); RamHit finalVisual P95={ramHitFinalP95:F1}ms (threshold {ramHitP95Threshold}ms); ") +
+            FormattableString.Invariant($"(threshold {sharePct}%); RamHit finalVisual P95={FmtMs(ramHitFinalP95)} (threshold {ramHitP95Threshold}ms); ") +
             FormattableString.Invariant($"frameTime P95={(frameTimeP95Ms is { } f ? FormattableString.Invariant($"{f:F1}ms") : "N/A")} (threshold {frameThreshold}ms)");
 
         if (avgShare is null && double.IsNaN(ramHitFinalP95) && frameTimeP95Ms is null)
@@ -183,8 +187,8 @@ public static class PerfRules
         var withT2 = gens.Where(g => g.T2Ms.HasValue).ToList();
         if (withT2.Count == 0)
             return new RuleResult("R-FOLDER", null, "No folder generation has T2 (first image presented).");
-        var worst = withT2.OrderByDescending(g => g.T2Ms).First();
+        var worst = withT2.MaxBy(g => g.T2Ms)!;
         return new RuleResult("R-FOLDER", worst.T2Ms > thresholdMs,
-            FormattableString.Invariant($"worst T0->T2={worst.T2Ms:F1}ms (gen={worst.Gen}, T1 catalogReady={worst.T1CatalogReadyMs:F1}ms, T3 {worst.T3Phase}={worst.T3Ms:F1}ms; threshold {thresholdMs}ms)"));
+            FormattableString.Invariant($"worst T0->T2={FmtMs(worst.T2Ms)} (gen={worst.Gen}, T1 catalogReady={FmtMs(worst.T1CatalogReadyMs)}, T3 {worst.T3Phase}={FmtMs(worst.T3Ms)}; threshold {thresholdMs}ms)"));
     }
 }

@@ -9,7 +9,6 @@ namespace PhotoReview.PerfAnalysis;
 public sealed class NavRecord
 {
     public long Nav { get; init; }
-    public string SourceFile { get; init; } = "";
 
     public string Mode { get; set; } = "";
     public int Index { get; set; }
@@ -55,10 +54,6 @@ public sealed class NavRecord
     /// <summary>RamHit | InflightJoin | DiskCacheHit | SourceMiss, optionally prefixed
     /// "Thumbnail+" when a thumbnail was shown first (plan mục 3).</summary>
     public string Kind { get; set; } = "Unknown";
-
-    /// <summary>Sum of every t_post_* phase recorded via PostStart/PostEnd (preloadKick, compare,
-    /// hash, dims, session, ...).</summary>
-    public double TPostTotalMs => PostMs.Count == 0 ? 0 : PostMs.Values.Sum();
 }
 
 public sealed record PreloadItemRow(int Slot, string PathId, double QueueWaitMs, string Kind, double Ms);
@@ -76,7 +71,6 @@ public sealed class FolderGenSummary
 /// <summary>Everything reassembled from one perf-*.csv file's rows (D11 spec items 1-5).</summary>
 public sealed class PerfFileAnalysis
 {
-    public required PerfCsvFile File { get; init; }
     public List<NavRecord> Navs { get; } = [];
     public List<PreloadItemRow> PreloadItems { get; } = [];
     public int PreloadPausedCount { get; set; }
@@ -106,7 +100,7 @@ public static class PerfAnalyzeNavBuilder
 
     public static PerfFileAnalysis Build(PerfCsvFile file)
     {
-        var result = new PerfFileAnalysis { File = file };
+        var result = new PerfFileAnalysis();
 
         var byNav = new Dictionary<long, List<PerfRow>>();
         var keyInputs = new List<PerfRow>();
@@ -229,7 +223,7 @@ public static class PerfAnalyzeNavBuilder
     private static NavRecord BuildNavRecord(PerfCsvFile file, long navId, List<PerfRow> rows, List<PerfRow> keyInputs)
     {
         var ordered = rows.OrderBy(r => r.QpcTicks).ToList();
-        var rec = new NavRecord { Nav = navId, SourceFile = file.Path };
+        var rec = new NavRecord { Nav = navId };
 
         var showStart = ordered.FirstOrDefault(r => r.Event == "ShowStart");
         var t0Qpc = showStart?.QpcTicks ?? ordered[0].QpcTicks;
