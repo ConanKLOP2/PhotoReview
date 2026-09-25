@@ -1,6 +1,6 @@
 # ADR 0004: Tách project `Presentation` khỏi App (ST12 — điều tra)
 
-- Ngày: 2026-09-20. Trạng thái: **đề xuất, chờ người dùng duyệt** (ST12 chỉ điều tra, không sửa source).
+- Ngày: 2026-09-20. Trạng thái: **Chấp nhận (Accepted) — không tách project** (người dùng duyệt khuyến nghị; ST12 chỉ điều tra, không sửa source).
 - Khuyến nghị: **chưa làm**. Không có consumer nào bỏ được tham chiếu tới `PhotoReview.App`.
 - Thay thế bản nháp đầu của ADR này: bản đó lập luận "vòng phụ thuộc" (sai — App → Presentation là một chiều) và có ước lượng thời gian build chưa đo (đã bỏ).
 
