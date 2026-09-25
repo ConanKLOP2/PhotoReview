@@ -15,6 +15,8 @@ internal static class WicGuids
     public static readonly Guid GUID_WICPixelFormat32bppBGRA = new("6fddc324-4e03-4bfe-b185-3d77768dc90f");
     public static readonly Guid GUID_WICPixelFormat32bppBGR = new("6fddc324-4e03-4bfe-b185-3d77768dc90e");
     public static readonly Guid GUID_WICPixelFormat32bppPBGRA = new("6fddc324-4e03-4bfe-b185-3d77768dc910");
+    public static readonly Guid GUID_ContainerFormatJpeg = new("19e4a5aa-5662-4fc5-a0c0-1758028e1057");
+    public static readonly Guid GUID_ContainerFormatTiff = new("163bcc30-e2e9-4f0b-961d-a3e9fdb788a3");
 
     // Pixel formats WIC defines without an alpha channel. Anything not listed is treated as
     // potentially transparent and decoded to premultiplied BGRA (see WicDirectDecoder).
@@ -235,7 +237,10 @@ internal interface IWICMetadataQueryReader
 {
     void GetContainerFormat(out Guid pguidContainerFormat);
     void GetLocation(uint cchMaxLength, [Out] char[] wzNamespace, out uint pcchActualLength);
-    void GetMetadataByName(string wzName, IntPtr pvarValue);
+    // PreserveSig: a missing tag (WINCODEC_ERR_PROPERTYNOTFOUND) is the normal case when reading several EXIF
+    // tags; returning the HRESULT avoids a first-chance COMException per absent tag on the decode path.
+    [PreserveSig]
+    int GetMetadataByName([MarshalAs(UnmanagedType.LPWStr)] string wzName, IntPtr pvarValue);
     void GetEnumerator(out IntPtr ppIEnumString);
 }
 

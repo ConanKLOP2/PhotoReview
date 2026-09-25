@@ -502,5 +502,12 @@
   "dialog.startupRecoveryFailed.message.one": "{count} file operation was interrupted last time and could not be confirmed. Nothing was replayed or deleted. Open Recovery to review it now?",
   "dialog.startupRecoveryFailed.message.other": "{count} file operations were interrupted last time and could not be confirmed. Nothing was replayed or deleted. Open Recovery to review them now?",
   "dialog.exportActions.failed.title": "Export failed",
-  "dialog.exportActions.failed.message": "Could not save the action profile file: {error}"
+  "dialog.exportActions.failed.message": "Could not save the action profile file: {error}",
+  "exif.dimensions": "{width}×{height}",
+  "exif.iso": "ISO {value}",
+  "exif.focalLength": "{value} mm",
+  "exif.aperture": "f/{value}",
+  "exif.shutterFraction": "1/{denominator} s",
+  "exif.shutterSeconds": "{value} s",
+  "main.exif.automationName": "Photo information: {details}"
 }

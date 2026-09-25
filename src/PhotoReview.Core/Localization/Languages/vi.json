@@ -495,5 +495,12 @@
   "dialog.startupRecoveryFailed.title": "Thao tác tệp bị gián đoạn",
   "dialog.startupRecoveryFailed.message.other": "Có {count} thao tác tệp bị gián đoạn ở lần chạy trước và không xác nhận được. Không có gì được thực hiện lại hay bị xóa. Mở Phục hồi để xem ngay?",
   "dialog.exportActions.failed.title": "Xuất thất bại",
-  "dialog.exportActions.failed.message": "Không lưu được tệp thiết lập hành động: {error}"
+  "dialog.exportActions.failed.message": "Không lưu được tệp thiết lập hành động: {error}",
+  "exif.dimensions": "{width}×{height}",
+  "exif.iso": "ISO {value}",
+  "exif.focalLength": "{value} mm",
+  "exif.aperture": "f/{value}",
+  "exif.shutterFraction": "1/{denominator} giây",
+  "exif.shutterSeconds": "{value} giây",
+  "main.exif.automationName": "Thông tin ảnh: {details}"
 }
