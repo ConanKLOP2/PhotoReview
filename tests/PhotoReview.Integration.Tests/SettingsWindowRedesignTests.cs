@@ -94,8 +94,8 @@ public sealed class SettingsWindowRedesignTests
         var type = current.GetType();
         if (type.IsDefined(typeof(FlagsAttribute), inherit: false))
         {
-            var all = Enum.GetValues(type).Cast<Enum>().Aggregate(0L, (acc, v) => acc | Convert.ToInt64(v));
-            var distinct = (Convert.ToInt64(current) ^ all) & all; // flip every defined bit -> always != current when all != 0
+            var all = Enum.GetValues(type).Cast<Enum>().Aggregate(0L, (acc, v) => acc | Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture));
+            var distinct = (Convert.ToInt64(current, System.Globalization.CultureInfo.InvariantCulture) ^ all) & all; // flip every defined bit -> always != current when all != 0
             return Enum.ToObject(type, distinct);
         }
         var values = Enum.GetValues(type).Cast<Enum>().ToList();
