@@ -491,5 +491,10 @@
   "status.moveCopyTo.stateChanged": "Could not run {actionName}: the folder, the photo or another file operation changed while the folder dialog was open. Nothing was changed.",
   "app.alreadyRunningNoResponse": "Photo Review is already running but did not respond. Close it and try again.",
   "status.folderOpenedInOtherWindow": "\"{folder}\" is open in another Photo Review window; the request was sent there.",
-  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" is open in another Photo Review window that did not respond. This window keeps the current folder."
+  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" is open in another Photo Review window that did not respond. This window keeps the current folder.",
+  "main.folderInfo.automationName": "Current folder and the neighbouring image folders",
+  "main.folderInfo.current": "📁 {folder}",
+  "main.folderInfo.pending": "…",
+  "main.folderInfo.previous": "◀ {key}: {folder}",
+  "main.folderInfo.next": "{key}: {folder} ▶"
 }

@@ -160,6 +160,15 @@ public sealed partial class ViewerState : ObservableObject
     /// <summary>Original-relative zoom currently applied, or null in Fit.</summary>
     public double? EffectiveZoom => IsFit ? null : Zoom;
 
+    /// <summary>Original-relative zoom of "actual size": one source pixel per device pixel (ADR 0008).</summary>
+    public const double ActualSizeZoom = 1.0;
+
+    /// <summary>
+    /// Zooms to 100 % = one source pixel per device pixel (ADR 0008). Leaves Fit even when the Fit zoom happens to
+    /// be 1.0, and raises <see cref="ZoomModeChanged"/> so the current image's original is decoded on demand.
+    /// </summary>
+    public void ZoomToActualSize() => SetZoom(ActualSizeZoom);
+
     /// <summary>
     /// Tăng mức zoom thêm 0.25 (tối đa 4.0).
     /// </summary>

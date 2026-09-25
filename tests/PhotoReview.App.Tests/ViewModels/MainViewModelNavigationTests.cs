@@ -13,6 +13,7 @@ using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -342,6 +343,120 @@ public sealed class MainViewModelNavigationTests : IDisposable
         Assert.False(vm.Viewer.IsFullscreen);
     }
 
+    [Fact]
+    public async Task LastAsync_GoesToLastImage_AndBackWithFirst()
+    {
+        var folder = Path.Combine(_tempDir, "album_last");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        CreateImageFile(folder, "b.jpg");
+        CreateImageFile(folder, "c.jpg");
+        var (vm, _, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        var interaction = _clock.CurrentInteraction;
+
+        await vm.LastImageAsync();
+
+        Assert.Equal(2, vm.CurrentIndex);
+        Assert.False(vm.CanNavigateNext);
+        Assert.True(_clock.CurrentInteraction > interaction);
+        await vm.FirstImageAsync();
+        Assert.Equal(0, vm.CurrentIndex);
+    }
+
+    [Fact]
+    public async Task LastAsync_WithoutImages_IsNoOp()
+    {
+        var (vm, _, _) = CreateViewModel();
+        var interaction = _clock.CurrentInteraction;
+
+        await vm.LastAsync();
+
+        Assert.Equal(-1, vm.CurrentIndex);
+        Assert.Equal(interaction, _clock.CurrentInteraction);
+    }
+
+    [Fact]
+    public async Task ZoomActualSize_WithImage_Sets100PercentOfSourcePixels_WithoutImage_IsNoOp()
+    {
+        var (vm, _, _) = CreateViewModel();
+
+        vm.ZoomActualSize();
+        Assert.True(vm.Viewer.IsFit);
+
+        var folder = Path.Combine(_tempDir, "album_zoom100");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        await vm.OpenFolderAsync(folder);
+        vm.ZoomIn();
+
+        vm.ZoomActualSize();
+
+        Assert.False(vm.Viewer.IsFit);
+        Assert.Equal(ViewerState.ActualSizeZoom, vm.Viewer.Zoom);
+        Assert.Equal(1.0, vm.Viewer.EffectiveZoom);
+    }
+
+    [Fact]
+    public void ToggleInfoOverlay_FlipsVisibility_AndPersistsToConfig()
+    {
+        var (vm, _, _) = CreateViewModel();
+        Assert.True(vm.InfoOverlay.IsFileInfoVisible);
+        Assert.True(vm.IsStatusPanelVisible);
+
+        vm.ToggleInfoOverlay();
+
+        Assert.False(vm.InfoOverlay.IsFileInfoVisible);
+        Assert.False(vm.IsStatusPanelVisible);
+        var reloaded = new SettingsStore(new AppPaths(_tempDir), _fileSystem, new NullLog()).Load();
+        Assert.False(reloaded.ShowInfoOverlay);
+
+        vm.ToggleInfoOverlay();
+
+        Assert.True(vm.InfoOverlay.IsFileInfoVisible);
+        Assert.True(new SettingsStore(new AppPaths(_tempDir), _fileSystem, new NullLog()).Load().ShowInfoOverlay);
+    }
+
+    [Fact]
+    public void StatusPanel_StaysVisibleForSkippedFilesWarning_WhenInfoHidden()
+    {
+        var (vm, _, _) = CreateViewModel();
+        vm.Settings = new AppSettings { ShowFileInfo = false };
+        Assert.False(vm.IsStatusPanelVisible);
+
+        ((IFolderLoadSink)vm).OnFilesSkipped(_tempDir, [new SkippedEntry(Path.Combine(_tempDir, "x.jpg"), "locked")]);
+
+        Assert.False(vm.InfoOverlay.IsFileInfoVisible);
+        Assert.True(vm.IsStatusPanelVisible);
+    }
+
+    [Fact]
+    public async Task OpenFolderAsync_ShowsSiblingImageFolders_ThatPageUpPageDownOpen()
+    {
+        var parent = Path.Combine(_tempDir, "sibling_info");
+        foreach (var name in new[] { "2024-05-01", "2024-05-02", "2024-05-02b-empty", "2024-05-03" })
+            Directory.CreateDirectory(Path.Combine(parent, name));
+        CreateImageFile(Path.Combine(parent, "2024-05-01"), "a.jpg");
+        CreateImageFile(Path.Combine(parent, "2024-05-02"), "b.jpg");
+        CreateImageFile(Path.Combine(parent, "2024-05-03"), "c.jpg");
+        var (vm, _, _) = CreateViewModel();
+
+        await vm.OpenFolderAsync(Path.Combine(parent, "2024-05-02"));
+        await vm.InfoOverlay.PendingSiblings.WithTimeout(TimeSpan.FromSeconds(10), "sibling info");
+
+        Assert.True(vm.InfoOverlay.IsFolderInfoVisible);
+        Assert.Equal(
+            string.Join("     ", Tr.MainFolderInfoPrevious("PageUp", "2024-05-01"), Tr.MainFolderInfoCurrent("2024-05-02"), Tr.MainFolderInfoNext("PageDown", "2024-05-03")),
+            vm.InfoOverlay.FolderInfoText);
+
+        // The display agrees with the key: PageDown opens the folder shown on the right (the empty one is skipped).
+        await vm.NextFolderAsync();
+        await vm.InfoOverlay.PendingSiblings.WithTimeout(TimeSpan.FromSeconds(10), "sibling info after switch");
+        Assert.Contains("2024-05-03", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.Equal(
+            string.Join("     ", Tr.MainFolderInfoPrevious("PageUp", "2024-05-02"), Tr.MainFolderInfoCurrent("2024-05-03")),
+            vm.InfoOverlay.FolderInfoText);
+    }
     private sealed class ForwardingFolderLoadSink : IFolderLoadSink
     {
         private readonly Func<IFolderLoadSink> _getSink;

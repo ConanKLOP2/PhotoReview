@@ -415,5 +415,10 @@
   "status.moveCopyTo.stateChanged": "Status bar: aborted because another folder was opened, the photo changed or another file operation started while the picker was open.",
   "app.alreadyRunningNoResponse": "Q-R18 SingleWindow mode: IDialogService.ShowMessage at startup when another instance holds the app lock but did not answer the forward pipe. Caption is app.title.",
   "status.folderOpenedInOtherWindow": "Q-R18 PerFolder mode: status bar text when a folder open was handed to the window that already shows that folder; {folder} = folder name.",
-  "status.folderOpenInOtherWindowNoResponse": "Q-R18 PerFolder mode: status bar text when another window owns the folder but did not answer; this window keeps its folder. {folder} = folder name."
+  "status.folderOpenInOtherWindowNoResponse": "Q-R18 PerFolder mode: status bar text when another window owns the folder but did not answer; this window keeps its folder. {folder} = folder name.",
+  "main.folderInfo.automationName": "AutomationProperties.Name of the bottom-right folder overlay (screen readers).",
+  "main.folderInfo.current": "Bottom-right overlay, middle part: the open folder. {folder} = folder name (not a path). The emoji is a folder icon; keep it.",
+  "main.folderInfo.pending": "Bottom-right overlay placeholder shown after the folder name while the neighbouring folders are being looked up (a fraction of a second). Neutral symbol; usually unchanged.",
+  "main.folderInfo.previous": "Bottom-right overlay, left part: the folder the PreviousFolder key opens. {key} = key name as configured (PageUp; not translated), {folder} = folder name. The arrow points left (previous).",
+  "main.folderInfo.next": "Bottom-right overlay, right part: the folder the NextFolder key opens. {key} = key name as configured (PageDown; not translated), {folder} = folder name. The arrow points right (next)."
 }

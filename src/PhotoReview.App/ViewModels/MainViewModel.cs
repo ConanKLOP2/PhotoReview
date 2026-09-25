@@ -108,6 +108,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             folderPicker: folderPicker, fileSystem: _fileSystem, rememberFolder: RememberMoveCopyFolder);
         _siblingNavigator = new SiblingFolderNavigator(
             _clock, _catalog, _fileSystem, this, () => _currentSession);
+        InfoOverlay = new InfoOverlayViewModel(() => Settings, _siblingNavigator.FindSiblingImageFolders);
+        InfoOverlay.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(InfoOverlayViewModel.IsFileInfoVisible)) OnPropertyChanged(nameof(IsStatusPanelVisible));
+        };
         _duplicateController = new DuplicateCleanupController(
             _clock, _catalog, _fileActionService, _hashService, _fileSystem, _dialogService, _uiScheduler,
             _preloadController, _thumbnailCache, _previewService, this);
@@ -143,8 +148,22 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public AppSettings Settings
     {
         get => _settingsOverride ?? _settingsStore.Current;
-        set => _settingsOverride = value;
+        set
+        {
+            _settingsOverride = value;
+            // Visibility switches and the folder keys shown in the folder line follow the new settings.
+            InfoOverlay.Refresh();
+        }
     }
+
+    /// <summary>On-image info overlays (file block, folder block with sibling folders).</summary>
+    public InfoOverlayViewModel InfoOverlay { get; }
+
+    /// <summary>
+    /// The bottom-left panel is shown when the file info is on, or when there is a skipped-files warning: the warning is
+    /// not "info" and must stay visible even with the overlays hidden.
+    /// </summary>
+    public bool IsStatusPanelVisible => InfoOverlay.IsFileInfoVisible || HasSkippedEntries;
 
     public string FolderTitle
     {
@@ -193,6 +212,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(SkippedEntries));
         OnPropertyChanged(nameof(HasSkippedEntries));
         OnPropertyChanged(nameof(SkippedWarningText));
+        OnPropertyChanged(nameof(IsStatusPanelVisible));
     }
 
     public object? CurrentImage => _presenter.CurrentImage;
@@ -210,6 +230,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public event Action? CatalogChanged;
 
     public Task FirstImageAsync() => FirstAsync();
+
+    public Task LastImageAsync() => LastAsync();
 
     public bool CurrentHasComparePair =>
         _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.Paths[_catalog.CurrentIndex]);
@@ -341,6 +363,19 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     }
 
     /// <summary>
+    /// Điều hướng tới ảnh cuối cùng trong danh mục (đối xứng với <see cref="FirstAsync"/>). Tăng thế hệ tương tác người dùng.
+    /// </summary>
+    public async Task LastAsync()
+    {
+        await WaitForPendingExplorerOrderAsync();
+        if (_catalog.Count == 0) return;
+        _clock.NextInteraction();
+        _statusText = string.Empty;
+        await _presenter.PresentAsync(_catalog.Count - 1);
+        NotifyNavigationStateChanged();
+    }
+
+    /// <summary>
     /// Bỏ qua ảnh hiện tại, ghi nhận vào danh sách Skipped của phiên và chuyển tiếp.
     /// </summary>
     public async Task SkipAsync()
@@ -441,6 +476,33 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public void ToggleFit() => _viewerState.ResetFit();
     public void ZoomIn() => _viewerState.ZoomIn();
     public void ZoomOut() => _viewerState.ZoomOut();
+
+    /// <summary>Zoom to 100 % = one source pixel per device pixel (ADR 0008); no-op without an image.</summary>
+    public void ZoomActualSize()
+    {
+        if (!HasImages) return;
+        _viewerState.ZoomToActualSize();
+    }
+
+    /// <summary>
+    /// Shows/hides all on-image info overlays and persists the choice (config.json, through the same SettingsStore.Save
+    /// as the Settings window, on the UI thread: SettingsStore.Changed listeners are UI-affine, ADR 0005).
+    /// </summary>
+    public void ToggleInfoOverlay()
+    {
+        var settings = Settings;
+        settings.ShowInfoOverlay = !settings.ShowInfoOverlay;
+        InfoOverlay.Refresh();
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The overlay still toggles for this session; only persisting failed.
+            AppLog.Error("Could not save the info overlay setting", ex);
+        }
+    }
     public void ToggleFullscreen() => _viewerState.ToggleFullscreen();
     public void ExitFullscreen() => _viewerState.ExitFullscreen();
 
@@ -502,6 +564,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (changed)
         {
             UpdateFolderTitle();
+            InfoOverlay.Refresh();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
             var newMode = _settingsStore.Current.LoadingMode;
             var newBackend = _settingsStore.Current.DecoderBackend;
@@ -564,6 +627,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         UpdateFolderTitle();
         if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
         OnPropertyChanged(nameof(SkippedWarningText));
+        InfoOverlay.Refresh();
         // StatusText is event text (last action); it switches language with the next update.
     }
 
@@ -598,6 +662,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_skippedEntries.Count > 0) SetSkippedEntries([]); // a new load; OnFilesSkipped follows if needed
         SetFolderText(folder, count, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
+        InfoOverlay.SetFolder(folder);
         _statusText = StatusFormatter.IndexOnly(0, count);
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();
@@ -617,6 +682,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnFolderShown(folder);
         SetFolderText(folder, 0, explorerOrderApplied: false);
         UpdateFolderTitle(folder);
+        InfoOverlay.SetFolder(folder);
         StatusText = StatusFormatter.NoSupportedImages();
         _presenter.ClearPresentation();
         CatalogChanged?.Invoke();

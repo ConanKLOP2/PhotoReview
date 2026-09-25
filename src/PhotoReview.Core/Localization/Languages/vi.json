@@ -485,5 +485,10 @@
   "status.moveCopyTo.stateChanged": "Không thực hiện được {actionName}: thư mục, ảnh hoặc một thao tác tệp khác đã thay đổi trong lúc hộp thoại chọn thư mục đang mở. Không có gì bị thay đổi.",
   "app.alreadyRunningNoResponse": "Photo Review đang chạy nhưng không phản hồi. Hãy đóng nó rồi thử lại.",
   "status.folderOpenedInOtherWindow": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác; yêu cầu đã được chuyển sang đó.",
-  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác nhưng cửa sổ đó không phản hồi. Cửa sổ này giữ nguyên thư mục hiện tại."
+  "status.folderOpenInOtherWindowNoResponse": "\"{folder}\" đang được mở trong một cửa sổ Photo Review khác nhưng cửa sổ đó không phản hồi. Cửa sổ này giữ nguyên thư mục hiện tại.",
+  "main.folderInfo.automationName": "Thư mục hiện tại và các thư mục ảnh liền kề",
+  "main.folderInfo.current": "📁 {folder}",
+  "main.folderInfo.pending": "…",
+  "main.folderInfo.previous": "◀ {key}: {folder}",
+  "main.folderInfo.next": "{key}: {folder} ▶"
 }

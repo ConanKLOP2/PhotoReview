@@ -11,6 +11,7 @@ public enum ReviewCommandType
     NextFolder,
     PreviousFolder,
     FirstImage,
+    LastImage,
     Undo,
     ToggleCompare,
     RunAction,
@@ -19,6 +20,8 @@ public enum ReviewCommandType
     ToggleFit,
     ZoomIn,
     ZoomOut,
+    ZoomActualSize,
+    ToggleInfoOverlay,
     Next,
     Previous,
     MoveToFolder,
@@ -32,10 +35,12 @@ public static class ReviewCommandTypeExtensions
     /// True for commands that change files (Recycle, action profiles, Undo): holding the key must not repeat
     /// them, otherwise photos are sent away faster than they can be looked at (R2-F-06).
     /// Navigation and zoom keys are deliberately not listed so they keep repeating for fast browsing.
+    /// ToggleInfoOverlay is listed too: it flips and SAVES a setting, so holding the key would flicker the overlay
+    /// and rewrite config.json on every repeat.
     /// </summary>
     public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
         type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo
-            or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder;
+            or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder or ReviewCommandType.ToggleInfoOverlay;
 }
 
 /// <summary>
@@ -50,6 +55,7 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand NextFolder => new(ReviewCommandType.NextFolder);
     public static ReviewCommand PreviousFolder => new(ReviewCommandType.PreviousFolder);
     public static ReviewCommand FirstImage => new(ReviewCommandType.FirstImage);
+    public static ReviewCommand LastImage => new(ReviewCommandType.LastImage);
     public static ReviewCommand Undo => new(ReviewCommandType.Undo);
     public static ReviewCommand ToggleCompare => new(ReviewCommandType.ToggleCompare);
     public static ReviewCommand Action(int index) => new(ReviewCommandType.RunAction, index);
@@ -58,6 +64,8 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand ToggleFit => new(ReviewCommandType.ToggleFit);
     public static ReviewCommand ZoomIn => new(ReviewCommandType.ZoomIn);
     public static ReviewCommand ZoomOut => new(ReviewCommandType.ZoomOut);
+    public static ReviewCommand ZoomActualSize => new(ReviewCommandType.ZoomActualSize);
+    public static ReviewCommand ToggleInfoOverlay => new(ReviewCommandType.ToggleInfoOverlay);
     public static ReviewCommand Next => new(ReviewCommandType.Next);
     public static ReviewCommand Previous => new(ReviewCommandType.Previous);
     public static ReviewCommand MoveToFolder(bool forcePicker) => new(ReviewCommandType.MoveToFolder, ForcePicker: forcePicker);

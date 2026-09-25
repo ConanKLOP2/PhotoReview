@@ -1,3 +1,4 @@
+using System.Reflection;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Localization;
 
@@ -16,11 +17,12 @@ public sealed class SettingsValidator
     {
         ArgumentNullException.ThrowIfNull(settings);
         var bindings = new List<(string Name, string Value)>();
-        foreach (var property in typeof(ShortcutMappings).GetProperties())
+        foreach (var property in typeof(ShortcutMappings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue; // Legacy alias; Enter is owned by ReviewAction.
             var value = property.GetValue(settings.Shortcuts)?.ToString()?.Trim();
-            if (string.IsNullOrWhiteSpace(value) && IsOptionalShortcut(property.Name)) continue; // empty = disabled
+            // Optional shortcuts (ShortcutMappings.OptionalNames): empty = feature disabled, not an error.
+            if (string.IsNullOrWhiteSpace(value) && ShortcutMappings.IsOptional(property.Name)) continue;
             if (string.IsNullOrWhiteSpace(value) || !_keyValidator.IsValidKeyName(value))
                 return Tr.CoreSettingsShortcutInvalid(property.Name);
             bindings.Add((property.Name, value));
@@ -34,8 +36,4 @@ public sealed class SettingsValidator
         var duplicate = bindings.GroupBy(item => item.Value, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
         return duplicate is null ? null : Tr.CoreSettingsShortcutDuplicate(duplicate.Key, string.Join(", ", duplicate.Select(item => item.Name)));
     }
-
-    /// <summary>Shortcuts that may be left empty to disable the command (a non-empty value is still checked and must be unique).</summary>
-    private static bool IsOptionalShortcut(string propertyName) =>
-        propertyName is nameof(ShortcutMappings.MoveToFolder) or nameof(ShortcutMappings.CopyToFolder);
 }
