@@ -41,7 +41,11 @@ public static class PerformanceTestHarness
     }
 
     /// <summary>R2-F-31: default report location; the user's photo folder must not receive files from a measurement run.</summary>
-    public static string DefaultReportPath { get; } = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark", "photoreview-performance-report.json");
+    public static string DefaultReportPath =>
+        Path.Combine(DefaultReportDirectoryOverride ?? Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark"), "photoreview-performance-report.json");
+
+    /// <summary>TEST-01: lets tests redirect the default report into a directory they own instead of the shared %TEMP% location.</summary>
+    public static string? DefaultReportDirectoryOverride { get; set; }
 
     public static async Task<PerformanceReport> RunAsync(string folder, int take = 30, int workers = 8,
         string? reportPath = null, CancellationToken cancellationToken = default)

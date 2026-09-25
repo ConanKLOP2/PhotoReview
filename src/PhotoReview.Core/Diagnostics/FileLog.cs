@@ -113,11 +113,33 @@ public sealed class FileLog : ILog, IDisposable
         Flush((int)Math.Max(0, 2000 - (Environment.TickCount64 - start)));
     }
 
+    /// <summary>Test seam (CORE-02): invoked by the writer at the start of every drain.</summary>
+    internal Action? DrainHook { get; set; }
+
+    internal bool IsWriterAlive => _writer is { IsAlive: true };
+
+    internal bool WaitWriterExit(int timeoutMs) => _writer?.Join(timeoutMs) ?? true;
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         Shutdown();
+        // CORE-02: if the writer did not exit within the join budget (blocked in I/O) it is still using these handles
+        // (Drain's finally calls _drained.Set, the loop waits on _signal). Disposing them now would throw
+        // ObjectDisposedException on that background thread; leave them to the finalizer instead.
+        // The writer releases them itself when it finally exits (WriterLoop).
+        if (_writer is { IsAlive: true }) return;
+        ReleaseHandles();
+    }
+
+    private int _handlesReleased;
+
+    internal bool HandlesReleased => Volatile.Read(ref _handlesReleased) != 0;
+
+    private void ReleaseHandles()
+    {
+        if (Interlocked.Exchange(ref _handlesReleased, 1) != 0) return;
         _signal.Dispose();
         _drained.Dispose();
     }
@@ -162,10 +184,12 @@ public sealed class FileLog : ILog, IDisposable
             Drain();
         }
         Drain();
+        if (_disposed) ReleaseHandles(); // Dispose deferred the release because this thread outlived its join timeout
     }
 
     private void Drain()
     {
+        DrainHook?.Invoke();
         if (_queue.IsEmpty)
         {
             _drained.Set();
