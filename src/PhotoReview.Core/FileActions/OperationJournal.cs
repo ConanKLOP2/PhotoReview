@@ -86,7 +86,7 @@ public sealed class OperationJournal
     {
         ArgumentNullException.ThrowIfNull(entries);
         var now = _clock.UtcNow;
-        var dismissed = entries.Select(entry => entry with { State = JournalState.Dismissed, TimestampUtc = now, Error = null }).ToList();
+        var dismissed = entries.Select(entry => entry with { State = JournalState.Dismissed, TimestampUtc = now, Error = null, ErrorCode = null }).ToList();
         if (dismissed.Count > 0) AppendLines(dismissed);
         return dismissed;
     }

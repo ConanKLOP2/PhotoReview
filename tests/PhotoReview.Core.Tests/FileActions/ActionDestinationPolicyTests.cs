@@ -17,6 +17,9 @@ public sealed class ActionDestinationPolicyTests
     [InlineData("/photos", ActionDestinationCheck.InvalidChars)]
     [InlineData("a|b", ActionDestinationCheck.InvalidChars)]
     [InlineData("a:b", ActionDestinationCheck.InvalidChars)]
+    [InlineData("sel*", ActionDestinationCheck.InvalidChars)]
+    [InlineData("a?b", ActionDestinationCheck.InvalidChars)]
+    [InlineData("D:\\Backup\\*", ActionDestinationCheck.InvalidChars)]
     [InlineData("", ActionDestinationCheck.Empty)]
     [InlineData("  ", ActionDestinationCheck.Empty)]
     public void Validate_ClassifiesDestinations(string destination, ActionDestinationCheck expected)

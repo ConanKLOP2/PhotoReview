@@ -32,12 +32,21 @@ public static class JournalStartupRecovery
                 return (outcome, undo.ReadStartupHistory());
             }).ConfigureAwait(false);
 
-            await uiScheduler.InvokeAsync(() => undo.SeedHistory(history)).ConfigureAwait(false);
-
             var failed = reconciled.Where(entry => entry.State == JournalState.Failed).ToList();
             if (reconciled.Count > 0)
                 log?.Warn(string.Format(CultureInfo.InvariantCulture,
                     "Startup journal reconcile: {0} pending operation(s), {1} failed.", reconciled.Count, failed.Count));
+
+            try
+            {
+                await uiScheduler.InvokeAsync(() => undo.SeedHistory(history)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Reconcile already succeeded: losing the Undo bootstrap must not hide the Failed entries from the user.
+                log?.Error("Startup Undo history seeding failed", ex);
+            }
+
             return failed;
         }
         catch (Exception ex)

@@ -93,6 +93,42 @@ public sealed class JournalStartupRecoveryTests
         Assert.False(completedBeforeRelease);
     }
 
+    private sealed class ThrowingUiScheduler : IUiScheduler
+    {
+        public void Post(Action action) => throw new InvalidOperationException("dispatcher gone");
+        public Task InvokeAsync(Action action) => throw new InvalidOperationException("dispatcher gone");
+        public ValueTask YieldAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
+    [Fact(DisplayName = "A failing UI dispatch does not hide the entries reconcile marked Failed")]
+    public async Task RunAsync_SeedThrows_StillReturnsFailed()
+    {
+        _fs.AddFile(@"C:\photos.jpg", "x", WriteTime);
+        _journal.Append(Pending("r1", FileOperationType.Recycle, @"C:\photos.jpg", null, 1, Start.AddMinutes(-1)));
+
+        var failed = await JournalStartupRecovery.RunAsync(_journal, _undo, _clock, new ThrowingUiScheduler());
+
+        Assert.Equal("r1", Assert.Single(failed).Id);
+    }
+
+    [Fact(DisplayName = "Dismissing a Failed entry drops its error code as well as its text")]
+    public void Dismiss_ClearsErrorCode()
+    {
+        var failed = Pending("f1", FileOperationType.Move, @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", 5, Start) with
+        {
+            State = PhotoReview.Core.Model.JournalState.Failed,
+            Error = "boom",
+            ErrorCode = PhotoReview.Core.FileActions.JournalErrors.DestinationOutsideSource,
+        };
+        _journal.Append(failed);
+
+        var dismissed = Assert.Single(_journal.Dismiss([failed]));
+
+        Assert.Null(dismissed.ErrorCode);
+        var lines = _fs.ReadAllText(new AppPaths(@"C:\Users\test\AppData\Local").JournalFile).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.DoesNotContain("ErrorCode", lines[^1], StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "An unreadable journal is logged, not thrown")]
     public async Task RunAsync_JournalReadFails_ReturnsEmpty()
     {
