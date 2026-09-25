@@ -488,5 +488,7 @@
   "settings.exifField.focalLength": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.FocalLength.",
   "settings.exifField.aperture": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.Aperture.",
   "settings.exifField.shutterSpeed": "Settings > Display, EXIF section: per-field checkbox for ExifInfoFields.ShutterSpeed.",
-  "settings.group.exif.hint": "Settings > Display, EXIF section: help text noting that the whole section is hidden whenever the ShowInfoOverlay master switch (shortcut I) is off."
+  "settings.group.exif.hint": "Settings > Display, EXIF section: help text noting that the whole section is hidden whenever the ShowInfoOverlay master switch (shortcut I) is off.",
+  "action.default.name": "Default Name of the built-in actions 2, 3 and 4 ({n} = the number). PERSISTED: fixed in settings.json when the settings are first created, so a later language switch will not rename it. The destination folder (Group-N) is deliberately language-neutral.",
+  "action.default.backup": "Default Name of the built-in Copy-to-Backup action. PERSISTED like action.default.name. Its destination folder "Backup" is not translated."
 }

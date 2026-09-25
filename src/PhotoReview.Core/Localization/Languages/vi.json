@@ -557,5 +557,7 @@
   "settings.exifField.focalLength": "Tiêu cự",
   "settings.exifField.aperture": "Khẩu độ",
   "settings.exifField.shutterSpeed": "Tốc độ màn trập",
-  "settings.group.exif.hint": "Ẩn cùng với lớp thông tin bên trên (phím tắt: I)."
+  "settings.group.exif.hint": "Ẩn cùng với lớp thông tin bên trên (phím tắt: I).",
+  "action.default.name": "Loại {n}",
+  "action.default.backup": "Sao lưu"
 }

@@ -564,5 +564,7 @@
   "settings.exifField.focalLength": "Focal length",
   "settings.exifField.aperture": "Aperture",
   "settings.exifField.shutterSpeed": "Shutter speed",
-  "settings.group.exif.hint": "Hidden together with the info overlay above (shortcut: I)."
+  "settings.group.exif.hint": "Hidden together with the info overlay above (shortcut: I).",
+  "action.default.name": "Action {n}",
+  "action.default.backup": "Backup"
 }
