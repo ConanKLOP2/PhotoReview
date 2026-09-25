@@ -13,6 +13,8 @@ public sealed class Localizer
 
     private static Localizer? s_current;
     private readonly FrozenDictionary<string, LocTemplate> _templates;
+    // baseKey -> (.one, .other) resolved once, so FormatPlural needs one lookup and no string concatenation per call.
+    private readonly FrozenDictionary<string, (LocTemplate? One, LocTemplate Other)> _plurals;
 
     private Localizer(string code, string nativeName, PluralRule plural, FrozenDictionary<string, LocTemplate> templates,
         IReadOnlyList<string> warnings)
@@ -21,6 +23,15 @@ public sealed class Localizer
         NativeName = nativeName;
         Plural = plural;
         _templates = templates;
+        var plurals = new Dictionary<string, (LocTemplate?, LocTemplate)>(StringComparer.Ordinal);
+        const string OtherSuffix = ".other";
+        foreach (var (key, template) in templates)
+        {
+            if (!key.EndsWith(OtherSuffix, StringComparison.Ordinal)) continue;
+            var baseKey = key[..^OtherSuffix.Length];
+            plurals[baseKey] = (templates.GetValueOrDefault(baseKey + ".one"), template);
+        }
+        _plurals = plurals.ToFrozenDictionary(StringComparer.Ordinal);
         Warnings = warnings;
     }
 
@@ -66,6 +77,8 @@ public sealed class Localizer
     public string FormatPlural(string baseKey, long count, params ReadOnlySpan<LocArg> args)
     {
         ArgumentNullException.ThrowIfNull(baseKey);
+        if (_plurals.TryGetValue(baseKey, out var pair))
+            return (Plural == PluralRule.OneOther && count == 1 && pair.One is { } one ? one : pair.Other).Render(args);
         var key = Plural == PluralRule.OneOther && count == 1 ? baseKey + ".one" : baseKey + ".other";
         if (!_templates.ContainsKey(key)) key = baseKey + ".other";
         return Format(key, args);
