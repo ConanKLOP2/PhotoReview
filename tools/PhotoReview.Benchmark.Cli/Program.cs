@@ -32,7 +32,7 @@ static async Task RunCliBenchmarksAsync(string folder, IReadOnlyList<BenchmarkPr
     var manifest = new BenchmarkDatasetManifest(Path.GetFullPath(folder),
         files.Select(Path.GetFullPath).ToArray(), unsupportedExtensions, 64);
     var anyFailed = false;
-    var recycleBin = BenchmarkRecycleBin.Create();
+    var recycleBin = BenchmarkRecycleBin.Create(() => PhotoReview.Platform.Windows.WindowsRecycleBin.Instance);
     foreach (var profile in profiles)
     {
         Console.WriteLine($"START profile={profile.Id} workload={profile.Workload} mode={profile.LoadingMode} workers={profile.Workers} window={profile.NextWindow}/{profile.PreviousWindow}");

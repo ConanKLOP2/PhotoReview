@@ -1,4 +1,4 @@
-﻿using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -192,6 +192,8 @@ public sealed class SessionWriterTests
         await dispose;
         await writer.WhenIdleAsync();
         _fs.WriteHook = null;
+        // The in-flight write of "a" finishes on the timer thread after release.Set(); WhenIdleAsync does not cover it.
+        await Wait.UntilAsync(() => store.Load(@"C:\photos").CurrentPath == "a", "the in-flight write of a to land");
         Assert.Equal("a", store.Load(@"C:\photos").CurrentPath); // "b" was skipped, not written
         writer.Dispose(); // double Dispose is a no-op
     }
