@@ -18,3 +18,13 @@ Branch `review/2026-09-25-round3` (base master `633ea3c`). Decisions: [OPEN-DECI
 - ``SettingsStore``: guard set only for the default config path, reset on each ``Load``, also on the locked-file branch; suppressed saves log a warning.
 - ``summary.json``: NaN written as ``null`` (``NaNAsNullDoubleConverter``).
 - Left: ``BenchmarkWindow`` (GUI) still uses the real Recycle Bin; CLI vs GUI delete timings are not comparable. Flaky under full-suite load, passes alone: Core test 'Dispose returns within its bound while a write is in flight and skips the last write'.
+
+## Round 6 (perf + robustness audits)
+Fixed: turbojpeg.dll loads only from the app folder; Undo of a Recycle refuses to restore over a newer file at the original path; journal append after a torn last line starts a new line; duplicate finder throws instead of hashing everything to "" when no hash service.
+Not fixed, need measurement or a decision (nothing here was measured; estimates are from reading code):
+- **Whole-folder preload estimate** (`RamBudgetPolicy.JpegExpansionFactor = 10`, used by `PreloadScheduler`) is ~8x pessimistic for viewport-sized previews, so folders above ~1.6 GB source fall back to the 32-ahead/8-behind window and most of the 16 GB target stays unused. Proposed: estimate `entries x TargetBox w x h x 4` (Q-R17, pending). Needs a perf run on the user machine (AR02e boundary).
+- Whole-folder warm scan runs synchronously on the UI thread per navigation (5-50 ms for 10k-50k files); `EntriesSnapshot()` + `SourceSizeTracker` re-sum per navigation; compare-pair index rebuilt on the UI thread after each file action (15-40 ms at 10k); 4 stats per RAM-hit navigation; thumbnail lookup duplicating the preview decode; 3+ redundant stats per preloaded image; source-bytes cache blocks the viewer thread on a pool read (option off by default).
+- Recycle on a fixed drive whose bin is disabled or too small is a silent permanent delete (needs IFileOperation or registry `BitBucket\Volume` check).
+- No pixel-count / file-size / scan-count cap in TurboJpeg and WicDirect decoders (huge or progressive-bomb JPEGs).
+- A Move whose post-move size check fails is reported as failed although the file moved (catalog restore points at a missing path).
+- Recycle-restore poll is only ~500 ms; a slow restore reports failure.
