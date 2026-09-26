@@ -669,5 +669,15 @@
   "settings.titleBarField.folderPath": "Folder path",
   "settings.titleBarField.indexCount": "Position (12/340)",
   "settings.titleBarField.fileSize": "File size",
-  "settings.exifField.modifiedDate": "Modified date"
+  "settings.exifField.modifiedDate": "Modified date",
+  "settings.shortcut.clickZoom": "Click zoom toggle",
+  "settings.shortcut.clickZoom.clearAutomationName": "Clear the click zoom toggle shortcut",
+  "main.menu.clickZoomLevel": "Click zoom level",
+  "main.menu.clickZoomLevel.automationName": "Click zoom level submenu",
+  "main.menu.clickZoomLevel.preset": "{percent}%",
+  "main.menu.clickZoomLevel.preset.automationName": "Zoom to {percent} percent",
+  "main.menu.clickZoomLevel.custom": "Custom…",
+  "main.menu.clickZoomLevel.custom.automationName": "Set a custom click zoom level",
+  "dialog.clickZoomCustom.title": "Custom click zoom level",
+  "dialog.clickZoomCustom.label": "Zoom level (10–800 %):"
 }

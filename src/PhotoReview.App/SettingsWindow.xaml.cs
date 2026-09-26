@@ -60,7 +60,7 @@ public partial class SettingsWindow : Window
         {
             NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
             ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
-            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText,
+            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText, ClickZoomText,
         };
         foreach (var textBox in allShortcutBoxes)
         {
@@ -301,6 +301,7 @@ public partial class SettingsWindow : Window
         FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit; SkipText.Text = Settings.Shortcuts.Skip; UndoText.Text = Settings.Shortcuts.Undo; FullscreenText.Text = Settings.Shortcuts.Fullscreen;
         LastImageText.Text = Settings.Shortcuts.LastImage; ZoomActualSizeText.Text = Settings.Shortcuts.ZoomActualSize; ToggleInfoOverlayText.Text = Settings.Shortcuts.ToggleInfoOverlay;
         MoveToFolderText.Text = Settings.Shortcuts.MoveToFolder; CopyToFolderText.Text = Settings.Shortcuts.CopyToFolder;
+        ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
@@ -397,6 +398,7 @@ public partial class SettingsWindow : Window
     private void ClearToggleInfoOverlay_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleInfoOverlayText);
     private void ClearMoveToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(MoveToFolderText);
     private void ClearCopyToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(CopyToFolderText);
+    private void ClearClickZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ClickZoomText);
 
     private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
 
@@ -426,6 +428,7 @@ public partial class SettingsWindow : Window
                 Fullscreen = FullscreenText.Text, ToggleInfoOverlay = ToggleInfoOverlayText.Text,
                 Skip = SkipText.Text, Undo = UndoText.Text, Compare = CompareText.Text,
                 MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
+                ClickZoom = ClickZoomText.Text,
             },
         };
         try { probe.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? []; }
@@ -507,7 +510,7 @@ public partial class SettingsWindow : Window
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
-        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text };
+        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text };
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
@@ -586,6 +589,7 @@ public partial class SettingsWindow : Window
         Settings.Shortcuts.FirstImage = ShortcutKeyCanonical.Canonicalize(FirstImageText.Text); Settings.Shortcuts.ZoomIn = ShortcutKeyCanonical.Canonicalize(ZoomInText.Text); Settings.Shortcuts.ZoomOut = ShortcutKeyCanonical.Canonicalize(ZoomOutText.Text); Settings.Shortcuts.ToggleFit = ShortcutKeyCanonical.Canonicalize(ToggleFitText.Text); Settings.Shortcuts.Skip = ShortcutKeyCanonical.Canonicalize(SkipText.Text); Settings.Shortcuts.Undo = ShortcutKeyCanonical.Canonicalize(UndoText.Text); Settings.Shortcuts.Fullscreen = ShortcutKeyCanonical.Canonicalize(FullscreenText.Text);
         Settings.Shortcuts.LastImage = ShortcutKeyCanonical.Canonicalize(LastImageText.Text); Settings.Shortcuts.ZoomActualSize = ShortcutKeyCanonical.Canonicalize(ZoomActualSizeText.Text); Settings.Shortcuts.ToggleInfoOverlay = ShortcutKeyCanonical.Canonicalize(ToggleInfoOverlayText.Text);
         Settings.Shortcuts.MoveToFolder = ShortcutKeyCanonical.Canonicalize(MoveToFolderText.Text); Settings.Shortcuts.CopyToFolder = ShortcutKeyCanonical.Canonicalize(CopyToFolderText.Text);
+        Settings.Shortcuts.ClickZoom = ShortcutKeyCanonical.Canonicalize(ClickZoomText.Text);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];

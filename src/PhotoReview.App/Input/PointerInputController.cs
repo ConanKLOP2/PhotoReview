@@ -275,6 +275,34 @@ internal sealed class PointerInputController
             : ZoomAtPointAsync(mouse, () => viewer.SetZoom(target));
     }
 
+    /// <summary>
+    /// ClickZoom shortcut: the same Fit &lt;-&gt; ClickZoomPercent toggle as a mouse click-to-zoom (<see cref="ClickZoomAsync"/>),
+    /// but anchored at the viewport centre instead of the cursor, and independent of <c>ClickToZoomEnabled</c> (which
+    /// only governs the mouse click).
+    /// </summary>
+    public Task ToggleClickZoomAsync()
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        return ClickZoomAsync(centre);
+    }
+
+    /// <summary>
+    /// Context menu "Click zoom level": zooms straight to <paramref name="percent"/> (no Fit toggle, unlike
+    /// <see cref="ToggleClickZoomAsync"/>), anchored at the viewport centre.
+    /// </summary>
+    public Task SetClickZoomLevelAsync(int percent)
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        var target = PointerGestures.ClickZoomFactor(percent);
+        return ZoomAtPointAsync(centre, () => _viewer.SetZoom(target));
+    }
+
     /// <summary>MainImage LostMouseCapture.</summary>
     public void OnLostCapture() => CancelPan();
 

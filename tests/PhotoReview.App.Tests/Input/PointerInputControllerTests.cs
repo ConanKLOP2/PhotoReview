@@ -201,6 +201,67 @@ public sealed class PointerInputControllerTests
         Assert.Equal(1, _fits);
     }
 
+    // ---- ClickZoom shortcut / context menu (centre-anchored, independent of ClickToZoomEnabled) ----
+
+    [Fact]
+    public async Task ToggleClickZoomAsync_InFit_ZoomsToClickZoomPercentAtTheViewportCentre()
+    {
+        _settings.ClickToZoomEnabled = false; // shortcut must work even when the mouse click feature is off
+
+        await _controller.ToggleClickZoomAsync();
+
+        Assert.False(_viewer.IsFit);
+        Assert.Equal(2.0, _viewer.Zoom, 6); // ClickZoomPercent = 200 in the fixture
+        Assert.Single(_surface.Scrolls);
+        Assert.Equal(0, _fits);
+    }
+
+    [Fact]
+    public async Task ToggleClickZoomAsync_AtTheClickZoomLevel_ReturnsToFit()
+    {
+        await _controller.ToggleClickZoomAsync(); // Fit -> click zoom
+        await _controller.ToggleClickZoomAsync(); // click zoom -> Fit
+
+        Assert.Equal(1, _fits);
+    }
+
+    [Fact]
+    public async Task ToggleClickZoomAsync_WithoutImages_DoesNothing()
+    {
+        _hasImages = false;
+
+        await _controller.ToggleClickZoomAsync();
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task SetClickZoomLevelAsync_ZoomsStraightToTheGivenPercent_NoFitToggle()
+    {
+        await _controller.SetClickZoomLevelAsync(150);
+
+        Assert.False(_viewer.IsFit);
+        Assert.Equal(1.5, _viewer.Zoom, 6);
+
+        // Calling it again at the SAME percent must zoom again (not toggle back to Fit, unlike ToggleClickZoomAsync).
+        await _controller.SetClickZoomLevelAsync(150);
+        Assert.False(_viewer.IsFit);
+        Assert.Equal(1.5, _viewer.Zoom, 6);
+        Assert.Equal(0, _fits);
+    }
+
+    [Fact]
+    public async Task SetClickZoomLevelAsync_WithoutImages_DoesNothing()
+    {
+        _hasImages = false;
+
+        await _controller.SetClickZoomLevelAsync(150);
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
     // ---- kinetic glide ----
 
     [Fact]

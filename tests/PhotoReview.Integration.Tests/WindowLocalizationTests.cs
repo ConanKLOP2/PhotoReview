@@ -110,9 +110,9 @@ public sealed class WindowLocalizationTests
             {
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
-                // feat/ui-dark-chrome-toolbar: "Open folder…", "Settings…" (+ a Separator), then Undo.
+                // feat/ui-dark-chrome-toolbar: "Open folder…", "Settings…" (+ a Separator), Undo, a Separator, then the click-zoom submenu.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(3, menuItems.Count);
+                Assert.Equal(4, menuItems.Count);
                 var openFolder = menuItems[0];
                 var settings = menuItems[1];
                 var undo = menuItems[2];
@@ -122,6 +122,9 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
+                var clickZoomLevel = menuItems[3];
+                Assert.Equal("Mức thu phóng khi nhấn", clickZoomLevel.Header);
+                Assert.Equal("Menu con mức thu phóng khi nhấn", AutomationProperties.GetName(clickZoomLevel));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
 
                 var texts = Texts(window);

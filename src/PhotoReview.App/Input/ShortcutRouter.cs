@@ -28,6 +28,7 @@ public sealed class ShortcutRouter
     private Key? _prevKey;
     private Key? _moveToFolderKey;
     private Key? _copyToFolderKey;
+    private Key? _clickZoomKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -63,6 +64,7 @@ public sealed class ShortcutRouter
         _prevKey = ParseKey(settings.Shortcuts.Previous);
         _moveToFolderKey = ParseKey(settings.Shortcuts.MoveToFolder); // empty = disabled (null)
         _copyToFolderKey = ParseKey(settings.Shortcuts.CopyToFolder);
+        _clickZoomKey = ParseKey(settings.Shortcuts.ClickZoom);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -194,6 +196,13 @@ public sealed class ShortcutRouter
         if (_zoomActualSizeKey.HasValue && key == _zoomActualSizeKey.Value)
         {
             return ReviewCommand.ZoomActualSize;
+        }
+
+        // 12b. Click zoom toggle: same group as the other zoom keys, works regardless of ClickToZoomEnabled
+        // (that setting only governs the mouse click).
+        if (_clickZoomKey.HasValue && key == _clickZoomKey.Value)
+        {
+            return ReviewCommand.ClickZoom;
         }
 
         // 13. Next / Previous
