@@ -16,7 +16,15 @@ public sealed class RamCachePercentTests
     public void MinimumPreviewWindowBytes_Is41UhdPreviewsAt4BytesPerPixel()
     {
         Assert.Equal(41, RamBudgetPolicy.PreloadWindowImageCount);
-        Assert.Equal(41L * 3840 * 2160 * 4, RamBudgetPolicy.MinimumPreviewWindowBytes);
+        Assert.Equal(41L * 3840 * 2160 * 4, RamBudgetPolicy.MinimumPreviewWindowBytes());
+    }
+
+    [Fact]
+    public void MinimumPreviewWindowBytes_ForWindow_ScalesWithImageCount()
+    {
+        // feat/preload-window-setting: default (32/8 -> 41 previews) is unchanged; a (1,0) window needs only 2.
+        Assert.Equal(RamBudgetPolicy.MinimumPreviewWindowBytes(), RamBudgetPolicy.MinimumPreviewWindowBytes(PreloadWindow.Default));
+        Assert.Equal(2L * 3840 * 2160 * 4, RamBudgetPolicy.MinimumPreviewWindowBytes(new PreloadWindow(1, 0)));
     }
 
     [Theory]
@@ -80,7 +88,7 @@ public sealed class RamCachePercentTests
         var bytes = RamBudgetPolicy.PreviewBytesForPercent(1, 16 * Gib, 0);
 
         Assert.Equal(RamBudgetPolicy.BytesForPercent(8, 16 * Gib), bytes);
-        Assert.True(bytes >= RamBudgetPolicy.MinimumPreviewWindowBytes);
+        Assert.True(bytes >= RamBudgetPolicy.MinimumPreviewWindowBytes());
     }
 
     [Fact]
@@ -112,7 +120,7 @@ public sealed class RamCachePercentTests
             var budget = RamBudgetPolicy.BytesForPercent(RamBudgetPolicy.ClampCachePercent(percent, physical), physical);
 
             Assert.True(source + preview <= budget, $"{percent}%: {source} + {preview} > {budget}");
-            Assert.True(preview >= RamBudgetPolicy.MinimumPreviewWindowBytes, $"{percent}%: preview {preview}");
+            Assert.True(preview >= RamBudgetPolicy.MinimumPreviewWindowBytes(), $"{percent}%: preview {preview}");
         }
     }
 

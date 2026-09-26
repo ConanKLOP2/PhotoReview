@@ -184,7 +184,7 @@
                     <StackPanel x:Name="PerformancePage" KeyboardNavigation.TabNavigation="Local">
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.nav.performance}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Text="{loc:Tr settings.decoderBackend.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                             <ComboBox x:Name="DecoderBackendCombo" Grid.Row="0" Grid.Column="1" AutomationProperties.Name="{loc:Tr settings.decoderBackend.automationName}"><ComboBoxItem Content="{loc:Tr enum.decoderBackend.wpf}"/><ComboBoxItem Content="{loc:Tr enum.decoderBackend.wicDirect}"/><ComboBoxItem x:Name="TurboJpegOption" Content="{loc:Tr enum.decoderBackend.turboJpeg}"/></ComboBox>
                             <!-- RAM%: in-memory preview cache share of physical RAM, [system minimum, 90]; applies after restart. -->
@@ -195,6 +195,12 @@
                                 <TextBlock x:Name="RamCacheValueText" VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.LiveSetting="Polite"/>
                             </StackPanel>
                             <TextBlock x:Name="RamCacheHint" Grid.Row="2" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <!-- feat/preload-window-setting: forward/backward preload window, [PerformanceOptions bounds]; applies after restart. -->
+                            <TextBlock x:Name="PreloadForwardLabel" Text="{loc:Tr settings.preloadForward.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="PreloadForwardBox" AutomationProperties.LabeledBy="{Binding ElementName=PreloadForwardLabel}" AutomationProperties.Name="{loc:Tr settings.preloadForward.automationName}" Grid.Row="3" Grid.Column="1" Width="90" HorizontalAlignment="Left" TextChanged="PreloadWindow_TextChanged"/>
+                            <TextBlock x:Name="PreloadBackwardLabel" Text="{loc:Tr settings.preloadBackward.label}" Grid.Row="4" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="PreloadBackwardBox" AutomationProperties.LabeledBy="{Binding ElementName=PreloadBackwardLabel}" AutomationProperties.Name="{loc:Tr settings.preloadBackward.automationName}" Grid.Row="4" Grid.Column="1" Width="90" HorizontalAlignment="Left" TextChanged="PreloadWindow_TextChanged"/>
+                            <TextBlock x:Name="PreloadWindowHint" Grid.Row="5" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
                     </StackPanel>
                 </ScrollViewer>

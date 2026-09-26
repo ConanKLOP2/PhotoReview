@@ -40,6 +40,8 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-R27 | Journal | Startup reconcile in a second process (PerFolder mode) can mark an operation still running in the first process Failed (false "N operations failed" dialog; the journal self-heals when it commits) | ✅ DECIDED 2026-09-26 (user) — D: per-operation named kernel object held Prepared→outcome; reconcile skips live ops; implemented on branch fix/q-r27-reconcile-live-ops | `JournalStartupRecovery`, `OperationJournal.ReconcilePendingOperations` |
 | Q-R28 | I18N | "Export strings to translate" wrote only the keys a language lacks (vi: 7 unused `.one` keys, en: empty) | ✅ DECIDED 2026-09-26 (user) — A: export every key, untranslated first (English text, listed in `_missing`), then current translations; skip untranslated `.one` keys when `plural` is `none`; user also asked (2026-09-26) for a clear message after Reload translations listing file/entry problems | branch `feat/i18n-export-all` |
 
+| Q-R30 | Features | Preload window size | ✅ DECIDED 2026-09-26 (user) — forward/backward counts configurable in Settings ▸ Performance (defaults 32/8, 1–500 / 0–500, RAM floor follows the window, applies after restart); branch feat/preload-window-setting | PreloadWindow, SettingsNormalizer |
+
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 
 Q-R1..Q-R6: the user answered "follow the recommendation" on 2026-09-24; all merged in #76. Q-R7..Q-R11 (round 2) decided 2026-09-25: R7 a, R8 c, R10 a, R11 leave as is.

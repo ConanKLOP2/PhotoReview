@@ -42,6 +42,7 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.ShowFolderInfo), nameof(AppSettings.MouseWheelAction), nameof(AppSettings.ClickToZoomEnabled),
         nameof(AppSettings.ClickZoomPercent), nameof(AppSettings.KineticPanEnabled), nameof(AppSettings.MoveCopyReuseLastFolder),
         nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields),
+        nameof(AppSettings.PreloadForwardCount), nameof(AppSettings.PreloadBackwardCount),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]
@@ -290,6 +291,80 @@ public sealed class SettingsWindowRedesignTests
                 Assert.Equal(AppSettings.DefaultClickZoomPercent, window.Settings.ClickZoomPercent); // untouched
             }
             finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>feat/preload-window-setting: mirrors <see cref="ClickZoomPercent_OutOfRange_IsRejected"/> for the two new preload-window boxes.</summary>
+    [Theory(DisplayName = "Out-of-range/unparsable preload forward is rejected by Save")]
+    [InlineData("abc")]
+    [InlineData("-5")]
+    [InlineData("0")] // forward minimum is 1
+    [InlineData("501")]
+    public async Task PreloadForward_InvalidInput_IsRejected(string text)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var warnings = new List<string>();
+            var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add };
+            try
+            {
+                window.PreloadForwardBox.Text = text;
+                InvokeSave(window);
+                Assert.Single(warnings);
+                Assert.Null(window.DialogResult);
+                Assert.Equal(PerformanceOptions.PreloadForwardCount, window.Settings.PreloadForwardCount); // untouched
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory(DisplayName = "Out-of-range/unparsable preload backward is rejected by Save")]
+    [InlineData("abc")]
+    [InlineData("-5")]
+    [InlineData("501")]
+    public async Task PreloadBackward_InvalidInput_IsRejected(string text)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var warnings = new List<string>();
+            var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add };
+            try
+            {
+                window.PreloadBackwardBox.Text = text;
+                InvokeSave(window);
+                Assert.Single(warnings);
+                Assert.Null(window.DialogResult);
+                Assert.Equal(PerformanceOptions.PreloadBackwardCount, window.Settings.PreloadBackwardCount); // untouched
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory(DisplayName = "Valid preload forward/backward values (including boundaries) are accepted by Save")]
+    [InlineData("1", "0")]
+    [InlineData("500", "500")]
+    [InlineData("32", "8")]
+    public async Task PreloadWindow_ValidInput_IsSaved(string forwardText, string backwardText)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings()) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            try
+            {
+                window.Loaded += (_, _) =>
+                {
+                    window.PreloadForwardBox.Text = forwardText;
+                    window.PreloadBackwardBox.Text = backwardText;
+                    InvokeSave(window);
+                };
+                Assert.True(window.ShowDialog());
+                Assert.Equal(int.Parse(forwardText, System.Globalization.CultureInfo.InvariantCulture), window.Settings.PreloadForwardCount);
+                Assert.Equal(int.Parse(backwardText, System.Globalization.CultureInfo.InvariantCulture), window.Settings.PreloadBackwardCount);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
             return Task.CompletedTask;
         });
     }

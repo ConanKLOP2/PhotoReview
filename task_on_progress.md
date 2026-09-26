@@ -4,6 +4,8 @@
 
 ## Now
 
+- **Preload window configurable (Q-R30, `feat/preload-window-setting`):** Settings ▸ Performance, forward/backward lookahead (32/8, 1-500/0-500); RAM floor follows it, applies after restart.
+
 - **Done 2026-09-26 (#94–#112 merged):** architecture review AR10–AR19 ([summary](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md); #106, AR16/Q-AR7 (c) background readability probe #107), benchmark speed-up #109 (gate −34 %, quick −24 %, in-app Quick check), stale Slow MainWindow tests #110, journal test-host crash #112, source audit F0–F4 closed. Details and numbers: [progress log](docs/archive/progress-log-2026-09.md#2026-09-26-late), `PERF-STATUS.md`.
 - **GUI checks — user reported "GUI OK" (2026-09-26):** AR13 (pan + glide, wheel zoom at cursor, Ctrl+wheel navigation, click-to-zoom, Fit after resize/DPI change, skipped-files list), AR16 (locked file: first image at once, then the warning), Settings > Updates and Defaults, close during a folder scan, Recycle Bin undo, decoder fallbacks with damaged EXIF/ICC, T89 Fit.
 - **User GUI check still open:** #109 benchmark — Quick check button, image limit 5 / 0, close the Benchmark window mid-run (no crash, no leftover `%TEMP%\PhotoReview-Benchmark-Cache\*`).

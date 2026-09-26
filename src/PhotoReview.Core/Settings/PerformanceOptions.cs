@@ -28,4 +28,22 @@ public static class PerformanceOptions
     public const long PreviewDiskCacheCapacityBytes = 4L * 1024 * 1024 * 1024;
     public const bool UseSourceBytesCache = false;
     public const long SourceBytesCapacityBytes = 16L * 1024 * 1024 * 1024;
+
+    /// <summary>Default forward (direction-of-travel) preload lookahead, images.</summary>
+    public const int PreloadForwardCount = 32;
+
+    /// <summary>Default backward preload lookahead, images.</summary>
+    public const int PreloadBackwardCount = 8;
+
+    /// <summary>Smallest accepted <see cref="PreloadForwardCount"/>: at least the current image's neighbour.</summary>
+    public const int MinPreloadForwardCount = 1;
+
+    /// <summary>Smallest accepted <see cref="PreloadBackwardCount"/>: 0 = no backward preload at all.</summary>
+    public const int MinPreloadBackwardCount = 0;
+
+    /// <summary>
+    /// Upper bound accepted for a hand-edited preload forward/backward count: each preloaded preview is
+    /// ~12 MiB at 2304x1280, so a huge value is a memory bomb (like <see cref="MaxPreloadWorkerCount"/>).
+    /// </summary>
+    public const int MaxPreloadCount = 500;
 }

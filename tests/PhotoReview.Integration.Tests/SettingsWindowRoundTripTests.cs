@@ -75,6 +75,8 @@ public sealed class SettingsWindowRoundTripTests
             w.ExifFieldFocalLengthCheck.IsChecked = false; w.ExifFieldApertureCheck.IsChecked = false;
             w.ExifFieldShutterSpeedCheck.IsChecked = false;
         },
+        [nameof(AppSettings.PreloadForwardCount)] = w => w.PreloadForwardBox.Text = "64", // 32 -> 64
+        [nameof(AppSettings.PreloadBackwardCount)] = w => w.PreloadBackwardBox.Text = "16", // 8 -> 16
     };
 
     /// <summary>What <see cref="ControlMutations"/> above is expected to produce on <see cref="AppSettings"/>.</summary>
@@ -103,6 +105,8 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ShowExifInfo)] = true,
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |
             ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed),
+        [nameof(AppSettings.PreloadForwardCount)] = 64,
+        [nameof(AppSettings.PreloadBackwardCount)] = 16,
     };
 
     [Fact(DisplayName = "Tripwire: every UI-controlled property has a round-trip mutation and expected value above")]
