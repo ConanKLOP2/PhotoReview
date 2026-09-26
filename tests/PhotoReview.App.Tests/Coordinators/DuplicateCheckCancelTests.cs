@@ -110,16 +110,20 @@ public sealed class DuplicateCheckCancelTests : IDisposable
     [Fact(DisplayName = "Repeated Esc while hashing is consumed each time and never throws")]
     public async Task CancelDuplicateCheck_Twice_BothConsumeAndDoNotThrow()
     {
-        var hasher = new BlockingHasher();
+        // The hasher ignores the token until released: a cooperative hasher could let the whole check finish between the
+        // two Esc presses (then the second one correctly reports "nothing running"), which made this test racy.
+        var hasher = new BlockingHasher { IgnoreCancellationUntilReleased = true };
         var controller = Create(hasher);
         var run = controller.RemoveDuplicatesAsync(removeNumbered: true);
         await hasher.FirstStarted.Task.WaitAsync(Guard);
 
         Assert.True(controller.CancelDuplicateCheck());
         Assert.True(controller.CancelDuplicateCheck());
+        hasher.Release();
         await run.WaitAsync(Guard);
 
         Assert.Empty(_bin.Recycled);
+        Assert.Equal(Tr.StatusDuplicateCheckCanceled, _sink.Statuses[^1]);
     }
 
     [Fact(DisplayName = "Esc pressed as the very last hash finishes still wins: the finished result is discarded, nothing is recycled")]
@@ -237,6 +241,8 @@ public sealed class DuplicateCheckCancelTests : IDisposable
         private int _open;
         public TaskCompletionSource FirstStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool BlockOnlyFirstCall { get; init; }
+        /// <summary>Keeps the hash "running" after a cancel request until <see cref="Release"/>, so a test can call Cancel again while the check is provably still in progress.</summary>
+        public bool IgnoreCancellationUntilReleased { get; init; }
         public int Calls => Volatile.Read(ref _calls);
         public int OpenHandles => Volatile.Read(ref _open);
         public CancellationToken FirstToken { get; private set; }
@@ -250,7 +256,7 @@ public sealed class DuplicateCheckCancelTests : IDisposable
             try
             {
                 if (n == 1) FirstStarted.TrySetResult();
-                if (!BlockOnlyFirstCall || n == 1) await _gate.Task.WaitAsync(cancellationToken);
+                if (!BlockOnlyFirstCall || n == 1) await (IgnoreCancellationUntilReleased ? _gate.Task : _gate.Task.WaitAsync(cancellationToken));
                 return "same";
             }
             finally { Interlocked.Decrement(ref _open); }

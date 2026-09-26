@@ -18,6 +18,7 @@ internal static class LocalizationModuleInit
     internal static void Init()
     {
         TestLocalization.UseVietnamese();
+        PrewarmThreadPool();
         var name = Environment.GetEnvironmentVariable("PHOTOREVIEW_TEST_CULTURE");
         if (string.IsNullOrWhiteSpace(name)) return;
         CultureInfo culture;
@@ -33,5 +34,15 @@ internal static class LocalizationModuleInit
 
         CultureInfo.DefaultThreadCurrentCulture = culture;
         CultureInfo.CurrentCulture = culture;
+    }
+
+    // Tests that block a pool worker on a ManualResetEventSlim gate (Task.Run + Wait) starve the default ThreadPool when
+    // every test project runs in parallel; a newly queued Task.Run then waits for hill-climbing thread injection (~0.5-1 s
+    // per thread) and trips a wall-clock guard. Raising the minimum makes workers available immediately (same fix as
+    // PhotoReview.App.Tests; failures were 10-second timeouts that pass alone).
+    private static void PrewarmThreadPool()
+    {
+        var minThreads = Math.Max(Environment.ProcessorCount * 4, 32);
+        ThreadPool.SetMinThreads(minThreads, minThreads);
     }
 }
