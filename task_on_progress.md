@@ -5,8 +5,9 @@
 ## Now
 
 - **Done 2026-09-26 (#94–#112 merged):** architecture review AR10–AR19 ([summary](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md); #106, AR16/Q-AR7 (c) background readability probe #107), benchmark speed-up #109 (gate −34 %, quick −24 %, in-app Quick check), stale Slow MainWindow tests #110, journal test-host crash #112, source audit F0–F4 closed. Details and numbers: [progress log](docs/archive/progress-log-2026-09.md#2026-09-26-late), `PERF-STATUS.md`.
-- **User GUI checks (open):** AR13 — pan + glide, wheel / Ctrl+wheel, click-to-zoom, Fit after resize and DPI change, skipped-files list; AR16 — folder with a locked file shows the first image at once, then "skipped N"; #109 — Quick check, image limit 5 / 0, close Benchmark mid-run (no crash, no leftover `%TEMP%\PhotoReview-Benchmark-Cache\*`); overnight review — Settings > Updates, Defaults button, close during a folder scan, Recycle Bin undo on non-English Windows, damaged EXIF/ICC fallbacks.
-- **Real-machine perf (open):** natural sort / snapshot validator, Q-R17 preload estimate on F4.
+- **GUI checks — user reported "GUI OK" (2026-09-26):** AR13 (pan + glide, wheel zoom at cursor, Ctrl+wheel navigation, click-to-zoom, Fit after resize/DPI change, skipped-files list), AR16 (locked file: first image at once, then the warning), Settings > Updates and Defaults, close during a folder scan, Recycle Bin undo, decoder fallbacks with damaged EXIF/ICC, T89 Fit.
+- **User GUI check still open:** #109 benchmark — Quick check button, image limit 5 / 0, close the Benchmark window mid-run (no crash, no leftover `%TEMP%\PhotoReview-Benchmark-Cache\*`).
+- **Still to do:** perf runs for natural sort / snapshot validator and Q-R17 on F4 (Claude, real machine); Q-R25 follow-up: cross-process reconcile ownership marker (needs a design decision).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.
 
