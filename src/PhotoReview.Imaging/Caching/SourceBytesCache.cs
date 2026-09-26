@@ -9,7 +9,7 @@ namespace PhotoReview.Imaging.Caching;
 public sealed class SourceBytesCache
 {
     private readonly BoundedLruCache<Key, byte[]> _cache;
-    private readonly ConcurrentDictionary<Key, Lazy<Task<byte[]>>> _inFlight = new();
+    private readonly ConcurrentDictionary<Key, Lazy<byte[]>> _inFlight = new();
     private int _generation;
     // Per-path eviction versions: evicting one moved/deleted file must not invalidate in-flight reads of OTHER paths
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
@@ -30,10 +30,18 @@ public sealed class SourceBytesCache
     public int Count => _cache.Count;
 
     /// <summary>
+    /// Test-only diagnostic: the managed thread id that actually performed the most recent real disk
+    /// read (as opposed to a cache hit). Lets a test assert <see cref="GetOrRead(string)"/> runs the
+    /// read on the calling thread instead of hopping to a thread-pool thread.
+    /// </summary>
+    internal int? LastReadManagedThreadId { get; private set; }
+
+    /// <summary>
     /// Returns the source bytes, reading the file if it is not cached yet.
-    /// WARNING: this blocks the calling thread until the read completes (it waits on a thread-pool
-    /// task). Call it only from a worker or dedicated decode thread -- never from a UI or other
-    /// <c>SynchronizationContext</c>-bound thread (IMG-09).
+    /// WARNING: this reads synchronously on the calling thread (no thread-pool hop). Call it only
+    /// from a worker or dedicated decode thread -- never from the UI thread or any other
+    /// <c>SynchronizationContext</c>-bound thread (IMG-09): a UI-thread call would block the message
+    /// pump for the duration of the disk read.
     /// </summary>
     public byte[] GetOrRead(string path) => GetOrRead(CreateKey(path));
 
@@ -52,12 +60,22 @@ public sealed class SourceBytesCache
     private byte[] GetOrRead(Key key)
     {
         if (_cache.TryGet(key, out var cached)) return cached;
+        System.Diagnostics.Debug.Assert(SynchronizationContext.Current is null,
+            "SourceBytesCache.GetOrRead must never be called from a UI (or other SynchronizationContext-bound) thread -- it reads synchronously.");
         var generation = Volatile.Read(ref _generation);
         var pathVersion = _pathVersions.GetValueOrDefault(key.Path);
-        var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<Task<byte[]>>(
-            () => Task.Run(() => ReadAndCache(key, generation, pathVersion)), LazyThreadSafetyMode.ExecutionAndPublication));
-        try { return lazy.Value.GetAwaiter().GetResult(); }
-        finally { _inFlight.TryRemove(new KeyValuePair<Key, Lazy<Task<byte[]>>>(key, lazy)); }
+        // Lazy<T> (ExecutionAndPublication) runs ReadAndCache on whichever caller's thread wins the race to
+        // create this entry, and every other concurrent caller for the same key blocks on that same Lazy<T>
+        // instead of starting its own read -- same dedup-by-identity as before, but without a Task.Run hop:
+        // every caller is already a worker/decode thread (see the threading warning on GetOrRead), so the
+        // read happens on the calling thread instead of costing a second thread-pool slot per call.
+        // Lazy<T> also caches a thrown exception and replays it to every waiter of this lazy (matching the
+        // old Task-based behavior); the finally below removes the entry either way, so the next GetOrRead
+        // for this key (e.g. after the file reappears) starts a fresh attempt rather than replaying a stale one.
+        var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<byte[]>(
+            () => ReadAndCache(key, generation, pathVersion), LazyThreadSafetyMode.ExecutionAndPublication));
+        try { return lazy.Value; }
+        finally { _inFlight.TryRemove(new KeyValuePair<Key, Lazy<byte[]>>(key, lazy)); }
     }
 
     /// <summary>
@@ -84,6 +102,7 @@ public sealed class SourceBytesCache
 
     private byte[] ReadAndCache(Key key, int generation, int pathVersion)
     {
+        LastReadManagedThreadId = Environment.CurrentManagedThreadId;
         using var stream = new FileStream(key.Path, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
         var bytes = GC.AllocateUninitializedArray<byte>(checked((int)stream.Length));

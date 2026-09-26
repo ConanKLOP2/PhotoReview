@@ -81,35 +81,17 @@ public sealed class DiskCacheStore
     /// <summary>
     /// Internal static atomic write helper for BitmapSource.
     /// </summary>
-    internal static async Task WriteAtomicallyAsync(BitmapSource image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
+    internal static Task WriteAtomicallyAsync(BitmapSource image, string cachePath, ILog? log = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(image);
         ArgumentException.ThrowIfNullOrWhiteSpace(cachePath);
 
-        System.IO.Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-        var temporaryPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
+        return AtomicCacheFile.WriteAsync(cachePath, stream =>
         {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
-            // perf(cache): this is a disposable cache, not a durability-critical journal -- the
-            // temp-file-then-atomic-rename below is the only guarantee that matters (a crash never
-            // leaves a half-written file at cachePath). WriteThrough/Flush(true) forced every write
-            // through to physical disk before the rename, which only slows down cache writes for a
-            // durability guarantee this data doesn't need (a lost write is just a future cache miss).
-            var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan);
-            await using (stream.ConfigureAwait(false))
-            {
-                encoder.Save(stream);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-            File.Move(temporaryPath, cachePath, overwrite: true);
-        }
-        finally
-        {
-            TryDelete(temporaryPath, log);
-        }
+            encoder.Save(stream);
+        }, log, cancellationToken);
     }
 
     /// <summary>
@@ -252,9 +234,6 @@ public sealed class DiskCacheStore
         return total;
     }
 
-    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, string? logContext, string? companionSuffix = null)
-        => PruneDirectory(directory, searchPattern, maxBytes, log: null, companionSuffix);
-
     /// <summary>
     /// Removes every file matching this store's pattern in its directory, plus leftover atomic-write temp files
     /// (<see cref="TempFilePattern"/>), which the store pattern never matches.
@@ -313,9 +292,6 @@ public sealed class DiskCacheStore
             TryDelete(path, log);
         }
     }
-
-    public static void ClearDirectory(string directory, string searchPattern, string? logContext)
-        => ClearDirectory(directory, searchPattern, log: null);
 
     /// <summary>
     /// Safely deletes a file, catching IOException and UnauthorizedAccessException.

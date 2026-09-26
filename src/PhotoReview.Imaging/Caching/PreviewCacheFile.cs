@@ -100,12 +100,9 @@ public static class PreviewCacheFile
     }
 
     /// <summary>
-    /// Atomically encodes <paramref name="bitmap"/> as a v4 cache entry (header + JPEG payload) via a
-    /// temporary file and rename. Unlike <see cref="DiskCacheStore.WriteAtomicallyAsync(System.Windows.Media.Imaging.BitmapSource,string,System.Threading.CancellationToken)"/>,
-    /// this never opens the file with <c>FileOptions.WriteThrough</c> or calls <c>Flush(true)</c>:
-    /// this is a disposable cache, not a durability-critical journal, so the atomic
-    /// temp-file-then-rename is the only guarantee that matters (a crash never leaves a
-    /// half-written file at <paramref name="cachePath"/>).
+    /// Atomically encodes <paramref name="bitmap"/> as a v4 cache entry (header + JPEG payload) via
+    /// <see cref="AtomicCacheFile.WriteAsync"/> (temp file, write, atomic rename -- see that type for
+    /// the durability rationale). The alpha/orientation validation below runs before the write.
     /// </summary>
     internal static async Task WriteAtomicallyAsync(
         BitmapSource bitmap,
@@ -126,39 +123,27 @@ public static class PreviewCacheFile
         if (!opacityVerified && !IsFullyOpaque(bitmap)) throw new ArgumentException("Bitmaps with transparent pixels cannot be stored in the JPEG preview cache.", nameof(bitmap));
         if (orientation is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(orientation), orientation, "EXIF orientation must be 1-8.");
 
-        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-        var temporaryPath = cachePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
+        // A caller that doesn't know the original (pre-downscale) source size yet reports 0/0
+        // here; fall back to this entry's own pixel dimensions rather than persisting a
+        // header that claims "no original size known" (0 would round-trip as "unknown" and
+        // force a real ReadInfo later, defeating the point of storing it at all).
+        var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
+        var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
+        var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
+        // v7: EXIF block (2-byte length, 0 = none, then the encoded summary) between header and payload.
+        var exifBytes = ExifSummaryCodec.Encode(exif);
+        var exifLength = new byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(exifLength, (ushort)exifBytes.Length);
+
+        await AtomicCacheFile.WriteAsync(cachePath, stream =>
         {
-            // A caller that doesn't know the original (pre-downscale) source size yet reports 0/0
-            // here; fall back to this entry's own pixel dimensions rather than persisting a
-            // header that claims "no original size known" (0 would round-trip as "unknown" and
-            // force a real ReadInfo later, defeating the point of storing it at all).
-            var headerOriginalWidth = originalWidth > 0 ? originalWidth : bitmap.PixelWidth;
-            var headerOriginalHeight = originalHeight > 0 ? originalHeight : bitmap.PixelHeight;
-            var header = BuildHeader(actualBackend, orientation, bitmap.PixelWidth, bitmap.PixelHeight, headerOriginalWidth, headerOriginalHeight);
-            // v7: EXIF block (2-byte length, 0 = none, then the encoded summary) between header and payload.
-            var exifBytes = ExifSummaryCodec.Encode(exif);
-            var exifLength = new byte[2];
-            BinaryPrimitives.WriteUInt16LittleEndian(exifLength, (ushort)exifBytes.Length);
-            var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                64 * 1024, FileOptions.SequentialScan);
-            await using (stream.ConfigureAwait(false))
-            {
-                stream.Write(header);
-                stream.Write(exifLength);
-                stream.Write(exifBytes);
-                var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };
-                encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                encoder.Save(stream);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-            File.Move(temporaryPath, cachePath, overwrite: true);
-        }
-        finally
-        {
-            DiskCacheStore.TryDelete(temporaryPath);
-        }
+            stream.Write(header);
+            stream.Write(exifLength);
+            stream.Write(exifBytes);
+            var encoder = new JpegBitmapEncoder { QualityLevel = jpegQuality };
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            encoder.Save(stream);
+        }, log: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

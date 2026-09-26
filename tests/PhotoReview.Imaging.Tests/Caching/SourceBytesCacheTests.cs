@@ -80,6 +80,30 @@ public sealed class SourceBytesCacheTests : IDisposable
         Assert.Equal(2, cache.Count);
     }
 
+    [Fact(DisplayName = "GetOrRead performs the real disk read synchronously on the calling thread (no Task.Run hop)")]
+    public void GetOrRead_ReadsOnCallingThread()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "sync.bin");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        var cache = new SourceBytesCache(1024);
+
+        // Runs on a dedicated (non-pool) thread so a Task.Run-based implementation would provably move
+        // the read to a different (pool) managed thread id; mutating GetOrRead back to Task.Run + GetAwaiter().GetResult()
+        // makes this assertion fail.
+        int? callingThreadId = null;
+        var worker = new Thread(() =>
+        {
+            callingThreadId = Environment.CurrentManagedThreadId;
+            cache.GetOrRead(path);
+        });
+        worker.Start();
+        worker.Join();
+
+        Assert.NotNull(callingThreadId);
+        Assert.Equal(callingThreadId, cache.LastReadManagedThreadId);
+    }
+
     public void Dispose()
     {
         try { if (Directory.Exists(_root)) Directory.Delete(_root, true); }
