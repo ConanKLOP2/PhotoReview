@@ -42,4 +42,4 @@
 
 ## Verification / Acceptance
 
-Bước 1: bảng số trong PERF-STATUS + Q-AR7 ghi trên `develop`. (c): gate chung + `run-matrix.ps1 -Profile gate` trước/sau (first visual không xấu hơn, S2/S3 không đổi) + `FolderLoadSkippedFilesTests` mở rộng.
+Bước 1: bảng số trong PERF-STATUS + Q-AR7 ghi trên `master` (PR docs, AGENTS.md "Decision log"). (c): gate chung + `run-matrix.ps1 -Profile gate` trước/sau (first visual không xấu hơn, S2/S3 không đổi) + `FolderLoadSkippedFilesTests` mở rộng.

@@ -93,4 +93,4 @@ Task có ghi "mutation": bỏ (hoặc đảo) đoạn mã được bảo vệ, t
 
 ## Sau khi xong
 
-Nén mỗi task thành một dòng `ID · status · SHA` ở bảng Tasks, chuyển bằng chứng vào `docs/archive/evidence/arch-review-2026-09-26/`, ghi quyết định Q-AR6..10 vào `OPEN-DECISIONS.md` trên `develop`, cập nhật `ACTIVE-TASKS.md` nhóm AR.
+Nén mỗi task thành một dòng `ID · status · SHA` ở bảng Tasks, chuyển bằng chứng vào `docs/archive/evidence/arch-review-2026-09-26/`, ghi quyết định Q-AR6..10 vào `OPEN-DECISIONS.md` trên `master` (PR docs, AGENTS.md "Decision log"), cập nhật `ACTIVE-TASKS.md` nhóm AR.
