@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
 using Xunit;
 
@@ -238,7 +239,10 @@ public sealed class MainWindowBehaviorActionTests
     /// </summary>
     private static void InstallTestAction(MainWindow window, string destinationFolder)
     {
-        var settings = Field<AppSettings>(window, "_settings");
+        // Through SettingsStore.Save, as the Settings window does: MainWindow rebuilds its ShortcutRouter from the
+        // store's Changed event, so mutating the live _settings object would leave the action key unmapped.
+        var store = Field<SettingsStore>(window, "_settingsStore");
+        var settings = store.Current;
         settings.Shortcuts = ShortcutMappings.Default();
         settings.Actions =
         [
@@ -251,6 +255,7 @@ public sealed class MainWindowBehaviorActionTests
                 Confirm = false,
             },
         ];
+        store.Save(settings);
     }
 
     /// <summary>

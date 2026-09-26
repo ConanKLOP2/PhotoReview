@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
 using Xunit;
 
@@ -18,7 +19,9 @@ namespace PhotoReview.Integration.Tests;
 /// seam (<c>TestHostHooks</c> via <c>TestAppHost</c>) on <see cref="StaTestHost"/>.
 /// <para>
 /// INV-5: An action that completes after the user has navigated away to a different folder
-/// must not register an undo entry or modify the catalog of the newly opened folder.
+/// must not modify the catalog of the newly opened folder. APP-03 (Q-R25 option B): a late
+/// action that succeeded is still registered for Undo; a late failure is dropped (no restore
+/// into the new folder's catalog).
 /// </para>
 /// </summary>
 [Collection("GlobalState")]
@@ -117,7 +120,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
         }
     }
 
-    [Fact(DisplayName = "INV-5: Move completing after folder switch does not mutate new catalog or register undo")]
+    [Fact(DisplayName = "INV-5 + APP-03: Move completing after folder switch leaves the new catalog alone, registers undo, and Undo restores into the old folder")]
     public async Task MoveCompletingAfterFolderSwitchDoesNotMutateNewCatalogOrRegisterUndo()
     {
         using var root = new TempRoot("t14c-inv5");
@@ -206,13 +209,15 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.DoesNotContain(fileA1, finalCatalogB, StringComparer.OrdinalIgnoreCase);
                 Assert.DoesNotContain(fileA2, finalCatalogB, StringComparer.OrdinalIgnoreCase);
 
-                // (b) No undo entry was registered for the stale move:
+                // (b) APP-03 (Q-R25 option B): the late move is real on disk, so it IS registered for Undo
+                // (only the new folder's catalog/session are left alone):
+                var movedTarget = Path.Combine(destination, "a1.png");
                 var moveHistory = GetMoveHistory(window);
-                Assert.Empty(moveHistory);
-                Assert.Null(GetLastUndoAction(window));
+                var entry = Assert.Single(moveHistory);
+                Assert.Equal(fileA1, entry.Source, ignoreCase: true);
+                Assert.Equal(movedTarget, entry.Destination, ignoreCase: true);
 
                 // (c) The filesystem move of a1.png itself succeeded on disk:
-                var movedTarget = Path.Combine(destination, "a1.png");
                 Assert.True(File.Exists(movedTarget), "The file was not moved to destination.");
                 Assert.False(File.Exists(fileA1), "The source file still exists in folder A.");
 
@@ -220,14 +225,92 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.True(File.Exists(fileB1), "b1.png was unexpectedly affected.");
                 Assert.True(File.Exists(fileB2), "b2.png was unexpectedly affected.");
 
-                // (e) Triggering Undo has no effect and touches no files:
+                // (e) Undo restores a1.png to folder A (not into folder B's catalog) and reopens folder A at it (R7-2):
                 await TriggerUndoAsync(window);
+                Assert.True(
+                    await StaTestHost.WaitForAsync(() => window.Files.Any(p => string.Equals(p, fileA1, StringComparison.OrdinalIgnoreCase)), PresentTimeout),
+                    $"Undo did not reopen folder A at the restored file. StatusText={window.StatusText.Text}");
                 await DrainAsync(DrainWindow);
 
-                Assert.True(File.Exists(movedTarget), "Undo unexpectedly moved a file.");
-                Assert.False(File.Exists(fileA1), "Undo unexpectedly restored fileA1.");
+                Assert.True(File.Exists(fileA1), "Undo did not restore a1.png to folder A.");
+                Assert.False(File.Exists(movedTarget), "Undo left a1.png in the destination.");
                 Assert.Empty(GetMoveHistory(window));
-                Assert.Null(GetLastUndoAction(window));
+                Assert.DoesNotContain(fileB1, window.Files, StringComparer.OrdinalIgnoreCase);
+                Assert.True(File.Exists(fileB1) && File.Exists(fileB2), "Undo touched folder B's files.");
+            });
+        }
+        finally
+        {
+            moveGate.TrySetResult();
+            await CloseAsync(window);
+        }
+    }
+
+    [Fact(DisplayName = "INV-5: a Move failing after a folder switch does not restore its source into the new folder")]
+    public async Task MoveFailingAfterFolderSwitchDoesNotRestoreSourceIntoNewCatalog()
+    {
+        using var root = new TempRoot("t14c-inv5-fail");
+        using var dataRoot = new DataRootFixture();
+        var folderA = root.Dir("imagesA");
+        var folderB = root.Dir("imagesB");
+        var destination = root.Dir("sorted");
+
+        var fileA1 = Path.Combine(folderA, "a1.png");
+        var fileB1 = Path.Combine(folderB, "b1.png");
+        var fileB2 = Path.Combine(folderB, "b2.png");
+
+        var presented = new List<string>();
+        var moveGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var moveInvocations = 0;
+        MainWindow? window = null;
+
+        try
+        {
+            await StaTestHost.RunAsync(async () =>
+            {
+                WriteTestImages(folderA, "a1.png", "a2.png");
+                WriteTestImages(folderB, "b1.png", "b2.png");
+
+                var hooks = new TestHostHooks
+                {
+                    OnPresented = presented.Add,
+                    MoveOverride = async (_, _) =>
+                    {
+                        Interlocked.Increment(ref moveInvocations);
+                        await moveGate.Task;
+                        throw new IOException("T14c: simulated move failure after the folder switch");
+                    },
+                };
+                window = TestAppHost.CreateMainWindow(folderA, hooks);
+
+                Assert.True(
+                    await StaTestHost.WaitForAsync(() => presented.Count > 0, PresentTimeout),
+                    $"Folder A never presented its first image. StatusText={window.StatusText.Text}");
+                Assert.Equal(fileA1, presented[0], ignoreCase: true);
+
+                InstallTestAction(window, destination);
+                Assert.True(PressKey(window, ActionKey), "The key press did not reach the action branch of Window_KeyDown.");
+                Assert.Equal(1, Volatile.Read(ref moveInvocations));
+
+                await LoadFolderAsync(window, folderB);
+                Assert.True(
+                    await StaTestHost.WaitForAsync(() => presented.Any(p => string.Equals(p, fileB1, StringComparison.OrdinalIgnoreCase)), PresentTimeout),
+                    $"Folder B was not presented. StatusText={window.StatusText.Text}");
+
+                moveGate.SetResult();
+                Assert.True(
+                    await StaTestHost.WaitForAsync(() => FileActionInProgress(window) == 0, SettleTimeout),
+                    "The failed move never released the in-flight guard.");
+                await DrainAsync(DrainWindow);
+
+                // Without the stale-folder guard the failure branch would Restore(a1) into folder B's catalog.
+                Assert.Equal(
+                    new[] { fileB1, fileB2 },
+                    window.Files.ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+                Assert.Empty(GetMoveHistory(window));
+                Assert.True(File.Exists(fileA1), "a1.png left folder A although the move failed.");
+                Assert.False(File.Exists(Path.Combine(destination, "a1.png")), "A failed move reached the destination.");
             });
         }
         finally
@@ -239,7 +322,10 @@ public sealed class MainWindowBehaviorFolderSwitchTests
 
     private static void InstallTestAction(MainWindow window, string destinationFolder)
     {
-        var settings = Field<AppSettings>(window, "_settings");
+        // Through SettingsStore.Save, as the Settings window does: MainWindow rebuilds its ShortcutRouter from the
+        // store's Changed event, so mutating the live _settings object would leave the action key unmapped.
+        var store = Field<SettingsStore>(window, "_settingsStore");
+        var settings = store.Current;
         settings.Shortcuts = ShortcutMappings.Default();
         settings.Actions =
         [
@@ -252,6 +338,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Confirm = false,
             },
         ];
+        store.Save(settings);
     }
 
     private static bool PressKey(MainWindow window, Key key)
