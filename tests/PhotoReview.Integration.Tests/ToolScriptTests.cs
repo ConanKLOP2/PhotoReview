@@ -16,6 +16,13 @@ internal static class PowerShellRunner
         throw new DirectoryNotFoundException("PhotoReview.slnx not found above " + AppContext.BaseDirectory);
     }
 
+    /// <summary>
+    /// The test run may itself be started from PowerShell 7 (CI does). Windows PowerShell 5.1 children then inherit the
+    /// PS7 <c>PSModulePath</c>, cannot load the PS7 build of Microsoft.PowerShell.Utility and lose cmdlets such as
+    /// Get-FileHash. Dropping the variable makes the child compute its own default module path.
+    /// </summary>
+    internal static void ForWindowsPowerShell(ProcessStartInfo psi) => psi.Environment.Remove("PSModulePath");
+
     private static readonly string[] BaseArgs = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass"];
 
     /// <summary>Runs <c>powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass</c> with the arguments; output is decoded as UTF-8.</summary>
@@ -27,6 +34,7 @@ internal static class PowerShellRunner
             StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
         };
         foreach (var a in BaseArgs.Concat(args)) psi.ArgumentList.Add(a);
+        ForWindowsPowerShell(psi);
         using var p = Process.Start(psi)!;
         var stderr = p.StandardError.ReadToEndAsync();
         var stdout = p.StandardOutput.ReadToEndAsync();
@@ -220,7 +228,7 @@ public sealed class FetchNativeScriptTests : IDisposable
 
         var (code, output) = Fetch(repo);
 
-        Assert.Equal(0, code);
+        Assert.True(code == 0, "fetch-native exit " + code + ": " + output);
         Assert.Contains("is present and SHA-256 matches", output, StringComparison.Ordinal);
         Assert.Equal(Dll, File.ReadAllBytes(Path.Combine(repo, "native", "x64", "turbojpeg.dll")));
     }
@@ -465,6 +473,6 @@ public sealed class ToolScriptEncodingTests : IDisposable
         var (code, output) = PowerShellRunner.Run("-File", script, "-ReleaseDirectory", release);
 
         Assert.NotEqual(0, code);
-        Assert.Contains("turbojpeg.dll SHA-256 mismatch", output, StringComparison.Ordinal);
+        Assert.True(output.Contains("turbojpeg.dll SHA-256 mismatch", StringComparison.Ordinal), "verify-release output: " + output);
     }
 }
