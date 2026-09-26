@@ -47,6 +47,7 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.ToolbarAutoHide), nameof(AppSettings.ToolbarAutoHideDelayMs), nameof(AppSettings.InfoOverlayFontSize),
         // Q-R34
         nameof(AppSettings.InfoOverlayAutoHide), nameof(AppSettings.InfoOverlayAutoHideDelayMs), nameof(AppSettings.ToolbarOpacityPercent),
+        nameof(AppSettings.ArrowPanStepPercent),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]

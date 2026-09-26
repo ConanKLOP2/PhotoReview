@@ -467,6 +467,21 @@ public sealed class PointerInputControllerTests
     }
 
     [Fact]
+    public void Arrow_StepFollowsTheArrowPanStepPercentSetting()
+    {
+        _settings.ArrowPanStepPercent = 25;
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 100;
+        _surface.VerticalOffset = 100;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Equal((300, 100), _surface.Scrolls[^1]); // 25 % of the 800-wide viewport
+        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.Equal((300, 250), _surface.Scrolls[^1]); // 25 % of the 600-high viewport
+    }
+
+    [Fact]
     public void Arrow_StepIsClampedToTheEdge()
     {
         _surface.ExtentWidth = 2000;

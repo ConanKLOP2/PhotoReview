@@ -352,7 +352,8 @@ internal sealed class PointerInputController
         };
         if ((dx, dy) == (0, 0) || !_surface.IsLoaded || !_commands.HasImages()) return false;
         var bounds = new ScrollBounds(_surface.ExtentWidth, _surface.ExtentHeight, _surface.ViewportWidth, _surface.ViewportHeight);
-        var (result, horizontal, vertical) = KeyboardPan.Step(dx, dy, _surface.HorizontalOffset, _surface.VerticalOffset, bounds);
+        var (result, horizontal, vertical) = KeyboardPan.Step(dx, dy, _surface.HorizontalOffset, _surface.VerticalOffset, bounds,
+            _settings().ArrowPanStepPercent / 100.0);
         switch (result)
         {
             case KeyboardPanResult.Panned:
