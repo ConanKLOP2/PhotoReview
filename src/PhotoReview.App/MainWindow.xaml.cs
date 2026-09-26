@@ -81,7 +81,7 @@ public partial class MainWindow : Window
         _shortcutRouter = new ShortcutRouter(_settings);
         // R2-F-27: the router/VM are refreshed here (settings change), not on every key press.
         _viewModel.Settings = _settings;
-        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); ApplyToolbarVisibility(); };
+        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); ApplyToolbarVisibility(); NoteInfoActivity(); };
         PhotoReviewPerf.StartupMark("mainWindowCtor");
         // I18N: a live language switch re-renders the texts the ViewModel builds in code (ADR 0006).
         Localizer.CurrentChanged += OnLanguageChanged;
@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         UpdateTargetDecodeBox();
         WireViewModelEvents();
         InitToolbarAutoHide();
+        InitInfoOverlayAutoHide();
     }
 
     public void InitializeWithInitialPath(string? initialPath)
@@ -124,7 +125,11 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _pointer.OnCurrentIndexChanged(_viewModel.CurrentIndex);
             // feat/ui-dark-chrome-toolbar: no folder open forces the toolbar visible (ToolbarAutoHidePolicy).
             if (e.PropertyName == nameof(MainViewModel.HasImages)) ApplyToolbarVisibility();
+            // Q-R34: navigation is activity (a new photo's info shows for the delay); HasImages/StatusText change what must stay visible.
+            if (e.PropertyName is nameof(MainViewModel.CurrentIndex) or nameof(MainViewModel.CurrentImage)) NoteInfoActivity();
+            else if (e.PropertyName is nameof(MainViewModel.HasImages) or nameof(MainViewModel.StatusText) or nameof(MainViewModel.HasSkippedEntries)) ApplyInfoOverlayVisibility();
         };
+        _viewModel.Compare.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(CompareViewModel.IsVisible)) NoteInfoActivity(); };
         // feat/mouse-zoom: any zoom change (wheel, keys, click, Fit) stops a glide; so does leaving the window.
         _viewModel.Viewer.ZoomModeChanged += (_, _) => _pointer.StopKinetic();
         Deactivated += (_, _) => _pointer.StopKinetic();
@@ -224,6 +229,7 @@ public partial class MainWindow : Window
 
     private void Window_MouseMove(object sender, MouseEventArgs e)
     {
+        NoteInfoActivity();
         if (ToolbarPanel is null) return;
         var topLeft = ToolbarPanel.TranslatePoint(new Point(0, 0), this);
         var position = e.GetPosition(this);
@@ -240,11 +246,12 @@ public partial class MainWindow : Window
     private void ApplyToolbarVisibility()
     {
         if (_toolbarHideTimer is null) return; // constructor still running
-        var keepVisible = ToolbarAutoHidePolicy.MustStayVisible(
+        var keepVisible = ToolbarAutoHidePolicy.IsShown(
             autoHideEnabled: _settings.ToolbarAutoHide,
             hasFolderOpen: _viewModel.HasImages,
             isToolsPopupOpen: ToolsButton.IsChecked == true,
-            isKeyboardFocusInsideToolbar: ToolbarPanel.IsKeyboardFocusWithin) || _toolbarMouseInsideHotZone;
+            isKeyboardFocusInsideToolbar: ToolbarPanel.IsKeyboardFocusWithin,
+            isMouseInsideHotZone: _toolbarMouseInsideHotZone);
 
         if (keepVisible)
         {
@@ -255,19 +262,67 @@ public partial class MainWindow : Window
         {
             // Just became eligible to hide: start counting down (does not restart on every later
             // mouse move outside the hot zone, so it hides at the configured delay after leaving).
-            var delayMs = Math.Clamp(_settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);
-            _toolbarHideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, delayMs));
+            _toolbarHideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, ToolbarAutoHidePolicy.DelayMs(_settings)));
             _toolbarHideTimer.Start();
         }
         _toolbarWasKeptVisible = keepVisible;
     }
 
-    private void SetToolbarOpacity(bool visible)
+    // The visible toolbar sits at the user's opacity (never below the minimum); hidden is always 0.
+    private void SetToolbarOpacity(bool visible) => FadeTo(ToolbarPanel, visible, ToolbarAutoHidePolicy.TargetOpacity(_settings.ToolbarOpacityPercent));
+
+    /// <summary>Shared fade for the toolbar and the info overlays; faded out = click-through so clicks/wheel/pan reach the image.</summary>
+    private static void FadeTo(UIElement element, bool visible, double visibleOpacity = 1.0)
     {
-        var animation = new DoubleAnimation(visible ? 1.0 : 0.0, TimeSpan.FromMilliseconds(visible ? ToolbarFadeInMs : ToolbarFadeOutMs));
-        ToolbarPanel.BeginAnimation(OpacityProperty, animation);
-        // Faded out: let clicks/wheel/pan through to the image underneath instead of the invisible toolbar.
-        ToolbarPanel.IsHitTestVisible = visible;
+        var animation = new DoubleAnimation(visible ? visibleOpacity : 0.0, TimeSpan.FromMilliseconds(visible ? ToolbarFadeInMs : ToolbarFadeOutMs));
+        element.BeginAnimation(OpacityProperty, animation);
+        element.IsHitTestVisible = visible;
+    }
+
+    // ---- Q-R34: info-overlay auto-hide. Decision logic is InfoOverlayAutoHidePolicy (unit-tested); this region
+    // only tracks idle time (mouse / wheel / key / navigation) and animates InfoOverlayHost. Uses its own
+    // InfoOverlayAutoHideDelayMs (independent of the toolbar's). Window inactive (dialog, Settings, other app) keeps the overlays visible. ----
+
+    private DispatcherTimer? _infoHideTimer;
+    private bool _infoIdleElapsed;
+    private bool _infoWasKeptVisible = true;
+
+    private void InitInfoOverlayAutoHide()
+    {
+        _infoHideTimer = new DispatcherTimer();
+        _infoHideTimer.Tick += (_, _) => { _infoHideTimer!.Stop(); _infoIdleElapsed = true; ApplyInfoOverlayVisibility(); };
+        PreviewMouseWheel += (_, _) => NoteInfoActivity();
+        PreviewKeyDown += (_, _) => NoteInfoActivity();
+        Activated += (_, _) => NoteInfoActivity();
+        Deactivated += (_, _) => ApplyInfoOverlayVisibility();
+        ApplyInfoOverlayVisibility();
+    }
+
+    /// <summary>Activity (mouse move/wheel/click, key, navigation, settings change): show the overlays and restart the idle countdown.</summary>
+    private void NoteInfoActivity()
+    {
+        if (_infoHideTimer is null) return; // constructor still running
+        _infoIdleElapsed = false;
+        _infoHideTimer.Stop();
+        ApplyInfoOverlayVisibility();
+        if (_infoWasKeptVisible) return; // nothing can hide right now (feature off, message, compare, inactive): no countdown
+        _infoHideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, InfoOverlayAutoHidePolicy.DelayMs(_settings)));
+        _infoHideTimer.Start();
+    }
+
+    private void ApplyInfoOverlayVisibility()
+    {
+        if (_infoHideTimer is null) return;
+        var keepVisible = InfoOverlayAutoHidePolicy.MustStayVisible(
+            autoHideEnabled: _settings.InfoOverlayAutoHide, hasFolderOpen: _viewModel.HasImages,
+            statusNeedsAttention: _viewModel.StatusNeedsAttention, isCompareOpen: _viewModel.Compare.IsVisible, isWindowActive: IsActive);
+        var wasKept = _infoWasKeptVisible;
+        _infoWasKeptVisible = keepVisible;
+        // A message/loading/dialog just ended: count the idle delay from now, not from the last activity.
+        if (wasKept && !keepVisible) { NoteInfoActivity(); return; }
+        var outcome = InfoOverlayAutoHidePolicy.Evaluate(
+            _settings.InfoOverlayAutoHide, _viewModel.HasImages, _viewModel.StatusNeedsAttention, _viewModel.Compare.IsVisible, IsActive, _infoIdleElapsed);
+        FadeTo(InfoOverlayHost, outcome.Opacity > 0);
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();

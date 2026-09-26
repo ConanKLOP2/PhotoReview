@@ -45,6 +45,7 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-R33 | Features | Sort options "Default" (folder order as received) + "Name A→Z / Z→A" (app order) | ✅ DECIDED 2026-09-26 (user) — new `ImageSortMode.Default` (catalog keeps the file system's enumeration order: no sort) and `NameAscending`/`NameDescending` (app natural name order, Z→A = exact reverse). None of the three starts or applies the Explorer view query (`SortModePolicy`); `Name` keeps following Explorer and stays the default for new installs | ImageSortService, FolderLoadCoordinator, SettingsWindow |
 
 | Q-R31 | Features | Preload window size | ✅ DECIDED 2026-09-26 (user) — forward/backward counts configurable in Settings ▸ Performance (defaults 32/8, 1–500 / 0–500, RAM floor follows the window, applies after restart); branch feat/preload-window-setting | PreloadWindow, SettingsNormalizer |
+| Q-R34 | UI | Toolbar auto-hide default off; auto-hide for the info over the photo | ✅ DECIDED 2026-09-26 (user) — ToolbarAutoHide default false (saved true kept), hides fully and only the mouse near it brings it back, own delay (1500) + opacity % (default 100, min 20); new InfoOverlayAutoHide (default off, own delay 3000, own Settings group) fades every info overlay on the photo, visible again on mouse/key/navigation, never while a message/progress/compare/dialog needs it | InfoOverlayAutoHidePolicy, ToolbarAutoHidePolicy |
 
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 

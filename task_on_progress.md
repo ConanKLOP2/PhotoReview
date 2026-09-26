@@ -1,6 +1,6 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-26 | **Base:** `6bbe3b1` | **Open PRs:** #127
+**Updated:** 2026-09-26 | **Base:** master `bf7e99a` (#128) | **Open PRs:** #129
 
 ## Now
 
@@ -8,7 +8,7 @@
 - **NAS report:** 40 s to first image = pre-AR16 per-file open, fixed ≥v2.0.111 (test #122). Follow-ups: Q-R29.
 - **Done 2026-09-26 (#94–#112 merged):** architecture review AR10–AR19 ([summary](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md); #106, AR16/Q-AR7 (c) background readability probe #107), benchmark speed-up #109 (gate −34 %, quick −24 %, in-app Quick check), stale Slow MainWindow tests #110, journal test-host crash #112, source audit F0–F4 closed. Details and numbers: [progress log](docs/archive/progress-log-2026-09.md#2026-09-26-late), `PERF-STATUS.md`.
 - **GUI checks — user reported "GUI OK" (2026-09-26):** AR13 (pan + glide, wheel zoom at cursor, Ctrl+wheel navigation, click-to-zoom, Fit after resize/DPI change, skipped-files list), AR16 (locked file: first image at once, then the warning), Settings > Updates and Defaults, close during a folder scan, Recycle Bin undo, decoder fallbacks with damaged EXIF/ICC, T89 Fit.
-- **Measured 2026-09-26 (PERF-STATUS):** natural sort / snapshot validator confirmed on an idle PC (validator ×2.36, sort ×1.59, no allocations); Q-R17 on F4 fills the whole folder (~10 GB) but first-visual latency is ~2.5–3× higher in steady state → **Q-R26 = B** (user): keep Q-R17, find the cause. Round 2 (idle PC): cause = whole-folder preload pass running every image's cache lookup on the UI thread per navigation; fixed in `perf/q-r26-preload-kick-off-ui` (first-visual back to window-mode level, whole folder still cached).
+- **Measured 2026-09-26 (PERF-STATUS):** natural sort / snapshot validator confirmed (validator ×2.36, sort ×1.59); Q-R17 first-visual ~2.5–3× slower → **Q-R26 = B**: cause = per-navigation whole-folder cache lookup on the UI thread; fixed in `perf/q-r26-preload-kick-off-ui`.
 - **Q-R27 = D (#116):** each running operation holds a named kernel event (`WindowsLiveOperationRegistry`) from Prepared to its outcome; startup reconcile skips live operations, so a second process no longer reports them Failed.
 - **Q-R28 = A (i18n export, branch `feat/i18n-export-all`):** Settings > Export strings to translate now writes every key (missing first + `_missing` list, then current translations, notes for all); `plural: none` languages no longer get unused `.one` keys. Settings > Reload translations now shows a message: "no problems" or the list of problems (skipped files, entries falling back to English; first 15, rest counted). Tests + 9 mutations pass; GUI look of the message still to be checked by the user.
 - **Tests never touch the real config.json (`fix/isolate-test-config`, merged):** `DataRootFixture` sets `PHOTOREVIEW_ISOLATE_CONFIG=1`, so `config.json` goes under the temp data root.
@@ -16,6 +16,7 @@
 - **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan (never leaves a zoomed image; `ArrowKeyNavigatesAtZoomEdge`), dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields (default folder name), optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **User GUI check: OK.** #109 GUI check: OK.
 - **Sort (Q-R33, #127):** Default / Name A→Z / Z→A ignore Explorer order; Name follows it.
 - **Zoom submenu (branch `feat/zoom-menu-presets`):** context menu "Zoom": Fit + 200/300/400 % added; GUI check pending.
+- **Info auto-hide (Q-R34, `feat/info-overlay-autohide`):** `ToolbarAutoHide` default off (saved `true` kept; own delay, opacity % min 20); new `InfoOverlayAutoHide` (off, own delay 3000) fades status/EXIF/folder info, never while a message/Compare/dialog. **GUI check pending.**
 - **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.

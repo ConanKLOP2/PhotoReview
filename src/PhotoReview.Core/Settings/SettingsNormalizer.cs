@@ -142,6 +142,18 @@ public static class SettingsNormalizer
             settings.ToolbarAutoHideDelayMs = toolbarDelay;
             fixedNames.Add(nameof(AppSettings.ToolbarAutoHideDelayMs));
         }
+        var infoDelay = Math.Clamp(settings.InfoOverlayAutoHideDelayMs, AppSettings.MinInfoOverlayAutoHideDelayMs, AppSettings.MaxInfoOverlayAutoHideDelayMs);
+        if (infoDelay != settings.InfoOverlayAutoHideDelayMs)
+        {
+            settings.InfoOverlayAutoHideDelayMs = infoDelay;
+            fixedNames.Add(nameof(AppSettings.InfoOverlayAutoHideDelayMs));
+        }
+        var toolbarOpacity = Math.Clamp(settings.ToolbarOpacityPercent, AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
+        if (toolbarOpacity != settings.ToolbarOpacityPercent)
+        {
+            settings.ToolbarOpacityPercent = toolbarOpacity;
+            fixedNames.Add(nameof(AppSettings.ToolbarOpacityPercent));
+        }
         var infoFontSize = Math.Clamp(settings.InfoOverlayFontSize, AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize);
         if (infoFontSize != settings.InfoOverlayFontSize)
         {

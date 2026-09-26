@@ -210,7 +210,7 @@ public sealed class ImagePresenter
                 UpdateCurrentImage(null);
                 // Same for a visible comparison pair: it is not this file, and the catalog stays untouched.
                 _compareViewModel.Clear();
-                UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(initialStatError!)));
+                UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(initialStatError!)), needsAttention: true);
             }
 
             return;
@@ -259,7 +259,7 @@ public sealed class ImagePresenter
             ? StatusFormatter.Ready(index, _catalog.Count, initialSize, Path.GetFileName(path))
             : StatusFormatter.Loading(index, _catalog.Count, initialSize);
 
-        UpdateStatus(initialStatus);
+        UpdateStatus(initialStatus, needsAttention: !ramReady);
 
         if (AppLog.Enabled)
             AppLog.Info($"ShowImage cache-state token={token} path={path} ramReady={ramReady} cacheBytes={_previewService.CacheBytes}");
@@ -323,7 +323,7 @@ public sealed class ImagePresenter
                         if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
 
                         _sink.ApplyInitialViewMode();
-                        UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize));
+                        UpdateStatus(StatusFormatter.LoadingFullRes(index, _catalog.Count, initialSize), needsAttention: true);
                     }
                     // else: source has no embedded thumbnail (or isn't a JPEG) -- nothing to show
                     // yet; fall through to step 5, which is already awaiting the same preview task.
@@ -418,7 +418,7 @@ public sealed class ImagePresenter
                     CurrentPhotoInfo = PhotoInfo.From(path, image);
                     UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
                     _sink.ApplyInitialViewMode();
-                    UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(partner), UserFacingError.Describe(ex)));
+                    UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(partner), UserFacingError.Describe(ex)), needsAttention: true);
                     return;
                 }
 
@@ -499,7 +499,7 @@ public sealed class ImagePresenter
         {
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
             CurrentPhotoInfo = null;
-            UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)));
+            UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)), needsAttention: true);
         }
         catch (Exception ex)
         {
@@ -526,7 +526,7 @@ public sealed class ImagePresenter
                 _zoomDetail.Reset();
                 UpdateCurrentImage(null);
                 _compareViewModel.Clear();
-                UpdateStatus(StatusFormatter.NoImagesRemaining());
+                UpdateStatus(StatusFormatter.NoImagesRemaining(), needsAttention: true);
                 return;
             }
 
@@ -569,9 +569,16 @@ public sealed class ImagePresenter
         _sink.SetCurrentImage(image);
     }
 
-    private void UpdateStatus(string status)
+    /// <summary>
+    /// Q-R34: true while the current status is a loading/error/no-images message that the info auto-hide must never
+    /// fade out (a normal "index / size / name" line is false).
+    /// </summary>
+    public bool StatusNeedsAttention { get; private set; }
+
+    private void UpdateStatus(string status, bool needsAttention = false)
     {
         StatusText = status;
+        StatusNeedsAttention = needsAttention;
         _sink.SetStatusText(status);
     }
 

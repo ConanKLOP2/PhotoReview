@@ -106,6 +106,8 @@
                 </StackPanel>
             </StackPanel>
         </Border>
+        <!-- Q-R34: one container for every info overlay on the photo; auto-hide animates only its Opacity/IsHitTestVisible. -->
+        <Grid x:Name="InfoOverlayHost">
         <Border x:Name="StatusPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" Visibility="{Binding IsStatusPanelVisible, Converter={StaticResource BoolToVis}}">
             <StackPanel>
                 <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="{Binding InfoOverlay.FontSize}" TextTrimming="CharacterEllipsis" Visibility="{Binding InfoOverlay.IsFileInfoVisible, Converter={StaticResource BoolToVis}}" />
@@ -120,5 +122,6 @@
         <Border x:Name="FolderInfoPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" MaxWidth="640" AutomationProperties.Name="{loc:Tr main.folderInfo.automationName}" Visibility="{Binding InfoOverlay.IsFolderInfoVisible, Converter={StaticResource BoolToVis}}">
             <TextBlock x:Name="FolderInfoText" Text="{Binding InfoOverlay.FolderInfoText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="{Binding InfoOverlay.FontSize}" TextTrimming="CharacterEllipsis" />
         </Border>
+        </Grid>
     </Grid>
 </Window>

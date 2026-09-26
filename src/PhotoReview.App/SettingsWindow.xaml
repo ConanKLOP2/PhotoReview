@@ -142,10 +142,28 @@
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.toolbar}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <CheckBox x:Name="ToolbarAutoHideCheck" Grid.Row="0" Grid.ColumnSpan="2" Content="{loc:Tr settings.toolbarAutoHide.label}" Checked="ToolbarAutoHideCheck_CheckedChanged" Unchecked="ToolbarAutoHideCheck_CheckedChanged"/>
                             <TextBlock x:Name="ToolbarAutoHideDelayLabel" Text="{loc:Tr settings.toolbarAutoHideDelay.label}" Grid.Row="1" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="ToolbarAutoHideDelayBox" AutomationProperties.LabeledBy="{Binding ElementName=ToolbarAutoHideDelayLabel}" AutomationProperties.Name="{loc:Tr settings.toolbarAutoHideDelay.automationName}" Grid.Row="1" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource HelpText}" Text="{loc:Tr settings.toolbarAutoHide.hint}"/>
+                            <!-- Q-R34: toolbar opacity while visible, [MinToolbarOpacityPercent, 100]; applies on Save. -->
+                            <TextBlock x:Name="ToolbarOpacityLabel" Text="{loc:Tr settings.toolbarOpacity.label}" Grid.Row="3" Style="{StaticResource FormLabel}" Margin="0,10,12,10"/>
+                            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,10">
+                                <Slider x:Name="ToolbarOpacitySlider" Width="260" VerticalAlignment="Center" IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" LargeChange="10"
+                                        AutomationProperties.Name="{loc:Tr settings.toolbarOpacity.automationName}" ValueChanged="ToolbarOpacitySlider_ValueChanged"/>
+                                <TextBlock x:Name="ToolbarOpacityValueText" VerticalAlignment="Center" Margin="12,0,0,0" AutomationProperties.LiveSetting="Polite"/>
+                            </StackPanel>
+                            <TextBlock x:Name="ToolbarOpacityHint" Grid.Row="4" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                        </Grid></GroupBox>
+
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.infoOverlay}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <CheckBox x:Name="InfoOverlayAutoHideCheck" Grid.Row="0" Grid.ColumnSpan="2" Content="{loc:Tr settings.infoOverlayAutoHide.label}" AutomationProperties.Name="{loc:Tr settings.infoOverlayAutoHide.automationName}" Checked="InfoOverlayAutoHideCheck_CheckedChanged" Unchecked="InfoOverlayAutoHideCheck_CheckedChanged"/>
+                            <TextBlock x:Name="InfoOverlayAutoHideDelayLabel" Text="{loc:Tr settings.infoOverlayAutoHideDelay.label}" Grid.Row="1" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="InfoOverlayAutoHideDelayBox" AutomationProperties.LabeledBy="{Binding ElementName=InfoOverlayAutoHideDelayLabel}" AutomationProperties.Name="{loc:Tr settings.infoOverlayAutoHideDelay.automationName}" Grid.Row="1" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource HelpText}" Text="{loc:Tr settings.infoOverlayAutoHide.hint}"/>
                         </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.displayPerformance}"><Grid>

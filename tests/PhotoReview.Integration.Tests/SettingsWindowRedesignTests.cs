@@ -45,6 +45,8 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.PreloadForwardCount), nameof(AppSettings.PreloadBackwardCount),
         // feat/ui-dark-chrome-toolbar
         nameof(AppSettings.ToolbarAutoHide), nameof(AppSettings.ToolbarAutoHideDelayMs), nameof(AppSettings.InfoOverlayFontSize),
+        // Q-R34
+        nameof(AppSettings.InfoOverlayAutoHide), nameof(AppSettings.InfoOverlayAutoHideDelayMs), nameof(AppSettings.ToolbarOpacityPercent),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]

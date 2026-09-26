@@ -18,11 +18,18 @@ public sealed class ToolbarAutoHideSettingsTests
     }
 
     [Fact]
-    public void Defaults_ToolbarAutoHideOnWith1500msDelayAndFontSize12()
+    public void Defaults_AutoHideOffWith1500msDelayAndFontSize12()
     {
         var settings = new AppSettings();
 
-        Assert.True(settings.ToolbarAutoHide);
+        Assert.False(settings.ToolbarAutoHide);
+        Assert.False(settings.InfoOverlayAutoHide);
+        Assert.Equal(3000, settings.InfoOverlayAutoHideDelayMs);
+        Assert.Equal(100, settings.ToolbarOpacityPercent);
+        Assert.Equal(20, AppSettings.MinToolbarOpacityPercent);
+        Assert.Equal(100, AppSettings.MaxToolbarOpacityPercent);
+        Assert.Equal(0, AppSettings.MinInfoOverlayAutoHideDelayMs);
+        Assert.Equal(10000, AppSettings.MaxInfoOverlayAutoHideDelayMs);
         Assert.Equal(1500, settings.ToolbarAutoHideDelayMs);
         Assert.Equal(12, settings.InfoOverlayFontSize);
         Assert.Equal(0, AppSettings.MinToolbarAutoHideDelayMs);
@@ -38,7 +45,10 @@ public sealed class ToolbarAutoHideSettingsTests
 
         var loaded = _store.Load();
 
-        Assert.True(loaded.ToolbarAutoHide);
+        Assert.False(loaded.ToolbarAutoHide);
+        Assert.False(loaded.InfoOverlayAutoHide);
+        Assert.Equal(3000, loaded.InfoOverlayAutoHideDelayMs);
+        Assert.Equal(100, loaded.ToolbarOpacityPercent);
         Assert.Equal(1500, loaded.ToolbarAutoHideDelayMs);
         Assert.Equal(12, loaded.InfoOverlayFontSize);
         Assert.Empty(_store.LastLoadRepairs);
@@ -72,6 +82,60 @@ public sealed class ToolbarAutoHideSettingsTests
 
         Assert.Equal(delayMs, settings.ToolbarAutoHideDelayMs);
         Assert.Empty(repairs);
+    }
+
+    [Theory]
+    [InlineData(-5, 0)]
+    [InlineData(10001, 10000)]
+    public void Load_OutOfRangeInfoOverlayAutoHideDelay_IsClampedAndReported(int stored, int expected)
+    {
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $$"""{ "ConfigVersion": 3, "InfoOverlayAutoHideDelayMs": {{stored}} }"""));
+
+        var loaded = _store.Load();
+
+        Assert.Equal(expected, loaded.InfoOverlayAutoHideDelayMs);
+        Assert.Contains(nameof(AppSettings.InfoOverlayAutoHideDelayMs), _store.LastLoadRepairs);
+    }
+
+    [Theory]
+    [InlineData(5, 20)]
+    [InlineData(0, 20)]
+    [InlineData(-40, 20)]
+    [InlineData(500, 100)]
+    public void Load_OutOfRangeToolbarOpacity_IsClampedAndReported(int stored, int expected)
+    {
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $$"""{ "ConfigVersion": 3, "ToolbarOpacityPercent": {{stored}} }"""));
+
+        var loaded = _store.Load();
+
+        Assert.Equal(expected, loaded.ToolbarOpacityPercent);
+        Assert.Contains(nameof(AppSettings.ToolbarOpacityPercent), _store.LastLoadRepairs);
+    }
+
+    [Theory]
+    [InlineData(20)]
+    [InlineData(60)]
+    [InlineData(100)]
+    public void Normalize_InRangeToolbarOpacity_IsKeptUnreported(int percent)
+    {
+        var settings = new AppSettings { ToolbarOpacityPercent = percent };
+
+        var repairs = SettingsNormalizer.Normalize(settings);
+
+        Assert.Equal(percent, settings.ToolbarOpacityPercent);
+        Assert.Empty(repairs);
+    }
+
+    [Fact]
+    public void Normalize_SavedToolbarAutoHideTrue_IsKept_NoMigrationToTheNewDefault()
+    {
+        var settings = new AppSettings { ToolbarAutoHide = true };
+
+        SettingsNormalizer.Normalize(settings);
+
+        Assert.True(settings.ToolbarAutoHide);
     }
 
     [Theory]
@@ -111,6 +175,9 @@ public sealed class ToolbarAutoHideSettingsTests
         {
             ToolbarAutoHide = false,
             ToolbarAutoHideDelayMs = 3000,
+            InfoOverlayAutoHide = true,
+            InfoOverlayAutoHideDelayMs = 4500,
+            ToolbarOpacityPercent = 60,
             InfoOverlayFontSize = 18,
         };
 
@@ -121,6 +188,9 @@ public sealed class ToolbarAutoHideSettingsTests
         Assert.Contains("\"ToolbarAutoHide\": false", json, StringComparison.Ordinal);
         Assert.False(reloaded.ToolbarAutoHide);
         Assert.Equal(3000, reloaded.ToolbarAutoHideDelayMs);
+        Assert.True(reloaded.InfoOverlayAutoHide);
+        Assert.Equal(4500, reloaded.InfoOverlayAutoHideDelayMs);
+        Assert.Equal(60, reloaded.ToolbarOpacityPercent);
         Assert.Equal(18, reloaded.InfoOverlayFontSize);
     }
 }
