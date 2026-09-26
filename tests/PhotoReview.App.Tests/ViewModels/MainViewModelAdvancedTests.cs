@@ -478,6 +478,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => targetProvider().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => targetProvider().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => targetProvider().OnFailed(folder, exception);
+        public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => targetProvider().OnUnreadableRemovedAsync(removedPaths, currentRemoved);
     }
 
     private sealed class FakeRecycleBin : IRecycleBin

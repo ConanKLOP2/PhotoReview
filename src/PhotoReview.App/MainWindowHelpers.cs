@@ -132,4 +132,5 @@ internal sealed class ForwardingFolderSink(Func<IFolderLoadSink> target) : IFold
     public void OnOrderApplied(int count, int currentIndex, bool currentKept) => target().OnOrderApplied(count, currentIndex, currentKept);
     public void OnFilesSkipped(string folder, IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> skipped) => target().OnFilesSkipped(folder, skipped);
     public void OnFailed(string folder, Exception exception) => target().OnFailed(folder, exception);
+    public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => target().OnUnreadableRemovedAsync(removedPaths, currentRemoved);
 }

@@ -212,5 +212,59 @@ public class ReviewCatalogTests
         Assert.Equal(2, snapshot.Count);
         Assert.Equal("img1.jpg", snapshot[0]);
     }
+
+    [Fact(DisplayName = "AR16 RemovePaths: removing other entries keeps the current path, at its new index")]
+    public void RemovePaths_NonCurrent_KeepsCurrentByPath()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+        catalog.SetCurrent(2);
+        var version = catalog.StructuralVersion;
+
+        var removed = catalog.RemovePaths(["D.JPG", "a.jpg", "ghost.jpg"]);
+
+        Assert.Equal(["a.jpg", "d.jpg"], removed);
+        Assert.Equal(["b.jpg", "c.jpg", "e.jpg"], catalog.Paths);
+        Assert.Equal("c.jpg", catalog.Current?.Path);
+        Assert.Equal(1, catalog.CurrentIndex);
+        Assert.Equal(-1, catalog.IndexOf("a.jpg"));
+        Assert.NotEqual(version, catalog.StructuralVersion);
+    }
+
+    [Theory(DisplayName = "AR16 RemovePaths: a removed current advances exactly like Remove (Delete)")]
+    [InlineData(1, new[] { "b.jpg" }, "c.jpg")]
+    [InlineData(1, new[] { "b.jpg", "c.jpg" }, "d.jpg")]
+    [InlineData(4, new[] { "e.jpg" }, "d.jpg")]
+    [InlineData(3, new[] { "d.jpg", "e.jpg" }, "c.jpg")]
+    [InlineData(0, new[] { "a.jpg", "c.jpg" }, "b.jpg")]
+    public void RemovePaths_Current_AdvancesLikeDelete(int current, string[] unreadable, string expectedCurrent)
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+        catalog.SetCurrent(current);
+
+        catalog.RemovePaths(unreadable);
+
+        // Delete semantics: the first surviving neighbour after the removed current, else the last one.
+        Assert.Equal(5 - unreadable.Length, catalog.Count);
+        Assert.Equal(expectedCurrent, catalog.Current?.Path);
+        Assert.Equal(catalog.IndexOf(expectedCurrent), catalog.CurrentIndex);
+    }
+
+    [Fact(DisplayName = "AR16 RemovePaths: removing everything empties the catalog; nothing to remove changes nothing")]
+    public void RemovePaths_AllOrNone()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(["a.jpg", "b.jpg"]);
+        var version = catalog.StructuralVersion;
+
+        Assert.Empty(catalog.RemovePaths(["x.jpg"]));
+        Assert.Equal(version, catalog.StructuralVersion);
+        Assert.Equal(0, catalog.CurrentIndex);
+
+        Assert.Equal(2, catalog.RemovePaths(["a.jpg", "b.jpg"]).Count);
+        Assert.Equal(0, catalog.Count);
+        Assert.Equal(-1, catalog.CurrentIndex);
+    }
 }
 

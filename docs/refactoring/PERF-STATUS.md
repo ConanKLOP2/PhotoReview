@@ -82,3 +82,18 @@ Per PR (measured as it landed): #40 ICC via WIC color transform + Bgr32/Pbgra32 
 | AR16 probe (F4, 1841 files, warm OS cache, 1 warm-up + 7 alternating runs, scratch console app mirroring `EnumerateReadableFilesWithStat`) | enumerate + filter 4.0 / 5.1 ms (median / P90); + per-file open probe 117.4 / 140.9 ms; **probe cost 113.6 / 136.8 ms = 61.7 µs per file ≈ 68 % of the 166 ms first-visual baseline**. The probe (IO04, #66) landed after that baseline (#39–#48), so current open-folder first visual was never re-measured. Q-AR7 pending. |
 | AR15c `SourceBytesCache` read on the calling thread, `UseSourceBytesCache=true` via new `--source-bytes-cache on` (quick profile, interleaved, 2 rounds, variant = AR15c reverted) | S2 next-slow P50/P95 15.2/30.6 ms (variant) vs 15.2/30.5 ms (AR15c); peak WS 15.7 vs 15.2 GB; S3 burst 200/200 shown, 0 incomplete in all runs, peak WS < 1 % apart. **Not worse.** |
 
+
+## AR16 (c) readability probe moved off the first-visual path — 2026-09-26
+
+F4 (1841 files), Preview, warm, production graph, `run-matrix.ps1 -Scenarios s1-open-folder,s2-next-slow,s3-next-burst -Repeat 3`, interleaved master `f2661fc`, branch `perf/ar16-background-probe`, master, branch (+1 extra S3 round each). Medians over 6 runs per build; S2/S3 P95 per batch.
+
+| Metric | master | AR16 (c) |
+|---|---:|---:|
+| S1 T1 catalog ready (Folder trace) | 305 ms | **88 ms** |
+| S1 T0→T2 first present (Folder trace) | 603 ms | **353 ms** |
+| S1 first / final visual (nav metric) | 291 / 291 ms | **262 / 262 ms** |
+| S2 next-slow P95 | 10.2 / 10.3 ms | 7.8 / 11.1 ms |
+| S3 burst P95 (incomplete) | 12.5 (94) / 7.8 / 23.7 ms (0) | 16.9 / 13.2 / 20.7 ms (0) |
+| Peak WS S1 / S2 / S3 | 7.8–10.1 / 10.2 / 10.7 GB | 8.8–10.2 / 10.2 / 10.7 GB |
+
+- The listing no longer opens each file: catalog-ready drops ~217 ms, first present ~250 ms (Folder trace). S2/S3 P95 differences are inside same-build run-to-run noise (S3 master alone spans 7.8–23.7 ms); one branch S3 run had a 1.5 s max outlier not seen in the extra round. Peak WS unchanged. Raw data is not committed.

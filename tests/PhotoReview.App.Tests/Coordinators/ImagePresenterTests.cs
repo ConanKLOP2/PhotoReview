@@ -466,6 +466,25 @@ public sealed partial class ImagePresenterTests : IDisposable
         Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
     }
 
+    [Fact(DisplayName = "AR16: files removed before the current one while it decodes: preload re-centers on its new index, not the stale one")]
+    public async Task PresentAsync_CatalogPrunedDuringDecode_PreloadUsesTheCurrentIndex()
+    {
+        var f0 = CreateFakeImageFile("pruned0.jpg");
+        var f1 = CreateFakeImageFile("pruned1.jpg");
+        var f2 = CreateFakeImageFile("pruned2.jpg");
+        _catalog.Reset([f0, f1, f2]);
+        using var gatedDecoder = new GatedDecoder(new FakeDecodedImage());
+        var presenter = CreatePresenterWithServices(CreatePreviewService(gatedDecoder), _thumbnailCache);
+
+        var present = presenter.PresentAsync(2);
+        _catalog.RemovePaths([f0]); // the background readability probe keeps the current path, shifts its index
+        gatedDecoder.Release();
+        await present.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(f2, _catalog.Current?.Path);
+        Assert.Equal([1], _preloadController.PreloadAroundCalls);
+    }
+
     [Fact(DisplayName = "When the thumbnail finishes before the preview, it is shown first and then replaced once the preview completes")]
     public async Task PresentAsync_WhenThumbnailFasterThanPreview_ShowsThumbnailThenReplacesWithPreview()
     {

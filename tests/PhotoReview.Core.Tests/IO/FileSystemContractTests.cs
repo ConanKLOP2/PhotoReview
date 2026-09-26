@@ -303,4 +303,19 @@ public class FileSystemContractTests
         Assert.Contains("Child1", dirs);
         Assert.Contains("Child2", dirs);
     }
+
+    [Theory]
+    [MemberData(nameof(GetHarnessFactories))]
+    public void TryProbeReadable_ExistingFileIsReadable_MissingFileReportsAReason(Func<IFileSystemHarness> factory)
+    {
+        using var harness = factory();
+        var fs = harness.FileSystem;
+        var present = harness.Combine("present.jpg");
+        fs.WriteAllTextAtomic(present, "img");
+
+        Assert.True(fs.TryProbeReadable(present, out var none));
+        Assert.Null(none);
+        Assert.False(fs.TryProbeReadable(harness.Combine("missing.jpg"), out var reason));
+        Assert.False(string.IsNullOrWhiteSpace(reason));
+    }
 }

@@ -179,11 +179,57 @@ public sealed class PhysicalFileSystem : IFileSystem
     }
 
     /// <summary>
-    /// ADR 0007 section 3: no silent <c>IgnoreInaccessible</c>. Each included file is probed with a
-    /// read-open (no bytes read); one that cannot be opened, or an error in the middle of the
+    /// ADR 0007 section 3: no silent <c>IgnoreInaccessible</c>. Each included file is probed with
+    /// <see cref="TryProbeReadable"/>; one that cannot be opened, or an error in the middle of the
     /// directory listing, is reported through <paramref name="onSkipped"/> and skipped.
     /// </summary>
     public IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(
+        string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
+    {
+        ArgumentNullException.ThrowIfNull(onSkipped);
+        foreach (var file in EnumerateFilesWithStat(directory, include, onSkipped))
+        {
+            if (TryProbeReadable(file.Path, out var failure))
+            {
+                yield return file;
+            }
+            else
+            {
+                onSkipped(new SkippedEntry(file.Path, failure ?? string.Empty));
+            }
+        }
+    }
+
+    /// <summary>
+    /// AR16: one read-open (no bytes read, shares ReadWrite|Delete so it never blocks another app);
+    /// a locked, access-denied or otherwise unopenable file returns false with the OS message.
+    /// </summary>
+    public bool TryProbeReadable(string path, out string? failure)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        try
+        {
+            using var probe = new FileStream(
+                path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            failure = ex.Message;
+            return false;
+        }
+
+        failure = null;
+        return true;
+    }
+
+    /// <summary>
+    /// AR16 fast listing: the included files with the stat of their directory entry, no per-file
+    /// open. An error in the middle of the listing is reported through <paramref name="onSkipped"/>
+    /// (<see cref="SkippedKind.ListingInterrupted"/>) and keeps what was read; an error before the
+    /// first entry (the folder itself is unreadable) propagates.
+    /// </summary>
+    public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
         string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
@@ -211,24 +257,6 @@ public sealed class PhysicalFileSystem : IFileSystem
             }
 
             if (!include(info.FullName)) continue;
-
-            string? failure = null;
-            try
-            {
-                using var probe = new FileStream(
-                    info.FullName, FileMode.Open, FileAccess.Read,
-                    FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                failure = ex.Message;
-            }
-
-            if (failure is not null)
-            {
-                onSkipped(new SkippedEntry(info.FullName, failure));
-                continue;
-            }
 
             yield return (info.FullName, new FileStat(info.Length, info.LastWriteTimeUtc));
         }

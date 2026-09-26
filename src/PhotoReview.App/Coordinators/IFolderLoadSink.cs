@@ -27,10 +27,21 @@ public interface IFolderLoadSink
     void OnOrderApplied(int count, int currentIndex, bool currentKept);
 
     /// <summary>
-    /// IO05: một số tệp/mục không đọc được đã bị bỏ qua khi quét (gọi ngay sau <see cref="OnCatalogReady"/>,
-    /// chỉ khi có mục bị bỏ qua). Mặc định không làm gì để các sink thử nghiệm không phải cài đặt.
+    /// IO05: một số tệp/mục không đọc được đã bị bỏ qua (chỉ khi có mục bị bỏ qua). Liệt kê bị ngắt giữa chừng
+    /// được báo ngay sau <see cref="OnCatalogReady"/>; file không mở được do probe nền (AR16) báo sau frame đầu,
+    /// khi đó <paramref name="skipped"/> là danh sách đầy đủ (thay danh sách trước). Mặc định không làm gì để
+    /// các sink thử nghiệm không phải cài đặt.
     /// </summary>
     void OnFilesSkipped(string folder, IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> skipped) { }
+
+    /// <summary>
+    /// AR16: probe nền đã gỡ <paramref name="removedPaths"/> (không đọc được) khỏi danh mục. Sink phải bỏ mọi
+    /// preload/cache của các path đó và dựng lại preload theo danh mục mới; <paramref name="currentRemoved"/> =
+    /// ảnh đang xem nằm trong số đó, danh mục đã chuyển sang ảnh kế tiếp như Delete (hoặc rỗng) và sink phải
+    /// trình diễn vị trí hiện tại mới. Không có cài đặt mặc định: một sink chuyển tiếp quên gọi tiếp sẽ để
+    /// preload giữ file đã gỡ, nên mọi sink phải cài đặt rõ ràng.
+    /// </summary>
+    Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved);
 
     /// <summary>Thông báo nạp thư mục thất bại.</summary>
     void OnFailed(string folder, Exception exception);

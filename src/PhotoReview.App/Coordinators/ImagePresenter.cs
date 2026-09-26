@@ -348,6 +348,12 @@ public sealed class ImagePresenter
 
             // INV-1: kiểm tra token sau await
             if (!_clock.IsNavigationCurrent(token)) return;
+            // AR16: the background readability probe may have removed other files while this image decoded.
+            // It keeps the current entry by path (as ReplaceOrder does), so re-read its index for preload/status.
+            if (_catalog.Current is { } stillCurrent && string.Equals(stillCurrent.Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                index = _catalog.CurrentIndex;
+            }
 
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
             var uiAssign = Stopwatch.StartNew();

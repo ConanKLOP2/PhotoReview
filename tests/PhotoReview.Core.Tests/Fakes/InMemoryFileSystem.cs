@@ -223,6 +223,29 @@ public sealed class InMemoryFileSystem : IFileSystem
         }
     }
 
+    /// <summary>AR16 probe: same outcome as <see cref="OpenReadShared"/> (hook or missing file = unreadable), no bytes copied.</summary>
+    public bool TryProbeReadable(string path, out string? failure)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (OpenReadHook?.Invoke(path) is { } ex and (IOException or UnauthorizedAccessException))
+        {
+            failure = ex.Message;
+            return false;
+        }
+
+        lock (_lock)
+        {
+            if (!_files.ContainsKey(NormalizePath(path)))
+            {
+                failure = "Không tìm thấy tệp tin.";
+                return false;
+            }
+        }
+
+        failure = null;
+        return true;
+    }
+
     public Stream OpenAppendDurable(string path) => OpenAppend(path, durable: true);
 
     public Stream OpenAppend(string path, bool durable)

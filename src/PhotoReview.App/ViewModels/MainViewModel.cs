@@ -251,6 +251,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>Latest folder load, including its Explorer-order apply/ignore; completes when the order is settled (tests await it instead of a wall-clock window).</summary>
     internal Task FolderLoadTask { get; private set; } = Task.CompletedTask;
 
+    /// <summary>AR16: the latest load's background readability probe (unreadable files removed and reported); tests await it.</summary>
+    internal Task ReadabilityProbeTask => _folderCoordinator.ReadabilityProbe;
+
     /// <summary>
     /// Mở thư mục ảnh và nạp danh mục ảnh.
     /// </summary>
@@ -741,6 +744,43 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     void IFolderLoadSink.OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped)
     {
         SetSkippedEntries(skipped.ToArray());
+    }
+
+    async Task IFolderLoadSink.OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved)
+    {
+        // AR16: the running preload loop walks a snapshot that still holds the removed files: stop it,
+        // and drop anything already cached/preloaded for them, before a fresh lifetime starts below.
+        _preloadController?.Cancel();
+        foreach (var path in removedPaths)
+        {
+            _presenter.EvictCachedPath(path);
+        }
+
+        if (_folderTextFolder is { } shown) SetFolderText(shown, _catalog.Count, IsExplorerOrderApplied);
+        CatalogChanged?.Invoke();
+
+        if (currentRemoved)
+        {
+            // Same as a Delete of the current image: show the next one (it saves the session), or the empty state.
+            _compare.Clear();
+            if (_catalog.CurrentIndex >= 0)
+            {
+                _statusText = string.Empty;
+                await _presenter.PresentAsync(_catalog.CurrentIndex);
+            }
+            else
+            {
+                _presenter.ClearPresentation();
+                StatusText = StatusFormatter.NoImagesRemaining();
+            }
+        }
+        else if (_catalog.CurrentIndex >= 0)
+        {
+            // The current image stays on screen; its neighbours changed, so preload re-centers on its new index.
+            _ = _preloadController?.PreloadAroundAsync(_catalog.CurrentIndex);
+        }
+
+        NotifyNavigationStateChanged();
     }
 
     void IFolderLoadSink.OnFailed(string folder, Exception exception)

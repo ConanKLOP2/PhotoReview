@@ -61,6 +61,7 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
             SkippedCalls.Add((folder, skipped));
         }
         public void OnFailed(string folder, Exception exception) => Failures.Add(exception);
+        public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => Task.CompletedTask;
     }
 
     private sealed class NoExplorerOrder : IExplorerOrderProvider
@@ -84,6 +85,9 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
             _catalog, new GenerationClock(), new NoExplorerOrder(), _fs,
             new SessionStore(paths, _fs), new SettingsStore(paths, _fs, NullLog.Instance), _sink);
         await coordinator.LoadAsync(_folder);
+        // AR16: unreadable files are found by the background probe after the first frame; LoadAsync completes
+        // when the Explorer order is settled, so the report is awaited separately.
+        await coordinator.ReadabilityProbe;
     }
 
     private string Touch(string name, string? dir = null)
@@ -234,7 +238,7 @@ public sealed class FolderLoadSkippedFilesTests : IDisposable
         var skipped = Assert.Single(call.Skipped);
         Assert.Equal(expectedPath, skipped.Path, ignoreCase: true);
         Assert.False(string.IsNullOrWhiteSpace(skipped.Reason));
-        Assert.Equal(1, _sink.CatalogReadyCountAtSkipped); // reported right after OnCatalogReady
+        Assert.Equal(1, _sink.CatalogReadyCountAtSkipped); // reported for this load (after its only OnCatalogReady)
         Assert.Empty(_sink.Failures);
     }
 }
