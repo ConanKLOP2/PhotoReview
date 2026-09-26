@@ -73,6 +73,9 @@ public sealed class BenchmarkCliArgumentsTests
     [InlineData("1920,,3840,", new[] { 1920, 3840 })]
     public void Widths_Valid(string text, int[] expected) => Assert.Equal(expected, BenchmarkCliArguments.ParseWidths(text));
 
+    [Fact(DisplayName = "Duplicate widths are measured once")]
+    public void Widths_DuplicatesAreDropped() => Assert.Equal([0, 1920], BenchmarkCliArguments.ParseWidths("0,1920,0,1920"));
+
     [Theory(DisplayName = "Widths reject empty, negative, decimal, thousands-separated, signed and overflowing input with an ArgumentException (not FormatException)")]
     [InlineData("")]
     [InlineData(",")]

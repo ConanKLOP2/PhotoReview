@@ -91,4 +91,30 @@ public sealed class BenchmarkReportFormattingTests
         Assert.Null(BenchmarkCliArguments.ParsePerfAnalyzeRules(["--perf-analyze", "runs"]));
         Assert.Equal("r.json", BenchmarkCliArguments.ParsePerfAnalyzeRules(["--perf-analyze", "runs", "--rules", "r.json"]));
     }
+
+    [Fact(DisplayName = "Speedup skips a backend that failed every decode at a width (no Infinity)")]
+    public void ApplySpeedups_SkipsAllFailedGroup()
+    {
+        var wpf = Group("Wpf", 20, 0);
+        var failed = new DecoderBenchmark.GroupStatistics { Backend = "TurboJpeg", TargetWidth = 1920, TotalRuns = 4, FailureCount = 4 };
+        var ok = Group("WicDirect", 10, 0);
+
+        DecoderBenchmark.ApplySpeedups([wpf, failed, ok], [1920]);
+
+        Assert.Equal(0, failed.SpeedupVsWpf);
+        Assert.Equal(2.0, ok.SpeedupVsWpf, 6);
+        var json = System.Text.Json.JsonSerializer.Serialize(Summary(wpf, failed, ok));
+        Assert.DoesNotContain("Infinity", json, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "decoder-bench parses widths and iterations with the shared validators")]
+    public void DecoderBenchOptions_UseSharedParsers()
+    {
+        var (_, widths, iterations) = DecoderBenchmark.ParseOptions(["--decoder-bench", "f", "o", "Wpf", "1920,0", "3"]);
+        Assert.Equal([1920, 0], widths);
+        Assert.Equal(3, iterations);
+        Assert.Throws<ArgumentException>(() => DecoderBenchmark.ParseOptions(["--decoder-bench", "f", "o", "Wpf", "1920,abc"]));
+        Assert.Throws<ArgumentException>(() => DecoderBenchmark.ParseOptions(["--decoder-bench", "f", "o", "Wpf", "-5"]));
+        Assert.Throws<ArgumentException>(() => DecoderBenchmark.ParseOptions(["--decoder-bench", "f", "o", "Wpf", "1920", "x"]));
+    }
 }
