@@ -555,7 +555,6 @@ public partial class MainWindow : Window
 
     private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
-        if (_clickZoomPresetItems is null) BuildClickZoomMenu();
         // Headers are re-read on every open so a language switch shows without a restart.
         _clickZoomCustomItem!.Header = Tr.MainMenuClickZoomLevelCustom;
         AutomationProperties.SetName(_clickZoomCustomItem, Tr.MainMenuClickZoomLevelCustomAutomationName);
