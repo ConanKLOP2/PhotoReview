@@ -41,4 +41,4 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 
 Q-R1..Q-R6: the user answered "follow the recommendation" on 2026-09-24; all merged in #76. Q-R7..Q-R11 (round 2) decided 2026-09-25: R7 a, R8 c, R10 a, R11 leave as is.
 
-**All Q-D1..D4, Q-ST1..4, Q-T1..4, Q-OC14, Q-S3, Q-AR1..5, Q-L1..L8, Q-IO1, Q-Z1 are decided** — full table (30 rows, resolution + rationale link per row) archived in [`archive/OPEN-DECISIONS-detail.md`](archive/OPEN-DECISIONS-detail.md). T89 GUI acceptance stays with the user.
+**All Q-D1..D4, Q-ST1..4, Q-T1..4, Q-OC14, Q-S3, Q-AR1..5, Q-L1..L8, Q-IO1, Q-Z1 are decided** — full table (30 rows, resolution + rationale link per row) archived in [`archive/OPEN-DECISIONS-detail.md`](archive/OPEN-DECISIONS-detail.md). T89 GUI acceptance: reported OK by the user on 2026-09-26.

@@ -11,14 +11,14 @@
 |-------|--------|-------|
 | **L** (I18N: EN + VI, community JSON catalogs) | ✅ L00–L12 DONE (#55, #61, #74; 2026-09-24) | Q-L1..Q-L8 decided. Plan: `refactoring/I18N-PLAN.md`, ADR 0006, `TRANSLATING.md`. |
 | **AR** (Architecture Review 2026-09-23) | ✅ AR00–AR07 all DONE (AR02d #35, AR04 #37); only T89/AR04 GUI acceptance left (user) | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
-| **AR** (Architecture Review 2026-09-26) | 🔄 AR11, AR12, AR13, AR14a, AR15, AR17a, AR18a, AR19a merged (#106); AR16 (Q-AR7 c) merged (#107); AR10 closed (Q-AR6 a); AR13/AR16 GUI check (user) | Summary: `refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md`. |
+| **AR** (Architecture Review 2026-09-26) | ✅ AR11, AR12, AR13, AR14a, AR15, AR17a, AR18a, AR19a merged (#106); AR16 (Q-AR7 c) merged (#107); AR10 closed (Q-AR6 a); AR13/AR16 GUI OK (user, 2026-09-26) | Summary: `refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE | ST01-ST12 merged (ST08/ST09 in #73 after OC14 #64). See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS07, TS10 DONE; TS08/TS09 closed (Q-AR5) | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
 | **CQ** (Code Quality / Warnings) | ✅ DONE | 634→0 warnings (PR #18 merged). Digest: `refactoring/CQ-WARNINGS-PLAN.md`; plan: `archive/historical/CQ-WARNINGS-PLAN-2026-09.md`. |
 | **TC** (Test Cleanup) | ✅ TC04, TC09 DONE (#36); TC06/TC07 live in `App.Tests/HotPath` (real Recycle Bin / real photos) | TS10 audit complete 2026-09-22. Plan: `archive/historical/TEST-CLEANUP-PLAN-2026-09-20.md`. |
-| **T89** (Fit Layout — GUI acceptance) | 🔄 GUI acceptance only (kept, Q-AR5) | T89.1-T89.2 (`10ff31f`) **merged to `master` via PR #15**; branch deleted. DF02 Fit tests skipped in `9f880d1`. STA/GUI acceptance still TODO. Plan: `archive/historical/T89-FIT-LAYOUT-PLAN.md`. |
-| **OC** (Optimize/Clean) | 🔄 GUI check only | OC14 #64; OC15-17 done, OC18 code done (#73); OC18 Fit GUI check under T89. OC01/OC12/OC13 remain generic TODO. |
+| **T89** (Fit Layout — GUI acceptance) | ✅ GUI acceptance OK (user, 2026-09-26) | T89.1-T89.2 (`10ff31f`) **merged to `master` via PR #15**; branch deleted. DF02 Fit tests skipped in `9f880d1`. GUI acceptance reported OK by the user 2026-09-26. Plan: `archive/historical/T89-FIT-LAYOUT-PLAN.md`. |
+| **OC** (Optimize/Clean) | ✅ GUI check OK (T89, 2026-09-26) | OC14 #64; OC15-17 done, OC18 code done (#73); OC18 Fit GUI OK with T89. OC01/OC12/OC13 remain generic TODO. |
 | **WD** (WPF Dialog) | ✅ WD01 unblocked (AR04/ADR 0005); WD02-06 closed 2026-09-23 (Q-AR5) | WD02 low-risk part covered by AR03c; WD03-06 had no known dialog bug to justify keeping open. |
 | **IO** (I/O Durability) | ✅ DONE (ADR 0007, 2026-09-24): IO03 #65, IO04+IO05 #66 merged | Journal durability = user setting (Fast default / power-loss safe), session no-fsync, unreadable files skipped with a visible warning. IO02, IO06, IO07 closed. |
 | **DT** (Docs Token Diet) | ✅ DONE | DT00-03, DT08-DT10 DONE; Q-D1..Q-D4 decided. DT04-07 closed 2026-09-23 (Q-AR5, diminishing returns). DT10 final measurement: T0 11.8→10.9 KB, T1 22.7→10.2 KB. Plan: `archive/future/DOCS-TOKEN-DIET-PLAN-2026-09-20.md`. |
