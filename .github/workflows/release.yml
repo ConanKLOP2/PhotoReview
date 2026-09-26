@@ -3,7 +3,9 @@ name: Release
 # Publishes an existing version tag as a GitHub Release with the framework-dependent zip attached.
 # Manual only: Actions > Release > Run workflow, enter the tag (CI creates v2.0.N tags after each merge to master).
 # Release notes = merged PRs from the previous published release to this tag (explicit previous_tag_name).
-# Tests are not re-run here: CI already ran the full gate on the same commit before it created the tag.
+# Tests are not re-run here. Instead the first step requires the CI check 'build-test-publish' to have succeeded on the
+# tagged commit: CI also backfills tags for commits whose own run was cancelled or failed, so a tag alone proves nothing.
+# Override only with the explicit skip_ci_check input (logged as a warning in the step summary).
 on:
   workflow_dispatch:
     inputs:
@@ -16,9 +18,15 @@ on:
         required: true
         type: boolean
         default: false
+      skip_ci_check:
+        description: "DANGEROUS: release even if CI has not succeeded on the tagged commit"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  checks: read
 
 concurrency:
   group: release-${{ inputs.tag }}
@@ -35,6 +43,40 @@ jobs:
         run: |
           # [0-9] and \z, not \d and $: in .NET \d also matches non-ASCII digits and $ also matches before a trailing newline.
           if ($env:TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+\z') { throw "Tag '$env:TAG' must look like v2.0.93" }
+
+      - name: Require a green CI check on the tagged commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SKIP_CI_CHECK: ${{ inputs.skip_ci_check }}
+        run: |
+          $repo = $env:GITHUB_REPOSITORY
+          $checkName = 'build-test-publish'
+          # The commits endpoint peels annotated tags to the commit.
+          $sha = gh api "repos/$repo/commits/$($env:TAG)" --jq .sha
+          if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw "Cannot resolve tag $env:TAG to a commit ($LASTEXITCODE)" }
+          # filter=all keeps re-runs; --paginate emits one line per check run across all pages.
+          $lines = gh api --paginate "repos/$repo/commits/$sha/check-runs?per_page=100&filter=all" --jq '.check_runs[] | [.id, .name, .status, (.conclusion | tostring)] | @tsv'
+          if ($LASTEXITCODE -ne 0) { throw "Cannot list check runs of $sha ($LASTEXITCODE)" }
+          $runs = @($lines | Where-Object { $_ } | ForEach-Object {
+              $f = $_ -split "`t"
+              [pscustomobject]@{ Id = [int64]$f[0]; Name = $f[1]; Status = $f[2]; Conclusion = $f[3] }
+            } | Where-Object { $_.Name -ceq $checkName })
+          # Latest run wins (highest id), so a green re-run overrides an older red or cancelled attempt.
+          $latest = $runs | Sort-Object Id -Descending | Select-Object -First 1
+          if ($latest -and $latest.Status -eq 'completed' -and $latest.Conclusion -eq 'success') {
+            "CI check '$checkName' succeeded on $sha (tag $env:TAG, check run $($latest.Id))." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            return
+          }
+          $found = if ($latest) { "status=$($latest.Status), conclusion=$($latest.Conclusion)" } else { "no check run named '$checkName' found" }
+          $msg = "CI check '$checkName' did not succeed on commit $sha (tag $env:TAG): $found."
+          if ($env:SKIP_CI_CHECK -eq 'true') {
+            "WARNING: skip_ci_check=true, releasing anyway. $msg" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Write-Host "::warning::$msg Continuing because skip_ci_check=true."
+            return
+          }
+          throw "$msg Fix CI on that commit (or re-run it), or re-run this workflow with skip_ci_check=true."
 
       - name: Checkout the tag with full history (the version is derived from git)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
