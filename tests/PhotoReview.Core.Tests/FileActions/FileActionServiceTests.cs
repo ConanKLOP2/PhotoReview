@@ -141,6 +141,94 @@ public sealed class FileActionServiceTests
         Assert.Empty(_journal.ReadCommittedMoves());
     }
 
+    [Fact(DisplayName = "F3: a Move whose size changed and whose source is gone is Failed, flags SourceRemoved, keeps the destination and registers no committed move")]
+    public async Task ExecuteAsync_MoveSizeChangedSourceGone_FailedJournalAndSourceRemoved()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        var service = new FileActionService(_journal, _fs, _clock, _recycleBin, (from, to) =>
+        {
+            _fs.Move(from, to);
+            _fs.WriteAllTextAtomic(to, "x");
+            return Task.CompletedTask;
+        });
+
+        var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"D:\Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.SourceRemoved);
+        Assert.True(result.JournalPersisted);
+        Assert.False(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(@"D:\Backup\a.jpg"));
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.VerifySizeChanged, failed.ErrorCode);
+        Assert.Equal(source, failed.Source);
+        Assert.Empty(_journal.ReadCommittedMoves());
+    }
+
+    [Fact(DisplayName = "F3: a Move that leaves the source in place does not set SourceRemoved")]
+    public async Task ExecuteAsync_MoveLeavesSource_SourceRemovedFalse()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        _fs.MoveLeavesSource = true;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"D:\Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.SourceRemoved);
+    }
+
+    [Fact(DisplayName = "F3: a Move that fails before touching the file (OS error, source intact) does not set SourceRemoved")]
+    public async Task ExecuteAsync_MoveOsFailureSourceIntact_SourceRemovedFalse()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        var service = new FileActionService(_journal, _fs, _clock, _recycleBin, (_, _) => Task.FromException(new IOException("OS says no")));
+
+        var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"D:\Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.SourceRemoved);
+    }
+
+    [Fact(DisplayName = "F3: a Move whose source is missing before anything is journaled does not set SourceRemoved")]
+    public async Task ExecuteAsync_MoveSourceMissingUpFront_SourceRemovedFalse()
+    {
+        var result = await _service.ExecuteAsync(new FileActionRequest(@"C:\photos\gone.jpg", FileOperationType.Move, @"D:\Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.SourceRemoved);
+        Assert.Empty(_journal.ReadFailedOperations());
+    }
+
+    [Fact(DisplayName = "F3: a failed Copy never sets SourceRemoved (the source stays)")]
+    public async Task ExecuteAsync_CopyFailure_SourceRemovedFalse()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        _fs.CopyHook = (_, _) => new IOException("copy went wrong");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, @"D:\Backup"));
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.SourceRemoved);
+        Assert.True(_fs.FileExists(source));
+    }
+
+    [Fact(DisplayName = "F3: a failed Recycle never sets SourceRemoved")]
+    public async Task ExecuteAsync_RecycleFailure_SourceRemovedFalse()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        _recycleBin.RecycleHook = _ => new IOException("bin error");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Recycle, null));
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.SourceRemoved);
+    }
+
     [Fact(DisplayName = "Copy is unaffected by the Move source check (source is expected to stay)")]
     public async Task ExecuteAsync_Copy_SourceStays_Succeeds()
     {

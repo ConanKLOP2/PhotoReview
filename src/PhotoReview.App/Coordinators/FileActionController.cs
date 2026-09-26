@@ -198,6 +198,16 @@ public sealed class FileActionController
                 return true;
             }
 
+            // F3: a Move that failed verification (size differs) after the source was already removed. The journal says
+            // Failed (Recovery window), but the source path no longer exists, so it must NOT go back into the catalog.
+            // No Undo is registered: the destination no longer matches the fingerprint of the prepared source.
+            if (operation == FileOperationType.Move && result.SourceRemoved)
+            {
+                _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
+                _sink.SetStatusText(Tr.StatusMoveUnverified(Path.GetFileName(source)));
+                return false;
+            }
+
             // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
             if (isRemove && sourceIndex >= 0)
             {
