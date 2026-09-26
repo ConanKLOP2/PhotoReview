@@ -103,6 +103,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _naturalComparer = naturalComparer ?? ManagedNaturalComparer.Instance;
         _resetCachesAction = resetCachesAction;
         Metrics = metrics ?? new ReviewMetrics();
+        // AR14 (Q-AR10 option a): the controllers below are built here on purpose, not injected. Each takes this
+        // view-model as its sink (IFileActionSink / ISiblingNavigatorSink / IDuplicateCleanupSink) plus delegates
+        // reading its state (() => Settings, () => _currentSession), so DI cannot create them before the VM exists:
+        // the controller -> sink = VM cycle is by design. See docs/refactoring/arch-review/AR14-viewmodel-composition.md.
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
             _naturalComparer, () => Settings, this,
