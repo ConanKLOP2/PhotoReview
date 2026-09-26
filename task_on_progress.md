@@ -15,7 +15,7 @@
 - **Releases are manual (user, 2026-09-26):** CI only tags `v2.0.N`; no automatic draft. Actions > Release > Run workflow (tag input) publishes directly (`draft` box optional).
 - **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan (never leaves a zoomed image; `ArrowKeyNavigatesAtZoomEdge`), dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields (default folder name), optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **User GUI check: OK.** #109 GUI check: OK.
 - **Sort (Q-R33, #127):** Default / Name A→Z / Z→A ignore Explorer order; Name follows it.
-- **Zoom submenu (branch `feat/zoom-menu-presets`):** context menu "Zoom": Fit + 200/300/400 % added; GUI check pending.
+- **Merged #128, #130 (build 2.0.134):** context menu "Zoom" (Fit + 200/300/400 %); "Taken:"/"Modified:" labels on both dates (info line + title bar). GUI check pending.
 - **Info auto-hide (Q-R34, `feat/info-overlay-autohide`):** `ToolbarAutoHide` default off (saved `true` kept; own delay, opacity % min 20); new `InfoOverlayAutoHide` (off, own delay 3000) fades status/EXIF/folder info, never while a message/Compare/dialog. **GUI check pending.**
 - **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
