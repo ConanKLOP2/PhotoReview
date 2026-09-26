@@ -93,10 +93,11 @@ internal interface IWICBitmapSource
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IWICBitmapSourceTransform
 {
-    void DoesSupportTransform(uint dstTransform, out int pfIsSupported);
+    // COM vtable order must match wincodec.h: CopyPixels, GetClosestSize, GetClosestPixelFormat, DoesSupportTransform.
+    void CopyPixels(IntPtr prcDst, uint uiWidth, uint uiHeight, ref Guid pguidDstFormat, uint dstTransform, uint nStride, uint cbBufferSize, IntPtr pbBuffer);
     void GetClosestSize(ref uint puiWidth, ref uint puiHeight);
     void GetClosestPixelFormat(ref Guid pguidDstFormat);
-    void CopyPixels(IntPtr prcDst, uint uiWidth, uint uiHeight, ref Guid pguidDstFormat, uint dstTransform, uint nStride, uint cbBufferSize, IntPtr pbBuffer);
+    void DoesSupportTransform(uint dstTransform, out int pfIsSupported);
 }
 
 [ComImport]
