@@ -76,6 +76,9 @@ public sealed partial class MainViewModelNavigationTests
         foreach (var name in names) CreateImageFile(folder, name);
         var (vm, _, _) = CreateViewModel(sharedSessionWriter: true);
         await vm.OpenFolderAsync(folder);
+        // AR16: the readability probe runs after OpenFolderAsync returns; let it finish before files are deleted behind
+        // the app's back, so a file deleted while still open (delete pending) is not reported as unreadable by it.
+        await vm.ReadabilityProbeTask;
         var model = new NavigationModel(names) { Current = 0, LastPresented = names[0] };
         var log = new List<string>();
 
@@ -104,6 +107,7 @@ public sealed partial class MainViewModelNavigationTests
                     vm.FlushSession();
                     model.Reopen();
                     await vm.OpenFolderAsync(folder);
+                    await vm.ReadabilityProbeTask;
                     break;
             }
 
