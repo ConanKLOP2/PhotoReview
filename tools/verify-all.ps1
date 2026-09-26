@@ -146,7 +146,7 @@ function Generate-TestReport {
         $allTests += $tests
 
         $projectName = Split-Path -Parent $trxFile.FullName | ForEach-Object {
-            if ($_ -match 'tests\\(.+?)\\obj') {
+            if ($_ -match 'TestResults\\([^\\]+)') {
                 $matches[1]
             }
         }
