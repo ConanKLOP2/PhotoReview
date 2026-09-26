@@ -1,0 +1,28 @@
+# Refactoring history (digest of finished work)
+
+One line per finished group. Detailed plans, evidence and per-task tables were removed on 2026-09-27 (docs cleanup) —
+recover them with `git log --follow -- <path>` or `git show <sha>:<path>` (last full copy: `1de561c`).
+Open work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md). Decisions: [`OPEN-DECISIONS.md`](OPEN-DECISIONS.md). Perf numbers: [`PERF-STATUS.md`](PERF-STATUS.md).
+
+| Group | Result | PRs / notes |
+|---|---|---|
+| **ST** Structure Optimize (ST01-ST12) | `AppComposition` out of `App.xaml.cs`; `PhotoReview.PerfAnalysis` project (no WPF); infra moved to Core; `FileActionController`, `DuplicateCleanupController`, `SiblingFolderNavigator` extracted; no Presentation project (ADR 0004). Arch rules R6-R9 enforce the boundaries. | ST08/ST09 in #73 (after OC14 #64). Plan kept for a test comment: `archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md`. |
+| **OC** Optimize/Clean | OC01-OC11 done (survivor policy, stride overflow, preload lifetime, cache invalidation, undo history size, benchmark propagation, decode/RAM series #39-#48); OC14 undo gate = `FileActionGate` in `MainViewModel` (#64); OC15-OC18 (#73). OC12/OC13 (generic final cleanup) dropped. | |
+| **TS** Test speed | Gate hang guard (`--blame-hang`), cheap fixture, `StaTestHost.WaitForAsync`, UTF-8 guard, deterministic journal test, `TempRoot`. Gate ~23 s at the time. TS08/TS09 closed (Q-AR5). | #32, #36 |
+| **TC** Test cleanup | TC01-TC11 (fixtures, `ReadBudgetProbe`, disk-read invariants, rapid Next/Move/Delete, native Recycle Bin and real-photo tests in `App.Tests/HotPath`, flake audit, categories, CI gate). Q-T1..Q-T4 decided (drop actions while busy, read-count seam, `PHOTOREVIEW_FIXTURE_DIR`, live Recycle Bin test with own items only). | #36 |
+| **DF / T89** Double-click Fit | DF00-DF07 (#14); T89 Fit convergence helpers (#15); `ApplyFitViewAsync` stays multi-pass. GUI acceptance OK (user, 2026-09-26). | |
+| **CQ** Warnings | 634 -> 0 analyzer warnings; conventions live in `AGENTS.md`; Release build treats warnings as errors (AR12b). | #18 |
+| **WD / IO / D** | WD01 via AR04; WD02-WD06, IO06-IO07, D01-D12 closed (Q-AR5). IO = ADR 0007 (journal mode setting, session no-fsync, unreadable files skipped + warned): #65, #66. | |
+| **DT** Docs token diet | Tiered reading (T0/T1/T2), `tools/docs-budget.ps1`, `tools/check-doc-links.ps1`. | Re-cleaned 2026-09-27. |
+| **L** I18N | JSON catalogs, EN + VI, community files, export/reload (L00-L12, Q-L1..Q-L8, Q-R28). | #55, #61, #74, #120; [`I18N-PLAN.md`](I18N-PLAN.md), ADR 0006, `../TRANSLATING.md` |
+| **AR 2026-09-23** (AR00-AR07) | TurboJpeg shipped + probed (AR01); single composition root `AppHost`, production-graph benchmarks (AR02); SourceBytes policy / Platform without WPF / startup dialog via `IDialogService` (AR03); UI-thread affinity, ADR 0005 (AR04); one release path (AR06); doc links + budget (AR07). | #23-#37; per-task plans kept only for AR02/AR04/AR11 (`arch-review/`, referenced by code comments/ADR 0005) |
+| **AR 2026-09-26** (AR10-AR19, F10-F23) | AR10 closed (RAM % needs restart, Q-AR6 a); AR11 static `AppSettings` persistence removed + Settings round-trip test; AR12 `.gitignore`/warnings-as-errors/GC note; AR13 `MainWindow` split (715 -> 404 lines: `PointerInputController`, `FitViewController`); AR14 comment only; AR15 imaging cache cleanup; AR16 readability probe moved to a background pass (Q-AR7 c, catalog-ready 305 -> 88 ms); AR17 TurboJpeg labelled experimental; AR18 benchmark window kept; AR19 `ShowSkippedFiles` via `IDialogService`. | #106, #107; GUI OK (user) |
+| **Review 2026-09-25** (waves 1-5, rounds 2-7) | ~40 verified findings fixed (alpha/PNG preview cache, action destinations, CI integration tests, `deploy/`, session write timeout, accessibility, Recycle on non-fixed drives refused, single-instance forwarding over a named pipe, forward-client outcomes, undo depth, preload estimate Q-R17, ...). Round 7 features: `End`, `1`, `I`, `M`/`Y`, mouse zoom, kinetic pan, Settings redesign. Q-R1..Q-R22. | #76-#93 |
+| **Overnight review + source audit 2026-09-26** | Function-level fixes (#96, #97, #103, #99); source audit F0-F4 all closed (F2 by design, F3 #101, F0/F1/F4 #103). Q-R25. | |
+| **Perf night 2026-09-24 / 09-26** | Decode-to-viewport, ICC via WIC, disk cache, direction-aware preload (#39-#48); benchmark harness speed-up (#109); Q-R26 cause found (`preloadKick` on the UI thread) and fixed. Numbers: `PERF-STATUS.md`. | |
+| **UI feedback 2026-09-26** | Q-R30: dark title bar/scrollbars, toolbar + info auto-hide (Q-R34), title-bar fields, click-zoom key `2`, glide smoothing, arrow-key pan that never leaves a zoomed image (Q-R32, `ArrowKeyNavigatesAtZoomEdge`), sort modes Default / Name A-Z / Z-A (Q-R33), preload window setting (Q-R31), Zoom menu + Zoom card in Settings, `ArrowPanStepPercent`, Taken/Modified labels. | #119-#134 |
+
+## Handoff log (older detail dropped)
+
+- **2026-09-23 navigation hot-path pass (#20, #21):** O(1) catalog `IndexOf`, `ComparePairService.BuildIndex` cached by `StructuralVersion`, per-backend decoder instance, `EnumerateFilesWithStat`; post-merge fix of a case-sensitive pair grouping and a cache race. Still deferred: `ConfigureAwait` removal (done later in AR04), RAM-budget accuracy (later Q-R17), TurboJpeg fine-scale lazy transform (not pursued).
+- **2026-09-26:** benchmark speed-up #109, test-host crash fix #112 (thread exceptions rethrown on the test thread), stale Slow MainWindow tests #110, Q-R27 named kernel event per running operation (#116), tests never touch the real `config.json` (`PHOTOREVIEW_ISOLATE_CONFIG`).
