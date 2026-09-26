@@ -24,11 +24,14 @@ public sealed class RepoHygieneTests
         {
             tracked = RunGitLsFiles();
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (System.ComponentModel.Win32Exception)
         {
-            // git is not available in this environment; there is nothing to verify.
+            // git is not installed in this environment; there is nothing to verify.
+            // A git that runs but fails (non-zero exit) is NOT swallowed: it must fail the test, not pass it vacuously.
             return;
         }
+
+        Assert.NotEmpty(tracked); // an empty listing would make the violation check below vacuous
 
         var violations = tracked
             .Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
