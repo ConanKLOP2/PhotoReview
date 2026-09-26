@@ -15,10 +15,20 @@ public sealed class WindowsRecycleBin : IRecycleBin
 {
     public static readonly WindowsRecycleBin Instance = new();
     private readonly ILog _log;
+    private readonly IRecycleBinSettingsSource _settings;
+    private readonly Action<string> _shellRecycle;
 
     public WindowsRecycleBin(ILog? log = null)
+        : this(log, WindowsRecycleBinSettingsSource.Instance)
+    {
+    }
+
+    /// <param name="shellRecycle">Test seam for the shell call, so refusal tests never reach the real Recycle Bin.</param>
+    internal WindowsRecycleBin(ILog? log, IRecycleBinSettingsSource settings, Action<string>? shellRecycle = null)
     {
         _log = log ?? NullLog.Instance;
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _shellRecycle = shellRecycle ?? (path => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
     }
 
     public void SendToRecycleBin(string path)
@@ -30,7 +40,16 @@ public sealed class WindowsRecycleBin : IRecycleBin
         // fixed drives take exactly the same call as before.
         if (!RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType))
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(path)));
-        FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        // F-WIN-2 backstop for callers that skipped FitsInRecycleBin: a bin turned off for this volume (or by policy)
+        // or unreadable settings would also delete permanently. The size check needs the file's size, which only
+        // FitsInRecycleBin receives (FileActionService passes its stat), so no extra file-system read happens here.
+        var verdict = RecycleBinCapacityGuard.Evaluate(path, fileSize: null, _settings, _log);
+        if (verdict != RecycleCapacityVerdict.Fits)
+        {
+            _log.Warn($"Recycle refused ({verdict}): {Path.GetFileName(path)}");
+            throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleBinCannotHold(Path.GetFileName(path)));
+        }
+        _shellRecycle(path);
         // A cancelled/aborted shell operation returns without an exception; never report success for a file still in place.
         if (File.Exists(path))
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
@@ -40,6 +59,16 @@ public sealed class WindowsRecycleBin : IRecycleBin
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         return RecycleEligibility.CanRecycle(path, RecycleEligibility.QueryDriveType);
+    }
+
+    /// <summary>F-WIN-2: see <see cref="IRecycleBin.FitsInRecycleBin"/>. Reads registry/volume settings only, never file data.</summary>
+    public bool FitsInRecycleBin(string path, long fileSize)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var verdict = RecycleBinCapacityGuard.Evaluate(path, fileSize, _settings, _log);
+        if (verdict == RecycleCapacityVerdict.Fits) return true;
+        _log.Warn($"Recycle refused ({verdict}): {Path.GetFileName(path)} ({fileSize.ToString(CultureInfo.InvariantCulture)} bytes)");
+        return false;
     }
 
     /// <summary>Q-R8: permanent delete for drives without a Recycle Bin. Refuses fixed drives so it can never bypass the Recycle Bin there.</summary>
