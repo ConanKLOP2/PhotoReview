@@ -34,18 +34,22 @@ public sealed class TempRoot : IDisposable
 
 /// <summary>
 /// A temporary directory that is also installed as PHOTOREVIEW_DATA_ROOT for the
-/// duration of the test, so SessionStore/OperationJournal/AppLog write into it.
+/// duration of the test, so SessionStore/OperationJournal/AppLog write into it. config.json is isolated there too
+/// (PHOTOREVIEW_ISOLATE_CONFIG): a test that saves settings must never overwrite the user's real config.
 /// </summary>
 public sealed class DataRootFixture : IDisposable
 {
     private readonly string? _previous;
+    private readonly string? _previousIsolate;
 
     public TempRoot Root { get; } = new("data");
 
     public DataRootFixture()
     {
         _previous = Environment.GetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT");
+        _previousIsolate = Environment.GetEnvironmentVariable("PHOTOREVIEW_ISOLATE_CONFIG");
         Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", Root.Combine("app-data"));
+        Environment.SetEnvironmentVariable("PHOTOREVIEW_ISOLATE_CONFIG", "1");
     }
 
     public string Path => Root.Path;
@@ -53,6 +57,7 @@ public sealed class DataRootFixture : IDisposable
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", _previous);
+        Environment.SetEnvironmentVariable("PHOTOREVIEW_ISOLATE_CONFIG", _previousIsolate);
         Root.Dispose();
     }
 }
