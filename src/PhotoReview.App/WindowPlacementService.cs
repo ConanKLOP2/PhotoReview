@@ -51,15 +51,24 @@ internal static class WindowPlacementService
             // Never reopen minimized. Closing from the taskbar should restore normally.
             placement.ShowCommand = ResolveShowCommand(placement.ShowCommand, fullscreenRestoreState);
             Directory.CreateDirectory(Path.GetDirectoryName(placementPath)!);
-            var temp = placementPath + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(placement, JsonOptions));
-            try { File.Move(temp, placementPath, true); }
-            catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
+            WriteAtomically(placementPath, JsonSerializer.Serialize(placement, JsonOptions));
         }
         catch (Exception ex)
         {
             AppLog.Error("Could not save window placement", ex);
         }
+    }
+
+    /// <summary>
+    /// Writes via a uniquely named temp file so several windows saving the same placement file (per-folder mode)
+    /// never collide on a shared "*.tmp" name (IOException / one window overwriting another's half-written file).
+    /// </summary>
+    internal static void WriteAtomically(string path, string content)
+    {
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        File.WriteAllText(temp, content);
+        try { File.Move(temp, path, true); }
+        catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
     }
 
     /// <summary>

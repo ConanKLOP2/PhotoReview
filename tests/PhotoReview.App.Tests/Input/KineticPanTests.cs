@@ -268,4 +268,221 @@ public sealed class KineticPanTests
         Assert.True(KeyboardPan.IsZoomed(VerticalOnly));
         Assert.True(KeyboardPan.IsZoomed(BothAxes));
     }
+
+    // ---- KeyboardPan.Step ----
+
+    [Fact]
+    public void Step_Horizontal_Positive_UsesDefaultStepFraction()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds);
+
+        // step = ViewportWidth * StepFraction * (dx + dy) = 800 * 0.1 * 1 = 80
+        var expected = horizontal + 80;
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(expected, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_Horizontal_Negative_MovesLeft()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: -1, dy: 0, horizontal, vertical, bounds);
+
+        // step = ViewportWidth * StepFraction * (dx + dy) = 800 * 0.1 * (-1) = -80
+        var expected = horizontal - 80;
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(expected, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_Vertical_Positive_UsesViewportHeight()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 0, dy: 1, horizontal, vertical, bounds);
+
+        // step = ViewportHeight * StepFraction * (dx + dy) = 600 * 0.1 * 1 = 60
+        var expected = vertical + 60;
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(expected, v);
+    }
+
+    [Fact]
+    public void Step_Vertical_Negative_MovesUp()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 0, dy: -1, horizontal, vertical, bounds);
+
+        // step = ViewportHeight * StepFraction * (dx + dy) = 600 * 0.1 * (-1) = -60
+        var expected = vertical - 60;
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(expected, v);
+    }
+
+    [Fact]
+    public void Step_CustomStepFraction_0_01_MovesOnePercent()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds, stepFraction: 0.01);
+
+        // step = ViewportWidth * 0.01 * 1 = 800 * 0.01 = 8
+        var expected = horizontal + 8;
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(expected, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_CustomStepFraction_1_0_MovesEntireViewport()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds, stepFraction: 1.0);
+
+        // step = ViewportWidth * 1.0 * 1 = 800 * 1 = 800
+        var expected = horizontal + 800;
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(expected, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_AtRightEdge_ReturnsAtEdge()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = bounds.MaxHorizontal; // 2000 - 800 = 1200
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds);
+
+        // Already at the edge; step would move further but gets clamped
+        Assert.Equal(KeyboardPanResult.AtEdge, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_NearRightEdge_ClampsToBoundary()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var maxH = bounds.MaxHorizontal; // 1200
+        var horizontal = maxH - 50; // 1150
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds);
+
+        // step = 800 * 0.1 * 1 = 80, but clamped to max
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(maxH, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_AtBottomEdge_ReturnsAtEdge()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = bounds.MaxVertical; // 1500 - 600 = 900
+
+        var (result, h, v) = KeyboardPan.Step(dx: 0, dy: 1, horizontal, vertical, bounds);
+
+        Assert.Equal(KeyboardPanResult.AtEdge, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_NearBottomEdge_ClampsToBoundary()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var maxV = bounds.MaxVertical; // 900
+        var vertical = maxV - 30; // 870
+
+        var (result, h, v) = KeyboardPan.Step(dx: 0, dy: 1, horizontal, vertical, bounds);
+
+        // step = 600 * 0.1 * 1 = 60, but clamped to max
+        Assert.Equal(KeyboardPanResult.Panned, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(maxV, v);
+    }
+
+    [Fact]
+    public void Step_AtLeftEdge_ReturnsAtEdge()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 0.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: -1, dy: 0, horizontal, vertical, bounds);
+
+        // Already at left edge; moving further would be clamped
+        Assert.Equal(KeyboardPanResult.AtEdge, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_NotScrollable_MaxIsSmall()
+    {
+        // MaxHorizontal = 100 - 800 = -700 -> Math.Max(0, -700) = 0, which is <= 0.5 (Epsilon)
+        var bounds = new ScrollBounds(ExtentWidth: 100, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 0.0;
+        var vertical = 300.0;
+
+        var (result, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds);
+
+        Assert.Equal(KeyboardPanResult.NotScrollable, result);
+        Assert.Equal(horizontal, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_HorizontalAxis_UsesHorizontalDirection()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (_, h, v) = KeyboardPan.Step(dx: 1, dy: 0, horizontal, vertical, bounds);
+
+        // Only horizontal should change; vertical stays the same
+        Assert.NotEqual(horizontal, h);
+        Assert.Equal(vertical, v);
+    }
+
+    [Fact]
+    public void Step_VerticalAxis_UsesVerticalDirection()
+    {
+        var bounds = new ScrollBounds(ExtentWidth: 2000, ExtentHeight: 1500, ViewportWidth: 800, ViewportHeight: 600);
+        var horizontal = 400.0;
+        var vertical = 300.0;
+
+        var (_, h, v) = KeyboardPan.Step(dx: 0, dy: 1, horizontal, vertical, bounds);
+
+        // Only vertical should change; horizontal stays the same
+        Assert.Equal(horizontal, h);
+        Assert.NotEqual(vertical, v);
+    }
 }
