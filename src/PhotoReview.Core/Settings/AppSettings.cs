@@ -220,4 +220,11 @@ public class AppSettings
     /// The auto-hide fade goes between 0 (hidden) and this value.
     /// </summary>
     public int ToolbarOpacityPercent { get; set; } = DefaultToolbarOpacityPercent;
+
+    /// <summary>
+    /// Default off: arrow keys only pan a zoomed image and never change photo (go back to Fit first). On: a fresh
+    /// arrow press at the edge of a zoomed image navigates to the next/previous photo (auto-repeat is swallowed).
+    /// </summary>
+    public bool ArrowKeyNavigatesAtZoomEdge { get; set; }
 }
+

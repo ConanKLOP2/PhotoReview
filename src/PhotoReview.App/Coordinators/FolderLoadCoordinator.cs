@@ -92,15 +92,29 @@ public sealed class FolderLoadCoordinator : IDisposable
             // perf(startup): the Explorer query needs only the folder, so it starts before the scan
             // instead of after it -- it is the slowest part of a load (~1-2 s of cross-process COM
             // calls for a 1800-item Explorer view) and now runs in parallel with scan + sort.
-            var explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(
-                folder,
-                ExplorerQueryTimeout,
-                null,
-                16,
-                loadToken);
-            perf.TraceExplorer(explorerTask);
-
             var sortMode = _settingsStore.Current.ImageSortMode;
+            Task<ExplorerViewSnapshot> explorerTask;
+            if (SortModePolicy.UsesExplorerOrder(sortMode))
+            {
+                explorerTask = _explorerOrder.TryGetSnapshotProgressiveAsync(
+                    folder,
+                    ExplorerQueryTimeout,
+                    null,
+                    16,
+                    loadToken);
+                perf.TraceExplorer(explorerTask);
+            }
+            else
+            {
+                // Default / NameAscending / NameDescending are decided by the app: the query is never started
+                // and an already-completed "unavailable" result takes the existing early path below
+                // (order settled, no pending-order gate, no late Explorer path, ReplaceOrder never called).
+                explorerTask = Task.FromResult(new ExplorerViewSnapshot(
+                    folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable,
+                    "Explorer order not used by this sort mode", DateTime.UtcNow));
+                perf.Mark("explorerSkipped");
+            }
+
             // perf(startup): scan and sort in ONE background task. Two separate Task.Run hops made the
             // sort wait for the UI thread in between -- at startup that is the whole of Window.Show().
             // IO05 (ADR 0007 s3): unreadable files are skipped and counted, never dropped silently.

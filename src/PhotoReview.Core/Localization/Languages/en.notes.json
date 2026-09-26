@@ -232,7 +232,7 @@
   "enum.fileOperation.delete": "ComboBoxItem.Content index 3 - legacy alias that saves as Recycle (JsonAlias \"Delete\"); still goes to the Recycle Bin, not a permanent delete. Translation must not imply permanent deletion.",
   "enum.fileOperation.move": "ComboBoxItem.Content for FileOperationType.Move. Combo is mapped by SelectedIndex (ActionProfilesWindow.xaml.cs:30-46), not by text - item ORDER must not change.",
   "enum.fileOperation.recycle": "ComboBoxItem.Content for FileOperationType.Recycle (index 2) = send to Windows Recycle Bin.",
-  "enum.imageSortMode.name": "ComboBoxItem index 0 = ImageSortMode.Name (index-mapped, SettingsWindow.xaml.cs:102/132; Tag unused).",
+  "enum.imageSortMode.name": "ComboBoxItem 0 = ImageSortMode.Name. Items are mapped by Tag (enum name), not by index; order: Name, NameAscending, NameDescending, SizeDescending, SizeAscending, Default.",
   "enum.imageSortMode.sizeAscending": "ComboBoxItem index 1 = SizeAscending.",
   "enum.imageSortMode.sizeDescending": "ComboBoxItem index 2 = SizeDescending.",
   "enum.initialViewMode.fit": "ComboBoxItem for InitialViewMode.Fit; items 100%/200%/400% are neutral. Combo mapped by SelectedIndex (SettingsWindow.xaml.cs:100/131) - order must not change.",
@@ -579,5 +579,9 @@
   "settings.kineticGlideSmoothing.automationName": "AutomationProperties.Name of the glide smoothing combo box (screen readers).",
   "settings.kineticGlideSmoothing.hint": "Help text under the glide smoothing combo box.",
   "enum.kineticGlideSmoothing.off": "Glide smoothing option: the original timing (WPF frame times).",
-  "enum.kineticGlideSmoothing.predict": "Glide smoothing option: each glide step lands on the monitor's next refresh (vblank)."
+  "enum.kineticGlideSmoothing.predict": "Glide smoothing option: each glide step lands on the monitor's next refresh (vblank).",
+  "enum.imageSortMode.default": "Sort option Default: files in the order the folder lists them (no sort, no Explorer order).",
+  "enum.imageSortMode.nameAscending": "Sort option NameAscending: the app natural name order, never Explorer order.",
+  "enum.imageSortMode.nameDescending": "Sort option NameDescending: exact reverse of NameAscending, never Explorer order.",
+  "settings.sortMode.hint": "Help text under the sort combo box."
 }

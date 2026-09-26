@@ -239,7 +239,7 @@
   "enum.fileOperation.delete": "Delete",
   "enum.fileOperation.move": "Move",
   "enum.fileOperation.recycle": "Recycle",
-  "enum.imageSortMode.name": "By name (Explorer style)",
+  "enum.imageSortMode.name": "Name (follows Explorer when it is open)",
   "enum.imageSortMode.sizeAscending": "By size, smallest first",
   "enum.imageSortMode.sizeDescending": "By size, largest first",
   "enum.initialViewMode.fit": "Fit",
@@ -702,5 +702,12 @@
   "dialog.settingsInvalid.infoOverlayAutoHideDelay": "Info auto-hide delay must be a whole number between {min} and {max} milliseconds.",
   "settings.toolbarOpacity.label": "Toolbar opacity",
   "settings.toolbarOpacity.automationName": "Toolbar opacity, in percent",
-  "settings.toolbarOpacity.hint": "How solid the toolbar looks while it is visible. Cannot go below {min}% so the buttons stay usable."
+  "settings.toolbarOpacity.hint": "How solid the toolbar looks while it is visible. Cannot go below {min}% so the buttons stay usable.",
+  "enum.imageSortMode.default": "Default (folder order)",
+  "enum.imageSortMode.nameAscending": "Name A→Z (app order)",
+  "enum.imageSortMode.nameDescending": "Name Z→A (app order)",
+  "settings.sortMode.hint": "Name follows the order of the Explorer window showing the folder, when there is one. Name A→Z, Name Z→A and Default never do. Default shows the files exactly in the order the folder lists them, with no sorting.",
+  "settings.arrowKeyNavigatesAtZoomEdge.label": "Arrow key at the edge of a zoomed image goes to the next/previous photo",
+  "settings.arrowKeyNavigatesAtZoomEdge.automationName": "Arrow key at the edge of a zoomed image",
+  "settings.arrowKeyNavigatesAtZoomEdge.hint": "Off (default): arrow keys only move around a zoomed image; go back to Fit to change photo. On: pressing an arrow key again at the edge changes photo."
 }

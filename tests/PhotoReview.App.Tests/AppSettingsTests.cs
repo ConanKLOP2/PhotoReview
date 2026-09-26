@@ -49,6 +49,22 @@ public sealed class AppSettingsTests
         Assert.Equal(ImageSortMode.Name, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"Unknown\"}")!.ImageSortMode);
     }
 
+    [Theory(DisplayName = "ImageSortMode Default/NameAscending/NameDescending load by name and by number; unknown falls back to Name")]
+    [InlineData("\"Default\"", ImageSortMode.Default)]
+    [InlineData("3", ImageSortMode.Default)]
+    [InlineData("\"NameAscending\"", ImageSortMode.NameAscending)]
+    [InlineData("4", ImageSortMode.NameAscending)]
+    [InlineData("\"NameDescending\"", ImageSortMode.NameDescending)]
+    [InlineData("5", ImageSortMode.NameDescending)]
+    [InlineData("\"Bogus\"", ImageSortMode.Name)]
+    public void ImageSortModeNewValuesRoundTrip(string json, ImageSortMode expected)
+    {
+        var loaded = JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":" + json + "}")!;
+        Assert.Equal(expected, loaded.ImageSortMode);
+        var again = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(loaded))!;
+        Assert.Equal(expected, again.ImageSortMode);
+    }
+
     [Fact(DisplayName = "InitialViewMode parses percent and fit strings")]
     public void InitialViewModeParsesPercentAndFit()
     {

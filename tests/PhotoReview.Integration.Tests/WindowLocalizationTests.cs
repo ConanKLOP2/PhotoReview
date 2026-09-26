@@ -44,7 +44,7 @@ public sealed class WindowLocalizationTests
                 var settingsTexts = Texts(settings);
                 Assert.Contains("Cài đặt", settingsTexts);
                 Assert.Contains("Hiển thị & hiệu năng", settingsTexts);
-                Assert.Contains("Theo tên (kiểu Explorer)", settingsTexts);
+                Assert.Contains("Tên (theo thứ tự Explorer nếu đang mở)", settingsTexts);
                 Assert.Contains("Nhanh (Linear, mượt hơn khi thu phóng)", settingsTexts);
                 Assert.Contains("Mở vị trí tệp log", settingsTexts);
                 Assert.Contains("Phím tắt", settingsTexts);
@@ -81,7 +81,7 @@ public sealed class WindowLocalizationTests
                     Assert.Equal("Close", Assert.Single(Texts(recovery), t => t == "Close"));
                     settingsTexts = Texts(settings);
                     Assert.Contains("Settings", settingsTexts);
-                    Assert.Contains("By name (Explorer style)", settingsTexts);
+                    Assert.Contains("Name (follows Explorer when it is open)", settingsTexts);
                     Assert.Contains("Save", settingsTexts);
                     Assert.Contains("Language / Ngôn ngữ", settingsTexts); // bilingual on purpose
                     Assert.Equal("Batch preview", batch.Title);

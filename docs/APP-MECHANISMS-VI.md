@@ -51,6 +51,7 @@ Cache key gắn với source version, backend và quality/target width. Khi đ�
 - File handle đọc ảnh cần cho phép `FileShare.ReadWrite | FileShare.Delete`, để Move/Delete không bị khóa bởi decode đang chạy. Giữ `SequentialScan` cho đọc tuần tự.
 - Preload là best-effort: giới hạn worker, kiểm tra memory headroom, ưu tiên ảnh gần vị trí hiện tại, bỏ hoặc hủy việc không còn hữu ích; không đổi responsiveness lấy working set vượt kiểm soát.
 - Explorer COM snapshot ảnh hưởng final ordering. Snapshot không khả dụng, không hợp lệ hoặc timeout phải giữ fallback hoạt động và không làm UI treo.
+- Chế độ sắp xếp `Default` (thứ tự thư mục như file system trả về), `NameAscending`/`NameDescending` (thứ tự tên của phần mềm) không truy vấn và không áp thứ tự Explorer (`SortModePolicy.UsesExplorerOrder`); `Name` và các chế độ theo kích thước vẫn theo Explorer khi có cửa sổ đang mở.
 
 ## Giới hạn diễn giải và benchmark
 
