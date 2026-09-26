@@ -30,24 +30,8 @@ public partial class MainWindow : Window
     private double? _cachedDpiScale;
     private readonly ViewportSizeSource? _viewport;
     private bool _placementRestored;
-    private long _viewportOperationVersion;
-    private bool _isPanning;
-    private bool _panMoved;
-    private Point _panStartPoint;
-    private Point _panLastPoint;
-    // feat/mouse-zoom
-    private bool _pressCanPan;        // the tracked press scrolls the image (zoomed and larger than the viewport)
-    private bool _pressConsumed;      // the tracked press only stopped a glide: its release is never a click
-    private bool _pressStoppedGlide;  // set by the window-level tunnel, read by the image's press handler
-    private int _pressTimestamp;
-    private int _lastSeenIndex = -1;
-    private readonly WheelGestureInterpreter _wheelGestures = new();
-    private readonly PanVelocityTracker _panVelocity = new();
-    private KineticScroller _kinetic;
-    private readonly EventHandler _kineticFrameHandler;
-    private bool _kineticHooked;
-    private bool _hasKineticFrame;
-    private TimeSpan _lastKineticFrame;
+    private readonly ViewportOperationVersion _viewportVersion = new(); // shared by zoom-at-point and Fit
+    private readonly PointerInputController _pointer; // feat/mouse-zoom (AR13a)
 
     // AR02d: read-only properties replacing the public mutable fields that used to be kept in
     // sync by WireViewModelEvents/SyncFiles (ST06/Q-ST3 exception, superseded by this change).
@@ -71,7 +55,6 @@ public partial class MainWindow : Window
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         ArgumentNullException.ThrowIfNull(viewport);
-        _kineticFrameHandler = OnKineticFrame; // one delegate for += / -= (no allocation per glide)
         PlacementFile = (appPaths ?? PhotoReview.Core.AppPaths.FromEnvironment()).WindowPlacementFile;
         // AR02b finding (see AR02-single-composition-root.md AR02d step 1, applied a step early
         // here because AR02b's migrated integration tests need it to observe real behaviour):
@@ -97,6 +80,9 @@ public partial class MainWindow : Window
         Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
+        _pointer = new PointerInputController(
+            new WpfImageSurface(ImageScroll, MainImage, () => IsLoaded), _viewModel.Viewer, () => _settings, _viewportVersion,
+            new PointerCommands(() => _viewModel.HasImages, _viewModel.NextAsync, _viewModel.PreviousAsync, _viewModel.ZoomActualSize, ApplyFitViewAsync));
         AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
         ContentRendered += (_, _) => PhotoReviewPerf.StartupMark("contentRendered");
@@ -125,16 +111,11 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(MainViewModel.CurrentImage) && _viewModel.Viewer.IsFit)
                 Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
             // feat/mouse-zoom: navigation stops a glide (a full-resolution swap of the same image does not).
-            if (e.PropertyName == nameof(MainViewModel.CurrentIndex) && _viewModel.CurrentIndex != _lastSeenIndex)
-            {
-                _lastSeenIndex = _viewModel.CurrentIndex;
-                StopKinetic();
-                _wheelGestures.Reset();
-            }
+            if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _pointer.OnCurrentIndexChanged(_viewModel.CurrentIndex);
         };
         // feat/mouse-zoom: any zoom change (wheel, keys, click, Fit) stops a glide; so does leaving the window.
-        _viewModel.Viewer.ZoomModeChanged += (_, _) => StopKinetic();
-        Deactivated += (_, _) => StopKinetic();
+        _viewModel.Viewer.ZoomModeChanged += (_, _) => _pointer.StopKinetic();
+        Deactivated += (_, _) => _pointer.StopKinetic();
         PreviewMouseDown += Window_PreviewMouseDown;
     }
 
@@ -269,284 +250,42 @@ public partial class MainWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         Localizer.CurrentChanged -= OnLanguageChanged;
-        StopKinetic(); // unhooks CompositionTarget.Rendering, a static event that would otherwise keep this window alive
-        CancelPan();
+        _pointer.OnWindowClosed(); // stops a glide (unhooks the static render-frame event that would keep this window alive), ends a pan
         _viewModel.CloseSession();
         (_viewModel.PreloadController as IDisposable)?.Dispose();
         // The IExplorerOrderProvider singleton is owned by the service provider (App.Dispose), not by this window (APP-01).
     }
 
     // ---- feat/mouse-zoom: wheel (zoom / navigate), click-to-zoom, drag-pan with kinetic glide ----
-    // The decisions live in Input/MouseGestures.cs and Input/KineticPan.cs (pure, unit tested); these handlers
-    // only gather WPF input and apply the result.
+    // AR13a: the state machine lives in Input/PointerInputController.cs; these handlers only forward WPF input
+    // and set e.Handled from what it returns.
 
     private async void ImageScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         e.Handled = true;
-        StopKinetic();
         var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
-        switch (_wheelGestures.Handle(e.Delta, ctrl, _settings.MouseWheelAction))
-        {
-            case WheelOutcomeKind.Zoom:
-                var delta = e.Delta;
-                await ZoomAtPointAsync(e.GetPosition(ImageScroll), () => _viewModel.Viewer.WheelZoom(delta));
-                break;
-            // Same path as the Next/Previous keys, so preload pacing and the navigation token apply unchanged.
-            case WheelOutcomeKind.Next:
-                if (_viewModel.HasImages) await _viewModel.NextAsync();
-                break;
-            case WheelOutcomeKind.Previous:
-                if (_viewModel.HasImages) await _viewModel.PreviousAsync();
-                break;
-        }
-    }
-
-    /// <summary>ZoomActualSize: 100 % (ADR 0008) keeping the image point at the viewport centre in place.</summary>
-    private async Task ZoomActualSizeAsync()
-    {
-        if (!_viewModel.HasImages) return;
-        CancelPan();
-        StopKinetic();
-        var centre = new Point(ImageScroll.ViewportWidth / 2, ImageScroll.ViewportHeight / 2);
-        await ZoomAtPointAsync(centre, _viewModel.ZoomActualSize);
-    }
-
-    /// <summary>
-    /// Applies a zoom change and then scrolls so the image point that was under <paramref name="mouse"/>
-    /// (ImageScroll coordinates) stays under it. Shared by the wheel and click-to-zoom.
-    /// </summary>
-    private async Task ZoomAtPointAsync(Point mouse, Action applyZoom)
-    {
-        var anchor = CaptureZoomAnchor(mouse);
-        var version = ++_viewportOperationVersion;
-        applyZoom();
-        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-        if (version != _viewportOperationVersion || !IsLoaded) return;
-        ImageScroll.UpdateLayout();
-
-        var imageOrigin = MainImage.TranslatePoint(new Point(0, 0), ImageScroll);
-        var offsets = MainWindowHelpers.CalculateZoomToPointOffsets(
-            anchor,
-            imageOrigin.X,
-            imageOrigin.Y,
-            MainImage.ActualWidth,
-            MainImage.ActualHeight,
-            mouse.X,
-            mouse.Y,
-            ImageScroll.HorizontalOffset,
-            ImageScroll.VerticalOffset,
-            ImageScroll.ExtentWidth,
-            ImageScroll.ExtentHeight,
-            ImageScroll.ViewportWidth,
-            ImageScroll.ViewportHeight);
-        ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
-        ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
-    }
-
-    /// <summary>The image point under <paramref name="mouse"/> as a fraction of the displayed image.</summary>
-    private MainWindowHelpers.ZoomImagePoint CaptureZoomAnchor(Point mouse)
-    {
-        var elementPoint = ImageScroll.TranslatePoint(mouse, MainImage);
-        // feat(zoom): the element is sized from original dims x zoom (no LayoutTransform), so the
-        // anchor is carried across the zoom step as a fraction of the displayed image.
-        if (_viewModel.Viewer.IsFit && MainImage.Source is { Width: > 0, Height: > 0 } source)
-        {
-            var sourcePoint = MainWindowHelpers.CalculateUniformImagePoint(
-                MainImage.ActualWidth,
-                MainImage.ActualHeight,
-                source.Width,
-                source.Height,
-                elementPoint.X,
-                elementPoint.Y);
-            return MainWindowHelpers.NormalizeImagePoint(sourcePoint.X, sourcePoint.Y, source.Width, source.Height);
-        }
-        return MainWindowHelpers.NormalizeImagePoint(elementPoint.X, elementPoint.Y, MainImage.ActualWidth, MainImage.ActualHeight);
+        await _pointer.OnWheelAsync(e.Delta, ctrl, e.GetPosition(ImageScroll));
     }
 
     /// <summary>Tunnels before the image's handler: any press stops a glide (remembered so that press is not a click).</summary>
-    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
-    {
-        _pressStoppedGlide = StopKinetic();
-    }
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => _pointer.OnWindowPreviewMouseDown();
 
     private void MainImage_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var stoppedGlide = _pressStoppedGlide | StopKinetic();
-        _pressStoppedGlide = false;
-
-        // DF03: the second press of a double-click is always Fit (before the pan check since CanPan=false in
-        // Fit). Its mouse-up finds no tracked press, so it never toggles click-to-zoom.
-        if (e.ChangedButton == MouseButton.Left && PointerGestures.IsFitDoubleClick(e.ClickCount))
-        {
-            CancelPan();
-            _ = ApplyFitViewAsync();
-            e.Handled = true;
-            return;
-        }
-
-        var canPan = CanPan();
-        if (!canPan && !_settings.ClickToZoomEnabled) return;
-
-        _isPanning = true;
-        _pressCanPan = canPan;
-        _pressConsumed = stoppedGlide;
-        _panMoved = false;
-        _panStartPoint = e.GetPosition(ImageScroll);
-        _panLastPoint = _panStartPoint;
-        _pressTimestamp = e.Timestamp;
-        _panVelocity.Reset();
-        _panVelocity.Add(0, _panStartPoint.X, _panStartPoint.Y);
-        if (canPan) MainImage.Cursor = Cursors.SizeAll;
-        MainImage.CaptureMouse();
-        e.Handled = true;
+        if (_pointer.OnImagePress(e.ChangedButton, e.ClickCount, e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
     }
 
     private void MainImage_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_isPanning || e.LeftButton != MouseButtonState.Pressed) return;
-
-        var point = e.GetPosition(ImageScroll);
-        var deltaX = point.X - _panLastPoint.X;
-        var deltaY = point.Y - _panLastPoint.Y;
-        _panLastPoint = point;
-        _panVelocity.Add(unchecked(e.Timestamp - _pressTimestamp), point.X, point.Y);
-        // OC15: once the drag threshold is crossed it stays crossed until the pan ends, so only
-        // test it while still below; delta/scroll below always run.
-        if (!_panMoved && MainWindowHelpers.IsBeyondDragThreshold(
-                point.X - _panStartPoint.X,
-                point.Y - _panStartPoint.Y,
-                SystemParameters.MinimumHorizontalDragDistance,
-                SystemParameters.MinimumVerticalDragDistance))
-        {
-            _panMoved = true;
-        }
-
-        if (_pressCanPan)
-        {
-            var offsets = MainWindowHelpers.CalculatePanOffsets(
-                ImageScroll.HorizontalOffset,
-                ImageScroll.VerticalOffset,
-                deltaX,
-                deltaY,
-                ImageScroll.ExtentWidth,
-                ImageScroll.ExtentHeight,
-                ImageScroll.ViewportWidth,
-                ImageScroll.ViewportHeight);
-            ImageScroll.ScrollToHorizontalOffset(offsets.Horizontal);
-            ImageScroll.ScrollToVerticalOffset(offsets.Vertical);
-        }
-        if (_panMoved) e.Handled = true;
+        if (_pointer.OnImageMove(e.LeftButton == MouseButtonState.Pressed, e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
     }
 
     private void MainImage_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isPanning)
-        {
-            CancelPan();
-            return;
-        }
-        var point = e.GetPosition(ImageScroll);
-        _panVelocity.Add(unchecked(e.Timestamp - _pressTimestamp), point.X, point.Y);
-        var action = PointerGestures.ClassifyRelease(
-            dragged: _panMoved,
-            panned: _pressCanPan,
-            pressWasConsumed: _pressConsumed,
-            clickToZoomEnabled: _settings.ClickToZoomEnabled,
-            kineticPanEnabled: _settings.KineticPanEnabled);
-        var moved = _panMoved;
-        CancelPan();
-
-        switch (action)
-        {
-            case PointerReleaseAction.ClickZoom:
-                _ = ClickZoomAsync(point);
-                e.Handled = true;
-                break;
-            case PointerReleaseAction.StartKinetic:
-                var (velocityX, velocityY) = _panVelocity.GetVelocity();
-                StartKinetic(velocityX, velocityY);
-                break;
-        }
-        if (moved) e.Handled = true;
+        if (_pointer.OnImageRelease(e.GetPosition(ImageScroll), e.Timestamp)) e.Handled = true;
     }
 
-    /// <summary>Click-to-zoom: Fit or another zoom -> ClickZoomPercent at the cursor; at ClickZoomPercent -> Fit.</summary>
-    private Task ClickZoomAsync(Point mouse)
-    {
-        var viewer = _viewModel.Viewer;
-        var target = PointerGestures.ClickZoomFactor(_settings.ClickZoomPercent);
-        return PointerGestures.DecideClickZoom(viewer.IsFit, viewer.Zoom, target) == ClickZoomTarget.Fit
-            ? ApplyFitViewAsync()
-            : ZoomAtPointAsync(mouse, () => viewer.SetZoom(target));
-    }
-
-    private void MainImage_LostMouseCapture(object sender, MouseEventArgs e) => CancelPan();
-
-    private bool CanPan() => !_viewModel.Viewer.IsFit &&
-        (ImageScroll.ExtentWidth > ImageScroll.ViewportWidth + 0.5 || ImageScroll.ExtentHeight > ImageScroll.ViewportHeight + 0.5);
-
-    private void CancelPan()
-    {
-        _isPanning = false;
-        _panMoved = false;
-        _pressCanPan = false;
-        _pressConsumed = false;
-        if (Mouse.Captured == MainImage) Mouse.Capture(null);
-        MainImage.Cursor = Cursors.Arrow;
-    }
-
-    // ---- kinetic glide: CompositionTarget.Rendering on the UI thread, hooked only while gliding ----
-
-    private void StartKinetic(double pointerVelocityX, double pointerVelocityY)
-    {
-        if (!_kinetic.Start(pointerVelocityX, pointerVelocityY)) return;
-        _hasKineticFrame = false;
-        if (_kineticHooked) return;
-        System.Windows.Media.CompositionTarget.Rendering += _kineticFrameHandler;
-        _kineticHooked = true;
-    }
-
-    /// <summary>Stops a running glide at once; returns true if one was running.</summary>
-    private bool StopKinetic()
-    {
-        var wasActive = _kinetic.IsActive;
-        _kinetic.Stop();
-        if (_kineticHooked)
-        {
-            System.Windows.Media.CompositionTarget.Rendering -= _kineticFrameHandler;
-            _kineticHooked = false;
-        }
-        return wasActive;
-    }
-
-    private void OnKineticFrame(object? sender, EventArgs e)
-    {
-        if (!_kinetic.IsActive || !IsLoaded)
-        {
-            StopKinetic();
-            return;
-        }
-        if (e is not System.Windows.Media.RenderingEventArgs rendering) return;
-        if (!_hasKineticFrame)
-        {
-            _hasKineticFrame = true;
-            _lastKineticFrame = rendering.RenderingTime;
-            return;
-        }
-        // Rendering can fire more than once per frame with the same RenderingTime: only step on a new frame.
-        var elapsed = (rendering.RenderingTime - _lastKineticFrame).TotalMilliseconds;
-        if (elapsed <= 0) return;
-        _lastKineticFrame = rendering.RenderingTime;
-
-        var (horizontal, vertical) = _kinetic.Step(
-            elapsed,
-            ImageScroll.HorizontalOffset,
-            ImageScroll.VerticalOffset,
-            new ScrollBounds(ImageScroll.ExtentWidth, ImageScroll.ExtentHeight, ImageScroll.ViewportWidth, ImageScroll.ViewportHeight));
-        ImageScroll.ScrollToHorizontalOffset(horizontal);
-        ImageScroll.ScrollToVerticalOffset(vertical);
-        if (!_kinetic.IsActive) StopKinetic();
-    }
+    private void MainImage_LostMouseCapture(object sender, MouseEventArgs e) => _pointer.OnLostCapture();
 
     private void Window_PreviewDragOver(object sender, DragEventArgs e)
     {
@@ -565,7 +304,7 @@ public partial class MainWindow : Window
     private async void Window_KeyDown(object sender, KeyEventArgs e)
     {
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
-        StopKinetic(); // feat/mouse-zoom: any key press stops a glide
+        _pointer.StopKinetic(); // feat/mouse-zoom: any key press stops a glide
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
 
@@ -604,7 +343,7 @@ public partial class MainWindow : Window
             case ReviewCommandType.FirstImage: await _viewModel.FirstImageAsync(); break;
             case ReviewCommandType.LastImage: await _viewModel.LastImageAsync(); break;
             case ReviewCommandType.ToggleInfoOverlay: _viewModel.ToggleInfoOverlay(); break;
-            case ReviewCommandType.ZoomActualSize: await ZoomActualSizeAsync(); break;
+            case ReviewCommandType.ZoomActualSize: await _pointer.ZoomActualSizeAsync(); break;
             case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
             case ReviewCommandType.RunAction:
@@ -652,9 +391,8 @@ public partial class MainWindow : Window
 
     private async Task ApplyFitViewAsync()
     {
-        CancelPan();
-        ++_viewportOperationVersion;
-        var version = _viewportOperationVersion;
+        _pointer.CancelPan();
+        var version = _viewportVersion.Next();
         var (width, height) = GetViewportSize();
         _viewModel.Viewer.ResetFit(width, height);
 
@@ -662,7 +400,7 @@ public partial class MainWindow : Window
         ViewportSnapshot? lastSnapshot = null;
         for (var pass = 0; pass < 3; pass++)
         {
-            if (version != _viewportOperationVersion || !IsLoaded) return;
+            if (version != _viewportVersion.Current || !IsLoaded) return;
             ImageScroll.UpdateLayout();
             UpdateFitSize();
             await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
@@ -677,7 +415,7 @@ public partial class MainWindow : Window
             lastSnapshot = currentSnapshot;
         }
 
-        if (version != _viewportOperationVersion || !IsLoaded) return;
+        if (version != _viewportVersion.Current || !IsLoaded) return;
         ImageScroll.UpdateLayout();
         ImageScroll.ScrollToHome();
         ImageScroll.ScrollToHorizontalOffset(0);

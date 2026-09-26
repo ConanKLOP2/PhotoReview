@@ -136,4 +136,17 @@ public sealed class StructureOptimizeRulesTests
         Assert.True(violations.Count == 0,
             $"Benchmark.Cli reflects into App types; expose a public member instead:\n{string.Join("\n", violations)}");
     }
+
+    [Theory(DisplayName = "Rule AR13: MainWindow code-behind holds no pointer/glide state machine (it lives in Input/PointerInputController.cs)")]
+    [Trait("Category", "Architecture")]
+    [InlineData("CompositionTarget.Rendering")]
+    [InlineData("_isPanning")]
+    public void MainWindowCodeBehind_HasNoPointerStateMachine(string forbidden)
+    {
+        var text = RepoScan.Text(Path.Combine(RepoScan.Root, "src", "PhotoReview.App", "MainWindow.xaml.cs"));
+
+        Assert.False(
+            text.Contains(forbidden, StringComparison.Ordinal),
+            $"MainWindow.xaml.cs contains '{forbidden}'; pointer/kinetic logic belongs in PointerInputController (AR13a).");
+    }
 }
