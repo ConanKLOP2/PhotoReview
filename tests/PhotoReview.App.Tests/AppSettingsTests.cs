@@ -1,7 +1,10 @@
-﻿using System.IO;
-using System.Text.Json;
+﻿using System.Text.Json;
 using PhotoReview.App;
+using PhotoReview.Core;
+using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Tests;
 
@@ -59,42 +62,17 @@ public sealed class AppSettingsTests
     {
         var settings = new AppSettings();
         settings.Actions.Add(new ReviewAction { Name = "Loáº¡i 3", Shortcut = "T", Operation = FileOperationType.Copy, Destination = "Loai-3" });
+        // AR11a: AppSettings.ValidateShortcuts (static) is gone; validation now lives on a SettingsStore instance
+        // (KeyNames defaults to the same permissive fallback the old static Validator used when unassigned).
+        var store = new SettingsStore(new AppPaths(AppContext.BaseDirectory), new PhysicalFileSystem(), NullLog.Instance);
         Assert.True(settings.Actions.Count >= 2
             && settings.Actions.All(a => a.Name.Length > 0 && Enum.IsDefined(a.Operation) && a.Destination.Length > 0)
-            && AppSettings.ValidateShortcuts(settings) is null);
+            && store.ValidateShortcuts(settings) is null);
     }
 
     [Fact(DisplayName = "Config carries an explicit version that round-trips through JSON")]
     public void ConfigCarriesExplicitVersionThatRoundTrips() =>
         Assert.True(new AppSettings().ConfigVersion == AppSettings.CurrentConfigVersion
             && JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":1}")!.ConfigVersion == 1);
-
-    [Fact(DisplayName = "Load v1 fixture migrates to enums properly")]
-    public void LoadV1FixtureMigratesProperly()
-    {
-        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "config-v1.json");
-        Assert.True(File.Exists(fixturePath), $"Fixture not found at {fixturePath}");
-        var settings = AppSettings.Load(fixturePath);
-        Assert.Equal(LoadingMode.Preview, settings.LoadingMode);
-        Assert.Equal(ImageSortMode.SizeDescending, settings.ImageSortMode);
-        Assert.Equal(InitialViewMode.Fit, settings.InitialViewMode);
-        Assert.Single(settings.Actions);
-        Assert.Equal(FileOperationType.Move, settings.Actions[0].Operation);
-    }
-
-    [Fact(DisplayName = "Load v2 fixture parses enums and aliases correctly")]
-    public void LoadV2FixtureParsesCorrectly()
-    {
-        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "config-v2.json");
-        Assert.True(File.Exists(fixturePath), $"Fixture not found at {fixturePath}");
-        var settings = AppSettings.Load(fixturePath);
-        Assert.Equal(AppSettings.CurrentConfigVersion, settings.ConfigVersion);
-        Assert.Equal("vi", settings.UiLanguage); // Q-L1: pre-i18n configs keep Vietnamese
-        Assert.Equal(LoadingMode.Original, settings.LoadingMode);
-        Assert.Equal(ImageSortMode.SizeAscending, settings.ImageSortMode);
-        Assert.Equal(InitialViewMode.Percent200, settings.InitialViewMode);
-        Assert.Single(settings.Actions);
-        Assert.Equal(FileOperationType.Recycle, settings.Actions[0].Operation);
-    }
 }
 

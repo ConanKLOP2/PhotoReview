@@ -318,4 +318,35 @@ public sealed class SettingsStoreTests
         Assert.Equal(LoadingMode.Preview, settings.LoadingMode);
         Assert.Equal(nameof(AppSettings.LoadingMode), Assert.Single(repaired));
     }
+
+    // ---- AR11a: v1/v2 fixture migration, moved from the App.Tests project's now-removed AppSettings.Load(path)
+    // path onto the internal SettingsStore.Parse(json) seam (no disk access needed). ----
+
+    private static string FixtureText(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
+
+    [Fact(DisplayName = "Parse of a v1 fixture migrates to enums properly")]
+    public void Parse_V1Fixture_MigratesProperly()
+    {
+        var settings = SettingsStore.Parse(FixtureText("config-v1.json"));
+
+        Assert.Equal(LoadingMode.Preview, settings.LoadingMode);
+        Assert.Equal(ImageSortMode.SizeDescending, settings.ImageSortMode);
+        Assert.Equal(InitialViewMode.Fit, settings.InitialViewMode);
+        Assert.Single(settings.Actions);
+        Assert.Equal(FileOperationType.Move, settings.Actions[0].Operation);
+    }
+
+    [Fact(DisplayName = "Parse of a v2 fixture parses enums and aliases correctly")]
+    public void Parse_V2Fixture_ParsesCorrectly()
+    {
+        var settings = SettingsStore.Parse(FixtureText("config-v2.json"));
+
+        Assert.Equal(AppSettings.CurrentConfigVersion, settings.ConfigVersion);
+        Assert.Equal("vi", settings.UiLanguage); // Q-L1: pre-i18n configs keep Vietnamese
+        Assert.Equal(LoadingMode.Original, settings.LoadingMode);
+        Assert.Equal(ImageSortMode.SizeAscending, settings.ImageSortMode);
+        Assert.Equal(InitialViewMode.Percent200, settings.InitialViewMode);
+        Assert.Single(settings.Actions);
+        Assert.Equal(FileOperationType.Recycle, settings.Actions[0].Operation);
+    }
 }

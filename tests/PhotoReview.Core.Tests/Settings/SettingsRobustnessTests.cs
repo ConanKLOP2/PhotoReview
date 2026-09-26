@@ -248,7 +248,7 @@ public sealed class SettingsRobustnessTests : IDisposable
         var s = LoadJson("""{"ConfigVersion":3,"Actions":[{"Name":"A","Shortcut":"F7","Operation":"Move","Destination":"a"},{"Name":"B","Shortcut":"f7","Operation":"Copy","Destination":"b"}]}""");
 
         Assert.Equal(2, s.Actions.Count);
-        Assert.NotNull(AppSettings.ValidateShortcuts(s));
+        Assert.NotNull(NewStore().ValidateShortcuts(s));
     }
 
     [Fact(DisplayName = "A future ConfigVersion loads without being migrated backwards")]

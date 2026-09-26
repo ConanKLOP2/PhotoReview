@@ -1,0 +1,31 @@
+# CoreFileSystemBoundaryTests (AR11a): PhotoReview.Core must not call File./Directory./FileInfo./DirectoryInfo.
+# directly -- it should go through IFileSystem so tests can fake disk I/O and callers can count/observe it
+# (INV-11). Format: relative/path.cs|count (lines that are pure comments, e.g. XML doc, are not counted).
+# This list may only shrink: a new violating file, or a higher count in a listed file, fails the test; a
+# lower real count also fails until this file is lowered to match (keeps the allowlist honest).
+#
+# Each entry below pre-dates AR11a (which only removed the File.*-based AppSettings.Load/Save) and is a
+# separate, larger refactor than this task's scope -- listed here instead of silently expanding AR11a into
+# an unrelated IFileSystem migration of the whole Core project.
+
+# The one designated implementation of IFileSystem; direct File./Directory. calls are its entire purpose.
+src/PhotoReview.Core/IO/PhysicalFileSystem.cs|14
+
+# Process-wide log writer (FileLog.Default), constructed before any DI container/IFileSystem exists and
+# shared by every composition root (App, Benchmark.Cli, PerfSession); has no IFileSystem seam today.
+src/PhotoReview.Core/Diagnostics/FileLog.cs|3
+
+# Perf-trace CSV writer, enabled only via an environment variable outside the normal DI graph; same
+# no-IFileSystem-seam situation as FileLog.
+src/PhotoReview.Core/Diagnostics/PerfCsvListener.cs|2
+
+# Validates paths the OS drag-and-drop gives the app (arbitrary external files/folders, not app-managed
+# state) before any IFileSystem/AppPaths context exists for the drop.
+src/PhotoReview.Core/Catalog/DragDropInputService.cs|2
+
+# PageUp/PageDown sibling-folder enumeration off the real OS folder tree; no IFileSystem seam today.
+src/PhotoReview.Core/Catalog/SiblingFolderService.cs|2
+
+# Already takes an optional IFileSystem; the File.Exists/FileInfo call is only the fallback branch used
+# when a caller passes none.
+src/PhotoReview.Core/FileActions/DuplicateFinder.cs|1

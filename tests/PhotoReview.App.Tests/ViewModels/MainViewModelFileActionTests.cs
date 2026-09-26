@@ -902,6 +902,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         public void ShowDiagnostics() { }
         public bool ShowSettings() => true;
         public void ShowBenchmark(string? folder = null) { }
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
     }
 
     internal class DelegatingFileSystem(IFileSystem inner) : IFileSystem

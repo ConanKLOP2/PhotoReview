@@ -105,4 +105,38 @@ public sealed class CacheTempFileAndDiskProbeTests : IDisposable
             await service.WaitForPruneAsync(TimeSpan.FromSeconds(5));
         }
     }
+
+    [Fact(DisplayName = "AtomicCacheFile.WriteAsync refuses a temp path that already exists instead of overwriting it (FileMode.CreateNew guard)")]
+    public async Task AtomicCacheFileWriteAsync_PreExistingTempPath_FailsAndLeavesNoCacheEntry()
+    {
+        var dir = _root.Dir("atomic-createnew");
+        var cachePath = Path.Combine(dir, "entry.bin");
+        var temporaryPath = cachePath + ".fixed.tmp";
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(temporaryPath, [9, 9, 9]); // simulates a name that already exists at the tmp path
+
+        await Assert.ThrowsAsync<IOException>(() => AtomicCacheFile.WriteAsync(
+            cachePath, stream => stream.WriteByte(1), log: null, temporaryPathOverride: temporaryPath, CancellationToken.None));
+
+        // FileMode.CreateNew must refuse to clobber the pre-existing tmp file, so the write never
+        // reached the point of moving it into place. Mutating CreateNew -> Create would instead
+        // silently truncate/overwrite it, write successfully, and create cachePath here.
+        Assert.False(File.Exists(cachePath));
+    }
+
+    [Fact(DisplayName = "AtomicCacheFile.WriteAsync deletes its temp file when the payload write throws")]
+    public async Task AtomicCacheFileWriteAsync_PayloadThrows_CleansUpTempFile()
+    {
+        var dir = _root.Dir("atomic-cleanup");
+        var cachePath = Path.Combine(dir, "entry.bin");
+        var temporaryPath = cachePath + ".fixed.tmp";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => AtomicCacheFile.WriteAsync(
+            cachePath, _ => throw new InvalidOperationException("boom"), log: null, temporaryPathOverride: temporaryPath, CancellationToken.None));
+
+        // The finally-block TryDelete must remove the half-written temp file; removing that finally
+        // would leave it behind forever (it would never be picked up as "stale" until 10 minutes pass).
+        Assert.False(File.Exists(temporaryPath));
+        Assert.False(File.Exists(cachePath));
+    }
 }

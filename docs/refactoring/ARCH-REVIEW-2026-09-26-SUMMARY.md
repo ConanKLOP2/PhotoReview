@@ -1,6 +1,6 @@
 # AR — Rà soát kiến trúc 2026-09-26 (tóm tắt)
 
-**Trạng thái:** 📝 PLAN (chưa task nào bắt đầu) · **Tier:** T1 · **Base:** review tại `master@1c84c59`, số dòng kiểm chứng lại tại `14dfe71` · **Plan từng task:** `docs/refactoring/arch-review/AR10..AR19-*.md` — chỉ đọc file của task đang làm.
+**Trạng thái:** 🔄 Đang thực thi — Wave 1–3 (mã) trong PR `integration/arch-review-2026-09-26`; còn Q-AR7 (AR16) và GUI check AR13 · **Tier:** T1 · **Base:** review tại `master@1c84c59`, số dòng kiểm chứng lại tại `14dfe71` · **Plan từng task:** `docs/refactoring/arch-review/AR10..AR19-*.md` — chỉ đọc file của task đang làm.
 
 ## Kết luận
 
@@ -22,7 +22,7 @@ Bốn lane đọc mã độc lập (Imaging, App, Core/Platform, build/test) + l
 | F13 | `native/x64/turbojpeg.dll` không bị commit chỉ nhờ pattern chung `x64/` | `.gitignore:24` | P2 | AR12 |
 | F14 | Không có `TreatWarningsAsErrors` dù quy ước là 0 warning | `Directory.Build.props`; `.editorconfig:29,36` | P2 | AR12 |
 | F15 | GC/runtime để mặc định, chưa ghi lý do (khác `PublishReadyToRun` có ghi) | `PhotoReview.App.csproj:10-14` | P3 | AR12 |
-| F16 | `MainWindow.xaml.cs` 708 dòng gộp: lifecycle/DPI, máy trạng thái pan/kinetic/wheel/click-zoom (:34-50, :283-548), hội tụ Fit (:646-698), phím tắt (:565-616), drag-drop, menu | `MainWindow.xaml.cs` | P2 | AR13 |
+| F16 | `MainWindow.xaml.cs` 715 dòng gộp: lifecycle/DPI, máy trạng thái pan/kinetic/wheel/click-zoom (:34-50, :283-548), hội tụ Fit (:646-698), phím tắt (:565-616), drag-drop, menu | `MainWindow.xaml.cs` | P2 | AR13 |
 | F17 | `MainViewModel` tự `new` 3 controller trong ctor; các controller nhận `this` làm sink → không inject thẳng được | `MainViewModel.cs:106-119` | P3 | AR14 |
 | F18 | Hai bản "temp → encode → rename" (`DiskCacheStore.cs:84`, `PreviewCacheFile.cs:110`); hai overload `logContext` không ai gọi và bỏ tham số | `DiskCacheStore.cs:255,317` | P3 | AR15 |
 | F19 | `SourceBytesCache.GetOrRead` chặn đồng bộ trên `Task.Run` dù caller đã ở worker | `SourceBytesCache.cs:52-61` | P3 (flag mặc định tắt) | AR15 |
@@ -35,16 +35,16 @@ Bốn lane đọc mã độc lập (Imaging, App, Core/Platform, build/test) + l
 
 | ID | Tên | Quyết định | Phụ thuộc | Máy thật / GUI | Agent gợi ý | Trạng thái |
 |---|---|---|---|---|---|---|
-| AR10 | Ngân sách RAM live (đảo Q-R19) | Q-AR6 | — | Không (perf gate không đổi đường nóng) | sonnet | TODO |
-| AR11 | Dọn `AppSettings` tĩnh; round-trip Settings UI | — | — | Không | sonnet | TODO |
-| AR12 | Vệ sinh build: `.gitignore`, warnings-as-errors, ghi chú GC | — | — | Không | haiku (12a/12c), sonnet (12b) | TODO |
-| AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | TODO |
-| AR14 | Lắp ráp controller của `MainViewModel` | Q-AR10 | — | Không | sonnet | TODO |
-| AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | TODO |
-| AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | TODO |
-| AR17 | TurboJpeg: thử nghiệm hay đầu tư | Q-AR8 | — | Đo trên máy thật nếu chọn (b) | strongest nếu (b) | TODO |
-| AR18 | Benchmark trong app: ghi nhận | Q-AR9 | — | Không | haiku | TODO |
-| AR19 | Tách `IDialogService` | Q-AR10 | AR13 (cùng file) | Không | sonnet | TODO |
+| AR10 | Ngân sách RAM live (đảo Q-R19) | Q-AR6 | — | Không (perf gate không đổi đường nóng) | sonnet | ❌ CLOSED — Q-AR6 (a), không sửa mã |
+| AR11 | Dọn `AppSettings` tĩnh; round-trip Settings UI | — | — | Không | sonnet | ✅ DONE (integration PR) — allowlist Core `File.*` 6 file có lý do; `SettingsWindow` giữ store tuỳ chọn |
+| AR12 | Vệ sinh build: `.gitignore`, warnings-as-errors, ghi chú GC | — | — | Không | haiku (12a/12c), sonnet (12b) | ✅ DONE (integration PR) — 0 warning cần sửa khi bật warnings-as-errors |
+| AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | ✅ CODE DONE (integration PR) — `MainWindow.xaml.cs` 715 → 404 dòng (phần còn lại: ctor/wiring, lifecycle, `Window_KeyDown`, forward menu — plan cho giữ); **GUI check: người dùng** |
+| AR14 | Lắp ráp controller của `MainViewModel` | Q-AR10 | — | Không | sonnet | ✅ DONE — Q-AR10 (a), chỉ comment |
+| AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | ✅ DONE (integration PR) — 15c đo trên F4: không chậm hơn (PERF-STATUS); thêm cờ CLI `--source-bytes-cache` |
+| AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | 🔄 Bước 1 xong: probe ≈ 114 ms/1841 file ≈ 68 % first visual → chờ Q-AR7 (khuyến nghị c) |
+| AR17 | TurboJpeg: thử nghiệm hay đầu tư | Q-AR8 | — | Đo trên máy thật nếu chọn (b) | strongest nếu (b) | ✅ DONE — Q-AR8 (a), nhãn "thử nghiệm" |
+| AR18 | Benchmark trong app: ghi nhận | Q-AR9 | — | Không | haiku | ✅ DONE — Q-AR9 (a), ghi chú architecture.md |
+| AR19 | Tách `IDialogService` | Q-AR10 | AR13 (cùng file) | Không | sonnet | ✅ DONE — Q-AR10 (a), `ShowSkippedFiles` qua `IDialogService` |
 
 ## Quyết định cần người dùng
 

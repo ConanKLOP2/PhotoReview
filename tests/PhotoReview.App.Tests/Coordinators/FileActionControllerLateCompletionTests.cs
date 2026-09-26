@@ -365,6 +365,7 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         public void ShowDiagnostics() { }
         public bool ShowSettings() => false;
         public void ShowBenchmark(string? folder = null) { }
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
     }
 
     private sealed class RecordingSink : IFileActionSink

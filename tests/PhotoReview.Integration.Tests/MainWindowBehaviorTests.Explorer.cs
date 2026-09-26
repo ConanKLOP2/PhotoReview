@@ -294,9 +294,11 @@ public sealed class MainWindowExplorerOrderTests
     /// </summary>
     private static void PressNext(MainWindow window)
     {
-        // Read the binding from the same settings source MainWindow uses, so a machine whose real
-        // config.json remaps Next does not silently turn this into some other command.
-        var configured = AppSettings.Load().Shortcuts.Next;
+        // Read the binding from the same SettingsStore this window's AppHost resolved (window.Settings is that
+        // store's Current, AR02c), so a machine whose real config.json remaps Next does not silently turn this
+        // into some other command. (AR11a: AppSettings.Load() always returned an in-memory default, never the
+        // real config -- this now reads what MainWindow itself actually uses.)
+        var configured = window.Settings.Shortcuts.Next;
         Assert.True(Enum.TryParse<Key>(configured, ignoreCase: true, out var key),
             $"The configured Next shortcut '{configured}' is not a WPF Key.");
         var source = PresentationSource.FromVisual(window)

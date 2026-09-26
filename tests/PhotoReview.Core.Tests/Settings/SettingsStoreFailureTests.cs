@@ -201,6 +201,6 @@ public sealed class SettingsStoreFailureTests
         Assert.Contains(nameof(AppSettings.Shortcuts), store.LastLoadRepairs);
         Assert.Equal(new ShortcutMappings().Next, loaded.Shortcuts.Next);
         Assert.Equal("Right", Assert.Single(loaded.Actions).Shortcut); // the user's action binding is never touched
-        Assert.NotNull(AppSettings.ValidateShortcuts(loaded)); // the settings dialog refuses to save until the user resolves it
+        Assert.NotNull(store.ValidateShortcuts(loaded)); // the settings dialog refuses to save until the user resolves it
     }
 }

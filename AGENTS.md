@@ -36,7 +36,7 @@ The application must prioritize the following principles when processing and rev
 3. **String comparisons (`CA1310`):** Always pass an explicit `StringComparison`. Use `Ordinal`/`OrdinalIgnoreCase` for file/path names (not culture-aware on Windows); `CurrentCulture` is reserved for user-facing text sorting/display only.
 4. **Culture-sensitive formatting (`CA1305`):** Any `ToString`/`Parse`/`Format` writing to a log, CSV, journal, or other machine-read/diagnostic file must use `CultureInfo.InvariantCulture`, never the user's locale (app ships Vietnamese UI text). UI-facing display text may use `CurrentCulture`.
 5. **Nullable warnings (`CS8603` and similar):** Fix these for real — they flag a genuine possible-null-return path, not style. Do not suppress.
-6. **New analyzer suppressions:** Any new `#pragma warning disable` or `.editorconfig` rule change needs a one-line justification (architecture decision, false positive, etc.) — never suppress silently to make CI green.
+6. **New analyzer suppressions:** Any new `#pragma warning disable` or `.editorconfig` rule change needs a one-line justification (architecture decision, false positive, etc.) — never suppress silently to make CI green. Release build treats warnings as errors (AR12b).
 
 ## Mandatory Build, Publish, and Git Push Workflow
 

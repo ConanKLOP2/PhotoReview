@@ -23,7 +23,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         var middle = WriteFile(dir, "middle.png", 100, accessedAgo: TimeSpan.FromMinutes(20));
         var newest = WriteFile(dir, "newest.png", 100, accessedAgo: TimeSpan.FromMinutes(10));
 
-        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 150, logContext: "test");
+        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 150, log: null);
 
         Assert.True(!File.Exists(oldest) && !File.Exists(middle) && File.Exists(newest));
     }
@@ -35,7 +35,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         var a = WriteFile(dir, "a.png", 50, accessedAgo: TimeSpan.FromMinutes(5));
         var b = WriteFile(dir, "b.png", 50, accessedAgo: TimeSpan.FromMinutes(1));
 
-        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 1_000, logContext: "test");
+        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 1_000, log: null);
 
         Assert.True(File.Exists(a) && File.Exists(b));
     }
@@ -45,7 +45,7 @@ public sealed class DiskCacheStoreTests : IDisposable
     {
         var missing = _root.Combine("does-not-exist");
 
-        var thrown = Record.Exception(() => DiskCacheStore.PruneDirectory(missing, "*.png", maxBytes: 10, logContext: "test"));
+        var thrown = Record.Exception(() => DiskCacheStore.PruneDirectory(missing, "*.png", maxBytes: 10, log: null));
 
         Assert.Null(thrown);
         Assert.False(Directory.Exists(missing)); // pruning must not create the directory it was asked to trim
@@ -60,7 +60,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         var current = WriteFile(dir, "current.png", 100, accessedAgo: TimeSpan.FromMinutes(1));
         File.WriteAllText(Path.Combine(dir, "orphan.png.meta"), "Wpf|1");
 
-        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 150, logContext: "test", companionSuffix: ".meta");
+        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 150, log: null, companionSuffix: ".meta");
 
         Assert.False(File.Exists(old));
         Assert.False(File.Exists(old + ".meta"));
@@ -100,7 +100,7 @@ public sealed class DiskCacheStoreTests : IDisposable
         var a = WriteFile(dir, "a.png", 10, accessedAgo: TimeSpan.Zero);
         var b = WriteFile(dir, "b.png", 10, accessedAgo: TimeSpan.Zero);
 
-        DiskCacheStore.ClearDirectory(dir, "*.png", logContext: "test");
+        DiskCacheStore.ClearDirectory(dir, "*.png", log: null);
 
         Assert.True(!File.Exists(a) && !File.Exists(b));
     }

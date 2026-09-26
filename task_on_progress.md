@@ -1,15 +1,15 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-26 (evening) | **Base:** master `985d524` (PRs #94–#103 merged) | **Open PRs:** none known besides this docs PR
+**Updated:** 2026-09-26 (night) | **Base:** master `36da791` (#94–#105 merged) | **Open:** integration PR `integration/arch-review-2026-09-26`
 
 ## Now
 
-- **Branch model change (this PR):** `develop` is retired. The handoff (`task_on_progress.md`), `docs/refactoring/OPEN-DECISIONS.md` and `docs/INDEX.md` live on `master` only; a PR that changes project state updates them in the same PR, and a decision taken outside a code PR gets a small docs PR. Reason: `develop` fell 170 commits behind, was merged once (#85), and master's copy of the handoff went stale — two sources of truth.
-- **Merged to master 2026-09-26:** #94–#97 (overnight review + wave5), #98 (AGENTS decision format), #99/#100 (Actions pinned by SHA + Dependabot), #101 (Codex full-source audit, F2 by design), #102 (architecture review plan), #103 (Q-R25 policy decisions + audit fixes: Undo after folder change/APP-03, canonical shortcut keys Enter/Return, Esc cancels duplicate-check hashing, F0/F1/F3/F4, thread-pool pre-warm in tests). All their branches and worktrees can be deleted.
-- **Architecture review plan (#102):** [ARCH-REVIEW-2026-09-26-SUMMARY](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — tasks AR10–AR19 all TODO. With #103 merged nothing blocks Wave 1 (AR11, AR12, AR15). Q-AR6..Q-AR10 wait for the user (options + recommendation in each `arch-review/AR1x` file).
-- **User (GUI / real machine), still open from the overnight review:** Settings > General > Updates, Defaults button (WIC, EXIF off), close during a folder scan, Recycle Bin undo on a non-English Windows (`undelete` fallback unverified), decoder fallbacks with damaged EXIF/ICC; real-machine perf run for natural sort / snapshot validator on F4; Q-R17 preload-estimate perf run.
-- **Caution (from the 2026-09-25 audit):** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it until isolated.
-- **Local build:** `src/PhotoReview.App/bin/Release/net10.0-windows` last rebuilt from master `fac8347` (2.0.106); rebuild after #103.
+- **Architecture review 2026-09-26 — code done, one integration PR:** [summary](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md). Four agent branches merged without conflicts: AR11 (static `AppSettings` persistence removed, Settings round-trip test, Core `File.*` boundary test), AR12 (+AR17a, AR18a: `.gitignore` native rule, Release warnings-as-errors, GC note, TurboJpeg "experimental" label), AR15 (dead overloads, one atomic cache writer, `SourceBytesCache` reads on the calling thread), AR13 (+AR19a, AR14a: `PointerInputController`, `FitViewController` — Fit loop moved verbatim, still ≤ 3 passes; `MainWindow.xaml.cs` 715 → 404 lines; `ShowSkippedFiles` via `IDialogService`). Decisions Q-AR6/8/9/10 = recommended options (user said "run everything"); Q-AR7 pending.
+- **Measured 2026-09-26 (PERF-STATUS):** AR15c not worse with the source-bytes cache on (new CLI flag `--source-bytes-cache`); AR16 probe ≈ 114 ms per folder open on F4 (≈ 68 % of the old 166 ms first visual) → **Q-AR7 waits for the user** (recommended: (c) background probe).
+- **Still to do:** **user GUI check for AR13**: pan + glide, wheel zoom at cursor, Ctrl+wheel navigation, click-to-zoom, Fit after resize and DPI change, skipped-files list opens. Reported by the AR13 agent, not re-verified by the lead: 5 `Slow` MainWindow integration tests (Actions/FolderSwitch/Explorer) fail identically on master. Also seen once: a `JournalConcurrencyTests` file-lock crash (passed on rerun).
+- **User (GUI / real machine), still open from the overnight review:** Settings > General > Updates, Defaults button, close during a folder scan, Recycle Bin undo on a non-English Windows, decoder fallbacks with damaged EXIF/ICC; perf runs for natural sort / snapshot validator and Q-R17 on F4.
+- **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
+- **Decision log:** handoff and decisions live on `master` only (no `develop` since #104).
 
 ## Status by Group
 

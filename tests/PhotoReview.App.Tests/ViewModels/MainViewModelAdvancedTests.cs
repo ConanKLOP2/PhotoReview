@@ -545,6 +545,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
             return SettingsResponse;
         }
         public void ShowBenchmark(string? folder = null) { }
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
     }
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
