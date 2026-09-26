@@ -29,7 +29,8 @@ Lookup order for every text: your file → shipped file → built-in English →
 ### Translate or add a language
 
 1. Settings → pick the language (or English for a new one) → **Export strings to translate**. This writes
-   `<code>.todo.json` with every missing key, its English text and translator notes.
+   `<code>.todo.json` with every key: the missing ones first (English text, also listed in `_missing`), then the
+   current translations, plus translator notes. Languages with `"plural": "none"` do not get untranslated `.one` keys.
 2. Create `<code>.json` (e.g. `de.json`) with a `_meta` block and your translations:
    ```json
    {
@@ -72,7 +73,7 @@ Thứ tự tìm mỗi chữ: file của bạn → file đi kèm → English có 
 
 ### Dịch hoặc thêm ngôn ngữ
 
-1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm các key còn thiếu, câu English và ghi chú.
+1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm toàn bộ key: key còn thiếu ở đầu (câu English, liệt kê trong `_missing`), sau đó là bản dịch hiện tại, kèm ghi chú. Ngôn ngữ có `"plural": "none"` không bị liệt kê các key `.one` chưa dịch.
 2. Tạo `<mã>.json` có khối `_meta` (mã, tên, tên bản địa, `plural`, tác giả) và bản dịch.
 3. Đặt vào thư mục người dùng, **Tải lại bản dịch**, chọn trong **Ngôn ngữ**.
 4. Chạy PhotoReview với `--i18n-keys` để thấy key của từng chữ, hoặc `--i18n-pseudo` để phát hiện chữ bị cắt.

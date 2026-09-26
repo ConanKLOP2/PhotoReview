@@ -27,11 +27,17 @@ public sealed class TranslationExportTests : IDisposable
     private static List<string> TextKeys(JsonElement root) =>
         [.. root.EnumerateObject().Select(p => p.Name).Where(n => !n.StartsWith('_'))];
 
+    private static List<string> MissingList(JsonElement root) =>
+        [.. root.GetProperty(TranslationExport.MissingKey).EnumerateArray().Select(e => e.GetString()!)];
+
+    private static List<string> EnglishKeysSorted(Func<string, bool> where) =>
+        [.. BuiltInCatalog.English.Entries.Keys.Where(where).Order(StringComparer.Ordinal)];
+
     [Fact]
-    public void BuildJson_ListsOnlyMissingKeys_WithEnglishText_MetaAndNotes()
+    public void BuildJson_ListsEveryKey_MissingFirstInEnglish_ThenCurrentTranslations_MetaAndNotes()
     {
         var partial = Catalog("""
-            { "_meta": { "code": "xx", "name": "Test", "nativeName": "Testish", "plural": "none", "authors": ["A"] },
+            { "_meta": { "code": "xx", "name": "Test", "nativeName": "Testish", "plural": "one-other", "authors": ["A"] },
               "app.title": "Tst", "common.cancel": "Nope" }
             """);
         var notes = new Dictionary<string, string> { ["common.save"] = "Save button.", ["app.title"] = "Product name." };
@@ -41,28 +47,83 @@ public sealed class TranslationExportTests : IDisposable
         var meta = root.GetProperty("_meta");
         Assert.Equal("xx", meta.GetProperty("code").GetString());
         Assert.Equal("Testish", meta.GetProperty("nativeName").GetString());
-        Assert.Equal("none", meta.GetProperty("plural").GetString());
+        Assert.Equal("one-other", meta.GetProperty("plural").GetString());
         Assert.Equal("A", Assert.Single(meta.GetProperty("authors").EnumerateArray()).GetString());
 
-        var keys = TextKeys(root);
-        var expected = BuiltInCatalog.English.Entries.Keys.Where(k => k is not "app.title" and not "common.cancel")
-            .Order(StringComparer.Ordinal).ToList();
-        Assert.Equal(expected, keys); // every missing key, sorted, nothing else
+        // Every English key once: the untranslated ones (sorted) first, then the translated ones (sorted).
+        var missing = EnglishKeysSorted(k => k is not "app.title" and not "common.cancel");
+        Assert.Equal([.. missing, "app.title", "common.cancel"], TextKeys(root));
+        Assert.Equal(missing, MissingList(root));
         Assert.Equal(BuiltInCatalog.English.Entries["common.save"], root.GetProperty("common.save").GetString());
+        Assert.Equal("Tst", root.GetProperty("app.title").GetString());
+        Assert.Equal("Nope", root.GetProperty("common.cancel").GetString());
 
-        // Notes only for keys that are exported.
+        // Notes for translated keys too, not only for missing ones.
         var exportedNotes = root.GetProperty("_notes").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString());
-        Assert.Equal("Save button.", Assert.Single(exportedNotes).Value);
+        Assert.Equal("Save button.", exportedNotes["common.save"]);
+        Assert.Equal("Product name.", exportedNotes["app.title"]);
+        Assert.Equal(2, exportedNotes.Count);
         Assert.Contains("_help", root.EnumerateObject().Select(p => p.Name));
     }
 
     [Fact]
-    public void BuildJson_English_HasNothingToTranslate()
+    public void BuildJson_English_ListsEveryKeyWithItsText_NothingMissing()
     {
         var root = Parse(TranslationExport.BuildJson(BuiltInCatalog.English, "en", [], new Dictionary<string, string>()));
 
-        Assert.Empty(TextKeys(root));
+        Assert.Equal(EnglishKeysSorted(_ => true), TextKeys(root));
+        Assert.Empty(MissingList(root));
+        Assert.Equal(BuiltInCatalog.English.Entries["common.save"], root.GetProperty("common.save").GetString());
         Assert.Equal("en", root.GetProperty("_meta").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public void BuildJson_English_UserOverrideReplacesBuiltInText()
+    {
+        var root = Parse(TranslationExport.BuildJson(BuiltInCatalog.English, "en",
+            [Catalog("""{ "_meta": { "code": "en" }, "common.save": "Keep" }""")], new Dictionary<string, string>()));
+
+        Assert.Equal("Keep", root.GetProperty("common.save").GetString());
+        Assert.Equal(BuiltInCatalog.English.Entries.Count, TextKeys(root).Count);
+    }
+
+    [Fact]
+    public void BuildJson_PluralNone_SkipsUntranslatedOneForms_KeepsTranslatedOnes()
+    {
+        var oneKeys = EnglishKeysSorted(k => k.EndsWith(".one", StringComparison.Ordinal)
+            && BuiltInCatalog.English.Entries.ContainsKey(k[..^".one".Length] + ".other"));
+        Assert.True(oneKeys.Count >= 2, "English must have plural pairs for this test");
+        var kept = oneKeys[0];
+        var translation = Catalog($$"""{ "_meta": { "code": "xx", "plural": "none" }, "{{kept}}": "One" }""");
+
+        var root = Parse(TranslationExport.BuildJson(BuiltInCatalog.English, "xx", [translation], new Dictionary<string, string>()));
+
+        var keys = TextKeys(root);
+        Assert.All(oneKeys.Skip(1), k => Assert.DoesNotContain(k, keys));
+        Assert.Equal("One", root.GetProperty(kept).GetString());
+        Assert.DoesNotContain(kept, MissingList(root));
+        Assert.Contains(oneKeys[1][..^".one".Length] + ".other", MissingList(root)); // .other is still work to do
+    }
+
+    [Fact]
+    public void BuildJson_PluralOneOther_ListsUntranslatedOneFormsAsMissing()
+    {
+        var oneKey = EnglishKeysSorted(k => k.EndsWith(".one", StringComparison.Ordinal))[0];
+
+        var root = Parse(TranslationExport.BuildJson(BuiltInCatalog.English, "xx",
+            [Catalog("""{ "_meta": { "code": "xx", "plural": "one-other" } }""")], new Dictionary<string, string>()));
+
+        Assert.Contains(oneKey, MissingList(root));
+    }
+
+    [Fact]
+    public void BuildJson_DropsKeysEnglishDoesNotKnow()
+    {
+        var root = Parse(TranslationExport.BuildJson(BuiltInCatalog.English, "xx",
+            [Catalog("""{ "_meta": { "code": "xx" }, "no.such.key": "x", "app.title": "T" }""")], new Dictionary<string, string>()));
+
+        Assert.DoesNotContain("no.such.key", TextKeys(root));
+        Assert.Equal("T", root.GetProperty("app.title").GetString());
     }
 
     [Fact]
@@ -75,7 +136,8 @@ public sealed class TranslationExportTests : IDisposable
         Assert.Equal("xx", catalog.Code);
         var localizer = Localizer.Create(BuiltInCatalog.English, [catalog]);
         Assert.Empty(localizer.Warnings);
-        Assert.DoesNotContain("app.title", catalog.Entries.Keys);
+        Assert.Equal("T", catalog.Entries["app.title"]); // the existing translation survives the round trip
+        Assert.Equal(BuiltInCatalog.English.Entries.Count, catalog.Entries.Count);
     }
 
     [Fact]
@@ -87,7 +149,7 @@ public sealed class TranslationExportTests : IDisposable
         File.WriteAllText(Path.Combine(shipped, TranslationExport.NotesFileName), """{ "_meta": {}, "common.save": "Save button." }""");
         File.WriteAllText(Path.Combine(shipped, "yy.json"), """{ "_meta": { "code": "yy" }, "common.save": "other language" }""");
         Directory.CreateDirectory(user);
-        File.WriteAllText(Path.Combine(user, "xx.json"), """{ "_meta": { "code": "xx", "nativeName": "Mine" }, "common.cancel": "C" }""");
+        File.WriteAllText(Path.Combine(user, "xx.json"), """{ "_meta": { "code": "xx", "nativeName": "Mine" }, "common.cancel": "C", "app.title": "U" }""");
 
         var path = TranslationExport.Export("xx", shipped, user);
 
@@ -95,17 +157,21 @@ public sealed class TranslationExportTests : IDisposable
         var bytes = File.ReadAllBytes(path);
         Assert.False(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, "UTF-8 without BOM");
         var root = Parse(Encoding.UTF8.GetString(bytes));
-        var keys = TextKeys(root);
-        Assert.DoesNotContain("app.title", keys);     // translated in the shipped file
-        Assert.DoesNotContain("common.cancel", keys); // translated in the user file
-        Assert.Contains("common.save", keys);         // a translation of another language does not count
+        var missing = MissingList(root);
+        Assert.Equal(BuiltInCatalog.English.Entries.Count, TextKeys(root).Count);
+        Assert.DoesNotContain("app.title", missing);     // translated in both files
+        Assert.DoesNotContain("common.cancel", missing); // translated in the user file
+        Assert.Contains("common.save", missing);         // a translation of another language does not count
+        Assert.Equal("U", root.GetProperty("app.title").GetString()); // user text wins over shipped
+        Assert.Equal("C", root.GetProperty("common.cancel").GetString());
+        Assert.Equal(BuiltInCatalog.English.Entries["common.save"], root.GetProperty("common.save").GetString());
         Assert.Equal("Mine", root.GetProperty("_meta").GetProperty("nativeName").GetString()); // user file wins
         Assert.Equal("Save button.", root.GetProperty("_notes").GetProperty("common.save").GetString());
 
         // The dotted name keeps the half-done file out of the language list and out of the loaded text.
         var loader = new LanguageLoader(new PhysicalFileSystem(), shipped, user);
         Assert.Single(loader.DiscoverLanguages(), l => l.Code == "xx");
-        Assert.Equal("T", loader.Load("xx").Get("app.title"));
+        Assert.Equal("U", loader.Load("xx").Get("app.title"));
         Assert.Equal(BuiltInCatalog.English.Entries["common.save"], loader.Load("xx").Get("common.save"));
     }
 
@@ -171,7 +237,7 @@ public sealed class TranslationExportTests : IDisposable
     }
 
     [Fact]
-    public void LocalizationService_ExportTodo_ShippedVietnamese_ListsExactlyTheKeysViLacks()
+    public void LocalizationService_ExportTodo_ShippedVietnamese_ListsEveryKey_WithViText()
     {
         var service = new LocalizationService(new PathsStub(Path.Combine(_temp.Path, "cfg", "config.json")), new PhysicalFileSystem(), NullLog.Instance);
 
@@ -179,14 +245,22 @@ public sealed class TranslationExportTests : IDisposable
 
         Assert.Equal(Path.Combine(service.UserLanguagesDir, "vi.todo.json"), path);
         var shippedVi = Catalog(File.ReadAllText(Path.Combine(LocalizationService.ShippedLanguagesDir, "vi.json")));
-        var expected = BuiltInCatalog.English.Entries.Keys.Where(k => !shippedVi.Entries.ContainsKey(k)).Order(StringComparer.Ordinal).ToList();
         var root = Parse(File.ReadAllText(path));
-        Assert.Equal(expected, TextKeys(root));
+        var keys = TextKeys(root);
+        // vi has no plural forms, so no key.one is work to do; every other English key is either missing or has vi text.
+        var expected = BuiltInCatalog.English.Entries.Keys
+            .Where(k => shippedVi.Entries.ContainsKey(k) || !k.EndsWith(".one", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal).ToList();
+        Assert.Equal(expected, keys.Order(StringComparer.Ordinal).ToList());
+        Assert.All(shippedVi.Entries.Where(p => BuiltInCatalog.English.Entries.ContainsKey(p.Key)),
+            p => Assert.Equal(p.Value, root.GetProperty(p.Key).GetString()));
+        Assert.All(MissingList(root), k => Assert.DoesNotContain(k, shippedVi.Entries.Keys));
         Assert.Equal("vi", root.GetProperty("_meta").GetProperty("code").GetString());
         Assert.Equal("none", root.GetProperty("_meta").GetProperty("plural").GetString());
         // Translator context comes from the shipped en.notes.json, and only for exported keys.
         var notes = root.GetProperty("_notes").EnumerateObject().Select(p => p.Name).ToList();
         Assert.All(notes, n => Assert.Contains(n, expected));
+        Assert.Contains("app.title", notes);
     }
 
     [Theory]
