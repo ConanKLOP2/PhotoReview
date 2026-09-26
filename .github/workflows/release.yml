@@ -2,6 +2,7 @@ name: Release
 
 # Publishes an existing version tag as a GitHub Release with the framework-dependent zip attached.
 # Manual only: Actions > Release > Run workflow, enter the tag (CI creates v2.0.N tags after each merge to master).
+# Release notes = merged PRs from the previous published release to this tag (explicit previous_tag_name).
 # Tests are not re-run here: CI already ran the full gate on the same commit before it created the tag.
 on:
   workflow_dispatch:
@@ -102,16 +103,32 @@ jobs:
           Compress-Archive -Path "$pub/*" -DestinationPath $zip
           $sha = (Get-FileHash "$pub/PhotoReview.App.exe" -Algorithm SHA256).Hash
           $zipSha = (Get-FileHash $zip -Algorithm SHA256).Hash
+          # Previous release = the highest published (non-draft) release below this tag, so re-releasing an older
+          # tag still compares against its real predecessor, not just "the latest one".
+          $repo = $env:GITHUB_REPOSITORY
+          $thisVer = [version]$env:TAG.TrimStart('v')
+          $prev = gh release list --repo $repo --exclude-drafts --limit 100 --json tagName --jq '.[].tagName' |
+            Where-Object { $_ -cmatch '^v[0-9]+\.[0-9]+\.[0-9]+\z' -and [version]$_.TrimStart('v') -lt $thisVer } |
+            Sort-Object { [version]$_.TrimStart('v') } -Descending | Select-Object -First 1
+          $changes = "This is the first published release; no earlier release to compare with."
+          if ($prev) {
+            # Explicit previous_tag_name: the summary is exactly $prev..$env:TAG (merged PRs + full-changelog link).
+            $body = gh api "repos/$repo/releases/generate-notes" -f tag_name=$env:TAG -f previous_tag_name=$prev --jq .body
+            if ($LASTEXITCODE -ne 0) { throw "generate-notes failed ($LASTEXITCODE)" }
+            $changes = "## Changes since $prev`n`n$body"
+          }
           $notes = @"
           Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe``.
 
           SHA256 of ``$zip``: ``$zipSha``
           SHA256 of ``PhotoReview.App.exe``: ``$sha``
+
+          $changes
           "@
           Set-Content -Path release-notes.md -Value $notes -Encoding utf8
           $ghArgs = @('release', 'create', $env:TAG, $zip, '--title', "PhotoReview $($env:TAG.TrimStart('v'))",
-                    '--verify-tag', '--generate-notes', '--notes-file', 'release-notes.md')
+                    '--verify-tag', '--notes-file', 'release-notes.md')
           if ($env:DRAFT -eq 'true') { $ghArgs += '--draft' }
           gh @ghArgs
           if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
-          "Release $env:TAG created (draft=$env:DRAFT), zip $zip (SHA256 $zipSha), exe SHA256 $sha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "Release $env:TAG created (draft=$env:DRAFT, changes since $prev), zip $zip (SHA256 $zipSha), exe SHA256 $sha" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
