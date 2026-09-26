@@ -96,7 +96,7 @@ public static class RamBudgetPolicy
 
     /// <summary>
     /// Clamps a requested percent to [<see cref="MinimumCachePercent(long, PreloadWindow)"/>, <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>]
-    /// for the user's configured <paramref name="window"/> (Q-R30): a bigger window raises the floor so the cache never
+    /// for the user's configured <paramref name="window"/> (Q-R31): a bigger window raises the floor so the cache never
     /// evicts previews the scheduler is still preloading.
     /// </summary>
     public static int ClampCachePercent(int requestedPercent, long physicalBytes, PreloadWindow window) =>
@@ -119,7 +119,7 @@ public static class RamBudgetPolicy
         PreviewBytesForPercent(requestedPercent, physicalBytes, sourceBytesCapacity, PreloadWindow.Default);
 
     /// <inheritdoc cref="PreviewBytesForPercent(int, long, long)"/>
-    /// <remarks>The percent floor follows <paramref name="window"/> (Q-R30).</remarks>
+    /// <remarks>The percent floor follows <paramref name="window"/> (Q-R31).</remarks>
     public static long PreviewBytesForPercent(int requestedPercent, long physicalBytes, long sourceBytesCapacity, PreloadWindow window)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(physicalBytes);
@@ -137,7 +137,7 @@ public static class RamBudgetPolicy
         SourceBytesForPercent(requestedBytes, requestedPercent, physicalBytes, PreloadWindow.Default);
 
     /// <inheritdoc cref="SourceBytesForPercent(long, int, long)"/>
-    /// <remarks>The preview room left over follows <paramref name="window"/> (Q-R30).</remarks>
+    /// <remarks>The preview room left over follows <paramref name="window"/> (Q-R31).</remarks>
     public static long SourceBytesForPercent(long requestedBytes, int requestedPercent, long physicalBytes, PreloadWindow window)
     {
         if (physicalBytes <= 0) return requestedBytes;

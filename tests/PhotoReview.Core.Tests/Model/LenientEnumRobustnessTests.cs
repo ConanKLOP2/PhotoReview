@@ -91,4 +91,18 @@ public sealed class LenientEnumRobustnessTests
         Assert.Equal(ExifInfoFields.All, JsonSerializer.Deserialize<ExifInfoFields>("-1"));
         Assert.Equal(ExifInfoFields.FileName | ExifInfoFields.Camera, JsonSerializer.Deserialize<ExifInfoFields>("\"filename, CAMERA\""));
     }
+
+    [Fact(DisplayName = "TitleBarFields accepts numbers and names, drops unknown bits and never yields an invalid mask")]
+    public void TitleBarFields_Robust()
+    {
+        foreach (var token in Tokens.Concat(["\"FolderName, FileName\"", "\"foldername,filesize\"", "\"All\"", "\"None\"", "-1", "1024", "9223372036854775807", "\"1, 2\""]))
+        {
+            TitleBarFields value = default;
+            var ex = Record.Exception(() => value = JsonSerializer.Deserialize<TitleBarFields>(token));
+            Assert.True(ex is null or JsonException, $"{token}: {ex}");
+            Assert.Equal(value & TitleBarFields.All, value);
+        }
+        Assert.Equal(TitleBarFields.All, JsonSerializer.Deserialize<TitleBarFields>("-1"));
+        Assert.Equal(TitleBarFields.FolderName | TitleBarFields.FileSize, JsonSerializer.Deserialize<TitleBarFields>("\"foldername, FILESIZE\""));
+    }
 }

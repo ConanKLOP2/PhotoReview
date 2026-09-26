@@ -633,9 +633,35 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         folder ??= _currentSession?.Folder ?? "";
         var settings = Settings;
-        FolderTitle = string.IsNullOrWhiteSpace(folder)
-            ? Tr.AppTitle
-            : settings.LoggingEnabled ? Tr.MainTitleWithFolderLogging(folder) : Tr.MainTitleWithFolder(folder);
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            FolderTitle = Tr.AppTitle;
+            return;
+        }
+        var content = BuildTitleBarContent(folder, settings.TitleBarFields);
+        FolderTitle = settings.LoggingEnabled ? Tr.MainTitleWithFolderLogging(content) : Tr.MainTitleWithFolder(content);
+    }
+
+    /// <summary>
+    /// Assembles the title bar's content from data already in memory (AGENTS.md rule 1: no disk I/O just for the
+    /// title) -- the catalog entry's Length/LastWriteUtc from the folder scan and the EXIF already read for the
+    /// presented photo (<see cref="ImagePresenter.CurrentPhotoInfo"/>), same sources <see cref="ExifText"/> uses.
+    /// Falls back to the folder name alone when the selected fields render empty (e.g. everything unchecked, or
+    /// nothing presented yet), so the title is never left bare.
+    /// </summary>
+    private string BuildTitleBarContent(string folder, TitleBarFields fields)
+    {
+        var entry = _catalog.Current;
+        var info = _presenter.CurrentPhotoInfo;
+        var index = _catalog.CurrentIndex;
+        var count = _catalog.Count;
+        var content = TitleBarFormatter.Format(
+            fields, folder,
+            index >= 0 && count > 0 ? index : null, count > 0 ? count : null,
+            info?.FileName, entry?.Length, info?.Width ?? 0, info?.Height ?? 0,
+            entry?.LastWriteUtc, info?.Exif,
+            System.Globalization.CultureInfo.CurrentCulture);
+        return content.Length > 0 ? content : Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
     }
 
     /// <summary>Sets the folder/count/Explorer state and renders <see cref="FolderText"/> from it.</summary>
@@ -675,6 +701,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(CurrentImage));
         OnPropertyChanged(nameof(StatusText));
         NotifyExifLineChanged();
+        UpdateFolderTitle(); // TitleBarFields may include the current file/EXIF, which just changed
     }
 
     // --- IFolderLoadSink implementation ---
@@ -900,6 +927,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public string ExifText => _presenter.CurrentPhotoInfo is { } info
         ? ExifFormatter.Format(Settings.ExifInfoFields, info.FileName, info.Width, info.Height, info.Exif,
+            _catalog.Current?.LastWriteUtc, // ModifiedDate: catalog entry from the folder scan, no extra disk read
             System.Globalization.CultureInfo.CurrentCulture) // display text: user's number/date format
         : string.Empty;
 

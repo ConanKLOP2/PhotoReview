@@ -19,6 +19,7 @@ public partial class ActionProfilesWindow : Window
     public ActionProfilesWindow(IEnumerable<ReviewAction> actions)
     {
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         Actions = actions.Select(Clone).ToList();
         ActionList.ItemsSource = Actions;
         if (Actions.Count > 0) ActionList.SelectedIndex = 0;

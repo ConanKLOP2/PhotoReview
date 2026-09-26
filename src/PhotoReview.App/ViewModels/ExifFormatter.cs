@@ -22,17 +22,20 @@ public static class ExifFormatter
     /// <param name="width">Original (post-orientation) width; 0 = unknown.</param>
     /// <param name="height">Original (post-orientation) height; 0 = unknown.</param>
     /// <param name="exif">EXIF read during the decode; null = none (e.g. an older cache entry).</param>
+    /// <param name="modifiedUtc">File's last-write time (catalog entry, no extra disk read); null = unknown.</param>
     /// <param name="provider">Number/date format; defaults to <see cref="CultureInfo.CurrentCulture"/>.</param>
     public static string Format(ExifInfoFields fields, string? fileName, int width, int height, ExifSummary? exif,
-        IFormatProvider? provider = null)
+        DateTime? modifiedUtc = null, IFormatProvider? provider = null)
     {
         provider ??= CultureInfo.CurrentCulture;
-        var parts = new List<string>(9);
+        var parts = new List<string>(10);
 
         if (fields.HasFlag(ExifInfoFields.FileName) && !string.IsNullOrWhiteSpace(fileName))
             parts.Add(fileName);
         if (fields.HasFlag(ExifInfoFields.DateTaken) && exif?.DateTaken is { } date)
-            parts.Add(FormatDate(date, provider));
+            parts.Add(FormatDateTime(date, provider));
+        if (fields.HasFlag(ExifInfoFields.ModifiedDate) && modifiedUtc is { } modified)
+            parts.Add(FormatDateTime(modified.ToLocalTime(), provider));
         if (fields.HasFlag(ExifInfoFields.Dimensions) && width > 0 && height > 0)
             parts.Add(Tr.ExifDimensions(width.ToString(provider), height.ToString(provider)));
         if (fields.HasFlag(ExifInfoFields.Camera) && CameraText(exif?.CameraMake, exif?.CameraModel) is { } camera)
@@ -52,10 +55,11 @@ public static class ExifFormatter
     }
 
     /// <summary>
-    /// A camera clock can hold any date, but some display calendars (Hijri Um al-Qura for ar-SA, Thai and others) accept
-    /// only a range and throw for the rest; one bad EXIF date must not blank the whole line.
+    /// A camera clock (or a file's last-write time) can hold any date, but some display calendars (Hijri Um al-Qura
+    /// for ar-SA, Thai and others) accept only a range and throw for the rest; one bad date must not blank the whole
+    /// line. Shared with <see cref="TitleBarFormatter"/> so DateTaken and the file's ModifiedDate render identically.
     /// </summary>
-    private static string FormatDate(DateTime date, IFormatProvider provider)
+    internal static string FormatDateTime(DateTime date, IFormatProvider provider)
     {
         try
         {

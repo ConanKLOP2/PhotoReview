@@ -220,7 +220,61 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         Assert.True(vm.HasImages);
         Assert.True(vm.CanNavigateNext);
         Assert.False(vm.CanNavigatePrevious);
-        Assert.Contains(folder, vm.FolderTitle);
+        // Default TitleBarFields = FolderName only (not the full path).
+        Assert.Contains(Path.GetFileName(folder), vm.FolderTitle);
+    }
+
+    [Fact(DisplayName = "TitleBarFields controls the title bar's content (in order) and follows navigation")]
+    public async Task TitleBarFields_ControlsTitleContent_AndFollowsNavigation()
+    {
+        var folder = Path.Combine(_tempDir, "title_fields");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        CreateImageFile(folder, "b.jpg");
+        var (vm, _, _) = CreateViewModel();
+        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview, TitleBarFields = TitleBarFields.IndexCount | TitleBarFields.FileName };
+
+        await vm.OpenFolderAsync(folder);
+
+        Assert.Contains("1/2", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.Contains("a.jpg", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain(folder, vm.FolderTitle, StringComparison.Ordinal); // FolderPath/FolderName are both off
+
+        await vm.NextAsync();
+
+        Assert.Contains("2/2", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.Contains("b.jpg", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("1/2", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("a.jpg", vm.FolderTitle, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "The title's LOG marker follows LoggingEnabled regardless of the selected TitleBarFields")]
+    public async Task TitleBarFields_KeepsTheLoggingMarker()
+    {
+        var folder = Path.Combine(_tempDir, "title_logging");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        var (vm, _, _) = CreateViewModel();
+        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview, LoggingEnabled = true, TitleBarFields = TitleBarFields.FileName };
+
+        await vm.OpenFolderAsync(folder);
+
+        Assert.Contains("a.jpg", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.Contains("LOG", vm.FolderTitle, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "With no fields selected the title falls back to the folder's own name instead of going bare")]
+    public async Task TitleBarFields_NoneSelected_FallsBackToFolderName()
+    {
+        var folder = Path.Combine(_tempDir, "title_none");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        var (vm, _, _) = CreateViewModel();
+        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview, TitleBarFields = TitleBarFields.None };
+
+        await vm.OpenFolderAsync(folder);
+
+        Assert.Contains(Path.GetFileName(folder), vm.FolderTitle, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -556,7 +610,8 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         await vm.OpenFolderAsync(b);
 
         Assert.Equal(1, vm.TotalFiles);
-        Assert.Contains(a, vm.FolderTitle);
+        // Default TitleBarFields = FolderName only (not the full path); the forwarded open to "b" left "a" current.
+        Assert.Contains(Path.GetFileName(a), vm.FolderTitle);
         Assert.Equal(PhotoReview.Core.Localization.Tr.StatusFolderOpenedInOtherWindow("b"), vm.StatusText);
         Assert.Empty(ownership.AfterOpens);
     }

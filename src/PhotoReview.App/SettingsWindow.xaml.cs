@@ -45,6 +45,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null, IUpdateChecker? updateChecker = null)
     {
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         _localization = localization;
         _updateChecker = updateChecker;
         VersionText.Text = BuildInfo.Describe(typeof(SettingsWindow).Assembly);
@@ -59,7 +60,7 @@ public partial class SettingsWindow : Window
         {
             NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
             ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
-            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText,
+            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText, ClickZoomText,
         };
         foreach (var textBox in allShortcutBoxes)
         {
@@ -300,6 +301,7 @@ public partial class SettingsWindow : Window
         FirstImageText.Text = Settings.Shortcuts.FirstImage; ZoomInText.Text = Settings.Shortcuts.ZoomIn; ZoomOutText.Text = Settings.Shortcuts.ZoomOut; ToggleFitText.Text = Settings.Shortcuts.ToggleFit; SkipText.Text = Settings.Shortcuts.Skip; UndoText.Text = Settings.Shortcuts.Undo; FullscreenText.Text = Settings.Shortcuts.Fullscreen;
         LastImageText.Text = Settings.Shortcuts.LastImage; ZoomActualSizeText.Text = Settings.Shortcuts.ZoomActualSize; ToggleInfoOverlayText.Text = Settings.Shortcuts.ToggleInfoOverlay;
         MoveToFolderText.Text = Settings.Shortcuts.MoveToFolder; CopyToFolderText.Text = Settings.Shortcuts.CopyToFolder;
+        ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
@@ -316,16 +318,21 @@ public partial class SettingsWindow : Window
         ShowInfoOverlayCheck.IsChecked = Settings.ShowInfoOverlay;
         ShowFileInfoCheck.IsChecked = Settings.ShowFileInfo;
         ShowFolderInfoCheck.IsChecked = Settings.ShowFolderInfo;
+        InfoOverlayFontSizeBox.Text = Settings.InfoOverlayFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ToolbarAutoHideCheck.IsChecked = Settings.ToolbarAutoHide;
+        ToolbarAutoHideDelayBox.Text = Settings.ToolbarAutoHideDelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         MouseWheelActionCombo.SelectedIndex = Settings.MouseWheelAction == MouseWheelAction.Navigate ? 1 : 0;
         ClickToZoomCheck.IsChecked = Settings.ClickToZoomEnabled;
         ClickZoomPercentBox.Text = Settings.ClickZoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PreloadForwardBox.Text = Settings.PreloadForwardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PreloadBackwardBox.Text = Settings.PreloadBackwardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KineticPanCheck.IsChecked = Settings.KineticPanEnabled;
+        KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         MoveCopyReuseLastFolderCheck.IsChecked = Settings.MoveCopyReuseLastFolder;
         ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
         ExifFieldFileNameCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FileName);
         ExifFieldDateTakenCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.DateTaken);
+        ExifFieldModifiedDateCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.ModifiedDate);
         ExifFieldDimensionsCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Dimensions);
         ExifFieldCameraCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Camera);
         ExifFieldLensCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Lens);
@@ -333,9 +340,24 @@ public partial class SettingsWindow : Window
         ExifFieldFocalLengthCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FocalLength);
         ExifFieldApertureCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Aperture);
         ExifFieldShutterSpeedCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.ShutterSpeed);
+        TitleBarFieldFolderNameCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FolderName);
+        TitleBarFieldFolderPathCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FolderPath);
+        TitleBarFieldIndexCountCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.IndexCount);
+        TitleBarFieldFileNameCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FileName);
+        TitleBarFieldFileSizeCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FileSize);
+        TitleBarFieldDimensionsCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Dimensions);
+        TitleBarFieldModifiedDateCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.ModifiedDate);
+        TitleBarFieldDateTakenCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.DateTaken);
+        TitleBarFieldCameraCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Camera);
+        TitleBarFieldLensCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Lens);
+        TitleBarFieldIsoCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Iso);
+        TitleBarFieldFocalLengthCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FocalLength);
+        TitleBarFieldApertureCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Aperture);
+        TitleBarFieldShutterSpeedCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.ShutterSpeed);
         UpdateClickZoomEnabled();
         UpdateShowInfoSubOptionsEnabled();
         UpdateExifFieldsEnabled();
+        UpdateToolbarAutoHideEnabled();
         LoadRamCache();
         UpdateDuplicateWarning();
     }
@@ -343,6 +365,10 @@ public partial class SettingsWindow : Window
     private void ClickToZoomCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateClickZoomEnabled();
 
     private void UpdateClickZoomEnabled() => ClickZoomPercentBox.IsEnabled = ClickToZoomCheck.IsChecked == true;
+
+    private void ToolbarAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateToolbarAutoHideEnabled();
+
+    private void UpdateToolbarAutoHideEnabled() => ToolbarAutoHideDelayBox.IsEnabled = ToolbarAutoHideCheck.IsChecked == true;
 
     private void ShowInfoOverlayCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateShowInfoSubOptionsEnabled();
 
@@ -364,7 +390,7 @@ public partial class SettingsWindow : Window
 
     private IEnumerable<System.Windows.Controls.CheckBox> ExifFieldChecks =>
     [
-        ExifFieldFileNameCheck, ExifFieldDateTakenCheck, ExifFieldDimensionsCheck, ExifFieldCameraCheck, ExifFieldLensCheck,
+        ExifFieldFileNameCheck, ExifFieldDateTakenCheck, ExifFieldModifiedDateCheck, ExifFieldDimensionsCheck, ExifFieldCameraCheck, ExifFieldLensCheck,
         ExifFieldIsoCheck, ExifFieldFocalLengthCheck, ExifFieldApertureCheck, ExifFieldShutterSpeedCheck,
     ];
 
@@ -375,6 +401,7 @@ public partial class SettingsWindow : Window
     private void ClearToggleInfoOverlay_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleInfoOverlayText);
     private void ClearMoveToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(MoveToFolderText);
     private void ClearCopyToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(CopyToFolderText);
+    private void ClearClickZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ClickZoomText);
 
     private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
 
@@ -404,6 +431,7 @@ public partial class SettingsWindow : Window
                 Fullscreen = FullscreenText.Text, ToggleInfoOverlay = ToggleInfoOverlayText.Text,
                 Skip = SkipText.Text, Undo = UndoText.Text, Compare = CompareText.Text,
                 MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
+                ClickZoom = ClickZoomText.Text,
             },
         };
         try { probe.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? []; }
@@ -502,9 +530,12 @@ public partial class SettingsWindow : Window
         Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = new AppSettings().DecoderBackend; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default();
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
-        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true;
+        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
+        Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs;
+        Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
+        Settings.TitleBarFields = TitleBarFields.Default;
         LoadFields();
     }
 
@@ -528,7 +559,7 @@ public partial class SettingsWindow : Window
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
-        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text };
+        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text };
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
@@ -551,11 +582,13 @@ public partial class SettingsWindow : Window
         Settings.MouseWheelAction = MouseWheelActionCombo.SelectedIndex == 1 ? MouseWheelAction.Navigate : MouseWheelAction.Zoom;
         Settings.ClickToZoomEnabled = ClickToZoomCheck.IsChecked == true;
         Settings.KineticPanEnabled = KineticPanCheck.IsChecked == true;
+        Settings.KineticGlideSmoothing = KineticGlideSmoothingCombo.SelectedIndex == 1 ? KineticGlideSmoothing.Predict : KineticGlideSmoothing.Off;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;
         Settings.ExifInfoFields =
             (ExifFieldFileNameCheck.IsChecked == true ? ExifInfoFields.FileName : ExifInfoFields.None) |
             (ExifFieldDateTakenCheck.IsChecked == true ? ExifInfoFields.DateTaken : ExifInfoFields.None) |
+            (ExifFieldModifiedDateCheck.IsChecked == true ? ExifInfoFields.ModifiedDate : ExifInfoFields.None) |
             (ExifFieldDimensionsCheck.IsChecked == true ? ExifInfoFields.Dimensions : ExifInfoFields.None) |
             (ExifFieldCameraCheck.IsChecked == true ? ExifInfoFields.Camera : ExifInfoFields.None) |
             (ExifFieldLensCheck.IsChecked == true ? ExifInfoFields.Lens : ExifInfoFields.None) |
@@ -563,6 +596,21 @@ public partial class SettingsWindow : Window
             (ExifFieldFocalLengthCheck.IsChecked == true ? ExifInfoFields.FocalLength : ExifInfoFields.None) |
             (ExifFieldApertureCheck.IsChecked == true ? ExifInfoFields.Aperture : ExifInfoFields.None) |
             (ExifFieldShutterSpeedCheck.IsChecked == true ? ExifInfoFields.ShutterSpeed : ExifInfoFields.None);
+        Settings.TitleBarFields =
+            (TitleBarFieldFolderNameCheck.IsChecked == true ? TitleBarFields.FolderName : TitleBarFields.None) |
+            (TitleBarFieldFolderPathCheck.IsChecked == true ? TitleBarFields.FolderPath : TitleBarFields.None) |
+            (TitleBarFieldIndexCountCheck.IsChecked == true ? TitleBarFields.IndexCount : TitleBarFields.None) |
+            (TitleBarFieldFileNameCheck.IsChecked == true ? TitleBarFields.FileName : TitleBarFields.None) |
+            (TitleBarFieldFileSizeCheck.IsChecked == true ? TitleBarFields.FileSize : TitleBarFields.None) |
+            (TitleBarFieldDimensionsCheck.IsChecked == true ? TitleBarFields.Dimensions : TitleBarFields.None) |
+            (TitleBarFieldModifiedDateCheck.IsChecked == true ? TitleBarFields.ModifiedDate : TitleBarFields.None) |
+            (TitleBarFieldDateTakenCheck.IsChecked == true ? TitleBarFields.DateTaken : TitleBarFields.None) |
+            (TitleBarFieldCameraCheck.IsChecked == true ? TitleBarFields.Camera : TitleBarFields.None) |
+            (TitleBarFieldLensCheck.IsChecked == true ? TitleBarFields.Lens : TitleBarFields.None) |
+            (TitleBarFieldIsoCheck.IsChecked == true ? TitleBarFields.Iso : TitleBarFields.None) |
+            (TitleBarFieldFocalLengthCheck.IsChecked == true ? TitleBarFields.FocalLength : TitleBarFields.None) |
+            (TitleBarFieldApertureCheck.IsChecked == true ? TitleBarFields.Aperture : TitleBarFields.None) |
+            (TitleBarFieldShutterSpeedCheck.IsChecked == true ? TitleBarFields.ShutterSpeed : TitleBarFields.None);
         if (!int.TryParse(ClickZoomPercentBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var clickZoomPercent)
             || clickZoomPercent < AppSettings.MinClickZoomPercent || clickZoomPercent > AppSettings.MaxClickZoomPercent)
         {
@@ -589,12 +637,28 @@ public partial class SettingsWindow : Window
         }
         Settings.PreloadForwardCount = preloadForward;
         Settings.PreloadBackwardCount = preloadBackward;
+        if (!int.TryParse(ToolbarAutoHideDelayBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var toolbarAutoHideDelayMs)
+            || toolbarAutoHideDelayMs < AppSettings.MinToolbarAutoHideDelayMs || toolbarAutoHideDelayMs > AppSettings.MaxToolbarAutoHideDelayMs)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidToolbarAutoHideDelay(AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs));
+            return;
+        }
+        if (!double.TryParse(InfoOverlayFontSizeBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var infoOverlayFontSize)
+            || infoOverlayFontSize < AppSettings.MinInfoOverlayFontSize || infoOverlayFontSize > AppSettings.MaxInfoOverlayFontSize)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidInfoOverlayFontSize(AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize));
+            return;
+        }
+        Settings.ToolbarAutoHide = ToolbarAutoHideCheck.IsChecked == true;
+        Settings.ToolbarAutoHideDelayMs = toolbarAutoHideDelayMs;
+        Settings.InfoOverlayFontSize = infoOverlayFontSize;
         Settings.Shortcuts.Next = ShortcutKeyCanonical.Canonicalize(NextText.Text); Settings.Shortcuts.Previous = ShortcutKeyCanonical.Canonicalize(PreviousText.Text);
         Settings.Shortcuts.SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(RecycleText.Text);
         Settings.Shortcuts.Compare = ShortcutKeyCanonical.Canonicalize(CompareText.Text); Settings.Shortcuts.NextFolder = ShortcutKeyCanonical.Canonicalize(NextFolderText.Text); Settings.Shortcuts.PreviousFolder = ShortcutKeyCanonical.Canonicalize(PreviousFolderText.Text);
         Settings.Shortcuts.FirstImage = ShortcutKeyCanonical.Canonicalize(FirstImageText.Text); Settings.Shortcuts.ZoomIn = ShortcutKeyCanonical.Canonicalize(ZoomInText.Text); Settings.Shortcuts.ZoomOut = ShortcutKeyCanonical.Canonicalize(ZoomOutText.Text); Settings.Shortcuts.ToggleFit = ShortcutKeyCanonical.Canonicalize(ToggleFitText.Text); Settings.Shortcuts.Skip = ShortcutKeyCanonical.Canonicalize(SkipText.Text); Settings.Shortcuts.Undo = ShortcutKeyCanonical.Canonicalize(UndoText.Text); Settings.Shortcuts.Fullscreen = ShortcutKeyCanonical.Canonicalize(FullscreenText.Text);
         Settings.Shortcuts.LastImage = ShortcutKeyCanonical.Canonicalize(LastImageText.Text); Settings.Shortcuts.ZoomActualSize = ShortcutKeyCanonical.Canonicalize(ZoomActualSizeText.Text); Settings.Shortcuts.ToggleInfoOverlay = ShortcutKeyCanonical.Canonicalize(ToggleInfoOverlayText.Text);
         Settings.Shortcuts.MoveToFolder = ShortcutKeyCanonical.Canonicalize(MoveToFolderText.Text); Settings.Shortcuts.CopyToFolder = ShortcutKeyCanonical.Canonicalize(CopyToFolderText.Text);
+        Settings.Shortcuts.ClickZoom = ShortcutKeyCanonical.Canonicalize(ClickZoomText.Text);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];

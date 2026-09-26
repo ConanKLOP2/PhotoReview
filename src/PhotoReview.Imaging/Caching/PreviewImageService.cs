@@ -179,7 +179,7 @@ public sealed class PreviewImageService : IPreloadTarget
             : string.Create(inv, $", source-bytes cache {source / mib} MiB");
         if (ramPercent is { } requestedPercent && physicalBytes > 0)
         {
-            // Q-R30: the percent floor follows the user's configured preload window, so a bigger window can never
+            // Q-R31: the percent floor follows the user's configured preload window, so a bigger window can never
             // end up with a cache smaller than the previews the scheduler keeps in flight.
             var window = preloadWindow ?? PreloadWindow.Default;
             var percent = RamBudgetPolicy.ClampCachePercent(requestedPercent, physicalBytes, window);

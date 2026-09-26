@@ -93,6 +93,7 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<ILiveOperationRegistry>(sp => new WindowsLiveOperationRegistry(sp.GetRequiredService<ILog>()));
         services.AddSingleton<IMemoryProbe>(sp => new WindowsMemoryProbe(sp.GetRequiredService<ILog>()));
         services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
+        services.AddSingleton<IDisplayClock>(_ => WindowsDisplayClock.Instance);
         services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
         services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
         services.AddSingleton<IDialogService, PhotoReview.App.Services.WpfDialogService>();
@@ -189,7 +190,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<PhotoReview.App.ViewModels.MainViewModel>(),
             sp.GetRequiredService<SettingsStore>(),
             sp.GetRequiredService<PhotoReview.App.Services.ViewportSizeSource>(),
-            sp.GetRequiredService<IAppPaths>()));
+            sp.GetRequiredService<IAppPaths>(),
+            sp.GetRequiredService<IDisplayClock>()));
     }
 
     /// <summary>

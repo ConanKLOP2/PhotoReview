@@ -41,8 +41,10 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.InstanceMode), nameof(AppSettings.ShowInfoOverlay), nameof(AppSettings.ShowFileInfo),
         nameof(AppSettings.ShowFolderInfo), nameof(AppSettings.MouseWheelAction), nameof(AppSettings.ClickToZoomEnabled),
         nameof(AppSettings.ClickZoomPercent), nameof(AppSettings.KineticPanEnabled), nameof(AppSettings.MoveCopyReuseLastFolder),
-        nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields),
+        nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields), nameof(AppSettings.TitleBarFields), nameof(AppSettings.KineticGlideSmoothing),
         nameof(AppSettings.PreloadForwardCount), nameof(AppSettings.PreloadBackwardCount),
+        // feat/ui-dark-chrome-toolbar
+        nameof(AppSettings.ToolbarAutoHide), nameof(AppSettings.ToolbarAutoHideDelayMs), nameof(AppSettings.InfoOverlayFontSize),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]
@@ -146,6 +148,30 @@ public sealed class SettingsWindowRedesignTests
         });
     }
 
+    [Fact(DisplayName = "Clearing the ClickZoom shortcut is accepted (optional shortcut)")]
+    public async Task ClickZoomShortcutClears_IsAccepted()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings()) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            try
+            {
+                window.Loaded += (_, _) =>
+                {
+                    Assert.False(string.IsNullOrEmpty(window.ClickZoomText.Text)); // has a default (D2) to begin with
+                    typeof(SettingsWindow).GetMethod("ClearClickZoom_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
+                        .Invoke(window, [window, new RoutedEventArgs()]);
+                    Assert.Equal(string.Empty, window.ClickZoomText.Text);
+                    InvokeSave(window);
+                };
+                Assert.True(window.ShowDialog());
+                Assert.Equal(string.Empty, window.Settings.Shortcuts.ClickZoom);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact(DisplayName = "Alias spellings of one key (Return/Enter, Prior/PageUp) show the duplicate warning and Save rejects them (Q-R25)")]
     public async Task AliasShortcuts_AreDuplicates_LiveAndOnSave()
     {
@@ -233,12 +259,14 @@ public sealed class SettingsWindowRedesignTests
                     window.ClickToZoomCheck.IsChecked = false;
                     window.ClickZoomPercentBox.Text = "222";
                     window.KineticPanCheck.IsChecked = false;
+                    window.KineticGlideSmoothingCombo.SelectedIndex = 0;
                     window.MoveCopyReuseLastFolderCheck.IsChecked = true;
                     window.LastImageText.Text = "End";
-                    window.ZoomActualSizeText.Text = "D2";
+                    window.ZoomActualSizeText.Text = "D3"; // D2 is now ClickZoom's default; pick another free key
                     window.ToggleInfoOverlayText.Text = "J";
                     window.MoveToFolderText.Text = "K";
                     window.CopyToFolderText.Text = "L";
+                    window.ClickZoomText.Text = "D9";
                     window.ShowExifInfoCheck.IsChecked = true;
                     window.ExifFieldCameraCheck.IsChecked = true;
                     window.ExifFieldLensCheck.IsChecked = false;
@@ -261,12 +289,14 @@ public sealed class SettingsWindowRedesignTests
                 Assert.False(window.Settings.ClickToZoomEnabled);
                 Assert.Equal(222, window.Settings.ClickZoomPercent);
                 Assert.False(window.Settings.KineticPanEnabled);
+                Assert.Equal(KineticGlideSmoothing.Off, window.Settings.KineticGlideSmoothing);
                 Assert.True(window.Settings.MoveCopyReuseLastFolder);
                 Assert.Equal("End", window.Settings.Shortcuts.LastImage);
-                Assert.Equal("D2", window.Settings.Shortcuts.ZoomActualSize);
+                Assert.Equal("D3", window.Settings.Shortcuts.ZoomActualSize);
                 Assert.Equal("J", window.Settings.Shortcuts.ToggleInfoOverlay);
                 Assert.Equal("K", window.Settings.Shortcuts.MoveToFolder);
                 Assert.Equal("L", window.Settings.Shortcuts.CopyToFolder);
+                Assert.Equal("D9", window.Settings.Shortcuts.ClickZoom);
                 Assert.True(window.Settings.ShowExifInfo);
                 Assert.Equal(ExifInfoFields.Camera, window.Settings.ExifInfoFields);
             }
@@ -275,6 +305,31 @@ public sealed class SettingsWindowRedesignTests
         });
     }
 
+    [Theory(DisplayName = "Glide smoothing combo shows the stored mode and an untouched Save keeps it")]
+    [InlineData(KineticGlideSmoothing.Off, 0)]
+    [InlineData(KineticGlideSmoothing.Predict, 1)]
+    public async Task GlideSmoothingCombo_ShowsTheStoredMode_AndSaveKeepsIt(KineticGlideSmoothing stored, int index)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings { KineticGlideSmoothing = stored }) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            var shown = -1;
+            try
+            {
+                window.Loaded += (_, _) =>
+                {
+                    shown = window.KineticGlideSmoothingCombo.SelectedIndex;
+                    InvokeSave(window);
+                };
+                Assert.True(window.ShowDialog());
+
+                Assert.Equal(index, shown);
+                Assert.Equal(stored, window.Settings.KineticGlideSmoothing);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
     [Fact(DisplayName = "Out-of-range click-zoom percent is rejected by Save")]
     public async Task ClickZoomPercent_OutOfRange_IsRejected()
     {

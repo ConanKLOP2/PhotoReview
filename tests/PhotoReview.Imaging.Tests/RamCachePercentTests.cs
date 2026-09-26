@@ -146,7 +146,7 @@ public sealed class RamCachePercentTests
         Assert.Contains("source-bytes cache off", line, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "Q-R30: the real percent clamp (not just the log) follows the configured preload window")]
+    [Fact(DisplayName = "Q-R31: the real percent clamp (not just the log) follows the configured preload window")]
     public void ResolveCapacity_LargeWindow_ClampsToThatWindowsFloor()
     {
         // 200 ahead + 50 behind + current = 251 UHD previews = 8,327,577,600 B = 24.24 % of 32 GiB -> floor 25 %.
@@ -162,7 +162,7 @@ public sealed class RamCachePercentTests
         Assert.Equal(5, RamBudgetPolicy.ClampCachePercent(5, 32 * Gib));
     }
 
-    [Fact(DisplayName = "Q-R30: the source-bytes cache leaves the configured window's previews room, not the default's")]
+    [Fact(DisplayName = "Q-R31: the source-bytes cache leaves the configured window's previews room, not the default's")]
     public void SourceBytesForPercent_LargeWindow_LeavesThatWindowRoom()
     {
         var window = PreloadWindow.Create(200, 50);

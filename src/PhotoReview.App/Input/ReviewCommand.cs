@@ -25,7 +25,8 @@ public enum ReviewCommandType
     Next,
     Previous,
     MoveToFolder,
-    CopyToFolder
+    CopyToFolder,
+    ClickZoom
 }
 
 /// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
@@ -70,4 +71,5 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand Previous => new(ReviewCommandType.Previous);
     public static ReviewCommand MoveToFolder(bool forcePicker) => new(ReviewCommandType.MoveToFolder, ForcePicker: forcePicker);
     public static ReviewCommand CopyToFolder(bool forcePicker) => new(ReviewCommandType.CopyToFolder, ForcePicker: forcePicker);
+    public static ReviewCommand ClickZoom => new(ReviewCommandType.ClickZoom);
 }

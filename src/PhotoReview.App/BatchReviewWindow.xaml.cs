@@ -10,6 +10,7 @@ public partial class BatchReviewWindow : Window
     public BatchReviewWindow(IReadOnlyList<string> paths)
     {
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         FilesList.ItemsSource = paths.Select(BuildItem).ToList();
         SummaryText.Text = Tr.BatchReviewSummary(paths.Count);
     }

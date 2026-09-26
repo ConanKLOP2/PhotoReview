@@ -27,7 +27,7 @@ public sealed class ExifFormatterTests
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
 
     private static string Format(ExifInfoFields fields, ExifSummary? exif = null, int width = 6000, int height = 4000) =>
-        ExifFormatter.Format(fields, "IMG_1234.jpg", width, height, exif ?? Exif, Invariant);
+        ExifFormatter.Format(fields, "IMG_1234.jpg", width, height, exif ?? Exif, provider: Invariant);
 
     [Fact(DisplayName = "All fields, in order, English catalog")]
     public void AllFieldsEnglish()
@@ -94,7 +94,7 @@ public sealed class ExifFormatterTests
     {
         ExifInfoFields[] fields =
         [
-            ExifInfoFields.FileName, ExifInfoFields.DateTaken, ExifInfoFields.Dimensions, ExifInfoFields.Camera, ExifInfoFields.Lens,
+            ExifInfoFields.FileName, ExifInfoFields.DateTaken, ExifInfoFields.ModifiedDate, ExifInfoFields.Dimensions, ExifInfoFields.Camera, ExifInfoFields.Lens,
             ExifInfoFields.Iso, ExifInfoFields.FocalLength, ExifInfoFields.Aperture, ExifInfoFields.ShutterSpeed,
         ];
         var union = ExifInfoFields.None;
@@ -113,10 +113,10 @@ public sealed class ExifFormatterTests
     {
         using var _ = TestLocalization.Use(TestLocalization.English);
 
-        Assert.Equal("IMG_1234.jpg · 6000×4000", ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 6000, 4000, null, Invariant));
-        Assert.Equal("IMG_1234.jpg", ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 0, 0, null, Invariant));
+        Assert.Equal("IMG_1234.jpg · 6000×4000", ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 6000, 4000, null, provider: Invariant));
+        Assert.Equal("IMG_1234.jpg", ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 0, 0, null, provider: Invariant));
         Assert.Equal("IMG_1234.jpg · ISO 100 · f/8",
-            ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 0, 0, new ExifSummary { Iso = 100, FNumber = new ExifRational(8, 1) }, Invariant));
+            ExifFormatter.Format(ExifInfoFields.All, "IMG_1234.jpg", 0, 0, new ExifSummary { Iso = 100, FNumber = new ExifRational(8, 1) }, provider: Invariant));
     }
 
     [Theory(DisplayName = "Shutter speed: fractions below half a second, seconds above")]
@@ -151,6 +151,64 @@ public sealed class ExifFormatterTests
         using var _ = TestLocalization.Use(TestLocalization.English);
         var exif = new ExifSummary { FocalLength = new ExifRational(185, 10), FNumber = new ExifRational(28, 10) };
 
-        Assert.Equal("18,5 mm · f/2,8", ExifFormatter.Format(ExifInfoFields.All, null, 0, 0, exif, new CultureInfo("vi-VN")));
+        Assert.Equal("18,5 mm · f/2,8", ExifFormatter.Format(ExifInfoFields.All, null, 0, 0, exif, provider: new CultureInfo("vi-VN")));
+    }
+
+    // ---- ModifiedDate (file last-write time, optional EXIF-line field, off by default; placed right after DateTaken) ----
+
+    [Fact(DisplayName = "ModifiedDate is off by default, alongside FileName and Dimensions")]
+    public void ModifiedDate_OffByDefault()
+    {
+        Assert.False(ExifInfoFields.Default.HasFlag(ExifInfoFields.ModifiedDate));
+        Assert.True(ExifInfoFields.All.HasFlag(ExifInfoFields.ModifiedDate));
+    }
+
+    [Fact(DisplayName = "ModifiedDate renders right after DateTaken, converted to local time, formatted like DateTaken")]
+    public void ModifiedDate_RendersAfterDateTakenInLocalTime()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.English);
+        var modifiedUtc = new DateTime(2024, 6, 15, 9, 30, 0, DateTimeKind.Utc);
+
+        var text = ExifFormatter.Format(ExifInfoFields.DateTaken | ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, Exif,
+            modifiedUtc, Invariant);
+
+        var expectedDateTaken = Exif.DateTaken!.Value.ToString("g", Invariant);
+        var expectedModified = modifiedUtc.ToLocalTime().ToString("g", Invariant);
+        Assert.Equal(expectedDateTaken + ExifFormatter.Separator + expectedModified, text);
+    }
+
+    [Fact(DisplayName = "ModifiedDate alone shows only the file's last-write time")]
+    public void ModifiedDate_Alone()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.English);
+        var modifiedUtc = new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+
+        var text = ExifFormatter.Format(ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, null, modifiedUtc, Invariant);
+
+        Assert.Equal(modifiedUtc.ToLocalTime().ToString("g", Invariant), text);
+    }
+
+    [Fact(DisplayName = "ModifiedDate is skipped (not '?') when the catalog entry has no last-write time")]
+    public void ModifiedDate_NullIsSkipped()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.English);
+
+        var text = ExifFormatter.Format(ExifInfoFields.FileName | ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, null, modifiedUtc: null, Invariant);
+
+        Assert.Equal("a.jpg", text);
+    }
+
+    [Fact(DisplayName = "Turning ModifiedDate off removes exactly that part")]
+    public void ModifiedDate_TurningOffRemovesExactlyThatPart()
+    {
+        using var _ = TestLocalization.Use(TestLocalization.English);
+        var modifiedUtc = new DateTime(2024, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        var fields = ExifInfoFields.FileName | ExifInfoFields.ModifiedDate | ExifInfoFields.Camera;
+
+        var withModified = ExifFormatter.Format(fields, "a.jpg", 0, 0, Exif, modifiedUtc, Invariant);
+        var withoutModified = ExifFormatter.Format(fields & ~ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, Exif, modifiedUtc, Invariant);
+
+        Assert.Equal("a.jpg" + ExifFormatter.Separator + modifiedUtc.ToLocalTime().ToString("g", Invariant) + ExifFormatter.Separator + "Canon EOS R5", withModified);
+        Assert.Equal("a.jpg" + ExifFormatter.Separator + "Canon EOS R5", withoutModified);
     }
 }

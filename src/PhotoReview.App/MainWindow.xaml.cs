@@ -2,10 +2,14 @@ using PhotoReview.Core.Localization;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Input;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Input;
@@ -53,7 +57,7 @@ public partial class MainWindow : Window
     /// </summary>
     internal string? PlacementFile { get; private set; }
 
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null, IDisplayClock? displayClock = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -77,13 +81,14 @@ public partial class MainWindow : Window
         _shortcutRouter = new ShortcutRouter(_settings);
         // R2-F-27: the router/VM are refreshed here (settings change), not on every key press.
         _viewModel.Settings = _settings;
-        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); };
+        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); ApplyToolbarVisibility(); };
         PhotoReviewPerf.StartupMark("mainWindowCtor");
         // I18N: a live language switch re-renders the texts the ViewModel builds in code (ADR 0006).
         Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
-        _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize);
+        DarkTitleBarChrome.Apply(this);
+        _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize, displayClock);
         _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
             new PointerCommands(() => _viewModel.HasImages, _viewModel.NextAsync, _viewModel.PreviousAsync, _viewModel.ZoomActualSize, ApplyFitViewAsync));
         _fit = new FitViewController(_surface, _viewModel.Viewer, _viewportVersion, _pointer.CancelPan);
@@ -95,6 +100,7 @@ public partial class MainWindow : Window
         DpiChanged += MainWindow_DpiChanged;
         UpdateTargetDecodeBox();
         WireViewModelEvents();
+        InitToolbarAutoHide();
     }
 
     public void InitializeWithInitialPath(string? initialPath)
@@ -116,6 +122,8 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
             // feat/mouse-zoom: navigation stops a glide (a full-resolution swap of the same image does not).
             if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _pointer.OnCurrentIndexChanged(_viewModel.CurrentIndex);
+            // feat/ui-dark-chrome-toolbar: no folder open forces the toolbar visible (ToolbarAutoHidePolicy).
+            if (e.PropertyName == nameof(MainViewModel.HasImages)) ApplyToolbarVisibility();
         };
         // feat/mouse-zoom: any zoom change (wheel, keys, click, Fit) stops a glide; so does leaving the window.
         _viewModel.Viewer.ZoomModeChanged += (_, _) => _pointer.StopKinetic();
@@ -132,6 +140,9 @@ public partial class MainWindow : Window
     public Task UndoLastActionAsync() => _viewModel.UndoAsync();
     public void ResetFitView() => _ = ApplyFitViewAsync();
     public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
+
+    /// <summary>Test seam (kinetic-pan frame measurement): drives a drag/glide through the real controller in-process.</summary>
+    internal PointerInputController PointerInput => _pointer;
     public Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
     public bool TryGetCachedPreview(string path, out object? preview)
     {
@@ -188,6 +199,75 @@ public partial class MainWindow : Window
         PhotoReviewPerf.StartupMark("windowLoaded");
         if (!_placementRestored) { _placementRestored = true; if (PlacementFile is { } placementFile) WindowPlacementService.Restore(this, placementFile); }
         UpdateFitSize();
+    }
+
+    // ---- Toolbar auto-hide (feat/ui-dark-chrome-toolbar). Decision logic is in ToolbarAutoHidePolicy
+    // (unit-tested, no WPF dependency); this region only drives the timer/animation/mouse tracking. ----
+
+    private DispatcherTimer? _toolbarHideTimer;
+    private bool _toolbarMouseInsideHotZone = true; // assume "inside" until the first mouse move says otherwise
+    private bool _toolbarWasKeptVisible = true;
+    private const double ToolbarHotZoneMargin = 24; // px, beyond ToolbarPanel's own bounds
+    private const int ToolbarFadeInMs = 150;
+    private const int ToolbarFadeOutMs = 200;
+
+    private void InitToolbarAutoHide()
+    {
+        _toolbarHideTimer = new DispatcherTimer();
+        _toolbarHideTimer.Tick += (_, _) => { _toolbarHideTimer!.Stop(); SetToolbarOpacity(visible: false); };
+        ToolsButton.Checked += (_, _) => ApplyToolbarVisibility();
+        ToolsButton.Unchecked += (_, _) => ApplyToolbarVisibility();
+        ToolbarPanel.GotKeyboardFocus += (_, _) => ApplyToolbarVisibility();
+        ToolbarPanel.LostKeyboardFocus += (_, _) => ApplyToolbarVisibility();
+        ApplyToolbarVisibility();
+    }
+
+    private void Window_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (ToolbarPanel is null) return;
+        var topLeft = ToolbarPanel.TranslatePoint(new Point(0, 0), this);
+        var position = e.GetPosition(this);
+        _toolbarMouseInsideHotZone = ToolbarAutoHidePolicy.IsInsideHotZone(
+            position.X, position.Y, topLeft.X, topLeft.Y, ToolbarPanel.ActualWidth, ToolbarPanel.ActualHeight, ToolbarHotZoneMargin);
+        ApplyToolbarVisibility();
+    }
+
+    /// <summary>
+    /// Re-evaluates whether the toolbar should be shown or eligible to auto-hide. Called from mouse
+    /// move, the Tools popup opening/closing, keyboard focus entering/leaving the toolbar, a folder
+    /// opening/closing (HasImages) and a settings change (auto-hide on/off, delay).
+    /// </summary>
+    private void ApplyToolbarVisibility()
+    {
+        if (_toolbarHideTimer is null) return; // constructor still running
+        var keepVisible = ToolbarAutoHidePolicy.MustStayVisible(
+            autoHideEnabled: _settings.ToolbarAutoHide,
+            hasFolderOpen: _viewModel.HasImages,
+            isToolsPopupOpen: ToolsButton.IsChecked == true,
+            isKeyboardFocusInsideToolbar: ToolbarPanel.IsKeyboardFocusWithin) || _toolbarMouseInsideHotZone;
+
+        if (keepVisible)
+        {
+            _toolbarHideTimer.Stop();
+            SetToolbarOpacity(visible: true);
+        }
+        else if (_toolbarWasKeptVisible)
+        {
+            // Just became eligible to hide: start counting down (does not restart on every later
+            // mouse move outside the hot zone, so it hides at the configured delay after leaving).
+            var delayMs = Math.Clamp(_settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);
+            _toolbarHideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, delayMs));
+            _toolbarHideTimer.Start();
+        }
+        _toolbarWasKeptVisible = keepVisible;
+    }
+
+    private void SetToolbarOpacity(bool visible)
+    {
+        var animation = new DoubleAnimation(visible ? 1.0 : 0.0, TimeSpan.FromMilliseconds(visible ? ToolbarFadeInMs : ToolbarFadeOutMs));
+        ToolbarPanel.BeginAnimation(OpacityProperty, animation);
+        // Faded out: let clicks/wheel/pan through to the image underneath instead of the invisible toolbar.
+        ToolbarPanel.IsHitTestVisible = visible;
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
@@ -367,6 +447,7 @@ public partial class MainWindow : Window
             case ReviewCommandType.Previous: await _viewModel.PreviousAsync(); break;
             case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
+            case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
         }
     }
 
@@ -408,4 +489,71 @@ public partial class MainWindow : Window
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
 
+    // ---- Context menu: "Click zoom level" submenu (presets + Custom…). Built once; refreshed (text + IsChecked) ----
+    // ---- on every open so a live language switch and a setting changed elsewhere both show correctly. ----
+
+    private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150];
+    private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
+
+    private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (_clickZoomPresetItems is null) BuildClickZoomMenu();
+        var current = _settings.ClickZoomPercent;
+        foreach (var item in _clickZoomPresetItems!)
+        {
+            var percent = (int)item.Tag!;
+            item.Header = Tr.MainMenuClickZoomLevelPreset(percent);
+            AutomationProperties.SetName(item, Tr.MainMenuClickZoomLevelPresetAutomationName(percent));
+            item.IsChecked = percent == current;
+        }
+    }
+
+    private void BuildClickZoomMenu()
+    {
+        _clickZoomPresetItems = [];
+        foreach (var percent in ClickZoomPresets)
+        {
+            var item = new System.Windows.Controls.MenuItem { IsCheckable = true, Tag = percent };
+            item.Click += ClickZoomPreset_Click;
+            _clickZoomPresetItems.Add(item);
+            ClickZoomMenu.Items.Add(item);
+        }
+        ClickZoomMenu.Items.Add(new System.Windows.Controls.Separator());
+        var custom = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelCustom };
+        AutomationProperties.SetName(custom, Tr.MainMenuClickZoomLevelCustomAutomationName);
+        custom.Click += ClickZoomCustom_Click;
+        ClickZoomMenu.Items.Add(custom);
+    }
+
+    private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem { Tag: int percent }) return;
+        await ApplyClickZoomLevelAsync(percent);
+    }
+
+    private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ClickZoomCustomDialog(_settings.ClickZoomPercent) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            await ApplyClickZoomLevelAsync(dialog.Value);
+        }
+    }
+
+    /// <summary>Persists the new click zoom level (same pattern as <c>MainViewModel.ToggleInfoOverlay</c>) and applies it now.</summary>
+    private async Task ApplyClickZoomLevelAsync(int percent)
+    {
+        var settings = _settings;
+        settings.ClickZoomPercent = percent;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The image still zooms for this session; only persisting the new level failed.
+            AppLog.Error("Could not save the click zoom level setting", ex);
+        }
+        await _pointer.SetClickZoomLevelAsync(percent);
+    }
 }

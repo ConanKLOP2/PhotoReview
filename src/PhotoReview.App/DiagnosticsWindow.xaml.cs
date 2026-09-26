@@ -11,6 +11,7 @@ public partial class DiagnosticsWindow : Window
     public DiagnosticsWindow(ReviewMetricsSnapshot snapshot, ExplorerViewSnapshot? explorerSnapshot = null)
     {
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         var culture = CultureInfo.CurrentCulture;
         var total = snapshot.CacheHits + snapshot.CacheMisses;
         CacheHitsText.Text = snapshot.CacheHits.ToString("N0", culture);

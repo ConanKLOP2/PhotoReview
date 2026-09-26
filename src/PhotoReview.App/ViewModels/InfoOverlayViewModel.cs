@@ -55,6 +55,15 @@ public sealed class InfoOverlayViewModel : ObservableObject
     /// <summary>Bottom-left file block (position/count, size, name, dimensions) is shown.</summary>
     public bool IsFileInfoVisible => _settings() is { ShowInfoOverlay: true, ShowFileInfo: true };
 
+    /// <summary>
+    /// Font size of the status line and the folder info panel (Settings > Display); the EXIF line
+    /// (below the status line) renders one point smaller -- see <see cref="ExifFontSize"/>.
+    /// </summary>
+    public double FontSize => _settings().InfoOverlayFontSize;
+
+    /// <summary>EXIF line font size: always one point below <see cref="FontSize"/>.</summary>
+    public double ExifFontSize => FontSize - 1;
+
     /// <summary>Bottom-right folder block is shown (enabled in settings and a folder is open).</summary>
     public bool IsFolderInfoVisible => IsFolderInfoEnabled && _folder is not null;
 
@@ -85,6 +94,8 @@ public sealed class InfoOverlayViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsFileInfoVisible));
         OnPropertyChanged(nameof(IsFolderInfoVisible));
+        OnPropertyChanged(nameof(FontSize));
+        OnPropertyChanged(nameof(ExifFontSize));
         if (_folder is not { } folder || !IsFolderInfoEnabled)
         {
             CancelPending(); // hidden: never touch the disk for it
