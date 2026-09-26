@@ -524,6 +524,36 @@ public sealed partial class ImagePresenterTests : IDisposable
         Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
     }
 
+    [Fact(DisplayName = "A thumbnail read that faults (unexpected WIC failure) is treated as no thumbnail: the preview is still presented and the image is not reported as broken")]
+    public async Task PresentAsync_WhenThumbnailFaultsBeforePreview_StillPresentsThePreview()
+    {
+        var f1 = CreateFakeImageFile("thumbnail-faults.jpg");
+        _catalog.Reset([f1]);
+
+        var previewImage = new FakeDecodedImage { PixelWidth = 1920 };
+        using var gatedDecoder = new GatedDecoder(previewImage); // the preview cannot win the race before the thumbnail faults
+        var previewService = CreatePreviewService(gatedDecoder);
+
+        var thumbnailFaulted = new TaskCompletionSource();
+        using var thumbnailCache = new ThumbnailCache(
+            diskDirectory: Path.Combine(_tempDir, "faulting-thumbs"),
+            persistNewThumbnails: false,
+            embeddedThumbnailReader: (_, _) =>
+            {
+                thumbnailFaulted.TrySetResult();
+                throw new InvalidOperationException("damaged thumbnail metadata");
+            });
+        var presenter = CreatePresenterWithServices(previewService, thumbnailCache);
+
+        var presentTask = presenter.PresentAsync(0);
+        await thumbnailFaulted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        gatedDecoder.Release();
+        await presentTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
+        Assert.Contains(f1, _sink.PresentedPaths);
+    }
+
     [Fact(DisplayName = "perf(preload): every navigation notifies preload before its own decode, and preload is still kicked after present")]
     public async Task PresentAsync_NotifiesPreloadOfEachNavigation()
     {

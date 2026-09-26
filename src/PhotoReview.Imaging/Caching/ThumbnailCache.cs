@@ -165,8 +165,9 @@ public sealed class ThumbnailCache : IDisposable
             // escape instead of being deleted and regenerated from the source below.
             // UnauthorizedAccessException is included too: a transiently ACL-blocked cache
             // file must fall back to the source and regenerate, not break loading entirely.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
-                or InvalidDataException or FileFormatException)
+            // Damaged metadata in an otherwise well-formed PNG surfaces as ArgumentException / InvalidOperationException /
+            // COMException etc. (DiskCacheStore.IsCacheEntryFailure): also a miss.
+            catch (Exception ex) when (DiskCacheStore.IsCacheEntryFailure(ex))
             {
                 _log.Error($"Disk thumbnail read failed: {cachePath}", ex);
                 DiskCacheStore.TryDelete(cachePath, _log);

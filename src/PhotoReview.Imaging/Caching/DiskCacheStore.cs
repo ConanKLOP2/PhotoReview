@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
@@ -292,6 +293,18 @@ public sealed class DiskCacheStore
             TryDelete(path, log);
         }
     }
+
+    /// <summary>
+    /// True for the failures that reading or decoding a disk-cache entry can raise for a damaged, unreadable or foreign
+    /// file: I/O and access errors, our own header validation (<see cref="InvalidDataException"/>), and whatever WPF/WIC
+    /// throws for a well-framed but broken image (<see cref="FileFormatException"/>, and <see cref="ArgumentException"/>,
+    /// <see cref="InvalidOperationException"/>, <see cref="OverflowException"/>, <see cref="InvalidCastException"/> or
+    /// <see cref="COMException"/> for damaged metadata). Such an entry is a cache miss (delete it, decode from source);
+    /// anything else (cancellation, out-of-memory, programming errors) must still propagate.
+    /// </summary>
+    internal static bool IsCacheEntryFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException
+            or ArgumentException or InvalidOperationException or OverflowException or InvalidCastException or COMException;
 
     /// <summary>
     /// Safely deletes a file, catching IOException and UnauthorizedAccessException.

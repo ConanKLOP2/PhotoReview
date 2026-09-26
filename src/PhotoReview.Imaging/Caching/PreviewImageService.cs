@@ -485,9 +485,12 @@ public sealed class PreviewImageService : IPreloadTarget
             // magic, a version other than PreviewCacheFile.CurrentVersion, or any other
             // structurally invalid header) -- a version bump makes every older entry take this
             // same "corrupt: delete and re-decode" path instead of needing a migration.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException)
+            // A well-framed entry with damaged metadata also fails inside WPF with ArgumentException / InvalidOperationException /
+            // COMException etc. (DiskCacheStore.IsCacheEntryFailure), and must be a miss too, not an unopenable image.
+            catch (Exception ex) when (DiskCacheStore.IsCacheEntryFailure(ex))
             {
-                try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
+                // Best-effort: TryDelete logs and swallows only IO/access failures; the entry is re-decoded from source below.
+                DiskCacheStore.TryDelete(cachePath, _log);
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId);
             }
