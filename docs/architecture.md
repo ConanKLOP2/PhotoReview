@@ -11,6 +11,7 @@ PhotoReview.App (WPF composition root, View, ViewModel, coordinator)
   ├─> PhotoReview.Imaging.TurboJpeg (đăng ký khi TurboJpegAvailability.Probe() thành công — AR01)
   ├─> PhotoReview.Platform.Windows (Explorer, Recycle Bin, memory/monitor)
   └─> PhotoReview.Benchmarking (benchmark dùng chung)
+      — cũng là backend của cửa sổ Benchmark trong app; assembly chỉ nạp khi mở cửa sổ (AR18, Q-AR9 a)
 
 PhotoReview.Imaging ─> PhotoReview.Core
 PhotoReview.Platform.Windows ─> PhotoReview.Core
