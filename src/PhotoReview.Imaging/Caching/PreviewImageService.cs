@@ -179,11 +179,11 @@ public sealed class PreviewImageService : IPreloadTarget
             : string.Create(inv, $", source-bytes cache {source / mib} MiB");
         if (ramPercent is { } requestedPercent && physicalBytes > 0)
         {
-            var percent = RamBudgetPolicy.ClampCachePercent(requestedPercent, physicalBytes);
-            var capacity = RamBudgetPolicy.PreviewBytesForPercent(percent, physicalBytes, source);
-            // feat/preload-window-setting: the displayed floor follows the user's configured window, even though the
-            // actual clamp above still enforces the default-window floor (Q-R30: not reworked in this change).
+            // Q-R30: the percent floor follows the user's configured preload window, so a bigger window can never
+            // end up with a cache smaller than the previews the scheduler keeps in flight.
             var window = preloadWindow ?? PreloadWindow.Default;
+            var percent = RamBudgetPolicy.ClampCachePercent(requestedPercent, physicalBytes, window);
+            var capacity = RamBudgetPolicy.PreviewBytesForPercent(percent, physicalBytes, source, window);
             var clampPart = percent != requestedPercent
                 ? string.Create(inv, $" (requested {requestedPercent}% clamped to {percent}%; allowed {RamBudgetPolicy.MinimumCachePercent(physicalBytes, window)}-{PhotoReview.Core.Settings.PerformanceOptions.MaxImageCacheRamPercent}%)")
                 : "";
@@ -241,7 +241,7 @@ public sealed class PreviewImageService : IPreloadTarget
     /// <summary>
     /// Stops accepting new persist requests and waits for in-flight writes to finish.
     /// Only for short-lived instances (benchmark runs); the production singleton never
-    /// calls this — see the constructor's comment on why that's intentional.
+    /// calls this â€” see the constructor's comment on why that's intentional.
     /// </summary>
     public Task ShutdownPersistWorkersAsync()
     {
@@ -372,7 +372,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // entry from the dictionary via a bare TryRemove(key), letting a third caller
         // start yet another redundant decode.
         // GetOrAdd(key, factory) can invoke the factory more than once when callers race,
-        // discarding every result but the winner's — so a closure flag set inside the
+        // discarding every result but the winner's â€” so a closure flag set inside the
         // factory (e.g. "isNewLoad = true") can report CacheMiss for a caller that actually
         // lost the race and joined someone else's in-flight decode. Constructing the
         // candidate up front and comparing it by reference to what GetOrAdd returns

@@ -116,7 +116,8 @@ public partial class App : System.Windows.Application, IDisposable
             if (!settings.UseSourceBytesCache) return new SourceBytesCachePolicy(null);
             // RAM%: the source-bytes cache must leave the preload window to the preview cache inside the user's share.
             var sourceBytes = RamBudgetPolicy.SourceBytesForPercent(
-                settings.SourceBytesCapacityBytes, settings.ImageCacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes());
+                settings.SourceBytesCapacityBytes, settings.ImageCacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes(),
+                PreloadWindow.FromSettings(settings));
             if (sourceBytes <= 0)
             {
                 sp.GetService<ILog>()?.Warn("Source-bytes cache disabled: the RAM cache share leaves no room beyond the preview preload window.");
