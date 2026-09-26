@@ -88,6 +88,7 @@ public sealed class FitViewControllerTests
 
         var fit = _controller.ApplyFitAsync();
         _version.Next(); // ZoomAtPoint took a newer version
+        _surface.HoldYields = false; // a pass that wrongly continued must finish (and fail the asserts), not hang
         _surface.ReleaseYields();
         await fit;
 
