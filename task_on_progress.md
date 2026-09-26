@@ -9,6 +9,7 @@
 - **Validation:** `dotnet build PhotoReview.slnx -c Release --nologo` passed, 0 warnings; default filtered `dotnet test` passed 1779, skipped 6. Native/Slow/Manual and GUI were not run. One corrupt-JPEG CLI repro returned exit 0 with 0 valid groups.
 - **Caution:** the default test run included `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder`, which writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; the path is now absent. Its prior state is unknown. Do not rerun this test until isolated.
 - **Next:** finish function/test coverage, review findings and decisions in the audit; Q-R19 defaults, GUI checks in [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md), and Q-R17 real-machine perf remain open.
+- **Architecture review 2026-09-26 (plan only, no code):** [ARCH-REVIEW-2026-09-26-SUMMARY](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — tasks AR10–AR19 all TODO; Wave 1 (AR11, AR12, AR15) needs no decision; Q-AR6..Q-AR10 wait for the user (options + recommendation in each `arch-review/AR1x` file). Branch `docs/arch-review-2026-09-26`.
 
 ## Status by Group
 
