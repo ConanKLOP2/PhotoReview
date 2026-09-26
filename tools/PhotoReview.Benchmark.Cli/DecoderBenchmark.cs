@@ -244,7 +244,7 @@ public static class DecoderBenchmark
                             var pct = (double)completedDecodes / totalDecodes * 100.0;
                             var elapsedSec = stopwatch.Elapsed.TotalSeconds;
                             var decodesPerSec = completedDecodes / Math.Max(0.001, elapsedSec);
-                            Console.WriteLine($"  [{pct:F1}%] {completedDecodes}/{totalDecodes} decodes done ({decodesPerSec:F1} decodes/s)");
+                            Console.WriteLine(FormattableString.Invariant($"  [{pct:F1}%] {completedDecodes}/{totalDecodes} decodes done ({decodesPerSec:F1} decodes/s)"));
                         }
                     }
                 }
@@ -252,7 +252,7 @@ public static class DecoderBenchmark
         }
 
         stopwatch.Stop();
-        Console.WriteLine($"[DEC-BENCH] Benchmark completed in {stopwatch.Elapsed.TotalSeconds:F1}s.");
+        Console.WriteLine(FormattableString.Invariant($"[DEC-BENCH] Benchmark completed in {stopwatch.Elapsed.TotalSeconds:F1}s."));
 
         // Compute group statistics
         var groupStats = new List<GroupStatistics>();
