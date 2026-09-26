@@ -118,5 +118,22 @@ Warm-up total 146.0 s / 392.6 s = **37.2 % of wall time** — well above the 10 
 
 **Step 2** — `BenchmarkWindow`: "Quick check" button (fast-sequential, 10 iterations, its default 1 warm-up) via `BuildQuickCheckProfile`; image-limit control (default 64, 0 = all) via `ApplyImageLimit`, mirroring the CLI's `--benchmark-all` `Take(64)`; `BenchmarkImageExecutor.DisposeAsync` no longer awaits the disk-cache prune pass (was bounded to 5 s) before returning — the wait + directory delete move to a background task (`TeardownBackgroundTask`) so a slow prune cannot hold up the next profile in a sequential run, while still guaranteeing the scratch directory is removed once the prune settles.
 
-(Before/after wall-clock numbers for gate/quick/in-app runs: see the table appended after Step 4 below, once measured on this machine.)
+**Step 4 — before/after wall-clock (F4, 1841 files, same machine, interleaved commit range `f2661fc`→`984b55d`, -SkipBuild):**
+
+| Run | Before | After | Change |
+|---|---:|---:|---:|
+| `-Profile gate` (S2+S3+S4, repeat 2) | 393.0 s | 260.3 s | **-33.8 %** |
+| `-Profile quick` (S2 100 keys + S3, repeat 1, `-WarmupEveryCell` = old default) → new quick (S2-quick 40 keys + S3, repeat 1, batched warm-up) | 208.5 s | 157.9 s | **-24.3 %** |
+
+In-app `BenchmarkWindow` (headless probe: `BenchmarkEngine.RunPreparedAsync` + `BenchmarkWorkloadRunner.PrepareIterationAsync` through a real `BenchmarkImageExecutor`, same F4 folder, same recipe the window uses):
+
+| Run | Files | Iterations | Wall time |
+|---|---:|---:|---:|
+| Default run today (fast-sequential, no cap — pre-Step-2b) | 1841 | 30 | 7875 ms |
+| Default run with the new 64-image cap | 64 | 30 | 8157 ms |
+| **Quick check** (fast-sequential, 64 images, 10 iterations) | 64 | 10 | **2620 ms** |
+
+The image cap alone barely moves fast-sequential's wall time on this fixture: its `ImagesPerSample = min(Workers, fileCount) = 8` either way once the folder has ≥8 files, so decode volume is unchanged — the cap's real payoff is keeping setup (file enumeration, `totalSourceBytes`, the preload-window index) and `FullFolder` profiles (e.g. `full-folder-warm`, `ram-maximizer`) cheap on folders with tens of thousands of files, not measurable on this 1841-file fixture. "Quick check" itself is the big win: **~3.1x faster than the default run** (10 vs 30 timed iterations, same 1 warm-up).
+
+Gate: `dotnet build PhotoReview.slnx -c Release` 0 warnings/0 errors; `dotnet test --filter "Category!=Manual&Category!=Native&Category!=Slow"` 3352 passed, 1 skipped (pre-existing, unrelated), 0 failed; `docs-budget.ps1 -Check`, `check-doc-links.ps1`, `i18n-check.ps1` all PASS. Mutation checks (reverted after each): `BenchmarkWindow.ApplyImageLimit` cap removed → red; `BuildQuickCheckProfile` iterations override ignored → red; `BenchmarkImageExecutor` teardown cleanup skipped → red (this last one needed a test fix — the first version of the teardown test was a false green because the RAM cache never evicted the 5 tiny test images, so nothing was ever persisted to disk to clean up; fixed by seeding the scratch directory directly).
 
