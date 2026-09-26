@@ -1,6 +1,6 @@
 # AR — Rà soát kiến trúc 2026-09-26 (tóm tắt)
 
-**Trạng thái:** 🔄 Đang thực thi — Wave 1–3 (mã) trong PR `integration/arch-review-2026-09-26`; còn Q-AR7 (AR16) và GUI check AR13 · **Tier:** T1 · **Base:** review tại `master@1c84c59`, số dòng kiểm chứng lại tại `14dfe71` · **Plan từng task:** `docs/refactoring/arch-review/AR10..AR19-*.md` — chỉ đọc file của task đang làm.
+**Trạng thái:** ✅ Mã xong — AR11–AR15, AR17–AR19 trong #106, AR16 (Q-AR7 c) trong #107; chỉ còn GUI check AR13/AR16 (người dùng) · **Tier:** T1 · **Base:** review tại `master@1c84c59`, số dòng kiểm chứng lại tại `14dfe71` · **Plan từng task:** `docs/refactoring/arch-review/AR10..AR19-*.md` — chỉ đọc file của task đang làm.
 
 ## Kết luận
 
@@ -36,12 +36,12 @@ Bốn lane đọc mã độc lập (Imaging, App, Core/Platform, build/test) + l
 | ID | Tên | Quyết định | Phụ thuộc | Máy thật / GUI | Agent gợi ý | Trạng thái |
 |---|---|---|---|---|---|---|
 | AR10 | Ngân sách RAM live (đảo Q-R19) | Q-AR6 | — | Không (perf gate không đổi đường nóng) | sonnet | ❌ CLOSED — Q-AR6 (a), không sửa mã |
-| AR11 | Dọn `AppSettings` tĩnh; round-trip Settings UI | — | — | Không | sonnet | ✅ DONE (integration PR) — allowlist Core `File.*` 6 file có lý do; `SettingsWindow` giữ store tuỳ chọn |
-| AR12 | Vệ sinh build: `.gitignore`, warnings-as-errors, ghi chú GC | — | — | Không | haiku (12a/12c), sonnet (12b) | ✅ DONE (integration PR) — 0 warning cần sửa khi bật warnings-as-errors |
-| AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | ✅ CODE DONE (integration PR) — `MainWindow.xaml.cs` 715 → 404 dòng (phần còn lại: ctor/wiring, lifecycle, `Window_KeyDown`, forward menu — plan cho giữ); **GUI check: người dùng** |
+| AR11 | Dọn `AppSettings` tĩnh; round-trip Settings UI | — | — | Không | sonnet | ✅ DONE (#106) — allowlist Core `File.*` 6 file có lý do; `SettingsWindow` giữ store tuỳ chọn |
+| AR12 | Vệ sinh build: `.gitignore`, warnings-as-errors, ghi chú GC | — | — | Không | haiku (12a/12c), sonnet (12b) | ✅ DONE (#106) — 0 warning cần sửa khi bật warnings-as-errors |
+| AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | ✅ DONE (#106) — `MainWindow.xaml.cs` 715 → 404 dòng (phần còn lại: ctor/wiring, lifecycle, `Window_KeyDown`, forward menu — plan cho giữ); **GUI check: người dùng** |
 | AR14 | Lắp ráp controller của `MainViewModel` | Q-AR10 | — | Không | sonnet | ✅ DONE — Q-AR10 (a), chỉ comment |
-| AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | ✅ DONE (integration PR) — 15c đo trên F4: không chậm hơn (PERF-STATUS); thêm cờ CLI `--source-bytes-cache` |
-| AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | 🔄 Bước 1 xong: probe ≈ 114 ms/1841 file ≈ 68 % first visual → chờ Q-AR7 (khuyến nghị c) |
+| AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | ✅ DONE (#106) — 15c đo trên F4: không chậm hơn (PERF-STATUS); thêm cờ CLI `--source-bytes-cache` |
+| AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | ✅ DONE (#107) — Q-AR7 (c): probe chạy nền sau frame đầu; catalog sẵn sàng 305 → 88 ms trên F4; **GUI check: người dùng** |
 | AR17 | TurboJpeg: thử nghiệm hay đầu tư | Q-AR8 | — | Đo trên máy thật nếu chọn (b) | strongest nếu (b) | ✅ DONE — Q-AR8 (a), nhãn "thử nghiệm" |
 | AR18 | Benchmark trong app: ghi nhận | Q-AR9 | — | Không | haiku | ✅ DONE — Q-AR9 (a), ghi chú architecture.md |
 | AR19 | Tách `IDialogService` | Q-AR10 | AR13 (cùng file) | Không | sonnet | ✅ DONE — Q-AR10 (a), `ShowSkippedFiles` qua `IDialogService` |
