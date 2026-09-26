@@ -90,7 +90,15 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         var keys = KeysFor(folder);
-        if (ClaimCore(keys, markPending: true) != InstanceClaimResult.OwnedElsewhere) return FolderOpenDecision.Proceed;
+        var claimed = ClaimCore(keys, markPending: true);
+        if (claimed == InstanceClaimResult.OwnedElsewhere && !WhenReleased.IsCompleted)
+        {
+            // Our own release of this very folder (we just moved away and are coming back) may still be pending: its mutex handle
+            // is still open, so the name looks taken. Wait for our releases, then claim again, instead of forwarding to ourselves.
+            await WhenReleased.ConfigureAwait(false);
+            claimed = ClaimCore(keys, markPending: true);
+        }
+        if (claimed != InstanceClaimResult.OwnedElsewhere) return FolderOpenDecision.Proceed;
 
         var target = Path.GetFullPath(initialPath ?? folder);
         var forwarded = await SecondInstanceHandoff.TryForwardAsync(
@@ -176,6 +184,7 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
             // stall a folder switch while preload workers keep the pool busy. Server first, then the mutex name.
             _releases = Task.WhenAll(_releases, Task.Run(() =>
             {
+                BeforeReleaseHook?.Invoke();
                 foreach (var claim in released)
                 {
                     try { claim.Dispose(); }
@@ -186,6 +195,9 @@ public sealed class InstanceScope : IFolderOwnership, IDisposable
     }
 
     private Task _releases = Task.CompletedTask;
+
+    /// <summary>Test seam: runs on the pool thread right before a release disposes its locks (lets a test hold a release pending).</summary>
+    internal Action? BeforeReleaseHook { get; set; }
 
     /// <summary>Completes when every release started so far has finished (tests; shutdown does not need it).</summary>
     internal Task WhenReleased

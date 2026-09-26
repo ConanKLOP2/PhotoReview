@@ -71,6 +71,7 @@ public partial class SettingsWindow : Window
         LoadFields();
         ApplyDecoderAvailability(decoderFactory);
         LoadLanguages();
+        Localizer.CurrentChanged += OnLanguageChanged;
     }
 
     // ---- Left navigation: page list, remembers the last page for this process only (DR02) ----
@@ -101,8 +102,32 @@ public partial class SettingsWindow : Window
         s_lastPageKey = key;
         foreach (var (pageKey, entry) in _pages)
             entry.Scroll.Visibility = pageKey == key ? Visibility.Visible : Visibility.Collapsed;
-        PageTitleText.Text = Localizer.Current.Get(page.TitleKey);
+        UpdatePageTitle();
         page.Scroll.ScrollToHome();
+    }
+
+    private void UpdatePageTitle()
+    {
+        if (_pages is null || NavList.SelectedItem is not ListBoxItem { Tag: string key } || !_pages.TryGetValue(key, out var page)) return;
+        PageTitleText.Text = Localizer.Current.Get(page.TitleKey);
+    }
+
+    /// <summary>"Reload translations" / a language switch: only {loc:Tr} XAML texts follow on their own, so re-render the texts set in code.</summary>
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.CheckAccess()) RefreshLocalizedTexts();
+        else Dispatcher.BeginInvoke(RefreshLocalizedTexts);
+    }
+
+    private void RefreshLocalizedTexts()
+    {
+        UpdatePageTitle();
+        ToolbarOpacityHint.Text = Tr.SettingsToolbarOpacityHint(AppSettings.MinToolbarOpacityPercent);
+        UpdateToolbarOpacityValueText();
+        UpdateRamCacheRange();
+        UpdateRamCacheValueText();
+        UpdatePreloadWindowHint();
+        UpdateZoomShortcutSummary();
     }
 
     /// <summary>Ctrl+Tab / Ctrl+Shift+Tab cycles pages regardless of which control has focus.</summary>
@@ -197,7 +222,7 @@ public partial class SettingsWindow : Window
 
     private void StartExplorer(string arguments)
     {
-        try { Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true }); }
+        try { using var process = Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { ShowOpenFailed(ex); }
     }
 
@@ -207,7 +232,7 @@ public partial class SettingsWindow : Window
     // ---- Manual update check: the only network use in the app, only on click (no auto-check/download/install) ----
 
     /// <summary>Test seam: opens the download page; default is the system browser via ShellExecute.</summary>
-    internal Action<string> OpenUrl { get; set; } = static url => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    internal Action<string> OpenUrl { get; set; } = static url => { using var process = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); };
 
     /// <summary>The last started update check (test seam: lets a test await completion).</summary>
     internal Task UpdateCheckTask { get; private set; } = Task.CompletedTask;
@@ -278,6 +303,7 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        Localizer.CurrentChanged -= OnLanguageChanged;
         _cancelUpdateCheck?.Invoke();
         base.OnClosed(e);
     }

@@ -168,15 +168,24 @@ public sealed record BenchmarkEffectiveConfig(int Workers, int NextWindow, int P
 /// </summary>
 public static class BenchmarkProfileScope
 {
-    /// <summary>Sets logging to <paramref name="profile"/>'s DetailedLogging; disposing restores the previous state.</summary>
-    public static IDisposable ApplyLogging(BenchmarkProfile profile, Func<bool> getEnabled, Action<bool> setEnabled)
+    /// <summary>
+    /// Sets logging to <paramref name="profile"/>'s DetailedLogging; disposing restores the previous state.
+    /// With <paramref name="getWriteCount"/> (a counter that increases on every write of the logging flag) the restore is skipped
+    /// when someone else changed the flag during the run (e.g. the user toggled logging in Settings), so their choice wins.
+    /// </summary>
+    public static IDisposable ApplyLogging(BenchmarkProfile profile, Func<bool> getEnabled, Action<bool> setEnabled, Func<int>? getWriteCount = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(getEnabled);
         ArgumentNullException.ThrowIfNull(setEnabled);
         var previous = getEnabled();
         setEnabled(profile.DetailedLogging);
-        return new Restore(() => setEnabled(previous));
+        var writesAfterApply = getWriteCount?.Invoke();
+        return new Restore(() =>
+        {
+            if (getWriteCount is not null && getWriteCount() != writesAfterApply) return;
+            setEnabled(previous);
+        });
     }
 
     private sealed class Restore(Action restore) : IDisposable

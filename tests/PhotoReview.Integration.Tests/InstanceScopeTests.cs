@@ -220,6 +220,29 @@ public sealed class InstanceScopeTests : IDisposable
         Assert.True(scope.Holds(y));
     }
 
+    [Fact(DisplayName = "PerFolder: returning to a folder whose release is still pending waits for it and proceeds instead of forwarding to itself")]
+    public async Task PerFolder_ReopenFolderWhoseReleaseIsPending_WaitsAndProceeds()
+    {
+        var scope = NewScope(InstanceMode.PerFolder, clientFactory: _ => new FixedClient(ForwardOutcome.NoInstance));
+        var x = Folder("x");
+        var y = Folder("y");
+        Assert.True(scope.TryAcquire(x));
+        scope.OnFolderShown(x);
+        using var releaseGate = new ManualResetEventSlim(false);
+        scope.BeforeReleaseHook = () => releaseGate.Wait(Timeout);
+
+        Assert.Equal(FolderOpenDecision.Proceed, await scope.BeforeOpenAsync(y, null));
+        scope.OnFolderShown(y); // X is dropped from the claims; its mutex handle stays open until the gate opens
+        scope.AfterOpen(y, shownFolder: y);
+        Assert.False(scope.Holds(x));
+
+        var back = scope.BeforeOpenAsync(x, null); // the user goes straight back to X
+        releaseGate.Set();
+
+        Assert.Equal(FolderOpenDecision.Proceed, await back.WithTimeout(Timeout, "reopen after pending release"));
+        Assert.True(scope.Holds(x));
+    }
+
     [Fact(DisplayName = "PerFolder: a failed open releases the claimed folder and keeps the shown one")]
     public async Task PerFolder_FailedOpen_ReleasesClaimKeepsShown()
     {
