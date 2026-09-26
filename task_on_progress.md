@@ -1,15 +1,15 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-25 | **Base:** master `dd85670` (v2.0.90) | **Review branch:** `codex/review-function-audit-20260925`
+**Updated:** 2026-09-26 (evening) | **Base:** master `985d524` (PRs #94–#103 merged) | **Open PRs:** none known besides this docs PR
 
-## Now: function-level codebase review
+## Now
 
-- **What:** [Function audit](docs/refactoring/REVIEW-2026-09-25-FUNCTION-AUDIT.md) at `dd85670`: independent Core/Platform, Imaging/Benchmarking, App, and tools/tests lanes. Read-only code review; no production edits.
-- **Git:** PR #86 integration and PR #87 defaults are on `master`; `develop` fast-forwarded to `dd85670` on 2026-09-25. Do not reuse older "PR open" statements.
-- **Validation:** `dotnet build PhotoReview.slnx -c Release --nologo` passed, 0 warnings; default filtered `dotnet test` passed 1779, skipped 6. Native/Slow/Manual and GUI were not run. One corrupt-JPEG CLI repro returned exit 0 with 0 valid groups.
-- **Caution:** the default test run included `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder`, which writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; the path is now absent. Its prior state is unknown. Do not rerun this test until isolated.
-- **Next:** finish function/test coverage, review findings and decisions in the audit; Q-R19 defaults, GUI checks in [WORK-2026-09-25](docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md), and Q-R17 real-machine perf remain open.
-- **Architecture review 2026-09-26 (plan only, no code):** [ARCH-REVIEW-2026-09-26-SUMMARY](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — tasks AR10–AR19 all TODO; Wave 1 (AR11, AR12, AR15) needs no decision; Q-AR6..Q-AR10 wait for the user (options + recommendation in each `arch-review/AR1x` file). Branch `docs/arch-review-2026-09-26`.
+- **Branch model change (this PR):** `develop` is retired. The handoff (`task_on_progress.md`), `docs/refactoring/OPEN-DECISIONS.md` and `docs/INDEX.md` live on `master` only; a PR that changes project state updates them in the same PR, and a decision taken outside a code PR gets a small docs PR. Reason: `develop` fell 170 commits behind, was merged once (#85), and master's copy of the handoff went stale — two sources of truth.
+- **Merged to master 2026-09-26:** #94–#97 (overnight review + wave5), #98 (AGENTS decision format), #99/#100 (Actions pinned by SHA + Dependabot), #101 (Codex full-source audit, F2 by design), #102 (architecture review plan), #103 (Q-R25 policy decisions + audit fixes: Undo after folder change/APP-03, canonical shortcut keys Enter/Return, Esc cancels duplicate-check hashing, F0/F1/F3/F4, thread-pool pre-warm in tests). All their branches and worktrees can be deleted.
+- **Architecture review plan (#102):** [ARCH-REVIEW-2026-09-26-SUMMARY](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — tasks AR10–AR19 all TODO. With #103 merged nothing blocks Wave 1 (AR11, AR12, AR15). Q-AR6..Q-AR10 wait for the user (options + recommendation in each `arch-review/AR1x` file).
+- **User (GUI / real machine), still open from the overnight review:** Settings > General > Updates, Defaults button (WIC, EXIF off), close during a folder scan, Recycle Bin undo on a non-English Windows (`undelete` fallback unverified), decoder fallbacks with damaged EXIF/ICC; real-machine perf run for natural sort / snapshot validator on F4; Q-R17 preload-estimate perf run.
+- **Caution (from the 2026-09-25 audit):** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it until isolated.
+- **Local build:** `src/PhotoReview.App/bin/Release/net10.0-windows` last rebuilt from master `fac8347` (2.0.106); rebuild after #103.
 
 ## Status by Group
 
@@ -37,8 +37,3 @@ dotnet build PhotoReview.slnx -c Release
 dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual&Category!=Native&Category!=Slow"
 tools/verify-all.ps1
 ```
-
-## Review lane tools/CI/benchmark (2026-09-26, branch `review/tools-ci-benchmark`, not merged)
-
-- Fixed with tests: `PerfStats.NearestRank` float rank (P7 of 100 gave rank 8), non-finite CSV numbers, `BenchmarkPhaseResult` `with` copies, NaN ranking, CLI empty/invalid list args, `i18n-check` (invalid UTF-8, lone surrogates, 200k-deep JSON crash), `-LiteralPath`/BOM in tools scripts, `release.yml` tag regex, zip SHA-256 in notes.
-- Open: `BenchmarkStatistics.Percentile` (Core, other lane) returns NaN for `[Inf, Inf]`/overflowing spans; Actions are tag-pinned not SHA-pinned; workflows cannot be run locally (draft-release flow unproven, `gh release view` on drafts unverified).
