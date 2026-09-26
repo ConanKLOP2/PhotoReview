@@ -5,18 +5,52 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using PhotoReview.App.Coordinators;
 using PhotoReview.App.Input;
+using PhotoReview.App.ViewModels;
 
 namespace PhotoReview.App.Services;
 
 /// <summary>
 /// AR13: the WPF side of the main window's image view (ImageScroll + MainImage) for
-/// <see cref="PointerInputController"/>. Each member is the one-line WPF call the controller used to make directly
-/// in MainWindow. Holds the two elements, never the window (<paramref name="isLoaded"/> reads the window's IsLoaded).
+/// <see cref="PointerInputController"/> and <see cref="FitViewController"/>. Each member is the WPF call the
+/// controllers used to make directly in MainWindow. Holds the two elements, never the window
+/// (<paramref name="isLoaded"/> reads the window's IsLoaded, <paramref name="updateFitSize"/> is MainWindow.UpdateFitSize).
 /// </summary>
-internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, Func<bool> isLoaded) : IImageSurface
+internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerState viewer, Func<bool> isLoaded, Action updateFitSize)
+    : IImageSurface, IFitSurface
 {
     public bool IsLoaded => isLoaded();
+
+    public (double Width, double Height) ViewportSize =>
+        (Math.Max(0, scroll.ActualWidth - scroll.BorderThickness.Left - scroll.BorderThickness.Right),
+         Math.Max(0, scroll.ActualHeight - scroll.BorderThickness.Top - scroll.BorderThickness.Bottom));
+
+    public void UpdateFitSize() => updateFitSize();
+
+    public void ScrollHome()
+    {
+        scroll.ScrollToHome();
+        scroll.ScrollToHorizontalOffset(0);
+        scroll.ScrollToVerticalOffset(0);
+    }
+
+    public ViewportSnapshot Capture() =>
+        new ViewportSnapshot(
+            Zoom: viewer.Zoom,
+            Stretch: viewer.Stretch,
+            MaxImageWidth: viewer.MaxImageWidth,
+            MaxImageHeight: viewer.MaxImageHeight,
+            ActualImageWidth: image.ActualWidth,
+            ActualImageHeight: image.ActualHeight,
+            ExtentWidth: scroll.ExtentWidth,
+            ExtentHeight: scroll.ExtentHeight,
+            ViewportWidth: scroll.ViewportWidth,
+            ViewportHeight: scroll.ViewportHeight,
+            HorizontalOffset: scroll.HorizontalOffset,
+            VerticalOffset: scroll.VerticalOffset,
+            HorizontalScrollbarVisibility: scroll.ComputedHorizontalScrollBarVisibility,
+            VerticalScrollbarVisibility: scroll.ComputedVerticalScrollBarVisibility);
 
     public double HorizontalOffset => scroll.HorizontalOffset;
     public double VerticalOffset => scroll.VerticalOffset;

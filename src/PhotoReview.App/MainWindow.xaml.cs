@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using PhotoReview.App.Coordinators;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Input;
 using PhotoReview.App.Services;
@@ -31,7 +32,9 @@ public partial class MainWindow : Window
     private readonly ViewportSizeSource? _viewport;
     private bool _placementRestored;
     private readonly ViewportOperationVersion _viewportVersion = new(); // shared by zoom-at-point and Fit
+    private readonly WpfImageSurface _surface;
     private readonly PointerInputController _pointer; // feat/mouse-zoom (AR13a)
+    private readonly FitViewController _fit; // T89 convergence loop (AR13b)
 
     // AR02d: read-only properties replacing the public mutable fields that used to be kept in
     // sync by WireViewModelEvents/SyncFiles (ST06/Q-ST3 exception, superseded by this change).
@@ -80,9 +83,10 @@ public partial class MainWindow : Window
         Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
-        _pointer = new PointerInputController(
-            new WpfImageSurface(ImageScroll, MainImage, () => IsLoaded), _viewModel.Viewer, () => _settings, _viewportVersion,
+        _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize);
+        _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
             new PointerCommands(() => _viewModel.HasImages, _viewModel.NextAsync, _viewModel.PreviousAsync, _viewModel.ZoomActualSize, ApplyFitViewAsync));
+        _fit = new FitViewController(_surface, _viewModel.Viewer, _viewportVersion, _pointer.CancelPan);
         AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
         ContentRendered += (_, _) => PhotoReviewPerf.StartupMark("contentRendered");
@@ -150,9 +154,7 @@ public partial class MainWindow : Window
         WindowState = isFullscreen ? WindowState.Maximized : _stateBeforeFullscreen;
     }
 
-    private (double Width, double Height) GetViewportSize() =>
-        (Math.Max(0, ImageScroll.ActualWidth - ImageScroll.BorderThickness.Left - ImageScroll.BorderThickness.Right),
-         Math.Max(0, ImageScroll.ActualHeight - ImageScroll.BorderThickness.Top - ImageScroll.BorderThickness.Bottom));
+    private (double Width, double Height) GetViewportSize() => _surface.ViewportSize;
 
     private void UpdateFitSize()
     {
@@ -388,59 +390,8 @@ public partial class MainWindow : Window
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.PickAndOpenFolderAsync();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
     private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
+    private Task ApplyFitViewAsync() => _fit.ApplyFitAsync(); // T89 convergence loop: Coordinators/FitViewController.cs
 
-    private async Task ApplyFitViewAsync()
-    {
-        _pointer.CancelPan();
-        var version = _viewportVersion.Next();
-        var (width, height) = GetViewportSize();
-        _viewModel.Viewer.ResetFit(width, height);
-
-        // Converge layout: loop until viewport stabilizes or max iterations reached
-        ViewportSnapshot? lastSnapshot = null;
-        for (var pass = 0; pass < 3; pass++)
-        {
-            if (version != _viewportVersion.Current || !IsLoaded) return;
-            ImageScroll.UpdateLayout();
-            UpdateFitSize();
-            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-
-            // Check viewport convergence
-            var currentSnapshot = CaptureViewportSnapshot();
-            if (lastSnapshot != null && ViewportConvergence.IsStableViewport(lastSnapshot, currentSnapshot))
-            {
-                // Viewport stable, no need to continue
-                break;
-            }
-            lastSnapshot = currentSnapshot;
-        }
-
-        if (version != _viewportVersion.Current || !IsLoaded) return;
-        ImageScroll.UpdateLayout();
-        ImageScroll.ScrollToHome();
-        ImageScroll.ScrollToHorizontalOffset(0);
-        ImageScroll.ScrollToVerticalOffset(0);
-    }
-
-    private ViewportSnapshot CaptureViewportSnapshot()
-    {
-        var image = MainImage.Source;
-        return new ViewportSnapshot(
-            Zoom: _viewModel.Viewer.Zoom,
-            Stretch: _viewModel.Viewer.Stretch,
-            MaxImageWidth: _viewModel.Viewer.MaxImageWidth,
-            MaxImageHeight: _viewModel.Viewer.MaxImageHeight,
-            ActualImageWidth: MainImage.ActualWidth,
-            ActualImageHeight: MainImage.ActualHeight,
-            ExtentWidth: ImageScroll.ExtentWidth,
-            ExtentHeight: ImageScroll.ExtentHeight,
-            ViewportWidth: ImageScroll.ViewportWidth,
-            ViewportHeight: ImageScroll.ViewportHeight,
-            HorizontalOffset: ImageScroll.HorizontalOffset,
-            VerticalOffset: ImageScroll.VerticalOffset,
-            HorizontalScrollbarVisibility: ImageScroll.ComputedHorizontalScrollBarVisibility,
-            VerticalScrollbarVisibility: ImageScroll.ComputedVerticalScrollBarVisibility);
-    }
     private void Recovery_Click(object sender, RoutedEventArgs e) => _viewModel.ShowRecovery();
     private void SkippedFiles_Click(object sender, RoutedEventArgs e) => new SkippedFilesWindow(_viewModel.SkippedEntries) { Owner = this }.ShowDialog();
     private void Diagnostics_Click(object sender, RoutedEventArgs e) => _viewModel.ShowDiagnostics();
