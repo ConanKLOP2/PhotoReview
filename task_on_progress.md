@@ -1,12 +1,14 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-26 | **Base:** master `3ea2555`+ (PRs #94-#96 open) | **Branches:** `integration/review-2026-09-26` (PR #96), `integration/wave5-2026-09-26` (everything, incl. waves 3-5)
+**Updated:** 2026-09-26 (evening) | **Base:** master `fac8347` (PRs #94–#102 merged) | **Open:** PR #103 `integration/policy-fixes-2026-09-26` (5 fix branches, CLEAN, not merged)
 
-## Now: overnight review 2026-09-26 (Q-R25)
+## Now
 
-- **What:** 7 lane review branches (fileactions, core, imaging, platform, app, tools/CI, test quality) = PR #96; ~20 more small-agent branches (`opt/*`, `fix2/*`) merged into `integration/wave5-2026-09-26`: bug fixes, dead-code removal, measured optimisations, cross-review fixes. Gate on wave5: build 0 warnings, default tests green, `i18n-check` PASS. PR order: #94 (flaky fix), #95 (update button), #96, then a PR from `integration/wave5-2026-09-26`.
-- **User:** merge order above; GUI checks: Settings > General > Updates, Defaults button (WIC, EXIF off), close during a folder scan, Recycle Bin undo on a non-English Windows (`undelete` fallback is unverified), decoder fallbacks with damaged EXIF/ICC; real-machine perf run for the measured optimisations (natural sort, snapshot validator) on F4.
-- **Decisions needed:** see Q-R25 (APP-03, Enter/Return, DuplicateCleanup cancellation, journal ownership marker, Actions pinned by SHA).
+- **Merged to master 2026-09-26:** #94–#97 (overnight review + wave5), #98 (AGENTS decision format), #99/#100 (Actions pinned by SHA + Dependabot), #101 (Codex full-source audit, F2 by design), #102 (architecture review plan). Their branches and worktrees are deleted.
+- **Open — PR #103** (`integration/policy-fixes-2026-09-26`): Q-R25 policy decisions + audit fixes — Undo after folder change (APP-03), canonical shortcut keys (Enter/Return), Esc cancels duplicate-check hashing, F0/F1/F3/F4 from the source audit, thread-pool pre-warm in tests. Worktrees `app03-undo`, `dup-cancel`, `f3-size`, `f4f1f0`, `shortcut-canonical`, `integ-policy` still exist for it; delete after merge.
+- **Architecture review plan (in master, #102):** [ARCH-REVIEW-2026-09-26-SUMMARY](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — tasks AR10–AR19 all TODO. AR12 and AR15a/b touch no file of #103 and can start now; AR11, AR10, AR13, AR14, AR19 overlap #103 (`MainWindow`, `MainViewModel`, `Settings*`) — start only after #103 merges. Q-AR6..Q-AR10 wait for the user (options + recommendation in each `arch-review/AR1x` file).
+- **User:** GUI checks still open from the overnight review: Settings > General > Updates, Defaults button (WIC, EXIF off), close during a folder scan, Recycle Bin undo on a non-English Windows (`undelete` fallback unverified), decoder fallbacks with damaged EXIF/ICC; real-machine perf run for natural sort / snapshot validator on F4.
+- **Local build:** `src/PhotoReview.App/bin/Release/net10.0-windows` rebuilt from master `fac8347` (see the session note for the version).
 
 ## Status by Group
 
