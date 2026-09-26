@@ -492,7 +492,7 @@ public partial class MainWindow : Window
     // ---- Context menu: "Click zoom level" submenu (presets + Custom…). Built once; refreshed (text + IsChecked) ----
     // ---- on every open so a live language switch and a setting changed elsewhere both show correctly. ----
 
-    private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150];
+    private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 200, 300, 400];
     private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
 
     private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
@@ -511,6 +511,11 @@ public partial class MainWindow : Window
     private void BuildClickZoomMenu()
     {
         _clickZoomPresetItems = [];
+        var fit = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelFit };
+        AutomationProperties.SetName(fit, Tr.MainMenuClickZoomLevelFitAutomationName);
+        fit.Click += ClickZoomFit_Click;
+        ClickZoomMenu.Items.Add(fit);
+        ClickZoomMenu.Items.Add(new System.Windows.Controls.Separator());
         foreach (var percent in ClickZoomPresets)
         {
             var item = new System.Windows.Controls.MenuItem { IsCheckable = true, Tag = percent };
@@ -524,6 +529,8 @@ public partial class MainWindow : Window
         custom.Click += ClickZoomCustom_Click;
         ClickZoomMenu.Items.Add(custom);
     }
+
+    private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => _ = ApplyFitViewAsync();
 
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
     {
