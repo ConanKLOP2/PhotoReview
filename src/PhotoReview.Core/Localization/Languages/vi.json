@@ -238,7 +238,7 @@
   "enum.fileOperation.delete": "Xóa (vào Thùng rác)",
   "enum.fileOperation.move": "Di chuyển",
   "enum.fileOperation.recycle": "Đưa vào Thùng rác",
-  "enum.imageSortMode.name": "Theo tên (kiểu Explorer)",
+  "enum.imageSortMode.name": "Tên (theo thứ tự Explorer nếu đang mở)",
   "enum.imageSortMode.sizeAscending": "Theo kích thước tăng dần",
   "enum.imageSortMode.sizeDescending": "Theo kích thước giảm dần",
   "enum.initialViewMode.fit": "Vừa khung",
@@ -676,5 +676,9 @@
   "settings.kineticGlideSmoothing.automationName": "Làm mượt chuyển động trượt quán tính",
   "settings.kineticGlideSmoothing.hint": "Cho ảnh trượt khớp với tần số quét của màn hình. Tắt để so sánh.",
   "enum.kineticGlideSmoothing.off": "Tắt",
-  "enum.kineticGlideSmoothing.predict": "Khớp tần số màn hình"
+  "enum.kineticGlideSmoothing.predict": "Khớp tần số màn hình",
+  "enum.imageSortMode.default": "Mặc định (theo thứ tự thư mục)",
+  "enum.imageSortMode.nameAscending": "Tên A→Z (theo phần mềm)",
+  "enum.imageSortMode.nameDescending": "Tên Z→A (theo phần mềm)",
+  "settings.sortMode.hint": "Tên đi theo thứ tự của cửa sổ Explorer đang mở thư mục này (nếu có). Tên A→Z, Tên Z→A và Mặc định không bao giờ theo Explorer. Mặc định hiển thị file đúng thứ tự thư mục liệt kê, không sắp xếp."
 }

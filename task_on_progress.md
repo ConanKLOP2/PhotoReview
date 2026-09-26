@@ -1,6 +1,6 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-26 (later) | **Base:** master `5cb8f0a` (#94–#121) | **Open PRs:** `test/nas-first-frame-no-per-file-io`
+**Updated:** 2026-09-26 | **Base:** master `5cb8f0a` (#94–#121) | **Open PRs:** `test/nas-first-frame-no-per-file-io`, `feat/sort-mode-default`
 
 ## Now
 
@@ -12,7 +12,8 @@
 - **Q-R28 = A (i18n export, branch `feat/i18n-export-all`):** Settings > Export strings to translate now writes every key (missing first + `_missing` list, then current translations, notes for all); `plural: none` languages no longer get unused `.one` keys. Settings > Reload translations now shows a message: "no problems" or the list of problems (skipped files, entries falling back to English; first 15, rest counted). Tests + 9 mutations pass; GUI look of the message still to be checked by the user.
 - **Tests no longer overwrite the user's real config.json (user, urgent, 2026-09-26, `fix/isolate-test-config`):** `DataRootFixture` now also sets `PHOTOREVIEW_ISOLATE_CONFIG=1`, so `AppPaths.FromEnvironment()` puts `config.json` under the temp data root (before, e.g. `SettingsJournalDurabilityTests` reset `%LOCALAPPDATA%\PhotoReview\config.json` to defaults on every test run). Full suite verified: real config hash unchanged.
 - **Releases are manual (user, 2026-09-26):** CI only tags `v2.0.N`; no automatic draft. Actions > Release > Run workflow (tag input) publishes directly (`draft` box optional).
-- **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan, dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields (default folder name), optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **User GUI check pending.** #109 GUI check: OK.
+- **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan, dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields, optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **GUI check pending.**
+- **Sort modes (Q-R33):** `Default`, `NameAscending`, `NameDescending` ignore Explorer order; `Name` still follows it.
 - **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.

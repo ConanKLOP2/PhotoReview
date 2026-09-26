@@ -305,7 +305,7 @@ public partial class SettingsWindow : Window
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
-        SortModeCombo.SelectedIndex = Settings.ImageSortMode switch { ImageSortMode.SizeAscending => 1, ImageSortMode.SizeDescending => 2, _ => 0 };
+        SortModeCombo.SelectedIndex = Math.Max(0, SortModeCombo.Items.Cast<ComboBoxItem>().ToList().FindIndex(item => Equals(item.Tag, Settings.ImageSortMode.ToString())));
         ScalingQualityCombo.SelectedIndex = Settings.ScalingQuality == ScalingQuality.Linear ? 1 : 0;
         DecoderBackendCombo.SelectedIndex = Settings.DecoderBackend switch { DecoderBackend.WicDirect => 1, DecoderBackend.TurboJpeg => 2, _ => 0 };
         InstanceModeCombo.SelectedIndex = Settings.InstanceMode == InstanceMode.PerFolder ? 1 : 0;
@@ -517,7 +517,7 @@ public partial class SettingsWindow : Window
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
         Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
-        Settings.ImageSortMode = SortModeCombo.SelectedIndex switch { 1 => ImageSortMode.SizeAscending, 2 => ImageSortMode.SizeDescending, _ => ImageSortMode.Name };
+        Settings.ImageSortMode = SortModeCombo.SelectedItem is ComboBoxItem { Tag: string sortTag } && Enum.TryParse<ImageSortMode>(sortTag, out var chosenSort) ? chosenSort : ImageSortMode.Name;
         Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;
         Settings.DecoderBackend = DecoderBackendCombo.SelectedIndex switch { 1 => DecoderBackend.WicDirect, 2 => DecoderBackend.TurboJpeg, _ => DecoderBackend.Wpf };
         Settings.LoadingMode = LoadingModeCombo.SelectedIndex switch { 1 => LoadingMode.Preview, 2 => LoadingMode.Original, _ => LoadingMode.Fast };

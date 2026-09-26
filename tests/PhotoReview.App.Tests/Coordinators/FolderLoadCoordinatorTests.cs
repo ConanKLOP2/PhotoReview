@@ -152,6 +152,7 @@ public sealed partial class FolderLoadCoordinatorTests
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
     {
         public Func<string, Task<ExplorerViewSnapshot>>? SnapshotHook { get; set; }
+        public int QueryCount { get; private set; }
 
         public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(
             string folder,
@@ -166,6 +167,7 @@ public sealed partial class FolderLoadCoordinatorTests
             int progressiveBatchSize = 16,
             CancellationToken cancellationToken = default)
         {
+            QueryCount++;
             if (SnapshotHook is not null)
             {
                 return SnapshotHook(folder);
@@ -686,5 +688,106 @@ public sealed partial class FolderLoadCoordinatorTests
         _catalog.SetCurrent(1);
         Assert.Equal(small, _catalog.Current?.Path);
         Assert.Equal(1, _catalog.Current?.Length);
+    }
+
+    /// <summary>Creates c, a, b in that order: the fake listing yields them in insertion (scan) order.</summary>
+    private (string A, string B, string C) CreateImagesScanOrderCab(string folder)
+    {
+        _fs.CreateDirectory(folder);
+        var a = Path.Combine(folder, "a.jpg");
+        var b = Path.Combine(folder, "b.jpg");
+        var c = Path.Combine(folder, "c.jpg");
+        _fs.WriteAllTextAtomic(c, "3");
+        _fs.WriteAllTextAtomic(a, "1");
+        _fs.WriteAllTextAtomic(b, "2");
+        return (a, b, c);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DefaultSort_KeepsScanOrder()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateImagesScanOrderCab(folder);
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Default;
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(new[] { c, a, b }, _catalog.Paths);
+        Assert.Equal(0, _explorerOrder.QueryCount);
+    }
+
+    [Theory]
+    [InlineData(ImageSortMode.Default)]
+    [InlineData(ImageSortMode.NameAscending)]
+    [InlineData(ImageSortMode.NameDescending)]
+    public async Task LoadAsync_AppDecidedModes_NeverQueryOrApplyExplorerOrder(ImageSortMode mode)
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateImagesScanOrderCab(folder);
+        _settingsStore.Current.ImageSortMode = mode;
+        // A valid snapshot that would reorder everything to [b, c, a] if it were ever asked for.
+        _explorerOrder.SnapshotHook = _ => Task.FromResult(MakeSnapshot(folder, [b, c, a]));
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        var expected = mode switch
+        {
+            ImageSortMode.Default => new[] { c, a, b },
+            ImageSortMode.NameAscending => new[] { a, b, c },
+            _ => new[] { c, b, a },
+        };
+        Assert.Equal(expected, _catalog.Paths);
+        Assert.Equal(0, _explorerOrder.QueryCount);
+        Assert.Equal(0, _sink.OrderAppliedCount);
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+    }
+
+    [Fact]
+    public async Task LoadAsync_NameSort_StillAppliesExplorerOrder()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateImagesScanOrderCab(folder);
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Name;
+        _explorerOrder.SnapshotHook = _ => Task.FromResult(MakeSnapshot(folder, [b, c, a]));
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(1, _explorerOrder.QueryCount);
+        Assert.Equal(1, _sink.OrderAppliedCount);
+        Assert.Equal(new[] { b, c, a }, _catalog.Paths);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DefaultSort_InitialPathMovesToFront_RestInScanOrder()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateImagesScanOrderCab(folder);
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Default;
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder, initialPath: b);
+
+        Assert.Equal(new[] { b, c, a }, _catalog.Paths);
+        Assert.Equal(b, _catalog.Current?.Path);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DefaultSort_FirstFrameNeverWaitsOnExplorer()
+    {
+        var folder = @"C:\photos";
+        var (a, b, c) = CreateImagesScanOrderCab(folder);
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Default;
+        var never = new TaskCompletionSource<ExplorerViewSnapshot>(); // would hang the load if it were awaited
+        _explorerOrder.SnapshotHook = _ => never.Task;
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder, initialPath: b).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Single(_sink.Presented);
+        Assert.True(coordinator.PendingOrder.IsCompleted);
+        Assert.Equal(0, _explorerOrder.QueryCount);
     }
 }

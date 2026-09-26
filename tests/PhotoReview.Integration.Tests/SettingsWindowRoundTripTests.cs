@@ -47,7 +47,7 @@ public sealed class SettingsWindowRoundTripTests
     {
         [nameof(AppSettings.InitialViewMode)] = w => w.ViewModeCombo.SelectedIndex = 1, // Fit -> Percent100
         [nameof(AppSettings.LoadingMode)] = w => w.LoadingModeCombo.SelectedIndex = 2, // Preview -> Original
-        [nameof(AppSettings.ImageSortMode)] = w => w.SortModeCombo.SelectedIndex = 1, // Name -> SizeAscending
+        [nameof(AppSettings.ImageSortMode)] = w => w.SortModeCombo.SelectedIndex = 4, // Name -> SizeAscending (item 4 of the Tag-mapped order; see SortModeCombo_ListsSixModes...)
         [nameof(AppSettings.CompareHashEnabled)] = w => w.CompareHashCheck.IsChecked = false, // true -> false
         [nameof(AppSettings.CompareSizeEnabled)] = w => w.CompareSizeCheck.IsChecked = false, // true -> false
         [nameof(AppSettings.ScalingQuality)] = w => w.ScalingQualityCombo.SelectedIndex = 1, // HighQuality -> Linear
@@ -180,5 +180,43 @@ public sealed class SettingsWindowRoundTripTests
             return Task.CompletedTask;
         });
         Assert.True(failures.Count == 0, "Settings.Save dropped or mis-saved these UI-controlled properties:\n" + string.Join('\n', failures));
+    }
+
+    [Fact]
+    public async Task SortModeCombo_ListsSixModesInStableOrder_AndSavesEach()
+    {
+        ImageSortMode[] expectedOrder =
+        [
+            ImageSortMode.Name, ImageSortMode.NameAscending, ImageSortMode.NameDescending,
+            ImageSortMode.SizeDescending, ImageSortMode.SizeAscending, ImageSortMode.Default,
+        ];
+        var failures = new List<string>();
+        await StaTestHost.RunAsync(() =>
+        {
+            foreach (var mode in expectedOrder)
+            {
+                var window = new SettingsWindow(new AppSettings { ImageSortMode = ImageSortMode.SizeAscending })
+                {
+                    WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false,
+                };
+                try
+                {
+                    window.Loaded += (_, _) =>
+                    {
+                        var tags = window.SortModeCombo.Items.Cast<System.Windows.Controls.ComboBoxItem>().Select(i => (string)i.Tag).ToArray();
+                        if (!tags.SequenceEqual(expectedOrder.Select(m => m.ToString()))) failures.Add("item order: " + string.Join(",", tags));
+                        // The combo starts on the mode from the settings (SizeAscending), found by tag, not by index.
+                        if (window.SortModeCombo.SelectedIndex != 4) failures.Add("initial selection index " + window.SortModeCombo.SelectedIndex);
+                        window.SortModeCombo.SelectedIndex = Array.IndexOf(expectedOrder, mode);
+                        InvokeSave(window);
+                    };
+                    if (window.ShowDialog() != true) { failures.Add($"{mode}: Save was rejected"); continue; }
+                    if (window.Settings.ImageSortMode != mode) failures.Add($"expected {mode}, got {window.Settings.ImageSortMode}");
+                }
+                finally { if (window.IsLoaded) window.Close(); }
+            }
+            return Task.CompletedTask;
+        });
+        Assert.True(failures.Count == 0, string.Join('\n', failures));
     }
 }

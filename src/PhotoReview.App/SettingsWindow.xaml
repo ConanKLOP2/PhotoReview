@@ -103,14 +103,15 @@
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.nav.general}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="SortModeLabel" Text="{loc:Tr settings.sortMode.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
-                            <ComboBox x:Name="SortModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=SortModeLabel}" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.imageSortMode.name}" Tag="Name"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.sizeAscending}" Tag="SizeAscending"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.sizeDescending}" Tag="SizeDescending"/></ComboBox>
-                            <TextBlock x:Name="ViewModeLabel" Text="{loc:Tr settings.viewMode.label}" Grid.Row="1" Style="{StaticResource FormLabel}"/>
-                            <ComboBox x:Name="ViewModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=ViewModeLabel}" Grid.Row="1" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.initialViewMode.fit}"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
-                            <TextBlock x:Name="InstanceModeLabel" Text="{loc:Tr settings.instanceMode.label}" Grid.Row="2" Style="{StaticResource FormLabel}"/>
-                            <ComboBox x:Name="InstanceModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=InstanceModeLabel}" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.instanceMode.singleWindow}"/><ComboBoxItem Content="{loc:Tr enum.instanceMode.perFolder}"/></ComboBox>
-                            <TextBlock Text="{loc:Tr settings.instanceMode.hint}" Grid.Row="3" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <ComboBox x:Name="SortModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=SortModeLabel}" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.imageSortMode.name}" Tag="Name"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.nameAscending}" Tag="NameAscending"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.nameDescending}" Tag="NameDescending"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.sizeDescending}" Tag="SizeDescending"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.sizeAscending}" Tag="SizeAscending"/><ComboBoxItem Content="{loc:Tr enum.imageSortMode.default}" Tag="Default"/></ComboBox>
+                            <TextBlock Text="{loc:Tr settings.sortMode.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <TextBlock x:Name="ViewModeLabel" Text="{loc:Tr settings.viewMode.label}" Grid.Row="2" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="ViewModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=ViewModeLabel}" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.initialViewMode.fit}"/><ComboBoxItem Content="100%"/><ComboBoxItem Content="200%"/><ComboBoxItem Content="400%"/></ComboBox>
+                            <TextBlock x:Name="InstanceModeLabel" Text="{loc:Tr settings.instanceMode.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="InstanceModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=InstanceModeLabel}" Grid.Row="3" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.instanceMode.singleWindow}"/><ComboBoxItem Content="{loc:Tr enum.instanceMode.perFolder}"/></ComboBox>
+                            <TextBlock Text="{loc:Tr settings.instanceMode.hint}" Grid.Row="4" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr update.section.title}"><StackPanel>
