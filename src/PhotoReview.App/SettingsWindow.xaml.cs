@@ -8,6 +8,7 @@ using PhotoReview.App.Localization;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
+using PhotoReview.Core.Updates;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 
@@ -22,6 +23,9 @@ public partial class SettingsWindow : Window
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private readonly SettingsStore? _store;
     private readonly LocalizationService? _localization;
+    private readonly IUpdateChecker? _updateChecker;
+    private Action? _cancelUpdateCheck;
+    private string? _updateUrl;
     public AppSettings Settings { get; }
 
     /// <summary>Test seam: receives the invalid-destination warning of Save instead of a MessageBox.</summary>
@@ -32,16 +36,17 @@ public partial class SettingsWindow : Window
 
     private Dictionary<string, (ScrollViewer Scroll, string TitleKey)>? _pages;
 
-    public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null)
-        : this(store.Current, decoderFactory, localization)
+    public SettingsWindow(SettingsStore store, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null, IUpdateChecker? updateChecker = null)
+        : this(store.Current, decoderFactory, localization, updateChecker)
     {
         _store = store;
     }
 
-    public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null)
+    public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null, IUpdateChecker? updateChecker = null)
     {
         InitializeComponent();
         _localization = localization;
+        _updateChecker = updateChecker;
         VersionText.Text = BuildInfo.Describe(typeof(SettingsWindow).Assembly);
         // Structural fix: clone through the same JSON contract used to persist config.json, so every AppSettings
         // property survives round-tripping through this window -- including ones this window has no control for
@@ -195,6 +200,84 @@ public partial class SettingsWindow : Window
 
     private void ShowOpenFailed(Exception ex) =>
         System.Windows.MessageBox.Show(this, ex.Message, Tr.DialogSettingsOpenFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+
+    // ---- Manual update check: the only network use in the app, only on click (no auto-check/download/install) ----
+
+    /// <summary>Test seam: opens the download page; default is the system browser via ShellExecute.</summary>
+    internal Action<string> OpenUrl { get; set; } = static url => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+
+    /// <summary>The last started update check (test seam: lets a test await completion).</summary>
+    internal Task UpdateCheckTask { get; private set; } = Task.CompletedTask;
+
+    private void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CheckUpdateButton.IsEnabled) return;
+        UpdateCheckTask = RunUpdateCheckAsync();
+    }
+
+    private async Task RunUpdateCheckAsync()
+    {
+        CheckUpdateButton.IsEnabled = false;
+        OpenUpdatePageButton.Visibility = Visibility.Collapsed;
+        _updateUrl = null;
+        UpdateStatusText.Text = Tr.UpdateCheckChecking;
+        using var cts = new CancellationTokenSource();
+        _cancelUpdateCheck = () => { try { cts.Cancel(); } catch (ObjectDisposedException) { } }; // the check may already be finished and disposed
+        var version = BuildInfo.GetVersion(typeof(SettingsWindow).Assembly);
+        UpdateCheckResult result;
+        try
+        {
+            var checker = _updateChecker ?? new UpdateChecker();
+            result = await checker.CheckAsync(version, cts.Token);
+        }
+        catch (OperationCanceledException) { return; } // window closed while checking
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            result = UpdateCheckResult.Failed(UpdateFailure.BadResponse);
+        }
+        if (cts.IsCancellationRequested) return;
+
+        switch (result.Status)
+        {
+            case UpdateCheckStatus.UpToDate:
+                UpdateStatusText.Text = Tr.UpdateStatusUpToDate(result.LatestVersion ?? string.Empty);
+                break;
+            case UpdateCheckStatus.UpdateAvailable:
+                _updateUrl = UpdateUrlPolicy.Validate(result.DownloadUrl);
+                var current = AppVersion.TryParse(version, out var parsed) ? parsed.ToString() : version ?? string.Empty;
+                UpdateStatusText.Text = Tr.UpdateStatusAvailable(result.LatestVersion ?? string.Empty, current);
+                OpenUpdatePageButton.Visibility = _updateUrl is null ? Visibility.Collapsed : Visibility.Visible;
+                break;
+            default:
+                UpdateStatusText.Text = result.Failure switch
+                {
+                    UpdateFailure.Offline => Tr.UpdateStatusFailedOffline,
+                    UpdateFailure.Timeout => Tr.UpdateStatusFailedTimeout,
+                    UpdateFailure.RateLimited => Tr.UpdateStatusFailedRateLimited,
+                    UpdateFailure.InvalidVersion => Tr.UpdateStatusFailedInvalidVersion,
+                    _ => Tr.UpdateStatusFailedBadResponse,
+                };
+                break;
+        }
+        CheckUpdateButton.IsEnabled = true;
+    }
+
+    private void OpenUpdatePage_Click(object sender, RoutedEventArgs e)
+    {
+        var url = UpdateUrlPolicy.Validate(_updateUrl);
+        if (url is null) return;
+        try { OpenUrl(url); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            UpdateStatusText.Text = Tr.UpdateOpenPageFailed;
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _cancelUpdateCheck?.Invoke();
+        base.OnClosed(e);
+    }
 
     private void SettingsWindow_Loaded(object sender, RoutedEventArgs e)
     {

@@ -147,6 +147,29 @@ public sealed class ViewerQuickFeaturesTests
         Assert.Equal(Expected(@"C:\photos\a", folder, @"C:\photos\c"), vm.FolderInfoText);
     }
 
+    [Fact(DisplayName = "A sibling search that finishes before Refresh returns never leaves the placeholder behind")]
+    public async Task FolderInfo_SearchFinishingBeforeRefreshReturns_KeepsTheFinalText()
+    {
+        // No SynchronizationContext here (unlike the UI thread), so the search continuation can run on the pool
+        // while SetFolder/Refresh is still executing. Refresh must therefore publish the placeholder BEFORE it starts
+        // the search; the other order lets the placeholder overwrite an already finished result (seen on CI).
+        // The window is a few instructions wide, so this repeats the scenario to make an ordering regression show up.
+        var folder = @"C:\photos";
+        var expected = Expected(@"C:\photos", folder, @"C:\photos\c");
+        for (var i = 0; i < 3000; i++)
+        {
+            var settings = new AppSettings { ShowFolderInfo = true };
+            var finder = new Finder();
+            finder.Results[folder] = new SiblingImageFolders(@"C:\photos", @"C:\photos\c");
+            var vm = new InfoOverlayViewModel(() => settings, finder.Find);
+
+            vm.SetFolder(folder);
+            await vm.PendingSiblings.WithTimeout(Timeout, "sibling search");
+
+            Assert.True(expected == vm.FolderInfoText, $"iteration {i}: placeholder overwrote the finished result: '{vm.FolderInfoText}'");
+        }
+    }
+
     [Fact]
     public async Task FolderInfo_ShowsPlaceholderWhileSearching_ThenSiblingsWithConfiguredKeys()
     {

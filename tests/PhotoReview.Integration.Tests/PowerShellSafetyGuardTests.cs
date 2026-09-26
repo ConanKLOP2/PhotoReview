@@ -27,6 +27,7 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
     {
         var psi = new ProcessStartInfo("powershell.exe") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in BaseArgs.Concat(args)) psi.ArgumentList.Add(a);
+        PowerShellRunner.ForWindowsPowerShell(psi);
         using var p = Process.Start(psi)!;
         var stderr = p.StandardError.ReadToEndAsync();
         var stdout = p.StandardOutput.ReadToEnd();

@@ -210,6 +210,7 @@ public sealed class BenchmarkTrustTests : IDisposable
     {
         var psi = new ProcessStartInfo("powershell.exe") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var a in PowerShellPrefix.Concat(args)) psi.ArgumentList.Add(a);
+        PowerShellRunner.ForWindowsPowerShell(psi);
         using var process = Process.Start(psi)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
