@@ -645,5 +645,10 @@
   "benchmark.quickCheck": "Quick check",
   "benchmark.quickCheck.automationName": "Run a quick 10-iteration check with Fast Sequential",
   "benchmark.imageLimit.label": "Images to test (0 = all):",
-  "benchmark.imageLimit.automationName": "Number of images to include in the benchmark run, 0 for all supported images in the folder"
+  "benchmark.imageLimit.automationName": "Number of images to include in the benchmark run, 0 for all supported images in the folder",
+  "dialog.reloadTranslations.title": "Reload translations",
+  "dialog.reloadTranslations.ok": "Translations reloaded. No problems found in the translation files.",
+  "dialog.reloadTranslations.problems.one": "Translations reloaded, but {count} problem was found. A broken file is skipped entirely; a broken entry shows the English text instead. Fix it and press 'Reload translations' again.\n\n{details}",
+  "dialog.reloadTranslations.problems.other": "Translations reloaded, but {count} problems were found. A broken file is skipped entirely; a broken entry shows the English text instead. Fix them and press 'Reload translations' again.\n\n{details}",
+  "dialog.reloadTranslations.more": "… and {count} more (all problems are in the log)."
 }

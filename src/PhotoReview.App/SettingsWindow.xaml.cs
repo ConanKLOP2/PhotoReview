@@ -157,9 +157,11 @@ public partial class SettingsWindow : Window
     private void ReloadTranslations_Click(object sender, RoutedEventArgs e)
     {
         if (_localization is null) return;
-        _localization.Reload();
+        var problems = _localization.Reload();
         LoadLanguages(); // a translator may have added a language file
         AppLog.Info("Translations reloaded");
+        System.Windows.MessageBox.Show(this, TranslationProblems.Message(problems), Tr.DialogReloadTranslationsTitle, MessageBoxButton.OK,
+            TranslationProblems.HasProblems(problems) ? MessageBoxImage.Warning : MessageBoxImage.Information);
     }
 
     private void ExportTranslation_Click(object sender, RoutedEventArgs e)

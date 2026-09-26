@@ -638,5 +638,9 @@
   "benchmark.quickCheck": "Kiểm tra nhanh",
   "benchmark.quickCheck.automationName": "Chạy kiểm tra nhanh 10 lần lặp với Fast Sequential",
   "benchmark.imageLimit.label": "Số ảnh cần kiểm tra (0 = tất cả):",
-  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục"
+  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục",
+  "dialog.reloadTranslations.title": "Tải lại bản dịch",
+  "dialog.reloadTranslations.ok": "Đã tải lại bản dịch. Không có lỗi trong các tệp dịch.",
+  "dialog.reloadTranslations.problems.other": "Đã tải lại bản dịch nhưng có {count} lỗi. Tệp hỏng bị bỏ qua toàn bộ; mục hỏng sẽ hiện chữ tiếng Anh. Hãy sửa rồi nhấn 'Tải lại bản dịch' lần nữa.\n\n{details}",
+  "dialog.reloadTranslations.more": "… và {count} lỗi khác (xem đủ trong log)."
 }

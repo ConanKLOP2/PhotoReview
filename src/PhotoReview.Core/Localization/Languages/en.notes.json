@@ -569,5 +569,10 @@
   "benchmark.quickCheck": "Button.Content next to benchmark.run; always runs fast-sequential with 10 iterations, ignoring the profile list selection.",
   "benchmark.quickCheck.automationName": "AutomationProperties.Name of the Quick check button (screen readers).",
   "benchmark.imageLimit.label": "Label next to the image-limit TextBox.",
-  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers)."
+  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers).",
+  "dialog.reloadTranslations.title": "MessageBox caption after Settings > 'Reload translations'.",
+  "dialog.reloadTranslations.ok": "MessageBox body when every translation file loaded without a problem.",
+  "dialog.reloadTranslations.problems.one": "MessageBox body when the files have problems. {details} is a list, one problem per line, in English (file path or language code, key, reason); keep the blank line before it.",
+  "dialog.reloadTranslations.problems.other": "Same as .one, for several problems.",
+  "dialog.reloadTranslations.more": "Last line of {details} when more problems exist than are listed; {count} is how many are not shown."
 }
