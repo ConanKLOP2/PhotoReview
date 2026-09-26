@@ -636,5 +636,8 @@
   "action.default.backup": "Backup",
   "dialog.importActions.failed.message": "Could not read the action profile file: {error}",
   "status.moveUnverified": "Warning: {fileName} was moved, but the result could not be verified (size differs). Review it in Recovery.",
-  "compare.hash.unknown": " | hash unknown"
+  "compare.hash.unknown": " | hash unknown",
+  "status.lateMoveUndoable": "{fileName} was moved to {folder} after you left its folder. Press Ctrl+Z to undo.",
+  "status.lateRecycleUndoable": "{fileName} was moved to the Recycle Bin after you left its folder. Press Ctrl+Z to undo.",
+  "status.lateDeletedPermanently": "{fileName} was deleted permanently after you left its folder (it cannot be undone)."
 }

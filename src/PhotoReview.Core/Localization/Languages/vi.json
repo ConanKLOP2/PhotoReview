@@ -629,5 +629,8 @@
   "action.default.backup": "Sao lưu",
   "dialog.importActions.failed.message": "Không đọc được tệp thiết lập hành động: {error}",
   "status.moveUnverified": "Cảnh báo: đã di chuyển {fileName} nhưng không xác minh được kết quả (kích thước khác). Hãy kiểm tra trong Phục hồi.",
-  "compare.hash.unknown": " | hash không xác định"
+  "compare.hash.unknown": " | hash không xác định",
+  "status.lateMoveUndoable": "Đã di chuyển {fileName} tới {folder} sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
+  "status.lateRecycleUndoable": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
+  "status.lateDeletedPermanently": "Đã xóa vĩnh viễn {fileName} sau khi bạn rời thư mục chứa tệp (không thể hoàn tác)."
 }
