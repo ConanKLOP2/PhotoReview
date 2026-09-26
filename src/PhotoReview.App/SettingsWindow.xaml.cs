@@ -473,7 +473,7 @@ public partial class SettingsWindow : Window
     {
         AppLog.Info("Settings save requested");
         var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
-        if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
+        if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Select(ShortcutKeyCanonical.Canonicalize).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
@@ -521,12 +521,12 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ClickZoomPercent = clickZoomPercent;
-        Settings.Shortcuts.Next = NextText.Text.Trim(); Settings.Shortcuts.Previous = PreviousText.Text.Trim();
-        Settings.Shortcuts.SendToRecycleBin = RecycleText.Text.Trim();
-        Settings.Shortcuts.Compare = CompareText.Text.Trim(); Settings.Shortcuts.NextFolder = NextFolderText.Text.Trim(); Settings.Shortcuts.PreviousFolder = PreviousFolderText.Text.Trim();
-        Settings.Shortcuts.FirstImage = FirstImageText.Text.Trim(); Settings.Shortcuts.ZoomIn = ZoomInText.Text.Trim(); Settings.Shortcuts.ZoomOut = ZoomOutText.Text.Trim(); Settings.Shortcuts.ToggleFit = ToggleFitText.Text.Trim(); Settings.Shortcuts.Skip = SkipText.Text.Trim(); Settings.Shortcuts.Undo = UndoText.Text.Trim(); Settings.Shortcuts.Fullscreen = FullscreenText.Text.Trim();
-        Settings.Shortcuts.LastImage = LastImageText.Text.Trim(); Settings.Shortcuts.ZoomActualSize = ZoomActualSizeText.Text.Trim(); Settings.Shortcuts.ToggleInfoOverlay = ToggleInfoOverlayText.Text.Trim();
-        Settings.Shortcuts.MoveToFolder = MoveToFolderText.Text.Trim(); Settings.Shortcuts.CopyToFolder = CopyToFolderText.Text.Trim();
+        Settings.Shortcuts.Next = ShortcutKeyCanonical.Canonicalize(NextText.Text); Settings.Shortcuts.Previous = ShortcutKeyCanonical.Canonicalize(PreviousText.Text);
+        Settings.Shortcuts.SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(RecycleText.Text);
+        Settings.Shortcuts.Compare = ShortcutKeyCanonical.Canonicalize(CompareText.Text); Settings.Shortcuts.NextFolder = ShortcutKeyCanonical.Canonicalize(NextFolderText.Text); Settings.Shortcuts.PreviousFolder = ShortcutKeyCanonical.Canonicalize(PreviousFolderText.Text);
+        Settings.Shortcuts.FirstImage = ShortcutKeyCanonical.Canonicalize(FirstImageText.Text); Settings.Shortcuts.ZoomIn = ShortcutKeyCanonical.Canonicalize(ZoomInText.Text); Settings.Shortcuts.ZoomOut = ShortcutKeyCanonical.Canonicalize(ZoomOutText.Text); Settings.Shortcuts.ToggleFit = ShortcutKeyCanonical.Canonicalize(ToggleFitText.Text); Settings.Shortcuts.Skip = ShortcutKeyCanonical.Canonicalize(SkipText.Text); Settings.Shortcuts.Undo = ShortcutKeyCanonical.Canonicalize(UndoText.Text); Settings.Shortcuts.Fullscreen = ShortcutKeyCanonical.Canonicalize(FullscreenText.Text);
+        Settings.Shortcuts.LastImage = ShortcutKeyCanonical.Canonicalize(LastImageText.Text); Settings.Shortcuts.ZoomActualSize = ShortcutKeyCanonical.Canonicalize(ZoomActualSizeText.Text); Settings.Shortcuts.ToggleInfoOverlay = ShortcutKeyCanonical.Canonicalize(ToggleInfoOverlayText.Text);
+        Settings.Shortcuts.MoveToFolder = ShortcutKeyCanonical.Canonicalize(MoveToFolderText.Text); Settings.Shortcuts.CopyToFolder = ShortcutKeyCanonical.Canonicalize(CopyToFolderText.Text);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
@@ -534,7 +534,7 @@ public partial class SettingsWindow : Window
                 !ShortcutKeyName.TryParse(action.Shortcut, out _) ||
                 !Enum.IsDefined(action.Operation)))
                 throw new JsonException("An action has no name, an invalid shortcut or an invalid operation."); // never shown (caught below)
-            if (Settings.Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+            if (Settings.Actions.GroupBy(action => ShortcutKeyCanonical.Canonicalize(action.Shortcut), StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
                 throw new JsonException("Two actions use the same shortcut."); // never shown (caught below)
         }
         catch { ShowInvalid(Tr.DialogSettingsInvalidActionsJson); return; }
@@ -578,7 +578,7 @@ public partial class SettingsWindow : Window
         if (key == Key.ImeProcessed) key = e.ImeProcessedKey;
         // Tab/Escape/modifiers and anything else that can never be a shortcut must not be swallowed (focus trap, Esc cancel).
         if (ShortcutKeyName.IsReserved(key)) return;
-        textBox.Text = key.ToString();
+        textBox.Text = ShortcutKeyCanonical.Canonicalize(key.ToString());
         textBox.SelectAll();
         e.Handled = true;
     }

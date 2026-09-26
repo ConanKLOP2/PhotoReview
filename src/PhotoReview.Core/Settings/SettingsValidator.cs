@@ -27,13 +27,13 @@ public sealed class SettingsValidator
             if (string.IsNullOrWhiteSpace(value) && ShortcutMappings.IsOptional(property.Name)) continue;
             if (string.IsNullOrWhiteSpace(value) || !_keyValidator.IsValidKeyName(value))
                 return Tr.CoreSettingsShortcutInvalid(property.Name);
-            bindings.Add((property.Name, value));
+            bindings.Add((property.Name, ShortcutKeyCanonical.Canonicalize(value)));
         }
         foreach (var action in settings.Actions ?? [])
         {
             if (action is null || string.IsNullOrWhiteSpace(action.Name) || string.IsNullOrWhiteSpace(action.Shortcut) || !_keyValidator.IsValidKeyName(action.Shortcut.Trim()))
                 return Tr.CoreSettingsActionInvalid;
-            bindings.Add((Tr.CoreSettingsActionBindingName(action.Name), action.Shortcut.Trim()));
+            bindings.Add((Tr.CoreSettingsActionBindingName(action.Name), ShortcutKeyCanonical.Canonicalize(action.Shortcut)));
         }
         var duplicate = bindings.GroupBy(item => item.Value, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1);
         return duplicate is null ? null : Tr.CoreSettingsShortcutDuplicate(duplicate.Key, string.Join(", ", duplicate.Select(item => item.Name)));

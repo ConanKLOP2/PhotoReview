@@ -140,6 +140,7 @@ public sealed class SettingsStore
             _fileSystem.CreateDirectory(dir);
         }
 
+        ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: always saved canonical
         settings.ConfigVersion = AppSettings.CurrentConfigVersion;
         var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
         _fileSystem.WriteAllTextAtomic(filePath, json, durable: true);

@@ -41,7 +41,7 @@ public partial class ActionProfilesWindow : Window
     private void SaveCurrent()
     {
         if (_loaded is null || !Actions.Contains(_loaded)) return;
-        _loaded.Name = NameText.Text.Trim(); _loaded.Shortcut = ShortcutText.Text.Trim(); _loaded.Destination = DestinationText.Text.Trim(); _loaded.Confirm = ConfirmCheck.IsChecked == true;
+        _loaded.Name = NameText.Text.Trim(); _loaded.Shortcut = PhotoReview.Core.Settings.ShortcutKeyCanonical.Canonicalize(ShortcutText.Text); _loaded.Destination = DestinationText.Text.Trim(); _loaded.Confirm = ConfirmCheck.IsChecked == true;
         _loaded.Operation = OperationCombo.SelectedIndex switch
         {
             1 => FileOperationType.Copy,
