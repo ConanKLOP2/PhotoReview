@@ -23,10 +23,14 @@ public sealed partial class FolderLoadCoordinatorTests
     private sealed class FakeFileSystem : IFileSystem
     {
         private static readonly string[] LineSeparators = ["\r\n", "\n"];
+        /// <summary>Fixed LastWriteUtc handed out by the (fake) directory listing, mirroring the fact that
+        /// PhysicalFileSystem's real listing gets the stat from the directory entry itself.</summary>
+        private static readonly DateTime FixedListingDate = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         public Dictionary<string, byte[]> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> Directories { get; } = new(StringComparer.OrdinalIgnoreCase);
-        public int StatCount { get; private set; }
+        private int _statCount;
+        public int StatCount => Volatile.Read(ref _statCount);
         /// <summary>Times a session file (under <see cref="FakeAppPaths.SessionsDir"/>) was read.</summary>
         public int SessionReadCount { get; private set; }
         /// <summary>Runs on the scan's background thread at the start of a directory listing (used to block a scan).</summary>
@@ -37,6 +41,19 @@ public sealed partial class FolderLoadCoordinatorTests
         public Action<string>? OnProbe { get; set; }
         private int _probeCount;
         public int ProbeCount => Volatile.Read(ref _probeCount);
+        private int _fileExistsCount;
+        /// <summary>Times <see cref="FileExists"/> was called (session-file existence check, per-file readability probe fallback, etc.).</summary>
+        public int FileExistsCount => Volatile.Read(ref _fileExistsCount);
+        private int _openReadCount;
+        /// <summary>Times <see cref="OpenReadShared"/> was called (one real per-file open).</summary>
+        public int OpenReadCount => Volatile.Read(ref _openReadCount);
+
+        /// <summary>
+        /// Sum of every per-file file-system call this fake tracks (stat + exists + open + readability
+        /// probe). Used by SlowStorage tests to assert this stays flat as the folder grows, instead of
+        /// scaling with file count the way the pre-AR16 scan did.
+        /// </summary>
+        public int PerFileCallCount => StatCount + FileExistsCount + OpenReadCount + ProbeCount;
 
         public bool TryProbeReadable(string path, out string? failure)
         {
@@ -46,10 +63,14 @@ public sealed partial class FolderLoadCoordinatorTests
         }
 
         public bool DirectoryExists(string path) => Directories.Contains(Path.GetFullPath(path));
-        public bool FileExists(string path) => Files.ContainsKey(Path.GetFullPath(path));
+        public bool FileExists(string path)
+        {
+            Interlocked.Increment(ref _fileExistsCount);
+            return Files.ContainsKey(Path.GetFullPath(path));
+        }
         public FileStat? GetFileStat(string path)
         {
-            StatCount++;
+            Interlocked.Increment(ref _statCount);
             return Files.TryGetValue(Path.GetFullPath(path), out var b) ? new FileStat(b.Length, DateTime.UtcNow) : null;
         }
 
@@ -63,8 +84,11 @@ public sealed partial class FolderLoadCoordinatorTests
             Files.Remove(Path.GetFullPath(source));
         }
 
-        public Stream OpenReadShared(string path, int bufferSize = 65536) =>
-            new MemoryStream(Files[Path.GetFullPath(path)], writable: false);
+        public Stream OpenReadShared(string path, int bufferSize = 65536)
+        {
+            Interlocked.Increment(ref _openReadCount);
+            return new MemoryStream(Files[Path.GetFullPath(path)], writable: false);
+        }
         public Stream OpenAppendDurable(string path) =>
             throw new NotImplementedException();
         public void WriteAllTextAtomic(string path, string text, bool durable = true) =>
@@ -83,6 +107,27 @@ public sealed partial class FolderLoadCoordinatorTests
             var fullDir = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Files.Keys.Where(k => k.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase) &&
                                          !k.Substring(fullDir.Length).Contains(Path.DirectorySeparatorChar));
+        }
+
+        /// <summary>
+        /// AR16 fidelity: mirrors PhysicalFileSystem.EnumerateFilesWithStat, which gets Length/LastWriteUtc
+        /// straight from the single directory listing (DirectoryInfo.EnumerateFiles), never a per-file
+        /// GetFileStat/FileExists/File.Open call. The interface's default implementation (used before this
+        /// override existed) composed EnumerateFiles + GetFileStat per file, which made every fake-backed
+        /// scan pay a per-file stat call that the real folder-open path (post AR16, commit 67c4502) does
+        /// not -- so tests built on the default were guarding a fake artefact, not the real behaviour.
+        /// </summary>
+        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
+            string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
+        {
+            OnEnumerateFiles?.Invoke();
+            var fullDir = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return Files
+                .Where(kvp => kvp.Key.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase)
+                    && !kvp.Key.Substring(fullDir.Length).Contains(Path.DirectorySeparatorChar)
+                    && include(kvp.Key))
+                .Select(kvp => (kvp.Key, (FileStat?)new FileStat(kvp.Value.Length, FixedListingDate)))
+                .ToList();
         }
 
         public IEnumerable<string> EnumerateDirectories(string directory) => Enumerable.Empty<string>();
@@ -148,9 +193,14 @@ public sealed partial class FolderLoadCoordinatorTests
             CatalogReadyCount++;
             SessionsReceived.Add(session);
         }
+        /// <summary>Invoked synchronously inside <see cref="PresentAsync"/> before <see cref="FirstPresented"/>
+        /// completes, so a test can snapshot fake file-system counters at the exact moment of the first
+        /// present (only fires once, on the first call, matching FirstPresented's own TrySetResult semantics).</summary>
+        public Action? OnFirstPresent { get; set; }
         public Task PresentAsync(int index, long presentationGeneration)
         {
             Presented.Add((index, presentationGeneration));
+            if (!FirstPresented.Task.IsCompleted) OnFirstPresent?.Invoke();
             FirstPresented.TrySetResult();
             return Task.CompletedTask;
         }
@@ -215,7 +265,12 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.Equal(2, _catalog.Count);
         Assert.Equal(1, _sink.ResetCachesCount);
         Assert.Equal(1, _sink.CatalogReadyCount);
-        Assert.Equal(2, _fs.StatCount);
+        // FakeFileSystem.EnumerateFilesWithStat now mirrors PhysicalFileSystem (Length/LastWriteUtc come
+        // from the one directory listing, see PerFileCallCount's doc comment): the scan makes no separate
+        // GetFileStat call per file. The old "Equal(2, StatCount)" only held because the fake fell back to
+        // the interface's default EnumerateFilesWithStat (EnumerateFiles + GetFileStat per file), which is
+        // not what the real, post-AR16 folder-open path does -- it was guarding a fake artefact.
+        Assert.Equal(0, _fs.StatCount);
         Assert.Single(_sink.Presented);
         Assert.Equal(0, _sink.Presented[0].Index);
         Assert.Empty(_sink.Failures);
@@ -427,6 +482,24 @@ public sealed partial class FolderLoadCoordinatorTests
         return (a, b, c);
     }
 
+    /// <summary>
+    /// Creates <paramref name="count"/> supported-extension image files directly on <paramref name="fs"/>
+    /// (a specific fake instance, not necessarily <c>_fs</c> -- SlowStorage tests build independent
+    /// fake sets per folder size so counters from one load never leak into another's snapshot).
+    /// </summary>
+    private static string[] CreateImages(FakeFileSystem fs, string folder, int count)
+    {
+        fs.CreateDirectory(folder);
+        var paths = new string[count];
+        for (var i = 0; i < count; i++)
+        {
+            var path = Path.Combine(folder, $"img{i.ToString("D5", System.Globalization.CultureInfo.InvariantCulture)}.jpg");
+            fs.WriteAllTextAtomic(path, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            paths[i] = path;
+        }
+        return paths;
+    }
+
     [Fact]
     public async Task LoadAsync_DirectFileOpen_PresentsRequestedFileBeforeSnapshot_ThenAppliesOrderKeepingIt()
     {
@@ -589,7 +662,9 @@ public sealed partial class FolderLoadCoordinatorTests
 
         // perf(startup): the query (the slowest part of a load) runs in parallel with the scan.
         Assert.Equal(0, statCountAtQuery);
-        Assert.Equal(3, _fs.StatCount);
+        // See the comment on LoadAsync_NormalFolder_PopulatesCatalogAndPresentsFirstImage: the scan gets
+        // stat data from the single directory listing now, so this never grows away from 0.
+        Assert.Equal(0, _fs.StatCount);
     }
 
     [Fact]
