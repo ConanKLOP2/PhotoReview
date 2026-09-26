@@ -176,9 +176,14 @@ public sealed class FileActionController
             var request = new FileActionRequest(source, operation, destination, allowPermanent);
             var result = await _fileActionService.ExecuteAsync(request);
 
-            // Stale Folder Guard: Nếu người dùng đã đổi thư mục trong khi I/O đang chạy, bỏ qua
+            // Stale Folder Guard: the user switched folder while the I/O ran. The new folder's catalog, session path,
+            // current image and gate state must not be touched (the file belonged to the previous folder).
+            // APP-03 (Q-R25, option B): a SUCCESSFUL action is still real on disk, so it is registered for Undo and
+            // the user is told (see ReportLateCompletion). On failure nothing changed on disk: no undo, and the
+            // INV-5 restore into the (now different) catalog is skipped.
             if (!_clock.IsFolderCurrent(folderGen))
             {
+                if (result.Succeeded) ReportLateCompletion(result);
                 return false;
             }
 
@@ -198,6 +203,16 @@ public sealed class FileActionController
                 return true;
             }
 
+            // F3: a Move that failed verification (size differs) after the source was already removed. The journal says
+            // Failed (Recovery window), but the source path no longer exists, so it must NOT go back into the catalog.
+            // No Undo is registered: the destination no longer matches the fingerprint of the prepared source.
+            if (operation == FileOperationType.Move && result.SourceRemoved)
+            {
+                _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
+                _sink.SetStatusText(Tr.StatusMoveUnverified(Path.GetFileName(source)));
+                return false;
+            }
+
             // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
             if (isRemove && sourceIndex >= 0)
             {
@@ -210,6 +225,33 @@ public sealed class FileActionController
         finally
         {
             _sink.NotifyNavigationStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// APP-03: a Move/Recycle/Copy that finished after the folder changed. Move and Recycle are registered with the
+    /// undo service (Ctrl+Z restores the file to its original path and reopens that folder, R7-2); Copy has no undo
+    /// (UndoService ignores it) and stays silent as before. Only <see cref="IFileActionSink.ShowLateActionStatus"/>
+    /// is used for the message, which the sink drops when the new folder's status line holds its own text (a load
+    /// in progress, "no images", "open failed"): losing this hint is harmless, Ctrl+Z still works.
+    /// </summary>
+    private void ReportLateCompletion(FileActionResult result)
+    {
+        if (result.Rejected) return;
+        _undoService?.Register(result);
+
+        var fileName = Path.GetFileName(result.Source);
+        switch (result.Operation)
+        {
+            case FileOperationType.Move when !string.IsNullOrEmpty(result.DestinationPath):
+                _sink.ShowLateActionStatus(Tr.StatusLateMoveUndoable(fileName, Path.GetDirectoryName(result.DestinationPath) ?? string.Empty));
+                break;
+            case FileOperationType.Recycle when result.PermanentlyDeleted:
+                _sink.ShowLateActionStatus(Tr.StatusLateDeletedPermanently(fileName));
+                break;
+            case FileOperationType.Recycle:
+                _sink.ShowLateActionStatus(Tr.StatusLateRecycleUndoable(fileName));
+                break;
         }
     }
 
@@ -244,8 +286,12 @@ public sealed class FileActionController
 
             _sink.UpdateSessionPath(result.Source);
         }
-        else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source))
+        else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source)
+            && IsInFolder(result.Source, currentFolder))
         {
+            // Only for the current folder: a Recycle made in another folder must not write its path into THIS
+            // folder's session (the caller reopens the restored file's own folder instead).
+
             _sink.UpdateSessionPath(result.Source);
         }
 

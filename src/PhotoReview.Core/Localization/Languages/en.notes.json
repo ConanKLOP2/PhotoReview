@@ -558,5 +558,12 @@
   "export.help": "Header written into every exported .todo.json for translators. {{ and }} are literal braces; <code> stands for the language code.",
   "action.default.name": "Default Name of the built-in actions 2, 3 and 4 ({n} = the number). PERSISTED: fixed in settings.json when the settings are first created, so a later language switch will not rename it. The destination folder (Group-N) is deliberately language-neutral.",
   "action.default.backup": "Default Name of the built-in Copy-to-Backup action. PERSISTED like action.default.name. Its destination folder \"Backup\" is not translated.",
-  "dialog.importActions.failed.message": "MessageBox text when Import of action profiles cannot read the file; {error} = the system error message (access denied, ...). A malformed file uses dialog.importActions.invalid.message instead."
+  "dialog.importActions.failed.message": "MessageBox text when Import of action profiles cannot read the file; {error} = the system error message (access denied, ...). A malformed file uses dialog.importActions.invalid.message instead.",
+  "status.moveUnverified": "Status bar (warning) after a Move whose source was removed but whose destination size differs from the size recorded before the move (file changed while moving). The journal keeps it as Failed so it appears in the Recovery window; {fileName} = file name only.",
+  "compare.hash.unknown": "Compare status fragment (leading ' | ' separator, inserted into status.compare as {hashText}) shown when the hash of one or both files could not be computed (file changed or unreadable); the previews stay visible. Sibling of compare.hash.same / compare.hash.different.",
+  "status.lateMoveUndoable": "Status bar (APP-03) when a Move finished after the user had already opened another folder; the move is registered for Undo. {fileName} = file name, {folder} = full folder the file went to. Only shown when the new folder's status line is idle.",
+  "status.lateRecycleUndoable": "Status bar (APP-03) when a Recycle finished after the user had already opened another folder; registered for Undo. {fileName} = file name.",
+  "status.lateDeletedPermanently": "Status bar (APP-03) when a permanent delete (drive without a Recycle Bin, Q-R8) finished after the user had opened another folder. {fileName} = file name. Not undoable.",
+  "status.duplicateCheckRunning": "Status bar while the duplicate check hashes same-size files; Esc cancels it (MainWindow Window_KeyDown -> MainViewModel.CancelDuplicateCheck). Replaced by the result status.",
+  "status.duplicateCheckCanceled": "Status bar after the user pressed Esc during the duplicate check. Nothing was moved to the Recycle Bin."
 }

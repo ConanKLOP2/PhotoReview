@@ -222,8 +222,13 @@ public sealed partial class ImagePresenterTests : IDisposable
             await presenter.PresentAsync(0);
         }
 
-        Assert.Equal($"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc giải mã: {path}", presenter.StatusText);
+        // The file keeps changing, so either check may notice first: while decoding or while reading the dimensions.
+        // Both are the localized "source changed" sentence; the assertion is that the UI language is used, not which check won.
+        var duringDecode = $"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc giải mã: {path}";
+        var readingDimensions = $"Lỗi ảnh: racing.png — Tệp ảnh đã thay đổi trong lúc đọc kích thước: {path}";
+        Assert.True(presenter.StatusText == duringDecode || presenter.StatusText == readingDimensions, "unexpected status: " + presenter.StatusText);
         Assert.DoesNotContain("changed during decode", presenter.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("changed while", presenter.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]

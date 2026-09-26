@@ -80,10 +80,15 @@ public sealed class SourceSizeTracker
         var (sum, calls) = Sum(observed);
         lock (_gate)
         {
-            _cachedTotalBytes = sum;
-            _fsCallCount = calls;
-            _cachedVersion = -2;
-            if (ReferenceEquals(observed, _observed)) _observedDirty = false;
+            // A newer snapshot may have been observed (and even cached) while this one was statting: only the result for
+            // the still-current snapshot may be committed, otherwise a late older total would overwrite the newer one.
+            if (ReferenceEquals(observed, _observed))
+            {
+                _cachedTotalBytes = sum;
+                _fsCallCount = calls;
+                _cachedVersion = -2;
+                _observedDirty = false;
+            }
         }
         return sum;
     }

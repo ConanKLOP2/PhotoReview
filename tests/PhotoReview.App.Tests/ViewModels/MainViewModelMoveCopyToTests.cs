@@ -10,9 +10,11 @@ using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.FileActions;
 using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
+using PhotoReview.TestSupport;
 
 namespace PhotoReview.App.Tests.ViewModels;
 
@@ -21,6 +23,7 @@ namespace PhotoReview.App.Tests.ViewModels;
 /// FileActionService/UndoService/OperationJournal on temp folders (fake Recycle Bin; nothing outside the temp root is touched).
 /// </summary>
 [Trait("Category", "HotPath")]
+[Collection("GlobalState")]
 public sealed class MainViewModelMoveCopyToTests : IDisposable
 {
     private readonly TempRoot _root = new("movecopyto");
@@ -58,10 +61,10 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
 
     private AppSettings Settings => _settingsStore.Current;
 
-    private (MainViewModel Vm, FileActionService FileActions, UndoService Undo) CreateViewModel()
+    private (MainViewModel Vm, FileActionService FileActions, UndoService Undo) CreateViewModel(Func<string, string, Task>? moveOverride = null)
     {
         var recycleBin = new NeverRecycleBin();
-        var fileActions = new FileActionService(_journal, _fileSystem, new SystemClock(), recycleBin);
+        var fileActions = new FileActionService(_journal, _fileSystem, new SystemClock(), recycleBin, moveOverride);
         var undo = new UndoService(_journal, _fileSystem, recycleBin, fileActions);
         MainViewModel? vm = null;
         var preload = new NoPreload();
@@ -77,12 +80,12 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
     }
 
     /// <summary>photos/1.jpg, photos/2.jpg and an empty sibling folder "dest"; the view model has photos open on 1.jpg.</summary>
-    private async Task<(MainViewModel Vm, FileActionService FileActions, UndoService Undo, string Img1, string Img2, string Dest)> OpenAlbumAsync()
+    private async Task<(MainViewModel Vm, FileActionService FileActions, UndoService Undo, string Img1, string Img2, string Dest)> OpenAlbumAsync(Func<string, string, Task>? moveOverride = null)
     {
         var img1 = _root.File(Path.Combine("photos", "1.jpg"), TestImages.OpaquePng);
         var img2 = _root.File(Path.Combine("photos", "2.jpg"), TestImages.OpaquePng);
         var dest = _root.Dir("dest");
-        var (vm, fileActions, undo) = CreateViewModel();
+        var (vm, fileActions, undo) = CreateViewModel(moveOverride);
         await vm.OpenFolderAsync(_root.Combine("photos"));
         Assert.Equal(img1, vm.Catalog.Current?.Path);
         return (vm, fileActions, undo, img1, img2, dest);
@@ -301,6 +304,58 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
         Assert.Equal(0, undo.MoveHistoryCount);
         Assert.Equal(StatusFormatter.ActionFailed(Tr.ActionMoveToFolderName, Tr.CoreFileActionDestinationExists(existing)), vm.StatusText);
         Assert.Null(Settings.LastMoveToFolder); // only a successful operation is remembered
+    }
+
+    // F3: the file changed size while moving -> source gone, destination present, journal Failed. The catalog must not
+    // get the missing source back, the status is the "moved but unverified" warning, and no Undo is registered.
+    [Theory]
+    [InlineData("vi")]
+    [InlineData("en")]
+    public async Task MoveTo_SizeChangedDuringMove_SourceStaysOutOfCatalog_WarnsAndJournalsFailed(string language)
+    {
+        using var _ = TestLocalization.Use(language == "vi" ? TestLocalization.Vietnamese : TestLocalization.English);
+        var (vm, _, undo, img1, img2, dest) = await OpenAlbumAsync((source, destination) =>
+        {
+            File.Move(source, destination);
+            File.AppendAllText(destination, "grew while moving");
+            return Task.CompletedTask;
+        });
+        _picker.Result = dest;
+
+        await vm.MoveToFolderAsync();
+
+        var moved = Path.Combine(dest, "1.jpg");
+        Assert.False(File.Exists(img1));
+        Assert.True(File.Exists(moved));
+        Assert.Equal(1, vm.TotalFiles);
+        Assert.DoesNotContain(img1, vm.Catalog.Paths);
+        Assert.Equal(img2, vm.Catalog.Current?.Path);
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.VerifySizeChanged, failed.ErrorCode);
+        Assert.Equal(img1, failed.Source);
+        Assert.Equal(0, undo.MoveHistoryCount);
+        Assert.Null(Settings.LastMoveToFolder); // not a success: the folder is not remembered
+        Assert.Equal(Tr.StatusMoveUnverified("1.jpg"), vm.StatusText);
+        Assert.Contains(language == "vi" ? "không xác minh được" : "could not be verified", vm.StatusText, StringComparison.Ordinal);
+        Assert.False(vm.IsFileActionInProgress);
+    }
+
+    [Fact]
+    public async Task MoveTo_SourceStillExistsAfterFailedMove_KeepsSourceInCatalog()
+    {
+        var (vm, _, _, img1, _, dest) = await OpenAlbumAsync((source, destination) =>
+        {
+            File.Copy(source, destination); // cross-volume style: copied, but the source could not be deleted
+            return Task.CompletedTask;
+        });
+        _picker.Result = dest;
+
+        await vm.MoveToFolderAsync();
+
+        Assert.True(File.Exists(img1));
+        Assert.Equal(2, vm.TotalFiles);
+        Assert.Equal(img1, vm.Catalog.Paths[0]);
+        Assert.Equal(StatusFormatter.ActionFailed(Tr.ActionMoveToFolderName, Tr.CoreFileActionMoveSourceNotRemoved), vm.StatusText);
     }
 
     // --- test doubles ---

@@ -10,5 +10,19 @@ internal static class LocalizationModuleInit
     [ModuleInitializer]
     [SuppressMessage("Usage", "CA2255:The 'ModuleInitializer' attribute should not be used in libraries",
         Justification = "Test assembly: pins the UI language before any test runs; xunit v2 has no assembly fixture.")]
-    internal static void Init() => TestLocalization.UseVietnamese();
+    internal static void Init()
+    {
+        TestLocalization.UseVietnamese();
+        PrewarmThreadPool();
+    }
+
+    // Tests that block a pool worker on a ManualResetEventSlim gate (Task.Run + Wait) starve the default ThreadPool when
+    // every test project runs in parallel; a newly queued Task.Run then waits for hill-climbing thread injection (~0.5-1 s
+    // per thread) and trips a wall-clock guard. Raising the minimum makes workers available immediately (same fix as
+    // PhotoReview.App.Tests; failures were 10-second timeouts that pass alone).
+    private static void PrewarmThreadPool()
+    {
+        var minThreads = Math.Max(Environment.ProcessorCount * 4, 32);
+        ThreadPool.SetMinThreads(minThreads, minThreads);
+    }
 }

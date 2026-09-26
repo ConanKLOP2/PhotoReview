@@ -509,15 +509,15 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         Assert.Equal(1, vm.TotalFiles);
     }
 
-    [Fact]
-    public async Task RunActionAsync_WhenFolderSwitchedDuringIo_IgnoresCompletion()
+    [Fact(DisplayName = "APP-03 (Q-R25 option B, replaces 'ignores completion'): a Move finishing after a folder switch IS registered for Undo, and the new folder is untouched")]
+    public async Task RunActionAsync_WhenFolderSwitchedDuringIo_RegistersUndo_AndLeavesNewFolderUntouched()
     {
         var folder1 = Path.Combine(_tempDir, "album_stale1");
         var folder2 = Path.Combine(_tempDir, "album_stale2");
         Directory.CreateDirectory(folder1);
         Directory.CreateDirectory(folder2);
         CreateImageFile(folder1, "1.jpg");
-        CreateImageFile(folder2, "x.jpg");
+        var x = CreateImageFile(folder2, "x.jpg");
 
         var moveGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var interceptingFs = new BlockingMoveFileSystem(_fileSystem, moveGate.Task);
@@ -533,8 +533,11 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         moveGate.SetResult();
         await actionTask;
 
-        // Undo không được ghi nhận cho folder cũ
-        Assert.Equal(0, undo.MoveHistoryCount);
+        // The move is real, so it is undoable (it was NOT before APP-03); folder 2 is not touched.
+        Assert.Equal(1, undo.MoveHistoryCount);
+        Assert.Equal([x], vm.Catalog.Paths);
+        Assert.Equal(folder2, vm.Session?.Folder);
+        Assert.Equal(x, vm.Session?.CurrentPath);
     }
 
     [Fact]
@@ -854,9 +857,13 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
 
         public bool CanRecycle(string path) => !HasNoRecycleBin;
 
+        /// <summary>APP-03: makes the recycle "slow" (I/O in flight) until the test releases it.</summary>
+        public Task? SendGate { get; set; }
+
         public void SendToRecycleBin(string path)
         {
             if (HasNoRecycleBin) throw new IOException("no recycle bin");
+            SendGate?.GetAwaiter().GetResult();
             RecycledPaths.Add(path);
             if (File.Exists(path)) File.Delete(path);
         }
@@ -897,7 +904,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         public void ShowBenchmark(string? folder = null) { }
     }
 
-    private class DelegatingFileSystem(IFileSystem inner) : IFileSystem
+    internal class DelegatingFileSystem(IFileSystem inner) : IFileSystem
     {
         public virtual bool FileExists(string path) => inner.FileExists(path);
         public virtual bool DirectoryExists(string path) => inner.DirectoryExists(path);
@@ -922,6 +929,15 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         {
             blockTask.GetAwaiter().GetResult();
             base.Move(source, destination);
+        }
+    }
+
+    private sealed class BlockingCopyFileSystem(IFileSystem inner, Task blockTask) : DelegatingFileSystem(inner)
+    {
+        public override void Copy(string source, string destination)
+        {
+            blockTask.GetAwaiter().GetResult();
+            base.Copy(source, destination);
         }
     }
 

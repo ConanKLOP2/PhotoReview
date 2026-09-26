@@ -77,7 +77,7 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
         await controller.RemoveDuplicatesAsync(removeNumbered: false);
 
         Assert.Equal(0, sourceBytes.Count);
-        Assert.Equal([Tr.StatusDuplicateCheckCanceledFolderChanged], sink.Statuses);
+        Assert.Equal(Tr.StatusDuplicateCheckCanceledFolderChanged, sink.Statuses[^1]); // a "checking... Esc cancels" status precedes it
     }
 
     /// <summary>Forwards to the real file system; the first size lookup (the scan's stat pass) simulates a folder switch.</summary>

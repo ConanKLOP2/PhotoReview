@@ -218,15 +218,17 @@ public sealed partial class CompareViewModel : ObservableObject
         var hashResult = StatusFormatter.CompareHashText(null);
         if (compareHashEnabled && getHashAsync != null)
         {
-            var leftHashTask = getHashAsync(pair.Left);
-            var rightHashTask = getHashAsync(pair.Right);
+            var leftHashTask = TryGetHashAsync(getHashAsync, pair.Left);
+            var rightHashTask = TryGetHashAsync(getHashAsync, pair.Right);
             var hashes = await Task.WhenAll(leftHashTask, rightHashTask);
 
             // Kiểm tra token sau await
             if (!isTokenCurrent(token)) return false;
 
-            var match = string.Equals(hashes[0], hashes[1], StringComparison.OrdinalIgnoreCase);
-            hashResult = StatusFormatter.CompareHashText(match);
+            // Hash lỗi (tệp đổi/không đọc được) không được hủy so sánh: hai ảnh đã tải xong vẫn hiển thị, hash "không xác định".
+            hashResult = hashes[0] is null || hashes[1] is null
+                ? StatusFormatter.CompareHashUnknown()
+                : StatusFormatter.CompareHashText(string.Equals(hashes[0], hashes[1], StringComparison.OrdinalIgnoreCase));
         }
         HashText = hashResult;
 
@@ -236,6 +238,20 @@ public sealed partial class CompareViewModel : ObservableObject
         StatusText = StatusFormatter.Compare(currentIndex, totalFiles, leftName, leftSize, rightName, rightSize, HashText);
 
         return true;
+    }
+
+    /// <summary>Hash of one file, or null when it cannot be computed (logged). Cancellation still propagates.</summary>
+    private static async Task<string?> TryGetHashAsync(Func<string, Task<string>> getHashAsync, string path)
+    {
+        try
+        {
+            return await getHashAsync(path);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLog.Error($"Compare hash failed path={path}", ex);
+            return null;
+        }
     }
 
     private static long? TryGetFileSize(string path)

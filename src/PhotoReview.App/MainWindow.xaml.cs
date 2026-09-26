@@ -577,6 +577,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Q-R25: Esc while a duplicate check is hashing cancels it (before fullscreen exit / window close); the key is consumed.
+        if (pressedKey == Key.Escape && _viewModel.CancelDuplicateCheck())
+        {
+            e.Handled = true;
+            return;
+        }
+
         // Space/Enter belong to a focused button or compare pane (keyboard activation); the window-level tunnel must not steal them.
         // A mouse click leaves focus on the toolbar button, so ReturnFocusAfterButtonClick hands it back to the window;
         // otherwise Space/Enter would keep re-activating that button instead of Skip / Move to folder 2.

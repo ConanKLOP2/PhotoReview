@@ -234,6 +234,9 @@ public sealed class FileActionService
             string? journalError = null;
             _ = tx?.Fail(ex, out journalError);
             var mutationCompleted = tx?.MutationCompleted ?? false;
+            // F3: only a Move that was journaled (Prepared) and then failed can have removed the source; ask the disk.
+            var sourceRemoved = !mutationCompleted && request.Operation == FileOperationType.Move && tx is { IsPrepared: true }
+                && IsSourceGone(request.Source);
 
             return new FileActionResult(
                 Succeeded: mutationCompleted,
@@ -245,11 +248,25 @@ public sealed class FileActionService
                 Error: mutationCompleted ? null : ex.Message,
                 JournalPersisted: journalError is null,
                 JournalError: journalError,
-                PermanentlyDeleted: permanent && mutationCompleted);
+                PermanentlyDeleted: permanent && mutationCompleted,
+                SourceRemoved: sourceRemoved);
         }
         finally
         {
             End();
+        }
+    }
+
+    /// <summary>True only when the file system positively reports the source missing; an inspection error counts as "not gone" (keeps the catalog entry).</summary>
+    private bool IsSourceGone(string source)
+    {
+        try
+        {
+            return !_fileSystem.FileExists(source);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
         }
     }
 

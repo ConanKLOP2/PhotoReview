@@ -68,6 +68,9 @@ public static class StatusFormatter
         false => Tr.CompareHashDifferent,
     };
 
+    /// <summary>Hash state fragment when a hash could not be computed (file changed or unreadable); the previews stay visible.</summary>
+    public static string CompareHashUnknown() => Tr.CompareHashUnknown;
+
     public static string ImageError(string fileName, string message) =>
         Tr.StatusImageError(fileName, message);
 
@@ -80,6 +83,10 @@ public static class StatusFormatter
     public static string DuplicateCheckFailed(string message) => Tr.StatusDuplicateCheckFailed(message);
 
     public static string DuplicateCheckCanceledFolderChanged() => Tr.StatusDuplicateCheckCanceledFolderChanged;
+
+    public static string DuplicateCheckRunning() => Tr.StatusDuplicateCheckRunning;
+
+    public static string DuplicateCheckCanceled() => Tr.StatusDuplicateCheckCanceled;
 
     public static string NoDuplicatesFound() => Tr.StatusNoDuplicatesFound;
 

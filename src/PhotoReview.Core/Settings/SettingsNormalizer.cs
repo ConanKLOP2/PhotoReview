@@ -108,6 +108,8 @@ public static class SettingsNormalizer
             shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
         }
 
+        ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
+
         // feat/mouse-zoom
         if (!Enum.IsDefined(settings.MouseWheelAction)) { settings.MouseWheelAction = MouseWheelAction.Zoom; fixedNames.Add(nameof(AppSettings.MouseWheelAction)); }
         var clickZoom = Math.Clamp(settings.ClickZoomPercent, AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent);
@@ -134,7 +136,7 @@ public static class SettingsNormalizer
         var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         void Take(string? key)
         {
-            if (!string.IsNullOrWhiteSpace(key)) taken.Add(key.Trim());
+            if (!string.IsNullOrWhiteSpace(key)) taken.Add(ShortcutKeyCanonical.Canonicalize(key));
         }
         // Same set the validator checks (MoveToFolder2 is a legacy alias owned by the actions).
         Take(shortcuts.Next); Take(shortcuts.Previous); Take(shortcuts.SendToRecycleBin); Take(shortcuts.Compare);
@@ -144,7 +146,7 @@ public static class SettingsNormalizer
 
         string Resolve(string name, string? value)
         {
-            var key = value?.Trim() ?? "";
+            var key = ShortcutKeyCanonical.Canonicalize(value);
             if (key.Length == 0) return "";
             if (!taken.Add(key))
             {
