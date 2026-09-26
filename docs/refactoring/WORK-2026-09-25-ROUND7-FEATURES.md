@@ -1,13 +1,13 @@
 # 2026-09-25 — Review round 7 fixes + viewer features
 
-Decision log for this batch lives here and in [OPEN-DECISIONS](OPEN-DECISIONS.md) (Q-R18, Q-R19). Branch `develop` carries these docs; code lands on master through one integration PR.
+Decision log for this batch lives here and in [OPEN-DECISIONS](OPEN-DECISIONS.md) (Q-R18, Q-R19). Docs and code both live on master (the `develop` branch that carried these docs was retired 2026-09-26, PR #104); code landed through one integration PR (#86).
 
 ## Plan
 
 1. Nine agent branches, each from master `ebf2bf3` (below), pushed but **no PR each**.
 2. Integrate: merge all nine into `integration/2026-09-25-features` (from master), resolve append conflicts (AppSettings, ShortcutMappings, ReviewCommandType, MainWindow, `en.json`/`vi.json`), wire `ShowInfoOverlay` (key `I`) to also hide the EXIF line.
 3. Redesign the Settings window on that branch (left navigation + pages: General, Display, Performance, Shortcuts, Files & safety, Diagnostics; every new option and every EXIF field toggle; ✕ to clear a shortcut; duplicate-key warning).
-4. Full gate, one PR to master; then merge `develop` docs.
+4. Full gate, one PR to master (done: #86; docs updated in the same PR — no separate docs branch).
 
 ## Branches
 

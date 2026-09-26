@@ -41,7 +41,7 @@ Lợi ích thực của việc đổi: VM ngắn hơn ~15 dòng; test VM có th�
 
 ## Verification / Acceptance
 
-Gate chung. (a): một comment + Q-AR10 ghi trên `develop`. (b): VM ctor không còn `new *Controller(`; test kiến trúc quét `MainViewModel.cs` cấm `new FileActionController(`.
+Gate chung. (a): một comment + Q-AR10 ghi trên `master` (PR docs, AGENTS.md "Decision log"). (b): VM ctor không còn `new *Controller(`; test kiến trúc quét `MainViewModel.cs` cấm `new FileActionController(`.
 
 ## Không thuộc phạm vi
 

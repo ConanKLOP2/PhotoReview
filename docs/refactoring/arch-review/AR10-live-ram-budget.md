@@ -25,7 +25,7 @@ UI đã ghi "Có hiệu lực sau khi khởi động lại PhotoReview" (`Langua
 | Ưu | Đơn giản, đã chấp nhận, UI đã ghi | Nhất quán với `LoadingMode`/`DecoderBackend` live; bỏ dòng "khởi động lại" |
 | Nhược | Người dùng phải khởi động lại (~2 s, #46) | Đảo quyết định đã chốt; thêm 1 API mutable ở LRU |
 
-**Khuyến nghị: (a).** Đổi % RAM rất hiếm, UI đã nói rõ, khởi động lại rẻ. Làm (b) chỉ khi người dùng muốn Settings hoàn toàn live. Nếu chọn (a): đóng AR10, ghi Q-AR6 = a trên `develop`, không sửa mã.
+**Khuyến nghị: (a).** Đổi % RAM rất hiếm, UI đã nói rõ, khởi động lại rẻ. Làm (b) chỉ khi người dùng muốn Settings hoàn toàn live. Nếu chọn (a): đóng AR10, ghi Q-AR6 = a trên `master` (PR docs, AGENTS.md "Decision log"), không sửa mã.
 
 ## Thay đổi nếu chọn (b) — mô hình đẩy
 
@@ -62,7 +62,7 @@ Không dùng `Func<long>` ở LRU: khi giảm dung lượng phải **chủ độ
 4. `src/PhotoReview.App/ViewModels/MainViewModel.cs` `ShowSettings` (`:554`): chụp `previousPercent`; sau `changed`, nếu khác → `_previewService.ApplyRamBudget(new, settings.ImageCacheCapacityBytes)`; `_preloadController?.Cancel()`; present lại index hiện tại. **Không** `ClearCache`.
 5. `SourceBytesCachePolicy`: **giữ cần khởi động lại** (flag bật/tắt đã cần restart theo `architecture.md`; `ResolveCapacity` vẫn trừ đúng phần đã dành vì nhận `sourceBytesCache?.CapacityBytes`).
 6. i18n: bỏ câu cuối "Có hiệu lực sau khi khởi động lại PhotoReview." / "Applies after restarting PhotoReview." ở `settings.ramCache.hint`; xoá comment `SettingsWindow.xaml:190`. Chạy `tools/i18n-check.ps1`.
-7. Docs: bảng "Settings có ảnh hưởng kiến trúc" trong `docs/architecture.md` thêm dòng `ImageCacheRamPercent` (live, đẩy qua `ApplyRamBudget`); ghi Q-AR6 = b trên `develop`.
+7. Docs: bảng "Settings có ảnh hưởng kiến trúc" trong `docs/architecture.md` thêm dòng `ImageCacheRamPercent` (live, đẩy qua `ApplyRamBudget`); ghi Q-AR6 = b trên `master` (PR docs, AGENTS.md "Decision log").
 
 ## Tests
 

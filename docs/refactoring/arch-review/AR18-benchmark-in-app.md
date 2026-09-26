@@ -26,4 +26,4 @@
 
 ## Verification / Acceptance
 
-`tools/docs-budget.ps1 -Check`; Q-AR9 ghi trên `develop`.
+`tools/docs-budget.ps1 -Check`; Q-AR9 ghi trên `master` (PR docs, AGENTS.md "Decision log").
