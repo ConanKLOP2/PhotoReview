@@ -6,6 +6,7 @@ using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
+using PhotoReview.App.Services;
 
 namespace PhotoReview.App;
 
@@ -50,19 +51,63 @@ public partial class ActionProfilesWindow : Window
         ActionList.Items.Refresh();
     }
 
-    private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = Tr.ActionProfilesNewActionName, Shortcut = "F6", Operation = FileOperationType.Move, Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
-    private void Remove_Click(object sender, RoutedEventArgs e) { if (ActionList.SelectedItem is ReviewAction action) { Actions.Remove(action); ActionList.Items.Refresh(); if (Actions.Count > 0) ActionList.SelectedIndex = 0; } }
+    private void Add_Click(object sender, RoutedEventArgs e) { SaveCurrent(); var action = new ReviewAction { Name = Tr.ActionProfilesNewActionName, Shortcut = NextFreeShortcut(Actions), Operation = FileOperationType.Move, Destination = "Output" }; Actions.Add(action); ActionList.Items.Refresh(); ActionList.SelectedItem = action; }
+    private void Remove_Click(object sender, RoutedEventArgs e)
+    {
+        if (ActionList.SelectedItem is not ReviewAction action) return;
+        var index = ActionList.SelectedIndex;
+        Actions.Remove(action);
+        ActionList.Items.Refresh();
+        if (Actions.Count > 0)
+        {
+            ActionList.SelectedIndex = Math.Min(index, Actions.Count - 1);
+            return;
+        }
+
+        // Nothing left to edit: drop the removed action's values from the detail fields.
+        _loaded = null;
+        NameText.Text = ShortcutText.Text = DestinationText.Text = "";
+        ConfirmCheck.IsChecked = false;
+    }
+
     private void Import_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog { Filter = Tr.DialogFileFilterJsonOrAll };
         if (dialog.ShowDialog(this) != true) return;
+        var imported = TryImport(dialog.FileName, out var error);
+        if (imported is null)
+        {
+            System.Windows.MessageBox.Show(this, error, Tr.DialogImportActionsFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        Actions.Clear(); Actions.AddRange(imported); ActionList.Items.Refresh(); ActionList.SelectedIndex = 0;
+    }
+
+    /// <summary>
+    /// Reads an exported action list. A malformed/empty file gives the "invalid file" message; an I/O or access error is
+    /// logged and gives its own reason (both used to collapse into one bare catch that hid the cause).
+    /// </summary>
+    internal static List<ReviewAction>? TryImport(string path, out string error)
+    {
         try
         {
-            var imported = JsonSerializer.Deserialize<List<ReviewAction>>(System.IO.File.ReadAllText(dialog.FileName));
-            if (imported is null || imported.Count == 0) throw new JsonException();
-            Actions.Clear(); Actions.AddRange(imported.Select(Clone)); ActionList.Items.Refresh(); ActionList.SelectedIndex = 0;
+            var imported = JsonSerializer.Deserialize<List<ReviewAction>>(System.IO.File.ReadAllText(path));
+            if (imported is null || imported.Count == 0 || imported.Any(action => action is null)) throw new JsonException();
+            error = "";
+            return imported.Select(Clone).ToList();
         }
-        catch { System.Windows.MessageBox.Show(this, Tr.DialogImportActionsInvalidMessage, Tr.DialogImportActionsFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidCastException)
+        {
+            error = Tr.DialogImportActionsInvalidMessage;
+            return null;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+        {
+            AppLog.Error($"Action import failed: {path}", ex);
+            error = Tr.DialogImportActionsFailedMessage(ex.Message);
+            return null;
+        }
     }
 
     private void Export_Click(object sender, RoutedEventArgs e)
@@ -85,7 +130,7 @@ public partial class ActionProfilesWindow : Window
             System.IO.File.WriteAllText(path, JsonSerializer.Serialize(actions, JsonOptions));
             return null;
         }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
         {
             AppLog.Error($"Action export failed: {path}", ex);
             return Tr.DialogExportActionsFailedMessage(ex.Message);
@@ -94,11 +139,40 @@ public partial class ActionProfilesWindow : Window
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         SaveCurrent();
-        if (Actions.Count == 0 || Actions.Any(action => string.IsNullOrWhiteSpace(action.Name) || !ShortcutKeyName.TryParse(action.Shortcut, out _) || !Enum.IsDefined(action.Operation)) || Actions.GroupBy(action => action.Shortcut, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+        if (HasInvalidActions(Actions))
         { System.Windows.MessageBox.Show(this, Tr.DialogActionProfilesInvalidMessage, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         if (FindDestinationProblem(Actions) is { } problem)
         { System.Windows.MessageBox.Show(this, problem, Tr.DialogActionProfilesInvalidTitle, MessageBoxButton.OK, MessageBoxImage.Warning); return; }
         DialogResult = true;
+    }
+
+    /// <summary>
+    /// True when the list is empty, a name is blank, an operation is undefined, a shortcut cannot be parsed, or two
+    /// shortcuts resolve to the same <see cref="Key"/> (aliases such as Return/Enter parse to one key and would leave the
+    /// second action unreachable, so comparing the strings is not enough).
+    /// </summary>
+    internal static bool HasInvalidActions(IReadOnlyList<ReviewAction> actions)
+    {
+        if (actions.Count == 0) return true;
+        var seen = new HashSet<Key>();
+        foreach (var action in actions)
+        {
+            if (string.IsNullOrWhiteSpace(action.Name) || !Enum.IsDefined(action.Operation)) return true;
+            if (!ShortcutKeyName.TryParse(action.Shortcut, out var key) || !seen.Add(key)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>The first F6..F12 key no action uses yet (by parsed key); "F6" when all are taken so Apply reports it.</summary>
+    internal static string NextFreeShortcut(IEnumerable<ReviewAction> actions)
+    {
+        var used = new HashSet<Key>();
+        foreach (var action in actions)
+            if (ShortcutKeyName.TryParse(action.Shortcut, out var key)) used.Add(key);
+        for (var k = Key.F6; k <= Key.F12; k++)
+            if (!used.Contains(k)) return k.ToString();
+        return nameof(Key.F6);
     }
 
     /// <summary>

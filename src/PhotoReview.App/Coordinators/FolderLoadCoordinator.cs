@@ -79,7 +79,8 @@ public sealed class FolderLoadCoordinator : IDisposable
 
         try
         {
-            folder = Path.GetFullPath(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            // Trim after GetFullPath: TrimEnd first turned the root "C:\" into "C:" (the drive's current directory).
+            folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
             if (!_fileSystem.DirectoryExists(folder))
             {
                 throw new DirectoryNotFoundException(Tr.StatusFolderNotFound(folder));

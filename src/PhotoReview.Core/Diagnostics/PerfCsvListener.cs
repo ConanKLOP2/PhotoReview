@@ -193,7 +193,7 @@ public sealed class PerfCsvListener : EventListener, IDisposable
     }
 
     private static readonly string[] DiagFlagNames =
-        ["PHOTOREVIEW_DIAG_PREREAD", "PHOTOREVIEW_DIAG_PRELOAD_WORKERS", "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE"];
+        [DiagOptions.PreReadVar, DiagOptions.PreloadWorkersVar, DiagOptions.DisableDiskCacheVar];
 
     private static void WriteHeader(StreamWriter writer)
     {

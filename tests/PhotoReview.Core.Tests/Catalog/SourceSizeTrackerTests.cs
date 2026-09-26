@@ -3,6 +3,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.IO;
+using PhotoReview.Core.Tests.Fakes;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
@@ -182,6 +183,28 @@ public class SourceSizeTrackerTests
 
         Assert.Equal(300L, total1);
         Assert.Equal(300L, total2);
+    }
+
+    [Fact(DisplayName = "Observe (UI thread) is not blocked while GetTotal (preload thread) is statting files")]
+    public async Task Observe_WhileGetTotalIsStatting_DoesNotBlock()
+    {
+        using var inStat = new ManualResetEventSlim(false);
+        using var releaseStat = new ManualResetEventSlim(false);
+        var fs = new InMemoryFileSystem { StatHook = _ => { inStat.Set(); releaseStat.Wait(TimeSpan.FromSeconds(60)); return null; } };
+        var catalog = new ReviewCatalog();
+        var tracker = new SourceSizeTracker(catalog, fs);
+        catalog.Reset(["file1"]); // no cached Length, so GetTotal must stat
+        tracker.Observe(catalog.EntriesSnapshot());
+
+        var total = Task.Run(tracker.GetTotal);
+        Assert.True(inStat.Wait(TimeSpan.FromSeconds(10)), "GetTotal never started statting");
+
+        using var observed = new ManualResetEventSlim(false);
+        var observe = Task.Run(() => { tracker.Observe(catalog.EntriesSnapshot()); observed.Set(); });
+        var observeFinished = observed.Wait(TimeSpan.FromSeconds(10));
+        releaseStat.Set();
+        Assert.True(observeFinished, "Observe stayed blocked behind GetTotal's file-system stat");
+        await Task.WhenAll(total, observe);
     }
 }
 

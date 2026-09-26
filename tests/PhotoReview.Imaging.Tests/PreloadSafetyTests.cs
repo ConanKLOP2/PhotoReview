@@ -150,8 +150,6 @@ public sealed class PreloadSafetyTests : IDisposable
     {
         public bool HasHeadroom(double maximumLoad, long reserveBytes) => hasHeadroom();
         public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-        public bool IsMemoryPressureHigh() => !hasHeadroom();
-        public long GetAvailableMemoryBytes() => hasHeadroom() ? 16L * 1024 * 1024 * 1024 : 0;
     }
 
     private sealed class RecordingTarget(bool blockUntilCancellation = false, SemaphoreSlim? uncancellableGate = null) : IPreloadTarget, IDisposable

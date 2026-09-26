@@ -7,6 +7,7 @@ using PhotoReview.App;
 using PhotoReview.App.Composition;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.PerfAnalysis;
 
 internal static class LocalUiNextProbe
 {
@@ -112,16 +113,16 @@ internal static class LocalUiNextProbe
                     }
                     await Task.Delay(200);
                 }
-                var durations = new long[sampleCount];
+                var durations = new double[sampleCount];
                 for (var sample = 0; sample < sampleCount; sample++)
                 {
                     if (!window.TryGetCachedPreview(files[sample], out var _))
                         throw new TimeoutException($"Image {sample + 1} was not warm before navigation");
-                    var sw = Stopwatch.StartNew();
+                    var swStart = Stopwatch.GetTimestamp();
                     show = window.ShowImageAsync(sample);
                     status = ((TextBlock)window.FindName("StatusText")!).Text;
                     await show;
-                    durations[sample] = sw.ElapsedMilliseconds;
+                    durations[sample] = Stopwatch.GetElapsedTime(swStart).TotalMilliseconds;
                     if (!presenter.LastPresentStartedFromRam)
                         throw new InvalidOperationException($"Warm navigation showed loading at {sample + 1}: {status}");
                     index = window.CurrentIndex;
@@ -129,9 +130,9 @@ internal static class LocalUiNextProbe
                     if ((sample + 1) % 10 == 0) Console.WriteLine($"WPF navigation progress: {sample + 1}/{sampleCount}");
                 }
                 Array.Sort(durations);
-                long At(double fraction) => durations[(int)Math.Ceiling(durations.Length * fraction) - 1];
+                double At(double fraction) => PerfStats.NearestRank(durations, fraction * 100.0);
                 return $"PASS: local WPF warm navigation count={sampleCount} " +
-                    $"medianMs={At(.5)} p95Ms={At(.95)} maxMs={durations[^1]} " +
+                    $"medianMs={At(.5):F2} p95Ms={At(.95):F2} maxMs={durations[^1]:F2} " +
                     $"firstNextStatus={status}";
             }
             finally

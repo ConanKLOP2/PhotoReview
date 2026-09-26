@@ -21,7 +21,6 @@ public sealed class JournalModelTests
     private sealed class Clock : IClock
     {
         public DateTime UtcNow { get; set; } = T0.AddDays(30);
-        public long Timestamp => 0;
     }
 
     public static TheoryData<int, int> Seeds()

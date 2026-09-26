@@ -91,6 +91,34 @@ public sealed class ThumbnailCacheTests : IDisposable
         Assert.Equal(64, thumbnail.OriginalHeight);
     }
 
+    private sealed class RecordingLog : PhotoReview.Core.Abstractions.ILog
+    {
+        private readonly List<string> _errors = [];
+        public bool Enabled => true;
+        public void Info(string message) { }
+        public void Warn(string message) { }
+        public void Error(string message, Exception? ex = null) { lock (_errors) _errors.Add(message); }
+        public string[] Errors { get { lock (_errors) return [.. _errors]; } }
+    }
+
+    [Fact(DisplayName = "A corrupt cached thumbnail that cannot be deleted logs the failed delete instead of swallowing it")]
+    public async Task CorruptCachedThumbnailThatCannotBeDeleted_LogsTheFailedDelete()
+    {
+        var log = new RecordingLog();
+        using var cache = new ThumbnailCache(_diskDir, maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: true, log: log);
+        await cache.GetAsync(_jpegWithThumbnailPath);
+        await PhotoReview.TestSupport.Wait.UntilAsync(() => Directory.GetFiles(_diskDir, "*.png").Length == 1, "thumbnail persisted to disk");
+        var cached = Directory.GetFiles(_diskDir, "*.png")[0];
+        cache.ClearMemory();
+
+        // Corrupt the file, then hold it open without FileShare.Delete: reading still works (and fails to decode), deleting cannot.
+        File.WriteAllBytes(cached, [1, 2, 3, 4]);
+        using var hold = new FileStream(cached, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await cache.GetAsync(_jpegWithThumbnailPath);
+
+        Assert.Contains(log.Errors, e => e.Contains("Delete failed", StringComparison.Ordinal));
+    }
+
     [Fact(DisplayName = "The embedded-thumbnail reader is used instead of a full source decode -- proven via an injected fake")]
     public async Task GetAsyncNeverPerformsAFullSourceDecodeOnMiss()
     {

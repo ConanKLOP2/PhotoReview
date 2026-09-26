@@ -3,6 +3,7 @@ using System.Windows.Media.Imaging;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Tests.Fixtures;
+using PhotoReview.TestSupport;
 
 namespace PhotoReview.Imaging.Tests.Decoding;
 
@@ -57,10 +58,22 @@ public sealed class WpfBitmapImageDecoderTests : IDisposable
         Assert.Same(wpfImage.Source, decoded.PlatformImage);
     }
 
+    [Fact(DisplayName = "A width-only request on a source that already fits neither upscales nor reports downscaled")]
+    public void WidthOnlyRequestOnSmallSource_DoesNotUpscaleOrReportDownscaled()
+    {
+        var decoded = _decoder.Decode(new DecodeRequest(_imagePath, TargetWidth: 100)); // the source is 1x1
+
+        Assert.False(decoded.Downscaled);
+        Assert.Equal(1, decoded.PixelWidth);
+        Assert.Equal(1, decoded.PixelHeight);
+    }
+
     [Fact(DisplayName = "Decode with target width reports downscaled true")]
     public void DecodeWithTargetWidthReportsDownscaled()
     {
-        var request = new DecodeRequest(_imagePath, TargetWidth: 100);
+        var widePath = Path.Combine(_tempDir, "wide.png");
+        File.WriteAllBytes(widePath, TestImages.BuildRgbaPng(300, 200, (_, _) => 255));
+        var request = new DecodeRequest(widePath, TargetWidth: 100);
         var decoded = _decoder.Decode(request);
 
         Assert.NotNull(decoded);

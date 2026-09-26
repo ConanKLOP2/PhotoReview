@@ -52,14 +52,22 @@ public sealed class SessionWriter : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
-            _versions.TryGetValue(snapshot.Folder, out var version);
-            _versions[snapshot.Folder] = version + 1;
-            _pending[snapshot.Folder] = snapshot;
+            var key = KeyOf(snapshot.Folder);
+            _versions.TryGetValue(key, out var version);
+            _versions[key] = version + 1;
+            _pending[key] = snapshot;
             if (_timerCts is not null) return; // a write is already scheduled; it will pick up the latest state
             var cts = new CancellationTokenSource();
             _timerCts = cts;
             _lastRun = RunTimerAsync(cts);
         }
+    }
+
+    /// <summary>Same identity as the session file name, so a folder with and without a trailing separator is one pending entry (newest wins).</summary>
+    private static string KeyOf(string folder)
+    {
+        try { return SessionStore.CanonicalFolder(folder); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return folder; }
     }
 
     /// <summary>Writes every pending state now and cancels the scheduled write.</summary>
@@ -153,13 +161,14 @@ public sealed class SessionWriter : IDisposable
                 // the writer lock. Do not let an obsolete batch overwrite it.
                 lock (_gate)
                 {
-                    if (!_versions.TryGetValue(state.Folder, out var current) || current != version)
+                    if (!_versions.TryGetValue(KeyOf(state.Folder), out var current) || current != version)
                         continue;
                 }
                 try { _store.Save(state); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                catch (Exception ex)
                 {
-                    // Best-effort like the rest of session persistence: a failed write must not break navigation.
+                    // Best-effort like the rest of session persistence: a failed write must not break navigation, and any
+                    // exception type (not only IO) must not drop the rest of the drained batch or fault the timer task.
                     _log?.Error($"Session write failed: {state.Folder}", ex);
                 }
             }

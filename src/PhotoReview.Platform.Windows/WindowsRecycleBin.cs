@@ -93,7 +93,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
                             kept = true;
                         }
                     }
-                    catch (Exception ex) when (ex is COMException or InvalidCastException or FormatException)
+                    catch (Exception ex) when (RecycleItemFailure.IsPerItem(ex))
                     {
                         _log.Error("Recycle Bin item inspection failed", ex);
                     }
@@ -169,6 +169,17 @@ public sealed class WindowsRecycleBin : IRecycleBin
 /// Decides whether the shell can really recycle a path (R2-F-05). Only local fixed drives have a Recycle Bin that
 /// <c>SHFileOperation</c> uses without warning; removable, network, optical, RAM and unknown volumes delete permanently.
 /// </summary>
+/// <summary>
+/// Which failures while reading ONE Recycle Bin item's shell properties skip that item instead of aborting the whole
+/// restore. The items are late-bound (<c>dynamic</c>), so a property the shell does not expose surfaces as a
+/// <see cref="Microsoft.CSharp.RuntimeBinder.RuntimeBinderException"/>, not a COM error.
+/// </summary>
+internal static class RecycleItemFailure
+{
+    public static bool IsPerItem(Exception ex) =>
+        ex is COMException or InvalidCastException or FormatException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException;
+}
+
 internal static class RecycleEligibility
 {
     private const string ExtendedPrefix = @"\\?\";

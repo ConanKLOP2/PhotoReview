@@ -93,6 +93,15 @@ public sealed class AppLogTests : IDisposable
         Assert.False(AppLog.Enabled);
     }
 
+    [Fact(DisplayName = "Concurrent forced logging leaves the enabled flag as it found it")]
+    public void ConcurrentForcedLoggingRestoresTheEnabledFlag()
+    {
+        Assert.False(AppLog.Enabled);
+        var ex = new InvalidOperationException("boom");
+        Parallel.For(0, 400, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i => App.LogStartupErrorForced("forced-" + i, ex));
+        Assert.False(AppLog.Enabled);
+    }
+
     [Fact(DisplayName = "Concurrent logging preserves every entry")]
     public void ConcurrentLoggingPreservesEveryEntry()
     {

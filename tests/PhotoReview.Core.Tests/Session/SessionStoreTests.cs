@@ -150,6 +150,20 @@ public sealed class SessionStoreTests
         Assert.True(_fs.FileExists(_sessionsDir + @"\abc.json"));
     }
 
+    [Fact(DisplayName = "One undeletable stale temp file does not stop the sweep of the others")]
+    public void Constructor_SweepContinuesAfterOneDeleteFails()
+    {
+        var old = DateTime.UtcNow.AddDays(-3);
+        _fs.AddFile(_sessionsDir + @"\a.json.1111.tmp", "x", old);
+        _fs.AddFile(_sessionsDir + @"\b.json.2222.tmp", "x", old);
+        _fs.DeleteHook = path => path.EndsWith("a.json.1111.tmp", StringComparison.OrdinalIgnoreCase) ? new IOException("locked") : null;
+
+        _ = CreateStore();
+
+        Assert.True(_fs.FileExists(_sessionsDir + @"\a.json.1111.tmp"));
+        Assert.False(_fs.FileExists(_sessionsDir + @"\b.json.2222.tmp"));
+    }
+
     [Fact(DisplayName = "Session file with null Skipped loads as an empty list (R2-F-25)")]
     public void Load_NullSkipped_BecomesEmptyList()
     {
@@ -163,5 +177,17 @@ public sealed class SessionStoreTests
         Assert.NotNull(loaded.Skipped);
         Assert.Empty(loaded.Skipped);
     }
-}
 
+    [Theory(DisplayName = "Session file name is the persisted format: SHA-256 of the upper-cased folder without trailing separator (files from older builds still load)")]
+    [InlineData(@"C:\photos\vacation")]
+    [InlineData(@"C:\photos\vacation\")]
+    [InlineData(@"c:\PHOTOS\Vacation/")]
+    public void GetPath_KeepsThePersistedFileNameScheme(string spelling)
+    {
+        var store = CreateStore();
+        var expectedKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(@"C:\PHOTOS\VACATION")));
+
+        Assert.Equal(Path.Combine(_sessionsDir, expectedKey + ".json"), store.GetPath(spelling));
+    }
+}

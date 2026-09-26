@@ -19,11 +19,6 @@ public sealed class RecoveryRetryService
     private readonly IFileSystem _fileSystem;
     private readonly IClock _clock;
 
-    public RecoveryRetryService()
-        : this(new OperationJournal(), new PhysicalFileSystem(), new SystemClock())
-    {
-    }
-
     public RecoveryRetryService(OperationJournal journal, IFileSystem fileSystem, IClock clock)
     {
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));

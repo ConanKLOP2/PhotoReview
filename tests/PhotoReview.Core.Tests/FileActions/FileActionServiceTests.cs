@@ -15,7 +15,6 @@ public sealed class FileActionServiceTests
     {
         public FakeClock(DateTime utcNow) => UtcNow = utcNow;
         public DateTime UtcNow { get; set; }
-        public long Timestamp => 0;
     }
 
     private sealed class FakeAppPaths : IAppPaths
@@ -54,6 +53,17 @@ public sealed class FileActionServiceTests
     {
         _journal = new OperationJournal(new FakeAppPaths(@"C:\data\operations.jsonl"), _fs, _clock);
         _service = new FileActionService(_journal, _fs, _clock, _recycleBin);
+    }
+
+    [Theory]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
+    public async Task ExecuteAsync_MissingSource_DoesNotCreateDestinationFolder(FileOperationType operation)
+    {
+        var result = await _service.ExecuteAsync(new FileActionRequest(@"C:\photos\gone.jpg", operation, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.False(_fs.DirectoryExists(@"C:\photos\sel"));
     }
 
     [Theory]

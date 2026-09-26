@@ -16,6 +16,9 @@ public static class TranslationExport
 {
     public const string FileSuffix = ".todo.json";
 
+    /// <summary>Appended to the previous export when Export replaces it (never matches the loader's <c>*.json</c> scan).</summary>
+    public const string BackupSuffix = ".bak";
+
     public const string NotesFileName = "en.notes.json";
 
     /// <summary>Guidance written into every export (catalog key <c>export.help</c>, in the current UI language).</summary>
@@ -45,8 +48,20 @@ public static class TranslationExport
 
         Directory.CreateDirectory(userDir);
         var path = Path.Combine(userDir, code.ToLowerInvariant() + FileSuffix);
+        // The export is what a translator edits by hand: a second Export must not silently destroy that work.
+        // Each export that would replace different content keeps its own backup (.bak, .bak2, ...): a second Export
+        // must not overwrite the only copy of the first with the generated file. An identical file needs none.
+        if (File.Exists(path) && !string.Equals(File.ReadAllText(path), json, StringComparison.Ordinal))
+            File.Copy(path, FreeBackupPath(path), overwrite: false);
         File.WriteAllText(path, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         return path;
+    }
+
+    private static string FreeBackupPath(string path)
+    {
+        var candidate = path + BackupSuffix;
+        for (var n = 2; File.Exists(candidate); n++) candidate = path + BackupSuffix + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return candidate;
     }
 
     /// <summary>
@@ -100,7 +115,7 @@ public static class TranslationExport
         var notes = new Dictionary<string, string>(StringComparer.Ordinal);
         try
         {
-            if (!File.Exists(path)) return notes;
+            if (!File.Exists(path) || new FileInfo(path).Length > LanguageCatalog.MaxFileBytes) return notes;
             using var doc = JsonDocument.Parse(File.ReadAllText(path),
                 new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return notes;

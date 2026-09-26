@@ -10,8 +10,6 @@ namespace PhotoReview.Imaging.Decoding.Wic;
 
 internal static class WicGuids
 {
-    public static readonly Guid CLSID_WICImagingFactory = new("cac5261a-05e2-4928-9d9d-a30f36abf114");
-    public static readonly Guid CLSID_WICImagingFactory2 = new("31741610-e414-49f2-b690-acf12f15ecab");
     public static readonly Guid GUID_WICPixelFormat32bppBGRA = new("6fddc324-4e03-4bfe-b185-3d77768dc90f");
     public static readonly Guid GUID_WICPixelFormat32bppBGR = new("6fddc324-4e03-4bfe-b185-3d77768dc90e");
     public static readonly Guid GUID_WICPixelFormat32bppPBGRA = new("6fddc324-4e03-4bfe-b185-3d77768dc910");
@@ -414,7 +412,6 @@ internal sealed class ManagedIStream : IStream, IDisposable
 internal static class WicNativeMethods
 {
     public const uint WINCODEC_SDK_VERSION1 = 0x0236;
-    public const uint WINCODEC_SDK_VERSION2 = 0x0237;
 
     [DllImport("WindowsCodecs.dll", EntryPoint = "WICCreateImagingFactory_Proxy", ExactSpelling = true)]
     public static extern int WICCreateImagingFactory_Proxy(uint sdkVersion, out IWICImagingFactory ppIImagingFactory);

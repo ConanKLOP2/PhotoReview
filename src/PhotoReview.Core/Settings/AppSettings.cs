@@ -99,7 +99,6 @@ public class AppSettings
     public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.Default;
 
     public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
-    public static Func<string?, AppSettings>? Loader { get; set; }
     public static Action<AppSettings>? Saver { get; set; }
     public static Func<AppSettings, string?>? Validator { get; set; }
 
@@ -114,7 +113,7 @@ public class AppSettings
             loaded.Actions ??= ReviewAction.Defaults();
             return loaded;
         }
-        return Loader?.Invoke(path) ?? new AppSettings();
+        return new AppSettings();
     }
 
     public static void Save(AppSettings settings) => Saver?.Invoke(settings);

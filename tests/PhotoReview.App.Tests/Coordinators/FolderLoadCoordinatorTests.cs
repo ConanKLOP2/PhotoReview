@@ -89,7 +89,6 @@ public sealed partial class FolderLoadCoordinatorTests
     private sealed class FakeClock : IClock
     {
         public DateTime UtcNow => new(2026, 9, 19, 12, 0, 0, DateTimeKind.Utc);
-        public long Timestamp => 0;
     }
 
     private sealed class FakeExplorerOrderProvider : IExplorerOrderProvider
@@ -195,6 +194,35 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.Single(_sink.Presented);
         Assert.Equal(0, _sink.Presented[0].Index);
         Assert.Empty(_sink.Failures);
+    }
+
+    [Fact]
+    public async Task LoadAsync_DriveRoot_KeepsTheRootAndLoadsItsImages()
+    {
+        // TrimEnd turned the root into "C:", which GetFullPath resolves to the drive's current directory.
+        var folder = @"C:\";
+        _fs.CreateDirectory(folder);
+        _fs.WriteAllTextAtomic(@"C:\root-photo.jpg", "img1");
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Empty(_sink.Failures);
+        Assert.Equal(1, _catalog.Count);
+        Assert.Equal(@"C:\root-photo.jpg", _catalog.PathAt(0));
+    }
+
+    [Fact]
+    public async Task LoadAsync_TrailingSeparator_LoadsTheFolder()
+    {
+        _fs.CreateDirectory(@"C:\photos");
+        _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "img1");
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(@"C:\photos\");
+
+        Assert.Empty(_sink.Failures);
+        Assert.Equal(1, _catalog.Count);
     }
 
     [Fact]

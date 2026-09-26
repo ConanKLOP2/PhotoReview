@@ -38,4 +38,15 @@ public sealed class BoundedLruCacheTests
     [Fact(DisplayName = "LRU rejects a null removal predicate")]
     public void RemoveWhereNullPredicateThrows() =>
         Assert.Throws<ArgumentNullException>(() => Seeded().RemoveWhere(null!));
+
+    [Fact(DisplayName = "LRU oversize replacement drops the stale entry for the key")]
+    public void OversizeReplacementDropsStaleEntry()
+    {
+        var cache = Seeded(); // capacity 4: "a"->"aa", "b"->"b"
+        cache.Set("a", "too-big-for-capacity");
+        Assert.False(cache.TryGet("a", out _));
+        Assert.Equal(1, cache.Count);
+        Assert.Equal(1, cache.CurrentSize);
+        Assert.True(cache.TryGet("b", out _));
+    }
 }

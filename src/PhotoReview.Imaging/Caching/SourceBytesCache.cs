@@ -35,9 +35,22 @@ public sealed class SourceBytesCache
     /// task). Call it only from a worker or dedicated decode thread -- never from a UI or other
     /// <c>SynchronizationContext</c>-bound thread (IMG-09).
     /// </summary>
-    public byte[] GetOrRead(string path)
+    public byte[] GetOrRead(string path) => GetOrRead(CreateKey(path));
+
+    /// <summary>
+    /// Read-ahead entry point: caches the file's bytes unless this cache could never keep them (see <see cref="CanCache"/>),
+    /// in which case nothing is read at all. Returns whether the file is (now) cached. Same threading rules as <see cref="GetOrRead(string)"/>.
+    /// </summary>
+    public bool TryPrefetch(string path)
     {
         var key = CreateKey(path);
+        if (!CanCache(key.Length)) return false;
+        GetOrRead(key);
+        return true;
+    }
+
+    private byte[] GetOrRead(Key key)
+    {
         if (_cache.TryGet(key, out var cached)) return cached;
         var generation = Volatile.Read(ref _generation);
         var pathVersion = _pathVersions.GetValueOrDefault(key.Path);

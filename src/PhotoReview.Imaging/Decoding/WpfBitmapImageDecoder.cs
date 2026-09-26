@@ -62,9 +62,6 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
     }
 
-    public static BitmapSource DecodeSource(DecodeRequest request)
-        => DecodeSource(request, ignoreColorProfile: false, out _, out _, out _, out _, out _);
-
     private static BitmapSource DecodeSource(DecodeRequest request, bool ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.
@@ -123,7 +120,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         }
 
         // For transposed orientations (5 to 8), decoded height becomes the final visual width after rotation.
-        bool isTransposed = request.ApplyOrientation && orientation is >= 5 and <= 8;
+        bool isTransposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
 
         // Original (post-orientation) dimensions reported via IDecodedImage -- mirrors what
         // ExifOrientation.Apply below does to the final bitmap's own pixel dimensions.
@@ -148,12 +145,6 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             {
                 bitmap.DecodePixelWidth = targetW;
                 bitmap.DecodePixelHeight = targetH;
-                downscaled = true;
-            }
-            else if (request.TargetWidth <= 0 || request.TargetHeight <= 0)
-            {
-                // Compatibility: a one-axis (width-only) request has always reported Downscaled, also when the source already
-                // fit (it used to be stretched instead). Callers and tests key the disk-cache persistence on this flag.
                 downscaled = true;
             }
         }

@@ -1,9 +1,5 @@
 using System.Windows;
 using System.IO;
-using System.Collections;
-using System.Diagnostics;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.App.Diagnostics;
@@ -91,7 +87,7 @@ public partial class App : System.Windows.Application, IDisposable
         // 5. Platform Services
         services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();
         services.AddSingleton<IRecycleBin>(_ => WindowsRecycleBin.Instance);
-        services.AddSingleton<IMemoryProbe>(_ => PhysicalMemory.Instance);
+        services.AddSingleton<IMemoryProbe>(sp => new WindowsMemoryProbe(sp.GetRequiredService<ILog>()));
         services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
         services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();
         services.AddSingleton<IUiScheduler>(_ => new DispatcherUiScheduler(Current?.Dispatcher ?? Dispatcher.CurrentDispatcher));
@@ -103,8 +99,7 @@ public partial class App : System.Windows.Application, IDisposable
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>
         {
-            var log = sp.GetService<ILog>();
-            return new ImageDecoderFactory(Composition.DecoderProviders.Create(log), log, sp.GetService<ReviewMetrics>());
+            return new ImageDecoderFactory(Composition.DecoderProviders.Create(), sp.GetService<ILog>(), sp.GetService<ReviewMetrics>());
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
@@ -163,12 +158,12 @@ public partial class App : System.Windows.Application, IDisposable
                 getEntries,
                 getTotalBytes,
                 fullFolderRamThresholdBytes: previewService.CapacityBytes, // effective (clamped) budget, R2-A-05
-                memoryLoadLimit: sp.GetRequiredService<SettingsStore>().Current.PreloadMemoryLoadLimit,
+                memoryLoadLimit: settingsStore.Current.PreloadMemoryLoadLimit,
                 memoryProbe: sp.GetRequiredService<IMemoryProbe>(),
-                workerCountOverride: sp.GetRequiredService<SettingsStore>().Current.PreloadWorkerCount,
+                workerCountOverride: settingsStore.Current.PreloadWorkerCount,
                 log: sp.GetService<ILog>(),
                 prefetchSourceBytes: sourceBytesCache is not null
-                    ? (path, token) => Task.Run(() => sourceBytesCache.GetOrRead(path), token)
+                    ? (path, token) => Task.Run(() => sourceBytesCache.TryPrefetch(path), token)
                     : null);
             });
 
@@ -241,13 +236,12 @@ public partial class App : System.Windows.Application, IDisposable
 
         var initial = e.Args.FirstOrDefault(arg => File.Exists(arg));
         var initialFolder = e.Args.FirstOrDefault(arg => Directory.Exists(arg));
-        var lockFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder; // R2-F-08: a relative file argument has an empty directory name
+        var launchFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder; // R2-F-08: a relative file argument has an empty directory name
         // perf(startup): Explorer's view order is the slowest part of opening a photo (~1-2 s of
         // cross-process COM for a large folder). Start it now, in parallel with settings, window
         // construction and Show(); the folder load joins this query instead of starting its own.
-        var explorerFolder = initial is not null ? Path.GetDirectoryName(Path.GetFullPath(initial)) : initialFolder;
-        if (!string.IsNullOrEmpty(explorerFolder))
-            _services.GetRequiredService<IExplorerOrderProvider>().Prefetch(explorerFolder, ExplorerPrefetchTimeout);
+        if (!string.IsNullOrEmpty(launchFolder))
+            _services.GetRequiredService<IExplorerOrderProvider>().Prefetch(launchFolder, ExplorerPrefetchTimeout);
 
         var store = _services.GetRequiredService<SettingsStore>();
         store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
@@ -298,14 +292,14 @@ public partial class App : System.Windows.Application, IDisposable
             appSettings.InstanceMode, _forwardCoalescer.Submit, _services.GetRequiredService<ILog>(), allowServerForeground: true);
         // Listen right away (the scope starts the pipe with the lock): a second launch made while this one is still
         // starting waits for the pipe (up to its timeout).
-        if (!_instanceScope.TryAcquire(lockFolder))
+        if (!_instanceScope.TryAcquire(launchFolder))
         {
             // Q-R10: hand the request to the instance that already owns this folder (or, SingleWindow, the app) instead
             // of showing an error; with no path the owner just comes to the front. No answer within the timeout (stale
             // mutex) keeps the previous behaviour.
             var existing = e.Args.Where(a => File.Exists(a) || Directory.Exists(a)).Select(Path.GetFullPath).ToList();
             var forwarded = await SecondInstanceHandoff.TryForwardAsync(
-                _instanceScope.CreateClient(lockFolder), existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
+                _instanceScope.CreateClient(launchFolder), existing, SecondInstanceHandoff.DefaultTimeout, _services.GetRequiredService<ILog>());
             if (!forwarded)
             {
                 _services.GetRequiredService<IDialogService>().ShowMessage(
@@ -344,24 +338,29 @@ public partial class App : System.Windows.Application, IDisposable
     /// </summary>
     private async Task RecoverJournalAsync(MainWindow window)
     {
-        var services = _services!;
-        var failed = await JournalStartupRecovery.RunAsync(
-            services.GetRequiredService<OperationJournal>(),
-            services.GetRequiredService<UndoService>(),
-            services.GetRequiredService<IClock>(),
-            services.GetRequiredService<IUiScheduler>(),
-            services.GetRequiredService<ILog>());
-        if (failed.Count == 0) return;
-        var dialogs = services.GetRequiredService<IDialogService>();
-        if (dialogs.ShowConfirmation(PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedTitle,
-                PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedMessage(failed.Count)))
-            window.ViewModel.ShowRecovery();
+        // Fire-and-forget from StartupCoreAsync: a fault here would otherwise surface only via UnobservedTaskException
+        // after a GC, long after the cause.
+        try
+        {
+            var services = _services!;
+            var failed = await JournalStartupRecovery.RunAsync(
+                services.GetRequiredService<OperationJournal>(),
+                services.GetRequiredService<UndoService>(),
+                services.GetRequiredService<IClock>(),
+                services.GetRequiredService<IUiScheduler>(),
+                services.GetRequiredService<ILog>());
+            if (failed.Count == 0) return;
+            var dialogs = services.GetRequiredService<IDialogService>();
+            if (dialogs.ShowConfirmation(PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedTitle,
+                    PhotoReview.Core.Localization.Tr.DialogStartupRecoveryFailedMessage(failed.Count)))
+                window.ViewModel.ShowRecovery();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Startup journal recovery failed", ex);
+        }
     }
 
-    /// <summary>
-    /// Budget of the startup Explorer prefetch. It starts ~1 s before the folder load asks for it, and
-    /// the load still bounds its own wait by its 2 s timeout, so this is 2 s plus that head start.
-    /// </summary>
     /// <summary>Explorer's N launches forward within a short burst; they collapse into one open of the first path.</summary>
     private static readonly TimeSpan ForwardCoalesceWindow = TimeSpan.FromMilliseconds(750);
 
@@ -379,16 +378,38 @@ public partial class App : System.Windows.Application, IDisposable
             CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.FromCurrentSynchronizationContext());
     }
 
+    /// <summary>
+    /// Budget of the startup Explorer prefetch. It starts ~1 s before the folder load asks for it, and
+    /// the load still bounds its own wait by its 2 s timeout, so this is 2 s plus that head start.
+    /// </summary>
     private static readonly TimeSpan ExplorerPrefetchTimeout = TimeSpan.FromSeconds(3);
 
-    internal static void LogStartupErrorForced(string message, Exception ex)
+    /// <summary>
+    /// Serializes the "force logging on, write, flush, restore" sequences: two racing callers (AppDomain handler on a
+    /// pool thread and the dispatcher handler) each saved the other's forced value as "previous state" and could leave
+    /// logging permanently on.
+    /// </summary>
+    private static readonly object ForcedLogLock = new();
+
+    private static void WriteForced(Action write)
     {
-        var wasEnabled = AppLog.Enabled;
-        AppLog.Enabled = true;
-        AppLog.Error(message, ex);
-        AppLog.Flush();
-        AppLog.Enabled = wasEnabled;
+        lock (ForcedLogLock)
+        {
+            var wasEnabled = AppLog.Enabled;
+            AppLog.Enabled = true;
+            try
+            {
+                write();
+                AppLog.Flush();
+            }
+            finally
+            {
+                AppLog.Enabled = wasEnabled;
+            }
+        }
     }
+
+    internal static void LogStartupErrorForced(string message, Exception ex) => WriteForced(() => AppLog.Error(message, ex));
 
     /// <summary>R2-F-12: records an unhandled exception even when logging is disabled and flushes before returning.</summary>
     internal static void LogUnhandledForced(string message, object? exceptionObject)
@@ -422,13 +443,6 @@ public partial class App : System.Windows.Application, IDisposable
     /// <c>AppSettings.LogStartupErrorForced</c>: force logging on just long enough to persist this one
     /// line, flush, then restore whatever state it was in.
     /// </summary>
-    private static void LogDiagModeForced()
-    {
-        var wasEnabled = AppLog.Enabled;
-        AppLog.Enabled = true;
-        AppLog.Error($"DIAG MODE: {DiagOptions.Describe()}");
-        AppLog.Flush();
-        AppLog.Enabled = wasEnabled;
-    }
+    private static void LogDiagModeForced() => WriteForced(() => AppLog.Error($"DIAG MODE: {DiagOptions.Describe()}"));
 
 }

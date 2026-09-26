@@ -24,7 +24,6 @@ public sealed class JournalErrorCodeTests : IDisposable
     private sealed class FakeClock(DateTime utcNow) : IClock
     {
         public DateTime UtcNow { get; } = utcNow;
-        public long Timestamp => 0;
     }
 
     private sealed class FakeAppPaths : IAppPaths

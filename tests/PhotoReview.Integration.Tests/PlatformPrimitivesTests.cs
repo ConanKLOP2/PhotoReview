@@ -15,7 +15,6 @@ public sealed class PlatformPrimitivesTests
         Assert.NotNull(snapshot);
         Assert.True(snapshot.Value.LoadPercent <= 100);
         Assert.True(snapshot.Value.AvailableBytes > 0);
-        Assert.True(probe.GetAvailableMemoryBytes() > 0);
         Assert.True(probe.HasHeadroom(1.0, 0));
     }
 
@@ -31,17 +30,6 @@ public sealed class PlatformPrimitivesTests
         Assert.True(comparer.Compare(null, "a") < 0);
         Assert.True(comparer.Compare("a", null) > 0);
         Assert.Equal(0, comparer.Compare(null, null));
-    }
-
-    [Fact(DisplayName = "InstanceLock detects concurrent ownership of the same key")]
-    public void InstanceLockDetectsConcurrentOwnership()
-    {
-        var key = "test-key-" + Guid.NewGuid().ToString("N");
-        using var lock1 = new InstanceLock(key);
-        Assert.True(lock1.IsOwner);
-
-        using var lock2 = new InstanceLock(key);
-        Assert.False(lock2.IsOwner);
     }
 
     [Fact(DisplayName = "WindowsRecycleBin rejects invalid arguments")]

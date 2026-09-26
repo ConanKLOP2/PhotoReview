@@ -146,30 +146,6 @@ public sealed class ViewerStateTests
         Assert.Equal(720, state.MaxImageHeight);
     }
 
-    [Theory]
-    [InlineData(1.0, 2.0, 100, 80, 0, 0, 2000, 1600, 800, 600, 100, 80)]
-    [InlineData(2.0, 1.0, 120, 90, 300, 200, 1000, 800, 800, 600, 90, 55)]
-    public void ZoomViewportOffsets_KeepPointUnderMouseAnchored(
-        double oldZoom, double newZoom, double mouseX, double mouseY,
-        double oldHorizontal, double oldVertical, double newExtentWidth, double newExtentHeight,
-        double viewportWidth, double viewportHeight, double expectedHorizontal, double expectedVertical)
-    {
-        var result = MainWindowHelpers.CalculateZoomViewportOffsets(oldZoom, newZoom, mouseX, mouseY,
-            oldHorizontal, oldVertical, newExtentWidth, newExtentHeight, viewportWidth, viewportHeight);
-
-        Assert.Equal(expectedHorizontal, result.Horizontal, 6);
-        Assert.Equal(expectedVertical, result.Vertical, 6);
-    }
-
-    [Fact]
-    public void ZoomViewportOffsets_ClampToExtent()
-    {
-        var result = MainWindowHelpers.CalculateZoomViewportOffsets(1, 4, 1000, 1000, 0, 0, 500, 400, 800, 600);
-
-        Assert.Equal(0, result.Horizontal);
-        Assert.Equal(0, result.Vertical);
-    }
-
     [Fact]
     public void UniformImagePoint_RemovesLetterboxAndMapsToSourceCoordinates()
     {

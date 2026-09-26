@@ -9,7 +9,6 @@ namespace PhotoReview.PerfAnalysis;
 public sealed class NavRecord
 {
     public long Nav { get; init; }
-    public string SourceFile { get; init; } = "";
 
     public string Mode { get; set; } = "";
     public int Index { get; set; }
@@ -55,10 +54,6 @@ public sealed class NavRecord
     /// <summary>RamHit | InflightJoin | DiskCacheHit | SourceMiss, optionally prefixed
     /// "Thumbnail+" when a thumbnail was shown first (plan mục 3).</summary>
     public string Kind { get; set; } = "Unknown";
-
-    /// <summary>Sum of every t_post_* phase recorded via PostStart/PostEnd (preloadKick, compare,
-    /// hash, dims, session, ...).</summary>
-    public double TPostTotalMs => PostMs.Count == 0 ? 0 : PostMs.Values.Sum();
 }
 
 public sealed record PreloadItemRow(int Slot, string PathId, double QueueWaitMs, string Kind, double Ms);
@@ -76,7 +71,6 @@ public sealed class FolderGenSummary
 /// <summary>Everything reassembled from one perf-*.csv file's rows (D11 spec items 1-5).</summary>
 public sealed class PerfFileAnalysis
 {
-    public required PerfCsvFile File { get; init; }
     public List<NavRecord> Navs { get; } = [];
     public List<PreloadItemRow> PreloadItems { get; } = [];
     public int PreloadPausedCount { get; set; }
@@ -98,6 +92,39 @@ public sealed class PerfFileAnalysis
     public Dictionary<string, double> Startup { get; } = new(StringComparer.Ordinal);
 }
 
+/// <summary>KeyInput rows bucketed per thread and sorted by QpcTicks, so the "nearest KeyInput at or before a ShowStart" lookup is a
+/// binary search instead of a scan (with LINQ sort) of every KeyInput per navigation, which was quadratic on long burst runs.</summary>
+internal sealed class KeyInputIndex
+{
+    private readonly Dictionary<int, PerfRow[]> _byThread;
+
+    public KeyInputIndex(IEnumerable<PerfRow> keyInputs) =>
+        // OrderBy is stable: KeyInputs with an identical timestamp keep file order, as the previous OrderByDescending(...).First() did.
+        _byThread = keyInputs.GroupBy(k => k.Thread).ToDictionary(g => g.Key, g => g.OrderBy(k => k.QpcTicks).ToArray());
+
+    /// <summary>The KeyInput on <paramref name="thread"/> with the greatest QpcTicks &lt;= <paramref name="qpcTicks"/> (the first in file
+    /// order among equal timestamps), or null.</summary>
+    public PerfRow? NearestAtOrBefore(int thread, long qpcTicks)
+    {
+        if (!_byThread.TryGetValue(thread, out var rows)) return null;
+        var upper = FirstIndexWhere(rows, r => r.QpcTicks > qpcTicks);
+        if (upper == 0) return null;
+        var best = rows[upper - 1].QpcTicks;
+        return rows[FirstIndexWhere(rows, r => r.QpcTicks >= best)];
+    }
+
+    private static int FirstIndexWhere(PerfRow[] rows, Func<PerfRow, bool> predicate)
+    {
+        int lo = 0, hi = rows.Length; // predicate is monotone (false...true) over the sorted array
+        while (lo < hi)
+        {
+            var mid = (lo + hi) >>> 1;
+            if (predicate(rows[mid])) hi = mid; else lo = mid + 1;
+        }
+        return lo;
+    }
+}
+
 public static class PerfAnalyzeNavBuilder
 {
     /// <summary>KeyInput→ShowStart matching window (D11 spec item 2): the nearest KeyInput on the
@@ -106,7 +133,7 @@ public static class PerfAnalyzeNavBuilder
 
     public static PerfFileAnalysis Build(PerfCsvFile file)
     {
-        var result = new PerfFileAnalysis { File = file };
+        var result = new PerfFileAnalysis();
 
         var byNav = new Dictionary<long, List<PerfRow>>();
         var keyInputs = new List<PerfRow>();
@@ -187,9 +214,10 @@ public static class PerfAnalyzeNavBuilder
             result.Startup["firstPresented"] = anchorMs + file.QpcToMs(firstPresented.QpcTicks - startupAnchor.QpcTicks);
         }
 
+        var keyInputIndex = new KeyInputIndex(keyInputs);
         foreach (var (navId, rows) in byNav)
         {
-            result.Navs.Add(BuildNavRecord(file, navId, rows, keyInputs));
+            result.Navs.Add(BuildNavRecord(file, navId, rows, keyInputIndex));
         }
 
         return result;
@@ -226,10 +254,10 @@ public static class PerfAnalyzeNavBuilder
         }
     }
 
-    private static NavRecord BuildNavRecord(PerfCsvFile file, long navId, List<PerfRow> rows, List<PerfRow> keyInputs)
+    private static NavRecord BuildNavRecord(PerfCsvFile file, long navId, List<PerfRow> rows, KeyInputIndex keyInputs)
     {
         var ordered = rows.OrderBy(r => r.QpcTicks).ToList();
-        var rec = new NavRecord { Nav = navId, SourceFile = file.Path };
+        var rec = new NavRecord { Nav = navId };
 
         var showStart = ordered.FirstOrDefault(r => r.Event == "ShowStart");
         var t0Qpc = showStart?.QpcTicks ?? ordered[0].QpcTicks;
@@ -238,11 +266,9 @@ public static class PerfAnalyzeNavBuilder
             rec.Index = (int)(showStart.ANum ?? 0);
             rec.Mode = showStart.Text;
 
-            var matchedKeyInput = keyInputs
-                .Where(k => k.Thread == showStart.Thread && k.QpcTicks <= showStart.QpcTicks)
-                .Where(k => file.QpcToMs(showStart.QpcTicks - k.QpcTicks) <= KeyInputMatchWindowMs)
-                .OrderByDescending(k => k.QpcTicks)
-                .FirstOrDefault();
+            var matchedKeyInput = keyInputs.NearestAtOrBefore(showStart.Thread, showStart.QpcTicks);
+            if (matchedKeyInput is not null && file.QpcToMs(showStart.QpcTicks - matchedKeyInput.QpcTicks) > KeyInputMatchWindowMs)
+                matchedKeyInput = null;
             if (matchedKeyInput is not null)
             {
                 rec.TInputMs = matchedKeyInput.ANum;

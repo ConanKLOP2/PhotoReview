@@ -319,7 +319,7 @@ public sealed class PreloadScheduler : IDisposable
                     var measured = _sizes.MeanBytes(box);
                     var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries.Length, box, sourceBytes, measured);
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(estimated,
-                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes);
+                        _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes, _options.MemoryLoadLimit);
                     if (_log.Enabled)
                         _log.Info($"Preload policy: sourceBytes={sourceBytes} images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
                     order = PreloadOrderService.Build(center, entries.Length,
@@ -429,7 +429,7 @@ public sealed class PreloadScheduler : IDisposable
             await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
         }
         // Any other exception (unexpected cancellation source, or a genuine
-        // failure in PreloadOrderService/PhysicalMemory) would otherwise escape
+        // failure in PreloadOrderService/the memory probe) would otherwise escape
         // unobserved once the discarded fire-and-forget task
         // (`_ = PreloadAroundAsync(...)`) is garbage collected.
         catch (Exception ex)
@@ -665,8 +665,6 @@ public sealed class DelegateMemoryProbe : IMemoryProbe
     public DelegateMemoryProbe(Func<double, bool> hasHeadroom) => _hasHeadroom = hasHeadroom;
     public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom(maximumLoad);
     public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-    public bool IsMemoryPressureHigh() => false;
-    public long GetAvailableMemoryBytes() => 16L * 1024 * 1024 * 1024;
 }
 
 public sealed class FakeMemoryProbe : IMemoryProbe
@@ -675,6 +673,4 @@ public sealed class FakeMemoryProbe : IMemoryProbe
     public FakeMemoryProbe(bool hasHeadroom = true) => _hasHeadroom = hasHeadroom;
     public bool HasHeadroom(double maximumLoad, long reserveBytes) => _hasHeadroom;
     public MemorySnapshot? GetSnapshot() => new(50, 16L * 1024 * 1024 * 1024);
-    public bool IsMemoryPressureHigh() => !_hasHeadroom;
-    public long GetAvailableMemoryBytes() => _hasHeadroom ? 16L * 1024 * 1024 * 1024 : 0;
 }

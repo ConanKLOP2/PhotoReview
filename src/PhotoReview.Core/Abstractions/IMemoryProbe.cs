@@ -7,15 +7,9 @@ public readonly record struct MemorySnapshot(uint LoadPercent, ulong AvailableBy
 /// </summary>
 public interface IMemoryProbe
 {
-    /// <summary>Trả về true nếu bộ nhớ còn đủ không gian an toàn (load < maximumLoad và available >= reserveBytes).</summary>
+    /// <summary>Trả về true nếu bộ nhớ còn đủ không gian an toàn (load &lt; maximumLoad và available >= reserveBytes).</summary>
     bool HasHeadroom(double maximumLoad, long reserveBytes);
 
     /// <summary>Lấy snapshot trạng thái bộ nhớ hiện tại.</summary>
     MemorySnapshot? GetSnapshot();
-
-    /// <summary>Trả về true nếu áp lực bộ nhớ RAM vượt quá ngưỡng an toàn.</summary>
-    bool IsMemoryPressureHigh();
-
-    /// <summary>Số byte RAM vật lý còn khả dụng của hệ thống.</summary>
-    long GetAvailableMemoryBytes();
 }

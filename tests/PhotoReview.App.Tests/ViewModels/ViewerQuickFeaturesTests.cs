@@ -282,6 +282,27 @@ public sealed class ViewerQuickFeaturesTests
     }
 
     [Fact]
+    public void FindSiblingImageFolders_TrailingSeparatorOnCurrentFolder_StillFindsSiblings()
+    {
+        // session.Folder / an overlay caller can carry a trailing separator; the current folder was then not found (-1).
+        using var root = new TempRoot("sibling-info-trailing");
+        root.File(@"parent\a\1.jpg", 1);
+        var current = root.File(@"parent\b\1.png", 1);
+        root.File(@"parent\c\1.jpeg", 1);
+        var navigator = new SiblingFolderNavigator(
+            new PhotoReview.Core.Catalog.GenerationClock(),
+            new PhotoReview.Core.Catalog.ReviewCatalog(),
+            new PhotoReview.Core.IO.PhysicalFileSystem(),
+            new NullSink(),
+            () => null);
+
+        var result = navigator.FindSiblingImageFolders(Path.GetDirectoryName(current)! + Path.DirectorySeparatorChar, CancellationToken.None);
+
+        Assert.Equal(root.Combine("parent", "a"), result.Previous);
+        Assert.Equal(root.Combine("parent", "c"), result.Next);
+    }
+
+    [Fact]
     public void FindSiblingImageFolders_CancelledToken_Throws()
     {
         using var root = new TempRoot("sibling-info-cancel");
@@ -301,6 +322,5 @@ public sealed class ViewerQuickFeaturesTests
     {
         public void SetStatusText(string status) { }
         public Task OpenFolderAsync(string folder, string? initialPath = null) => Task.CompletedTask;
-        public void NotifyNavigationStateChanged() { }
     }
 }

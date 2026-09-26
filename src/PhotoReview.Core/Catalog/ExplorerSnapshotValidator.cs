@@ -70,7 +70,7 @@ public static class ExplorerSnapshotValidator
                 reason = ExplorerReason.OutsideFolder;
                 return false;
             }
-            if (!SamePath(Path.GetDirectoryName(path) ?? string.Empty, folder))
+            if (!InFolder(path, folder))
             {
                 reason = ExplorerReason.OutsideFolder;
                 return false;
@@ -88,7 +88,8 @@ public static class ExplorerSnapshotValidator
             }
         }
 
-        if (result.Count != expected.Count || !expected.SetEquals(result))
+        // result holds unique members of expected (seen rejects duplicates), so equal counts already mean equal sets.
+        if (result.Count != expected.Count)
         {
             reason = ExplorerReason.IncompleteSnapshot;
             return false;
@@ -111,6 +112,18 @@ public static class ExplorerSnapshotValidator
         if (full.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + full[8..];
         if (full.Length >= 6 && full.StartsWith(@"\\?\", StringComparison.Ordinal) && full[5] == ':') return full[4..];
         return full;
+    }
+
+    /// <summary>
+    /// <see cref="SamePath"/>(directory of <paramref name="normalizedPath"/>, <paramref name="canonicalFolder"/>) without
+    /// re-canonicalising per item: an already normalised path's directory that textually equals the canonical folder is
+    /// the same folder; anything else falls back to the full comparison, so the result never differs.
+    /// </summary>
+    private static bool InFolder(string normalizedPath, string canonicalFolder)
+    {
+        var directory = Path.GetDirectoryName(normalizedPath.AsSpan());
+        return directory.Equals(canonicalFolder, StringComparison.OrdinalIgnoreCase)
+            || SamePath(directory.ToString(), canonicalFolder);
     }
 
     public static bool SamePath(string first, string second) =>

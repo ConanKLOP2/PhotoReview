@@ -109,7 +109,6 @@ public sealed class FileActionService
                     && !destinationFolder.StartsWith(sourceFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                     throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
 
-                _fileSystem.CreateDirectory(destinationFolder);
                 destinationPath = Path.Combine(destinationFolder, Path.GetFileName(source));
 
                 if (_fileSystem.FileExists(destinationPath))
@@ -120,6 +119,9 @@ public sealed class FileActionService
 
                 sourceSize = sourceStat.Length;
                 sourceLastWriteUtc = sourceStat.LastWriteUtc;
+
+                // Only after every pre-check passed: a missing source must not leave an empty destination folder behind.
+                _fileSystem.CreateDirectory(destinationFolder);
 
                 tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,

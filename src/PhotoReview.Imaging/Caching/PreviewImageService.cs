@@ -62,8 +62,6 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
-    public IImageDecoder Decoder => GetDecoder(_currentBackend());
-    public IImageDecoderFactory? DecoderFactory => _decoderFactory;
 
     // Persistence (PNG-encode + write + prune) runs outside the decode semaphore, so it
     // needs its own bound: without one, a preload burst spawns one Task.Run per decoded
@@ -295,13 +293,6 @@ public sealed class PreviewImageService : IPreloadTarget
     {
         var isOriginal = IsOriginalLoadingMode();
         return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
-    }
-
-    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public ImageCacheKey GetCurrentCacheKey(FileInfo info)
-    {
-        var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(info, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
     }
 
     public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
@@ -623,7 +614,6 @@ public sealed class PreviewImageService : IPreloadTarget
 
     public Task<bool> WaitForPruneAsync(TimeSpan timeout) => _diskStore.WaitForPruneAsync(timeout);
 
-    public void ClearOriginalDimensions() => _originalDimensions.Clear();
 
     public void ClearSourceBytesCache() => _sourceBytesCache?.Clear();
 
@@ -633,7 +623,8 @@ public sealed class PreviewImageService : IPreloadTarget
     private IDecodedImage DecodeFromSource(string path, long sourceLength, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
-        // A file the byte cache cannot hold is streamed by the decoder: pre-reading it would allocate the whole file (LOH, and
+        // A file the byte cache cannot hold is not pre-read here (the WPF/WIC decoders stream it; TurboJpeg still reads it whole
+        // itself, which needs the full buffer anyway): pre-reading it would allocate the whole file (LOH, and
         // several at once under preload) only to drop it again.
         if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
         {

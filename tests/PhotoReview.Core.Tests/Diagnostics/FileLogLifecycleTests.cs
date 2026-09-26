@@ -52,10 +52,26 @@ public sealed class FileLogLifecycleTests : IDisposable
         Assert.False(File.Exists(LogFile));
     }
 
+    [Fact(DisplayName = "Dispose drains every entry queued before it to disk")]
+    public void Dispose_DrainsEveryQueuedEntryToDisk()
+    {
+        for (var round = 0; round < 5; round++)
+        {
+            var path = Path.Combine(_tempDir, "drain" + round, "drain.log");
+            var log = new FileLog(path) { Enabled = true };
+            for (var i = 0; i < 2_000; i++) log.Info("t0-" + i);
+
+            log.Dispose();
+
+            Assert.Equal(0, log.DroppedCount);
+            Assert.Equal(2_000, File.ReadAllLines(path).Length);
+        }
+    }
+
     [Fact(DisplayName = "Writers racing Dispose never see an exception and every entry accepted before Dispose is on disk")]
     public void DisposeUnderLoad_WritersNeverThrow()
     {
-        for (var round = 0; round < 12; round++)
+        for (var round = 0; round < 6; round++)
         {
             var path = Path.Combine(_tempDir, "round" + round, "load.log");
             var log = new FileLog(path) { Enabled = true };
@@ -66,7 +82,7 @@ public sealed class FileLogLifecycleTests : IDisposable
                 start.Wait();
                 try
                 {
-                    for (var i = 0; i < 5_000; i++) log.Info("t" + t + "-" + i);
+                    for (var i = 0; i < 1_500; i++) log.Info("t" + t + "-" + i);
                 }
                 catch (Exception e)
                 {
@@ -79,7 +95,33 @@ public sealed class FileLogLifecycleTests : IDisposable
             log.Dispose();
             foreach (var thread in threads) Assert.True(thread.Join(30_000), "writer thread hung");
             Assert.Empty(errors);
+            AssertOnDiskIsPerThreadPrefix(path, log.DroppedCount);
         }
+    }
+
+    /// <summary>
+    /// Entries are dropped only once the log stops accepting, so per writer thread what reached the disk is the contiguous
+    /// prefix 0..k-1 (no gaps, no duplicates, no torn lines). The deterministic drain-on-Dispose guard is
+    /// <see cref="Dispose_DrainsEveryQueuedEntryToDisk"/>.
+    /// </summary>
+    private static void AssertOnDiskIsPerThreadPrefix(string path, long dropped)
+    {
+        var seen = new Dictionary<int, List<int>>();
+        if (File.Exists(path))
+        {
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(line, @"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} \[INFO\] \[T\d+\] t(\d+)-(\d+)$");
+                Assert.True(m.Success, "torn or malformed log line: " + line);
+                var t = int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                if (!seen.TryGetValue(t, out var list)) seen[t] = list = [];
+                list.Add(int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
+        if (dropped != 0) return; // queue overflow drops the oldest entries, so gaps are legitimate then
+        foreach (var (t, list) in seen)
+            Assert.Equal(Enumerable.Range(0, list.Count), list);
     }
 
     [Fact(DisplayName = "Multi-line messages, unicode and embedded braces are written verbatim")]

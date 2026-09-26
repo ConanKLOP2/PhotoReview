@@ -8,6 +8,8 @@ namespace PhotoReview.Core;
 /// </summary>
 public sealed class AppPaths : IAppPaths
 {
+    public const string DataRootEnvironmentVariable = "PHOTOREVIEW_DATA_ROOT";
+
     public string ConfigFile { get; }
     public string JournalFile { get; }
     public string SessionsDir { get; }
@@ -21,13 +23,16 @@ public sealed class AppPaths : IAppPaths
         ArgumentException.ThrowIfNullOrWhiteSpace(localAppData);
 
         var appRoot = Path.Combine(localAppData, "PhotoReview");
-        var hasOverride = !string.IsNullOrWhiteSpace(dataRootOverride);
-        var dataRoot = hasOverride ? dataRootOverride! : Path.Combine(appRoot, "Data");
+        // Resolve once: a relative override would otherwise follow the (mutable) current directory at every later use.
+        // An unusable value (e.g. NUL) must not crash startup or logger init: ignore it and use the default root.
+        var overrideRoot = ResolveOverride(dataRootOverride);
+        var hasOverride = overrideRoot is not null;
+        var dataRoot = overrideRoot ?? Path.Combine(appRoot, "Data");
 
         // ConfigFile: Giữ nguyên hành vi cũ là nằm tại %LOCALAPPDATA%\PhotoReview\config.json.
         // Chỉ ghi vào <override>\config.json khi isolateConfig = true và có dataRootOverride (dành riêng cho test).
         ConfigFile = isolateConfig && hasOverride
-            ? Path.Combine(dataRootOverride!, "config.json")
+            ? Path.Combine(overrideRoot!, "config.json")
             : Path.Combine(appRoot, "config.json");
 
         // JournalFile: <dataRoot>\operations.jsonl
@@ -39,7 +44,7 @@ public sealed class AppPaths : IAppPaths
         // LogFile: (override ?? %LOCALAPPDATA%\PhotoReview)\logs\app.log
         // Ghi chú: FileLog dùng root trực tiếp dưới PhotoReview (hoặc override),
         // khác với Journal và Sessions vốn nằm trong thư mục con Data khi không có override.
-        var logRoot = hasOverride ? dataRootOverride! : appRoot;
+        var logRoot = overrideRoot ?? appRoot;
         LogFile = Path.Combine(logRoot, "logs", "app.log");
 
         // Caches và WindowPlacementFile luôn nằm dưới appRoot (%LOCALAPPDATA%\PhotoReview)
@@ -48,7 +53,12 @@ public sealed class AppPaths : IAppPaths
         WindowPlacementFile = Path.Combine(appRoot, "window-placement.json");
     }
 
-    public const string DataRootEnvironmentVariable = "PHOTOREVIEW_DATA_ROOT";
+    private static string? ResolveOverride(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try { return Path.GetFullPath(value.Trim()); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return null; }
+    }
 
     /// <summary>
     /// Factory là nơi DUY NHẤT trong toàn bộ ứng dụng đọc biến môi trường PHOTOREVIEW_DATA_ROOT.

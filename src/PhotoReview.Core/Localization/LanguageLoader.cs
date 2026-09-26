@@ -127,8 +127,8 @@ public sealed class LanguageLoader
                     continue;
                 }
                 json = _fileSystem.ReadAllText(file);
-                // The stat above can be missing or stale (the file grew after it): the text length is the last line of defence.
-                if (json.Length > LanguageCatalog.MaxFileBytes)
+                // The stat above can be missing or stale (the file grew after it): its UTF-8 byte count is the last line of defence.
+                if (json.Length > LanguageCatalog.MaxFileBytes || System.Text.Encoding.UTF8.GetByteCount(json) > LanguageCatalog.MaxFileBytes)
                 {
                     warnings.Add($"{file}: larger than {LanguageCatalog.MaxFileBytes} bytes, skipped");
                     continue;

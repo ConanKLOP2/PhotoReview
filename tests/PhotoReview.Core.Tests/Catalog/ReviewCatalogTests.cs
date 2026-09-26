@@ -32,7 +32,7 @@ public class ReviewCatalogTests
         Assert.Equal(-1, catalog.CurrentIndex);
         Assert.Null(catalog.Current);
         Assert.Empty(catalog.Paths);
-        Assert.Empty(catalog.Snapshot());
+        Assert.Empty(catalog.Paths);
 
         Assert.Equal(-1, catalog.IndexOf("anything.jpg"));
         Assert.False(catalog.SetCurrent(0));
@@ -197,19 +197,19 @@ public class ReviewCatalogTests
     }
 
     [Fact]
-    public void Snapshot_ReturnsIndependentArray()
+    public void Paths_TakenBeforeAChange_IsNotMutatedByIt()
     {
         var catalog = new ReviewCatalog();
         catalog.Reset(["img1.jpg", "img2.jpg"]);
 
-        var snapshot = catalog.Snapshot();
+        var snapshot = catalog.Paths;
         Assert.Equal(["img1.jpg", "img2.jpg"], snapshot);
 
         catalog.Remove("img1.jpg");
         Assert.Single(catalog.Paths);
 
         // Snapshot is not mutated
-        Assert.Equal(2, snapshot.Length);
+        Assert.Equal(2, snapshot.Count);
         Assert.Equal("img1.jpg", snapshot[0]);
     }
 }

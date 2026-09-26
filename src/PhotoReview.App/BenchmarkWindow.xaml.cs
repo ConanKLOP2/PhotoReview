@@ -177,12 +177,16 @@ public partial class BenchmarkWindow : Window, IDisposable
         ResultsGrid.Items.Refresh();
     }
 
+    /// <summary>File name of one profile's report; a report with no phases (nothing measured) must not throw here.</summary>
+    internal static string ReportFileName(BenchmarkReport report) =>
+        $"{(report.Phases.Count > 0 ? report.Phases[0].ProfileId : "report")}-{report.RunId}.json";
+
     private async Task SaveSessionSummaryAsync(IReadOnlyList<BenchmarkReport> reports)
     {
         var dir = Path.Combine(Path.GetTempPath(), "PhotoReview-Benchmark-Reports", DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(dir);
         foreach (var report in reports)
-            await File.WriteAllTextAsync(Path.Combine(dir, $"{report.Phases[0].ProfileId}-{report.RunId}.json"), report.ToJson());
+            await File.WriteAllTextAsync(Path.Combine(dir, ReportFileName(report)), report.ToJson());
         var summaryPath = Path.Combine(dir, "summary.json");
         await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(reports, JsonOptions));
         _lastReport = summaryPath;
@@ -190,13 +194,26 @@ public partial class BenchmarkWindow : Window, IDisposable
 
     private void OpenReport_Click(object sender, RoutedEventArgs e)
     {
-        if (_lastReport is not null && File.Exists(_lastReport)) Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_lastReport}\"") { UseShellExecute = true });
+        if (_lastReport is not null && File.Exists(_lastReport)) StartExplorer($"/select,\"{_lastReport}\"");
     }
 
     private void OpenResultFolder_Click(object sender, RoutedEventArgs e)
     {
         var dir = _lastReport is null ? Path.GetTempPath() : Path.GetDirectoryName(_lastReport)!;
-        Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
+        StartExplorer(dir);
+    }
+
+    /// <summary>Opens Explorer and disposes the process handle; a launch failure is logged (the dispatcher would swallow it silently).</summary>
+    private static void StartExplorer(string arguments)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            AppLog.Error("Could not start Explorer", ex);
+        }
     }
 }
 

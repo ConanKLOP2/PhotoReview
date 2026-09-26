@@ -161,15 +161,18 @@ public sealed class SettingsRobustnessTests : IDisposable
         AssertUsable(s);
     }
 
-    [Fact(DisplayName = "A 50 MB config file loads (or is rejected) without throwing")]
+    [Fact(DisplayName = "A multi-MB config file (huge unknown string) loads, keeps its known values and is not backed up as corrupt")]
     public void Load_HugeFile_DoesNotThrow()
     {
-        var sb = new StringBuilder("{\"ConfigVersion\":3,\"Junk\":\"");
-        sb.Append('x', 50 * 1024 * 1024).Append("\"}");
+        // 4 MB is far beyond any real config yet keeps the default run light (was 50 MB = ~250 MB of string copies).
+        var sb = new StringBuilder("{\"ConfigVersion\":3,\"ClickZoomPercent\":250,\"Junk\":\"");
+        sb.Append('x', 4 * 1024 * 1024).Append("\"}");
 
         var s = LoadJson(sb.ToString());
 
         AssertUsable(s);
+        Assert.Equal(250, s.ClickZoomPercent);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(_paths.ConfigFile)!, "*.corrupt-*"));
     }
 
     [Theory(DisplayName = "Out-of-range and extreme numbers are repaired to usable values")]

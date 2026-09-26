@@ -1,4 +1,5 @@
 using System.IO;
+using PhotoReview.Core.Model;
 using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.Integration.Tests;
@@ -10,37 +11,38 @@ public sealed class InstanceLockKeyTests
     [Fact(DisplayName = "Different spellings of one folder map to the same mutex name")]
     public void MutexNameFor_SpellingVariants_AreEqual()
     {
-        var expected = InstanceLock.MutexNameFor(@"C:\Photos");
+        var expected = InstanceKeys.MutexNameFor(@"C:\Photos");
 
-        Assert.Equal(expected, InstanceLock.MutexNameFor(@"C:\Photos\"));
-        Assert.Equal(expected, InstanceLock.MutexNameFor(@"c:\photos"));
-        Assert.Equal(expected, InstanceLock.MutexNameFor(@"C:\Photos\sub\.."));
-        Assert.NotEqual(expected, InstanceLock.MutexNameFor(@"C:\Photos2"));
+        Assert.Equal(expected, InstanceKeys.MutexNameFor(@"C:\Photos\"));
+        Assert.Equal(expected, InstanceKeys.MutexNameFor(@"c:\photos"));
+        Assert.Equal(expected, InstanceKeys.MutexNameFor(@"C:\Photos\sub\.."));
+        Assert.NotEqual(expected, InstanceKeys.MutexNameFor(@"C:\Photos2"));
     }
 
     [Fact(DisplayName = "A relative path does not throw and equals its absolute form")]
     public void MutexNameFor_RelativePath_ResolvesAgainstCurrentDirectory()
     {
         Assert.Equal(
-            InstanceLock.MutexNameFor(Path.GetFullPath("relative-folder")),
-            InstanceLock.MutexNameFor("relative-folder"));
+            InstanceKeys.MutexNameFor(Path.GetFullPath("relative-folder")),
+            InstanceKeys.MutexNameFor("relative-folder"));
     }
 
     [Fact(DisplayName = "The no-folder launch uses one constant name")]
     public void MutexNameFor_NoFolder_IsConstant()
     {
-        Assert.Equal(InstanceLock.MutexNameFor(null), InstanceLock.MutexNameFor(""));
-        Assert.NotEqual(InstanceLock.MutexNameFor(null), InstanceLock.MutexNameFor(Path.GetFullPath("PhotoReview")));
+        Assert.Equal(InstanceKeys.MutexNameFor(null), InstanceKeys.MutexNameFor(""));
+        Assert.NotEqual(InstanceKeys.MutexNameFor(null), InstanceKeys.MutexNameFor(Path.GetFullPath("PhotoReview")));
     }
 
-    [Fact(DisplayName = "A second instance on the same folder spelled differently is refused")]
-    public void SecondInstance_SameFolderDifferentSpelling_IsNotOwner()
+    [Fact(DisplayName = "A folder text that is not a usable path still yields a stable name instead of throwing")]
+    public void MutexNameFor_UnusablePath_DoesNotThrow()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "PhotoReviewLock_" + Guid.NewGuid().ToString("N"));
-        using var first = new InstanceLock(folder);
-        using var second = new InstanceLock(folder.ToLowerInvariant() + Path.DirectorySeparatorChar);
+        var bad = "C:\\Photos\0bad";
 
-        Assert.True(first.IsOwner);
-        Assert.False(second.IsOwner);
+        var name = InstanceKeys.MutexNameFor(bad);
+
+        Assert.Equal(name, InstanceKeys.MutexNameFor(bad));
+        Assert.NotEqual(name, InstanceKeys.MutexNameFor(@"C:\Photos"));
+        Assert.Equal(name, InstanceKeys.For(InstanceMode.PerFolder, bad).MutexName);
     }
 }

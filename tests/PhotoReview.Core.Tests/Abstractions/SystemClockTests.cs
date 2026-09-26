@@ -18,17 +18,4 @@ public class SystemClockTests
         Assert.True(clockTime <= after.AddMilliseconds(100));
         Assert.Equal(DateTimeKind.Utc, clockTime.Kind);
     }
-
-    [Fact]
-    public void TimestampReturnsNonZeroAndIncreases()
-    {
-        var clock = SystemClock.Instance;
-        var t1 = clock.Timestamp;
-        Thread.SpinWait(100);
-        var t2 = clock.Timestamp;
-
-        Assert.True(t1 > 0);
-        Assert.True(t2 >= t1);
-    }
 }
-

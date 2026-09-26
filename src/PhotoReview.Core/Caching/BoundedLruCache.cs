@@ -41,10 +41,10 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
     public void Set(TKey key, TValue value)
     {
         var size = Math.Max(1, _sizeOf(value));
-        if (size > _capacity) return;
         lock (_gate)
         {
-            RemoveCore(key);
+            RemoveCore(key); // a replacement supersedes the old value even when the new one is too large to cache
+            if (size > _capacity) return;
             while (_size + size > _capacity && _lru.Last is not null)
             {
                 var oldest = _lru.Last!;

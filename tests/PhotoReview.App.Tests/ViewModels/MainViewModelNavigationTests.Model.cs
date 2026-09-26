@@ -197,4 +197,17 @@ public sealed partial class MainViewModelNavigationTests
         Assert.Equal(1, vm.TotalFiles);
         Assert.Equal(Path.Combine(folder, "a.png"), vm.Catalog.Current?.Path);
     }
+
+    [Fact(DisplayName = "Setting StatusText raises PropertyChanged(StatusText) exactly once per change")]
+    public void StatusText_Set_RaisesOneNotification()
+    {
+        var (vm, _, _) = CreateViewModel();
+        var count = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.StatusText)) count++; };
+
+        vm.StatusText = "hello";
+        Assert.Equal(1, count);
+        vm.StatusText = "hello";
+        Assert.Equal(1, count);
+    }
 }

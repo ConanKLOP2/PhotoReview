@@ -15,7 +15,6 @@ public sealed class FileActionSafetyEdgeTests
     private sealed class Clock : IClock
     {
         public DateTime UtcNow { get; } = new(2026, 9, 26, 1, 0, 0, DateTimeKind.Utc);
-        public long Timestamp => 0;
     }
 
     private sealed class Bin : IRecycleBin
@@ -169,6 +168,50 @@ public sealed class FileActionSafetyEdgeTests
         journal.Append(prepared with { State = JournalState.Failed, Error = "boom" });
 
         Assert.Single(journal.ReadFailedOperations());
+    }
+
+    // A journal past the 1 MB threshold makes ReadCommittedMoves use the reverse (tail) reader.
+    private static OperationJournal LargeJournal(InMemoryFileSystem disk)
+    {
+        var text = new System.Text.StringBuilder();
+        for (var i = 0; i < 400; i++)
+        {
+            var pad = new JournalEntry("pre" + i, FileOperationType.Move, JournalState.Committed, $@"C:\old\{i}.jpg", $@"C:\old\sel\{i}.jpg", 10, Stamp, Stamp, new string('p', 3500));
+            text.Append(System.Text.Json.JsonSerializer.Serialize(pad)).AppendLine();
+        }
+        disk.AddFile(Paths.JournalFile, text.ToString());
+        Assert.True(disk.GetFileStat(Paths.JournalFile)!.Length >= 1024 * 1024);
+        return new OperationJournal(Paths, disk, new Clock());
+    }
+
+    [Fact(DisplayName = "Large journal (reverse reader): move, undo, move again still leaves only the newest entry for the destination")]
+    public void ReadStartupHistory_LargeJournal_MoveUndoMoveAgain_KeepsNewest()
+    {
+        var disk = new InMemoryFileSystem();
+        disk.AddFile(@"C:\photos\sel.jpg", "12345", Stamp);
+        var journal = LargeJournal(disk);
+        journal.Append(Move("m1", @"C:\photos.jpg", @"C:\photos\sel.jpg"));
+        journal.Append(Move("u1", @"C:\photos\sel.jpg", @"C:\photos.jpg", undo: true));
+        journal.Append(Move("m2", @"C:\photos.jpg", @"C:\photos\sel.jpg"));
+
+        var history = new UndoService(journal, disk, new Bin()).ReadStartupHistory();
+
+        Assert.Equal("m2", Assert.Single(history).Id);
+    }
+
+    [Fact(DisplayName = "Large journal (reverse reader) and small journal agree when a stale reconcile Failed follows a Committed Move")]
+    public void StaleReconcileFailed_LargeJournal_SameViewAsSmall()
+    {
+        var disk = new InMemoryFileSystem();
+        var journal = LargeJournal(disk);
+        var prepared = Move("race", @"C:\photos.jpg", @"C:\photos\sel.jpg", JournalState.Prepared);
+        journal.Append(prepared);
+        journal.Append(prepared with { State = JournalState.Committed });
+        journal.Append(prepared with { State = JournalState.Failed, ErrorCode = JournalErrors.PendingUnconfirmed, Error = JournalErrors.EnglishText(JournalErrors.PendingUnconfirmed) });
+
+        Assert.Empty(journal.ReadFailedOperations());
+        Assert.Empty(journal.ReadPendingOperations());
+        Assert.Contains(journal.ReadCommittedMoves(), e => e.Id == "race");
     }
 
     [Theory(DisplayName = "Retry refuses a source whose size or last-write time differs from the journal, and touches nothing")]

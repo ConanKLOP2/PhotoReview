@@ -27,6 +27,11 @@ public sealed class WindowsRecycleBinRestoreVerbTests
         "Ausschneiden", "&Löschen", "Eigenschaften",
         "剪切(&T)", "删除(&D)", "属性(&R)", "切り取り(&T)", "削除(&D)", "プロパティ(&R)",
         "Вырезать", "Удалить", "Свойства",
+        "&Supprimer", "&Couper", "Propriétés", "&Eliminar", "Cor&tar", "&Elimina", "&Taglia", "Proprietà",
+        "&Verwijderen", "&Knippen", "Eigenschappen", "&Slet", "&Klip", "Egenskaber", "&Ta bort", "Klipp &ut", "Egenskaper",
+        "&Poista", "&Leikkaa", "Ominaisuudet", "&Usuń", "Wy&tnij", "Właściwości", "&Odstranit", "&Vyjmout", "Vlastnosti",
+        "&Törlés", "&Kivágás", "&Sil", "&Kes", "Özellikler", "Видалити", "Вирізати", "Властивості",
+        "Διαγραφή", "Αποκοπή", "Ιδιότητες", "삭제(&D)", "잘라내기(&T)", "속성(&R)", "حذف", "قص", "خصائص", "מחק", "גזור", "מאפיינים",
     };
 
     [Theory]

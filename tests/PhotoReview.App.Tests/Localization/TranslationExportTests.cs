@@ -122,6 +122,49 @@ public sealed class TranslationExportTests : IDisposable
     }
 
     [Fact]
+    public void Export_KeepsTheEarlierExportAsBackup_SoHandEditsAreNotLost()
+    {
+        var shipped = _temp.Dir("shipped4");
+        var user = _temp.Dir("user4");
+        var existing = Path.Combine(user, "xx.todo.json");
+        File.WriteAllText(existing, "my half-done translation");
+
+        var path = TranslationExport.Export("xx", shipped, user);
+
+        Assert.Equal(existing, path);
+        Assert.Equal("my half-done translation", File.ReadAllText(existing + TranslationExport.BackupSuffix));
+        Assert.StartsWith("{", File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Export_SecondExport_KeepsHandEditsInAnotherBackup()
+    {
+        var shipped = _temp.Dir("shipped5");
+        var user = _temp.Dir("user5");
+        var existing = Path.Combine(user, "xx.todo.json");
+        File.WriteAllText(existing, "first hand edit");
+        TranslationExport.Export("xx", shipped, user);
+        File.WriteAllText(existing, "second hand edit");
+
+        TranslationExport.Export("xx", shipped, user);
+
+        Assert.Equal("first hand edit", File.ReadAllText(existing + TranslationExport.BackupSuffix));
+        Assert.Equal("second hand edit", File.ReadAllText(existing + TranslationExport.BackupSuffix + "2"));
+    }
+
+    [Fact]
+    public void Export_UnchangedFile_NeedsNoBackup()
+    {
+        var shipped = _temp.Dir("shipped6");
+        var user = _temp.Dir("user6");
+        var path = TranslationExport.Export("xx", shipped, user);
+
+        TranslationExport.Export("xx", shipped, user);
+
+        Assert.False(File.Exists(path + TranslationExport.BackupSuffix));
+    }
+
+    [Fact]
     public void Export_RejectsInvalidCode()
     {
         Assert.Throws<ArgumentException>(() => TranslationExport.Export("..\\evil", _temp.Dir("s3"), _temp.Dir("u3")));

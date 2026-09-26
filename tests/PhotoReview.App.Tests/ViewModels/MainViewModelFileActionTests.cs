@@ -209,6 +209,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
     {
         var folder = Path.Combine(_tempDir, "close_coordinator");
         Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
         var (vm, _, _) = CreateViewModel();
 
         vm.CloseSession();
@@ -217,8 +218,14 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         // async-void handler; the disposed coordinator is only the second line of defence.
         await vm.OpenFolderAsync(folder);
 
+        // The folder holds a photo, so a load that did start would report TotalFiles == 1: 0 proves it never started.
         Assert.Equal(0, vm.TotalFiles);
         Assert.Null(vm.Session);
+
+        // Positive control: the same folder opens normally on a VM that was not closed.
+        var (open, _, _) = CreateViewModel();
+        await open.OpenFolderAsync(folder);
+        Assert.Equal(1, open.TotalFiles);
     }
 
     [Fact]

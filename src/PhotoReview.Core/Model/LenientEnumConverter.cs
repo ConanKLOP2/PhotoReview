@@ -8,7 +8,7 @@ namespace PhotoReview.Core.Model;
 /// <summary>
 /// Bộ chuyển đổi JSON tha thứ (lenient) cho kiểu enum:
 /// - Đọc không phân biệt hoa thường.
-/// - Nhận alias qua <see cref="JsonAliasAttribute"/> và bảng tĩnh các kiểu chuẩn.
+/// - Nhận alias qua <see cref="JsonAliasAttribute"/>.
 /// - Trả về giá trị mặc định khi gặp chuỗi không nhận dạng được, chuỗi rỗng, null hoặc cấu trúc rác.
 /// - Khi ghi: chuyển <see cref="InitialViewMode"/> thành "Fit", "100%", "200%", "400%" để tương thích ngược; các enum khác ghi tên PascalCase chuẩn.
 /// </summary>
@@ -137,29 +137,7 @@ public sealed class LenientEnumConverter<T> : JsonConverter<T> where T : struct,
             }
         }
 
-        // 2. Bảng alias tĩnh cho các trường hợp đặc biệt
-        if (typeof(T) == typeof(ImageSortMode))
-        {
-            SetStaticAlias(dict, "Size", (T)(object)ImageSortMode.SizeDescending);
-            SetStaticAlias(dict, "PortraitFirst", (T)(object)ImageSortMode.Name);
-        }
-        else if (typeof(T) == typeof(FileOperationType))
-        {
-            SetStaticAlias(dict, "Delete", (T)(object)FileOperationType.Recycle);
-        }
-        else if (typeof(T) == typeof(InitialViewMode))
-        {
-            SetStaticAlias(dict, "100%", (T)(object)InitialViewMode.Percent100);
-            SetStaticAlias(dict, "200%", (T)(object)InitialViewMode.Percent200);
-            SetStaticAlias(dict, "400%", (T)(object)InitialViewMode.Percent400);
-        }
-
         return dict;
-    }
-
-    private static void SetStaticAlias(Dictionary<string, T> dict, string key, T value)
-    {
-        dict[key] = value;
     }
 }
 

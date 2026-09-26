@@ -19,10 +19,18 @@ public static class ActionDestinationPolicy
 {
     private static readonly char[] s_separators = ['\\', '/'];
 
+    // Path.GetInvalidPathChars() allocates per call and omits the wildcards '*' and '?', which a folder name can never
+    // contain; without them "sel*" passed validation and only failed later inside CreateDirectory.
+    private static readonly System.Buffers.SearchValues<char> s_invalidChars =
+        System.Buffers.SearchValues.Create([.. Path.GetInvalidPathChars(), '*', '?']);
+
     public static ActionDestinationCheck Validate(string? destination)
     {
         if (string.IsNullOrWhiteSpace(destination)) return ActionDestinationCheck.Empty;
-        if (destination.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return ActionDestinationCheck.InvalidChars;
+        // The Win32 extended-length prefix \\?\ (long paths) legitimately contains '?'; only what follows it is checked.
+        var body = destination.AsSpan();
+        if (body.StartsWith(@"\\?\", StringComparison.Ordinal)) body = body[4..];
+        if (body.IndexOfAny(s_invalidChars) >= 0) return ActionDestinationCheck.InvalidChars;
 
         // A drive-relative "a:b" is "rooted" to .NET but is neither a real absolute path nor a valid relative one.
         if (!Path.IsPathFullyQualified(destination) && destination.Contains(':', StringComparison.Ordinal))

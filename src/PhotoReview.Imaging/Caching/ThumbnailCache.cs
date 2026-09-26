@@ -169,7 +169,7 @@ public sealed class ThumbnailCache : IDisposable
                 or InvalidDataException or FileFormatException)
             {
                 _log.Error($"Disk thumbnail read failed: {cachePath}", ex);
-                DiskCacheStore.TryDelete(cachePath, "Thumbnail delete failed");
+                DiskCacheStore.TryDelete(cachePath, _log);
             }
         }
 

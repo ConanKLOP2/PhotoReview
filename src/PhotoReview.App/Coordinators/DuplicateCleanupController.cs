@@ -73,11 +73,22 @@ public sealed class DuplicateCleanupController
             remove = await DuplicateFinder.FindAsync(
                 candidates,
                 removeNumbered,
-                (path, ct) => _hashService?.GetAsync(path, ct) ?? throw UserFacingError.Localized(
-                    new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
-                    () => Tr.ErrIoHashServiceMissing),
+                (path, ct) =>
+                {
+                    // Minimize disk reads: once the folder changed the result is discarded anyway (guard below),
+                    // so stop hashing the remaining same-size files instead of reading them all.
+                    if (!_clock.IsFolderCurrent(preHashGeneration)) throw new OperationCanceledException();
+                    return _hashService?.GetAsync(path, ct) ?? throw UserFacingError.Localized(
+                        new InvalidOperationException("Duplicate detection needs a hash service; without one every same-size file would look identical."),
+                        () => Tr.ErrIoHashServiceMissing);
+                },
                 _fileSystem,
                 System.Threading.CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (!_clock.IsFolderCurrent(preHashGeneration))
+        {
+            _sink.SetStatusText(StatusFormatter.DuplicateCheckCanceledFolderChanged());
+            return;
         }
         catch (Exception ex)
         {
@@ -164,7 +175,7 @@ public sealed class DuplicateCleanupController
         _sink.SetStatusText(StatusFormatter.BatchDone(succeeded, failures.Count));
         if (failures.Count > 0 && _dialogService is not null)
         {
-            _dialogService.ShowError(Tr.DialogBatchErrorsTitle,string.Join(Environment.NewLine, failures));
+            _dialogService.ShowError(Tr.DialogBatchErrorsTitle, string.Join(Environment.NewLine, failures));
         }
 
         if (succeeded > 0 && remove.Count > 0)

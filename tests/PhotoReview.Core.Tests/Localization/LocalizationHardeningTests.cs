@@ -76,6 +76,18 @@ public sealed class LocalizationHardeningTests
         Assert.Contains(localizer.Warnings, w => w.Contains("larger than", StringComparison.Ordinal));
     }
 
+    [Fact(DisplayName = "A multibyte translation file over the byte limit is skipped even though its character count is under it")]
+    public void OversizedMultibyteFile_WithoutStat_Skipped()
+    {
+        var fs = new InMemoryFileSystem();
+        var padding = new string('é', (int)LanguageCatalog.MaxFileBytes / 2 + 1000); // 2 bytes each: chars < limit < bytes
+        fs.AddFile(@"C:\App\Languages\big.json", "{ \"_meta\": {\"code\":\"bg\"}, \"pad\": \"" + padding + "\" }");
+        var loader = new LanguageLoader(new NoStatFileSystem(fs), @"C:\App\Languages", null);
+
+        Assert.DoesNotContain("bg", loader.DiscoverLanguages().Select(l => l.Code));
+        Assert.Contains(loader.Load("bg").Warnings, w => w.Contains("larger than", StringComparison.Ordinal));
+    }
+
     [Fact(DisplayName = "UserFacingError.Describe falls back to the exception message when the sentence factory throws")]
     public void Describe_ThrowingFactory_FallsBackToMessage()
     {

@@ -190,10 +190,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         get => string.IsNullOrEmpty(_statusText) ? _presenter.StatusText : _statusText;
         set
         {
-            if (SetProperty(ref _statusText, value))
-            {
-                OnPropertyChanged(nameof(StatusText));
-            }
+            SetProperty(ref _statusText, value);
         }
     }
 
@@ -235,7 +232,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public Task LastImageAsync() => LastAsync();
 
     public bool CurrentHasComparePair =>
-        _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.Paths[_catalog.CurrentIndex]);
+        _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.PathAt(_catalog.CurrentIndex));
 
     public void ToggleCompare()
     {
@@ -403,16 +400,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         await _presenter.PresentAsync(nextIdx);
         NotifyNavigationStateChanged();
     }
-
-    /// <summary>
-    /// Chuyển tới thư mục anh em kế tiếp có chứa ảnh.
-    /// </summary>
-    public Task NextFolderAsync() => _siblingNavigator.NavigateSiblingFolderAsync(1);
-
-    /// <summary>
-    /// Chuyển tới thư mục anh em phía trước có chứa ảnh.
-    /// </summary>
-    public Task PreviousFolderAsync() => _siblingNavigator.NavigateSiblingFolderAsync(-1);
 
     /// <summary>
     /// Điều hướng thư mục cùng cấp (sibling), bảo toàn kiểm tra thế hệ folder chống race condition.
@@ -796,11 +783,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         await OpenFolderAsync(folder, initialPath);
     }
 
-    void ISiblingNavigatorSink.NotifyNavigationStateChanged()
-    {
-        NotifyNavigationStateChanged();
-    }
-
     // IDuplicateCleanupSink implementation
     void IDuplicateCleanupSink.SetStatusText(string status)
     {
@@ -810,11 +792,6 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
     {
         await OpenFolderAsync(folder, initialPath);
-    }
-
-    void IDuplicateCleanupSink.NotifyNavigationStateChanged()
-    {
-        NotifyNavigationStateChanged();
     }
 
     // ---- "Move to… / Copy to…" ----
