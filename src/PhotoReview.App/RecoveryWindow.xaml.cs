@@ -55,6 +55,7 @@ public partial class RecoveryWindow : Window
     {
         ArgumentNullException.ThrowIfNull(entries);
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         _rows = entries.Select(entry => new RecoveryRow(entry)).ToList();
         _retry = retry;
         _dismiss = dismiss;

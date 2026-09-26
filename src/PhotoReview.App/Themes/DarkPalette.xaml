@@ -45,4 +45,8 @@
     <SolidColorBrush x:Key="Dark.BorderSubtle" Color="#3A3A3A"/>
     <SolidColorBrush x:Key="Dark.BorderToolbar" Color="#454545"/>
     <SolidColorBrush x:Key="Dark.GridLine" Color="#333333"/>
+
+    <!-- ScrollBar track / ScrollViewer corner: near-black grey, same tone in every window
+         (Themes/DarkScrollBars.xaml). -->
+    <SolidColorBrush x:Key="Dark.ScrollTrack" Color="#161616"/>
 </ResourceDictionary>

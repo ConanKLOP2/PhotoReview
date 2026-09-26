@@ -75,6 +75,10 @@ public sealed class SettingsWindowRoundTripTests
             w.ExifFieldFocalLengthCheck.IsChecked = false; w.ExifFieldApertureCheck.IsChecked = false;
             w.ExifFieldShutterSpeedCheck.IsChecked = false;
         },
+        // feat/ui-dark-chrome-toolbar
+        [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.ToolbarAutoHideDelayMs)] = w => w.ToolbarAutoHideDelayBox.Text = "3000", // 1500 -> 3000
+        [nameof(AppSettings.InfoOverlayFontSize)] = w => w.InfoOverlayFontSizeBox.Text = "18", // 12 -> 18
     };
 
     /// <summary>What <see cref="ControlMutations"/> above is expected to produce on <see cref="AppSettings"/>.</summary>
@@ -103,6 +107,10 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ShowExifInfo)] = true,
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |
             ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed),
+        // feat/ui-dark-chrome-toolbar
+        [nameof(AppSettings.ToolbarAutoHide)] = false,
+        [nameof(AppSettings.ToolbarAutoHideDelayMs)] = 3000,
+        [nameof(AppSettings.InfoOverlayFontSize)] = 18.0,
     };
 
     [Fact(DisplayName = "Tripwire: every UI-controlled property has a round-trip mutation and expected value above")]

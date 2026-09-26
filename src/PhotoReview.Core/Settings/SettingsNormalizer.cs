@@ -118,6 +118,20 @@ public static class SettingsNormalizer
             settings.ClickZoomPercent = clickZoom;
             fixedNames.Add(nameof(AppSettings.ClickZoomPercent));
         }
+
+        // feat/ui-dark-chrome-toolbar
+        var toolbarDelay = Math.Clamp(settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);
+        if (toolbarDelay != settings.ToolbarAutoHideDelayMs)
+        {
+            settings.ToolbarAutoHideDelayMs = toolbarDelay;
+            fixedNames.Add(nameof(AppSettings.ToolbarAutoHideDelayMs));
+        }
+        var infoFontSize = Math.Clamp(settings.InfoOverlayFontSize, AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize);
+        if (infoFontSize != settings.InfoOverlayFontSize)
+        {
+            settings.InfoOverlayFontSize = infoFontSize;
+            fixedNames.Add(nameof(AppSettings.InfoOverlayFontSize));
+        }
         return fixedNames;
     }
 

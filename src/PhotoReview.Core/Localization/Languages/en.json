@@ -645,5 +645,17 @@
   "benchmark.quickCheck": "Quick check",
   "benchmark.quickCheck.automationName": "Run a quick 10-iteration check with Fast Sequential",
   "benchmark.imageLimit.label": "Images to test (0 = all):",
-  "benchmark.imageLimit.automationName": "Number of images to include in the benchmark run, 0 for all supported images in the folder"
+  "benchmark.imageLimit.automationName": "Number of images to include in the benchmark run, 0 for all supported images in the folder",
+  "main.menu.openFolder": "Open folder…",
+  "main.menu.openFolder.automationName": "Open image folder",
+  "main.menu.settings": "Settings…",
+  "main.menu.settings.automationName": "Open settings",
+  "settings.group.toolbar": "Toolbar",
+  "settings.toolbarAutoHide.label": "Auto-hide toolbar",
+  "settings.toolbarAutoHideDelay.label": "Hide delay (ms)",
+  "settings.toolbarAutoHideDelay.automationName": "Toolbar auto-hide delay, in milliseconds",
+  "settings.infoOverlayFontSize.label": "Info overlay font size",
+  "settings.infoOverlayFontSize.automationName": "Info overlay font size, in points",
+  "dialog.settingsInvalid.toolbarAutoHideDelay": "Toolbar auto-hide delay must be a whole number between {min} and {max} milliseconds.",
+  "dialog.settingsInvalid.infoOverlayFontSize": "Info overlay font size must be a number between {min} and {max}."
 }
