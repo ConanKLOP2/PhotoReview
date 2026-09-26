@@ -1,0 +1,14 @@
+# Keeps the SHA-pinned GitHub Actions (see the "# vX.Y.Z" comment next to each `uses:`) up to date:
+# Dependabot opens one grouped PR per week; review it like any other change (Q-R25).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"

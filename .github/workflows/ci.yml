@@ -29,7 +29,7 @@ jobs:
       TEST_FILTER: "Category!=Manual&Category!=Native&Category!=Slow"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Full history + tags: Directory.Build.targets derives the version from
           # `git rev-list --count --first-parent v2.0.0..HEAD`.
@@ -40,18 +40,18 @@ jobs:
       # Keyed on global.json's hash so a version bump auto-invalidates the cache
       # instead of silently reusing a stale SDK.
       - name: Cache .NET SDK
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: C:\hostedtoolcache\windows\dotnet
           key: ${{ runner.os }}-dotnet-sdk-${{ hashFiles('global.json') }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         # No dotnet-version input: reads the pinned SDK version from global.json
         # directly, so the workflow can't drift from what the repo actually pins.
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
@@ -146,14 +146,14 @@ jobs:
         run: ./tools/verify-release.ps1 -ReleaseDirectory 'src/PhotoReview.App/bin/Release/net10.0-windows/publish'
 
       - name: Upload publish artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: release-publish
           path: src/PhotoReview.App/bin/Release/net10.0-windows/publish
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: test-results
@@ -172,7 +172,7 @@ jobs:
       tag: ${{ steps.release_tag.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
