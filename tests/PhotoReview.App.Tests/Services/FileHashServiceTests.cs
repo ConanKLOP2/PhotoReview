@@ -30,6 +30,24 @@ public sealed class FileHashServiceTests : IDisposable
         Assert.True(first == cached && first != changed);
     }
 
+    [Fact(DisplayName = "File hash service streams a file larger than the source-bytes cache instead of reading it whole")]
+    public async Task FileHashServiceStreamsFileTooLargeForCache()
+    {
+        const int size = 24 * 1024 * 1024;
+        var fixture = Path.Combine(_root.Path, "big.bin");
+        var content = new byte[size];
+        new Random(7).NextBytes(content);
+        File.WriteAllBytes(fixture, content);
+        var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content));
+        content = [];
+        var cache = new PhotoReview.Imaging.Caching.SourceBytesCache(1024 * 1024);
+        Assert.False(cache.CanCache(size));
+        var service = new FileHashService(cache);
+        var actual = await service.GetAsync(fixture);
+        Assert.Equal(expected, actual);
+        Assert.Null(cache.LastReadManagedThreadId); // the cache never read the file whole
+    }
+
     [Fact(DisplayName = "File hash service deduplicates concurrent reads")]
     public async Task FileHashServiceDeduplicatesConcurrentReads()
     {

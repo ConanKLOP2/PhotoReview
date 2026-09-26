@@ -255,6 +255,28 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Assert.False(vm.IsFileActionInProgress);
     }
 
+    [Fact(DisplayName = "Closing defers only while the file-action gate is held; the recycle phase is never cancelled by the close request")]
+    public async Task DeferCloseForFileAction_DefersOnlyWhileGateHeld_AndKeepsTheBatch()
+    {
+        var folder = Path.Combine(_tempDir, "dup_close");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png", ValidPngBytes);
+        var numbered = CreateImageFile(folder, "photo (1).png", ValidPngBytes);
+
+        var (vm, _) = CreateViewModel();
+        await vm.OpenFolderAsync(folder);
+        _dialogService.BatchReviewResponse = true;
+        var deferredDuringReview = false;
+        _dialogService.OnBatchReview = () => deferredDuringReview = vm.DeferCloseForFileAction();
+
+        Assert.False(vm.DeferCloseForFileAction()); // idle: the window may close at once
+        await vm.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.True(deferredDuringReview);
+        Assert.Equal([numbered], _recycleBin.RecycledPaths); // hashing is over, so the close request does not abort the batch
+        Assert.False(vm.DeferCloseForFileAction());
+    }
+
     [Fact(DisplayName = "R7-4: a folder switch while the duplicate review is open cancels the cleanup")]
     public async Task RemoveDuplicatesAsync_FolderSwitchDuringReview_RecyclesNothing()
     {

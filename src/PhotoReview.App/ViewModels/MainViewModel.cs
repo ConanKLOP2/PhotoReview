@@ -544,6 +544,17 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public bool CancelDuplicateCheck() => _duplicateController.CancelDuplicateCheck();
 
     /// <summary>
+    /// R7-7: true while a file action holds the gate, so closing the window must wait for it. A duplicate check that is still
+    /// only hashing (read-only) is cancelled so the wait ends quickly; a Move/recycle batch is never interrupted.
+    /// </summary>
+    public bool DeferCloseForFileAction()
+    {
+        if (!IsFileActionInProgress) return false;
+        CancelDuplicateCheck();
+        return true;
+    }
+
+    /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
     /// </summary>
     public async Task ClearCacheAsync() =>
