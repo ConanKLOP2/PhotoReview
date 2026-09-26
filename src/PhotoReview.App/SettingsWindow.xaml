@@ -112,6 +112,15 @@
                             <ComboBox x:Name="InstanceModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=InstanceModeLabel}" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.instanceMode.singleWindow}"/><ComboBoxItem Content="{loc:Tr enum.instanceMode.perFolder}"/></ComboBox>
                             <TextBlock Text="{loc:Tr settings.instanceMode.hint}" Grid.Row="3" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
+
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr update.section.title}"><StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="CheckUpdateButton" Content="{loc:Tr update.check.button}" AutomationProperties.Name="{loc:Tr update.check.button}" Click="CheckUpdate_Click" Margin="0,0,8,0"/>
+                                <Button x:Name="OpenUpdatePageButton" Content="{loc:Tr update.openPage.button}" AutomationProperties.Name="{loc:Tr update.openPage.button}" Click="OpenUpdatePage_Click" Visibility="Collapsed"/>
+                            </StackPanel>
+                            <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite"/>
+                            <TextBlock Text="{loc:Tr update.hint}" Style="{StaticResource HelpText}" Margin="0,8,0,0"/>
+                        </StackPanel></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 
