@@ -96,8 +96,11 @@ public sealed class InfoOverlayViewModel : ObservableObject
             FolderInfoText = Format(folder, _siblings);
             return;
         }
-        if (!string.Equals(_pendingFolder, folder, StringComparison.Ordinal)) Start(folder);
+        // Publish the placeholder BEFORE starting the search: without a SynchronizationContext the search continuation
+        // can finish on the pool while this method is still running, and a placeholder written afterwards would
+        // overwrite the finished result.
         FolderInfoText = Tr.MainFolderInfoCurrent(DisplayName(folder)) + PartSeparator + Tr.MainFolderInfoPending;
+        if (!string.Equals(_pendingFolder, folder, StringComparison.Ordinal)) Start(folder);
     }
 
     private void Start(string folder)
