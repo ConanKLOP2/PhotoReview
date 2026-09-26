@@ -12,10 +12,18 @@ public sealed class SettingsStore
     private readonly IFileSystem _fileSystem;
     private readonly ILog _log;
     private readonly Action<string, Exception>? _onStartupError;
+    private readonly SettingsValidator _settingsValidator;
     private AppSettings _current;
     private bool _keepCorruptFile; // the corrupt config.json could not be backed up: never overwrite the only copy this session
 
     public AppSettings Current => _current;
+
+    /// <summary>
+    /// The key-name validator this store's <see cref="ValidateShortcuts"/> uses (AR11a: replaces the old static
+    /// <c>AppSettings.Validator</c>). Defaults to a permissive fallback (any non-blank name) when the caller does not
+    /// have a platform-specific one (e.g. <c>WpfKeyNameValidator</c>, wired in <c>App.ConfigureServices</c>).
+    /// </summary>
+    public IKeyNameValidator KeyNames { get; }
 
     /// <summary>
     /// Names of the settings the last <see cref="Load"/> had to reset because <c>config.json</c> held unusable values
@@ -28,13 +36,28 @@ public sealed class SettingsStore
         IAppPaths appPaths,
         IFileSystem fileSystem,
         ILog log,
-        Action<string, Exception>? onStartupError = null)
+        Action<string, Exception>? onStartupError = null,
+        IKeyNameValidator? keyNameValidator = null)
     {
         _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _onStartupError = onStartupError;
+        KeyNames = keyNameValidator ?? new SimpleKeyNameValidator();
+        _settingsValidator = new SettingsValidator(KeyNames);
         _current = new AppSettings();
+    }
+
+    /// <summary>
+    /// AR11a: replaces the old static <c>AppSettings.ValidateShortcuts</c> -- uses this store's <see cref="KeyNames"/>
+    /// instead of a process-wide mutable static.
+    /// </summary>
+    public string? ValidateShortcuts(AppSettings settings) => _settingsValidator.ValidateShortcuts(settings);
+
+    /// <summary>Permissive fallback used when a caller does not wire a platform-specific <see cref="IKeyNameValidator"/>.</summary>
+    private sealed class SimpleKeyNameValidator : IKeyNameValidator
+    {
+        public bool IsValidKeyName(string keyName) => !string.IsNullOrWhiteSpace(keyName);
     }
 
     public AppSettings Load(string? path = null)
@@ -70,9 +93,7 @@ public sealed class SettingsStore
                         LogStartupError("Could not back up config.json with unreadable values", copyEx);
                     }
                 }
-                Migrate(loaded);
-                loaded.Shortcuts ??= ShortcutMappings.Default();
-                loaded.Actions ??= ReviewAction.Defaults();
+                FinishDeserialize(loaded);
                 LastLoadRepairs = [.. salvagedFrom, .. SettingsNormalizer.Normalize(loaded).Except(salvagedFrom, StringComparer.Ordinal)];
                 if (LastLoadRepairs.Count > 0)
                     _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
@@ -205,6 +226,26 @@ public sealed class SettingsStore
         {
             _log.Error(message, ex);
         }
+    }
+
+    /// <summary>
+    /// AR11a: deserializes a config.json-shaped string and applies the same post-processing <see cref="Load"/>
+    /// does (migrate + fill in missing <see cref="AppSettings.Shortcuts"/>/<see cref="AppSettings.Actions"/>), without
+    /// touching disk. Internal test seam (<c>InternalsVisibleTo PhotoReview.Core.Tests</c>) for fixture-driven
+    /// migration tests that used to go through the now-removed <c>AppSettings.Load(path)</c>.
+    /// </summary>
+    internal static AppSettings Parse(string json)
+    {
+        var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+        FinishDeserialize(loaded);
+        return loaded;
+    }
+
+    private static void FinishDeserialize(AppSettings loaded)
+    {
+        Migrate(loaded);
+        loaded.Shortcuts ??= ShortcutMappings.Default();
+        loaded.Actions ??= ReviewAction.Defaults();
     }
 
     public static void Migrate(AppSettings settings)

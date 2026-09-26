@@ -43,7 +43,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<IAppPaths>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<ILog>(),
-            LogStartupErrorForced));
+            LogStartupErrorForced,
+            new WpfKeyNameValidator())); // AR11a: was the static AppSettings.Validator, now an instance dependency
         services.AddSingleton<SessionStore>(sp => new SessionStore(
             sp.GetRequiredService<IAppPaths>(),
             sp.GetRequiredService<IFileSystem>(),
@@ -229,7 +230,6 @@ public partial class App : System.Windows.Application, IDisposable
         // and the Startup milestones below (msSinceProcessStart) cover services/settings/window too.
         _perfListener = PerfCsvListener.TryStartFromEnvironment();
         PhotoReviewPerf.StartupMark("appStartup");
-        PhotoReview.App.Services.WpfKeyNameValidator.WireUp();
 
         _services = Composition.AppHost.BuildServices();
         PhotoReviewPerf.StartupMark("servicesBuilt");

@@ -382,8 +382,7 @@ public partial class SettingsWindow : Window
     {
         if (ShortcutDuplicateWarningText is null) return; // can fire while InitializeComponent is still building the tree
         var probe = BuildProbeSettings();
-        var validator = new SettingsValidator(new WpfKeyNameValidator());
-        var message = validator.ValidateShortcuts(probe);
+        var message = _store is not null ? _store.ValidateShortcuts(probe) : new SettingsValidator(new WpfKeyNameValidator()).ValidateShortcuts(probe);
         ShortcutDuplicateWarningText.Text = message ?? string.Empty;
         ShortcutDuplicateWarningText.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -538,8 +537,9 @@ public partial class SettingsWindow : Window
                 throw new JsonException("Two actions use the same shortcut."); // never shown (caught below)
         }
         catch { ShowInvalid(Tr.DialogSettingsInvalidActionsJson); return; }
-        var validator = new PhotoReview.App.Services.WpfKeyNameValidator();
-        var shortcutError = new SettingsValidator(validator).ValidateShortcuts(Settings);
+        var shortcutError = _store is not null
+            ? _store.ValidateShortcuts(Settings)
+            : new SettingsValidator(new PhotoReview.App.Services.WpfKeyNameValidator()).ValidateShortcuts(Settings);
         if (shortcutError is not null) { ShowInvalid(shortcutError); return; }
         // R7-8: destinations typed in the raw actions JSON get the same check as the Action Profiles editor (CORE-03 / Q-R2).
         if (ActionProfilesWindow.FindDestinationProblem(Settings.Actions) is { } destinationProblem)
@@ -551,10 +551,11 @@ public partial class SettingsWindow : Window
             Settings.UiLanguage = LanguageOptions.ToSetting(LanguageCombo.SelectedItem as LanguageOption, Settings.UiLanguage);
         try
         {
-            if (_store is not null)
-                _store.Save(Settings);
-            else
-                AppSettings.Save(Settings);
+            // AR11a: the old fallback here was AppSettings.Save(Settings), a static Saver hook nothing ever assigned
+            // (a silent no-op) -- removed along with the rest of the dead static persistence API. A window built
+            // without a store (test-only: see the AppSettings-taking constructor) has nothing to persist to; Settings
+            // (the in-memory clone above) already reflects everything Save just validated and assigned.
+            _store?.Save(Settings);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

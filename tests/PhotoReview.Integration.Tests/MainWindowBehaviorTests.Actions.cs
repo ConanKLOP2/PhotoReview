@@ -229,7 +229,7 @@ public sealed class MainWindowBehaviorActionTests
     /// <summary>
     /// Points the window at a single, deterministic Move action inside this test's temp tree.
     /// <para>
-    /// <c>MainWindow</c> starts from <c>AppSettings.Load()</c>, i.e. the machine's real
+    /// <c>MainWindow</c> starts from the SettingsStore its AppHost resolved, i.e. the machine's real
     /// <c>config.json</c> -- on a developer machine that can map Enter to a Move into a real photo
     /// folder. Overwriting the in-memory shortcut map and action list (nothing is saved back to
     /// disk) keeps the key route independent of whoever runs the suite and keeps every filesystem

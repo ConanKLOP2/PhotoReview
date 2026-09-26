@@ -161,8 +161,9 @@ internal static class PerfSession
         // Both must be set before the listener, AppSettings or any window/journal/session object exists.
         Environment.SetEnvironmentVariable("PHOTOREVIEW_PERF_TRACE", outDir);
         Environment.SetEnvironmentVariable("PHOTOREVIEW_DATA_ROOT", dataRoot);
-        if (!File.Exists(AppSettings.ConfigPath))
-            Console.WriteLine($"WARNING: {AppSettings.ConfigPath} does not exist; AppSettings.Load() (app code) will create a default one.");
+        var configPath = AppPaths.FromEnvironment().ConfigFile;
+        if (!File.Exists(configPath))
+            Console.WriteLine($"WARNING: {configPath} does not exist; SettingsStore.Load() (app code) will create a default one.");
 
         var usesCopy = scenario.Copy is not null || scenario.Steps.Any(s => s.Action is not null);
         var sourceImageCount = Directory.EnumerateFiles(source).Count(ImageFileTypes.IsSupported);
