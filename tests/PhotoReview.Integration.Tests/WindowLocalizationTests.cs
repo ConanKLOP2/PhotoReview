@@ -124,6 +124,8 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
                 var clickZoomLevel = menuItems[3];
                 Assert.Equal("Thu phóng", clickZoomLevel.Header);
+                // Populated before the first open: an empty MenuItem shows no submenu arrow and cannot open.
+                Assert.True(clickZoomLevel.HasItems);
                 Assert.Equal("Menu con thu phóng", AutomationProperties.GetName(clickZoomLevel));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
 

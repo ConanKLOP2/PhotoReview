@@ -87,6 +87,8 @@ public partial class MainWindow : Window
         Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
+        // Items exist before the first open: a MenuItem with no children shows no submenu arrow and never opens.
+        BuildClickZoomMenu();
         DarkTitleBarChrome.Apply(this);
         _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize, displayClock);
         _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
@@ -549,10 +551,17 @@ public partial class MainWindow : Window
 
     private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 200, 300, 400];
     private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
+    private System.Windows.Controls.MenuItem? _clickZoomFitItem;
+    private System.Windows.Controls.MenuItem? _clickZoomCustomItem;
 
     private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         if (_clickZoomPresetItems is null) BuildClickZoomMenu();
+        // Headers are re-read on every open so a language switch shows without a restart.
+        _clickZoomFitItem!.Header = Tr.MainMenuClickZoomLevelFit;
+        AutomationProperties.SetName(_clickZoomFitItem, Tr.MainMenuClickZoomLevelFitAutomationName);
+        _clickZoomCustomItem!.Header = Tr.MainMenuClickZoomLevelCustom;
+        AutomationProperties.SetName(_clickZoomCustomItem, Tr.MainMenuClickZoomLevelCustomAutomationName);
         var current = _settings.ClickZoomPercent;
         foreach (var item in _clickZoomPresetItems!)
         {
@@ -566,7 +575,7 @@ public partial class MainWindow : Window
     private void BuildClickZoomMenu()
     {
         _clickZoomPresetItems = [];
-        var fit = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelFit };
+        var fit = _clickZoomFitItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelFit };
         AutomationProperties.SetName(fit, Tr.MainMenuClickZoomLevelFitAutomationName);
         fit.Click += ClickZoomFit_Click;
         ClickZoomMenu.Items.Add(fit);
@@ -574,12 +583,13 @@ public partial class MainWindow : Window
         foreach (var percent in ClickZoomPresets)
         {
             var item = new System.Windows.Controls.MenuItem { IsCheckable = true, Tag = percent };
+            item.Header = Tr.MainMenuClickZoomLevelPreset(percent);
             item.Click += ClickZoomPreset_Click;
             _clickZoomPresetItems.Add(item);
             ClickZoomMenu.Items.Add(item);
         }
         ClickZoomMenu.Items.Add(new System.Windows.Controls.Separator());
-        var custom = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelCustom };
+        var custom = _clickZoomCustomItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelCustom };
         AutomationProperties.SetName(custom, Tr.MainMenuClickZoomLevelCustomAutomationName);
         custom.Click += ClickZoomCustom_Click;
         ClickZoomMenu.Items.Add(custom);
