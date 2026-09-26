@@ -84,8 +84,17 @@ public sealed class LocalizationService
     /// <summary>Loads and applies in one step (language switch or "Reload translations").</summary>
     public void Switch(string? language) => Apply(language, Load(language));
 
-    /// <summary>Re-reads the files of the current language, e.g. after a translator edited them.</summary>
-    public void Reload() => Switch(RequestedLanguage);
+    /// <summary>
+    /// Re-reads the files of the current language, e.g. after a translator edited them, and returns the problems
+    /// found (skipped files, entries that fall back to English) so the caller can show them.
+    /// </summary>
+    public IReadOnlyList<string> Reload()
+    {
+        var language = RequestedLanguage;
+        var localizer = Load(language);
+        Apply(language, localizer);
+        return localizer.Warnings;
+    }
 
     /// <summary>The language code a setting value loads (<c>auto</c> follows the Windows UI language; unknown codes give English).</summary>
     public string ResolveCode(string? language) => _loader.Resolve(language, CultureInfo.InstalledUICulture);

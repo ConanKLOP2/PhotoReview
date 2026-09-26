@@ -80,9 +80,75 @@ public sealed class LocalizationServiceTests : IDisposable
         File.WriteAllText(Path.Combine(service.UserLanguagesDir, "vi.json"),
             """{ "_meta": { "code": "vi" }, "app.title": "Duyệt ảnh" }""");
 
-        service.Reload();
+        var problems = service.Reload();
 
         Assert.Equal("Duyệt ảnh", Localizer.Current.Get("app.title"));
+        Assert.Empty(problems);
+    }
+
+    [Fact]
+    public void Reload_BrokenUserFile_ReturnsTheProblem_AndKeepsShippedText()
+    {
+        var service = CreateService();
+        service.Switch("vi");
+        var shippedTitle = Localizer.Current.Get("app.title");
+        Directory.CreateDirectory(service.UserLanguagesDir);
+        var broken = Path.Combine(service.UserLanguagesDir, "vi.json");
+        File.WriteAllText(broken, """{ "_meta": { "code": "vi" }, "app.title": "Duyệt ảnh" """); // missing '}'
+
+        var problems = service.Reload();
+
+        Assert.Contains(problems, p => p.Contains(broken, StringComparison.Ordinal) && p.Contains("invalid JSON", StringComparison.Ordinal));
+        Assert.Equal(shippedTitle, Localizer.Current.Get("app.title")); // the whole file is skipped
+    }
+
+    [Fact]
+    public void Reload_BadPlaceholder_ReturnsTheProblemForThatKey()
+    {
+        var service = CreateService();
+        service.Switch("vi");
+        Directory.CreateDirectory(service.UserLanguagesDir);
+        File.WriteAllText(Path.Combine(service.UserLanguagesDir, "vi.json"),
+            """{ "_meta": { "code": "vi" }, "main.skipped.warning.other": "Bỏ qua {soLuong} tệp", "app.title": "Duyệt ảnh" }""");
+
+        var problems = service.Reload();
+
+        Assert.Contains(problems, p => p.Contains("'main.skipped.warning.other'", StringComparison.Ordinal));
+        Assert.Equal("Duyệt ảnh", Localizer.Current.Get("app.title")); // the other entries still load
+    }
+
+    [Fact]
+    public void ProblemsMessage_NoProblems_SaysSo()
+    {
+        TestLocalization.UseVietnamese();
+
+        Assert.Equal(Tr.DialogReloadTranslationsOk, TranslationProblems.Message([]));
+        Assert.False(TranslationProblems.HasProblems([]));
+    }
+
+    [Fact]
+    public void ProblemsMessage_ListsEachProblem_AndCountsTheRest()
+    {
+        TestLocalization.UseVietnamese();
+        var warnings = Enumerable.Range(1, TranslationProblems.MaxListed + 3).Select(i => $"problem-{i:D2}").ToList();
+
+        var message = TranslationProblems.Message(warnings);
+
+        Assert.True(TranslationProblems.HasProblems(warnings));
+        Assert.Contains((TranslationProblems.MaxListed + 3).ToString(CultureInfo.InvariantCulture), message, StringComparison.Ordinal);
+        Assert.All(warnings.Take(TranslationProblems.MaxListed), w => Assert.Contains("• " + w, message, StringComparison.Ordinal));
+        Assert.DoesNotContain(warnings[TranslationProblems.MaxListed], message, StringComparison.Ordinal);
+        Assert.EndsWith(Tr.DialogReloadTranslationsMore(3), message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProblemsMessage_FewProblems_ListsAllWithoutMoreLine()
+    {
+        TestLocalization.UseVietnamese();
+
+        var message = TranslationProblems.Message(["a.json: invalid JSON"]);
+
+        Assert.EndsWith("• a.json: invalid JSON", message, StringComparison.Ordinal);
     }
 
     [Fact]

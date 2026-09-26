@@ -29,7 +29,8 @@ Lookup order for every text: your file → shipped file → built-in English →
 ### Translate or add a language
 
 1. Settings → pick the language (or English for a new one) → **Export strings to translate**. This writes
-   `<code>.todo.json` with every missing key, its English text and translator notes.
+   `<code>.todo.json` with every key: the missing ones first (English text, also listed in `_missing`), then the
+   current translations, plus translator notes. Languages with `"plural": "none"` do not get untranslated `.one` keys.
 2. Create `<code>.json` (e.g. `de.json`) with a `_meta` block and your translations:
    ```json
    {
@@ -49,7 +50,8 @@ Lookup order for every text: your file → shipped file → built-in English →
   (that entry is ignored and English is shown). Write `{{` / `}}` for literal braces.
 - Plurals: `key.one` / `key.other`. Languages without plural forms set `"plural": "none"` and only need `.other`.
 - Keep file-dialog filters' `|` separators and `*.json` patterns.
-- A broken file never crashes the app: it is skipped and the problem is written to the log.
+- A broken file never crashes the app: it is skipped (a broken entry shows English) and the problem is written to
+  the log. **Reload translations** also shows every problem in a message (file, key, reason), or says none were found.
 - Maintainers: when the *meaning* of an English text changes, give it a new key (e.g. `…V2`) so old
   translations never silently mismatch.
 
@@ -72,7 +74,7 @@ Thứ tự tìm mỗi chữ: file của bạn → file đi kèm → English có 
 
 ### Dịch hoặc thêm ngôn ngữ
 
-1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm các key còn thiếu, câu English và ghi chú.
+1. Cài đặt → chọn ngôn ngữ → **Xuất chuỗi cần dịch**: tạo `<mã>.todo.json` gồm toàn bộ key: key còn thiếu ở đầu (câu English, liệt kê trong `_missing`), sau đó là bản dịch hiện tại, kèm ghi chú. Ngôn ngữ có `"plural": "none"` không bị liệt kê các key `.one` chưa dịch.
 2. Tạo `<mã>.json` có khối `_meta` (mã, tên, tên bản địa, `plural`, tác giả) và bản dịch.
 3. Đặt vào thư mục người dùng, **Tải lại bản dịch**, chọn trong **Ngôn ngữ**.
 4. Chạy PhotoReview với `--i18n-keys` để thấy key của từng chữ, hoặc `--i18n-pseudo` để phát hiện chữ bị cắt.
@@ -84,7 +86,8 @@ Thứ tự tìm mỗi chữ: file của bạn → file đi kèm → English có 
 - Giữ nguyên placeholder `{count}`, `{fileName}`…: được đổi vị trí hoặc bỏ bớt (có cảnh báo), không được tự đặt tên mới
   (key đó bị bỏ qua, hiện English). Dấu ngoặc nhọn thường viết `{{` / `}}`.
 - Số nhiều: `key.one` / `key.other`; tiếng Việt dùng `"plural": "none"` nên chỉ cần `.other`.
-- File hỏng không làm app crash: file bị bỏ qua và lỗi được ghi vào log.
+- File hỏng không làm app crash: file bị bỏ qua (mục hỏng hiện tiếng Anh) và lỗi được ghi vào log. Nhấn **Tải lại bản dịch**
+  sẽ hiện thông báo liệt kê từng lỗi (file, key, lý do), hoặc báo không có lỗi.
 
 ## Vietnamese glossary / Thuật ngữ tiếng Việt
 

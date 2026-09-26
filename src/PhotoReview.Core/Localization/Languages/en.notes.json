@@ -307,7 +307,7 @@
   "settings.header": "Heading.",
   "settings.language.auto": "First item of the language picker: follow the Windows display language (English when no catalog matches).",
   "settings.language.automationName": "AutomationProperties.Name (screen readers) of the language picker combo.",
-  "settings.language.export": "Button.Content. Writes <code>.todo.json into the user languages folder with every key the selected language lacks (English text as value) and opens the folder.",
+  "settings.language.export": "Button.Content. Writes <code>.todo.json into the user languages folder with every key of the selected language (missing ones first with English text, then the current translations) and opens the folder.",
   "settings.language.export.toolTip": "ToolTip of the export button. '.todo.json' is a file name suffix - keep it literal.",
   "settings.language.hint": "Grey help text under the language buttons (wraps).",
   "settings.language.label": "Field label of the language picker (column Width=200).",
@@ -555,7 +555,7 @@
   "skipped.reason.fileUnreadable": "Skipped files window: {detail} is the Windows error message (in the Windows language, not translated).",
   "skipped.reason.listingInterrupted": "Skipped files window: {detail} is the Windows error message.",
   "compare.sizePair": "Compare window: sizes of the two images separated by a double arrow.",
-  "export.help": "Header written into every exported .todo.json for translators. {{ and }} are literal braces; <code> stands for the language code.",
+  "export.help": "Header written into every exported .todo.json for translators. {{ and }} are literal braces; <code> stands for the language code; _missing is a literal JSON key name.",
   "action.default.name": "Default Name of the built-in actions 2, 3 and 4 ({n} = the number). PERSISTED: fixed in settings.json when the settings are first created, so a later language switch will not rename it. The destination folder (Group-N) is deliberately language-neutral.",
   "action.default.backup": "Default Name of the built-in Copy-to-Backup action. PERSISTED like action.default.name. Its destination folder \"Backup\" is not translated.",
   "dialog.importActions.failed.message": "MessageBox text when Import of action profiles cannot read the file; {error} = the system error message (access denied, ...). A malformed file uses dialog.importActions.invalid.message instead.",
@@ -569,5 +569,10 @@
   "benchmark.quickCheck": "Button.Content next to benchmark.run; always runs fast-sequential with 10 iterations, ignoring the profile list selection.",
   "benchmark.quickCheck.automationName": "AutomationProperties.Name of the Quick check button (screen readers).",
   "benchmark.imageLimit.label": "Label next to the image-limit TextBox.",
-  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers)."
+  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers).",
+  "dialog.reloadTranslations.title": "MessageBox caption after Settings > 'Reload translations'.",
+  "dialog.reloadTranslations.ok": "MessageBox body when every translation file loaded without a problem.",
+  "dialog.reloadTranslations.problems.one": "MessageBox body when the files have problems. {details} is a list, one problem per line, in English (file path or language code, key, reason); keep the blank line before it.",
+  "dialog.reloadTranslations.problems.other": "Same as .one, for several problems.",
+  "dialog.reloadTranslations.more": "Last line of {details} when more problems exist than are listed; {count} is how many are not shown."
 }
