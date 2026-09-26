@@ -213,4 +213,59 @@ public sealed class KineticPanTests
         Assert.False(scroller.IsActive);
         Assert.Equal((50.0, 60.0), (h, v));
     }
+
+    // ---- ConsumesKey: arrow keys inside a zoomed image ----
+
+    private static readonly ScrollBounds Fit = new(800, 600, 800, 600);
+    private static readonly ScrollBounds BothAxes = new(2000, 1500, 800, 600);
+    private static readonly ScrollBounds HorizontalOnly = new(2000, 600, 800, 600);
+    private static readonly ScrollBounds VerticalOnly = new(800, 1500, 800, 600);
+
+    public static TheoryData<string> ZoomedCases => new() { "both", "horizontal", "vertical" };
+
+    private static ScrollBounds Named(string name) => name switch
+    {
+        "both" => BothAxes,
+        "horizontal" => HorizontalOnly,
+        "vertical" => VerticalOnly,
+        _ => Fit,
+    };
+
+    [Theory]
+    [MemberData(nameof(ZoomedCases))]
+    public void ConsumesKey_Default_ZoomedConsumesEveryResult(string zoom)
+    {
+        foreach (var result in new[] { KeyboardPanResult.Panned, KeyboardPanResult.AtEdge, KeyboardPanResult.NotScrollable })
+            foreach (var repeat in new[] { false, true })
+                Assert.True(KeyboardPan.ConsumesKey(result, repeat, navigatesAtEdge: false, Named(zoom)));
+    }
+
+    [Fact]
+    public void ConsumesKey_Default_AtFitFallsThrough()
+    {
+        foreach (var repeat in new[] { false, true })
+            Assert.False(KeyboardPan.ConsumesKey(KeyboardPanResult.NotScrollable, repeat, navigatesAtEdge: false, Fit));
+    }
+
+    [Theory]
+    [MemberData(nameof(ZoomedCases))]
+    public void ConsumesKey_Legacy_MatchesThePreviousBehaviour(string zoom)
+    {
+        var bounds = Named(zoom);
+        Assert.True(KeyboardPan.ConsumesKey(KeyboardPanResult.Panned, false, navigatesAtEdge: true, bounds));
+        Assert.True(KeyboardPan.ConsumesKey(KeyboardPanResult.Panned, true, navigatesAtEdge: true, bounds));
+        Assert.False(KeyboardPan.ConsumesKey(KeyboardPanResult.AtEdge, false, navigatesAtEdge: true, bounds));
+        Assert.True(KeyboardPan.ConsumesKey(KeyboardPanResult.AtEdge, true, navigatesAtEdge: true, bounds));
+        Assert.False(KeyboardPan.ConsumesKey(KeyboardPanResult.NotScrollable, false, navigatesAtEdge: true, bounds));
+        Assert.False(KeyboardPan.ConsumesKey(KeyboardPanResult.NotScrollable, true, navigatesAtEdge: true, bounds));
+    }
+
+    [Fact]
+    public void IsZoomed_TrueOnEitherAxis_FalseAtFit()
+    {
+        Assert.False(KeyboardPan.IsZoomed(Fit));
+        Assert.True(KeyboardPan.IsZoomed(HorizontalOnly));
+        Assert.True(KeyboardPan.IsZoomed(VerticalOnly));
+        Assert.True(KeyboardPan.IsZoomed(BothAxes));
+    }
 }

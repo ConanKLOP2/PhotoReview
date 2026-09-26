@@ -485,8 +485,9 @@ public sealed class PointerInputControllerTests
     }
 
     [Fact]
-    public void Arrow_AtTheEdge_RepeatIsSwallowed_FreshPressFallsThroughToNavigation()
+    public void Arrow_LegacySetting_AtTheEdge_RepeatIsSwallowed_FreshPressFallsThroughToNavigation()
     {
+        _settings.ArrowKeyNavigatesAtZoomEdge = true;
         _surface.ExtentWidth = 2000;
         _surface.HorizontalOffset = 1200;
 
@@ -499,14 +500,66 @@ public sealed class PointerInputControllerTests
     }
 
     [Fact]
-    public void Arrow_OnlyScrollableAxisPans_OtherKeysAndNoImageAreIgnored()
+    public void Arrow_LegacySetting_OnlyScrollableAxisPans_OtherKeysAndNoImageAreIgnored()
     {
+        _settings.ArrowKeyNavigatesAtZoomEdge = true;
         _surface.ExtentWidth = 2000; // wide image: vertical fits
 
         Assert.False(_controller.TryPanByArrow(Key.Up, isRepeat: false));
         Assert.False(_controller.TryPanByArrow(Key.A, isRepeat: false));
         _hasImages = false;
         Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public void Arrow_Default_OtherKeysAndNoImageAreIgnored()
+    {
+        _surface.ExtentWidth = 2000;
+        Assert.False(_controller.TryPanByArrow(Key.A, isRepeat: false));
+        _hasImages = false;
+        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public void Arrow_Default_FreshPressAtTheEdge_IsConsumed_NoScrollNoNavigation()
+    {
+        Assert.False(_settings.ArrowKeyNavigatesAtZoomEdge);
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 1200;
+        _surface.VerticalOffset = 900;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: true));
+        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        _surface.HorizontalOffset = 0;
+        _surface.VerticalOffset = 0;
+        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(Key.Up, isRepeat: false));
+        Assert.Empty(_surface.Scrolls);
+        Assert.Equal(0, _next + _previous);
+    }
+
+    [Fact]
+    public void Arrow_Default_OnAnAxisThatCannotScroll_IsConsumedAsANoOp()
+    {
+        _surface.ExtentHeight = 1500; // tall image zoomed only vertically
+        _surface.VerticalOffset = 100;
+
+        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Empty(_surface.Scrolls);
+        Assert.Equal(0, _next + _previous);
+    }
+
+    [Fact]
+    public void Arrow_Default_AtFit_FallsThrough()
+    {
+        Assert.False(_controller.TryPanByArrow(Key.Left, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(Key.Up, isRepeat: false));
         Assert.Empty(_surface.Scrolls);
     }
 

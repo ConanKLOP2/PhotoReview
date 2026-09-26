@@ -676,5 +676,8 @@
   "settings.kineticGlideSmoothing.automationName": "Làm mượt chuyển động trượt quán tính",
   "settings.kineticGlideSmoothing.hint": "Cho ảnh trượt khớp với tần số quét của màn hình. Tắt để so sánh.",
   "enum.kineticGlideSmoothing.off": "Tắt",
-  "enum.kineticGlideSmoothing.predict": "Khớp tần số màn hình"
+  "enum.kineticGlideSmoothing.predict": "Khớp tần số màn hình",
+  "settings.arrowKeyNavigatesAtZoomEdge.label": "Phím mũi tên ở mép ảnh đang phóng to chuyển sang ảnh kế/trước",
+  "settings.arrowKeyNavigatesAtZoomEdge.automationName": "Phím mũi tên ở mép ảnh đang phóng to",
+  "settings.arrowKeyNavigatesAtZoomEdge.hint": "Tắt (mặc định): phím mũi tên chỉ di chuyển trong ảnh đang phóng to; muốn đổi ảnh hãy quay về Fit. Bật: nhấn phím mũi tên thêm lần nữa ở mép sẽ đổi ảnh."
 }

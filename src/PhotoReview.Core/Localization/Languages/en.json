@@ -684,5 +684,8 @@
   "settings.kineticGlideSmoothing.automationName": "Kinetic glide smoothing",
   "settings.kineticGlideSmoothing.hint": "Moves the glide in step with your monitor's refresh rate. Turn off to compare.",
   "enum.kineticGlideSmoothing.off": "Off",
-  "enum.kineticGlideSmoothing.predict": "Match monitor refresh"
+  "enum.kineticGlideSmoothing.predict": "Match monitor refresh",
+  "settings.arrowKeyNavigatesAtZoomEdge.label": "Arrow key at the edge of a zoomed image goes to the next/previous photo",
+  "settings.arrowKeyNavigatesAtZoomEdge.automationName": "Arrow key at the edge of a zoomed image",
+  "settings.arrowKeyNavigatesAtZoomEdge.hint": "Off (default): arrow keys only move around a zoomed image; go back to Fit to change photo. On: pressing an arrow key again at the edge changes photo."
 }

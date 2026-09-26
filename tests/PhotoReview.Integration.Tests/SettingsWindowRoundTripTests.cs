@@ -77,6 +77,7 @@ public sealed class SettingsWindowRoundTripTests
             w.ExifFieldShutterSpeedCheck.IsChecked = false;
         },
         // feat/ui-dark-chrome-toolbar
+        [nameof(AppSettings.ArrowKeyNavigatesAtZoomEdge)] = w => w.ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = false, // true -> false
         [nameof(AppSettings.ToolbarAutoHideDelayMs)] = w => w.ToolbarAutoHideDelayBox.Text = "3000", // 1500 -> 3000
         [nameof(AppSettings.InfoOverlayFontSize)] = w => w.InfoOverlayFontSizeBox.Text = "18", // 12 -> 18
@@ -121,6 +122,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |
             ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed | ExifInfoFields.ModifiedDate),
         // feat/ui-dark-chrome-toolbar
+        [nameof(AppSettings.ArrowKeyNavigatesAtZoomEdge)] = true,
         [nameof(AppSettings.ToolbarAutoHide)] = false,
         [nameof(AppSettings.ToolbarAutoHideDelayMs)] = 3000,
         [nameof(AppSettings.InfoOverlayFontSize)] = 18.0,

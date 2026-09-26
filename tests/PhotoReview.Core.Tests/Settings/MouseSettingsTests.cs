@@ -123,6 +123,20 @@ public sealed class MouseSettingsTests
     }
 
     [Fact]
+    public void ArrowKeyNavigatesAtZoomEdge_DefaultsOff_AnOldConfigGetsItWithoutARepair_AndItRoundTrips()
+    {
+        Assert.False(new AppSettings().ArrowKeyNavigatesAtZoomEdge);
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, """{ "ConfigVersion": 3, "KineticPanEnabled": true }""");
+        var loaded = _store.Load();
+        Assert.False(loaded.ArrowKeyNavigatesAtZoomEdge);
+        Assert.Empty(_store.LastLoadRepairs);
+
+        loaded.ArrowKeyNavigatesAtZoomEdge = true;
+        _store.Save(loaded);
+        Assert.True(_store.Load().ArrowKeyNavigatesAtZoomEdge);
+    }
+
+    [Fact]
     public void GlideSmoothing_DefaultsToPredict_AndAnOldConfigGetsItWithoutARepair()
     {
         Assert.Equal(KineticGlideSmoothing.Predict, new AppSettings().KineticGlideSmoothing);
