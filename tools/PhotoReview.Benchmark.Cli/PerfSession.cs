@@ -228,6 +228,8 @@ internal static class PerfSession
         string folder, bool usesCopy, string copyRoot, int sourceImageCount, int iteration, string iterationDir)
     {
         using var process = Process.GetCurrentProcess();
+        using var gcEvents = new GcEventRecorder(); // Q-R26: which GCs fall inside a navigation
+        gcEvents.Start();
         var gcStart = new[] { GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2) };
         var pauseStart = GC.GetTotalPauseDuration();
         var cpuStart = process.TotalProcessorTime;
@@ -309,6 +311,7 @@ internal static class PerfSession
             {
                 stepNo++;
                 var t0 = Stopwatch.GetTimestamp();
+                var pageFaults0 = ProcessPageFaults.Read(); // Q-R26
                 string? detail = null;
                 switch (step.Kind)
                 {
@@ -436,6 +439,7 @@ internal static class PerfSession
                         throw new InvalidOperationException($"step {stepNo}: unknown step");
                 }
                 var t1 = Stopwatch.GetTimestamp();
+                if (pageFaults0 >= 0) detail = $"{detail} pageFaults={ProcessPageFaults.Read() - pageFaults0}";
                 steps.Add(new StepRecord(stepNo, step.Kind, t0, t1, PhotoReviewPerf.Ms(t0), detail));
                 Console.WriteLine($"  [{iteration}] step {stepNo} {step.Kind} {detail} ({PhotoReviewPerf.Ms(t0):0} ms)");
             }
@@ -534,6 +538,7 @@ internal static class PerfSession
         };
         await File.WriteAllTextAsync(Path.Combine(iterationDir, "metrics.json"), JsonSerializer.Serialize(metrics, WriteOptions));
         await File.WriteAllTextAsync(Path.Combine(iterationDir, "process.json"), JsonSerializer.Serialize(processInfo, WriteOptions));
+        gcEvents.WriteCsv(Path.Combine(iterationDir, "gc-events.csv"));
         await File.WriteAllTextAsync(Path.Combine(iterationDir, "session.json"), JsonSerializer.Serialize(sessionInfo, WriteOptions));
         Console.WriteLine($"  [{iteration}] config: graph={effectiveConfig.graph} cacheBytes={effectiveConfig.imageCacheCapacityBytes} " +
             $"preloadWorkers={effectiveConfig.preloadWorkerCount} decoder={effectiveConfig.decoderBackend} " +
