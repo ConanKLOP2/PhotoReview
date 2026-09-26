@@ -36,6 +36,32 @@ public sealed class SourceBytesCacheRobustnessTests : IDisposable
         Assert.Equal(new byte[] { 7, 8, 9 }, cache.GetOrRead(path));
     }
 
+    [Theory(DisplayName = "An Evict/Clear landing between a read's version check and its cache Set is not undone by that read")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EvictBetweenCheckAndSet_DoesNotRepublish(bool clear)
+    {
+        var path = _root.File("racing.bin", new byte[64]);
+        var cache = new SourceBytesCache(1024 * 1024);
+        using var paused = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        cache.BeforePublishForTests = () => { paused.Set(); release.Wait(); };
+
+        var reader = new Thread(() => cache.GetOrRead(path));
+        reader.Start();
+        paused.Wait();
+        cache.BeforePublishForTests = null;
+        var evictor = new Thread(() => { if (clear) cache.Clear(); else cache.Evict(path); });
+        evictor.Start();
+        // Either the eviction already finished (unguarded: nothing to remove yet) or it is blocked on the gate.
+        SpinWait.SpinUntil(() => !evictor.IsAlive || (evictor.ThreadState & ThreadState.WaitSleepJoin) != 0);
+        release.Set();
+        reader.Join();
+        evictor.Join();
+
+        Assert.Equal(0, cache.Count);
+    }
+
     [Fact(DisplayName = "A file larger than the whole capacity is returned but never cached, and does not push out smaller entries")]
     public void OversizedFile_IsReturnedButNotCached()
     {
