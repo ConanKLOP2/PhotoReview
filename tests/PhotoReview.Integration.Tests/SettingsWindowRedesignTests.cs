@@ -353,6 +353,96 @@ public sealed class SettingsWindowRedesignTests
         });
     }
 
+    [Theory(DisplayName = "Out-of-range/unparsable arrow-pan step is rejected by Save")]
+    [InlineData("abc")]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("101")]
+    [InlineData("")]
+    public async Task ArrowPanStep_InvalidInput_IsRejected(string text)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var warnings = new List<string>();
+            var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add };
+            try
+            {
+                window.ArrowPanStepBox.Text = text;
+                InvokeSave(window);
+                Assert.Single(warnings);
+                Assert.Null(window.DialogResult);
+                Assert.Equal(AppSettings.DefaultArrowPanStepPercent, window.Settings.ArrowPanStepPercent); // untouched
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory(DisplayName = "Boundary arrow-pan steps (min and max) are accepted and stored by Save")]
+    [InlineData("1", 1)]
+    [InlineData("100", 100)]
+    public async Task ArrowPanStep_BoundaryValues_AreAcceptedAndSaved(string text, int expected)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var warnings = new List<string>();
+            var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add, WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            try
+            {
+                window.Loaded += (_, _) =>
+                {
+                    window.ArrowPanStepBox.Text = text;
+                    InvokeSave(window);
+                    if (window.DialogResult is null) window.Close(); // rejected save: end the modal loop so the test fails instead of hanging
+                };
+                Assert.True(window.ShowDialog());
+                Assert.Empty(warnings);
+                Assert.Equal(expected, window.Settings.ArrowPanStepPercent);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory(DisplayName = "Click-zoom level box stays editable whether or not click-to-zoom is enabled")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ClickZoomPercentBox_IsAlwaysEnabled(bool clickToZoom)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings { ClickToZoomEnabled = clickToZoom });
+            try
+            {
+                Assert.Equal(clickToZoom, window.ClickToZoomCheck.IsChecked);
+                Assert.True(window.ClickZoomPercentBox.IsEnabled);
+                window.ClickToZoomCheck.IsChecked = !clickToZoom; // toggling must not disable it either
+                Assert.True(window.ClickZoomPercentBox.IsEnabled);
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact(DisplayName = "Restore defaults resets the arrow-pan step (setting and box)")]
+    public async Task RestoreDefaults_ResetsArrowPanStep()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings { ArrowPanStepPercent = 25 });
+            try
+            {
+                Assert.Equal("25", window.ArrowPanStepBox.Text);
+                typeof(SettingsWindow).GetMethod("Defaults_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, [null, new RoutedEventArgs()]);
+                Assert.Equal(AppSettings.DefaultArrowPanStepPercent, window.Settings.ArrowPanStepPercent);
+                Assert.Equal(AppSettings.DefaultArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture), window.ArrowPanStepBox.Text);
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>feat/preload-window-setting: mirrors <see cref="ClickZoomPercent_OutOfRange_IsRejected"/> for the two new preload-window boxes.</summary>
     [Theory(DisplayName = "Out-of-range/unparsable preload forward is rejected by Save")]
     [InlineData("abc")]

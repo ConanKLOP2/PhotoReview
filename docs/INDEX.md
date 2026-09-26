@@ -1,34 +1,23 @@
 # Documentation Index
-**Architecture review plan (2026-09-26, T1):** [`refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md`](refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — findings F10–F23, tasks AR10–AR19 (`refactoring/arch-review/AR1x-*.md`), decisions Q-AR6..Q-AR10.
 
-**Current source audit (2026-09-26):** [`refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md`](refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md) — five static P2 findings; all closed (F2 by design, F3 #101, F0/F1/F4 #103).
-
-**Review 2026-09-25 plan (T1):** [`refactoring/REVIEW-2026-09-25-PLAN.md`](refactoring/REVIEW-2026-09-25-PLAN.md) — verified findings, waves 1–5, Q-R decisions.
-
-Quick reference for finding documentation by purpose. Read-tier guides which files to load.
+Find a document by purpose. Read tiers: **T0** (every session, ≤16 KB total) · **T1** (one per task, ≤24 KB per file) · **T2** (history only). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
 
 | File | Purpose | Tier |
 |------|---------|------|
-| **AGENTS.md** | Rules for work mode, process, agent behavior | T0, always |
-| **task_on_progress.md** | Current status, blockers, critical rules | T0, always |
-| **docs/ACTIVE-TASKS.md** | Consolidated open tasks across all groups | T0, always |
-| **docs/architecture.md** | System design, code map, component ownership | T1, any area |
-| **docs/APP-MECHANISMS-VI.md** | Core flow descriptions (Vietnamese) | T1, app flow |
-| **docs/adr/*.md** | Architecture decisions 0001-0008 | T1, relevant area |
-| **docs/refactoring/I18N-PLAN.md** | Multi-language design, L00–L12 tasks, Q-L decisions | T1, UI text |
-| **docs/TRANSLATING.md** | Adding/fixing a language (JSON catalogs) | T1, translations |
-| **docs/refactoring/ARCH-REVIEW-SUMMARY.md** | AR review 2026-09-23: findings F1-F9, task order | T1, AR tasks |
-| **docs/refactoring/arch-review/AR0x-*.md** | Step-by-step plan per AR task | T1, the AR task at hand |
-| **docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md** | ST task status & invariants | T1, ST scope |
-| **docs/refactoring/REFACTOR-STATUS.md** | OC/ST consolidated status | T1, refactoring |
-| **docs/refactoring/PERF-STATUS.md** | Perf baselines (AR02e, perf night) | T1, perf diagnosis |
-| **docs/refactoring/OPEN-DECISIONS.md** | Q-* decision registry (mostly resolved) | T1, decision lookup |
-| **docs/refactoring/WORK-2026-09-25-ROUND7-FEATURES.md** | 9 agent branches (features + review round 7 fixes), integration + Settings redesign plan | T1, current batch |
-| **docs/refactoring/OPTIMIZE-CLEAN-SUMMARY.md** | OC task status & blockers | T1, OC tasks |
-| **docs/refactoring/TEST-CLEANUP-SUMMARY.md** | TC status (DONE); pointer to archive | T1, test cleanup |
-| **docs/refactoring/TEST-SPEED-SUMMARY.md** | TS completed work, remaining tasks | T1, test speed |
-| **docs/refactoring/T89-FIT-SUMMARY.md** | Fit layout status; pointer to archive | T1, Fit/GUI |
-| **README.md** | Project overview, setup, build commands | T1, first-time setup |
-| **docs/archive/** (`historical/`, `future/`, `evidence/`, `progress-log-2026-09.md`) | Full plans, ADR evidence, completed-task detail | T2, **do not read** unless referenced |
+| [`AGENTS.md`](../AGENTS.md) | Work mode, priorities, coding/test rules, agent workflow | T0 |
+| [`task_on_progress.md`](../task_on_progress.md) | Current state, pending checks, critical rules | T0 |
+| [`ACTIVE-TASKS.md`](ACTIVE-TASKS.md) | Open work only (single source) | T1, always cheap |
+| [`architecture.md`](architecture.md) | System design, code map, invariants INV-1..12, settings table | T1, any code area |
+| [`APP-MECHANISMS-VI.md`](APP-MECHANISMS-VI.md) | Core app flows and settings (Vietnamese) | T1, app flow |
+| [`adr/`](adr/) | Decisions 0001 decoder · 0002 UI framework · 0003 journal startup · 0004 no Presentation project · 0005 UI-thread affinity · 0006 localization catalogs · 0007 I/O durability · 0008 zoom = source pixel | T1, relevant area |
+| [`TRANSLATING.md`](TRANSLATING.md) | Add/fix a language (JSON catalogs) | T1, translations |
+| [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) | Q-* decisions: one open row + one line per decided | T1, decision lookup |
+| [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) | Perf baselines and measured conclusions | T1, perf work |
+| [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
+| [`refactoring/I18N-PLAN.md`](refactoring/I18N-PLAN.md) | Multi-language design (L00-L12, done) | T1, UI text |
+| `refactoring/arch-review/AR02, AR04, AR11` | Kept plans referenced by ADR 0005 and code comments | T2 |
+| [`../README.md`](../README.md) | Overview, setup, build, settings | T1, first-time setup |
+| [`../tests/Fixtures/README.md`](../tests/Fixtures/README.md) | Test fixtures and env vars | T1, tests |
+| `archive/evidence/` (`decoder-bench`, `D-diagnosis-REPORT`, `T66-final`), `archive/historical/` (`PERF-DIAGNOSIS-TASKS`, `test-parity`), `refactoring/archive/STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md` | Evidence for ADR 0001/0002 and files cited by code comments | T2, do not read unless referenced |
 
-**Tiers:** T0 ≤ 16 KB total (always read) · T1 ≤ 24 KB/file (per work; `README.md`, `docs/*.md`, `docs/adr/`, `docs/refactoring/*.md`, `arch-review/`) · T2 unlimited (archive only). Checked by `tools/docs-budget.ps1 -Check`.
+Everything else that was finished (plans, review reports, per-task tables) was deleted on 2026-09-27; use `git log --follow -- <path>` or `git show 1de561c:<path>`.
