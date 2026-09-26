@@ -186,4 +186,11 @@ public class AppSettings
 
     /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
     public KineticGlideSmoothing KineticGlideSmoothing { get; set; } = KineticGlideSmoothing.Predict;
+
+    /// <summary>
+    /// Default off: arrow keys only pan a zoomed image and never change photo (go back to Fit first). On: a fresh
+    /// arrow press at the edge of a zoomed image navigates to the next/previous photo (auto-repeat is swallowed).
+    /// </summary>
+    public bool ArrowKeyNavigatesAtZoomEdge { get; set; }
 }
+
