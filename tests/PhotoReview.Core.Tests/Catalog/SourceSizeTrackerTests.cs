@@ -206,5 +206,41 @@ public class SourceSizeTrackerTests
         Assert.True(observeFinished, "Observe stayed blocked behind GetTotal's file-system stat");
         await Task.WhenAll(total, observe);
     }
+
+    [Fact(DisplayName = "A GetTotal that finishes late for an older snapshot cannot replace the cached total of the newer snapshot")]
+    public async Task GetTotal_OlderSnapshotFinishingLate_DoesNotOverwriteNewerCachedTotal()
+    {
+        using var inStat = new ManualResetEventSlim(false);
+        using var releaseStat = new ManualResetEventSlim(false);
+        var statCalls = 0;
+        var fs = new InMemoryFileSystem();
+        fs.AddFile(@"C:\photos\a.jpg", new byte[100]);
+        fs.StatHook = _ =>
+        {
+            Interlocked.Increment(ref statCalls);
+            inStat.Set();
+            releaseStat.Wait(TimeSpan.FromSeconds(60));
+            return null;
+        };
+        var catalog = new ReviewCatalog();
+        var tracker = new SourceSizeTracker(catalog, fs);
+
+        catalog.Reset([@"C:\photos\a.jpg"]); // no cached Length: snapshot A must stat
+        tracker.Observe(catalog.EntriesSnapshot());
+        var totalA = Task.Run(tracker.GetTotal);
+        Assert.True(inStat.Wait(TimeSpan.FromSeconds(10)), "GetTotal(A) never started statting");
+
+        catalog.Reset([@"C:\photos\b.jpg"]);
+        catalog.UpdateMetadata(@"C:\photos\b.jpg", 5L, DateTime.UtcNow); // snapshot B needs no stat
+        tracker.Observe(catalog.EntriesSnapshot());
+        Assert.Equal(5L, tracker.GetTotal());
+
+        releaseStat.Set();
+        Assert.Equal(100L, await totalA); // the late caller still gets its own result
+
+        Assert.Equal(5L, tracker.GetTotal());
+        Assert.Equal(1, Volatile.Read(ref statCalls)); // B's cache hit: no extra stat
+        Assert.Equal(0, tracker.LastFsCallCount);
+    }
 }
 
