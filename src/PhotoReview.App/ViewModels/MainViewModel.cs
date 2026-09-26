@@ -740,6 +740,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         StatusText = status;
     }
 
+    void IFileActionSink.ShowLateActionStatus(string status)
+    {
+        // Event text (_statusText) is non-empty while the current folder shows its own message (catalog just listed,
+        // "no images", "open failed", an action result) and is cleared once an image is presented. Never overwrite it.
+        if (string.IsNullOrEmpty(_statusText)) StatusText = status;
+    }
+
     void IFileActionSink.OnCatalogChanged(string? removedPath)
     {
         CatalogChanged?.Invoke();

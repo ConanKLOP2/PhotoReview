@@ -634,5 +634,8 @@
   "export.help": "Translate the values (keep {{placeholders}} and the key names), then copy the entries into <code>.json in this folder (create it with this _meta block if it does not exist) and press 'Reload translations' in Settings. _notes explains where each text appears; keys starting with '_' are ignored by PhotoReview.",
   "action.default.name": "Action {n}",
   "action.default.backup": "Backup",
-  "dialog.importActions.failed.message": "Could not read the action profile file: {error}"
+  "dialog.importActions.failed.message": "Could not read the action profile file: {error}",
+  "status.lateMoveUndoable": "{fileName} was moved to {folder} after you left its folder. Press Ctrl+Z to undo.",
+  "status.lateRecycleUndoable": "{fileName} was moved to the Recycle Bin after you left its folder. Press Ctrl+Z to undo.",
+  "status.lateDeletedPermanently": "{fileName} was deleted permanently after you left its folder (it cannot be undone)."
 }
