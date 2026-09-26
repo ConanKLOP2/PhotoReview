@@ -34,3 +34,36 @@ public class ShortcutKeyNameTests
         Assert.False(ShortcutKeyName.TryParse(name, out _));
     }
 }
+
+public class ShortcutKeyCanonicalTableTests
+{
+    [Fact(DisplayName = "Every alias pair of the Core table is a true same-value alias of the WPF Key enum")]
+    public void AliasTable_MatchesKeyEnum()
+    {
+        foreach (var (alias, canonical) in PhotoReview.Core.Settings.ShortcutKeyCanonical.AliasPairs)
+        {
+            Assert.True(Enum.TryParse<Key>(alias, out var a), alias);
+            Assert.True(Enum.TryParse<Key>(canonical, out var c), canonical);
+            Assert.Equal(a, c);
+        }
+    }
+
+    [Fact(DisplayName = "Every Key name that shares a value with another is covered by the table (no missing alias)")]
+    public void AliasTable_CoversAllEnumAliases()
+    {
+        var covered = PhotoReview.Core.Settings.ShortcutKeyCanonical.AliasPairs.SelectMany(p => new[] { p.Alias, p.Canonical }).ToHashSet(StringComparer.Ordinal);
+        foreach (var group in Enum.GetNames<Key>().GroupBy(n => (int)Enum.Parse<Key>(n)).Where(g => g.Count() > 1))
+            foreach (var name in group) Assert.Contains(name, covered);
+    }
+
+    [Theory(DisplayName = "Aliases parse to the same Key as their canonical name")]
+    [InlineData("Return", "Enter")]
+    [InlineData("Prior", "PageUp")]
+    [InlineData("next", "PageDown")]
+    public void TryParse_Alias_SameKey(string alias, string canonical)
+    {
+        Assert.True(ShortcutKeyName.TryParse(alias, out var a));
+        Assert.True(ShortcutKeyName.TryParse(canonical, out var c));
+        Assert.Equal(a, c);
+    }
+}

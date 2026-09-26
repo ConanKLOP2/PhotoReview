@@ -141,6 +141,53 @@ public sealed class SettingsWindowRedesignTests
         });
     }
 
+    [Fact(DisplayName = "Alias spellings of one key (Return/Enter, Prior/PageUp) show the duplicate warning and Save rejects them (Q-R25)")]
+    public async Task AliasShortcuts_AreDuplicates_LiveAndOnSave()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var warnings = new List<string>();
+            var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add };
+            try
+            {
+                Assert.Equal(Visibility.Collapsed, window.ShortcutDuplicateWarningText.Visibility);
+                window.SkipText.Text = "Return"; // the default action already uses Enter
+                Assert.Equal(Visibility.Visible, window.ShortcutDuplicateWarningText.Visibility);
+                InvokeSave(window);
+                Assert.Single(warnings);
+                Assert.Null(window.DialogResult);
+
+                window.SkipText.Text = "Space";
+                Assert.Equal(Visibility.Collapsed, window.ShortcutDuplicateWarningText.Visibility);
+                window.PreviousFolderText.Text = "Prior";
+                window.NextFolderText.Text = "Next"; // Prior/Next are PageUp/PageDown: two different keys
+                Assert.Equal(Visibility.Collapsed, window.ShortcutDuplicateWarningText.Visibility);
+                window.ZoomInText.Text = "PageUp"; // same key as Prior
+                Assert.Equal(Visibility.Visible, window.ShortcutDuplicateWarningText.Visibility);
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact(DisplayName = "Save writes alias shortcut spellings back canonical (Prior -> PageUp)")]
+    public async Task Save_AliasShortcut_IsStoredCanonical()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings()) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            try
+            {
+                window.Loaded += (_, _) => { window.PreviousFolderText.Text = "Prior"; window.NextFolderText.Text = "next"; InvokeSave(window); };
+                Assert.True(window.ShowDialog());
+                Assert.Equal("PageUp", window.Settings.Shortcuts.PreviousFolder);
+                Assert.Equal("PageDown", window.Settings.Shortcuts.NextFolder);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact(DisplayName = "Two shortcuts sharing the same key show a live duplicate warning that clears once they differ again")]
     public async Task DuplicateShortcuts_ShowLiveWarning()
     {
