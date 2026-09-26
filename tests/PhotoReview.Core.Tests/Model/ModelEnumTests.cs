@@ -14,7 +14,7 @@ public class ModelEnumTests
     public static TheoryData<Type, string[]> PersistedEnums => new()
     {
         { typeof(LoadingMode), ["Fast", "Preview", "Original"] },
-        { typeof(ImageSortMode), ["Name", "SizeDescending", "SizeAscending"] },
+        { typeof(ImageSortMode), ["Name", "SizeDescending", "SizeAscending", "Default", "NameAscending", "NameDescending"] },
         { typeof(InitialViewMode), ["Fit", "Percent100", "Percent200", "Percent400"] },
         { typeof(FileOperationType), ["Move", "Copy", "Recycle"] },
         { typeof(JournalState), ["Prepared", "Committed", "Failed", "Dismissed"] },

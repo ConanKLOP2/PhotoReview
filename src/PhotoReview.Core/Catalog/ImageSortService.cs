@@ -16,10 +16,18 @@ public static class ImageSortService
 
         return mode switch
         {
+            ImageSortMode.Default => entries.ToList(),
+            ImageSortMode.NameDescending => Reversed(OrderByName(entries, NameOf, comparer).ToList()),
             ImageSortMode.SizeDescending => ThenByName(entries.OrderByDescending(entry => entry.Length ?? -1L), NameOf, comparer).ToList(),
             ImageSortMode.SizeAscending => ThenByName(entries.OrderBy(entry => entry.Length ?? -1L), NameOf, comparer).ToList(),
             _ => OrderByName(entries, NameOf, comparer).ToList()
         };
+    }
+
+    private static List<T> Reversed<T>(List<T> ascending)
+    {
+        ascending.Reverse();
+        return ascending;
     }
 
     // perf: ManagedNaturalComparer.Compare builds two natural keys per call, i.e. O(n log n) StringBuilder allocations
@@ -69,6 +77,8 @@ public static class ImageSortService
 
         return mode switch
         {
+            ImageSortMode.Default => files.ToList(),
+            ImageSortMode.NameDescending => Reversed(OrderByName(files, NameOf, comparer).ToList()),
             ImageSortMode.SizeDescending => ThenByName(files.OrderByDescending(path => GetFileSize(path, log)), NameOf, comparer).ToList(),
             ImageSortMode.SizeAscending => ThenByName(files.OrderBy(path => GetFileSize(path, log)), NameOf, comparer).ToList(),
             _ => OrderByName(files, NameOf, comparer).ToList()
@@ -85,6 +95,9 @@ public static class ImageSortService
         {
             "SIZE" or "SIZEDESCENDING" => ImageSortMode.SizeDescending,
             "SIZEASCENDING" => ImageSortMode.SizeAscending,
+            "DEFAULT" => ImageSortMode.Default,
+            "NAMEASCENDING" => ImageSortMode.NameAscending,
+            "NAMEDESCENDING" => ImageSortMode.NameDescending,
             _ => ImageSortMode.Name
         };
 
