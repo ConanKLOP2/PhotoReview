@@ -23,7 +23,13 @@ function Get-DocTier {
 # Measure the working tree (not HEAD) so staged-new and uncommitted growth count; quotepath=off keeps non-ASCII names intact.
 # Always the repo root, whatever the caller's current directory (verify-all may run from tools/).
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$docs = @(& git -C $root -c core.quotepath=off ls-files | Where-Object { $_ -match '\.(md|txt)$' -and (Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf) } | ForEach-Object {
+# Fail closed: a git failure or a missing T0 file must never look like an empty (passing) budget.
+$tracked = @(& git -C $root -c core.quotepath=off ls-files)
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[FAIL] 'git ls-files' failed (exit $LASTEXITCODE); cannot measure the documentation budget" -ForegroundColor Red
+    exit 2
+}
+$docs = @($tracked | Where-Object { $_ -match '\.(md|txt)$' -and (Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf) } | ForEach-Object {
     $content = [System.IO.File]::ReadAllText((Join-Path $root $_), [System.Text.Encoding]::UTF8)
     $bytes = [System.Text.Encoding]::UTF8.GetByteCount($content)
     [pscustomobject]@{
@@ -73,6 +79,9 @@ Write-Host "Cold start (T0 + largest T1): $(Format-KB ($t0 + $largestT1)) KB (~$
 
 if ($Check) {
     $errors = @()
+    foreach ($t0File in 'AGENTS.md', 'task_on_progress.md', 'docs/INDEX.md') {
+        if (-not ($docs | Where-Object { $_.Path -eq $t0File })) { $errors += "T0 file not found (not tracked or missing on disk): $t0File" }
+    }
     if ($t0 -gt $T0BudgetBytes) { $errors += "T0 exceeds $(Format-KB $T0BudgetBytes) KB ($(Format-KB $t0) KB)" }
     foreach ($doc in $t1Over) { $errors += "T1 file over $(Format-KB $T1FileBudgetBytes) KB: $($doc.Path) ($(Format-KB $doc.Bytes) KB)" }
     if ($errors.Count -gt 0) {
