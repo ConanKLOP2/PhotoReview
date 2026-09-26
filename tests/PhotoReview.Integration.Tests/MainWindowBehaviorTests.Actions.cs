@@ -129,7 +129,7 @@ public sealed class MainWindowBehaviorActionTests
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => FileActionInProgress(window) == 0, SettleTimeout),
                     "The file action never released its in-flight guard.");
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 // INV-3, third half: no ShowImage after the action finished.
                 Assert.Equal(1, Volatile.Read(ref moveInvocations));
@@ -194,7 +194,7 @@ public sealed class MainWindowBehaviorActionTests
                 Assert.True(PressKey(window, ActionKey), "The second key press did not reach the action branch of Window_KeyDown.");
 
                 Assert.Equal(1, Volatile.Read(ref moveInvocations));
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
                 Assert.Equal(1, Volatile.Read(ref moveInvocations));
                 Assert.Equal(1, FileActionInProgress(window));
 
@@ -202,7 +202,7 @@ public sealed class MainWindowBehaviorActionTests
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => FileActionInProgress(window) == 0, SettleTimeout),
                     "The file action never released its in-flight guard.");
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 // The dropped press must not resurface once the first action finishes.
                 Assert.Equal(1, Volatile.Read(ref moveInvocations));
@@ -292,21 +292,6 @@ public sealed class MainWindowBehaviorActionTests
             ?? throw new InvalidOperationException(
                 $"MainWindow.{name} no longer exists; the T14b INV-3/INV-4 tests observe it directly.");
         return (T)field.GetValue(window)!;
-    }
-
-    /// <summary>Pumps the dispatcher for a fixed window so late work has a chance to be observed.</summary>
-    private static async Task DrainAsync(TimeSpan duration)
-    {
-        // TC09: Replace Task.Delay with multiple dispatcher pumps.
-        // Each pump ensures queued work from the previous invocation is processed.
-        // Pump multiple times to ensure ShowImage calls and other deferred work execute.
-        const int PumpIterations = 40;  // ~400ms at 10ms per pump iteration
-        var estimatedPumps = Math.Max(PumpIterations, (int)(duration.TotalMilliseconds / 10));
-
-        for (int i = 0; i < estimatedPumps; i++)
-        {
-            await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-        }
     }
 
     private static async Task CloseAsync(MainWindow? window)

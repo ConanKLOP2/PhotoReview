@@ -125,6 +125,23 @@ public static class StaTestHost
         }
         return true;
     }
+
+    /// <summary>
+    /// Keeps the dispatcher pumping for the full wall-clock <paramref name="duration"/> so work that arrives late
+    /// (a pool-thread decode or continuation posting back to the UI) has a real chance to show up before a
+    /// "nothing else happened" assertion. Bounded by elapsed time, not by a pump count: back-to-back pumps of an
+    /// empty queue finish in microseconds and would not wait for anything.
+    /// </summary>
+    public static async Task DrainAsync(TimeSpan duration)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        do
+        {
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+            await Task.Delay(10);
+        }
+        while (sw.Elapsed < duration);
+    }
 }
 
 /// <summary>
@@ -228,6 +245,16 @@ internal static class WpfResourceLookup
 [Collection("GlobalState")]
 public sealed class StaTestHostSmokeTests
 {
+    [Fact]
+    public async Task DrainAsync_WaitsTheFullWallClockDuration()
+    {
+        // Guards the "nothing else happened" windows: a pump-count drain over an empty dispatcher returns in ms.
+        var duration = TimeSpan.FromMilliseconds(250);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await StaTestHost.RunAsync(() => StaTestHost.DrainAsync(duration));
+        Assert.True(sw.Elapsed >= duration, $"DrainAsync returned after {sw.Elapsed.TotalMilliseconds:F0} ms, before {duration.TotalMilliseconds:F0} ms.");
+    }
+
     [Fact]
     public async Task OpeningAFolderPresentsTheFirstImage()
     {
