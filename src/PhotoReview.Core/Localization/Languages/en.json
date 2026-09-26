@@ -662,5 +662,12 @@
   "settings.infoOverlayFontSize.label": "Info overlay font size",
   "settings.infoOverlayFontSize.automationName": "Info overlay font size, in points",
   "dialog.settingsInvalid.toolbarAutoHideDelay": "Toolbar auto-hide delay must be a whole number between {min} and {max} milliseconds.",
-  "dialog.settingsInvalid.infoOverlayFontSize": "Info overlay font size must be a number between {min} and {max}."
+  "dialog.settingsInvalid.infoOverlayFontSize": "Info overlay font size must be a number between {min} and {max}.",
+  "settings.group.titleBar": "Title bar",
+  "settings.group.titleBar.hint": "What the main window's title bar shows, in this order.",
+  "settings.titleBarField.folderName": "Folder name",
+  "settings.titleBarField.folderPath": "Folder path",
+  "settings.titleBarField.indexCount": "Position (12/340)",
+  "settings.titleBarField.fileSize": "File size",
+  "settings.exifField.modifiedDate": "Modified date"
 }

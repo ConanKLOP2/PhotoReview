@@ -41,7 +41,7 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.InstanceMode), nameof(AppSettings.ShowInfoOverlay), nameof(AppSettings.ShowFileInfo),
         nameof(AppSettings.ShowFolderInfo), nameof(AppSettings.MouseWheelAction), nameof(AppSettings.ClickToZoomEnabled),
         nameof(AppSettings.ClickZoomPercent), nameof(AppSettings.KineticPanEnabled), nameof(AppSettings.MoveCopyReuseLastFolder),
-        nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields),
+        nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields), nameof(AppSettings.TitleBarFields),
         // feat/ui-dark-chrome-toolbar
         nameof(AppSettings.ToolbarAutoHide), nameof(AppSettings.ToolbarAutoHideDelayMs), nameof(AppSettings.InfoOverlayFontSize),
     };

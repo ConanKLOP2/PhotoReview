@@ -167,4 +167,7 @@ public class AppSettings
     /// status line) is always one point smaller. [<see cref="MinInfoOverlayFontSize"/>, <see cref="MaxInfoOverlayFontSize"/>].
     /// </summary>
     public double InfoOverlayFontSize { get; set; } = DefaultInfoOverlayFontSize;
+
+    /// <summary>Parts shown in the main window's title bar; absent in older configs = <see cref="TitleBarFields.Default"/>.</summary>
+    public TitleBarFields TitleBarFields { get; set; } = TitleBarFields.Default;
 }

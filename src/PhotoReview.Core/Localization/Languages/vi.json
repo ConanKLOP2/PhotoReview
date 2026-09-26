@@ -654,5 +654,12 @@
   "settings.infoOverlayFontSize.label": "Cỡ chữ lớp phủ thông tin",
   "settings.infoOverlayFontSize.automationName": "Cỡ chữ lớp phủ thông tin, tính bằng điểm",
   "dialog.settingsInvalid.toolbarAutoHideDelay": "Độ trễ tự ẩn thanh công cụ phải là số nguyên từ {min} đến {max} mili giây.",
-  "dialog.settingsInvalid.infoOverlayFontSize": "Cỡ chữ lớp phủ thông tin phải là số từ {min} đến {max}."
+  "dialog.settingsInvalid.infoOverlayFontSize": "Cỡ chữ lớp phủ thông tin phải là số từ {min} đến {max}.",
+  "settings.group.titleBar": "Thanh tiêu đề",
+  "settings.group.titleBar.hint": "Nội dung hiển thị trên thanh tiêu đề cửa sổ chính, theo đúng thứ tự này.",
+  "settings.titleBarField.folderName": "Tên thư mục",
+  "settings.titleBarField.folderPath": "Đường dẫn thư mục",
+  "settings.titleBarField.indexCount": "Vị trí (12/340)",
+  "settings.titleBarField.fileSize": "Dung lượng tệp",
+  "settings.exifField.modifiedDate": "Ngày sửa đổi"
 }

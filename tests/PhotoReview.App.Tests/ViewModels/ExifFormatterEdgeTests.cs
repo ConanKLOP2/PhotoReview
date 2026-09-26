@@ -28,10 +28,10 @@ public sealed class ExifFormatterEdgeTests
     {
         using var _ = Use(english);
 
-        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.None, "a.jpg", 10, 10, new ExifSummary { Iso = 100 }, Invariant));
-        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.All, null, 0, 0, null, Invariant));
-        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.All, "   ", -1, 5, new ExifSummary(), Invariant));
-        Assert.Equal("a.jpg", ExifFormatter.Format(ExifInfoFields.All, "a.jpg", 0, 0, null, Invariant));
+        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.None, "a.jpg", 10, 10, new ExifSummary { Iso = 100 }, provider: Invariant));
+        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.All, null, 0, 0, null, provider: Invariant));
+        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.All, "   ", -1, 5, new ExifSummary(), provider: Invariant));
+        Assert.Equal("a.jpg", ExifFormatter.Format(ExifInfoFields.All, "a.jpg", 0, 0, null, provider: Invariant));
     }
 
     [Theory]
@@ -47,7 +47,7 @@ public sealed class ExifFormatterEdgeTests
             ExposureTime = new ExifRational(uint.MaxValue, 1),
         };
 
-        var text = ExifFormatter.Format(ExifInfoFields.All, "x.jpg", int.MaxValue, int.MaxValue, exif, Invariant);
+        var text = ExifFormatter.Format(ExifInfoFields.All, "x.jpg", int.MaxValue, int.MaxValue, exif, provider: Invariant);
 
         Assert.Contains("2147483647×2147483647", text, StringComparison.Ordinal);
         Assert.Contains("2147483647", text, StringComparison.Ordinal);
@@ -67,9 +67,9 @@ public sealed class ExifFormatterEdgeTests
             FNumber = new ExifRational(0, 10),
             ExposureTime = new ExifRational(0, 0),
         };
-        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed, "x.jpg", 1, 1, exif, Invariant));
+        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed, "x.jpg", 1, 1, exif, provider: Invariant));
 
-        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.Iso, "x.jpg", 1, 1, new ExifSummary { Iso = -100 }, Invariant));
+        Assert.Equal(string.Empty, ExifFormatter.Format(ExifInfoFields.Iso, "x.jpg", 1, 1, new ExifSummary { Iso = -100 }, provider: Invariant));
     }
 
     [Theory]
@@ -81,7 +81,7 @@ public sealed class ExifFormatterEdgeTests
     {
         var expected = model.StartsWith(make, StringComparison.OrdinalIgnoreCase) ? model : make + " " + model;
 
-        var text = ExifFormatter.Format(ExifInfoFields.Camera, "f.jpg", 1, 1, new ExifSummary { CameraMake = make, CameraModel = model }, Invariant);
+        var text = ExifFormatter.Format(ExifInfoFields.Camera, "f.jpg", 1, 1, new ExifSummary { CameraMake = make, CameraModel = model }, provider: Invariant);
 
         Assert.Equal(expected, text);
     }
@@ -89,7 +89,7 @@ public sealed class ExifFormatterEdgeTests
     [Fact]
     public void RightToLeftFileName_IsKeptInsideTheSeparatedLine()
     {
-        var text = ExifFormatter.Format(ExifInfoFields.FileName | ExifInfoFields.Dimensions, "صورة‏.jpg", 640, 480, null, Invariant);
+        var text = ExifFormatter.Format(ExifInfoFields.FileName | ExifInfoFields.Dimensions, "صورة‏.jpg", 640, 480, null, provider: Invariant);
 
         Assert.StartsWith("صورة‏.jpg" + ExifFormatter.Separator, text, StringComparison.Ordinal);
         Assert.EndsWith("640×480", text, StringComparison.Ordinal);
@@ -110,7 +110,7 @@ public sealed class ExifFormatterEdgeTests
             foreach (var date in dates)
             {
                 var exif = new ExifSummary { DateTaken = date };
-                var text = Record.Exception(() => ExifFormatter.Format(ExifInfoFields.DateTaken, "f.jpg", 1, 1, exif, culture));
+                var text = Record.Exception(() => ExifFormatter.Format(ExifInfoFields.DateTaken, "f.jpg", 1, 1, exif, provider: culture));
                 Assert.True(text is null, $"culture {culture.Name}, date {date:O}: {text}");
             }
         }
