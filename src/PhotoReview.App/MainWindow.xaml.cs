@@ -132,6 +132,9 @@ public partial class MainWindow : Window
     public Task UndoLastActionAsync() => _viewModel.UndoAsync();
     public void ResetFitView() => _ = ApplyFitViewAsync();
     public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
+
+    /// <summary>Test seam (kinetic-pan frame measurement): drives a drag/glide through the real controller in-process.</summary>
+    internal PointerInputController PointerInput => _pointer;
     public Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
     public bool TryGetCachedPreview(string path, out object? preview)
     {
