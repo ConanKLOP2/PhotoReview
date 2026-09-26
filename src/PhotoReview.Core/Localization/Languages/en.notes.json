@@ -565,5 +565,9 @@
   "status.lateRecycleUndoable": "Status bar (APP-03) when a Recycle finished after the user had already opened another folder; registered for Undo. {fileName} = file name.",
   "status.lateDeletedPermanently": "Status bar (APP-03) when a permanent delete (drive without a Recycle Bin, Q-R8) finished after the user had opened another folder. {fileName} = file name. Not undoable.",
   "status.duplicateCheckRunning": "Status bar while the duplicate check hashes same-size files; Esc cancels it (MainWindow Window_KeyDown -> MainViewModel.CancelDuplicateCheck). Replaced by the result status.",
-  "status.duplicateCheckCanceled": "Status bar after the user pressed Esc during the duplicate check. Nothing was moved to the Recycle Bin."
+  "status.duplicateCheckCanceled": "Status bar after the user pressed Esc during the duplicate check. Nothing was moved to the Recycle Bin.",
+  "benchmark.quickCheck": "Button.Content next to benchmark.run; always runs fast-sequential with 10 iterations, ignoring the profile list selection.",
+  "benchmark.quickCheck.automationName": "AutomationProperties.Name of the Quick check button (screen readers).",
+  "benchmark.imageLimit.label": "Label next to the image-limit TextBox.",
+  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers)."
 }

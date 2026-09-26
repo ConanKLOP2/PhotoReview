@@ -97,3 +97,43 @@ F4 (1841 files), Preview, warm, production graph, `run-matrix.ps1 -Scenarios s1-
 | Peak WS S1 / S2 / S3 | 7.8–10.1 / 10.2 / 10.7 GB | 8.8–10.2 / 10.2 / 10.7 GB |
 
 - The listing no longer opens each file: catalog-ready drops ~217 ms, first present ~250 ms (Folder trace). S2/S3 P95 differences are inside same-build run-to-run noise (S3 master alone spans 7.8–23.7 ms); one branch S3 run had a 1.5 s max outlier not seen in the extra round. Peak WS unchanged. Raw data is not committed.
+
+## Benchmark harness/window speed-up (benchmark speed-up) — 2026-09-26
+
+Goal: make the benchmark tools (CLI harness `run-matrix.ps1`, in-app `BenchmarkWindow`) themselves faster to run, not the app under test. Branch `perf/benchmark-speed`, base `f2661fc`.
+
+**Step 1 — where a `gate` run spends time** (F4, 1841 files, `-Profile gate -SkipBuild`, before any code change): total batch 393 s.
+
+| Scenario/cell | warm-up | run 1 | run 2 |
+|---|---:|---:|---:|
+| s2-next-slow | 127.2 s | 105.0 s | 15.3 s |
+| s3-next-burst | 9.8 s | 78.9 s | 16.6 s |
+| s4-jump | 9.0 s | 14.7 s | 16.1 s |
+
+Warm-up total 146.0 s / 392.6 s = **37.2 % of wall time** — well above the 10 % threshold, so **Step 3a (batched warm-up) was implemented**. `dotnet build PhotoReview.slnx -c Release` (full solution, from clean `obj`/`bin` after `git switch -c`): 60.7 s, 0 warnings.
+
+**Step 3a** — `run-matrix.ps1` now runs one warm-up per (fixture, mode, condition) combo per batch (scenario loop moved innermost) instead of once per scenario/fixture/mode/condition cell; `-WarmupEveryCell` restores the old per-cell behavior (`-FullWarmup` implies it, since a full warm-up only makes sense per scenario).
+
+**Step 3b** — new scenario `s2-next-slow-quick.json` (same as `s2-next-slow`, `repeat: 40` instead of 100); `-Profile quick` now uses it. `-Profile gate`/`full` are unchanged (100 keys) so decisions stay comparable to earlier AR entries in this file. `PerfAnalyze.IsBurstScenario` and the rest of the analyze/report tooling key off the scenario's `name` field ("S2-next-slow", unchanged) and an S3/S4 prefix check, not the file name, so no other change was needed there.
+
+**Step 2** — `BenchmarkWindow`: "Quick check" button (fast-sequential, 10 iterations, its default 1 warm-up) via `BuildQuickCheckProfile`; image-limit control (default 64, 0 = all) via `ApplyImageLimit`, mirroring the CLI's `--benchmark-all` `Take(64)`; `BenchmarkImageExecutor.DisposeAsync` no longer awaits the disk-cache prune pass (was bounded to 5 s) before returning — the wait + directory delete move to a background task (`TeardownBackgroundTask`) so a slow prune cannot hold up the next profile in a sequential run, while still guaranteeing the scratch directory is removed once the prune settles.
+
+**Step 4 — before/after wall-clock (F4, 1841 files, same machine, interleaved commit range `f2661fc`→`984b55d`, -SkipBuild):**
+
+| Run | Before | After | Change |
+|---|---:|---:|---:|
+| `-Profile gate` (S2+S3+S4, repeat 2) | 393.0 s | 260.3 s | **-33.8 %** |
+| `-Profile quick` (S2 100 keys + S3, repeat 1, `-WarmupEveryCell` = old default) → new quick (S2-quick 40 keys + S3, repeat 1, batched warm-up) | 208.5 s | 157.9 s | **-24.3 %** |
+
+In-app `BenchmarkWindow` (headless probe: `BenchmarkEngine.RunPreparedAsync` + `BenchmarkWorkloadRunner.PrepareIterationAsync` through a real `BenchmarkImageExecutor`, same F4 folder, same recipe the window uses):
+
+| Run | Files | Iterations | Wall time |
+|---|---:|---:|---:|
+| Default run today (fast-sequential, no cap — pre-Step-2b) | 1841 | 30 | 7875 ms |
+| Default run with the new 64-image cap | 64 | 30 | 8157 ms |
+| **Quick check** (fast-sequential, 64 images, 10 iterations) | 64 | 10 | **2620 ms** |
+
+The image cap alone barely moves fast-sequential's wall time on this fixture: its `ImagesPerSample = min(Workers, fileCount) = 8` either way once the folder has ≥8 files, so decode volume is unchanged — the cap's real payoff is keeping setup (file enumeration, `totalSourceBytes`, the preload-window index) and `FullFolder` profiles (e.g. `full-folder-warm`, `ram-maximizer`) cheap on folders with tens of thousands of files, not measurable on this 1841-file fixture. "Quick check" itself is the big win: **~3.1x faster than the default run** (10 vs 30 timed iterations, same 1 warm-up).
+
+Gate: `dotnet build PhotoReview.slnx -c Release` 0 warnings/0 errors; `dotnet test --filter "Category!=Manual&Category!=Native&Category!=Slow"` 3352 passed, 1 skipped (pre-existing, unrelated), 0 failed; `docs-budget.ps1 -Check`, `check-doc-links.ps1`, `i18n-check.ps1` all PASS. Mutation checks (reverted after each): `BenchmarkWindow.ApplyImageLimit` cap removed → red; `BuildQuickCheckProfile` iterations override ignored → red; `BenchmarkImageExecutor` teardown cleanup skipped → red (this last one needed a test fix — the first version of the teardown test was a false green because the RAM cache never evicted the 5 tiny test images, so nothing was ever persisted to disk to clean up; fixed by seeding the scratch directory directly).
+
