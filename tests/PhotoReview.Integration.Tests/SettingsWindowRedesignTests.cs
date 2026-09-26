@@ -42,6 +42,8 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.ShowFolderInfo), nameof(AppSettings.MouseWheelAction), nameof(AppSettings.ClickToZoomEnabled),
         nameof(AppSettings.ClickZoomPercent), nameof(AppSettings.KineticPanEnabled), nameof(AppSettings.MoveCopyReuseLastFolder),
         nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields),
+        // feat/ui-dark-chrome-toolbar
+        nameof(AppSettings.ToolbarAutoHide), nameof(AppSettings.ToolbarAutoHideDelayMs), nameof(AppSettings.InfoOverlayFontSize),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]

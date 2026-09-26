@@ -650,5 +650,17 @@
   "dialog.reloadTranslations.ok": "Translations reloaded. No problems found in the translation files.",
   "dialog.reloadTranslations.problems.one": "Translations reloaded, but {count} problem was found. A broken file is skipped entirely; a broken entry shows the English text instead. Fix it and press 'Reload translations' again.\n\n{details}",
   "dialog.reloadTranslations.problems.other": "Translations reloaded, but {count} problems were found. A broken file is skipped entirely; a broken entry shows the English text instead. Fix them and press 'Reload translations' again.\n\n{details}",
-  "dialog.reloadTranslations.more": "… and {count} more (all problems are in the log)."
+  "dialog.reloadTranslations.more": "… and {count} more (all problems are in the log).",
+  "main.menu.openFolder": "Open folder…",
+  "main.menu.openFolder.automationName": "Open image folder",
+  "main.menu.settings": "Settings…",
+  "main.menu.settings.automationName": "Open settings",
+  "settings.group.toolbar": "Toolbar",
+  "settings.toolbarAutoHide.label": "Auto-hide toolbar",
+  "settings.toolbarAutoHideDelay.label": "Hide delay (ms)",
+  "settings.toolbarAutoHideDelay.automationName": "Toolbar auto-hide delay, in milliseconds",
+  "settings.infoOverlayFontSize.label": "Info overlay font size",
+  "settings.infoOverlayFontSize.automationName": "Info overlay font size, in points",
+  "dialog.settingsInvalid.toolbarAutoHideDelay": "Toolbar auto-hide delay must be a whole number between {min} and {max} milliseconds.",
+  "dialog.settingsInvalid.infoOverlayFontSize": "Info overlay font size must be a number between {min} and {max}."
 }

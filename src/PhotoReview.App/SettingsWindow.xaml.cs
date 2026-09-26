@@ -45,6 +45,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings current, IImageDecoderFactory? decoderFactory = null, LocalizationService? localization = null, IUpdateChecker? updateChecker = null)
     {
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         _localization = localization;
         _updateChecker = updateChecker;
         VersionText.Text = BuildInfo.Describe(typeof(SettingsWindow).Assembly);
@@ -316,6 +317,9 @@ public partial class SettingsWindow : Window
         ShowInfoOverlayCheck.IsChecked = Settings.ShowInfoOverlay;
         ShowFileInfoCheck.IsChecked = Settings.ShowFileInfo;
         ShowFolderInfoCheck.IsChecked = Settings.ShowFolderInfo;
+        InfoOverlayFontSizeBox.Text = Settings.InfoOverlayFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ToolbarAutoHideCheck.IsChecked = Settings.ToolbarAutoHide;
+        ToolbarAutoHideDelayBox.Text = Settings.ToolbarAutoHideDelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         MouseWheelActionCombo.SelectedIndex = Settings.MouseWheelAction == MouseWheelAction.Navigate ? 1 : 0;
         ClickToZoomCheck.IsChecked = Settings.ClickToZoomEnabled;
         ClickZoomPercentBox.Text = Settings.ClickZoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -334,6 +338,7 @@ public partial class SettingsWindow : Window
         UpdateClickZoomEnabled();
         UpdateShowInfoSubOptionsEnabled();
         UpdateExifFieldsEnabled();
+        UpdateToolbarAutoHideEnabled();
         LoadRamCache();
         UpdateDuplicateWarning();
     }
@@ -341,6 +346,10 @@ public partial class SettingsWindow : Window
     private void ClickToZoomCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateClickZoomEnabled();
 
     private void UpdateClickZoomEnabled() => ClickZoomPercentBox.IsEnabled = ClickToZoomCheck.IsChecked == true;
+
+    private void ToolbarAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateToolbarAutoHideEnabled();
+
+    private void UpdateToolbarAutoHideEnabled() => ToolbarAutoHideDelayBox.IsEnabled = ToolbarAutoHideCheck.IsChecked == true;
 
     private void ShowInfoOverlayCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateShowInfoSubOptionsEnabled();
 
@@ -457,6 +466,8 @@ public partial class SettingsWindow : Window
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
+        Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs;
+        Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
         LoadFields();
     }
 
@@ -522,6 +533,21 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ClickZoomPercent = clickZoomPercent;
+        if (!int.TryParse(ToolbarAutoHideDelayBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var toolbarAutoHideDelayMs)
+            || toolbarAutoHideDelayMs < AppSettings.MinToolbarAutoHideDelayMs || toolbarAutoHideDelayMs > AppSettings.MaxToolbarAutoHideDelayMs)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidToolbarAutoHideDelay(AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs));
+            return;
+        }
+        if (!double.TryParse(InfoOverlayFontSizeBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var infoOverlayFontSize)
+            || infoOverlayFontSize < AppSettings.MinInfoOverlayFontSize || infoOverlayFontSize > AppSettings.MaxInfoOverlayFontSize)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidInfoOverlayFontSize(AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize));
+            return;
+        }
+        Settings.ToolbarAutoHide = ToolbarAutoHideCheck.IsChecked == true;
+        Settings.ToolbarAutoHideDelayMs = toolbarAutoHideDelayMs;
+        Settings.InfoOverlayFontSize = infoOverlayFontSize;
         Settings.Shortcuts.Next = ShortcutKeyCanonical.Canonicalize(NextText.Text); Settings.Shortcuts.Previous = ShortcutKeyCanonical.Canonicalize(PreviousText.Text);
         Settings.Shortcuts.SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(RecycleText.Text);
         Settings.Shortcuts.Compare = ShortcutKeyCanonical.Canonicalize(CompareText.Text); Settings.Shortcuts.NextFolder = ShortcutKeyCanonical.Canonicalize(NextFolderText.Text); Settings.Shortcuts.PreviousFolder = ShortcutKeyCanonical.Canonicalize(PreviousFolderText.Text);

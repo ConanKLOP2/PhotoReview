@@ -35,6 +35,7 @@ public partial class BenchmarkWindow : Window, IDisposable
     public BenchmarkWindow(string? initialFolder)
     {
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         FolderText.Text = initialFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
         foreach (var item in _profileItems) ProfilesList.Items.Add(item);
         ProfilesList.SelectedItems.Add(_profileItems.First(i => i.Profile.Id == "fast-sequential"));

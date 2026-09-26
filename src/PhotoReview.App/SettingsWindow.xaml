@@ -133,7 +133,19 @@
                                 <CheckBox x:Name="ShowFileInfoCheck" Content="{loc:Tr settings.showFileInfo.label}"/>
                                 <CheckBox x:Name="ShowFolderInfoCheck" Content="{loc:Tr settings.showFolderInfo.label}"/>
                             </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="20,8,0,0">
+                                <TextBlock x:Name="InfoOverlayFontSizeLabel" Text="{loc:Tr settings.infoOverlayFontSize.label}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <TextBox x:Name="InfoOverlayFontSizeBox" Width="70" AutomationProperties.LabeledBy="{Binding ElementName=InfoOverlayFontSizeLabel}" AutomationProperties.Name="{loc:Tr settings.infoOverlayFontSize.automationName}" Margin="0"/>
+                            </StackPanel>
                         </StackPanel></GroupBox>
+
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.toolbar}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <CheckBox x:Name="ToolbarAutoHideCheck" Grid.Row="0" Grid.ColumnSpan="2" Content="{loc:Tr settings.toolbarAutoHide.label}" Checked="ToolbarAutoHideCheck_CheckedChanged" Unchecked="ToolbarAutoHideCheck_CheckedChanged"/>
+                            <TextBlock x:Name="ToolbarAutoHideDelayLabel" Text="{loc:Tr settings.toolbarAutoHideDelay.label}" Grid.Row="1" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="ToolbarAutoHideDelayBox" AutomationProperties.LabeledBy="{Binding ElementName=ToolbarAutoHideDelayLabel}" AutomationProperties.Name="{loc:Tr settings.toolbarAutoHideDelay.automationName}" Grid.Row="1" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
+                        </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.displayPerformance}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

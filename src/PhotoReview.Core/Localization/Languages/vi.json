@@ -642,5 +642,17 @@
   "dialog.reloadTranslations.title": "Tải lại bản dịch",
   "dialog.reloadTranslations.ok": "Đã tải lại bản dịch. Không có lỗi trong các tệp dịch.",
   "dialog.reloadTranslations.problems.other": "Đã tải lại bản dịch nhưng có {count} lỗi. Tệp hỏng bị bỏ qua toàn bộ; mục hỏng sẽ hiện chữ tiếng Anh. Hãy sửa rồi nhấn 'Tải lại bản dịch' lần nữa.\n\n{details}",
-  "dialog.reloadTranslations.more": "… và {count} lỗi khác (xem đủ trong log)."
+  "dialog.reloadTranslations.more": "… và {count} lỗi khác (xem đủ trong log).",
+  "main.menu.openFolder": "Mở thư mục…",
+  "main.menu.openFolder.automationName": "Mở thư mục ảnh",
+  "main.menu.settings": "Cài đặt…",
+  "main.menu.settings.automationName": "Mở cài đặt",
+  "settings.group.toolbar": "Thanh công cụ",
+  "settings.toolbarAutoHide.label": "Tự ẩn thanh công cụ",
+  "settings.toolbarAutoHideDelay.label": "Độ trễ ẩn (ms)",
+  "settings.toolbarAutoHideDelay.automationName": "Độ trễ tự ẩn thanh công cụ, tính bằng mili giây",
+  "settings.infoOverlayFontSize.label": "Cỡ chữ lớp phủ thông tin",
+  "settings.infoOverlayFontSize.automationName": "Cỡ chữ lớp phủ thông tin, tính bằng điểm",
+  "dialog.settingsInvalid.toolbarAutoHideDelay": "Độ trễ tự ẩn thanh công cụ phải là số nguyên từ {min} đến {max} mili giây.",
+  "dialog.settingsInvalid.infoOverlayFontSize": "Cỡ chữ lớp phủ thông tin phải là số từ {min} đến {max}."
 }

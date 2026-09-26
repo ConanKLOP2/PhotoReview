@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Diagnostics;
 using PhotoReview.App.Input;
@@ -77,12 +79,13 @@ public partial class MainWindow : Window
         _shortcutRouter = new ShortcutRouter(_settings);
         // R2-F-27: the router/VM are refreshed here (settings change), not on every key press.
         _viewModel.Settings = _settings;
-        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); };
+        _settingsStore.Changed += (_, s) => { _settings = s; _viewModel.Settings = s; _shortcutRouter.Rebuild(s); ApplyToolbarVisibility(); };
         PhotoReviewPerf.StartupMark("mainWindowCtor");
         // I18N: a live language switch re-renders the texts the ViewModel builds in code (ADR 0006).
         Localizer.CurrentChanged += OnLanguageChanged;
         DataContext = _viewModel;
         InitializeComponent();
+        DarkTitleBarChrome.Apply(this);
         _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize);
         _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
             new PointerCommands(() => _viewModel.HasImages, _viewModel.NextAsync, _viewModel.PreviousAsync, _viewModel.ZoomActualSize, ApplyFitViewAsync));
@@ -95,6 +98,7 @@ public partial class MainWindow : Window
         DpiChanged += MainWindow_DpiChanged;
         UpdateTargetDecodeBox();
         WireViewModelEvents();
+        InitToolbarAutoHide();
     }
 
     public void InitializeWithInitialPath(string? initialPath)
@@ -116,6 +120,8 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(UpdateFitSize, System.Windows.Threading.DispatcherPriority.Render);
             // feat/mouse-zoom: navigation stops a glide (a full-resolution swap of the same image does not).
             if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) _pointer.OnCurrentIndexChanged(_viewModel.CurrentIndex);
+            // feat/ui-dark-chrome-toolbar: no folder open forces the toolbar visible (ToolbarAutoHidePolicy).
+            if (e.PropertyName == nameof(MainViewModel.HasImages)) ApplyToolbarVisibility();
         };
         // feat/mouse-zoom: any zoom change (wheel, keys, click, Fit) stops a glide; so does leaving the window.
         _viewModel.Viewer.ZoomModeChanged += (_, _) => _pointer.StopKinetic();
@@ -188,6 +194,75 @@ public partial class MainWindow : Window
         PhotoReviewPerf.StartupMark("windowLoaded");
         if (!_placementRestored) { _placementRestored = true; if (PlacementFile is { } placementFile) WindowPlacementService.Restore(this, placementFile); }
         UpdateFitSize();
+    }
+
+    // ---- Toolbar auto-hide (feat/ui-dark-chrome-toolbar). Decision logic is in ToolbarAutoHidePolicy
+    // (unit-tested, no WPF dependency); this region only drives the timer/animation/mouse tracking. ----
+
+    private DispatcherTimer? _toolbarHideTimer;
+    private bool _toolbarMouseInsideHotZone = true; // assume "inside" until the first mouse move says otherwise
+    private bool _toolbarWasKeptVisible = true;
+    private const double ToolbarHotZoneMargin = 24; // px, beyond ToolbarPanel's own bounds
+    private const int ToolbarFadeInMs = 150;
+    private const int ToolbarFadeOutMs = 200;
+
+    private void InitToolbarAutoHide()
+    {
+        _toolbarHideTimer = new DispatcherTimer();
+        _toolbarHideTimer.Tick += (_, _) => { _toolbarHideTimer!.Stop(); SetToolbarOpacity(visible: false); };
+        ToolsButton.Checked += (_, _) => ApplyToolbarVisibility();
+        ToolsButton.Unchecked += (_, _) => ApplyToolbarVisibility();
+        ToolbarPanel.GotKeyboardFocus += (_, _) => ApplyToolbarVisibility();
+        ToolbarPanel.LostKeyboardFocus += (_, _) => ApplyToolbarVisibility();
+        ApplyToolbarVisibility();
+    }
+
+    private void Window_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (ToolbarPanel is null) return;
+        var topLeft = ToolbarPanel.TranslatePoint(new Point(0, 0), this);
+        var position = e.GetPosition(this);
+        _toolbarMouseInsideHotZone = ToolbarAutoHidePolicy.IsInsideHotZone(
+            position.X, position.Y, topLeft.X, topLeft.Y, ToolbarPanel.ActualWidth, ToolbarPanel.ActualHeight, ToolbarHotZoneMargin);
+        ApplyToolbarVisibility();
+    }
+
+    /// <summary>
+    /// Re-evaluates whether the toolbar should be shown or eligible to auto-hide. Called from mouse
+    /// move, the Tools popup opening/closing, keyboard focus entering/leaving the toolbar, a folder
+    /// opening/closing (HasImages) and a settings change (auto-hide on/off, delay).
+    /// </summary>
+    private void ApplyToolbarVisibility()
+    {
+        if (_toolbarHideTimer is null) return; // constructor still running
+        var keepVisible = ToolbarAutoHidePolicy.MustStayVisible(
+            autoHideEnabled: _settings.ToolbarAutoHide,
+            hasFolderOpen: _viewModel.HasImages,
+            isToolsPopupOpen: ToolsButton.IsChecked == true,
+            isKeyboardFocusInsideToolbar: ToolbarPanel.IsKeyboardFocusWithin) || _toolbarMouseInsideHotZone;
+
+        if (keepVisible)
+        {
+            _toolbarHideTimer.Stop();
+            SetToolbarOpacity(visible: true);
+        }
+        else if (_toolbarWasKeptVisible)
+        {
+            // Just became eligible to hide: start counting down (does not restart on every later
+            // mouse move outside the hot zone, so it hides at the configured delay after leaving).
+            var delayMs = Math.Clamp(_settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);
+            _toolbarHideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, delayMs));
+            _toolbarHideTimer.Start();
+        }
+        _toolbarWasKeptVisible = keepVisible;
+    }
+
+    private void SetToolbarOpacity(bool visible)
+    {
+        var animation = new DoubleAnimation(visible ? 1.0 : 0.0, TimeSpan.FromMilliseconds(visible ? ToolbarFadeInMs : ToolbarFadeOutMs));
+        ToolbarPanel.BeginAnimation(OpacityProperty, animation);
+        // Faded out: let clicks/wheel/pan through to the image underneath instead of the invisible toolbar.
+        ToolbarPanel.IsHitTestVisible = visible;
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
