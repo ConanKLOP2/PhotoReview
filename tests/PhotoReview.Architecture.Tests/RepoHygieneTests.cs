@@ -12,7 +12,11 @@ namespace PhotoReview.Architecture.Tests;
 /// </summary>
 public sealed class RepoHygieneTests
 {
+    // Shells out to the real `git` executable (Process.Start): a genuine OS resource, so this is
+    // Category=Integration rather than the default filter (TEST-OS rule in TestQualityRulesTests).
+    // Integration-only (no Slow) still runs under the shared gate filter (AGENTS.md > Tests / CI TEST_FILTER).
     [Fact(DisplayName = "AR12a: no tracked *.dll/*.exe files outside bin/obj build output")]
+    [Trait("Category", "Integration")]
     public void NoTrackedNativeBinariesOutsideBuildOutput()
     {
         string[] tracked;
@@ -22,8 +26,7 @@ public sealed class RepoHygieneTests
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            // git is not available in this environment; nothing to verify here (still true, vacuously).
-            Assert.True(true, "git unavailable; skipping repo-tracked-files scan");
+            // git is not available in this environment; there is nothing to verify.
             return;
         }
 
