@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Input;
 using PhotoReview.App.ViewModels;
+using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.App.Services;
 
@@ -17,7 +18,7 @@ namespace PhotoReview.App.Services;
 /// controllers used to make directly in MainWindow. Holds the two elements, never the window
 /// (<paramref name="isLoaded"/> reads the window's IsLoaded, <paramref name="updateFitSize"/> is MainWindow.UpdateFitSize).
 /// </summary>
-internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerState viewer, Func<bool> isLoaded, Action updateFitSize)
+internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerState viewer, Func<bool> isLoaded, Action updateFitSize, IDisplayClock? displayClock = null)
     : IImageSurface, IFitSurface
 {
     public bool IsLoaded => isLoaded();
@@ -91,4 +92,9 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
     public void HookRenderFrame(EventHandler handler) => CompositionTarget.Rendering += handler;
     public void UnhookRenderFrame(EventHandler handler) => CompositionTarget.Rendering -= handler;
     public TimeSpan? RenderingTime(EventArgs e) => e is RenderingEventArgs rendering ? rendering.RenderingTime : null;
+    public long Timestamp => System.Diagnostics.Stopwatch.GetTimestamp();
+    public DisplayTiming? DisplayTiming =>
+        displayClock is not null && PresentationSource.FromVisual(scroll) is System.Windows.Interop.HwndSource source
+            ? displayClock.GetTiming(source.Handle)
+            : null;
 }

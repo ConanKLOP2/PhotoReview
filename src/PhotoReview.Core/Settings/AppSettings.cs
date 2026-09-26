@@ -170,4 +170,7 @@ public class AppSettings
 
     /// <summary>Parts shown in the main window's title bar; absent in older configs = <see cref="TitleBarFields.Default"/>.</summary>
     public TitleBarFields TitleBarFields { get; set; } = TitleBarFields.Default;
+
+    /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
+    public KineticGlideSmoothing KineticGlideSmoothing { get; set; } = KineticGlideSmoothing.Predict;
 }

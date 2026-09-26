@@ -574,5 +574,10 @@
   "dialog.reloadTranslations.ok": "MessageBox body when every translation file loaded without a problem.",
   "dialog.reloadTranslations.problems.one": "MessageBox body when the files have problems. {details} is a list, one problem per line, in English (file path or language code, key, reason); keep the blank line before it.",
   "dialog.reloadTranslations.problems.other": "Same as .one, for several problems.",
-  "dialog.reloadTranslations.more": "Last line of {details} when more problems exist than are listed; {count} is how many are not shown."
+  "dialog.reloadTranslations.more": "Last line of {details} when more problems exist than are listed; {count} is how many are not shown.",
+  "settings.kineticGlideSmoothing.label": "Settings > Mouse & zoom: label of the combo box choosing how the kinetic glide is timed (Off / match the monitor refresh).",
+  "settings.kineticGlideSmoothing.automationName": "AutomationProperties.Name of the glide smoothing combo box (screen readers).",
+  "settings.kineticGlideSmoothing.hint": "Help text under the glide smoothing combo box.",
+  "enum.kineticGlideSmoothing.off": "Glide smoothing option: the original timing (WPF frame times).",
+  "enum.kineticGlideSmoothing.predict": "Glide smoothing option: each glide step lands on the monitor's next refresh (vblank)."
 }

@@ -679,5 +679,10 @@
   "main.menu.clickZoomLevel.custom": "Custom…",
   "main.menu.clickZoomLevel.custom.automationName": "Set a custom click zoom level",
   "dialog.clickZoomCustom.title": "Custom click zoom level",
-  "dialog.clickZoomCustom.label": "Zoom level (10–800 %):"
+  "dialog.clickZoomCustom.label": "Zoom level (10–800 %):",
+  "settings.kineticGlideSmoothing.label": "Glide smoothing",
+  "settings.kineticGlideSmoothing.automationName": "Kinetic glide smoothing",
+  "settings.kineticGlideSmoothing.hint": "Moves the glide in step with your monitor's refresh rate. Turn off to compare.",
+  "enum.kineticGlideSmoothing.off": "Off",
+  "enum.kineticGlideSmoothing.predict": "Match monitor refresh"
 }

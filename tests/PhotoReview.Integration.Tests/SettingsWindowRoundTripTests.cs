@@ -64,6 +64,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ClickToZoomEnabled)] = w => w.ClickToZoomCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ClickZoomPercent)] = w => w.ClickZoomPercentBox.Text = "222", // 100 -> 222
         [nameof(AppSettings.KineticPanEnabled)] = w => w.KineticPanCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.KineticGlideSmoothing)] = w => w.KineticGlideSmoothingCombo.SelectedIndex = 0, // Predict -> Off
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = w => w.MoveCopyReuseLastFolderCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ShowExifInfo)] = w => w.ShowExifInfoCheck.IsChecked = true, // false -> true
         // Default is All minus (FileName|Dimensions); flip every field so the result is the complement (FileName|Dimensions).
@@ -114,6 +115,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ClickToZoomEnabled)] = true,
         [nameof(AppSettings.ClickZoomPercent)] = 222,
         [nameof(AppSettings.KineticPanEnabled)] = false,
+        [nameof(AppSettings.KineticGlideSmoothing)] = KineticGlideSmoothing.Off,
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = true,
         [nameof(AppSettings.ShowExifInfo)] = true,
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |

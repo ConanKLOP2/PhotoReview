@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows;
+using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.App.Input;
 
@@ -62,4 +63,10 @@ internal interface IImageSurface
 
     /// <summary>The frame time carried by a render callback's arguments, or null if they are not frame arguments.</summary>
     TimeSpan? RenderingTime(EventArgs e);
+
+    /// <summary>Now, in Stopwatch (QPC) ticks: the time base of <see cref="DisplayTiming"/>.</summary>
+    long Timestamp { get; }
+
+    /// <summary>Vblank timing of the monitor showing the image (<see cref="IDisplayClock"/>), or null when not known (yet). Non-blocking; reading it starts the clock.</summary>
+    DisplayTiming? DisplayTiming { get; }
 }

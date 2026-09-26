@@ -671,5 +671,10 @@
   "main.menu.clickZoomLevel.custom": "Tùy chỉnh…",
   "main.menu.clickZoomLevel.custom.automationName": "Đặt mức thu phóng khi nhấn tùy chỉnh",
   "dialog.clickZoomCustom.title": "Mức thu phóng khi nhấn tùy chỉnh",
-  "dialog.clickZoomCustom.label": "Mức thu phóng (10–800%):"
+  "dialog.clickZoomCustom.label": "Mức thu phóng (10–800%):",
+  "settings.kineticGlideSmoothing.label": "Làm mượt khi trượt",
+  "settings.kineticGlideSmoothing.automationName": "Làm mượt chuyển động trượt quán tính",
+  "settings.kineticGlideSmoothing.hint": "Cho ảnh trượt khớp với tần số quét của màn hình. Tắt để so sánh.",
+  "enum.kineticGlideSmoothing.off": "Tắt",
+  "enum.kineticGlideSmoothing.predict": "Khớp tần số màn hình"
 }

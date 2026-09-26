@@ -57,7 +57,7 @@ public partial class MainWindow : Window
     /// </summary>
     internal string? PlacementFile { get; private set; }
 
-    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null)
+    public MainWindow(MainViewModel viewModel, SettingsStore settingsStore, ViewportSizeSource viewport, IAppPaths? appPaths = null, IDisplayClock? displayClock = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -88,7 +88,7 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         InitializeComponent();
         DarkTitleBarChrome.Apply(this);
-        _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize);
+        _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize, displayClock);
         _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
             new PointerCommands(() => _viewModel.HasImages, _viewModel.NextAsync, _viewModel.PreviousAsync, _viewModel.ZoomActualSize, ApplyFitViewAsync));
         _fit = new FitViewController(_surface, _viewModel.Viewer, _viewportVersion, _pointer.CancelPan);
@@ -140,6 +140,9 @@ public partial class MainWindow : Window
     public Task UndoLastActionAsync() => _viewModel.UndoAsync();
     public void ResetFitView() => _ = ApplyFitViewAsync();
     public void SetZoom(double level) => _viewModel.Viewer.SetZoom(level);
+
+    /// <summary>Test seam (kinetic-pan frame measurement): drives a drag/glide through the real controller in-process.</summary>
+    internal PointerInputController PointerInput => _pointer;
     public Task ShowImageAsync(int index) => _viewModel.Presenter.PresentAsync(index);
     public bool TryGetCachedPreview(string path, out object? preview)
     {
