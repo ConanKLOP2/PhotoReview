@@ -8,7 +8,8 @@
 - **GUI checks — user reported "GUI OK" (2026-09-26):** AR13 (pan + glide, wheel zoom at cursor, Ctrl+wheel navigation, click-to-zoom, Fit after resize/DPI change, skipped-files list), AR16 (locked file: first image at once, then the warning), Settings > Updates and Defaults, close during a folder scan, Recycle Bin undo, decoder fallbacks with damaged EXIF/ICC, T89 Fit.
 - **User GUI check still open:** #109 benchmark — Quick check button, image limit 5 / 0, close the Benchmark window mid-run (no crash, no leftover `%TEMP%\PhotoReview-Benchmark-Cache\*`).
 - **Measured 2026-09-26 (PERF-STATUS):** natural sort / snapshot validator confirmed on an idle PC (validator ×2.36, sort ×1.59, no allocations); Q-R17 on F4 fills the whole folder (~10 GB) but first-visual latency is ~2.5–3× higher in steady state → **Q-R26 = B** (user): keep Q-R17, find the cause. Round 1 (branch `perf/q-r26-gc-investigation`, harness now logs GCs and page faults): not GC, not the page-fault count; noisy machine — rerun on an idle PC next.
-- **Still to do:** decisions Q-R26 (Q-R17 trade-off) and Q-R27 (reconcile in a second process can report a running operation as Failed; PerFolder mode only).
+- **Still to do:** Q-R26 round 2 on an idle PC (Claude): rerun master vs variant, whole-folder mode on a small folder, ETW hard/soft faults and memory compression during navigation.
+- **Q-R27 = D (#116):** each running operation holds a named kernel event (`WindowsLiveOperationRegistry`) from Prepared to its outcome; startup reconcile skips live operations, so a second process no longer reports them Failed.
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.
 

@@ -64,7 +64,7 @@ public sealed class RecoveryRetryService
     private RecoveryRetryResult ExecuteRetry(JournalEntry failed, JournalEntry prepared)
     {
         var destination = failed.Destination!; // validated non-empty by the caller
-        var tx = new JournalTransaction(_journal, _clock, prepared, failWithoutPrepared: true);
+        using var tx = new JournalTransaction(_journal, _clock, prepared, failWithoutPrepared: true);
         try
         {
             tx.Begin();

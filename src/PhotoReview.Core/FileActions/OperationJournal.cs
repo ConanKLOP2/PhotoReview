@@ -42,6 +42,7 @@ public sealed class OperationJournal
     private readonly object _gate = new();
     private readonly Func<JournalDurability> _durability;
     private readonly Action<TimeSpan> _appendRetryDelay;
+    private readonly ILiveOperationRegistry _liveOperations;
 
     /// <summary>
     /// Review r7: two PhotoReview processes (one per folder) share operations.jsonl, and an append holds the file with
@@ -60,9 +61,15 @@ public sealed class OperationJournal
     /// Wait between append attempts after a sharing/lock violation (default <see cref="Thread.Sleep(TimeSpan)"/>).
     /// A test seam: it lets a test release a competing handle deterministically instead of racing a timer.
     /// </param>
+    /// <param name="liveOperations">
+    /// Q-R27: markers of the operations executing right now (in any process sharing this journal). Every Prepared entry is
+    /// written under a marker (<see cref="JournalTransaction"/>) and reconcile skips live ones. Default: a process-local
+    /// registry (tests, tools); the app injects the Windows named-object registry.
+    /// </param>
     public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock, Func<JournalDurability>? durability = null,
-        Action<TimeSpan>? appendRetryDelay = null)
+        Action<TimeSpan>? appendRetryDelay = null, ILiveOperationRegistry? liveOperations = null)
     {
+        _liveOperations = liveOperations ?? new InProcessLiveOperationRegistry();
         _durability = durability ?? (() => JournalDurability.Fast);
         _appendRetryDelay = appendRetryDelay ?? Thread.Sleep;
         ArgumentNullException.ThrowIfNull(paths);
@@ -73,6 +80,9 @@ public sealed class OperationJournal
 
     /// <summary>Mode applied to the next write (re-read from the provider every time, so a Settings change needs no restart).</summary>
     public JournalDurability Durability => _durability();
+
+    /// <summary>Q-R27: the registry the operations of this journal hold their live marker in (see <see cref="JournalTransaction"/>).</summary>
+    public ILiveOperationRegistry LiveOperations => _liveOperations;
 
     public void Append(JournalEntry entry)
     {
@@ -342,12 +352,19 @@ public sealed class OperationJournal
     /// Only Prepared entries stamped before this instant are reconciled. Startup passes the moment it began, so an
     /// action this process starts while the (background) reconcile runs is never judged mid-flight.
     /// </param>
+    /// <remarks>
+    /// Q-R27: an entry whose live marker exists (<see cref="ILiveOperationRegistry.IsLive"/>) is still executing, possibly in
+    /// another PhotoReview process that started it before this one launched (a long Move/Copy to a slow drive). It is
+    /// skipped: left Prepared, nothing appended, not returned. The owner appends its outcome; a crashed owner's marker is
+    /// gone with its process, so a real leftover is reconciled by the next start.
+    /// </remarks>
     public IReadOnlyList<JournalEntry> ReconcilePendingOperations(DateTime? preparedBeforeUtc = null)
     {
         var reconciled = new List<JournalEntry>();
         foreach (var pending in ReadPendingOperations())
         {
             if (preparedBeforeUtc is { } cutoff && pending.TimestampUtc >= cutoff) continue;
+            if (IsExecuting(pending.Id)) continue; // Q-R27: skip before any (possibly slow) file check
             if (pending.Type == FileOperationType.Recycle)
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
@@ -383,10 +400,15 @@ public sealed class OperationJournal
             JournalEntry? latest = null;
             ReadEntries(entry => { if (string.Equals(entry.Id, outcome.Id, StringComparison.Ordinal)) latest = entry; });
             if (latest is null || latest.State != JournalState.Prepared) return false;
+            // Q-R27: re-checked after the re-read. A marker is taken before its Prepared entry is appended, so a retry that
+            // re-prepared this Id since the snapshot (same Id, RecoveryRetryService) is already visible as live here.
+            if (IsExecuting(outcome.Id)) return false;
             Append(outcome);
             return true;
         }
     }
+
+    private bool IsExecuting(string operationId) => _liveOperations.IsLive(operationId);
 
     // Journal text is invariant (AGENTS.md rule 4): a failure stores its code plus English, never the UI language.
     private JournalEntry WithOutcome(JournalEntry pending, JournalState state, string failureCode)

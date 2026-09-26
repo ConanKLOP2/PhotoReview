@@ -253,6 +253,7 @@ public sealed class FileActionService
         }
         finally
         {
+            tx?.Dispose(); // Q-R27 safety net: the live marker normally ends with Commit/Fail
             End();
         }
     }

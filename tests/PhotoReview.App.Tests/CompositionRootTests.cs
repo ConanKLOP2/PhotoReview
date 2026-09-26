@@ -90,6 +90,19 @@ public class CompositionRootTests
         Assert.Same(provider.GetRequiredService<ReviewMetrics>(), vm.Metrics);
     }
 
+    // Q-R27: the app's journal must hold its live markers in the cross-process (named kernel object) registry; the
+    // in-process default would let another PhotoReview's startup reconcile fail an operation still running here.
+    [Fact]
+    public void AppHost_BuildServices_JournalUsesWindowsLiveOperationRegistry()
+    {
+        using var provider = AppHost.BuildServices();
+
+        var registry = provider.GetRequiredService<ILiveOperationRegistry>();
+
+        Assert.IsType<PhotoReview.Platform.Windows.WindowsLiveOperationRegistry>(registry);
+        Assert.Same(registry, provider.GetRequiredService<OperationJournal>().LiveOperations);
+    }
+
     [Fact]
     public void AppHost_BuildServices_AppliesOverridesAfterConfigureServices()
     {
