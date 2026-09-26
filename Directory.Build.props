@@ -12,4 +12,11 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
+  <!-- AR12b: Release is the shipped configuration, so a new warning there must fail the build
+       rather than slip into a release silently. Debug stays warning-only so the IDE inner loop
+       is not blocked by a warning mid-edit. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
 </Project>

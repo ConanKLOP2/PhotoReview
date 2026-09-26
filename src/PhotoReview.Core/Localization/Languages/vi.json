@@ -224,7 +224,7 @@
   "enum.benchmarkWorkload.random": "Random",
   "enum.benchmarkWorkload.sequential": "Sequential",
   "enum.benchmarkWorkload.warmNext": "WarmNext",
-  "enum.decoderBackend.turboJpeg": "TurboJPEG (JPEG)",
+  "enum.decoderBackend.turboJpeg": "TurboJPEG (JPEG) (thử nghiệm)",
   "enum.decoderBackend.wicDirect": "WIC Direct (nhanh)",
   "enum.decoderBackend.wpf": "WPF (mặc định, an toàn)",
   "enum.explorerOrderStatus.available": "Sẵn sàng",

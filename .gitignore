@@ -58,6 +58,10 @@ dlldata.c
 # Benchmark Results
 BenchmarkDotNet.Artifacts/
 
+# Native binaries are fetched by tools/fetch-native.ps1 (hash-pinned); never commit them
+native/**/*.dll
+native/**/*.pdb
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json
