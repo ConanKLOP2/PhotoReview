@@ -420,7 +420,14 @@ public sealed class PreloadScheduler : IDisposable
                 // Q-R17: the window may run out right as its decodes finish calibrating the estimate;
                 // take one more pass so a now-affordable whole folder still gets queued.
                 if (!paused && running.Count == 0 && (_sizes.MeanBytes(seenBox) is not null) != seenCalibrated) continue;
-                if (paused || running.Count == 0) break;
+                if (paused || running.Count == 0)
+                {
+                    // A navigation that landed after this pass read the version bumped it and woke nobody (there is
+                    // nothing to wait on): take another pass for the new centre instead of exiting.
+                    if (!paused && !cancellationToken.IsCancellationRequested
+                        && Interlocked.Read(ref _preloadPriorityVersion) != seenVersion) continue;
+                    break;
+                }
                 var signalled = await Task.WhenAny(running.Keys.Append<Task>(wake)).ConfigureAwait(false);
                 if (ReferenceEquals(signalled, wake)) continue; // woken by a navigation: re-prioritize
                 var finished = (Task<PreloadOutcome>)signalled;

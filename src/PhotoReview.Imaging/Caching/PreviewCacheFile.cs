@@ -100,7 +100,7 @@ public static class PreviewCacheFile
     }
 
     /// <summary>
-    /// Atomically encodes <paramref name="bitmap"/> as a v4 cache entry (header + JPEG payload) via
+    /// Atomically encodes <paramref name="bitmap"/> as a current-version (<see cref="CurrentVersion"/>) cache entry (header + JPEG payload) via
     /// <see cref="AtomicCacheFile.WriteAsync"/> (temp file, write, atomic rename -- see that type for
     /// the durability rationale). The alpha/orientation validation below runs before the write.
     /// </summary>
@@ -147,7 +147,7 @@ public static class PreviewCacheFile
     }
 
     /// <summary>
-    /// Reads and fully decodes a v4 cache entry in one file open (no separate metadata file to
+    /// Reads and fully decodes a cache entry in one file open (no separate metadata file to
     /// read). Throws <see cref="InvalidDataException"/> for a bad magic, an unsupported/mismatched
     /// version, or any other structurally invalid header -- callers treat that exactly like a
     /// corrupt payload (delete the entry, fall back to decoding the source).
