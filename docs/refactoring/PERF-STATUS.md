@@ -72,3 +72,4 @@ Per PR (measured as it landed): #40 ICC via WIC color transform + Bgr32/Pbgra32 
 
 - New harness: `run-matrix.ps1 -Profile quick|gate|full` (gate ≈ 7 min vs ~30 min), `-ColdDiskCache`, fixture-change guard; `--perf-analyze` reports `renderedFrame` (2nd Rendering tick) and Startup/Folder phases again.
 - Not shipped: SIMD-only TurboJpeg scale factors (measured slower). TurboJpeg remains slower than WicDirect on this set.
+- Not shipped: GC mode — giữ mặc định (AR12c), lý do trong architecture.md.

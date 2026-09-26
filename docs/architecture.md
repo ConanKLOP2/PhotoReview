@@ -124,6 +124,10 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 
 PhotoReview.Core.Updates (IUpdateChecker, UpdateChecker, AppVersion, UpdateUrlPolicy) là **nơi duy nhất trong ứng dụng chạm tới mạng**, và chỉ chạy khi người dùng bấm **Cài đặt → Chung → Cập nhật → Kiểm tra cập nhật**. Không tự kiểm tra, không tự tải, không tự cài, không ép cập nhật. Một request GET https://api.github.com/repos/ConanKLOP2/PhotoReview/releases/latest (HTTPS, có User-Agent, timeout 10 giây, CancellationToken, async — không chặn UI) chỉ đọc 	ag_name/html_url; không gửi gì về ảnh hoặc đường dẫn. Bỏ qua draft/prerelease; so sánh số major.minor.patch với phiên bản đang chạy (BuildInfo.GetVersion, chấp nhận tiền tố  và +metadata). Kết quả: UpToDate / UpdateAvailable(version, url) / Failed(Offline, Timeout, RateLimited, BadResponse, InvalidVersion). Tầng HTTP tiêm được qua HttpMessageHandler nên test không dùng mạng thật. Nút **Mở trang tải về** chỉ hiện khi có bản mới và chỉ mở URL https://github.com/ConanKLOP2/PhotoReview/... (UpdateUrlPolicy) bằng trình duyệt mặc định.
 
+## Runtime và GC (AR12c)
+
+Workstation concurrent GC (mặc định .NET) là lựa chọn có chủ đích, không phải bỏ sót: (i) app một cửa sổ, độ trễ UI quan trọng hơn throughput; (ii) buffer pixel của `BitmapSource` nằm ở native heap (MIL), heap managed nhỏ nên Server GC không giúp. `InvariantGlobalization` **không** bật vì `vi.json` và sắp xếp `CurrentCulture` cần ICU. `TieredPGO`/`TieredCompilation` dùng mặc định .NET 10 (đã bật). Đo lại chỉ khi `%` thời gian GC pause trong perf session > 1 %.
+
 ## Build, test, benchmark và publish
 
 ```powershell
