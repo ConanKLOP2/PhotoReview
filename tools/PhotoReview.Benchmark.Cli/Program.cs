@@ -84,17 +84,15 @@ if (args.Length == 1 && args[0] == "--benchmark-list-profiles")
 if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all" || args[0] == "--benchmark-actions"))
 {
     var benchmarkFolder = args[1];
-    var requested = args[0] switch
+    IReadOnlyList<BenchmarkProfile> requested;
+    try { requested = BenchmarkCliArguments.ResolveProfiles(args[0], args); }
+    catch (ArgumentException ex)
     {
-        "--benchmark-all" => BenchmarkProfiles.Runnable.ToArray(),
-        "--benchmark-actions" => BenchmarkProfiles.All.Where(p => p.Workload == BenchmarkWorkload.FileAction).ToArray(),
-        _ => (args.Length >= 3
-            ? args[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(id => BenchmarkProfiles.Find(id) ?? throw new ArgumentException($"Unknown benchmark profile: {id}"))
-                .ToArray()
-            : [BenchmarkProfiles.Find("recommended-auto")!])
-    };
-    var output = args.Length >= 3 && args[0] != "--benchmark" ? args[2] : null;
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+        return;
+    }
+    var output = BenchmarkCliArguments.ResolveOutput(args[0], args);
     await RunCliBenchmarksAsync(benchmarkFolder, requested, output);
     return;
 }
@@ -112,7 +110,15 @@ if (args.Length >= 1 && args[0] == "--perf-session")
 
 if ((args.Length == 2 || args.Length == 3) && args[0] == "--preload-bench")
 {
-    await LocalImageBenchmark.RunAsync(args[1], args.Length == 3 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 8);
+    int workers;
+    try { workers = args.Length == 3 ? BenchmarkCliArguments.ParsePositiveInt(args[2], "worker count") : 8; }
+    catch (ArgumentException ex)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+        return;
+    }
+    await LocalImageBenchmark.RunAsync(args[1], workers);
     return;
 }
 
@@ -132,10 +138,19 @@ if (args.Length >= 2 && args[0] == "--perf-analyze")
 
 if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
 {
-    var ioWidths = args.Length >= 4
-        ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToArray()
-        : [0, 1920, 2560, 3840];
-    var ioMax = args.Length >= 5 ? int.Parse(args[4], CultureInfo.InvariantCulture) : 60;
+    int[] ioWidths;
+    int ioMax;
+    try
+    {
+        ioWidths = args.Length >= 4 ? BenchmarkCliArguments.ParseWidths(args[3]) : [0, 1920, 2560, 3840];
+        ioMax = args.Length >= 5 ? BenchmarkCliArguments.ParsePositiveInt(args[4], "file limit") : 60;
+    }
+    catch (ArgumentException ex)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+        return;
+    }
     await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax);
     return;
 }

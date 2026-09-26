@@ -46,7 +46,7 @@ public sealed class ImageCacheRamPercentSettingsTests
     [InlineData(500, 90)]
     public void Load_OutOfRangePercent_IsClampedToNearestBoundAndReported(int stored, int expected)
     {
-        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, $$"""{ "ConfigVersion": 3, "ImageCacheRamPercent": {{stored}} }""");
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, string.Create(System.Globalization.CultureInfo.InvariantCulture, $$"""{ "ConfigVersion": 3, "ImageCacheRamPercent": {{stored}} }"""));
 
         var loaded = _store.Load();
 

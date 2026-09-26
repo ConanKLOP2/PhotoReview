@@ -7,6 +7,7 @@ namespace PhotoReview.Integration.Tests;
 /// TOOL-02 / TOOL-03: destructive-path guards in tools/*.ps1. Every scenario uses fake roots under an owned
 /// temp directory; nothing outside it is created or deleted.
 /// </summary>
+[Trait("Category", "Integration")]
 public sealed class PowerShellSafetyGuardTests : IDisposable
 {
     private readonly TempRoot _root = new("ps-guard");
@@ -26,6 +27,7 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
     {
         var psi = new ProcessStartInfo("powershell.exe") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in BaseArgs.Concat(args)) psi.ArgumentList.Add(a);
+        PowerShellRunner.ForWindowsPowerShell(psi);
         using var p = Process.Start(psi)!;
         var stderr = p.StandardError.ReadToEndAsync();
         var stdout = p.StandardOutput.ReadToEnd();
@@ -108,6 +110,58 @@ public sealed class PowerShellSafetyGuardTests : IDisposable
 
         Assert.NotEqual(0, code);
         Assert.Contains("Refusing to wipe", output);
+    }
+
+    [Fact(DisplayName = "TOOL-02: '..' segments are resolved before the approved-root check, so a path that only looks inside is rejected")]
+    public void DotDotTraversalOutOfApprovedRootIsRejected()
+    {
+        var approved = _root.Dir("approved");
+        MakeDir(Path.Combine("elsewhere", "publish"));
+        var sneaky = Path.Combine(approved, "..", "elsewhere", "publish");
+
+        var (code, output) = RunGuard(sneaky, approved);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("Refusing to wipe", output);
+        Assert.True(File.Exists(Path.Combine(_root.Path, "elsewhere", "publish", "keep.txt")));
+    }
+
+    [Fact(DisplayName = "TOOL-02: wildcard characters, spaces, a trailing separator on the root and an upper-case leaf do not break acceptance")]
+    public void BracketsTrailingSeparatorAndLeafCaseAreAccepted()
+    {
+        var approved = _root.Dir("[approved] root");
+        var inside = MakeDir(Path.Combine("[approved] root", "bin [x]", "PUBLISH"));
+
+        var (code, output) = RunGuard(inside, approved + Path.DirectorySeparatorChar);
+
+        Assert.Equal(0, code);
+        Assert.Contains("GUARD-OK", output);
+    }
+
+    [Fact(DisplayName = "TOOL-02: a directory that does not exist yet is accepted anywhere (nothing can be wiped)")]
+    public void MissingDirectoryIsAccepted()
+    {
+        var approved = _root.Dir("approved");
+
+        var (code, output) = RunGuard(_root.Combine("nowhere", "publish"), approved);
+
+        Assert.Equal(0, code);
+        Assert.Contains("GUARD-OK", output);
+    }
+
+    [Theory(DisplayName = "TOOL-02: the approved root itself and a drive-like leaf are never wiped")]
+    [InlineData("approved")]
+    [InlineData("approved-publish")]
+    public void ApprovedRootItselfOrLookalikeLeafIsRejected(string relative)
+    {
+        var approved = _root.Dir("approved");
+        var target = relative == "approved" ? approved : MakeDir(relative);
+
+        var (code, output) = RunGuard(target, approved);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("Refusing to wipe", output);
+        Assert.True(Directory.Exists(target));
     }
 
     [Theory(DisplayName = "TOOL-03: run-matrix rejects the cold-diskcache condition combined with -SharedAppCache before doing anything")]

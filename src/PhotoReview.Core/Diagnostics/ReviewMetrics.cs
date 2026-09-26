@@ -56,6 +56,9 @@ public sealed class ReviewMetrics
 
     public void RecordSourceRead(long bytes, long milliseconds)
     {
+        // A negative value (clock adjustment, a caller bug) must not shrink a running total.
+        bytes = Math.Max(0, bytes);
+        milliseconds = Math.Max(0, milliseconds);
         Interlocked.Increment(ref _sourceReads);
         Interlocked.Add(ref _sourceBytesRead, bytes);
         Interlocked.Add(ref _decodeMilliseconds, milliseconds);
@@ -86,6 +89,7 @@ public sealed class ReviewMetrics
 
     public void RecordPresented(long milliseconds)
     {
+        milliseconds = Math.Max(0, milliseconds);
         Interlocked.Increment(ref _presentedImages);
         Interlocked.Add(ref _presentMilliseconds, milliseconds);
         Interlocked.Increment(ref _presentBuckets[PresentBucketIndex(milliseconds)]);

@@ -36,3 +36,8 @@ dotnet build PhotoReview.slnx -c Release
 dotnet test PhotoReview.slnx -c Release --filter "Category!=Manual&Category!=Native&Category!=Slow"
 tools/verify-all.ps1
 ```
+
+## Review lane tools/CI/benchmark (2026-09-26, branch `review/tools-ci-benchmark`, not merged)
+
+- Fixed with tests: `PerfStats.NearestRank` float rank (P7 of 100 gave rank 8), non-finite CSV numbers, `BenchmarkPhaseResult` `with` copies, NaN ranking, CLI empty/invalid list args, `i18n-check` (invalid UTF-8, lone surrogates, 200k-deep JSON crash), `-LiteralPath`/BOM in tools scripts, `release.yml` tag regex, zip SHA-256 in notes.
+- Open: `BenchmarkStatistics.Percentile` (Core, other lane) returns NaN for `[Inf, Inf]`/overflowing spans; Actions are tag-pinned not SHA-pinned; workflows cannot be run locally (draft-release flow unproven, `gh release view` on drafts unverified).

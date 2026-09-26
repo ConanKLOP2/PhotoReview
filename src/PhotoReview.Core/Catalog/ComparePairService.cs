@@ -58,36 +58,48 @@ public static class ComparePairService
 
         foreach (var group in byFolderAndExtension)
         {
-            var byBaseStem = group.GroupBy(
-                f => BaseStemOf(f.Path),
-                StringComparer.OrdinalIgnoreCase);
-
-            foreach (var stemGroup in byBaseStem)
+            // Same rules as Find, evaluated per file: the "original" is the first file whose OWN stem equals the base stem
+            // and a numbered file may itself be the original of a deeper numbering ("a (1)" is the numbered variant of "a"
+            // and the original of "a (1) (2)"), so files cannot be grouped by base stem alone.
+            var members = group.ToList();
+            var originals = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var variants = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var m in members)
             {
-                var members = stemGroup.ToList();
-                var original = members.FirstOrDefault(m =>
-                    Path.GetFileNameWithoutExtension(m.Path).Equals(stemGroup.Key, StringComparison.OrdinalIgnoreCase));
-                if (original.Path is null) continue;
+                var stem = Path.GetFileNameWithoutExtension(m.Path);
+                originals.TryAdd(stem, m.Path);
+                var match = NumberedStemPattern.Match(stem);
+                if (!match.Success) continue;
+                var baseStem = match.Groups[1].Value;
+                if (!variants.TryGetValue(baseStem, out var list)) variants[baseStem] = list = [];
+                list.Add(m.Path);
+            }
+            foreach (var list in variants.Values) list.Sort(CompareBySuffixStable(list));
 
-                var numbered = members
-                    .Where(m => IsNumberedVariantOf(m.Path, stemGroup.Key))
-                    .OrderBy(m => NumberedSuffix(m.Path))
-                    .ToList();
-                if (numbered.Count == 0) continue;
-
-                result[original.Path] = (original.Path, numbered[0].Path);
-                foreach (var n in numbered) result[n.Path] = (original.Path, n.Path);
+            foreach (var m in members)
+            {
+                var stem = Path.GetFileNameWithoutExtension(m.Path);
+                var match = NumberedStemPattern.Match(stem);
+                var baseStem = match.Success ? match.Groups[1].Value : stem;
+                if (!originals.TryGetValue(baseStem, out var original)) continue;
+                if (match.Success) result[m.Path] = (original, m.Path);
+                else if (variants.TryGetValue(baseStem, out var numbered)) result[m.Path] = (original, numbered[0]);
             }
         }
 
         return result;
     }
 
-    private static string BaseStemOf(string path)
+    // List.Sort is unstable; ties on the suffix keep their (path-sorted) input order like Find's OrderBy.
+    private static Comparison<string> CompareBySuffixStable(List<string> original)
     {
-        var stem = Path.GetFileNameWithoutExtension(path);
-        var match = NumberedStemPattern.Match(stem);
-        return match.Success ? match.Groups[1].Value : stem;
+        var position = new Dictionary<string, int>(original.Count, StringComparer.Ordinal);
+        for (var i = 0; i < original.Count; i++) position.TryAdd(original[i], i);
+        return (a, b) =>
+        {
+            var cmp = NumberedSuffix(a).CompareTo(NumberedSuffix(b));
+            return cmp != 0 ? cmp : position[a].CompareTo(position[b]);
+        };
     }
 
     private static bool IsNumberedVariantOf(string candidate, string baseStem)

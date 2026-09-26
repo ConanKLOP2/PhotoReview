@@ -56,6 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     private bool _isExplorerOrderApplied;
     private string _statusText = string.Empty;
     private SessionState? _currentSession;
+    private bool _isClosed;
 
     public MainViewModel(
         ReviewCatalog catalog,
@@ -255,6 +256,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public async Task OpenFolderAsync(string folder, string? initialPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        // A forwarded open, drop or undo that reaches a window already closed (CloseSession disposed the load coordinator)
+        // is dropped instead of throwing out of an async-void handler.
+        if (_isClosed) return;
         // Q-R18: every folder open (command line, drop, forwarded, sibling navigation) passes the instance ownership
         // first. The common case completes synchronously, so this adds no dispatcher yield.
         var ownership = FolderOwnership;
@@ -613,6 +617,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public void CloseSession()
     {
+        _isClosed = true;
         _folderCoordinator.Dispose();
         _sessionWriter?.Dispose();
     }

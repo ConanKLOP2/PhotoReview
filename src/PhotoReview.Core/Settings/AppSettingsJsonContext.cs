@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PhotoReview.Core.Settings;
@@ -9,7 +10,8 @@ namespace PhotoReview.Core.Settings;
 /// what <see cref="SettingsStore"/> used before (defaults + WriteIndented), so the file format and
 /// the lenient enum handling (type-level <c>[JsonConverter]</c> on the enums) are unchanged.
 /// </summary>
-[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSourceGenerationOptions(WriteIndented = true, NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]
 [JsonSerializable(typeof(AppSettings))]
 internal sealed partial class AppSettingsJsonContext : JsonSerializerContext
 {

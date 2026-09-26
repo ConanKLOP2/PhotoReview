@@ -27,7 +27,9 @@ public sealed record PerfRow(
     public long? NavId => long.TryParse(Nav, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 
     private static double? ParseDouble(string s) =>
-        s.Length > 0 && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;
+        // double.TryParse accepts "NaN"/"Infinity" (and overflows "1e999" to Infinity on .NET Core 3.0+); a corrupt or
+        // hand-edited CSV must not feed non-finite values into sorting and percentiles, so those columns read as absent.
+        s.Length > 0 && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) ? v : null;
 }
 
 /// <summary>One parsed perf-*.csv file: header metadata plus every data row, in file order.</summary>

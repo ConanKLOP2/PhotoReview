@@ -367,21 +367,38 @@ public sealed class ImagePresenter
             {
                 CurrentPhotoInfo = null; // two images: the compare status describes them
                 UpdateCurrentImage(null);
-                var loaded = await _compareViewModel.LoadAsync(
-                    pair.Value,
-                    token,
-                    t => _clock.IsNavigationCurrent(t),
-                    async p =>
-                    {
-                        var prev = await _previewService.GetPreviewAsync(p);
-                        return prev.PlatformImage;
-                    },
-                    p => _hashService.GetAsync(p),
-                    compareSizeEnabled: settings.CompareSizeEnabled,
-                    compareHashEnabled: settings.CompareHashEnabled,
-                    currentIndex: index,
-                    totalFiles: _catalog.Count,
-                    initialSelectedPath: path);
+                bool loaded;
+                try
+                {
+                    loaded = await _compareViewModel.LoadAsync(
+                        pair.Value,
+                        token,
+                        t => _clock.IsNavigationCurrent(t),
+                        async p =>
+                        {
+                            var prev = await _previewService.GetPreviewAsync(p);
+                            return prev.PlatformImage;
+                        },
+                        p => _hashService.GetAsync(p),
+                        compareSizeEnabled: settings.CompareSizeEnabled,
+                        compareHashEnabled: settings.CompareHashEnabled,
+                        currentIndex: index,
+                        totalFiles: _catalog.Count,
+                        initialSelectedPath: path);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException && _clock.IsNavigationCurrent(token))
+                {
+                    // The compare partner vanished or cannot be decoded. That must not take the current image (which is
+                    // fine) out of the catalog via the stale-file path below: show it alone and name the partner.
+                    var partner = string.Equals(pair.Value.Left, path, StringComparison.OrdinalIgnoreCase) ? pair.Value.Right : pair.Value.Left;
+                    AppLog.Error($"ShowImage compare partner failed token={token} path={path} partner={partner}", ex);
+                    _compareViewModel.Clear();
+                    CurrentPhotoInfo = PhotoInfo.From(path, image);
+                    UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
+                    _sink.ApplyInitialViewMode();
+                    UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(partner), UserFacingError.Describe(ex)));
+                    return;
+                }
 
                 if (!loaded || !_clock.IsNavigationCurrent(token)) return;
 

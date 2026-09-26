@@ -31,6 +31,15 @@ public static class UserFacingError
     public static string Describe(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        return exception.Data[DataKey] is Func<string> text ? text() : exception.Message;
+        if (exception.Data[DataKey] is not Func<string> text) return exception.Message;
+        try
+        {
+            return text();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Building the sentence must never hide the original error behind a second one.
+            return exception.Message;
+        }
     }
 }

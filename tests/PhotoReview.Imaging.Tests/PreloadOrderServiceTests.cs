@@ -2,7 +2,7 @@
 
 namespace PhotoReview.Imaging.Tests;
 
-[Trait("Category", "Slow")]
+[Trait("Category", "HotPath")] // pure computation: no I/O or timing, so it belongs in the default gate
 public sealed class PreloadOrderServiceTests
 {
     [Fact(DisplayName = "Full-folder preload prioritizes the next 32, then prior 8, and queues every other image once")]

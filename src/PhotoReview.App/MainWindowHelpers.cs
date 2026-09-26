@@ -18,7 +18,10 @@ internal static class MainWindowHelpers
         double pointerX,
         double pointerY)
     {
-        if (elementWidth <= 0 || elementHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0)
+        if (!(elementWidth > 0) || !(elementHeight > 0) || !(sourceWidth > 0) || !(sourceHeight > 0)
+            || !double.IsFinite(elementWidth) || !double.IsFinite(elementHeight)
+            || !double.IsFinite(sourceWidth) || !double.IsFinite(sourceHeight)
+            || !double.IsFinite(pointerX) || !double.IsFinite(pointerY))
             return new(0, 0);
 
         var scale = Math.Min(elementWidth / sourceWidth, elementHeight / sourceHeight);
@@ -27,9 +30,12 @@ internal static class MainWindowHelpers
         var left = (elementWidth - renderedWidth) / 2;
         var top = (elementHeight - renderedHeight) / 2;
         return new(
-            Math.Clamp((pointerX - left) / scale, 0, sourceWidth),
-            Math.Clamp((pointerY - top) / scale, 0, sourceHeight));
+            ClampToSource((pointerX - left) / scale, sourceWidth),
+            ClampToSource((pointerY - top) / scale, sourceHeight));
     }
+
+    // A denormal element size makes the scale overflow ((x - left) / scale = Infinity, or 0 * Infinity = NaN).
+    private static double ClampToSource(double value, double max) => double.IsNaN(value) ? 0 : Math.Clamp(value, 0, max);
 
     /// <summary>
     /// feat(zoom): expresses a point on the image as a fraction of the image's size, so the wheel
@@ -38,6 +44,7 @@ internal static class MainWindowHelpers
     /// </summary>
     internal static ZoomImagePoint NormalizeImagePoint(double x, double y, double width, double height) =>
         width > 0 && height > 0 && double.IsFinite(width) && double.IsFinite(height)
+            && double.IsFinite(x / width) && double.IsFinite(y / height)
             ? new(x / width, y / height)
             : new(0.5, 0.5);
 
@@ -130,7 +137,8 @@ internal static class MainWindowHelpers
 
     private static double ClampOffset(double value, double extent, double viewport)
     {
-        var maximum = Math.Max(0, extent - viewport);
+        var room = extent - viewport;
+        var maximum = double.IsFinite(room) ? Math.Max(0, room) : 0; // NaN would make Math.Clamp return the value unclamped
         return Math.Clamp(double.IsFinite(value) ? value : 0, 0, maximum);
     }
 

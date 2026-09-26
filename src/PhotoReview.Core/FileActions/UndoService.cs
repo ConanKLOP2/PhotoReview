@@ -116,7 +116,12 @@ public sealed class UndoService
             if (entry.Undo == true) continue;
 
             if (_fileSystem.FileExists(entry.Destination) && !_fileSystem.FileExists(entry.Source))
+            {
+                // Move, undo, move again leaves two Committed records for one destination: keep only the newest, or the
+                // second Ctrl+Z would hit a stale entry (file no longer there) and block every older undo.
+                history.RemoveAll(older => string.Equals(older.Destination, entry.Destination, StringComparison.OrdinalIgnoreCase));
                 history.Add(entry);
+            }
         }
         return history;
     }
@@ -286,15 +291,14 @@ public sealed class UndoService
                 return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoBusy, Rejected: true);
             }
 
-            // The shell Restore verb would replace (or prompt about) a newer file that now sits at the original path.
-            if (_fileSystem.FileExists(action.Source))
-            {
-                End();
-                return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleTargetExists(Path.GetFileName(action.Source)));
-            }
-
             try
             {
+                // The shell Restore verb would replace (or prompt about) a newer file that now sits at the original path.
+                if (_fileSystem.FileExists(action.Source))
+                {
+                    return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoRecycleTargetExists(Path.GetFileName(action.Source)));
+                }
+
                 var restored = await Task.Run(() => _recycleBin.TryRestore(action.Source, action.Size, action.LastWriteUtc)).ConfigureAwait(false);
                 if (!restored)
                 {

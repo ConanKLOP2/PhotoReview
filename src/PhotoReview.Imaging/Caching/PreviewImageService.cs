@@ -492,13 +492,13 @@ public sealed class PreviewImageService : IPreloadTarget
             {
                 try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
                 sourceRead = true;
-                decodedImage = DecodeFromSource(path, key.Backend, targetBox, perf, perfNav, perfPathId);
+                decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId);
             }
         }
         else
         {
             sourceRead = true;
-            decodedImage = DecodeFromSource(path, key.Backend, targetBox, perf, perfNav, perfPathId);
+            decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId);
         }
 
         // A path can be replaced while decode is in flight. Never publish
@@ -630,10 +630,12 @@ public sealed class PreviewImageService : IPreloadTarget
     private IImageDecoder GetDecoder(DecoderBackend backend) =>
         _decoderFactory is null ? _decoder : _decodersByBackend.GetOrAdd(backend, _decoderFactory.Create);
 
-    private IDecodedImage DecodeFromSource(string path, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId)
+    private IDecodedImage DecodeFromSource(string path, long sourceLength, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
-        if (_sourceBytesCache is not null)
+        // A file the byte cache cannot hold is streamed by the decoder: pre-reading it would allocate the whole file (LOH, and
+        // several at once under preload) only to drop it again.
+        if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
         {
             preReadBytes = _sourceBytesCache.GetOrRead(path);
         }
@@ -706,7 +708,7 @@ public sealed class PreviewImageService : IPreloadTarget
             Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
             var perf = PhotoReviewPerf.Log.IsEnabled();
             var stopwatch = Stopwatch.StartNew();
-            var decoded = DecodeFromSource(path, key.Backend, DecodeBox.Unbounded, perf,
+            var decoded = DecodeFromSource(path, key.Length, key.Backend, DecodeBox.Unbounded, perf,
                 perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
             _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));

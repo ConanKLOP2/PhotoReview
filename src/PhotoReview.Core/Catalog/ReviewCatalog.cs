@@ -125,14 +125,18 @@ public sealed class ReviewCatalog
     {
         AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(paths);
-        _entries.Clear();
+        // Materialise first: an enumeration that throws (or a live view of this catalog) must not leave the
+        // catalog cleared with a stale index/version.
+        var fresh = new List<CatalogEntry>();
         foreach (var path in paths)
         {
             if (!string.IsNullOrWhiteSpace(path))
             {
-                _entries.Add(new CatalogEntry(path));
+                fresh.Add(new CatalogEntry(path));
             }
         }
+        _entries.Clear();
+        _entries.AddRange(fresh);
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
         InvalidateIndex();
     }
@@ -141,8 +145,9 @@ public sealed class ReviewCatalog
     {
         AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(entries);
+        var fresh = entries.Where(e => e is not null && !string.IsNullOrWhiteSpace(e.Path)).ToList();
         _entries.Clear();
-        _entries.AddRange(entries.Where(e => e is not null && !string.IsNullOrWhiteSpace(e.Path)));
+        _entries.AddRange(fresh);
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
         InvalidateIndex();
     }

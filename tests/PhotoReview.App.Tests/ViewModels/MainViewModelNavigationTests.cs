@@ -25,7 +25,7 @@ using Xunit;
 namespace PhotoReview.App.Tests.ViewModels;
 
 [Trait("Category", "HotPath")]
-public sealed class MainViewModelNavigationTests : IDisposable
+public sealed partial class MainViewModelNavigationTests : IDisposable
 {
     private static readonly byte[] ValidPngBytes =
     [
@@ -114,9 +114,12 @@ public sealed class MainViewModelNavigationTests : IDisposable
         return filePath;
     }
 
-    private (MainViewModel ViewModel, ImagePresenter Presenter, FolderLoadCoordinator Coordinator) CreateViewModel()
+    /// <param name="sharedSessionWriter">Production wiring: the presenter, the folder coordinator and the view model all
+    /// write the session through ONE debounced <see cref="SessionWriter"/> (otherwise the presenter saves directly).</param>
+    private (MainViewModel ViewModel, ImagePresenter Presenter, FolderLoadCoordinator Coordinator) CreateViewModel(bool sharedSessionWriter = false)
     {
         MainViewModel? vm = null;
+        var sessionWriter = new SessionWriter(_sessionStore, new NullLog());
 
         var presenter = new ImagePresenter(
             _catalog,
@@ -131,7 +134,8 @@ public sealed class MainViewModelNavigationTests : IDisposable
             _sessionStore,
             _sink,
             _fileSystem,
-            getSession: () => vm?.Session);
+            getSession: () => vm?.Session,
+            sessionWriter: sharedSessionWriter ? sessionWriter : null);
 
         var coordinator = new FolderLoadCoordinator(
             _catalog,
@@ -140,7 +144,8 @@ public sealed class MainViewModelNavigationTests : IDisposable
             _fileSystem,
             _sessionStore,
             _settingsStore,
-            new ForwardingFolderLoadSink(() => vm!));
+            new ForwardingFolderLoadSink(() => vm!),
+            sharedSessionWriter ? sessionWriter : null);
 
         var appPaths = new PhotoReview.Core.AppPaths(_tempDir);
         var journal = new OperationJournal(appPaths, _fileSystem, new SystemClock());
@@ -164,7 +169,7 @@ public sealed class MainViewModelNavigationTests : IDisposable
             _hashService,
             _previewService,
             _thumbnailCache,
-            new SessionWriter(_sessionStore, new NullLog()),
+            sessionWriter,
             preloadController: _preloadController);
 
         return (vm, presenter, coordinator);

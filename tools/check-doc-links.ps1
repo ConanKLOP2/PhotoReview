@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
   AR07 §3: link-check gate for non-archive Markdown docs.
@@ -87,7 +87,7 @@ foreach ($file in $mdFiles) {
     $fileDir = $file.DirectoryName
     $relFile = $file.FullName.Substring($root.Length + 1) -replace '\\', '/'
     $lineNum = 0
-    foreach ($line in Get-Content -LiteralPath $file.FullName) {
+    foreach ($line in Get-Content -LiteralPath $file.FullName -Encoding UTF8) {
         $lineNum++
 
         foreach ($m in $MdLinkRegex.Matches($line)) {

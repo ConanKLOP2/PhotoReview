@@ -117,7 +117,7 @@ public sealed class TestIsolationRulesTests
     }
 
     /// <summary>Same-length copy of <paramref name="text"/> with comment and string/char literal contents blanked out.</summary>
-    private static string Blank(string text)
+    internal static string Blank(string text)
     {
         var chars = text.ToCharArray();
         var i = 0;
@@ -135,8 +135,12 @@ public sealed class TestIsolationRulesTests
             }
             else if (Starts(text, i, "\"\"\""))
             {
-                var end = text.IndexOf("\"\"\"", i + 3, StringComparison.Ordinal);
-                end = end < 0 ? chars.Length : end + 3;
+                // A raw string literal opens and closes with the same run of 3+ quotes (so a 4-quote literal may contain """).
+                var quotes = 3;
+                while (i + quotes < text.Length && text[i + quotes] == '"') quotes++;
+                var fence = new string('"', quotes);
+                var end = text.IndexOf(fence, i + quotes, StringComparison.Ordinal);
+                end = end < 0 ? chars.Length : end + quotes;
                 while (i < end) Erase(chars, i++);
             }
             else if (chars[i] == '"')

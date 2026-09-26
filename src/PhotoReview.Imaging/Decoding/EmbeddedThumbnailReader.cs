@@ -74,7 +74,11 @@ public static class EmbeddedThumbnailReader
                 originalWidth: originalWidth, originalHeight: originalHeight);
         }
         catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException
-            or FileFormatException or UnauthorizedAccessException)
+            or FileFormatException or UnauthorizedAccessException
+            // Damaged EXIF/thumbnail metadata surfaces from WIC as ArgumentException ("corrupted metadata header"), OverflowException
+            // or COMException; ThumbnailCache does not catch around this reader, so a throw would fail the whole thumbnail load.
+            or ArgumentException or OverflowException or InvalidCastException or FormatException
+            or System.Runtime.InteropServices.COMException)
         {
             return null;
         }

@@ -42,7 +42,9 @@ public static class DuplicateFinder
 
         // Bước 1: Nhóm theo kích thước (chỉ giữ các nhóm có từ 2 tệp cùng kích thước trở lên)
         // ADR 0005: one stat per candidate; the App caller is on the UI thread, so run it on the pool.
+        // The same file can be listed twice (or with different casing on a case-insensitive volume): it must not count as its own duplicate.
         var sizeGroups = await Task.Run(() => files
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path =>
             {
                 try
@@ -60,20 +62,22 @@ public static class DuplicateFinder
             .Where(item => item.Size >= 0)
             .GroupBy(item => item.Size)
             .Where(group => group.Count() > 1)
-            .Select(group => group.Select(item => item.Path).ToList())
+            .Select(group => (Size: group.Key, Paths: group.Select(item => item.Path).ToList()))
             .ToList(), cancellationToken).ConfigureAwait(false);
 
         // Bước 2: Với các tệp cùng kích thước, tính hash và nhóm theo hash
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in sizeGroups.SelectMany(group => group))
+        // Keyed by size AND hash: a weak or colliding hash must never turn files of different length into duplicates.
+        foreach (var (size, path) in sizeGroups.SelectMany(group => group.Paths.Select(path => (group.Size, path))))
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var hashValue = await hash(path, cancellationToken).ConfigureAwait(false);
-                if (!groups.TryGetValue(hashValue, out var group))
+                var key = size.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + hashValue;
+                if (!groups.TryGetValue(key, out var group))
                 {
-                    groups[hashValue] = group = [];
+                    groups[key] = group = [];
                 }
                 group.Add(path);
             }

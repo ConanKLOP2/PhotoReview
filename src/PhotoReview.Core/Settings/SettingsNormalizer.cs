@@ -50,6 +50,11 @@ public static class SettingsNormalizer
             settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
             fixedNames.Add(nameof(AppSettings.PreloadWorkerCount));
         }
+        else if (settings.PreloadWorkerCount > PerformanceOptions.MaxPreloadWorkerCount)
+        {
+            settings.PreloadWorkerCount = PerformanceOptions.MaxPreloadWorkerCount;
+            fixedNames.Add(nameof(AppSettings.PreloadWorkerCount));
+        }
         if (!(settings.PreloadMemoryLoadLimit > 0 && settings.PreloadMemoryLoadLimit <= 1))
         {
             settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
@@ -84,6 +89,19 @@ public static class SettingsNormalizer
 
         if (settings.Shortcuts is { } shortcuts)
         {
+            // Mandatory shortcuts: a null/blank value (hand-edited or corrupt file) would leave the action unreachable and
+            // fail validation on the next Save, so it falls back to its default.
+            var defaults = ShortcutMappings.Default();
+            var resetShortcut = false;
+            foreach (var property in typeof(ShortcutMappings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                if (property.PropertyType != typeof(string) || !property.CanWrite || ShortcutMappings.IsOptional(property.Name) || property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue; // MoveToFolder2: legacy alias, ignored by the validator
+                if (!string.IsNullOrWhiteSpace((string?)property.GetValue(shortcuts))) continue;
+                property.SetValue(shortcuts, property.GetValue(defaults));
+                resetShortcut = true;
+            }
+            if (resetShortcut) fixedNames.Add(nameof(AppSettings.Shortcuts));
+            shortcuts.MoveToFolder2 ??= ""; // legacy alias nobody reads: only keep it non-null
             // Optional shortcuts: an explicit null in a hand-edited file means "disabled", like "".
             shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
             shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";

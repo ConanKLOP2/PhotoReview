@@ -98,7 +98,8 @@ internal sealed class FlatJsonReader
             var keyStart = _pos;
             var key = ReadString();
             var keyLength = _pos - keyStart;
-            SkipTrivia();
+            RejectUnpairedSurrogate(key, keyStart);
+            SkipWhitespace(); // System.Text.Json (the runtime loader) does not allow a comment between a name and its ':'
             Expect(':');
             SkipTrivia();
             if (key.Length > 0 && key[0] == '_')
@@ -108,7 +109,10 @@ internal sealed class FlatJsonReader
             else
             {
                 if (Peek() != '"') throw Error("value of '" + key + "' must be a string");
-                entries.Add(new JsonEntry(key, ReadString(), keyStart, keyLength));
+                var valueStart = _pos;
+                var value = ReadString();
+                RejectUnpairedSurrogate(value, valueStart);
+                entries.Add(new JsonEntry(key, value, keyStart, keyLength));
             }
             SkipTrivia();
             if (TryConsume(',')) continue;
@@ -173,7 +177,7 @@ internal sealed class FlatJsonReader
             if (isObject)
             {
                 ReadString();
-                SkipTrivia();
+                SkipWhitespace();
                 Expect(':');
                 SkipTrivia();
             }
@@ -190,12 +194,13 @@ internal sealed class FlatJsonReader
         var start = _pos;
         if (Peek() == '-') _pos++;
         var digits = 0;
+        var leadingZero = Peek() == '0';
         while (IsDigit(Peek()))
         {
             _pos++;
             digits++;
         }
-        if (digits == 0) throw Error("invalid number", start);
+        if (digits == 0 || (leadingZero && digits > 1)) throw Error("invalid number", start); // JSON forbids leading zeros
         if (Peek() == '.')
         {
             _pos++;
@@ -246,10 +251,13 @@ internal sealed class FlatJsonReader
                 case 'r': sb.Append('\r'); break;
                 case 't': sb.Append('\t'); break;
                 case 'u':
-                    if (_pos + 4 > _text.Length
-                        || !int.TryParse(_text.Substring(_pos, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var code))
+                    // Exactly four hex digits: int.TryParse would also accept a trailing NUL, System.Text.Json does not.
+                    var code = 0;
+                    for (var k = 0; k < 4; k++)
                     {
-                        throw Error("invalid \\u escape", _pos - 2);
+                        var digit = _pos + k < _text.Length ? HexValue(_text[_pos + k]) : -1;
+                        if (digit < 0) throw Error("invalid \\u escape", _pos - 2);
+                        code = (code * 16) + digit;
                     }
                     sb.Append((char)code);
                     _pos += 4;
@@ -258,6 +266,29 @@ internal sealed class FlatJsonReader
                     throw Error("invalid escape '\\" + e + "'", _pos - 2);
             }
         }
+    }
+
+    // An unpaired surrogate (a \ud800 escape) is valid JSON text but System.Text.Json cannot turn it into a string, so the
+    // runtime rejects the catalog; accepting it here would let a catalog build and then fail to load. Only the strings the
+    // runtime actually reads (keys and catalog values) are checked, exactly like the runtime.
+    private static void RejectUnpairedSurrogate(string value, int position)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (char.IsHighSurrogate(value[i]) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+            {
+                i++;
+            }
+            else if (char.IsSurrogate(value[i]))
+            {
+                throw Error("unpaired surrogate in string", position);
+            }
+        }
+    }
+
+    private void SkipWhitespace()
+    {
+        while (_pos < _text.Length && (_text[_pos] == ' ' || _text[_pos] == '\t' || _text[_pos] == '\r' || _text[_pos] == '\n')) _pos++;
     }
 
     private void SkipTrivia()
@@ -271,7 +302,8 @@ internal sealed class FlatJsonReader
             }
             else if (c == '/' && _pos + 1 < _text.Length && _text[_pos + 1] == '/')
             {
-                while (_pos < _text.Length && _text[_pos] != '\n') _pos++;
+                // System.Text.Json ends a // comment at LF, CR, U+2028 or U+2029.
+                while (_pos < _text.Length && _text[_pos] != '\n' && _text[_pos] != '\r' && _text[_pos] != '\u2028' && _text[_pos] != '\u2029') _pos++;
             }
             else if (c == '/' && _pos + 1 < _text.Length && _text[_pos + 1] == '*')
             {
@@ -301,6 +333,9 @@ internal sealed class FlatJsonReader
         if (_text[_pos] != c) throw Error("expected '" + c + "'");
         _pos++;
     }
+
+    private static int HexValue(char c) =>
+        c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
 
     private static bool IsDigit(char c) => c >= '0' && c <= '9';
 

@@ -13,7 +13,7 @@ using Xunit;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>
-/// DF02 — Double-click to Fit gesture tests.
+/// DF02 - Double-click to Fit gesture tests.
 /// These tests verify that double-clicking on the main image applies the Fit operation.
 /// All cases expect usage of StaTestHost.WaitForAsync; no Task.Delay.
 /// </summary>
@@ -22,9 +22,9 @@ public partial class MainWindowBehaviorTests
 {
     /// <summary>
     /// DF02 Case 1: Zoom 200%, double-click main image → Fit converges (Zoom=1, Stretch=Uniform, offset=0).
-    /// This is the primary happy path; must FAIL on baseline (no double-click handler yet).
+    /// This is the primary happy path; 
     /// </summary>
-    [Fact(Skip = "DF02 feature not yet implemented")]
+    [Fact]
     public async Task DoubleClickFit_From200Percent_ConvergesTo1x()
     {
         using var dataRoot = new DataRootFixture();
@@ -62,19 +62,7 @@ public partial class MainWindowBehaviorTests
                     ?? HwndSource.FromHwnd(handle)
                     ?? throw new InvalidOperationException("No PresentationSource");
 
-                var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
-                };
-                // Try to set ClickCount=2 via reflection for testing
-                var clickCountField = typeof(MouseButtonEventArgs).GetField("_clickCount",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (clickCountField != null)
-                {
-                    clickCountField.SetValue(args, 2);
-                }
-
-                window.MainImage.RaiseEvent(args);
+                RaiseMainImagePress(window, MouseButton.Left, 2);
 
                 // Wait for Fit to converge
                 var fitConverged = await StaTestHost.WaitForAsync(
@@ -100,7 +88,7 @@ public partial class MainWindowBehaviorTests
     /// <summary>
     /// DF02 Case 2: Already in Fit mode, double-click → no visible change (state and dimensions unchanged).
     /// </summary>
-    [Fact(Skip = "DF02 feature not yet implemented")]
+    [Fact]
     public async Task DoubleClickFit_AlreadyFit_NoChange()
     {
         using var dataRoot = new DataRootFixture();
@@ -127,15 +115,7 @@ public partial class MainWindowBehaviorTests
                 var beforeHeight = window.MainImage.ActualHeight;
 
                 // Double-click
-                var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
-                };
-                var clickCountField = typeof(MouseButtonEventArgs).GetField("_clickCount",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (clickCountField != null) clickCountField.SetValue(args, 2);
-
-                window.MainImage.RaiseEvent(args);
+                RaiseMainImagePress(window, MouseButton.Left, 2);
 
                 // Brief pump to let any transaction complete
                 for (int i = 0; i < 5; i++)
@@ -160,7 +140,7 @@ public partial class MainWindowBehaviorTests
     /// <summary>
     /// DF02 Case 3: Single-click at zoom 200% → does NOT apply Fit (Zoom remains 2.0).
     /// </summary>
-    [Fact(Skip = "DF02 feature not yet implemented")]
+    [Fact]
     public async Task DoubleClickFit_SingleClick_DoesNotFit()
     {
         using var dataRoot = new DataRootFixture();
@@ -184,15 +164,7 @@ public partial class MainWindowBehaviorTests
                 await StaTestHost.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
                 // Single-click (ClickCount=1)
-                var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
-                };
-                var clickCountField = typeof(MouseButtonEventArgs).GetField("_clickCount",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (clickCountField != null) clickCountField.SetValue(args, 1);
-
-                window.MainImage.RaiseEvent(args);
+                RaiseMainImagePress(window, MouseButton.Left, 1);
 
                 // Brief wait
                 for (int i = 0; i < 3; i++)
@@ -216,7 +188,7 @@ public partial class MainWindowBehaviorTests
     /// DF02 Case 4: Drag pan, then double-click while panned → does NOT reset to Fit (pan offset preserved or returns to Fit depending on implementation).
     /// Expected: double-click should still apply Fit (version cancels pending pan).
     /// </summary>
-    [Fact(Skip = "DF02 feature not yet implemented")]
+    [Fact]
     public async Task DoubleClickFit_AfterPan_StillFits()
     {
         using var dataRoot = new DataRootFixture();
@@ -228,7 +200,7 @@ public partial class MainWindowBehaviorTests
         {
             await StaTestHost.RunAsync(async () =>
             {
-                WriteTestImages(fitFolder.Path, "test.png");
+                WriteTestImages(fitFolder.Path, 2000, "test.png"); // large enough that 200% overflows the viewport
                 var hooks = new TestHostHooks { OnPresented = path => presented.Add(path) };
                 window = TestAppHost.CreateMainWindow(fitFolder.Path, hooks);
 
@@ -240,22 +212,29 @@ public partial class MainWindowBehaviorTests
                 await StaTestHost.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
                 // Pan by scroll offset
+                // The window is never shown: lay it out at an explicit size so the scroll extent exists.
+                var layoutRoot = (FrameworkElement)window.Content;
+                var contentSize = new Size(1200, 800);
+                void LayOut()
+                {
+                    for (var pass = 0; pass < 2; pass++)
+                    {
+                        layoutRoot.Measure(contentSize);
+                        layoutRoot.Arrange(new Rect(contentSize));
+                        layoutRoot.UpdateLayout();
+                    }
+                }
+
+                LayOut();
                 window.ImageScroll.ScrollToHorizontalOffset(100);
                 window.ImageScroll.ScrollToVerticalOffset(100);
+                LayOut();
 
                 var panOffsetX = window.ImageScroll.HorizontalOffset;
-                Assert.True(panOffsetX > 50, "Pan offset not applied");
+                Assert.True(panOffsetX > 50, $"Pan offset not applied: extent={window.ImageScroll.ExtentWidth} viewport={window.ImageScroll.ViewportWidth} zoom={window.ViewModel.Viewer.Zoom} image={window.MainImage.ActualWidth}");
 
                 // Double-click while panned
-                var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
-                {
-                    RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
-                };
-                var clickCountField = typeof(MouseButtonEventArgs).GetField("_clickCount",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (clickCountField != null) clickCountField.SetValue(args, 2);
-
-                window.MainImage.RaiseEvent(args);
+                RaiseMainImagePress(window, MouseButton.Left, 2);
 
                 // Wait for Fit
                 var fitConverged = await StaTestHost.WaitForAsync(
@@ -276,7 +255,7 @@ public partial class MainWindowBehaviorTests
     /// <summary>
     /// DF02 Case 6: Right-click or middle-click with ClickCount=2 → does NOT apply Fit (left button only).
     /// </summary>
-    [Fact(Skip = "DF02 feature not yet implemented")]
+    [Fact]
     public async Task DoubleClickFit_RightButton_DoesNotFit()
     {
         using var dataRoot = new DataRootFixture();
@@ -299,15 +278,7 @@ public partial class MainWindowBehaviorTests
                 await StaTestHost.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
                 // Right-click (RightButton, ClickCount=2)
-                var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Right)
-                {
-                    RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
-                };
-                var clickCountField = typeof(MouseButtonEventArgs).GetField("_clickCount",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                if (clickCountField != null) clickCountField.SetValue(args, 2);
-
-                window.MainImage.RaiseEvent(args);
+                RaiseMainImagePress(window, MouseButton.Right, 2);
 
                 // Brief wait
                 for (int i = 0; i < 3; i++)
@@ -326,16 +297,34 @@ public partial class MainWindowBehaviorTests
         }
     }
 
-    private static void WriteTestImages(string folder, params string[] names)
+    /// <summary>
+    /// Raises a preview left-button-down on the main image with the given changed button and click count. The click
+    /// count is a real property with an internal setter (there is no public way to synthesise a multi-click), so a
+    /// failure to set it must fail the test loudly instead of silently degrading to a single click.
+    /// </summary>
+    private static void RaiseMainImagePress(MainWindow window, MouseButton button, int clickCount)
     {
-        const int Size = 16;
-        const int Stride = Size * 4;
-        var pixels = new byte[Stride * Size];
+        var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, button)
+        {
+            RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
+        };
+        var property = typeof(MouseButtonEventArgs).GetProperty(nameof(MouseButtonEventArgs.ClickCount))!;
+        property.SetValue(args, clickCount);
+        Assert.Equal(clickCount, args.ClickCount);
+        window.MainImage.RaiseEvent(args);
+    }
+
+    private static void WriteTestImages(string folder, params string[] names) => WriteTestImages(folder, 16, names);
+
+    private static void WriteTestImages(string folder, int size, params string[] names)
+    {
+        var stride = size * 4;
+        var pixels = new byte[stride * size];
         Array.Fill(pixels, (byte)0x90);
         foreach (var name in names)
         {
             var path = Path.Combine(folder, name);
-            var bitmap = BitmapSource.Create(Size, Size, 96, 96, PixelFormats.Bgra32, null, pixels, Stride);
+            var bitmap = BitmapSource.Create(size, size, 96, 96, PixelFormats.Bgra32, null, pixels, stride);
             bitmap.Freeze();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(bitmap));

@@ -93,8 +93,11 @@ public static class PerfStats
     /// sorted ascending is the element at 1-based rank ceil(P/100 * N).</summary>
     public static double NearestRank(IReadOnlyList<double> sortedAscending, double percentile)
     {
-        if (sortedAscending.Count == 0) return double.NaN;
-        var rank = (int)Math.Ceiling(percentile / 100.0 * sortedAscending.Count);
+        if (sortedAscending.Count == 0 || double.IsNaN(percentile)) return double.NaN;
+        // Multiply first, divide last: `percentile / 100.0 * n` rounds 0.07 * 100 up to 7.000000000000001, so ceil() picked
+        // rank 8 instead of 7. p * n is exact for whole percents, and a single division of it is exactly rounded, so an
+        // exact integer quotient is never nudged over the next integer. The clamp also keeps +/-Infinity out of the int cast.
+        var rank = (int)Math.Ceiling(Math.Clamp(percentile, 0.0, 100.0) * sortedAscending.Count / 100.0);
         rank = Math.Clamp(rank, 1, sortedAscending.Count);
         return sortedAscending[rank - 1];
     }

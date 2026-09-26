@@ -1,0 +1,33 @@
+# TestQualityRulesTests: today's known exceptions to the test-quality guards. Format: rule|key|count
+# This list may only shrink: a new violation fails, and a fixed one fails until its line is removed.
+#   assertion-free         key = file::method   (no-throw tests; each needs a comment saying why there is no assert)
+#   delay                  key = file           (count of Thread.Sleep/Task.Delay/Task.Yield: poll loops with a timeout, fake delays)
+#   real-os-uncategorised  key = file::method   (default-filter test touching a real OS resource)
+#   stale-skip             key = file::method   (Skip reason says "not implemented"; must be a tracked decision)
+
+# Poll loops with a bounded timeout (10 ms steps) and fake/never-completing delays; replace with Wait.Until or a signal when touched.
+delay|tests/PhotoReview.App.Tests/Coordinators/FileActionGateTests.cs|1
+delay|tests/PhotoReview.App.Tests/Coordinators/ImagePresenterTests.cs|1
+delay|tests/PhotoReview.App.Tests/Coordinators/ZoomDetailTests.cs|2
+delay|tests/PhotoReview.App.Tests/HotPath/NativeRecycleBinTests.cs|1
+delay|tests/PhotoReview.Core.Tests/Diagnostics/FileLogLifecycleTests.cs|1
+delay|tests/PhotoReview.Core.Tests/FileActions/FileActionServiceTests.cs|1
+delay|tests/PhotoReview.Core.Tests/Instance/ForwardingCoreTests.cs|1
+delay|tests/PhotoReview.Core.Tests/Session/SessionWriterTests.cs|1
+delay|tests/PhotoReview.Core.Tests/Updates/UpdateCheckerTests.cs|2
+delay|tests/PhotoReview.Imaging.Tests/PreloadSafetyTests.cs|2
+delay|tests/PhotoReview.Imaging.Tests/PreviewImageServiceTests.cs|1
+delay|tests/PhotoReview.Imaging.Tests/ViewerDecodePriorityTests.cs|1
+delay|tests/PhotoReview.Integration.Tests/Fakes/FakeExplorerOrderProvider.cs|1
+delay|tests/PhotoReview.Integration.Tests/Infrastructure/StaTestHost.cs|1
+delay|tests/PhotoReview.Integration.Tests/ReviewRound7WindowTests.cs|1
+delay|tests/PhotoReview.TestSupport/Wait.cs|1
+
+# TC06 (Q-T1: queue keypresses) is decided but production still drops actions while a file action runs (FileActionController).
+stale-skip|tests/PhotoReview.App.Tests/HotPath/WarmNavigationReadBoundsTests.cs::MoveDeleteQueue_RapidActionsWhileBusy_AllExecutedInOrder|1
+
+# Fuzz tests that delegate to a shared Run/RunMutations helper: the assertions live inside the helper (the guard only reads the test body).
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/DecoderMutationFuzzTests.cs::MutatedImages_DeepRun|1
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/DecoderMutationFuzzTests.cs::MutatedImages_FailOnlyWithUnderstoodExceptions|1
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/PreviewCacheFileMutationTests.cs::MutatedEntries_DeepRun|1
+assertion-free|tests/PhotoReview.Imaging.Tests/Robustness/PreviewCacheFileMutationTests.cs::MutatedEntries_EndInResultOrCorruptEntryFailure|1

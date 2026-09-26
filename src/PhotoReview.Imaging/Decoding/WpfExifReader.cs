@@ -44,5 +44,5 @@ internal static class WpfExifReader
 
     private static bool IsMetadataFailure(Exception ex) =>
         ex is ArgumentException or NotSupportedException or InvalidOperationException or COMException or IOException
-            or FileFormatException or OverflowException;
+            or FileFormatException or OverflowException or InvalidCastException or FormatException;
 }

@@ -123,9 +123,13 @@ public sealed class InfoOverlayViewModel : ObservableObject
         {
             return;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            result = default; // unreadable parent: show the folder without siblings rather than a stuck placeholder
+            // Unreadable parent, an odd path, anything: show the folder without siblings rather than a stuck placeholder
+            // (and a faulted, unobserved PendingSiblings task). Expected I/O failures are not worth a log line.
+            if (ex is not (IOException or UnauthorizedAccessException))
+                AppLog.Error($"Sibling folder search failed for '{folder}'", ex);
+            result = default;
         }
         // Back on the UI thread (ADR 0005). A newer SetFolder/hide bumped the request: this result is for a folder the
         // user already left (or a search that was cancelled but finished anyway) -- drop it.
