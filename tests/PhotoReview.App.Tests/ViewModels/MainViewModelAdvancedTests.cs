@@ -219,7 +219,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Assert.False(File.Exists(numbered));
         Assert.True(File.Exists(original));
         Assert.Equal(1, vm.TotalFiles);
-        Assert.Contains("1/1", vm.StatusText);
+        Assert.Equal(StatusFormatter.BatchDone(1, 0), vm.StatusText); // set after the reload, which clears the status line
         Assert.Equal(1, _uiScheduler.InvokeCount);
     }
 
@@ -314,7 +314,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Assert.False(File.Exists(original));
         Assert.True(File.Exists(numbered));
         Assert.Equal(1, vm.TotalFiles);
-        Assert.Contains("1/1", vm.StatusText);
+        Assert.Equal(StatusFormatter.BatchDone(1, 0), vm.StatusText); // set after the reload, which clears the status line
     }
 
     [Fact]
