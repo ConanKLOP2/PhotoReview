@@ -46,8 +46,8 @@ public static class PerfRules
     private static string FmtMs(double? value) =>
         value is { } v && !double.IsNaN(v) ? FormattableString.Invariant($"{v:F1}ms") : "N/A";
 
-    /// <summary>R-IO: in the SourceMiss group, (t_open+t_read) share of finalVisual is high, or the
-    /// source is opened too many times per image. t_open is never emitted by the current app (no
+    /// <summary>R-IO: in the SourceMiss group, (t_open+t_read) share of finalVisual is high
+    /// (only sourceMissIoSharePct is evaluated; there is no per-image open-count check). t_open is never emitted by the current app (no
     /// call site yet) and t_read only exists under PHOTOREVIEW_DIAG_PREREAD, so this is N/A when
     /// neither is present in the data (plan mục 8 / D11 spec item 7).</summary>
     public static RuleResult EvaluateRIo(RulesConfig cfg, IReadOnlyList<NavRecord> sourceMissNavs)

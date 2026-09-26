@@ -46,6 +46,8 @@ shown. The journal scan and file checks run on the thread pool; only the Undo
 history is seeded on the UI thread, below Moves the user already made. Pending
 entries stamped after startup began (this process's own in-flight actions) are
 not reconciled. Entries marked Failed are reported once with an offer to open
-the Recovery window. Known limit: a Prepared entry of ANOTHER running instance
-(different folder, same journal) that is mid-flight at that moment can be
-marked Failed; the entry then shows in Recovery with its real file state.
+the Recovery window. A Prepared entry of ANOTHER running instance (different
+folder, same journal) that is mid-flight is not marked Failed: since Q-R27 the
+reconcile skips entries whose live marker (`ILiveOperationRegistry`) exists (see
+`architecture.md`, "Thao tác đang chạy"). Only the narrow window described in the
+FA-01 comment remains; such an entry shows in Recovery with its real file state.
