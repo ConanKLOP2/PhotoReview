@@ -37,6 +37,7 @@ Thumbnail có RAM/disk cache và quota riêng. Hủy waiter không nên làm h�
 | `DecoderBackend` | `WicDirect` | Chọn `Wpf`, `WicDirect` hoặc `TurboJpeg`. WIC/TurboJPEG fallback về WPF khi gặp lỗi codec được hỗ trợ. Đổi backend khi đang xem sẽ clear cache liên quan và trình diễn lại ảnh hiện tại. |
 | `ScalingQuality` | `HighQuality` | `HighQuality` ưu tiên chất lượng scale; `Linear` ưu tiên độ mượt khi zoom/chuyển khung. Không thay đổi pixel decode hoặc cache identity. |
 | `UseSourceBytesCache` | `false` | Bật cache byte nguồn trong RAM. Đây là feature flag; chỉ bật sau khi đo source-open, working set và độ trễ trên folder thật. |
+| `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` | Số ảnh tải trước phía trước/phía sau vị trí hiện tại (`PreloadOrderService`/`PreloadScheduler`). Cho phép `1`-`500` (forward) và `0`-`500` (backward); sàn của thanh trượt RAM (`RamBudgetPolicy.MinimumCachePercent`) đi theo cửa sổ này. Chụp lúc composition trong `App.xaml.cs`; có hiệu lực sau khi khởi động lại. |
 
 ### Đổi mode, resize và cache lifecycle
 

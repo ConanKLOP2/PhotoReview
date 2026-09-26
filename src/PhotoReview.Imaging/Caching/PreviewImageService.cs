@@ -10,6 +10,7 @@ using PhotoReview.Core.Diagnostics;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 using PhotoReview.Core.Localization;
+using PhotoReview.Imaging;
 
 namespace PhotoReview.Imaging.Caching;
 
@@ -93,10 +94,11 @@ public sealed class PreviewImageService : IPreloadTarget
         IImageDecoderFactory? decoderFactory = null,
         SourceBytesCache? sourceBytesCache = null,
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
-        int? cacheRamPercent = null)
+        int? cacheRamPercent = null,
+        PreloadWindow? preloadWindow = null)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity, cacheRamPercent)
+            originalDimensionsCapacity, cacheRamPercent, preloadWindow)
     {
     }
 
@@ -124,7 +126,8 @@ public sealed class PreviewImageService : IPreloadTarget
         IImageDecoderFactory? decoderFactory = null,
         SourceBytesCache? sourceBytesCache = null,
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
-        int? cacheRamPercent = null)
+        int? cacheRamPercent = null,
+        PreloadWindow? preloadWindow = null)
     {
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
@@ -144,7 +147,7 @@ public sealed class PreviewImageService : IPreloadTarget
             originalDimensionsCapacity, _ => 1);
         // IMG-11: clamp to the user's share of physical RAM (or half of it without a percent) and log what is in effect.
         capacityBytes = ResolveCapacity(capacityBytes, cacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes(),
-            sourceBytesCache?.CapacityBytes, out var budgetLine);
+            sourceBytesCache?.CapacityBytes, out var budgetLine, preloadWindow);
         CapacityBytes = capacityBytes;
         _log.Info(budgetLine);
         _cache = new BoundedLruCache<ImageCacheKey, IDecodedImage>(
@@ -166,7 +169,7 @@ public sealed class PreviewImageService : IPreloadTarget
     /// <paramref name="requestedBytes"/> clamped to half of physical RAM (IMG-11, R2-A-06).
     /// </summary>
     internal static long ResolveCapacity(long requestedBytes, int? ramPercent, long physicalBytes, long? sourceBytesCapacity,
-        out string logLine)
+        out string logLine, PreloadWindow? preloadWindow = null)
     {
         const long mib = 1024 * 1024;
         var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -176,10 +179,13 @@ public sealed class PreviewImageService : IPreloadTarget
             : string.Create(inv, $", source-bytes cache {source / mib} MiB");
         if (ramPercent is { } requestedPercent && physicalBytes > 0)
         {
-            var percent = RamBudgetPolicy.ClampCachePercent(requestedPercent, physicalBytes);
-            var capacity = RamBudgetPolicy.PreviewBytesForPercent(percent, physicalBytes, source);
+            // Q-R31: the percent floor follows the user's configured preload window, so a bigger window can never
+            // end up with a cache smaller than the previews the scheduler keeps in flight.
+            var window = preloadWindow ?? PreloadWindow.Default;
+            var percent = RamBudgetPolicy.ClampCachePercent(requestedPercent, physicalBytes, window);
+            var capacity = RamBudgetPolicy.PreviewBytesForPercent(percent, physicalBytes, source, window);
             var clampPart = percent != requestedPercent
-                ? string.Create(inv, $" (requested {requestedPercent}% clamped to {percent}%; allowed {RamBudgetPolicy.MinimumCachePercent(physicalBytes)}-{PhotoReview.Core.Settings.PerformanceOptions.MaxImageCacheRamPercent}%)")
+                ? string.Create(inv, $" (requested {requestedPercent}% clamped to {percent}%; allowed {RamBudgetPolicy.MinimumCachePercent(physicalBytes, window)}-{PhotoReview.Core.Settings.PerformanceOptions.MaxImageCacheRamPercent}%)")
                 : "";
             logLine = string.Create(inv,
                 $"Memory budgets: preview cache {capacity / mib} MiB; cache share {percent}% of {physicalBytes / mib} MiB physical RAM = {RamBudgetPolicy.BytesForPercent(percent, physicalBytes) / mib} MiB for preview + source-bytes{clampPart}{sourcePart}.");
@@ -235,7 +241,7 @@ public sealed class PreviewImageService : IPreloadTarget
     /// <summary>
     /// Stops accepting new persist requests and waits for in-flight writes to finish.
     /// Only for short-lived instances (benchmark runs); the production singleton never
-    /// calls this — see the constructor's comment on why that's intentional.
+    /// calls this â€” see the constructor's comment on why that's intentional.
     /// </summary>
     public Task ShutdownPersistWorkersAsync()
     {
@@ -366,7 +372,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // entry from the dictionary via a bare TryRemove(key), letting a third caller
         // start yet another redundant decode.
         // GetOrAdd(key, factory) can invoke the factory more than once when callers race,
-        // discarding every result but the winner's — so a closure flag set inside the
+        // discarding every result but the winner's â€” so a closure flag set inside the
         // factory (e.g. "isNewLoad = true") can report CacheMiss for a caller that actually
         // lost the race and joined someone else's in-flight decode. Constructing the
         // candidate up front and comparing it by reference to what GetOrAdd returns

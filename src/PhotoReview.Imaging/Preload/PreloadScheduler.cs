@@ -110,12 +110,14 @@ public sealed class PreloadScheduler : IDisposable
         int? workerCountOverride = null,
         IUiScheduler? uiScheduler = null,
         ILog? log = null,
-        Func<string, CancellationToken, Task>? prefetchSourceBytes = null)
+        Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
+        PreloadWindow? window = null)
         : this(target, metrics, snapshotEntries, totalSourceBytes,
             new PreloadOptions(
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
                 MemoryLoadLimit: memoryLoadLimit,
-                FullFolderThresholdBytes: fullFolderRamThresholdBytes),
+                FullFolderThresholdBytes: fullFolderRamThresholdBytes)
+            { Window = window ?? PreloadWindow.Default },
             memoryProbe ?? (hasHeadroom is not null
                 ? new DelegateMemoryProbe(hasHeadroom)
                 : throw new ArgumentNullException(nameof(memoryProbe), "A real memory probe or an explicit test override is required.")),
@@ -325,7 +327,7 @@ public sealed class PreloadScheduler : IDisposable
                     if (_log.Enabled)
                         _log.Info($"Preload policy: sourceBytes={sourceBytes} images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
                     order = PreloadOrderService.Build(center, entries.Length,
-                        wholeFolder, shape.Direction, shape.Lead).GetEnumerator();
+                        wholeFolder, shape.Direction, shape.Lead, _options.Window).GetEnumerator();
                     seenVersion = currentVersion;
                     seenShape = shape;
                     seenBox = box;
@@ -348,7 +350,7 @@ public sealed class PreloadScheduler : IDisposable
                     // (F4, 1895 images: preloadKick P50 2-2.8 ms vs 0.3 ms in window mode). The rest of the
                     // folder continues on the thread pool (ForceYielding without the captured context).
                     if (Environment.CurrentManagedThreadId == callerThreadId
-                        && !InPreloadWindow(order.Current, orderCenter, seenShape))
+                        && !InPreloadWindow(order.Current, orderCenter, seenShape, _options.Window))
                         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
                     // IMG-03: GlobalMemoryStatusEx is a syscall, so the probe is cached; it is re-run
                     // when a decode was queued since the last check (memory use changed) or after 50 ms,
@@ -374,7 +376,7 @@ public sealed class PreloadScheduler : IDisposable
                     // earliest preloaded -- the images right next to the user (estimate off, or other
                     // decodes such as compare/zoom sharing the cache).
                     if (seenWholeFolder && _target.CacheBytes >= _options.FullFolderThresholdBytes * WholeFolderCacheFillLimit
-                        && !InPreloadWindow(order.Current, orderCenter, seenShape)) break;
+                        && !InPreloadWindow(order.Current, orderCenter, seenShape, _options.Window)) break;
                     var entry = entries[order.Current];
                     var path = entry.Path;
                     if (queued.Contains(path)) continue;
@@ -517,11 +519,11 @@ public sealed class PreloadScheduler : IDisposable
     public const double WholeFolderCacheFillLimit = 0.9;
 
     // The directional window PreloadOrderService.Build queues first (before the rest of the folder).
-    private static bool InPreloadWindow(int index, int center, (int Direction, int Lead) shape)
+    private static bool InPreloadWindow(int index, int center, (int Direction, int Lead) shape, PreloadWindow window)
     {
         var ahead = (shape.Direction < 0 ? -1 : 1) * (index - center);
-        return ahead > 0 ? ahead <= shape.Lead + PreloadOrderService.ForwardLookahead
-            : ahead < 0 && -ahead <= PreloadOrderService.BackwardLookahead;
+        return ahead > 0 ? ahead <= shape.Lead + window.Forward
+            : ahead < 0 && -ahead <= window.Backward;
     }
 
     // Decode box previews are cached at right now, from the key of the image at the preload center

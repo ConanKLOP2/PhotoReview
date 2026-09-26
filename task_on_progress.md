@@ -1,10 +1,11 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-26 | **Base:** master `5cb8f0a` (#94–#121) | **Open PRs:** `test/nas-first-frame-no-per-file-io`, `feat/sort-mode-default`
+**Updated:** 2026-09-26 | **Base:** `a261fc6` | **Open PRs:** #126, #127
 
 ## Now
 
-- **NAS report:** ~40 s before first image, 500-file NAS folder; cause pre-AR16, already fixed (≥v2.0.111). Test added, branch above. Follow-ups: Q-R29.
+- **Preload window (Q-R31, #125):** Settings ▸ Performance, ahead/behind (32/8); RAM floor follows; after restart.
+- **NAS report:** 40 s to first image = pre-AR16 per-file open, fixed ≥v2.0.111 (test #122). Follow-ups: Q-R29.
 - **Done 2026-09-26 (#94–#112 merged):** architecture review AR10–AR19 ([summary](docs/refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md); #106, AR16/Q-AR7 (c) background readability probe #107), benchmark speed-up #109 (gate −34 %, quick −24 %, in-app Quick check), stale Slow MainWindow tests #110, journal test-host crash #112, source audit F0–F4 closed. Details and numbers: [progress log](docs/archive/progress-log-2026-09.md#2026-09-26-late), `PERF-STATUS.md`.
 - **GUI checks — user reported "GUI OK" (2026-09-26):** AR13 (pan + glide, wheel zoom at cursor, Ctrl+wheel navigation, click-to-zoom, Fit after resize/DPI change, skipped-files list), AR16 (locked file: first image at once, then the warning), Settings > Updates and Defaults, close during a folder scan, Recycle Bin undo, decoder fallbacks with damaged EXIF/ICC, T89 Fit.
 - **Measured 2026-09-26 (PERF-STATUS):** natural sort / snapshot validator confirmed on an idle PC (validator ×2.36, sort ×1.59, no allocations); Q-R17 on F4 fills the whole folder (~10 GB) but first-visual latency is ~2.5–3× higher in steady state → **Q-R26 = B** (user): keep Q-R17, find the cause. Round 2 (idle PC): cause = whole-folder preload pass running every image's cache lookup on the UI thread per navigation; fixed in `perf/q-r26-preload-kick-off-ui` (first-visual back to window-mode level, whole folder still cached).

@@ -117,7 +117,8 @@ public partial class App : System.Windows.Application, IDisposable
             if (!settings.UseSourceBytesCache) return new SourceBytesCachePolicy(null);
             // RAM%: the source-bytes cache must leave the preload window to the preview cache inside the user's share.
             var sourceBytes = RamBudgetPolicy.SourceBytesForPercent(
-                settings.SourceBytesCapacityBytes, settings.ImageCacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes());
+                settings.SourceBytesCapacityBytes, settings.ImageCacheRamPercent, RamBudgetPolicy.GetPhysicalMemoryBytes(),
+                PreloadWindow.FromSettings(settings));
             if (sourceBytes <= 0)
             {
                 sp.GetService<ILog>()?.Warn("Source-bytes cache disabled: the RAM cache share leaves no room beyond the preview preload window.");
@@ -148,7 +149,10 @@ public partial class App : System.Windows.Application, IDisposable
                 currentBackend: () => ctx.CurrentBackend(),
                 log: sp.GetService<ILog>(),
                 sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache,
-                cacheRamPercent: settingsStore.Current.ImageCacheRamPercent);
+                cacheRamPercent: settingsStore.Current.ImageCacheRamPercent,
+                // feat/preload-window-setting: captured once (applies after restart, like PreloadWorkerCount/Q-AR6/Q-R19);
+                // only affects the "allowed X-90%" text logged when the requested percent is clamped.
+                preloadWindow: PreloadWindow.FromSettings(settingsStore.Current));
         });
 
         services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>
@@ -169,7 +173,9 @@ public partial class App : System.Windows.Application, IDisposable
                 log: sp.GetService<ILog>(),
                 prefetchSourceBytes: sourceBytesCache is not null
                     ? (path, token) => Task.Run(() => sourceBytesCache.TryPrefetch(path), token)
-                    : null);
+                    : null,
+                // feat/preload-window-setting: captured once at composition (applies after restart, Q-AR6/Q-R19).
+                window: PreloadWindow.FromSettings(settingsStore.Current));
             });
 
         // 7. ViewModels & Coordinators

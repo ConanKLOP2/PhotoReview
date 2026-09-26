@@ -34,6 +34,10 @@ public sealed class DialogBoundaryTests
     private static readonly (string File, string Construction)[] AllowedElsewhere =
     [
         ("src/PhotoReview.App/SettingsWindow.xaml.cs", "new ActionProfilesWindow("),
+        // feat/preload-window-setting: PreloadWindow is a value type (forward/backward preload lookahead), not a
+        // WPF Window -- the "*Window" name just collides with this rule's naming heuristic.
+        ("src/PhotoReview.App/SettingsWindow.xaml.cs", "new PreloadWindow("),
+        ("src/PhotoReview.Imaging/PreloadWindow.cs", "new PreloadWindow("),
     ];
 
     [Fact(DisplayName = "Rule AR19: app windows are constructed only in Services/WpfDialogService.cs and App.xaml.cs (plus the explicit allowlist)")]

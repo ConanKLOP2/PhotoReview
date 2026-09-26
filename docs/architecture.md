@@ -122,6 +122,7 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 | `DecoderBackend` | `WicDirect` mặc định (nhanh nhất, ADR 0001); `Wpf`; `TurboJpeg` | `SettingsStore` → `PreviewStateContext` → `PreviewImageService`/`ImageDecoderFactory`. Đổi khi đang xem làm clear cache và present lại ảnh hiện tại. |
 | `ScalingQuality` | `HighQuality` mặc định; `Linear` | `MainViewModel` → `ViewerState` → WPF `RenderOptions.BitmapScalingMode`; không đổi decode/cache key. |
 | `UseSourceBytesCache` | `false` mặc định | Được chụp lúc composition trong `App.xaml.cs`; bật cache byte 16 GiB cho service hỗ trợ. Thay đổi cần khởi động lại để toàn bộ dependency nhận cùng policy. |
+| `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` mặc định; `1`-`500` / `0`-`500` | `SettingsStore` → `PreloadWindow.FromSettings` → `PreloadScheduler`/`PreloadOrderService.Build`; sàn phần trăm RAM (`RamBudgetPolicy.MinimumCachePercent`) tính theo cửa sổ này. Được chụp lúc composition trong `App.xaml.cs`; có hiệu lực sau khi khởi động lại (giống `PreloadWorkerCount`). |
 
 ## Kiểm tra cập nhật thủ công (chỉ dùng mạng ở đây)
 
