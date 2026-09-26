@@ -10,6 +10,12 @@ public sealed class AppPaths : IAppPaths
 {
     public const string DataRootEnvironmentVariable = "PHOTOREVIEW_DATA_ROOT";
 
+    /// <summary>
+    /// "1"/"true" + <see cref="DataRootEnvironmentVariable"/>: config.json also moves under the data root. Set by test
+    /// fixtures so a test that saves settings never overwrites the user's real %LOCALAPPDATA%\PhotoReview\config.json.
+    /// </summary>
+    public const string IsolateConfigEnvironmentVariable = "PHOTOREVIEW_ISOLATE_CONFIG";
+
     public string ConfigFile { get; }
     public string JournalFile { get; }
     public string SessionsDir { get; }
@@ -61,9 +67,13 @@ public sealed class AppPaths : IAppPaths
     }
 
     /// <summary>
-    /// Factory là nơi DUY NHẤT trong toàn bộ ứng dụng đọc biến môi trường PHOTOREVIEW_DATA_ROOT.
+    /// Factory là nơi DUY NHẤT trong toàn bộ ứng dụng đọc biến môi trường PHOTOREVIEW_DATA_ROOT / PHOTOREVIEW_ISOLATE_CONFIG.
     /// </summary>
     public static AppPaths FromEnvironment() => new(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        Environment.GetEnvironmentVariable(DataRootEnvironmentVariable));
+        Environment.GetEnvironmentVariable(DataRootEnvironmentVariable),
+        IsTruthy(Environment.GetEnvironmentVariable(IsolateConfigEnvironmentVariable)));
+
+    private static bool IsTruthy(string? value) =>
+        value is not null && (value.Trim() == "1" || value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase));
 }
