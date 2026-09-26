@@ -26,8 +26,8 @@
             <TextBlock Text="{loc:Tr actionProfiles.details.header}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource Dark.TextStrong}" Margin="0,0,0,16"/>
             <TextBlock x:Name="NameLabel" Text="{loc:Tr actionProfiles.name.label}"/><TextBox x:Name="NameText" AutomationProperties.LabeledBy="{Binding ElementName=NameLabel}"/>
             <TextBlock x:Name="ShortcutLabel" Text="{loc:Tr actionProfiles.shortcut.label}"/><TextBox x:Name="ShortcutText" AutomationProperties.LabeledBy="{Binding ElementName=ShortcutLabel}"/>
-            <!-- Mapped by SelectedIndex in code-behind (0 Move, 1 Copy, 2 Recycle, 3 legacy Delete = Recycle): keep the order. -->
-            <TextBlock x:Name="OperationLabel" Text="{loc:Tr actionProfiles.operation.label}"/><ComboBox x:Name="OperationCombo" AutomationProperties.LabeledBy="{Binding ElementName=OperationLabel}"><ComboBoxItem Content="{loc:Tr enum.fileOperation.move}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.copy}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.recycle}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.delete}"/></ComboBox>
+            <!-- Mapped by SelectedIndex in code-behind (0 Move, 1 Copy, 2 Recycle; a legacy config "Delete" is read as Recycle by JsonAlias): keep the order. -->
+            <TextBlock x:Name="OperationLabel" Text="{loc:Tr actionProfiles.operation.label}"/><ComboBox x:Name="OperationCombo" AutomationProperties.LabeledBy="{Binding ElementName=OperationLabel}"><ComboBoxItem Content="{loc:Tr enum.fileOperation.move}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.copy}"/><ComboBoxItem Content="{loc:Tr enum.fileOperation.recycle}"/></ComboBox>
             <TextBlock x:Name="DestinationLabel" Text="{loc:Tr actionProfiles.destination.label}"/><TextBox x:Name="DestinationText" AutomationProperties.LabeledBy="{Binding ElementName=DestinationLabel}"/>
             <CheckBox x:Name="ConfirmCheck" Content="{loc:Tr actionProfiles.confirm.label}"/>
         </StackPanel>

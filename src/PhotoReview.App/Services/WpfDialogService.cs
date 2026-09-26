@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
@@ -88,7 +89,7 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
     {
         var metrics = serviceProvider.GetService<ReviewMetrics>();
         var snapshot = metrics?.Snapshot() ?? new ReviewMetrics().Snapshot();
-        var window = new DiagnosticsWindow(snapshot)
+        var window = new DiagnosticsWindow(snapshot, serviceProvider.GetService<LatestExplorerSnapshot>()?.Current)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };

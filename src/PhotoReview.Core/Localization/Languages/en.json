@@ -236,7 +236,6 @@
   "enum.explorerOrderStatus.noMatchingWindow": "NoMatchingWindow",
   "enum.explorerOrderStatus.timedOut": "TimedOut",
   "enum.fileOperation.copy": "Copy",
-  "enum.fileOperation.delete": "Delete",
   "enum.fileOperation.move": "Move",
   "enum.fileOperation.recycle": "Recycle",
   "enum.imageSortMode.name": "Name (follows Explorer when it is open)",

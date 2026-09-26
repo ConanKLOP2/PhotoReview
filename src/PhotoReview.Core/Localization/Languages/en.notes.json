@@ -229,7 +229,6 @@
   "enum.explorerOrderStatus.noMatchingWindow": "See enum.explorerOrderStatus.available.",
   "enum.explorerOrderStatus.timedOut": "See enum.explorerOrderStatus.available.",
   "enum.fileOperation.copy": "ComboBoxItem.Content for FileOperationType.Copy (index 1).",
-  "enum.fileOperation.delete": "ComboBoxItem.Content index 3 - legacy alias that saves as Recycle (JsonAlias \"Delete\"); still goes to the Recycle Bin, not a permanent delete. Translation must not imply permanent deletion.",
   "enum.fileOperation.move": "ComboBoxItem.Content for FileOperationType.Move. Combo is mapped by SelectedIndex (ActionProfilesWindow.xaml.cs:30-46), not by text - item ORDER must not change.",
   "enum.fileOperation.recycle": "ComboBoxItem.Content for FileOperationType.Recycle (index 2) = send to Windows Recycle Bin.",
   "enum.imageSortMode.name": "ComboBoxItem 0 = ImageSortMode.Name. Items are mapped by Tag (enum name), not by index; order: Name, NameAscending, NameDescending, SizeDescending, SizeAscending, Default.",

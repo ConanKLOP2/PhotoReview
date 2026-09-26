@@ -235,7 +235,6 @@
   "enum.explorerOrderStatus.noMatchingWindow": "Không có cửa sổ Explorer phù hợp",
   "enum.explorerOrderStatus.timedOut": "Hết thời gian chờ",
   "enum.fileOperation.copy": "Sao chép",
-  "enum.fileOperation.delete": "Xóa (vào Thùng rác)",
   "enum.fileOperation.move": "Di chuyển",
   "enum.fileOperation.recycle": "Đưa vào Thùng rác",
   "enum.imageSortMode.name": "Tên (theo thứ tự Explorer nếu đang mở)",
