@@ -107,6 +107,17 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
     /// <summary>Test seam: completes once the pass started by the last <see cref="WarmPreloadAround"/> has finished.</summary>
     internal Task WhenPreloadSettledAsync() => _lastPreloadTask ?? Task.CompletedTask;
 
+    /// <summary>Test seam: the scratch disk-cache directory this executor writes into, so a teardown test can
+    /// assert it is actually removed once <see cref="TeardownBackgroundTask"/> settles.</summary>
+    internal string DiskCacheDirectory => _diskCacheDirectory;
+
+    /// <summary>
+    /// perf(bench-window): the background prune-then-delete pass <see cref="DisposeAsync"/> starts (never
+    /// awaited by production code, which must not block the next profile on a slow prune). Tests await this
+    /// to observe the scratch directory actually being removed once the prune settles.
+    /// </summary>
+    internal Task TeardownBackgroundTask { get; private set; } = Task.CompletedTask;
+
     public async ValueTask DisposeAsync()
     {
         // Cancel first so the last WarmPreloadAround call (fire-and-forget by design —
@@ -118,17 +129,27 @@ public sealed class BenchmarkImageExecutor : IAsyncDisposable
         // Only after every persist write has actually finished is it safe to delete the
         // scratch directory without racing a worker that's still writing into it.
         await _previewService.ShutdownPersistWorkersAsync();
-        // ShutdownPersistWorkersAsync guarantees every write has issued its SchedulePrune
-        // call, but that call is itself fire-and-forget -- wait for the prune pass(es) it
-        // started to actually finish, or the delete below can race a worker still
-        // enumerating/deleting files in this same directory.
-        var pruneSettled = await _previewService.WaitForPruneAsync(TimeSpan.FromSeconds(5));
+        // perf(bench-window): ShutdownPersistWorkersAsync guarantees every write has issued its
+        // SchedulePrune call, but that call is itself fire-and-forget, and the prune pass it
+        // started can take up to a few seconds on a large/slow disk. The OLD code awaited that
+        // pass (bounded to 5 s) right here, so a slow prune held up the NEXT profile's startup
+        // (the window runs profiles sequentially -- see BenchmarkWindow.RunAsync). Instead, wait
+        // for the pass and delete the directory on a background task that this call does not
+        // await: teardown itself returns as soon as persisted writes are flushed. The next
+        // profile is safe to start immediately because every executor gets its own fresh
+        // Guid-named scratch directory (see the constructor), so a still-running prune here can
+        // never race a directory another profile is using.
+        TeardownBackgroundTask = DeleteScratchDirectoryAfterPruneAsync();
+    }
+
+    private async Task DeleteScratchDirectoryAfterPruneAsync()
+    {
+        // Generous bound (not the old 5 s): this task no longer blocks anything, so there is no
+        // reason to give up early. A prune that somehow never settles just means the scratch
+        // directory is left for the OS temp cleaner, exactly like the old timeout path.
+        var pruneSettled = await _previewService.WaitForPruneAsync(TimeSpan.FromMinutes(2));
         if (!pruneSettled)
         {
-            // A timeout is not success: a prune worker may still be touching this
-            // directory, so deleting it now could race that worker instead of just
-            // leaving scratch data behind. Leave the directory for the OS temp cleaner
-            // rather than risk a racy delete.
             FileLog.Default.Error($"Benchmark disk cache prune did not finish in time; leaving scratch directory: {_diskCacheDirectory}");
             return;
         }

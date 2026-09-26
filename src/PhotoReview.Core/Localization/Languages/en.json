@@ -641,5 +641,9 @@
   "status.lateRecycleUndoable": "{fileName} was moved to the Recycle Bin after you left its folder. Press Ctrl+Z to undo.",
   "status.lateDeletedPermanently": "{fileName} was deleted permanently after you left its folder (it cannot be undone).",
   "status.duplicateCheckRunning": "Checking for duplicates... press Esc to cancel.",
-  "status.duplicateCheckCanceled": "Duplicate check canceled. Nothing was removed."
+  "status.duplicateCheckCanceled": "Duplicate check canceled. Nothing was removed.",
+  "benchmark.quickCheck": "Quick check",
+  "benchmark.quickCheck.automationName": "Run a quick 10-iteration check with Fast Sequential",
+  "benchmark.imageLimit.label": "Images to test (0 = all):",
+  "benchmark.imageLimit.automationName": "Number of images to include in the benchmark run, 0 for all supported images in the folder"
 }

@@ -19,6 +19,14 @@ public partial class BenchmarkWindow : Window, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    /// <summary>perf(bench-window): "Quick check" always runs this profile (fast-sequential) with a shortened
+    /// iteration count, regardless of what is selected in <see cref="ProfilesList"/>.</summary>
+    private const string QuickCheckProfileId = "fast-sequential";
+    private const int QuickCheckIterations = 10;
+
+    /// <summary>Default first-N image cap (mirrors the CLI's <c>--benchmark-all</c> <c>Take(64)</c>); 0 means "all".</summary>
+    private const int DefaultImageLimit = 64;
+
     private readonly ObservableCollection<BenchmarkResultRow> _rows = [];
     private readonly List<BenchmarkProfileItem> _profileItems = [.. BenchmarkProfiles.All.Select(p => new BenchmarkProfileItem(p))];
     private CancellationTokenSource? _cts;
@@ -30,6 +38,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         FolderText.Text = initialFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
         foreach (var item in _profileItems) ProfilesList.Items.Add(item);
         ProfilesList.SelectedItems.Add(_profileItems.First(i => i.Profile.Id == "fast-sequential"));
+        ImageLimitText.Text = DefaultImageLimit.ToString(CultureInfo.InvariantCulture);
         ResultsGrid.ItemsSource = _rows;
         Localizer.CurrentChanged += OnLanguageChanged;
     }
@@ -53,9 +62,41 @@ public partial class BenchmarkWindow : Window, IDisposable
 
     private void SelectNone_Click(object sender, RoutedEventArgs e) => ProfilesList.UnselectAll();
 
-    private async void Run_Click(object sender, RoutedEventArgs e) => await RunAsync();
+    private async void Run_Click(object sender, RoutedEventArgs e)
+    {
+        var profiles = ProfilesList.SelectedItems.Cast<BenchmarkProfileItem>().Select(i => i.Profile).ToArray();
+        if (profiles.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoProfileSelected; return; }
+        await RunAsync(profiles);
+    }
+
+    // "Quick check" (perf(bench-window)): a fixed, fast smoke run -- fast-sequential only, 10 iterations,
+    // 1 warm-up (the profile's default WarmupCount) -- that never touches ProfilesList.SelectedItems, so a
+    // careful multi-profile comparison the user set up is left alone.
+    private async void QuickCheck_Click(object sender, RoutedEventArgs e)
+    {
+        var profile = BuildQuickCheckProfile();
+        if (profile is null) { StatusText.Text = Tr.BenchErrorUnexpected($"Unknown profile '{QuickCheckProfileId}'"); return; }
+        await RunAsync([profile]);
+    }
+
+    /// <summary>The exact profile "Quick check" runs: fast-sequential with a shortened iteration count (1
+    /// warm-up, its default). A test seam so the override is asserted against production wiring, not a
+    /// re-derived expression (mutation: dropping the <c>with</c> override must fail this).</summary>
+    internal static BenchmarkProfile? BuildQuickCheckProfile() =>
+        BenchmarkProfiles.Find(QuickCheckProfileId) is { } profile ? profile with { Iterations = QuickCheckIterations } : null;
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
+
+    /// <summary>Parses <see cref="ImageLimitText"/>: 0 (or blank/invalid) means "all"; otherwise the first-N cap
+    /// (perf(bench-window), mirrors the CLI's <c>--benchmark-all</c> <c>Take(64)</c>).</summary>
+    private int ImageLimit => int.TryParse(ImageLimitText.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0
+        ? n : 0;
+
+    /// <summary>First-N cap applied to the folder's supported files, in the same order the caller enumerated
+    /// them; 0 (or a limit &gt;= the file count) means "all". A test seam for the actual production logic
+    /// (mutation: removing the cap must fail a test asserting the shorter length).</summary>
+    internal static string[] ApplyImageLimit(IReadOnlyList<string> files, int limit) =>
+        limit > 0 && files.Count > limit ? [.. files.Take(limit)] : [.. files];
 
     // This window is opened modelessly (dialog.Show() in MainWindow), not via ShowDialog(),
     // so IsCancel/DialogResult cannot be used on the Close button -- WPF throws
@@ -79,11 +120,9 @@ public partial class BenchmarkWindow : Window, IDisposable
         cts.Dispose();
     }
 
-    private async Task RunAsync()
+    private async Task RunAsync(BenchmarkProfile[] profiles)
     {
         if (!Directory.Exists(FolderText.Text)) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
-        var profiles = ProfilesList.SelectedItems.Cast<BenchmarkProfileItem>().Select(i => i.Profile).ToArray();
-        if (profiles.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoProfileSelected; return; }
         string[] files;
         try
         {
@@ -95,9 +134,13 @@ public partial class BenchmarkWindow : Window, IDisposable
             return;
         }
         if (files.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoImages; return; }
+        // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,
+        // same idea as the CLI's --benchmark-all Take(64) -- a large real folder no longer forces every run
+        // (including "Quick check") to decode thousands of images just to compare configurations. 0 = all.
+        files = ApplyImageLimit(files, ImageLimit);
         var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
 
-        RunButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false;
+        RunButton.IsEnabled = false; QuickCheckButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false; ImageLimitText.IsEnabled = false;
         _rows.Clear();
         RunProgress.Value = 0;
         _cts = new CancellationTokenSource();
@@ -154,7 +197,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         catch (Exception ex) { StatusText.Text = Tr.BenchStatusFailed(BenchmarkText.Describe(ex)); }
         finally
         {
-            RunButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true;
+            RunButton.IsEnabled = true; QuickCheckButton.IsEnabled = true; CancelButton.IsEnabled = false; BrowseButton.IsEnabled = true; ProfilesList.IsEnabled = true; ImageLimitText.IsEnabled = true;
             Dispose();
         }
     }

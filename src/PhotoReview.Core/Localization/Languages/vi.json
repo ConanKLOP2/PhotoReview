@@ -634,5 +634,9 @@
   "status.lateRecycleUndoable": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
   "status.lateDeletedPermanently": "Đã xóa vĩnh viễn {fileName} sau khi bạn rời thư mục chứa tệp (không thể hoàn tác).",
   "status.duplicateCheckRunning": "Đang kiểm tra bản trùng lặp... nhấn Esc để hủy.",
-  "status.duplicateCheckCanceled": "Đã hủy kiểm tra bản trùng lặp. Không có tệp nào bị xóa."
+  "status.duplicateCheckCanceled": "Đã hủy kiểm tra bản trùng lặp. Không có tệp nào bị xóa.",
+  "benchmark.quickCheck": "Kiểm tra nhanh",
+  "benchmark.quickCheck.automationName": "Chạy kiểm tra nhanh 10 lần lặp với Fast Sequential",
+  "benchmark.imageLimit.label": "Số ảnh cần kiểm tra (0 = tất cả):",
+  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục"
 }
