@@ -47,9 +47,9 @@ public static class TitleBarFormatter
         if (fields.HasFlag(TitleBarFields.Dimensions) && width > 0 && height > 0)
             parts.Add(Tr.ExifDimensions(width.ToString(provider), height.ToString(provider)));
         if (fields.HasFlag(TitleBarFields.ModifiedDate) && modifiedUtc is { } modified)
-            parts.Add(ExifFormatter.FormatDateTime(modified.ToLocalTime(), provider));
+            parts.Add(Tr.ExifModified(ExifFormatter.FormatDateTime(modified.ToLocalTime(), provider)));
         if (fields.HasFlag(TitleBarFields.DateTaken) && exif?.DateTaken is { } date)
-            parts.Add(ExifFormatter.FormatDateTime(date, provider));
+            parts.Add(Tr.ExifDateTaken(ExifFormatter.FormatDateTime(date, provider)));
         if (fields.HasFlag(TitleBarFields.Camera) && ExifFormatter.CameraText(exif?.CameraMake, exif?.CameraModel) is { } camera)
             parts.Add(camera);
         if (fields.HasFlag(TitleBarFields.Lens) && exif?.LensModel is { } lens)

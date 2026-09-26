@@ -55,7 +55,7 @@ public sealed class TitleBarFormatterTests
         // computed the same way TitleBarFormatter does, so this only pins the ORDER, not that method's own formatting.
         var expected = string.Join(TitleBarFormatter.Separator,
             FolderName, Folder, "12/340", "IMG_1234.jpg", StatusFormatter.FormatFileSize(2_500_000), "6000×4000",
-            ModifiedUtc.ToLocalTime().ToString("g", Invariant), "05/01/2024 14:03", "Canon EOS R5", "RF24-70mm F2.8",
+            "Modified: " + ModifiedUtc.ToLocalTime().ToString("g", Invariant), "Taken: 05/01/2024 14:03", "Canon EOS R5", "RF24-70mm F2.8",
             "ISO 400", "50 mm", "f/2.8", "1/250 s");
 
         Assert.Equal(expected, Format(TitleBarFields.All));
@@ -96,7 +96,8 @@ public sealed class TitleBarFormatterTests
     [Fact(DisplayName = "ModifiedDate converts UTC to local time and formats like ExifFormatter's DateTaken")]
     public void ModifiedDate_IsLocalTimeFormattedLikeDateTaken()
     {
-        Assert.Equal(ModifiedUtc.ToLocalTime().ToString("g", Invariant), Format(TitleBarFields.ModifiedDate));
+        using var _ = TestLocalization.Use(TestLocalization.English);
+        Assert.Equal("Modified: " + ModifiedUtc.ToLocalTime().ToString("g", Invariant), Format(TitleBarFields.ModifiedDate));
     }
 
     [Fact(DisplayName = "Camera reuses ExifFormatter's make/model de-duplication")]

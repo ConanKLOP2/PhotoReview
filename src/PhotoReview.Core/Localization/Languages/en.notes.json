@@ -473,6 +473,8 @@
   "dialog.settingsInvalid.clickZoomPercent": "MessageBox text shown on Save when the click-zoom percent box is not a number in [{min}, {max}] (AppSettings.MinClickZoomPercent/MaxClickZoomPercent).",
   "exif.dimensions": "Photo information line (under the status line): original image size in pixels; {width}/{height} are plain numbers. Parts of the line are joined with \" · \".",
   "exif.iso": "Photo information line: sensor sensitivity; {value} = ISO number (e.g. 400). \"ISO\" is normally kept as is.",
+  "exif.dateTaken": "Photo information line and title bar: label before the camera date the photo was taken; {value} = formatted date/time. Kept distinct from the modified label.",
+  "exif.modified": "Photo information line and title bar: label before the file last-modified date; {value} = formatted date/time. Must differ from the taken label.",
   "exif.focalLength": "Photo information line: lens focal length; {value} = millimetres (e.g. 50 or 18.5).",
   "exif.aperture": "Photo information line: aperture as an f-number; {value} = e.g. 2.8. \"f/\" is the photographic notation, normally kept.",
   "exif.shutterFraction": "Photo information line: short shutter speed as a fraction of a second; {denominator} = e.g. 250 (1/250 s). Keep it short.",

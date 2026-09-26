@@ -35,7 +35,7 @@ public sealed class ExifFormatterTests
         using var _ = TestLocalization.Use(TestLocalization.English);
 
         Assert.Equal(
-            "IMG_1234.jpg · 05/01/2024 14:03 · 6000×4000 · Canon EOS R5 · RF24-70mm F2.8 · ISO 400 · 50 mm · f/2.8 · 1/250 s",
+            "IMG_1234.jpg · Taken: 05/01/2024 14:03 · 6000×4000 · Canon EOS R5 · RF24-70mm F2.8 · ISO 400 · 50 mm · f/2.8 · 1/250 s",
             Format(ExifInfoFields.All));
     }
 
@@ -49,7 +49,7 @@ public sealed class ExifFormatterTests
 
     [Theory(DisplayName = "Each field alone")]
     [InlineData(ExifInfoFields.FileName, "IMG_1234.jpg")]
-    [InlineData(ExifInfoFields.DateTaken, "05/01/2024 14:03")]
+    [InlineData(ExifInfoFields.DateTaken, "Taken: 05/01/2024 14:03")]
     [InlineData(ExifInfoFields.Dimensions, "6000×4000")]
     [InlineData(ExifInfoFields.Camera, "Canon EOS R5")]
     [InlineData(ExifInfoFields.Lens, "RF24-70mm F2.8")]
@@ -69,7 +69,7 @@ public sealed class ExifFormatterTests
 
     [Theory(DisplayName = "Turning one field off removes exactly that part")]
     [InlineData(ExifInfoFields.FileName, "IMG_1234.jpg")]
-    [InlineData(ExifInfoFields.DateTaken, "05/01/2024 14:03")]
+    [InlineData(ExifInfoFields.DateTaken, "Taken: 05/01/2024 14:03")]
     [InlineData(ExifInfoFields.Dimensions, "6000×4000")]
     [InlineData(ExifInfoFields.Camera, "Canon EOS R5")]
     [InlineData(ExifInfoFields.Lens, "RF24-70mm F2.8")]
@@ -172,8 +172,8 @@ public sealed class ExifFormatterTests
         var text = ExifFormatter.Format(ExifInfoFields.DateTaken | ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, Exif,
             modifiedUtc, Invariant);
 
-        var expectedDateTaken = Exif.DateTaken!.Value.ToString("g", Invariant);
-        var expectedModified = modifiedUtc.ToLocalTime().ToString("g", Invariant);
+        var expectedDateTaken = "Taken: " + Exif.DateTaken!.Value.ToString("g", Invariant);
+        var expectedModified = "Modified: " + modifiedUtc.ToLocalTime().ToString("g", Invariant);
         Assert.Equal(expectedDateTaken + ExifFormatter.Separator + expectedModified, text);
     }
 
@@ -185,7 +185,7 @@ public sealed class ExifFormatterTests
 
         var text = ExifFormatter.Format(ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, null, modifiedUtc, Invariant);
 
-        Assert.Equal(modifiedUtc.ToLocalTime().ToString("g", Invariant), text);
+        Assert.Equal("Modified: " + modifiedUtc.ToLocalTime().ToString("g", Invariant), text);
     }
 
     [Fact(DisplayName = "ModifiedDate is skipped (not '?') when the catalog entry has no last-write time")]
@@ -208,7 +208,7 @@ public sealed class ExifFormatterTests
         var withModified = ExifFormatter.Format(fields, "a.jpg", 0, 0, Exif, modifiedUtc, Invariant);
         var withoutModified = ExifFormatter.Format(fields & ~ExifInfoFields.ModifiedDate, "a.jpg", 0, 0, Exif, modifiedUtc, Invariant);
 
-        Assert.Equal("a.jpg" + ExifFormatter.Separator + modifiedUtc.ToLocalTime().ToString("g", Invariant) + ExifFormatter.Separator + "Canon EOS R5", withModified);
+        Assert.Equal("a.jpg" + ExifFormatter.Separator + "Modified: " + modifiedUtc.ToLocalTime().ToString("g", Invariant) + ExifFormatter.Separator + "Canon EOS R5", withModified);
         Assert.Equal("a.jpg" + ExifFormatter.Separator + "Canon EOS R5", withoutModified);
     }
 }

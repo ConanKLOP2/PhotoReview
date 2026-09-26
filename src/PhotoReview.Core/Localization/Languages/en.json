@@ -549,6 +549,8 @@
   "dialog.settingsInvalid.clickZoomPercent": "Click zoom level must be a number between {min} and {max}.",
   "exif.dimensions": "{width}×{height}",
   "exif.iso": "ISO {value}",
+  "exif.dateTaken": "Taken: {value}",
+  "exif.modified": "Modified: {value}",
   "exif.focalLength": "{value} mm",
   "exif.aperture": "f/{value}",
   "exif.shutterFraction": "1/{denominator} s",
