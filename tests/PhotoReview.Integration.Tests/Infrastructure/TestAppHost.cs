@@ -32,8 +32,10 @@ internal static class TestAppHost
     {
         var sp = AppHost.BuildServices(services =>
         {
+            // Factory registration, as production's type registration: the container disposes what it created, but
+            // never an instance handed to AddSingleton(instance), so the window-close dispose would go unobserved.
             if (hooks?.Explorer is { } explorerOrder)
-                services.AddSingleton(explorerOrder);
+                services.AddSingleton<IExplorerOrderProvider>(_ => explorerOrder);
             // Never the real WindowsRecycleBin: a test that deletes must pass its own bin (TestHostHooks.RecycleBin).
             services.AddSingleton(hooks?.RecycleBin ?? ThrowingRecycleBin.Instance);
             if (hooks?.OnPresented is { } onPresented)
