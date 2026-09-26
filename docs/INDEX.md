@@ -1,7 +1,7 @@
 # Documentation Index
 **Architecture review plan (2026-09-26, T1):** [`refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md`](refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md) — findings F10–F23, tasks AR10–AR19 (`refactoring/arch-review/AR1x-*.md`), decisions Q-AR6..Q-AR10.
 
-**Current source audit (2026-09-26):** [`refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md`](refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md) — five static P2 findings from Core/FileActions, App/WPF, and Imaging/Platform/tools lanes.
+**Current source audit (2026-09-26):** [`refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md`](refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md) — five static P2 findings; all closed (F2 by design, F3 #101, F0/F1/F4 #103).
 
 **Review 2026-09-25 plan (T1):** [`refactoring/REVIEW-2026-09-25-PLAN.md`](refactoring/REVIEW-2026-09-25-PLAN.md) — verified findings, waves 1–5, Q-R decisions.
 

@@ -11,7 +11,7 @@
 |-------|--------|-------|
 | **L** (I18N: EN + VI, community JSON catalogs) | ✅ L00–L12 DONE (#55, #61, #74; 2026-09-24) | Q-L1..Q-L8 decided. Plan: `refactoring/I18N-PLAN.md`, ADR 0006, `TRANSLATING.md`. |
 | **AR** (Architecture Review 2026-09-23) | ✅ AR00–AR07 all DONE (AR02d #35, AR04 #37); only T89/AR04 GUI acceptance left (user) | Q-AR1..Q-AR5 all decided 2026-09-23. Summary: `refactoring/ARCH-REVIEW-SUMMARY.md`. |
-| **AR** (Architecture Review 2026-09-26) | 🔄 AR11, AR12, AR13, AR14a, AR15, AR17a, AR18a, AR19a in PR `integration/arch-review-2026-09-26`; AR10 closed (Q-AR6 a); AR16 measurement pending; AR13 GUI check (user) | Summary: `refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md`. |
+| **AR** (Architecture Review 2026-09-26) | 🔄 AR11, AR12, AR13, AR14a, AR15, AR17a, AR18a, AR19a merged (#106); AR16 (Q-AR7 c) merged (#107); AR10 closed (Q-AR6 a); AR13/AR16 GUI check (user) | Summary: `refactoring/ARCH-REVIEW-2026-09-26-SUMMARY.md`. |
 | **ST** (Structure Optimize) | ✅ DONE | ST01-ST12 merged (ST08/ST09 in #73 after OC14 #64). See `refactoring/STRUCTURE-OPTIMIZE-STATUS.md`. |
 | **TS** (Test Speed / gate reliability) | ✅ TS00-TS07, TS10 DONE; TS08/TS09 closed (Q-AR5) | Gate no longer hangs, runs ~23s. Plan: `archive/historical/TEST-SPEED-PLAN-2026-09-20.md`. |
 | **DF** (Double-click → Fit) | ✅ DONE | PR #14 merged. Plan archived: `refactoring/archive/DBLCLICK-FIT-PLAN-2026-09-21.md`. |
