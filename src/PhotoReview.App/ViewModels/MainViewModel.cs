@@ -276,6 +276,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (ownership is not null)
         {
             var decision = await ownership.BeforeOpenAsync(folder, initialPath);
+            if (_isClosed)
+            {
+                // The window closed while ownership was being negotiated: the load coordinator is disposed, so loading
+                // would throw out of an async-void handler. Keep the AfterOpen contract for a granted open.
+                if (decision == PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
+                    ownership.AfterOpen(folder, _shownFolder);
+                return;
+            }
             if (decision != PhotoReview.Core.Instance.FolderOpenDecision.Proceed)
             {
                 var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
@@ -819,7 +827,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     void IFolderLoadSink.OnFailed(string folder, Exception exception)
     {
-        StatusText = StatusFormatter.FolderOpenFailed(exception.Message);
+        StatusText = StatusFormatter.FolderOpenFailed(UserFacingError.Describe(exception));
         NotifyNavigationStateChanged();
     }
 
