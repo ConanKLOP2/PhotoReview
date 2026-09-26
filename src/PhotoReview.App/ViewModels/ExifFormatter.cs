@@ -33,9 +33,9 @@ public static class ExifFormatter
         if (fields.HasFlag(ExifInfoFields.FileName) && !string.IsNullOrWhiteSpace(fileName))
             parts.Add(fileName);
         if (fields.HasFlag(ExifInfoFields.DateTaken) && exif?.DateTaken is { } date)
-            parts.Add(FormatDateTime(date, provider));
+            parts.Add(Tr.ExifDateTaken(FormatDateTime(date, provider)));
         if (fields.HasFlag(ExifInfoFields.ModifiedDate) && modifiedUtc is { } modified)
-            parts.Add(FormatDateTime(modified.ToLocalTime(), provider));
+            parts.Add(Tr.ExifModified(FormatDateTime(modified.ToLocalTime(), provider)));
         if (fields.HasFlag(ExifInfoFields.Dimensions) && width > 0 && height > 0)
             parts.Add(Tr.ExifDimensions(width.ToString(provider), height.ToString(provider)));
         if (fields.HasFlag(ExifInfoFields.Camera) && CameraText(exif?.CameraMake, exif?.CameraModel) is { } camera)

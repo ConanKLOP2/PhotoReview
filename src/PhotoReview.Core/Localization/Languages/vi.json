@@ -542,6 +542,8 @@
   "dialog.settingsInvalid.clickZoomPercent": "Mức thu phóng khi nhấn phải là số từ {min} đến {max}.",
   "exif.dimensions": "{width}×{height}",
   "exif.iso": "ISO {value}",
+  "exif.dateTaken": "Chụp: {value}",
+  "exif.modified": "Sửa: {value}",
   "exif.focalLength": "{value} mm",
   "exif.aperture": "f/{value}",
   "exif.shutterFraction": "1/{denominator} giây",
