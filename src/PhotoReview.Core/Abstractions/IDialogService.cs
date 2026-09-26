@@ -31,4 +31,7 @@ public interface IDialogService
 
     /// <summary>Hiển thị cửa sổ đo benchmark hiệu năng nạp ảnh.</summary>
     void ShowBenchmark(string? folder = null);
+
+    /// <summary>Hiển thị danh sách tệp bị bỏ qua khi nạp thư mục (AR19).</summary>
+    void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries);
 }

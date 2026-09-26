@@ -232,6 +232,7 @@ public sealed class ExifLineViewModelTests : IDisposable
         public void ShowDiagnostics() { }
         public bool ShowSettings() => false;
         public void ShowBenchmark(string? folder = null) { }
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
     }
 
     private sealed class NoExplorerOrder : IExplorerOrderProvider
