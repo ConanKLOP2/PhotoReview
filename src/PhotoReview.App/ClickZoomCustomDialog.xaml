@@ -1,0 +1,25 @@
+<Window x:Class="PhotoReview.App.ClickZoomCustomDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:PhotoReview.App.Localization"
+        Title="{loc:Tr dialog.clickZoomCustom.title}" Width="360" Height="190" MinWidth="320" MinHeight="190"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="{DynamicResource Dark.Window}" Foreground="{DynamicResource Dark.WindowText}">
+    <Window.Resources><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkControls.xaml"/></Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="PercentLabel" Grid.Row="0" Text="{loc:Tr dialog.clickZoomCustom.label}" Margin="0,0,0,8"/>
+        <TextBox x:Name="PercentText" Grid.Row="1" AutomationProperties.LabeledBy="{Binding ElementName=PercentLabel}"/>
+        <TextBlock x:Name="ErrorText" Grid.Row="2" Foreground="{DynamicResource Dark.Warning}" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,8,0,0" AutomationProperties.LiveSetting="Assertive"/>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="{loc:Tr common.cancel}" IsCancel="True" Padding="16,7" Margin="0,0,8,0"/>
+            <Button Content="{loc:Tr common.apply}" IsDefault="True" Click="Ok_Click" Padding="18,7"/>
+        </StackPanel>
+    </Grid>
+</Window>

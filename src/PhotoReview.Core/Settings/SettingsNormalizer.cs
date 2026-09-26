@@ -106,17 +106,33 @@ public static class SettingsNormalizer
             shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
             shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";
             shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
+            shortcuts.ClickZoom = shortcuts.ClickZoom?.Trim() ?? "";
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
 
         // feat/mouse-zoom
         if (!Enum.IsDefined(settings.MouseWheelAction)) { settings.MouseWheelAction = MouseWheelAction.Zoom; fixedNames.Add(nameof(AppSettings.MouseWheelAction)); }
+        if (!Enum.IsDefined(settings.KineticGlideSmoothing)) { settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; fixedNames.Add(nameof(AppSettings.KineticGlideSmoothing)); }
         var clickZoom = Math.Clamp(settings.ClickZoomPercent, AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent);
         if (clickZoom != settings.ClickZoomPercent)
         {
             settings.ClickZoomPercent = clickZoom;
             fixedNames.Add(nameof(AppSettings.ClickZoomPercent));
+        }
+
+        // feat/ui-dark-chrome-toolbar
+        var toolbarDelay = Math.Clamp(settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);
+        if (toolbarDelay != settings.ToolbarAutoHideDelayMs)
+        {
+            settings.ToolbarAutoHideDelayMs = toolbarDelay;
+            fixedNames.Add(nameof(AppSettings.ToolbarAutoHideDelayMs));
+        }
+        var infoFontSize = Math.Clamp(settings.InfoOverlayFontSize, AppSettings.MinInfoOverlayFontSize, AppSettings.MaxInfoOverlayFontSize);
+        if (infoFontSize != settings.InfoOverlayFontSize)
+        {
+            settings.InfoOverlayFontSize = infoFontSize;
+            fixedNames.Add(nameof(AppSettings.InfoOverlayFontSize));
         }
         return fixedNames;
     }
@@ -160,6 +176,7 @@ public static class SettingsNormalizer
         shortcuts.ToggleInfoOverlay = Resolve(nameof(ShortcutMappings.ToggleInfoOverlay), shortcuts.ToggleInfoOverlay);
         shortcuts.MoveToFolder = Resolve(nameof(ShortcutMappings.MoveToFolder), shortcuts.MoveToFolder);
         shortcuts.CopyToFolder = Resolve(nameof(ShortcutMappings.CopyToFolder), shortcuts.CopyToFolder);
+        shortcuts.ClickZoom = Resolve(nameof(ShortcutMappings.ClickZoom), shortcuts.ClickZoom);
         return disabled;
     }
 }

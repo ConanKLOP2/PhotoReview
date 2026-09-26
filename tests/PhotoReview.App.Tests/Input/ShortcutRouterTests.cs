@@ -176,6 +176,19 @@ public sealed class ShortcutRouterTests
         Assert.Null(DefaultRouter().TryResolve(Key.D1, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
     }
 
+    [Fact]
+    public void ClickZoom_WhenHasImage_ResolvesToClickZoom()
+    {
+        var cmd = DefaultRouter().TryResolve(Key.D2, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        Assert.Equal(ReviewCommandType.ClickZoom, cmd?.Type);
+    }
+
+    [Fact]
+    public void ClickZoom_WhenNoImage_ReturnsNull()
+    {
+        Assert.Null(DefaultRouter().TryResolve(Key.D2, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -196,11 +209,13 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.LastImage = value;
         settings.Shortcuts.ZoomActualSize = value;
         settings.Shortcuts.ToggleInfoOverlay = value;
+        settings.Shortcuts.ClickZoom = value;
         var router = new ShortcutRouter(settings);
 
         Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, hasImage: true));
         Assert.Null(router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true));
         Assert.Null(router.TryResolve(Key.I, Key.None, ModifierKeys.None, false, hasImage: true));
+        Assert.Null(router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, hasImage: true));
     }
 
     [Fact]
@@ -211,12 +226,15 @@ public sealed class ShortcutRouterTests
         settings.Shortcuts.LastImage = "F7";
         settings.Shortcuts.ZoomActualSize = "D0";
         settings.Shortcuts.ToggleInfoOverlay = "O";
+        settings.Shortcuts.ClickZoom = "D3";
         router.Rebuild(settings);
 
         Assert.Equal(ReviewCommandType.LastImage, router.TryResolve(Key.F7, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Equal(ReviewCommandType.ZoomActualSize, router.TryResolve(Key.D0, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.O, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(Key.D3, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, true));
+        Assert.Null(router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, true)); // old ClickZoom default no longer bound
     }
 
     [Fact]
@@ -225,4 +243,13 @@ public sealed class ShortcutRouterTests
         // The fixture binds an action to D1 (an old config): actions are resolved before the zoom group.
         var cmd = _router.TryResolve(Key.D1, Key.None, ModifierKeys.None, false, hasImage: true);
         Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
-    }}
+    }
+
+    [Fact]
+    public void ClickZoom_ActionOnTheSameKey_KeepsPriority()
+    {
+        // The fixture binds an action to D2 (ClickZoom's default): actions are resolved before the zoom group.
+        var cmd = _router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, hasImage: true);
+        Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
+    }
+}

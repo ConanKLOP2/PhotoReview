@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using PhotoReview.App.ViewModels;
+using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Input;
@@ -45,8 +46,8 @@ internal sealed class PointerInputController
     private KineticScroller _kinetic;
     private readonly EventHandler _kineticFrameHandler;
     private bool _kineticHooked;
-    private bool _hasKineticFrame;
-    private TimeSpan _lastKineticFrame;
+    private GlideFrameClock _glideClock;
+    private static readonly double TicksPerMs = System.Diagnostics.Stopwatch.Frequency / 1000.0;
 
     public PointerInputController(
         IImageSurface surface,
@@ -188,6 +189,8 @@ internal sealed class PointerInputController
         _panVelocity.Reset();
         _panVelocity.Add(0, _panStartPoint.X, _panStartPoint.Y);
         if (canPan) _surface.SetPanCursor(true);
+        // Start the monitor's vblank clock during the drag so its timing is known when a glide starts.
+        if (canPan && _settings() is { KineticPanEnabled: true, KineticGlideSmoothing: not KineticGlideSmoothing.Off }) _ = _surface.DisplayTiming;
         _surface.CaptureMouse();
         return true;
     }
@@ -275,6 +278,34 @@ internal sealed class PointerInputController
             : ZoomAtPointAsync(mouse, () => viewer.SetZoom(target));
     }
 
+    /// <summary>
+    /// ClickZoom shortcut: the same Fit &lt;-&gt; ClickZoomPercent toggle as a mouse click-to-zoom (<see cref="ClickZoomAsync"/>),
+    /// but anchored at the viewport centre instead of the cursor, and independent of <c>ClickToZoomEnabled</c> (which
+    /// only governs the mouse click).
+    /// </summary>
+    public Task ToggleClickZoomAsync()
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        return ClickZoomAsync(centre);
+    }
+
+    /// <summary>
+    /// Context menu "Click zoom level": zooms straight to <paramref name="percent"/> (no Fit toggle, unlike
+    /// <see cref="ToggleClickZoomAsync"/>), anchored at the viewport centre.
+    /// </summary>
+    public Task SetClickZoomLevelAsync(int percent)
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+        var target = PointerGestures.ClickZoomFactor(percent);
+        return ZoomAtPointAsync(centre, () => _viewer.SetZoom(target));
+    }
+
     /// <summary>MainImage LostMouseCapture.</summary>
     public void OnLostCapture() => CancelPan();
 
@@ -296,7 +327,7 @@ internal sealed class PointerInputController
     private void StartKinetic(double pointerVelocityX, double pointerVelocityY)
     {
         if (!_kinetic.Start(pointerVelocityX, pointerVelocityY)) return;
-        _hasKineticFrame = false;
+        _glideClock.Start(_settings().KineticGlideSmoothing, TicksPerMs);
         if (_kineticHooked) return;
         _surface.HookRenderFrame(_kineticFrameHandler);
         _kineticHooked = true;
@@ -355,16 +386,12 @@ internal sealed class PointerInputController
             return;
         }
         if (_surface.RenderingTime(e) is not { } renderingTime) return;
-        if (!_hasKineticFrame)
-        {
-            _hasKineticFrame = true;
-            _lastKineticFrame = renderingTime;
-            return;
-        }
-        // Rendering can fire more than once per frame with the same RenderingTime: only step on a new frame.
-        var elapsed = (renderingTime - _lastKineticFrame).TotalMilliseconds;
+        // GlideFrameClock: 0 = no step (first frame, a repeated RenderingTime, or inside the current vblank/cadence slot).
+        var elapsed = _glideClock.Advance(
+            renderingTime.TotalMilliseconds,
+            _surface.Timestamp,
+            _glideClock.NeedsDisplayTiming ? _surface.DisplayTiming : null);
         if (elapsed <= 0) return;
-        _lastKineticFrame = renderingTime;
 
         var (horizontal, vertical) = _kinetic.Step(
             elapsed,

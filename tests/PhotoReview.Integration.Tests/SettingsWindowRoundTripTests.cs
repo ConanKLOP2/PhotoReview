@@ -64,6 +64,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ClickToZoomEnabled)] = w => w.ClickToZoomCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ClickZoomPercent)] = w => w.ClickZoomPercentBox.Text = "222", // 100 -> 222
         [nameof(AppSettings.KineticPanEnabled)] = w => w.KineticPanCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.KineticGlideSmoothing)] = w => w.KineticGlideSmoothingCombo.SelectedIndex = 0, // Predict -> Off
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = w => w.MoveCopyReuseLastFolderCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ShowExifInfo)] = w => w.ShowExifInfoCheck.IsChecked = true, // false -> true
         // Default is All minus (FileName|Dimensions); flip every field so the result is the complement (FileName|Dimensions).
@@ -74,6 +75,21 @@ public sealed class SettingsWindowRoundTripTests
             w.ExifFieldLensCheck.IsChecked = false; w.ExifFieldIsoCheck.IsChecked = false;
             w.ExifFieldFocalLengthCheck.IsChecked = false; w.ExifFieldApertureCheck.IsChecked = false;
             w.ExifFieldShutterSpeedCheck.IsChecked = false;
+        },
+        // feat/ui-dark-chrome-toolbar
+        [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.ToolbarAutoHideDelayMs)] = w => w.ToolbarAutoHideDelayBox.Text = "3000", // 1500 -> 3000
+        [nameof(AppSettings.InfoOverlayFontSize)] = w => w.InfoOverlayFontSizeBox.Text = "18", // 12 -> 18
+        // Default is FolderName only; check every other field too so the result is the full set.
+        [nameof(AppSettings.TitleBarFields)] = w =>
+        {
+            w.TitleBarFieldFolderPathCheck.IsChecked = true; w.TitleBarFieldIndexCountCheck.IsChecked = true;
+            w.TitleBarFieldFileNameCheck.IsChecked = true; w.TitleBarFieldFileSizeCheck.IsChecked = true;
+            w.TitleBarFieldDimensionsCheck.IsChecked = true; w.TitleBarFieldModifiedDateCheck.IsChecked = true;
+            w.TitleBarFieldDateTakenCheck.IsChecked = true; w.TitleBarFieldCameraCheck.IsChecked = true;
+            w.TitleBarFieldLensCheck.IsChecked = true; w.TitleBarFieldIsoCheck.IsChecked = true;
+            w.TitleBarFieldFocalLengthCheck.IsChecked = true; w.TitleBarFieldApertureCheck.IsChecked = true;
+            w.TitleBarFieldShutterSpeedCheck.IsChecked = true;
         },
     };
 
@@ -99,10 +115,16 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ClickToZoomEnabled)] = true,
         [nameof(AppSettings.ClickZoomPercent)] = 222,
         [nameof(AppSettings.KineticPanEnabled)] = false,
+        [nameof(AppSettings.KineticGlideSmoothing)] = KineticGlideSmoothing.Off,
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = true,
         [nameof(AppSettings.ShowExifInfo)] = true,
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |
-            ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed),
+            ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed | ExifInfoFields.ModifiedDate),
+        // feat/ui-dark-chrome-toolbar
+        [nameof(AppSettings.ToolbarAutoHide)] = false,
+        [nameof(AppSettings.ToolbarAutoHideDelayMs)] = 3000,
+        [nameof(AppSettings.InfoOverlayFontSize)] = 18.0,
+        [nameof(AppSettings.TitleBarFields)] = TitleBarFields.All,
     };
 
     [Fact(DisplayName = "Tripwire: every UI-controlled property has a round-trip mutation and expected value above")]

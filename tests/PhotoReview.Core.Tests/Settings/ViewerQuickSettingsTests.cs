@@ -117,6 +117,25 @@ public sealed class ViewerQuickSettingsTests
     }
 
     [Fact]
+    public void Load_OldConfigWhoseActionAlreadyUsesClickZoomsNewDefaultKey_DisablesOnlyClickZoom()
+    {
+        // Written before ClickZoom existed: the user's own action on the "2" key must keep working.
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, """
+        {
+            "ConfigVersion": 3,
+            "Actions": [ { "Name": "Best", "Shortcut": "D2", "Operation": "Move", "Destination": "Best" } ]
+        }
+        """);
+
+        var loaded = NewStore().Load();
+
+        Assert.Equal("", loaded.Shortcuts.ClickZoom);
+        Assert.Equal("D1", loaded.Shortcuts.ZoomActualSize);
+        Assert.Equal("D2", loaded.Actions[0].Shortcut);
+        Assert.Null(new SettingsValidator(new AllKeysValid()).ValidateShortcuts(loaded));
+    }
+
+    [Fact]
     public void DisableConflictingOptionalShortcuts_ConflictWithBuiltInShortcut_DisablesIt()
     {
         var settings = new AppSettings();
@@ -129,6 +148,19 @@ public sealed class ViewerQuickSettingsTests
     }
 
     [Fact]
+    public void DisableConflictingOptionalShortcuts_ClickZoomConflictWithAnotherOptionalShortcut_DisablesClickZoom()
+    {
+        var settings = new AppSettings();
+        settings.Shortcuts.ZoomActualSize = "D2"; // rebound onto ClickZoom's own default
+
+        var disabled = SettingsNormalizer.DisableConflictingOptionalShortcuts(settings);
+
+        Assert.Equal(new[] { nameof(ShortcutMappings.ClickZoom) }, disabled);
+        Assert.Equal("D2", settings.Shortcuts.ZoomActualSize);
+        Assert.Equal("", settings.Shortcuts.ClickZoom);
+    }
+
+    [Fact]
     public void DisableConflictingOptionalShortcuts_NoConflict_KeepsEverything()
     {
         var settings = new AppSettings();
@@ -137,6 +169,7 @@ public sealed class ViewerQuickSettingsTests
         Assert.Equal("End", settings.Shortcuts.LastImage);
         Assert.Equal("D1", settings.Shortcuts.ZoomActualSize);
         Assert.Equal("I", settings.Shortcuts.ToggleInfoOverlay);
+        Assert.Equal("D2", settings.Shortcuts.ClickZoom);
     }
 
     [Fact]
@@ -159,6 +192,7 @@ public sealed class ViewerQuickSettingsTests
         settings.Shortcuts.LastImage = "";
         settings.Shortcuts.ZoomActualSize = "   ";
         settings.Shortcuts.ToggleInfoOverlay = "";
+        settings.Shortcuts.ClickZoom = "";
 
         Assert.Null(new SettingsValidator(new AllKeysValid()).ValidateShortcuts(settings));
     }
@@ -176,6 +210,7 @@ public sealed class ViewerQuickSettingsTests
     [InlineData(nameof(ShortcutMappings.LastImage))]
     [InlineData(nameof(ShortcutMappings.ZoomActualSize))]
     [InlineData(nameof(ShortcutMappings.ToggleInfoOverlay))]
+    [InlineData(nameof(ShortcutMappings.ClickZoom))]
     public void Validator_UnparseableOptionalShortcut_IsInvalid(string name)
     {
         var settings = new AppSettings();
@@ -191,6 +226,7 @@ public sealed class ViewerQuickSettingsTests
     [InlineData(nameof(ShortcutMappings.LastImage), "Home")]           // FirstImage
     [InlineData(nameof(ShortcutMappings.ZoomActualSize), "F3")]        // default action "Loại 3"
     [InlineData(nameof(ShortcutMappings.ToggleInfoOverlay), "PageUp")] // PreviousFolder
+    [InlineData(nameof(ShortcutMappings.ClickZoom), "F4")]             // default action "Loại 4"
     public void Validator_OptionalShortcutDuplicatingAnotherBinding_IsReported(string name, string key)
     {
         var settings = new AppSettings();

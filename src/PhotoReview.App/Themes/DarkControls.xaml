@@ -9,6 +9,7 @@
     -->
     <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
+        <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkScrollBars.xaml"/>
     </ResourceDictionary.MergedDictionaries>
 
     <Style TargetType="TextBlock">
@@ -198,57 +199,6 @@
         <Setter Property="Height" Value="6"/>
     </Style>
 
-    <!-- Slim dark scrollbar (thumb only, no arrow buttons). -->
-    <Style x:Key="Dark.ScrollThumb" TargetType="Thumb">
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="Bd" Background="#4A4A4A" CornerRadius="4"/>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#6A6A6A"/></Trigger>
-                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="Bd" Property="Background" Value="#7A7A7A"/></Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-    <Style x:Key="Dark.ScrollPage" TargetType="RepeatButton">
-        <Setter Property="Focusable" Value="False"/>
-        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value></Setter>
-    </Style>
-    <Style TargetType="ScrollBar">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Width" Value="10"/>
-        <Setter Property="MinWidth" Value="10"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="ScrollBar">
-                    <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="1,2">
-                        <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource Dark.ScrollPage}" Command="ScrollBar.PageUpCommand"/></Track.DecreaseRepeatButton>
-                        <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource Dark.ScrollPage}" Command="ScrollBar.PageDownCommand"/></Track.IncreaseRepeatButton>
-                        <Track.Thumb><Thumb Style="{StaticResource Dark.ScrollThumb}"/></Track.Thumb>
-                    </Track>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-        <Style.Triggers>
-            <Trigger Property="Orientation" Value="Horizontal">
-                <Setter Property="Width" Value="Auto"/>
-                <Setter Property="MinWidth" Value="0"/>
-                <Setter Property="Height" Value="10"/>
-                <Setter Property="MinHeight" Value="10"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="ScrollBar">
-                            <Track x:Name="PART_Track" IsDirectionReversed="False" Margin="2,1">
-                                <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource Dark.ScrollPage}" Command="ScrollBar.PageLeftCommand"/></Track.DecreaseRepeatButton>
-                                <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource Dark.ScrollPage}" Command="ScrollBar.PageRightCommand"/></Track.IncreaseRepeatButton>
-                                <Track.Thumb><Thumb Style="{StaticResource Dark.ScrollThumb}"/></Track.Thumb>
-                            </Track>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Trigger>
-        </Style.Triggers>
-    </Style>
+    <!-- ScrollBar / ScrollViewer dark styling now lives in Themes/DarkScrollBars.xaml (merged above)
+         so MainWindow's ImageScroll can share it without merging this whole dialog-styles file. -->
 </ResourceDictionary>

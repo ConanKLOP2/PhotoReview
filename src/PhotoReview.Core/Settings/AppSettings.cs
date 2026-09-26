@@ -131,4 +131,46 @@ public class AppSettings
 
     /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
     public bool KineticPanEnabled { get; set; } = true;
+
+    // ---- Toolbar auto-hide / info overlay font size (feat/ui-dark-chrome-toolbar). Absent in older configs = these defaults. ----
+
+    /// <summary>Smallest accepted <see cref="ToolbarAutoHideDelayMs"/>.</summary>
+    public const int MinToolbarAutoHideDelayMs = 0;
+
+    /// <summary>Largest accepted <see cref="ToolbarAutoHideDelayMs"/>.</summary>
+    public const int MaxToolbarAutoHideDelayMs = 10000;
+
+    /// <summary>Default <see cref="ToolbarAutoHideDelayMs"/>.</summary>
+    public const int DefaultToolbarAutoHideDelayMs = 1500;
+
+    /// <summary>Smallest accepted <see cref="InfoOverlayFontSize"/>.</summary>
+    public const double MinInfoOverlayFontSize = 8;
+
+    /// <summary>Largest accepted <see cref="InfoOverlayFontSize"/>.</summary>
+    public const double MaxInfoOverlayFontSize = 24;
+
+    /// <summary>Default <see cref="InfoOverlayFontSize"/>, matching the size the overlay used before this setting existed.</summary>
+    public const double DefaultInfoOverlayFontSize = 12;
+
+    /// <summary>
+    /// The top-left toolbar (folder/settings/fit/tools) fades out after <see cref="ToolbarAutoHideDelayMs"/> once the
+    /// mouse leaves it, and fades back in when the mouse enters its hot zone. Always visible when no folder is open,
+    /// while its Tools popup is open, or while keyboard focus is inside it. Default on.
+    /// </summary>
+    public bool ToolbarAutoHide { get; set; } = true;
+
+    /// <summary>Delay, in milliseconds, before the toolbar fades out once eligible; [<see cref="MinToolbarAutoHideDelayMs"/>, <see cref="MaxToolbarAutoHideDelayMs"/>].</summary>
+    public int ToolbarAutoHideDelayMs { get; set; } = DefaultToolbarAutoHideDelayMs;
+
+    /// <summary>
+    /// Font size of the bottom-left status line and the bottom-right folder info panel; the EXIF line (below the
+    /// status line) is always one point smaller. [<see cref="MinInfoOverlayFontSize"/>, <see cref="MaxInfoOverlayFontSize"/>].
+    /// </summary>
+    public double InfoOverlayFontSize { get; set; } = DefaultInfoOverlayFontSize;
+
+    /// <summary>Parts shown in the main window's title bar; absent in older configs = <see cref="TitleBarFields.Default"/>.</summary>
+    public TitleBarFields TitleBarFields { get; set; } = TitleBarFields.Default;
+
+    /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
+    public KineticGlideSmoothing KineticGlideSmoothing { get; set; } = KineticGlideSmoothing.Predict;
 }

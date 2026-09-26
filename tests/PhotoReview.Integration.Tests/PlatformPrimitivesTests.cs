@@ -1,4 +1,7 @@
-﻿using PhotoReview.Core.Abstractions;
+﻿using System.Threading;
+using System.Windows;
+using System.Windows.Interop;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Platform.Windows;
 
 namespace PhotoReview.Integration.Tests;
@@ -41,6 +44,48 @@ public sealed class PlatformPrimitivesTests
         Assert.Throws<ArgumentException>(() => bin.SendToRecycleBin(""));
         Assert.Throws<ArgumentNullException>(() => bin.TryRestore(null!, 0, DateTime.UtcNow));
         Assert.Throws<ArgumentException>(() => bin.TryRestore("", 0, DateTime.UtcNow));
+    }
+
+    [Fact(DisplayName = "WindowsDarkTitleBar rejects a null handle and accepts a real window handle")]
+    public void WindowsDarkTitleBarEnablesDarkModeOnARealHandle()
+    {
+        Assert.False(WindowsDarkTitleBar.TryEnableDarkMode(IntPtr.Zero));
+        Assert.False(WindowsDarkTitleBar.TrySetCaptionColor(IntPtr.Zero, 0));
+
+        Exception? threadException = null;
+        bool darkModeAccepted = false, captionColorAccepted = false;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var window = new Window { Width = 1, Height = 1, ShowInTaskbar = false, WindowStyle = WindowStyle.None };
+                try
+                {
+                    // Forces native HWND creation (SourceInitialized) without ever showing the window.
+                    var handle = new WindowInteropHelper(window).EnsureHandle();
+                    darkModeAccepted = WindowsDarkTitleBar.TryEnableDarkMode(handle);
+                    captionColorAccepted = WindowsDarkTitleBar.TrySetCaptionColor(handle, 0x00171717);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                threadException = ex;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "Window handle creation timed out.");
+        Assert.Null(threadException);
+
+        // Both DWM attributes are supported on the CI/dev machines this suite runs on (Windows 10
+        // 20H1+/Windows 11); an older Windows build is expected to make DwmSetWindowAttribute fail,
+        // which TryEnableDarkMode/TrySetCaptionColor turn into `false` instead of throwing.
+        Assert.True(darkModeAccepted, "DWMWA_USE_IMMERSIVE_DARK_MODE was rejected by DWM on this machine.");
+        Assert.True(captionColorAccepted, "DWMWA_CAPTION_COLOR was rejected by DWM on this machine.");
     }
 
     // Split from the argument checks: a miss makes TryRestore enumerate the user's real Recycle Bin through

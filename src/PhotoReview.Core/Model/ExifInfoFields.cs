@@ -23,14 +23,17 @@ public enum ExifInfoFields
     FocalLength = 64,
     Aperture = 128,
     ShutterSpeed = 256,
+    /// <summary>File last-write time (not a camera EXIF value); rendered like <see cref="DateTaken"/>, right after it.</summary>
+    ModifiedDate = 512,
 
-    All = FileName | DateTaken | Dimensions | Camera | Lens | Iso | FocalLength | Aperture | ShutterSpeed,
+    All = FileName | DateTaken | Dimensions | Camera | Lens | Iso | FocalLength | Aperture | ShutterSpeed | ModifiedDate,
 
     /// <summary>
     /// AppSettings default: every EXIF field except FileName and Dimensions, which the status line above this one
-    /// already shows (avoids showing the same file name / W×H twice).
+    /// already shows (avoids showing the same file name / W×H twice), and ModifiedDate, which is off until the user
+    /// turns it on (added after the others; new users get it too since it is off by default for everyone).
     /// </summary>
-    Default = All & ~(FileName | Dimensions),
+    Default = All & ~(FileName | Dimensions | ModifiedDate),
 }
 
 /// <summary>Lenient JSON form of <see cref="ExifInfoFields"/> (see the type doc).</summary>

@@ -8,10 +8,13 @@
         xmlns:loc="clr-namespace:PhotoReview.App.Localization"
         mc:Ignorable="d"
         Icon="pack://application:,,,/Assets/PhotoReview.ico"
-        Title="{Binding FolderTitle}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="{DynamicResource Dark.Backdrop}" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed">
+        Title="{Binding FolderTitle}" Height="800" Width="1200" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" Background="{DynamicResource Dark.Backdrop}" AllowDrop="True" PreviewKeyDown="Window_KeyDown" PreviewDragOver="Window_PreviewDragOver" Drop="Window_Drop" SizeChanged="Window_SizeChanged" Loaded="Window_Loaded" Closing="Window_Closing" Closed="Window_Closed" MouseMove="Window_MouseMove">
     <Window.Resources>
         <ResourceDictionary>
-        <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/></ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
+            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkScrollBars.xaml"/>
+        </ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <converters:ViewerStretchModeConverter x:Key="StretchConverter" />
         <converters:CompareBorderBrushConverter x:Key="CompareBorderBrush" />
@@ -38,7 +41,12 @@
     <Grid Background="{DynamicResource Dark.Canvas}" ClipToBounds="True">
         <Grid.ContextMenu>
             <ContextMenu>
+                <MenuItem Header="{loc:Tr main.menu.openFolder}" AutomationProperties.Name="{loc:Tr main.menu.openFolder.automationName}" Click="OpenFolder_Click" />
+                <MenuItem Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
+                <Separator />
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
+                <Separator />
+                <MenuItem x:Name="ClickZoomMenu" Header="{loc:Tr main.menu.clickZoomLevel}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.automationName}" SubmenuOpened="ClickZoomMenu_SubmenuOpened" />
             </ContextMenu>
         </Grid.ContextMenu>
         <Border Background="{DynamicResource Dark.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -75,7 +83,7 @@
                 </Border>
             </Grid>
         </Border>
-        <Border Panel.ZIndex="100" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
+        <Border x:Name="ToolbarPanel" Panel.ZIndex="100" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="📂" AutomationProperties.Name="{loc:Tr main.toolbar.openFolder.automationName}" ToolTip="{loc:Tr main.toolbar.openFolder.toolTip}" FontSize="16" Padding="8,2" Click="OpenFolder_Click" />
@@ -100,8 +108,8 @@
         </Border>
         <Border x:Name="StatusPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" Visibility="{Binding IsStatusPanelVisible, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="13" TextTrimming="CharacterEllipsis" Visibility="{Binding InfoOverlay.IsFileInfoVisible, Converter={StaticResource BoolToVis}}" />
-                <TextBlock x:Name="ExifInfoText" Text="{Binding ExifText}" Visibility="{Binding IsExifLineVisible, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding ExifAutomationName}" ToolTip="{Binding ExifText}" Foreground="{DynamicResource Dark.TextSecondary}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="StatusText" Text="{Binding StatusText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="{Binding InfoOverlay.FontSize}" TextTrimming="CharacterEllipsis" Visibility="{Binding InfoOverlay.IsFileInfoVisible, Converter={StaticResource BoolToVis}}" />
+                <TextBlock x:Name="ExifInfoText" Text="{Binding ExifText}" Visibility="{Binding IsExifLineVisible, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding ExifAutomationName}" ToolTip="{Binding ExifText}" Foreground="{DynamicResource Dark.TextSecondary}" FontSize="{Binding InfoOverlay.ExifFontSize}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding HasSkippedEntries, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="{Binding SkippedWarningText}" Foreground="{DynamicResource Dark.Warning}" FontSize="13" VerticalAlignment="Center" />
                     <Button Content="{loc:Tr main.skipped.viewList}" AutomationProperties.Name="{loc:Tr main.skipped.viewList.automationName}" Padding="8,2" Margin="8,0,0,0" Click="SkippedFiles_Click" />
@@ -110,7 +118,7 @@
             </StackPanel>
         </Border>
         <Border x:Name="FolderInfoPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" MaxWidth="640" AutomationProperties.Name="{loc:Tr main.folderInfo.automationName}" Visibility="{Binding InfoOverlay.IsFolderInfoVisible, Converter={StaticResource BoolToVis}}">
-            <TextBlock x:Name="FolderInfoText" Text="{Binding InfoOverlay.FolderInfoText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="13" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="FolderInfoText" Text="{Binding InfoOverlay.FolderInfoText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="{Binding InfoOverlay.FontSize}" TextTrimming="CharacterEllipsis" />
         </Border>
     </Grid>
 </Window>
