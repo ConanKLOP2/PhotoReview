@@ -29,6 +29,9 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
     public async Task<ForwardOutcome> SendAsync(IReadOnlyList<string> paths, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         byte[] request;
+        // Only the first forwarded path is ever opened by the owner (ForwardedOpenCoalescer: Explorer starts one process per
+        // selected file and they all collapse into one open of the FIRST path), so trimming to MaxPaths drops nothing that
+        // would have been used and a long selection is still Delivered (audit F2 2026-09-26: by design, not a lost input).
         try { request = ForwardedPathProtocol.Encode(paths.Count > ForwardedPathProtocol.MaxPaths ? [.. paths.Take(ForwardedPathProtocol.MaxPaths)] : paths); }
         catch (ArgumentException) { return ForwardOutcome.Rejected; }
 
