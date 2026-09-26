@@ -294,6 +294,8 @@ public sealed class PreloadScheduler : IDisposable
         var examinedSinceYield = 0;
         var headroom = new HeadroomProbeState();
         var paused = false;
+        // Q-R26: the caller's thread (the UI thread for ImagePresenter) runs this loop until its first await.
+        var callerThreadId = Environment.CurrentManagedThreadId;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -340,6 +342,14 @@ public sealed class PreloadScheduler : IDisposable
                 while (running.Count < limit && order!.MoveNext())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    // perf(Q-R26): only the 32/8 window is examined on the caller's thread. Once the whole folder
+                    // is cached, a pass queues nothing and so never reached the yield below: every navigation
+                    // then ran one cache lookup per image in the folder on the UI thread before the frame
+                    // (F4, 1895 images: preloadKick P50 2-2.8 ms vs 0.3 ms in window mode). The rest of the
+                    // folder continues on the thread pool (ForceYielding without the captured context).
+                    if (Environment.CurrentManagedThreadId == callerThreadId
+                        && !InPreloadWindow(order.Current, orderCenter, seenShape))
+                        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
                     // IMG-03: GlobalMemoryStatusEx is a syscall, so the probe is cached; it is re-run
                     // when a decode was queued since the last check (memory use changed) or after 50 ms,
                     // so a burst never commits up to `workers` decodes past the limit on a stale answer.
