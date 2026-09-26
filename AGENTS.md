@@ -24,14 +24,14 @@ The application must prioritize the following principles when processing and rev
 
 1. **Every session (T0, ≤16 KB total):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
 2. **Per task (T1, ≤24 KB per file):** Use `INDEX.md` to find which single plan/architecture doc relates to the work. Read that file + relevant ADR. Do not pre-read all plans.
-3. **Archive (T2, unlimited):** `docs/archive/` and `docs/archive/future/` are historical only. Do not read unless referenced or verifying decisions. Use `git log --follow` for change rationale.
-4. **Task completion:** When a task is done and reaches status DONE, compress it to a single line (`ID · status · SHA`) in its plan, move detailed evidence/findings to archive, and reference the digest in `task_on_progress.md`.
+3. **Archive (T2, unlimited):** `docs/archive/` (ADR evidence only) is historical. Do not read unless referenced or verifying decisions. Use `git log --follow` for change rationale.
+4. **Task completion:** When a task is done and reaches status DONE, compress it to one line in `docs/refactoring/HISTORY.md` and delete the plan/evidence files (git history keeps them); keep `task_on_progress.md` and `docs/ACTIVE-TASKS.md` to open work only.
 
 ## Coding Conventions (Naming & Analyzer Warnings)
 
 **Goal:** Keep the build warning-free without fighting analyzer rules that don't fit the codebase's real conventions.
 
-1. **Production code (`src/`, `tools/`):** Strict PascalCase for all public/internal members. No public mutable fields (`CA1051`) — use properties. New public fields need a documented decision (see [`docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md`](docs/refactoring/STRUCTURE-OPTIMIZE-STATUS.md) ST06 for the superseded `MainWindow` exception).
+1. **Production code (`src/`, `tools/`):** Strict PascalCase for all public/internal members. No public mutable fields (`CA1051`) — use properties. New public fields need a documented decision (the old `MainWindow` public-field exception, ST06, was superseded by AR02d; see [`docs/refactoring/HISTORY.md`](docs/refactoring/HISTORY.md)).
 2. **Test code (`tests/`):** `Method_Scenario_ExpectedResult` (underscore-separated) is accepted — do not rename tests to remove underscores. `CA1707` is suppressed for test projects via `.editorconfig`, scoped so only test-only methods are exempt.
 3. **String comparisons (`CA1310`):** Always pass an explicit `StringComparison`. Use `Ordinal`/`OrdinalIgnoreCase` for file/path names (not culture-aware on Windows); `CurrentCulture` is reserved for user-facing text sorting/display only.
 4. **Culture-sensitive formatting (`CA1305`):** Any `ToString`/`Parse`/`Format` writing to a log, CSV, journal, or other machine-read/diagnostic file must use `CultureInfo.InvariantCulture`, never the user's locale (app ships Vietnamese UI text). UI-facing display text may use `CurrentCulture`.
