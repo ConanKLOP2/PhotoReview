@@ -330,6 +330,13 @@ public partial class MainWindow : Window
         // otherwise Space/Enter would keep re-activating that button instead of Skip / Move to folder 2.
         if (pressedKey is Key.Space or Key.Enter && e.OriginalSource is DependencyObject source && OwnsActivationKeys(source)) return;
 
+        // Arrow keys on a zoomed image pan the view (Left/Right navigate again at Fit, or on a fresh press at the edge).
+        if (Keyboard.Modifiers == ModifierKeys.None && !_viewModel.Compare.IsVisible && _pointer.TryPanByArrow(pressedKey, e.IsRepeat))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible);
         if (cmd is null) return;
         e.Handled = true;

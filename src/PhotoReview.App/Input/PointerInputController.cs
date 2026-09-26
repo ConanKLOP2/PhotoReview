@@ -302,6 +302,38 @@ internal sealed class PointerInputController
         _kineticHooked = true;
     }
 
+    /// <summary>
+    /// Arrow keys on a zoomed image move the view by <see cref="KeyboardPan.StepFraction"/> of the viewport instead
+    /// of navigating. Returns true when the key was used: it panned, or it is an auto-repeat at the edge (so holding
+    /// the key never runs on into the next images). False when the image does not scroll on that axis (Fit) or on a
+    /// fresh press at the edge, so the key keeps its normal meaning (Left/Right navigate).
+    /// </summary>
+    public bool TryPanByArrow(Key key, bool isRepeat)
+    {
+        var (dx, dy) = key switch
+        {
+            Key.Left => (-1, 0),
+            Key.Right => (1, 0),
+            Key.Up => (0, -1),
+            Key.Down => (0, 1),
+            _ => (0, 0),
+        };
+        if ((dx, dy) == (0, 0) || !_surface.IsLoaded || !_commands.HasImages()) return false;
+        var bounds = new ScrollBounds(_surface.ExtentWidth, _surface.ExtentHeight, _surface.ViewportWidth, _surface.ViewportHeight);
+        var (result, horizontal, vertical) = KeyboardPan.Step(dx, dy, _surface.HorizontalOffset, _surface.VerticalOffset, bounds);
+        switch (result)
+        {
+            case KeyboardPanResult.Panned:
+                StopKinetic();
+                _surface.ScrollTo(horizontal, vertical);
+                return true;
+            case KeyboardPanResult.AtEdge:
+                return isRepeat;
+            default:
+                return false;
+        }
+    }
+
     /// <summary>Stops a running glide at once; returns true if one was running.</summary>
     public bool StopKinetic()
     {
