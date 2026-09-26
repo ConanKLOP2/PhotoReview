@@ -15,7 +15,7 @@
 - **Releases are manual (user, 2026-09-26):** CI only tags `v2.0.N`; no automatic draft. Actions > Release > Run workflow (tag input) publishes directly (`draft` box optional).
 - **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan (never leaves a zoomed image; `ArrowKeyNavigatesAtZoomEdge`), dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields (default folder name), optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **User GUI check: OK.** #109 GUI check: OK.
 - **Sort (Q-R33, #127):** Default / Name A→Z / Z→A ignore Explorer order; Name follows it.
-- **Zoom submenu (user GUI OK on Q-R30; branch `feat/zoom-menu-presets`):** context-menu item renamed "Click zoom level" → "Zoom"; added "Fit to window" at the top and presets 200/300/400 %. Same semantics as before (a preset also sets the click-zoom level). User GUI check pending.
+- **Zoom submenu (branch `feat/zoom-menu-presets`):** context menu "Zoom": Fit + 200/300/400 % added; GUI check pending.
 - **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.
