@@ -117,7 +117,9 @@ public sealed class ExifLineViewModelTests : IDisposable
         Assert.False(vm.IsExifLineVisible);
         Assert.NotEmpty(vm.ExifText);
         vm.Settings.ShowExifInfo = true;
-        vm.Settings.ExifInfoFields = ExifInfoFields.All;
+        // ModifiedDate excluded here: it is the (real, wall-clock) file's last-write time, not fixed test data,
+        // and this step asserts an exact string equal to "b.jpg · 6000×4000" below.
+        vm.Settings.ExifInfoFields = ExifInfoFields.All & ~ExifInfoFields.ModifiedDate;
 
         var next = vm.NextAsync(); // b.jpg: decode held until released, then decodes without EXIF
         Assert.False(next.IsCompleted);

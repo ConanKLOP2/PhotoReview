@@ -131,4 +131,7 @@ public class AppSettings
 
     /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
     public bool KineticPanEnabled { get; set; } = true;
+
+    /// <summary>Parts shown in the main window's title bar; absent in older configs = <see cref="TitleBarFields.Default"/>.</summary>
+    public TitleBarFields TitleBarFields { get; set; } = TitleBarFields.Default;
 }

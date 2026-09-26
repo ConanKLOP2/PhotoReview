@@ -322,6 +322,7 @@ public partial class SettingsWindow : Window
         ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
         ExifFieldFileNameCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FileName);
         ExifFieldDateTakenCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.DateTaken);
+        ExifFieldModifiedDateCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.ModifiedDate);
         ExifFieldDimensionsCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Dimensions);
         ExifFieldCameraCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Camera);
         ExifFieldLensCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Lens);
@@ -329,6 +330,20 @@ public partial class SettingsWindow : Window
         ExifFieldFocalLengthCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FocalLength);
         ExifFieldApertureCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.Aperture);
         ExifFieldShutterSpeedCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.ShutterSpeed);
+        TitleBarFieldFolderNameCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FolderName);
+        TitleBarFieldFolderPathCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FolderPath);
+        TitleBarFieldIndexCountCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.IndexCount);
+        TitleBarFieldFileNameCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FileName);
+        TitleBarFieldFileSizeCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FileSize);
+        TitleBarFieldDimensionsCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Dimensions);
+        TitleBarFieldModifiedDateCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.ModifiedDate);
+        TitleBarFieldDateTakenCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.DateTaken);
+        TitleBarFieldCameraCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Camera);
+        TitleBarFieldLensCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Lens);
+        TitleBarFieldIsoCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Iso);
+        TitleBarFieldFocalLengthCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FocalLength);
+        TitleBarFieldApertureCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Aperture);
+        TitleBarFieldShutterSpeedCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.ShutterSpeed);
         UpdateClickZoomEnabled();
         UpdateShowInfoSubOptionsEnabled();
         UpdateExifFieldsEnabled();
@@ -360,7 +375,7 @@ public partial class SettingsWindow : Window
 
     private IEnumerable<System.Windows.Controls.CheckBox> ExifFieldChecks =>
     [
-        ExifFieldFileNameCheck, ExifFieldDateTakenCheck, ExifFieldDimensionsCheck, ExifFieldCameraCheck, ExifFieldLensCheck,
+        ExifFieldFileNameCheck, ExifFieldDateTakenCheck, ExifFieldModifiedDateCheck, ExifFieldDimensionsCheck, ExifFieldCameraCheck, ExifFieldLensCheck,
         ExifFieldIsoCheck, ExifFieldFocalLengthCheck, ExifFieldApertureCheck, ExifFieldShutterSpeedCheck,
     ];
 
@@ -455,6 +470,7 @@ public partial class SettingsWindow : Window
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
+        Settings.TitleBarFields = TitleBarFields.Default;
         LoadFields();
     }
 
@@ -506,6 +522,7 @@ public partial class SettingsWindow : Window
         Settings.ExifInfoFields =
             (ExifFieldFileNameCheck.IsChecked == true ? ExifInfoFields.FileName : ExifInfoFields.None) |
             (ExifFieldDateTakenCheck.IsChecked == true ? ExifInfoFields.DateTaken : ExifInfoFields.None) |
+            (ExifFieldModifiedDateCheck.IsChecked == true ? ExifInfoFields.ModifiedDate : ExifInfoFields.None) |
             (ExifFieldDimensionsCheck.IsChecked == true ? ExifInfoFields.Dimensions : ExifInfoFields.None) |
             (ExifFieldCameraCheck.IsChecked == true ? ExifInfoFields.Camera : ExifInfoFields.None) |
             (ExifFieldLensCheck.IsChecked == true ? ExifInfoFields.Lens : ExifInfoFields.None) |
@@ -513,6 +530,21 @@ public partial class SettingsWindow : Window
             (ExifFieldFocalLengthCheck.IsChecked == true ? ExifInfoFields.FocalLength : ExifInfoFields.None) |
             (ExifFieldApertureCheck.IsChecked == true ? ExifInfoFields.Aperture : ExifInfoFields.None) |
             (ExifFieldShutterSpeedCheck.IsChecked == true ? ExifInfoFields.ShutterSpeed : ExifInfoFields.None);
+        Settings.TitleBarFields =
+            (TitleBarFieldFolderNameCheck.IsChecked == true ? TitleBarFields.FolderName : TitleBarFields.None) |
+            (TitleBarFieldFolderPathCheck.IsChecked == true ? TitleBarFields.FolderPath : TitleBarFields.None) |
+            (TitleBarFieldIndexCountCheck.IsChecked == true ? TitleBarFields.IndexCount : TitleBarFields.None) |
+            (TitleBarFieldFileNameCheck.IsChecked == true ? TitleBarFields.FileName : TitleBarFields.None) |
+            (TitleBarFieldFileSizeCheck.IsChecked == true ? TitleBarFields.FileSize : TitleBarFields.None) |
+            (TitleBarFieldDimensionsCheck.IsChecked == true ? TitleBarFields.Dimensions : TitleBarFields.None) |
+            (TitleBarFieldModifiedDateCheck.IsChecked == true ? TitleBarFields.ModifiedDate : TitleBarFields.None) |
+            (TitleBarFieldDateTakenCheck.IsChecked == true ? TitleBarFields.DateTaken : TitleBarFields.None) |
+            (TitleBarFieldCameraCheck.IsChecked == true ? TitleBarFields.Camera : TitleBarFields.None) |
+            (TitleBarFieldLensCheck.IsChecked == true ? TitleBarFields.Lens : TitleBarFields.None) |
+            (TitleBarFieldIsoCheck.IsChecked == true ? TitleBarFields.Iso : TitleBarFields.None) |
+            (TitleBarFieldFocalLengthCheck.IsChecked == true ? TitleBarFields.FocalLength : TitleBarFields.None) |
+            (TitleBarFieldApertureCheck.IsChecked == true ? TitleBarFields.Aperture : TitleBarFields.None) |
+            (TitleBarFieldShutterSpeedCheck.IsChecked == true ? TitleBarFields.ShutterSpeed : TitleBarFields.None);
         if (!int.TryParse(ClickZoomPercentBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var clickZoomPercent)
             || clickZoomPercent < AppSettings.MinClickZoomPercent || clickZoomPercent > AppSettings.MaxClickZoomPercent)
         {

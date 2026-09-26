@@ -150,6 +150,7 @@
                             <WrapPanel Margin="20,0,0,0">
                                 <CheckBox x:Name="ExifFieldFileNameCheck" Content="{loc:Tr settings.exifField.fileName}" Margin="0,2,16,10"/>
                                 <CheckBox x:Name="ExifFieldDateTakenCheck" Content="{loc:Tr settings.exifField.dateTaken}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="ExifFieldModifiedDateCheck" Content="{loc:Tr settings.exifField.modifiedDate}" Margin="0,2,16,10"/>
                                 <CheckBox x:Name="ExifFieldDimensionsCheck" Content="{loc:Tr settings.exifField.dimensions}" Margin="0,2,16,10"/>
                                 <CheckBox x:Name="ExifFieldCameraCheck" Content="{loc:Tr settings.exifField.camera}" Margin="0,2,16,10"/>
                                 <CheckBox x:Name="ExifFieldLensCheck" Content="{loc:Tr settings.exifField.lens}" Margin="0,2,16,10"/>
@@ -157,6 +158,26 @@
                                 <CheckBox x:Name="ExifFieldFocalLengthCheck" Content="{loc:Tr settings.exifField.focalLength}" Margin="0,2,16,10"/>
                                 <CheckBox x:Name="ExifFieldApertureCheck" Content="{loc:Tr settings.exifField.aperture}" Margin="0,2,16,10"/>
                                 <CheckBox x:Name="ExifFieldShutterSpeedCheck" Content="{loc:Tr settings.exifField.shutterSpeed}" Margin="0,2,16,10"/>
+                            </WrapPanel>
+                        </StackPanel></GroupBox>
+
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.titleBar}"><StackPanel>
+                            <TextBlock Text="{loc:Tr settings.group.titleBar.hint}" Style="{StaticResource HelpText}" Margin="0,0,0,8"/>
+                            <WrapPanel>
+                                <CheckBox x:Name="TitleBarFieldFolderNameCheck" Content="{loc:Tr settings.titleBarField.folderName}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldFolderPathCheck" Content="{loc:Tr settings.titleBarField.folderPath}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldIndexCountCheck" Content="{loc:Tr settings.titleBarField.indexCount}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldFileNameCheck" Content="{loc:Tr settings.exifField.fileName}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldFileSizeCheck" Content="{loc:Tr settings.titleBarField.fileSize}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldDimensionsCheck" Content="{loc:Tr settings.exifField.dimensions}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldModifiedDateCheck" Content="{loc:Tr settings.exifField.modifiedDate}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldDateTakenCheck" Content="{loc:Tr settings.exifField.dateTaken}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldCameraCheck" Content="{loc:Tr settings.exifField.camera}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldLensCheck" Content="{loc:Tr settings.exifField.lens}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldIsoCheck" Content="{loc:Tr settings.exifField.iso}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldFocalLengthCheck" Content="{loc:Tr settings.exifField.focalLength}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldApertureCheck" Content="{loc:Tr settings.exifField.aperture}" Margin="0,2,16,10"/>
+                                <CheckBox x:Name="TitleBarFieldShutterSpeedCheck" Content="{loc:Tr settings.exifField.shutterSpeed}" Margin="0,2,16,10"/>
                             </WrapPanel>
                         </StackPanel></GroupBox>
                     </StackPanel>

@@ -638,5 +638,12 @@
   "benchmark.quickCheck": "Kiểm tra nhanh",
   "benchmark.quickCheck.automationName": "Chạy kiểm tra nhanh 10 lần lặp với Fast Sequential",
   "benchmark.imageLimit.label": "Số ảnh cần kiểm tra (0 = tất cả):",
-  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục"
+  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục",
+  "settings.group.titleBar": "Thanh tiêu đề",
+  "settings.group.titleBar.hint": "Nội dung hiển thị trên thanh tiêu đề cửa sổ chính, theo đúng thứ tự này.",
+  "settings.titleBarField.folderName": "Tên thư mục",
+  "settings.titleBarField.folderPath": "Đường dẫn thư mục",
+  "settings.titleBarField.indexCount": "Vị trí (12/340)",
+  "settings.titleBarField.fileSize": "Dung lượng tệp",
+  "settings.exifField.modifiedDate": "Ngày sửa đổi"
 }
