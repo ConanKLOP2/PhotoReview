@@ -1,6 +1,6 @@
 # AR — Rà soát kiến trúc 2026-09-26 (tóm tắt)
 
-**Trạng thái:** 🔄 Đang thực thi — Wave 1–3 (mã) trong PR `integration/arch-review-2026-09-26`; còn AR16 đo, AR15c đo, AR13 GUI · **Tier:** T1 · **Base:** review tại `master@1c84c59`, số dòng kiểm chứng lại tại `14dfe71` · **Plan từng task:** `docs/refactoring/arch-review/AR10..AR19-*.md` — chỉ đọc file của task đang làm.
+**Trạng thái:** 🔄 Đang thực thi — Wave 1–3 (mã) trong PR `integration/arch-review-2026-09-26`; còn Q-AR7 (AR16) và GUI check AR13 · **Tier:** T1 · **Base:** review tại `master@1c84c59`, số dòng kiểm chứng lại tại `14dfe71` · **Plan từng task:** `docs/refactoring/arch-review/AR10..AR19-*.md` — chỉ đọc file của task đang làm.
 
 ## Kết luận
 
@@ -40,8 +40,8 @@ Bốn lane đọc mã độc lập (Imaging, App, Core/Platform, build/test) + l
 | AR12 | Vệ sinh build: `.gitignore`, warnings-as-errors, ghi chú GC | — | — | Không | haiku (12a/12c), sonnet (12b) | ✅ DONE (integration PR) — 0 warning cần sửa khi bật warnings-as-errors |
 | AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | ✅ CODE DONE (integration PR) — `MainWindow.xaml.cs` 715 → 404 dòng (phần còn lại: ctor/wiring, lifecycle, `Window_KeyDown`, forward menu — plan cho giữ); **GUI check: người dùng** |
 | AR14 | Lắp ráp controller của `MainViewModel` | Q-AR10 | — | Không | sonnet | ✅ DONE — Q-AR10 (a), chỉ comment |
-| AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | ✅ DONE (integration PR) — 15c chờ đo perf `UseSourceBytesCache=true` |
-| AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | 🔄 Bước 1 (đo) chưa chạy |
+| AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | ✅ DONE (integration PR) — 15c đo trên F4: không chậm hơn (PERF-STATUS); thêm cờ CLI `--source-bytes-cache` |
+| AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | 🔄 Bước 1 xong: probe ≈ 114 ms/1841 file ≈ 68 % first visual → chờ Q-AR7 (khuyến nghị c) |
 | AR17 | TurboJpeg: thử nghiệm hay đầu tư | Q-AR8 | — | Đo trên máy thật nếu chọn (b) | strongest nếu (b) | ✅ DONE — Q-AR8 (a), nhãn "thử nghiệm" |
 | AR18 | Benchmark trong app: ghi nhận | Q-AR9 | — | Không | haiku | ✅ DONE — Q-AR9 (a), ghi chú architecture.md |
 | AR19 | Tách `IDialogService` | Q-AR10 | AR13 (cùng file) | Không | sonnet | ✅ DONE — Q-AR10 (a), `ShowSkippedFiles` qua `IDialogService` |

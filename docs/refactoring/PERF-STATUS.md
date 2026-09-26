@@ -74,3 +74,11 @@ Per PR (measured as it landed): #40 ICC via WIC color transform + Bgr32/Pbgra32 
 - Not shipped: SIMD-only TurboJpeg scale factors (measured slower). TurboJpeg remains slower than WicDirect on this set.
 - Not shipped: GC mode — giữ mặc định (AR12c), lý do trong architecture.md.
 - Not shipped: TurboJpeg giữ trạng thái thử nghiệm, không đầu tư thêm (Q-AR8 a).
+
+## Architecture review 2026-09-26 (AR15c, AR16 step 1)
+
+| Measurement | Result |
+|---|---|
+| AR16 probe (F4, 1841 files, warm OS cache, 1 warm-up + 7 alternating runs, scratch console app mirroring `EnumerateReadableFilesWithStat`) | enumerate + filter 4.0 / 5.1 ms (median / P90); + per-file open probe 117.4 / 140.9 ms; **probe cost 113.6 / 136.8 ms = 61.7 µs per file ≈ 68 % of the 166 ms first-visual baseline**. The probe (IO04, #66) landed after that baseline (#39–#48), so current open-folder first visual was never re-measured. Q-AR7 pending. |
+| AR15c `SourceBytesCache` read on the calling thread, `UseSourceBytesCache=true` via new `--source-bytes-cache on` (quick profile, interleaved, 2 rounds, variant = AR15c reverted) | S2 next-slow P50/P95 15.2/30.6 ms (variant) vs 15.2/30.5 ms (AR15c); peak WS 15.7 vs 15.2 GB; S3 burst 200/200 shown, 0 incomplete in all runs, peak WS < 1 % apart. **Not worse.** |
+
