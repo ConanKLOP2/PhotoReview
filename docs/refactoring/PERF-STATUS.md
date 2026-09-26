@@ -137,3 +137,20 @@ The image cap alone barely moves fast-sequential's wall time on this fixture: it
 
 Gate: `dotnet build PhotoReview.slnx -c Release` 0 warnings/0 errors; `dotnet test --filter "Category!=Manual&Category!=Native&Category!=Slow"` 3352 passed, 1 skipped (pre-existing, unrelated), 0 failed; `docs-budget.ps1 -Check`, `check-doc-links.ps1`, `i18n-check.ps1` all PASS. Mutation checks (reverted after each): `BenchmarkWindow.ApplyImageLimit` cap removed → red; `BuildQuickCheckProfile` iterations override ignored → red; `BenchmarkImageExecutor` teardown cleanup skipped → red (this last one needed a test fix — the first version of the teardown test was a false green because the RAM cache never evicted the 5 tiny test images, so nothing was ever persisted to disk to clean up; fixed by seeding the scratch directory directly).
 
+## Q-R17 preload estimate and natural sort / snapshot validator — measured 2026-09-26
+
+**Q-R17 (merged #82, never measured before).** F4 (1841 files, 13.2 GB), Preview, warm, `-Profile gate` (S2+S3+S4, repeat 2), production graph, cache 16 GiB, 8 workers, WicDirect, decode box 2304×1280. Interleaved master `868275b` / variant (same commit, `EstimateFolderPreviewBytes` forced to the pre-Q-R17 `compressed × 10`) / master / variant; `--perf-analyze` first-visual ms.
+
+| | master (Q-R17) run 1 / run 2 | variant (old estimate) run 1 / run 2 |
+|---|---|---|
+| Preload mode | whole folder: 1840 `PreloadItem` per run | window only: ~70–240 per run |
+| Peak working set | 9.9–10.7 GB | 0.7–1.8 GB |
+| S2 next-slow P50 / P95 | 4.4 / 8.6 · 5.0 / 9.6 | 1.6 / 2.8 · 1.8 / 3.8 |
+| S3 next-burst P50 / P95 | 3.1 / 5.5 · 3.6 / 8.3 | 1.7 / 3.0 · 1.7 / 2.7 |
+| S4 jump P50 / P95 | 3.9 / 11.1 · 4.2 / 10.2 | 2.0 / 3.5 · 2.1 / 3.7 |
+| Hit rate / kinds | 98.4–99.5 %, all RamHit (+2 disk) | identical |
+| Batch wall time | ~4.5 min (fill per run) | ~1.5 min |
+
+Q-R17 works as designed (F4 now keeps the whole folder in ~10 GB of RAM, AGENTS.md rule 2), but first-visual latency is ~2.5–3× higher (still < 12 ms P95, under one 60 Hz frame). It is **not** decode contention: the scenario waits for idle, and the fill had finished before the first key (54 s cold, 3.7 s with a warm disk cache; `PreloadItem` vs `KeyInput` timestamps). Steady-state GC is the likely cause (S2 run 2, `process.json`): managed heap 532 MB vs 37 MB, gen2 GCs 149 vs 69, GC pause 195 ms vs 60 ms over ~100 navigations. The scenarios stay inside the preload window, so the extra RAM brings no extra hits here; the benefit (far jumps/revisits all RAM hits) is not exercised by S2–S4. Decision pending (Q-R26).
+
+**Natural sort / Explorer snapshot validator (`83077cf`, first measured on a busy PC).** Re-run on the idle machine (`Category=Manual` `NaturalKeyBenchmarkTests`, `ExplorerSnapshotValidatorBenchmarkTests`, old = `*Reference` oracles, median): `TryValidate` 50k 111.3 → 47.1 ms, 9.6 → 6.1 MB (×2.36); `BuildNaturalKey` ×50k 54.9 → 49.0 ms, 38 → 7.8 MB; `Compare` ×500k 427 → 255 ms, 763 MB → 0; `Array.Sort` 50k 655 → 412 ms, 1.3 GB → 390 KB. Confirms the commit numbers; no action.
