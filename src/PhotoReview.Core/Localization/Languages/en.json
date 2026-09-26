@@ -635,5 +635,6 @@
   "action.default.name": "Action {n}",
   "action.default.backup": "Backup",
   "dialog.importActions.failed.message": "Could not read the action profile file: {error}",
-  "status.moveUnverified": "Warning: {fileName} was moved, but the result could not be verified (size differs). Review it in Recovery."
+  "status.moveUnverified": "Warning: {fileName} was moved, but the result could not be verified (size differs). Review it in Recovery.",
+  "compare.hash.unknown": " | hash unknown"
 }

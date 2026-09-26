@@ -628,5 +628,6 @@
   "action.default.name": "Loại {n}",
   "action.default.backup": "Sao lưu",
   "dialog.importActions.failed.message": "Không đọc được tệp thiết lập hành động: {error}",
-  "status.moveUnverified": "Cảnh báo: đã di chuyển {fileName} nhưng không xác minh được kết quả (kích thước khác). Hãy kiểm tra trong Phục hồi."
+  "status.moveUnverified": "Cảnh báo: đã di chuyển {fileName} nhưng không xác minh được kết quả (kích thước khác). Hãy kiểm tra trong Phục hồi.",
+  "compare.hash.unknown": " | hash không xác định"
 }

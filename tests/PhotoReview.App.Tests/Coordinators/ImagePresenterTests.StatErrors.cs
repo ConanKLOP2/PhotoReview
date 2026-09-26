@@ -129,4 +129,28 @@ public sealed partial class ImagePresenterTests
         Assert.Null(_sink.CurrentImage);
         Assert.Null(presenter.CurrentImage);
     }
+
+    [Fact]
+    public async Task PresentAsync_WhenStatFailsWithIoError_ClearsThePreviouslyShownComparePair()
+    {
+        var f1 = CreateFakeImageFile("photo.jpg", 1000);
+        var f2 = CreateFakeImageFile("photo (1).jpg", 2000);
+        var flaky = CreateFakeImageFile("flaky.png");
+        _catalog.Reset([f1, f2, flaky]);
+        var presenter = CreatePresenterWith(new StatThrowingFileSystem(new PhysicalFileSystem(), flaky, new IOException("share hiccup")));
+
+        await presenter.PresentAsync(0);
+        Assert.True(_compareViewModel.IsVisible); // precondition: a pair is on screen
+
+        await presenter.PresentAsync(2);
+
+        // The error status names flaky.png; the old A/B pair must not stay visible under it, and the catalog is untouched.
+        Assert.False(_compareViewModel.IsVisible);
+        Assert.Null(_compareViewModel.LeftPath);
+        Assert.Null(_compareViewModel.RightPath);
+        Assert.Null(_compareViewModel.LeftImage);
+        Assert.Null(_compareViewModel.RightImage);
+        Assert.False(presenter.IsCompareVisible);
+        Assert.Equal([f1, f2, flaky], _catalog.Paths);
+    }
 }
