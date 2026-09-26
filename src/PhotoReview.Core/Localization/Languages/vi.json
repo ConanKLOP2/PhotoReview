@@ -673,8 +673,8 @@
   "settings.exifField.modifiedDate": "Ngày sửa đổi",
   "settings.shortcut.clickZoom": "Bật/tắt thu phóng khi nhấn",
   "settings.shortcut.clickZoom.clearAutomationName": "Xóa phím tắt bật/tắt thu phóng khi nhấn",
-  "main.menu.clickZoomLevel": "Thu phóng",
-  "main.menu.clickZoomLevel.automationName": "Menu con thu phóng",
+  "main.menu.clickZoomLevel": "Mức thu phóng",
+  "main.menu.clickZoomLevel.automationName": "Menu con các mức thu phóng",
   "main.menu.clickZoomLevel.preset": "{percent}%",
   "main.menu.clickZoomLevel.preset.automationName": "Thu phóng đến {percent} phần trăm",
   "main.menu.clickZoomLevel.custom": "Tùy chỉnh…",
@@ -709,5 +709,13 @@
   "settings.arrowPanStepPercent.label": "Bước di chuyển khi nhấn phím mũi tên (ảnh đang phóng to)",
   "settings.arrowPanStepPercent.automationName": "Bước phím mũi tên, phần trăm khung nhìn",
   "settings.arrowPanStepPercent.hint": "Mỗi lần nhấn phím mũi tên di chuyển ảnh đang phóng to bao nhiêu phần trăm cửa sổ (mặc định 10).",
-  "dialog.settingsInvalid.arrowPanStepPercent": "Bước phím mũi tên phải là số từ {min} đến {max}."
+  "dialog.settingsInvalid.arrowPanStepPercent": "Bước phím mũi tên phải là số từ {min} đến {max}.",
+  "settings.group.zoom": "Thu phóng",
+  "settings.clickZoomPercent.hint": "Mức thu phóng dùng cho nhấn để thu phóng, phím tắt thu phóng và menu Thu phóng chuột phải. Vẫn áp dụng khi tắt nhấn để thu phóng.",
+  "settings.zoomShortcuts.title": "Phím tắt thu phóng",
+  "settings.zoomShortcuts.automationName": "Các phím tắt thu phóng hiện tại",
+  "settings.zoomShortcuts.hint": "Chỉ để xem: đổi các phím này ở trang Phím tắt.",
+  "settings.zoomShortcuts.none": "chưa đặt",
+  "main.menu.zoomToLevel": "Thu phóng về {percent}%",
+  "main.menu.zoomToLevel.automationName": "Thu phóng về mức đã cấu hình, {percent} phần trăm"
 }

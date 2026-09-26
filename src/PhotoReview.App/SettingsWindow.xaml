@@ -217,24 +217,33 @@
                 <!-- ============ Chuột & Zoom / Mouse & zoom ============ -->
                 <ScrollViewer x:Name="MouseScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" Focusable="False" IsTabStop="False" Visibility="Collapsed">
                     <StackPanel x:Name="MousePage" KeyboardNavigation.TabNavigation="Local">
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.zoom}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <TextBlock x:Name="ClickZoomPercentLabel" Text="{loc:Tr settings.clickZoomPercent.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="ClickZoomPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomPercentLabel}" AutomationProperties.Name="{loc:Tr settings.clickZoomPercent.automationName}" Grid.Row="0" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
+                            <TextBlock Text="{loc:Tr settings.clickZoomPercent.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <CheckBox x:Name="ClickToZoomCheck" Grid.Row="2" Grid.Column="1" Content="{loc:Tr settings.clickToZoom.label}"/>
+                            <TextBlock x:Name="ArrowPanStepLabel" Text="{loc:Tr settings.arrowPanStepPercent.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="ArrowPanStepBox" AutomationProperties.LabeledBy="{Binding ElementName=ArrowPanStepLabel}" AutomationProperties.Name="{loc:Tr settings.arrowPanStepPercent.automationName}" Grid.Row="3" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
+                            <TextBlock Text="{loc:Tr settings.arrowPanStepPercent.hint}" Grid.Row="4" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <TextBlock Text="{loc:Tr settings.zoomShortcuts.title}" Grid.Row="5" Style="{StaticResource FormLabel}"/>
+                            <TextBlock x:Name="ZoomShortcutsSummary" Grid.Row="5" Grid.Column="1" TextWrapping="Wrap" AutomationProperties.Name="{loc:Tr settings.zoomShortcuts.automationName}"/>
+                            <TextBlock Text="{loc:Tr settings.zoomShortcuts.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                        </Grid></GroupBox>
+
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.mouseZoom}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="MouseWheelActionLabel" Text="{loc:Tr settings.mouseWheelAction.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                             <ComboBox x:Name="MouseWheelActionCombo" AutomationProperties.LabeledBy="{Binding ElementName=MouseWheelActionLabel}" AutomationProperties.Name="{loc:Tr settings.mouseWheelAction.automationName}" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.mouseWheelAction.zoom}"/><ComboBoxItem Content="{loc:Tr enum.mouseWheelAction.navigate}"/></ComboBox>
                             <TextBlock Text="{loc:Tr settings.mouseWheelAction.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <CheckBox x:Name="ClickToZoomCheck" Grid.Row="2" Grid.Column="1" Content="{loc:Tr settings.clickToZoom.label}" Checked="ClickToZoomCheck_CheckedChanged" Unchecked="ClickToZoomCheck_CheckedChanged"/>
-                            <TextBlock x:Name="ClickZoomPercentLabel" Text="{loc:Tr settings.clickZoomPercent.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
-                            <TextBox x:Name="ClickZoomPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomPercentLabel}" AutomationProperties.Name="{loc:Tr settings.clickZoomPercent.automationName}" Grid.Row="3" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
-                            <CheckBox x:Name="KineticPanCheck" Grid.Row="4" Grid.Column="1" Content="{loc:Tr settings.kineticPan.label}"/>
-                            <TextBlock x:Name="KineticGlideSmoothingLabel" Text="{loc:Tr settings.kineticGlideSmoothing.label}" Grid.Row="5" Style="{StaticResource FormLabel}"/>
-                            <ComboBox x:Name="KineticGlideSmoothingCombo" AutomationProperties.LabeledBy="{Binding ElementName=KineticGlideSmoothingLabel}" AutomationProperties.Name="{loc:Tr settings.kineticGlideSmoothing.automationName}" Grid.Row="5" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.kineticGlideSmoothing.off}"/><ComboBoxItem Content="{loc:Tr enum.kineticGlideSmoothing.predict}"/></ComboBox>
-                            <TextBlock Text="{loc:Tr settings.kineticGlideSmoothing.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <CheckBox x:Name="ArrowKeyNavigatesAtZoomEdgeCheck" AutomationProperties.Name="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.automationName}" Grid.Row="7" Grid.Column="1" Content="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.label}"/>
-                            <TextBlock Text="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.hint}" Grid.Row="8" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <TextBlock x:Name="ArrowPanStepLabel" Text="{loc:Tr settings.arrowPanStepPercent.label}" Grid.Row="9" Style="{StaticResource FormLabel}"/>
-                            <TextBox x:Name="ArrowPanStepBox" AutomationProperties.LabeledBy="{Binding ElementName=ArrowPanStepLabel}" AutomationProperties.Name="{loc:Tr settings.arrowPanStepPercent.automationName}" Grid.Row="9" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
-                            <TextBlock Text="{loc:Tr settings.arrowPanStepPercent.hint}" Grid.Row="10" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <CheckBox x:Name="KineticPanCheck" Grid.Row="2" Grid.Column="1" Content="{loc:Tr settings.kineticPan.label}"/>
+                            <TextBlock x:Name="KineticGlideSmoothingLabel" Text="{loc:Tr settings.kineticGlideSmoothing.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="KineticGlideSmoothingCombo" AutomationProperties.LabeledBy="{Binding ElementName=KineticGlideSmoothingLabel}" AutomationProperties.Name="{loc:Tr settings.kineticGlideSmoothing.automationName}" Grid.Row="3" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.kineticGlideSmoothing.off}"/><ComboBoxItem Content="{loc:Tr enum.kineticGlideSmoothing.predict}"/></ComboBox>
+                            <TextBlock Text="{loc:Tr settings.kineticGlideSmoothing.hint}" Grid.Row="4" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <CheckBox x:Name="ArrowKeyNavigatesAtZoomEdgeCheck" AutomationProperties.Name="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.automationName}" Grid.Row="5" Grid.Column="1" Content="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.label}"/>
+                            <TextBlock Text="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
                     </StackPanel>
                 </ScrollViewer>

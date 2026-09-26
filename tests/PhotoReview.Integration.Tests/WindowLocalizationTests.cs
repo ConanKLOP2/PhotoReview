@@ -110,9 +110,9 @@ public sealed class WindowLocalizationTests
             {
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
-                // feat/ui-dark-chrome-toolbar: "Open folder…", "Settings…" (+ a Separator), Undo, a Separator, then the click-zoom submenu.
+                // feat/ui-dark-chrome-toolbar: "Open folder…", "Settings…" (+ a Separator), Undo, a Separator, then Fit, Zoom-to-level (its header is filled when the menu opens) and the zoom-levels submenu.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(4, menuItems.Count);
+                Assert.Equal(6, menuItems.Count);
                 var openFolder = menuItems[0];
                 var settings = menuItems[1];
                 var undo = menuItems[2];
@@ -122,11 +122,14 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
-                var clickZoomLevel = menuItems[3];
-                Assert.Equal("Thu phóng", clickZoomLevel.Header);
+                var fit = menuItems[3];
+                Assert.Equal("Vừa khung hình", fit.Header);
+                Assert.Equal("Đưa ảnh vừa khung cửa sổ", AutomationProperties.GetName(fit));
+                var clickZoomLevel = menuItems[5];
+                Assert.Equal("Mức thu phóng", clickZoomLevel.Header);
                 // Populated before the first open: an empty MenuItem shows no submenu arrow and cannot open.
                 Assert.True(clickZoomLevel.HasItems);
-                Assert.Equal("Menu con thu phóng", AutomationProperties.GetName(clickZoomLevel));
+                Assert.Equal("Menu con các mức thu phóng", AutomationProperties.GetName(clickZoomLevel));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
 
                 var texts = Texts(window);

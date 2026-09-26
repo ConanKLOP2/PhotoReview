@@ -363,7 +363,7 @@ public partial class SettingsWindow : Window
         TitleBarFieldFocalLengthCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.FocalLength);
         TitleBarFieldApertureCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.Aperture);
         TitleBarFieldShutterSpeedCheck.IsChecked = Settings.TitleBarFields.HasFlag(TitleBarFields.ShutterSpeed);
-        UpdateClickZoomEnabled();
+        UpdateZoomShortcutSummary();
         UpdateShowInfoSubOptionsEnabled();
         UpdateExifFieldsEnabled();
         UpdateToolbarAutoHideEnabled();
@@ -372,9 +372,21 @@ public partial class SettingsWindow : Window
         UpdateDuplicateWarning();
     }
 
-    private void ClickToZoomCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateClickZoomEnabled();
-
-    private void UpdateClickZoomEnabled() => ClickZoomPercentBox.IsEnabled = ClickToZoomCheck.IsChecked == true;
+    /// <summary>
+    /// The zoom card lists the zoom shortcuts as currently typed on the Shortcuts page (read-only here: they are edited
+    /// on that page), so the user sees which keys drive the zoom level without switching pages.
+    /// </summary>
+    private void UpdateZoomShortcutSummary()
+    {
+        if (ZoomShortcutsSummary is null) return; // can fire while InitializeComponent is still building the tree
+        string Key(System.Windows.Controls.TextBox box) => string.IsNullOrWhiteSpace(box.Text) ? Tr.SettingsZoomShortcutsNone : box.Text.Trim();
+        ZoomShortcutsSummary.Text = string.Join(Environment.NewLine,
+            $"{Tr.SettingsShortcutClickZoom}: {Key(ClickZoomText)}",
+            $"{Tr.SettingsShortcutToggleFit}: {Key(ToggleFitText)}",
+            $"{Tr.SettingsShortcutZoomActualSize}: {Key(ZoomActualSizeText)}",
+            $"{Tr.SettingsShortcutZoomIn}: {Key(ZoomInText)}",
+            $"{Tr.SettingsShortcutZoomOut}: {Key(ZoomOutText)}");
+    }
 
     private void ToolbarAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateToolbarAutoHideEnabled();
 
@@ -429,7 +441,11 @@ public partial class SettingsWindow : Window
 
     // ---- Live duplicate-shortcut warning (reuses SettingsValidator, the same check Save runs). ----
 
-    private void Shortcut_TextChanged(object sender, TextChangedEventArgs e) => UpdateDuplicateWarning();
+    private void Shortcut_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateDuplicateWarning();
+        UpdateZoomShortcutSummary();
+    }
 
     private void UpdateDuplicateWarning()
     {

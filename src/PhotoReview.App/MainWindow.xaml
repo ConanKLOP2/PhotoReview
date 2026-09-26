@@ -40,12 +40,14 @@
     </Window.Resources>
     <Grid Background="{DynamicResource Dark.Canvas}" ClipToBounds="True">
         <Grid.ContextMenu>
-            <ContextMenu>
+            <ContextMenu x:Name="ImageContextMenu" Opened="ImageContextMenu_Opened">
                 <MenuItem Header="{loc:Tr main.menu.openFolder}" AutomationProperties.Name="{loc:Tr main.menu.openFolder.automationName}" Click="OpenFolder_Click" />
                 <MenuItem Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
                 <Separator />
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
                 <Separator />
+                <MenuItem x:Name="FitMenuItem" Header="{loc:Tr main.menu.clickZoomLevel.fit}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.fit.automationName}" Click="ClickZoomFit_Click" />
+                <MenuItem x:Name="ZoomToLevelMenuItem" Click="ZoomToLevel_Click" />
                 <MenuItem x:Name="ClickZoomMenu" Header="{loc:Tr main.menu.clickZoomLevel}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.automationName}" SubmenuOpened="ClickZoomMenu_SubmenuOpened" />
             </ContextMenu>
         </Grid.ContextMenu>
