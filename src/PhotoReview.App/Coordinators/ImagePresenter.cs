@@ -208,6 +208,8 @@ public sealed class ImagePresenter
                 CurrentPhotoInfo = null;
                 // The status names this file, so the previous photo must not stay visible under it.
                 UpdateCurrentImage(null);
+                // Same for a visible comparison pair: it is not this file, and the catalog stays untouched.
+                _compareViewModel.Clear();
                 UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(initialStatError!)));
             }
 
