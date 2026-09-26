@@ -68,6 +68,9 @@ public static class StatusFormatter
         false => Tr.CompareHashDifferent,
     };
 
+    /// <summary>Hash state fragment when a hash could not be computed (file changed or unreadable); the previews stay visible.</summary>
+    public static string CompareHashUnknown() => Tr.CompareHashUnknown;
+
     public static string ImageError(string fileName, string message) =>
         Tr.StatusImageError(fileName, message);
 

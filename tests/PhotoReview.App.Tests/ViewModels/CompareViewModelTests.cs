@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using Xunit;
@@ -275,5 +276,83 @@ public sealed class CompareViewModelTests
 
         Assert.False(success);
         Assert.Equal(" | hash tắt", vm.HashText);
+    }
+
+    private static readonly (string, string) HashPair = (@"C:\photos\img1.jpg", @"C:\photos\img2.jpg");
+
+    private static Task<bool> LoadWithHash(CompareViewModel vm, Func<string, Task<string>> getHash, Func<long, bool>? isTokenCurrent = null,
+        Func<string, Task<object?>>? loadImage = null) =>
+        vm.LoadAsync(
+            HashPair,
+            token: 1,
+            isTokenCurrent: isTokenCurrent ?? (_ => true),
+            loadImageAsync: loadImage ?? (_ => Task.FromResult<object?>(new object())),
+            getHashAsync: getHash,
+            compareSizeEnabled: true,
+            compareHashEnabled: true,
+            currentIndex: 0,
+            totalFiles: 2,
+            getFileSize: p => p == HashPair.Item1 ? 10L : 20L);
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task LoadAsync_HashFailsAfterPreviewsLoaded_KeepsPreviewsAndSizesAndShowsUnknownHash(bool failLeft, bool failRight)
+    {
+        var vm = new CompareViewModel();
+        var leftImage = new object();
+        var rightImage = new object();
+
+        var success = await LoadWithHash(
+            vm,
+            p => (p == HashPair.Item1 ? failLeft : failRight)
+                ? Task.FromException<string>(new IOException("file changed while hashing"))
+                : Task.FromResult("abc"),
+            loadImage: p => Task.FromResult<object?>(p == HashPair.Item1 ? leftImage : rightImage));
+
+        Assert.True(success);
+        Assert.True(vm.IsVisible);
+        Assert.Same(leftImage, vm.LeftImage);
+        Assert.Same(rightImage, vm.RightImage);
+        Assert.Equal(" (10 byte)", vm.LeftSizeText);
+        Assert.Equal(" (20 byte)", vm.RightSizeText);
+        Assert.Equal(" | hash không xác định", vm.HashText);
+        Assert.Contains(" | hash không xác định", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoadAsync_PreviewFails_StillThrowsSoTheCallerCanClearTheComparison()
+    {
+        var vm = new CompareViewModel();
+
+        await Assert.ThrowsAsync<IOException>(() => LoadWithHash(
+            vm,
+            _ => Task.FromResult("abc"),
+            loadImage: p => p == HashPair.Item2 ? Task.FromException<object?>(new IOException("decode")) : Task.FromResult<object?>(new object())));
+    }
+
+    [Fact]
+    public async Task LoadAsync_HashCanceled_StillPropagatesCancellation()
+    {
+        var vm = new CompareViewModel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => LoadWithHash(
+            vm,
+            p => p == HashPair.Item1 ? Task.FromCanceled<string>(new System.Threading.CancellationToken(true)) : Task.FromResult("abc")));
+    }
+
+    [Fact]
+    public async Task LoadAsync_HashFailsButNavigationMovedOn_ReturnsFalse()
+    {
+        var vm = new CompareViewModel();
+        var current = true;
+        var hashTcs = new TaskCompletionSource<string>();
+
+        var load = LoadWithHash(vm, _ => hashTcs.Task, isTokenCurrent: _ => current);
+        current = false;
+        hashTcs.SetException(new IOException("file changed while hashing"));
+
+        Assert.False(await load);
     }
 }
