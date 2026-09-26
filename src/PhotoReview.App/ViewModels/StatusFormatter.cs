@@ -81,6 +81,10 @@ public static class StatusFormatter
 
     public static string DuplicateCheckCanceledFolderChanged() => Tr.StatusDuplicateCheckCanceledFolderChanged;
 
+    public static string DuplicateCheckRunning() => Tr.StatusDuplicateCheckRunning;
+
+    public static string DuplicateCheckCanceled() => Tr.StatusDuplicateCheckCanceled;
+
     public static string NoDuplicatesFound() => Tr.StatusNoDuplicatesFound;
 
     public static string BatchCanceled() => Tr.StatusBatchCanceled;

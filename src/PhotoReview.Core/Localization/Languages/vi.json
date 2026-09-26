@@ -627,5 +627,7 @@
   "export.help": "Dịch các giá trị (giữ nguyên {{placeholder}} và tên key), sau đó chép các mục vào <code>.json trong thư mục này (tạo file với khối _meta này nếu chưa có) và nhấn 'Tải lại bản dịch' trong Cài đặt. _notes giải thích từng chữ xuất hiện ở đâu; key bắt đầu bằng '_' bị PhotoReview bỏ qua.",
   "action.default.name": "Loại {n}",
   "action.default.backup": "Sao lưu",
-  "dialog.importActions.failed.message": "Không đọc được tệp thiết lập hành động: {error}"
+  "dialog.importActions.failed.message": "Không đọc được tệp thiết lập hành động: {error}",
+  "status.duplicateCheckRunning": "Đang kiểm tra bản trùng lặp... nhấn Esc để hủy.",
+  "status.duplicateCheckCanceled": "Đã hủy kiểm tra bản trùng lặp. Không có tệp nào bị xóa."
 }
