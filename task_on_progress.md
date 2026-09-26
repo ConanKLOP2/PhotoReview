@@ -10,6 +10,7 @@
 - **Measured 2026-09-26 (PERF-STATUS):** natural sort / snapshot validator confirmed on an idle PC (validator ×2.36, sort ×1.59, no allocations); Q-R17 on F4 fills the whole folder (~10 GB) but first-visual latency is ~2.5–3× higher in steady state → **Q-R26 = B** (user): keep Q-R17, find the cause. Round 1 (branch `perf/q-r26-gc-investigation`, harness now logs GCs and page faults): not GC, not the page-fault count; noisy machine — rerun on an idle PC next.
 - **Still to do:** Q-R26 round 2 on an idle PC (Claude): rerun master vs variant, whole-folder mode on a small folder, ETW hard/soft faults and memory compression during navigation.
 - **Q-R27 = D (#116):** each running operation holds a named kernel event (`WindowsLiveOperationRegistry`) from Prepared to its outcome; startup reconcile skips live operations, so a second process no longer reports them Failed.
+- **Releases are manual (user, 2026-09-26):** CI only tags `v2.0.N`; no automatic draft. Actions > Release > Run workflow (tag input) publishes directly (`draft` box optional).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.
 

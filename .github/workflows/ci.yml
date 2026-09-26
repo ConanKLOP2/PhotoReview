@@ -160,16 +160,14 @@ jobs:
           path: TestResults
 
   # One tag per merge to master: v<MajorMinor>.<N>, the same number the build embeds
-  # (Directory.Build.targets). Runs only after build + tests + publish succeeded.
+  # (Directory.Build.targets). Runs only after build + tests + publish succeeded. No release is created
+  # here: a human runs the Release workflow (Actions > Release > Run workflow) for the tag they want.
   tag-version:
     needs: build-test-publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      # The tag of THIS commit when it has no GitHub release yet; empty otherwise.
-      tag: ${{ steps.release_tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -203,28 +201,3 @@ jobs:
             echo "Tagged ${tag} at ${c}${note}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
           done
           if [ ${#created[@]} -gt 0 ]; then git push origin "${created[@]}"; else echo "No missing tags"; fi
-
-      - name: Find this commit's tag when it has no release yet
-        id: release_tag
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag=$(git tag --points-at "${GITHUB_SHA}" -l 'v*' | head -1)
-          if [ -n "${tag}" ] && ! gh release view "${tag}" >/dev/null 2>&1; then
-            echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "tag=" >> "${GITHUB_OUTPUT}"
-          fi
-
-  # Every merge to master gets a DRAFT release (zip + SHA256 + generated notes) to review on GitHub and
-  # publish by hand. Draft = invisible to the public, so a bad build never reaches users by itself.
-  draft-release:
-    needs: tag-version
-    if: needs.tag-version.outputs.tag != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/release.yml
-    with:
-      tag: ${{ needs.tag-version.outputs.tag }}
-      draft: true

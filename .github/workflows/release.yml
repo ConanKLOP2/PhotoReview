@@ -1,8 +1,7 @@
 name: Release
 
-# Publishes an existing version tag as a GitHub Release with the framework-dependent zip attached. CI calls it
-# automatically after tagging each merge to master (always as a DRAFT); it can also be dispatched by hand.
-# Tags created with GITHUB_TOKEN do not trigger other workflows, hence the explicit call from ci.yml.
+# Publishes an existing version tag as a GitHub Release with the framework-dependent zip attached.
+# Manual only: Actions > Release > Run workflow, enter the tag (CI creates v2.0.N tags after each merge to master).
 # Tests are not re-run here: CI already ran the full gate on the same commit before it created the tag.
 on:
   workflow_dispatch:
@@ -12,20 +11,10 @@ on:
         required: true
         type: string
       draft:
-        description: "Create as a draft (review, then press Publish on GitHub)"
+        description: "Create as a draft instead of publishing straight away"
         required: true
         type: boolean
-        default: true
-  # Called by ci.yml (job draft-release) right after it tags a merge to master.
-  workflow_call:
-    inputs:
-      tag:
-        required: true
-        type: string
-      draft:
-        required: false
-        type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write
