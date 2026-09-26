@@ -1,6 +1,4 @@
-using System.IO;
 using System.Text.Json;
-using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Settings;
@@ -98,26 +96,6 @@ public class AppSettings
     /// <summary>Parts of the photo information line to show; absent in older configs = <see cref="ExifInfoFields.Default"/>.</summary>
     public ExifInfoFields ExifInfoFields { get; set; } = ExifInfoFields.Default;
 
-    public static string ConfigPath => PhotoReview.Core.AppPaths.FromEnvironment().ConfigFile;
-    public static Action<AppSettings>? Saver { get; set; }
-    public static Func<AppSettings, string?>? Validator { get; set; }
-
-    public static AppSettings Load(string? path = null)
-    {
-        if (path is not null && File.Exists(path))
-        {
-            var json = File.ReadAllText(path);
-            var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new();
-            SettingsStore.Migrate(loaded);
-            loaded.Shortcuts ??= ShortcutMappings.Default();
-            loaded.Actions ??= ReviewAction.Defaults();
-            return loaded;
-        }
-        return new AppSettings();
-    }
-
-    public static void Save(AppSettings settings) => Saver?.Invoke(settings);
-
     /// <summary>
     /// Deep-clones <paramref name="source"/> by round-tripping it through the same JSON contract as disk storage
     /// (<see cref="AppSettingsJsonContext"/>), so every property is copied automatically -- including ones a caller
@@ -129,16 +107,6 @@ public class AppSettings
         ArgumentNullException.ThrowIfNull(source);
         var json = JsonSerializer.Serialize(source, AppSettingsJsonContext.Default.AppSettings);
         return JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
-    }
-
-    private static readonly SettingsValidator FallbackValidator = new(new SimpleKeyNameValidator());
-
-    public static string? ValidateShortcuts(AppSettings settings) =>
-        Validator is not null ? Validator(settings) : FallbackValidator.ValidateShortcuts(settings);
-
-    private sealed class SimpleKeyNameValidator : IKeyNameValidator
-    {
-        public bool IsValidKeyName(string keyName) => !string.IsNullOrWhiteSpace(keyName);
     }
 
     // ---- Mouse / zoom (feat/mouse-zoom). Absent in older configs = these defaults; no migration step. ----

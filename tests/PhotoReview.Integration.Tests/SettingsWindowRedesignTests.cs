@@ -26,7 +26,11 @@ public sealed class SettingsWindowRedesignTests
     /// exactly the structural guarantee <see cref="AppSettings.Clone"/> replaces the old hand-copy with, and it is
     /// reflection-driven so a future property is covered automatically without editing this test.
     /// </summary>
-    private static readonly HashSet<string> UiControlledProperties = new(StringComparer.Ordinal)
+    /// <summary>
+    /// Internal (not private): <see cref="SettingsWindowRoundTripTests"/> (AR11b) reuses this exact set so the two
+    /// tests can never drift -- "not shown in the UI" and "shown in the UI" are each other's complement.
+    /// </summary>
+    internal static readonly HashSet<string> UiControlledProperties = new(StringComparer.Ordinal)
     {
         nameof(AppSettings.ConfigVersion), // fixed to AppSettings.CurrentConfigVersion by the type itself
         nameof(AppSettings.InitialViewMode), nameof(AppSettings.LoadingMode), nameof(AppSettings.ImageSortMode),
