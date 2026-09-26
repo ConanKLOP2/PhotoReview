@@ -79,9 +79,12 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.PreloadForwardCount)] = w => w.PreloadForwardBox.Text = "64", // 32 -> 64
         [nameof(AppSettings.PreloadBackwardCount)] = w => w.PreloadBackwardBox.Text = "16", // 8 -> 16
         // feat/ui-dark-chrome-toolbar
-        [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = true, // false -> true (Q-R34 default off)
         [nameof(AppSettings.ToolbarAutoHideDelayMs)] = w => w.ToolbarAutoHideDelayBox.Text = "3000", // 1500 -> 3000
         [nameof(AppSettings.InfoOverlayFontSize)] = w => w.InfoOverlayFontSizeBox.Text = "18", // 12 -> 18
+        [nameof(AppSettings.InfoOverlayAutoHide)] = w => w.InfoOverlayAutoHideCheck.IsChecked = true, // false -> true (Q-R34)
+        [nameof(AppSettings.InfoOverlayAutoHideDelayMs)] = w => w.InfoOverlayAutoHideDelayBox.Text = "4500", // 3000 -> 4500
+        [nameof(AppSettings.ToolbarOpacityPercent)] = w => w.ToolbarOpacitySlider.Value = 60, // 100 -> 60
         // Default is FolderName only; check every other field too so the result is the full set.
         [nameof(AppSettings.TitleBarFields)] = w =>
         {
@@ -125,9 +128,12 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.PreloadForwardCount)] = 64,
         [nameof(AppSettings.PreloadBackwardCount)] = 16,
         // feat/ui-dark-chrome-toolbar
-        [nameof(AppSettings.ToolbarAutoHide)] = false,
+        [nameof(AppSettings.ToolbarAutoHide)] = true,
         [nameof(AppSettings.ToolbarAutoHideDelayMs)] = 3000,
         [nameof(AppSettings.InfoOverlayFontSize)] = 18.0,
+        [nameof(AppSettings.InfoOverlayAutoHide)] = true,
+        [nameof(AppSettings.InfoOverlayAutoHideDelayMs)] = 4500,
+        [nameof(AppSettings.ToolbarOpacityPercent)] = 60,
         [nameof(AppSettings.TitleBarFields)] = TitleBarFields.All,
     };
 

@@ -1,4 +1,5 @@
 using PhotoReview.App.Coordinators;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App.Tests.Coordinators;
 
@@ -33,6 +34,49 @@ public sealed class ToolbarAutoHidePolicyTests
     public void MustStayVisible_AutoHideEnabledFolderOpenPopupClosedNoFocus_IsFalse()
     {
         Assert.False(ToolbarAutoHidePolicy.MustStayVisible(autoHideEnabled: true, hasFolderOpen: true, isToolsPopupOpen: false, isKeyboardFocusInsideToolbar: false));
+    }
+
+    // Q-R34: the toolbar hides fully and ONLY the mouse entering its hot zone (or a must-stay-visible rule) brings it back.
+    // IsShown deliberately has no key-press / image-change / mouse-elsewhere input: those cannot show a hidden toolbar.
+    [Fact]
+    public void IsShown_HiddenState_OnlyTheHotZoneBringsItBack()
+    {
+        Assert.False(ToolbarAutoHidePolicy.IsShown(autoHideEnabled: true, hasFolderOpen: true, isToolsPopupOpen: false, isKeyboardFocusInsideToolbar: false, isMouseInsideHotZone: false));
+        Assert.True(ToolbarAutoHidePolicy.IsShown(autoHideEnabled: true, hasFolderOpen: true, isToolsPopupOpen: false, isKeyboardFocusInsideToolbar: false, isMouseInsideHotZone: true));
+    }
+
+    [Theory]
+    [InlineData(false, true, false, false, false)] // auto-hide off
+    [InlineData(true, false, false, false, false)] // no folder
+    [InlineData(true, true, true, false, false)]   // Tools popup open
+    [InlineData(true, true, false, true, false)]   // keyboard focus in the toolbar
+    public void IsShown_MustStayVisibleRules_ShowItWithoutTheMouse(bool enabled, bool folder, bool popup, bool focus, bool mouse)
+    {
+        Assert.True(ToolbarAutoHidePolicy.IsShown(enabled, folder, popup, focus, mouse));
+    }
+
+    [Theory]
+    [InlineData(100, 1.0)]
+    [InlineData(60, 0.6)]
+    [InlineData(20, 0.2)]
+    [InlineData(5, 0.2)]    // below the minimum -> the minimum, never (almost) invisible
+    [InlineData(0, 0.2)]
+    [InlineData(-30, 0.2)]
+    [InlineData(500, 1.0)]  // above 100 -> fully opaque
+    public void TargetOpacity_IsTheClampedPercentAsFraction(int percent, double expected)
+    {
+        Assert.Equal(expected, ToolbarAutoHidePolicy.TargetOpacity(percent), precision: 6);
+    }
+
+    [Fact]
+    public void DelayMs_UsesOnlyTheToolbarDelay_IndependentOfTheInfoDelay()
+    {
+        var settings = new AppSettings { ToolbarAutoHideDelayMs = 700, InfoOverlayAutoHideDelayMs = 9000 };
+        Assert.Equal(700, ToolbarAutoHidePolicy.DelayMs(settings));
+        settings.InfoOverlayAutoHideDelayMs = 1;
+        Assert.Equal(700, ToolbarAutoHidePolicy.DelayMs(settings));
+        settings.ToolbarAutoHideDelayMs = 2500;
+        Assert.Equal(2500, ToolbarAutoHidePolicy.DelayMs(settings));
     }
 
     [Theory]

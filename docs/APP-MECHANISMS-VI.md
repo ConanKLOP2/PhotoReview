@@ -38,6 +38,7 @@ Thumbnail có RAM/disk cache và quota riêng. Hủy waiter không nên làm h�
 | `ScalingQuality` | `HighQuality` | `HighQuality` ưu tiên chất lượng scale; `Linear` ưu tiên độ mượt khi zoom/chuyển khung. Không thay đổi pixel decode hoặc cache identity. |
 | `UseSourceBytesCache` | `false` | Bật cache byte nguồn trong RAM. Đây là feature flag; chỉ bật sau khi đo source-open, working set và độ trễ trên folder thật. |
 | `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` | Số ảnh tải trước phía trước/phía sau vị trí hiện tại (`PreloadOrderService`/`PreloadScheduler`). Cho phép `1`-`500` (forward) và `0`-`500` (backward); sàn của thanh trượt RAM (`RamBudgetPolicy.MinimumCachePercent`) đi theo cửa sổ này. Chụp lúc composition trong `App.xaml.cs`; có hiệu lực sau khi khởi động lại. |
+| `ToolbarAutoHide` / `InfoOverlayAutoHide` | `false` / `false` | Tự ẩn thanh nút (trễ `ToolbarAutoHideDelayMs`=1500, ẩn hẳn, chỉ hiện lại khi chuột lại gần; độ đậm `ToolbarOpacityPercent` 100, tối thiểu 20) và thông tin che ảnh (trễ `InfoOverlayAutoHideDelayMs`=3000, hiện lại khi di chuột/phím/đổi ảnh; luôn hiện khi có thông báo/đang tải, Compare mở hoặc cửa sổ không active). Logic thuần: `ToolbarAutoHidePolicy`, `InfoOverlayAutoHidePolicy`. |
 
 ### Đổi mode, resize và cache lifecycle
 

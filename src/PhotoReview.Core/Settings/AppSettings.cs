@@ -156,6 +156,24 @@ public class AppSettings
     /// <summary>Default <see cref="ToolbarAutoHideDelayMs"/>.</summary>
     public const int DefaultToolbarAutoHideDelayMs = 1500;
 
+    /// <summary>Smallest accepted <see cref="InfoOverlayAutoHideDelayMs"/>.</summary>
+    public const int MinInfoOverlayAutoHideDelayMs = 0;
+
+    /// <summary>Largest accepted <see cref="InfoOverlayAutoHideDelayMs"/>.</summary>
+    public const int MaxInfoOverlayAutoHideDelayMs = 10000;
+
+    /// <summary>Default <see cref="InfoOverlayAutoHideDelayMs"/>: longer than the toolbar's, because reading text takes longer than spotting a button.</summary>
+    public const int DefaultInfoOverlayAutoHideDelayMs = 3000;
+
+    /// <summary>Lowest accepted <see cref="ToolbarOpacityPercent"/>: the toolbar can never become practically invisible.</summary>
+    public const int MinToolbarOpacityPercent = 20;
+
+    /// <summary>Highest accepted <see cref="ToolbarOpacityPercent"/> (fully opaque).</summary>
+    public const int MaxToolbarOpacityPercent = 100;
+
+    /// <summary>Default <see cref="ToolbarOpacityPercent"/> (no visual change).</summary>
+    public const int DefaultToolbarOpacityPercent = 100;
+
     /// <summary>Smallest accepted <see cref="InfoOverlayFontSize"/>.</summary>
     public const double MinInfoOverlayFontSize = 8;
 
@@ -168,9 +186,9 @@ public class AppSettings
     /// <summary>
     /// The top-left toolbar (folder/settings/fit/tools) fades out after <see cref="ToolbarAutoHideDelayMs"/> once the
     /// mouse leaves it, and fades back in when the mouse enters its hot zone. Always visible when no folder is open,
-    /// while its Tools popup is open, or while keyboard focus is inside it. Default on.
+    /// while its Tools popup is open, or while keyboard focus is inside it. Default off (Q-R34); a saved true is kept.
     /// </summary>
-    public bool ToolbarAutoHide { get; set; } = true;
+    public bool ToolbarAutoHide { get; set; }
 
     /// <summary>Delay, in milliseconds, before the toolbar fades out once eligible; [<see cref="MinToolbarAutoHideDelayMs"/>, <see cref="MaxToolbarAutoHideDelayMs"/>].</summary>
     public int ToolbarAutoHideDelayMs { get; set; } = DefaultToolbarAutoHideDelayMs;
@@ -186,4 +204,20 @@ public class AppSettings
 
     /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
     public KineticGlideSmoothing KineticGlideSmoothing { get; set; } = KineticGlideSmoothing.Predict;
+
+    /// <summary>
+    /// Q-R34: the text overlays drawn over the photo (status line, EXIF line, folder info) fade out after
+    /// <see cref="InfoOverlayAutoHideDelayMs"/> without mouse/key/navigation activity and fade back in on activity. Never while a
+    /// message needs reading, no folder is open, Compare is open or the window is inactive. Default off.
+    /// </summary>
+    public bool InfoOverlayAutoHide { get; set; }
+
+    /// <summary>Idle delay, in milliseconds, before the info overlays fade out (independent of the toolbar's delay); [<see cref="MinInfoOverlayAutoHideDelayMs"/>, <see cref="MaxInfoOverlayAutoHideDelayMs"/>], default <see cref="DefaultInfoOverlayAutoHideDelayMs"/>.</summary>
+    public int InfoOverlayAutoHideDelayMs { get; set; } = DefaultInfoOverlayAutoHideDelayMs;
+
+    /// <summary>
+    /// How solid the toolbar looks while it is visible, in percent; [<see cref="MinToolbarOpacityPercent"/>, <see cref="MaxToolbarOpacityPercent"/>].
+    /// The auto-hide fade goes between 0 (hidden) and this value.
+    /// </summary>
+    public int ToolbarOpacityPercent { get; set; } = DefaultToolbarOpacityPercent;
 }

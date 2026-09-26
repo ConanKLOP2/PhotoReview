@@ -321,6 +321,13 @@ public partial class SettingsWindow : Window
         InfoOverlayFontSizeBox.Text = Settings.InfoOverlayFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
         ToolbarAutoHideCheck.IsChecked = Settings.ToolbarAutoHide;
         ToolbarAutoHideDelayBox.Text = Settings.ToolbarAutoHideDelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        InfoOverlayAutoHideCheck.IsChecked = Settings.InfoOverlayAutoHide;
+        InfoOverlayAutoHideDelayBox.Text = Settings.InfoOverlayAutoHideDelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ToolbarOpacitySlider.Minimum = AppSettings.MinToolbarOpacityPercent;
+        ToolbarOpacitySlider.Maximum = AppSettings.MaxToolbarOpacityPercent;
+        ToolbarOpacitySlider.Value = Math.Clamp(Settings.ToolbarOpacityPercent, AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
+        ToolbarOpacityHint.Text = Tr.SettingsToolbarOpacityHint(AppSettings.MinToolbarOpacityPercent);
+        UpdateToolbarOpacityValueText();
         MouseWheelActionCombo.SelectedIndex = Settings.MouseWheelAction == MouseWheelAction.Navigate ? 1 : 0;
         ClickToZoomCheck.IsChecked = Settings.ClickToZoomEnabled;
         ClickZoomPercentBox.Text = Settings.ClickZoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -358,6 +365,7 @@ public partial class SettingsWindow : Window
         UpdateShowInfoSubOptionsEnabled();
         UpdateExifFieldsEnabled();
         UpdateToolbarAutoHideEnabled();
+        UpdateInfoOverlayAutoHideEnabled();
         LoadRamCache();
         UpdateDuplicateWarning();
     }
@@ -369,6 +377,18 @@ public partial class SettingsWindow : Window
     private void ToolbarAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateToolbarAutoHideEnabled();
 
     private void UpdateToolbarAutoHideEnabled() => ToolbarAutoHideDelayBox.IsEnabled = ToolbarAutoHideCheck.IsChecked == true;
+
+    private void InfoOverlayAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateInfoOverlayAutoHideEnabled();
+
+    private void UpdateInfoOverlayAutoHideEnabled() => InfoOverlayAutoHideDelayBox.IsEnabled = InfoOverlayAutoHideCheck.IsChecked == true;
+
+    private void ToolbarOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateToolbarOpacityValueText();
+
+    private void UpdateToolbarOpacityValueText()
+    {
+        if (ToolbarOpacityValueText is null) return; // ValueChanged can fire while InitializeComponent is still building the tree
+        ToolbarOpacityValueText.Text = string.Create(System.Globalization.CultureInfo.CurrentCulture, $"{(int)Math.Round(ToolbarOpacitySlider.Value)} %");
+    }
 
     private void ShowInfoOverlayCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateShowInfoSubOptionsEnabled();
 
@@ -533,7 +553,7 @@ public partial class SettingsWindow : Window
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
-        Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs;
+        Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
         Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
         Settings.TitleBarFields = TitleBarFields.Default;
         LoadFields();
@@ -643,6 +663,13 @@ public partial class SettingsWindow : Window
             ShowInvalid(Tr.DialogSettingsInvalidToolbarAutoHideDelay(AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs));
             return;
         }
+        if (!int.TryParse(InfoOverlayAutoHideDelayBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var infoOverlayAutoHideDelayMs)
+            || infoOverlayAutoHideDelayMs < AppSettings.MinInfoOverlayAutoHideDelayMs || infoOverlayAutoHideDelayMs > AppSettings.MaxInfoOverlayAutoHideDelayMs)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidInfoOverlayAutoHideDelay(AppSettings.MinInfoOverlayAutoHideDelayMs, AppSettings.MaxInfoOverlayAutoHideDelayMs));
+            InfoOverlayAutoHideDelayBox.Focus();
+            return;
+        }
         if (!double.TryParse(InfoOverlayFontSizeBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var infoOverlayFontSize)
             || infoOverlayFontSize < AppSettings.MinInfoOverlayFontSize || infoOverlayFontSize > AppSettings.MaxInfoOverlayFontSize)
         {
@@ -651,6 +678,9 @@ public partial class SettingsWindow : Window
         }
         Settings.ToolbarAutoHide = ToolbarAutoHideCheck.IsChecked == true;
         Settings.ToolbarAutoHideDelayMs = toolbarAutoHideDelayMs;
+        Settings.InfoOverlayAutoHide = InfoOverlayAutoHideCheck.IsChecked == true;
+        Settings.InfoOverlayAutoHideDelayMs = infoOverlayAutoHideDelayMs;
+        Settings.ToolbarOpacityPercent = Math.Clamp((int)Math.Round(ToolbarOpacitySlider.Value), AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
         Settings.InfoOverlayFontSize = infoOverlayFontSize;
         Settings.Shortcuts.Next = ShortcutKeyCanonical.Canonicalize(NextText.Text); Settings.Shortcuts.Previous = ShortcutKeyCanonical.Canonicalize(PreviousText.Text);
         Settings.Shortcuts.SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(RecycleText.Text);

@@ -43,6 +43,7 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-R30 | UI | Tester feedback 2026-09-26 (10 items) | ✅ DECIDED 2026-09-26 (user) — do: dark title bar + fix white scrollbars; toolbar auto-hide (setting); Open folder + Settings in the context menu; title-bar fields setting (default folder name only); Modified date as an optional EXIF field (default off; status line untouched); info-overlay font size setting; click-zoom shortcut (`2`) + context-menu levels 30–150 % / Custom; glide smoothing (`Predict`, default on, setting). Arrow keys pan a zoomed image (#119). Declined: Shift+arrow panning (plain arrows do it now) | #119, integration/ui-feedback |
 
 | Q-R31 | Features | Preload window size | ✅ DECIDED 2026-09-26 (user) — forward/backward counts configurable in Settings ▸ Performance (defaults 32/8, 1–500 / 0–500, RAM floor follows the window, applies after restart); branch feat/preload-window-setting | PreloadWindow, SettingsNormalizer |
+| Q-R34 | UI | Toolbar auto-hide default off; auto-hide for the info over the photo | ✅ DECIDED 2026-09-26 (user) — ToolbarAutoHide default false (saved true kept), hides fully and only the mouse near it brings it back, own delay (1500) + opacity % (default 100, min 20); new InfoOverlayAutoHide (default off, own delay 3000, own Settings group) fades every info overlay on the photo, visible again on mouse/key/navigation, never while a message/progress/compare/dialog needs it | InfoOverlayAutoHidePolicy, ToolbarAutoHidePolicy |
 
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 

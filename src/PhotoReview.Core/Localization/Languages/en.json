@@ -691,5 +691,16 @@
   "settings.kineticGlideSmoothing.automationName": "Kinetic glide smoothing",
   "settings.kineticGlideSmoothing.hint": "Moves the glide in step with your monitor's refresh rate. Turn off to compare.",
   "enum.kineticGlideSmoothing.off": "Off",
-  "enum.kineticGlideSmoothing.predict": "Match monitor refresh"
+  "enum.kineticGlideSmoothing.predict": "Match monitor refresh",
+  "settings.infoOverlayAutoHide.label": "Auto-hide the info over the photo",
+  "settings.infoOverlayAutoHide.automationName": "Auto-hide the info over the photo",
+  "settings.toolbarAutoHide.hint": "The buttons hide completely after the delay and only reappear when the mouse comes back near them.",
+  "settings.group.infoOverlay": "Info over the photo",
+  "settings.infoOverlayAutoHide.hint": "The info fades after the delay and reappears on mouse move, key press or when the photo changes.",
+  "settings.infoOverlayAutoHideDelay.label": "Hide delay (ms)",
+  "settings.infoOverlayAutoHideDelay.automationName": "Info auto-hide delay, in milliseconds",
+  "dialog.settingsInvalid.infoOverlayAutoHideDelay": "Info auto-hide delay must be a whole number between {min} and {max} milliseconds.",
+  "settings.toolbarOpacity.label": "Toolbar opacity",
+  "settings.toolbarOpacity.automationName": "Toolbar opacity, in percent",
+  "settings.toolbarOpacity.hint": "How solid the toolbar looks while it is visible. Cannot go below {min}% so the buttons stay usable."
 }

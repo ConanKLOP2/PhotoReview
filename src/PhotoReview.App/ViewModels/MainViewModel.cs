@@ -198,6 +198,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    /// <summary>
+    /// Q-R34: true while the status area shows something the user must read (an event/error message such as an action
+    /// result or "open failed", a loading/error status from the presenter, or the skipped-files warning), so the info
+    /// auto-hide keeps it visible. A plain "index / size / name" line is false.
+    /// </summary>
+    public bool StatusNeedsAttention => !string.IsNullOrEmpty(_statusText) || _presenter.StatusNeedsAttention || HasSkippedEntries;
+
     private IReadOnlyList<SkippedEntry> _skippedEntries = [];
 
     /// <summary>IO05: files of the current folder that could not be read and are not in the catalog.</summary>
