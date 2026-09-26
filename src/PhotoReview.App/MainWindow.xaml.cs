@@ -551,15 +551,12 @@ public partial class MainWindow : Window
 
     private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 200, 300, 400];
     private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
-    private System.Windows.Controls.MenuItem? _clickZoomFitItem;
     private System.Windows.Controls.MenuItem? _clickZoomCustomItem;
 
     private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
         if (_clickZoomPresetItems is null) BuildClickZoomMenu();
         // Headers are re-read on every open so a language switch shows without a restart.
-        _clickZoomFitItem!.Header = Tr.MainMenuClickZoomLevelFit;
-        AutomationProperties.SetName(_clickZoomFitItem, Tr.MainMenuClickZoomLevelFitAutomationName);
         _clickZoomCustomItem!.Header = Tr.MainMenuClickZoomLevelCustom;
         AutomationProperties.SetName(_clickZoomCustomItem, Tr.MainMenuClickZoomLevelCustomAutomationName);
         var current = _settings.ClickZoomPercent;
@@ -575,11 +572,6 @@ public partial class MainWindow : Window
     private void BuildClickZoomMenu()
     {
         _clickZoomPresetItems = [];
-        var fit = _clickZoomFitItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelFit };
-        AutomationProperties.SetName(fit, Tr.MainMenuClickZoomLevelFitAutomationName);
-        fit.Click += ClickZoomFit_Click;
-        ClickZoomMenu.Items.Add(fit);
-        ClickZoomMenu.Items.Add(new System.Windows.Controls.Separator());
         foreach (var percent in ClickZoomPresets)
         {
             var item = new System.Windows.Controls.MenuItem { IsCheckable = true, Tag = percent };
@@ -596,6 +588,22 @@ public partial class MainWindow : Window
     }
 
     private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => _ = ApplyFitViewAsync();
+
+    /// <summary>"Zoom to N%": zooms to the configured level (does not change it; the presets below do).</summary>
+    private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent);
+
+    /// <summary>
+    /// Refreshes the two top-level zoom items on every open: the level in "Zoom to N%" and each item's shortcut
+    /// (as configured, shown right-aligned like an accelerator; empty when the shortcut is cleared).
+    /// </summary>
+    private void ImageContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        var percent = _settings.ClickZoomPercent;
+        ZoomToLevelMenuItem.Header = Tr.MainMenuZoomToLevel(percent);
+        AutomationProperties.SetName(ZoomToLevelMenuItem, Tr.MainMenuZoomToLevelAutomationName(percent));
+        ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
+        FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
+    }
 
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
     {

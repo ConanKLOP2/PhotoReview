@@ -17,7 +17,7 @@
 - **Sort (Q-R33, #127):** Default / Name A→Z / Z→A ignore Explorer order; Name follows it.
 - **Merged #128, #130 (build 2.0.134):** context menu "Zoom" (Fit + 200/300/400 %); "Taken:"/"Modified:" labels on both dates (info line + title bar). GUI check pending.
 - **Info auto-hide (Q-R34, `feat/info-overlay-autohide`):** `ToolbarAutoHide` default off (saved `true` kept; own delay, opacity % min 20); new `InfoOverlayAutoHide` (off, own delay 3000) fades status/EXIF/folder info, never while a message/Compare/dialog. **GUI check pending.**
-- **Arrow pan step (`feat/pan-step-setting`):** Settings > Mouse & zoom, % of viewport per arrow press (1–100, default 10).
+- **Zoom UI (#128–#133, `feat/zoom-settings-group`):** Mouse & zoom page: Zoom card (level always editable, click-to-zoom, arrow step %, read-only zoom shortcuts); right-click: Fit, Zoom to N%, Zoom levels ▸. GUI check pending.
 - **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Decision log:** handoff and decisions live on `master` only (no `develop` since #104). Keep this file short: move finished detail to the progress log.

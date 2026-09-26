@@ -589,5 +589,13 @@
   "settings.arrowPanStepPercent.label": "Settings > Mouse & zoom: label for the arrow-key pan step box (percent of the viewport per press, 1-100).",
   "settings.arrowPanStepPercent.automationName": "AutomationProperties.Name of the arrow-key pan step box.",
   "settings.arrowPanStepPercent.hint": "Help text under the arrow-key pan step box.",
-  "dialog.settingsInvalid.arrowPanStepPercent": "MessageBox text shown on Save when the arrow step is not a number in [{min}, {max}] (AppSettings.MinArrowPanStepPercent/MaxArrowPanStepPercent)."
+  "dialog.settingsInvalid.arrowPanStepPercent": "MessageBox text shown on Save when the arrow step is not a number in [{min}, {max}] (AppSettings.MinArrowPanStepPercent/MaxArrowPanStepPercent).",
+  "settings.group.zoom": "Settings > Mouse & zoom: card header for the zoom level, click-to-zoom, arrow step and the read-only list of zoom shortcuts.",
+  "settings.clickZoomPercent.hint": "Help text under the zoom-level box.",
+  "settings.zoomShortcuts.title": "Label of the read-only summary of the zoom shortcuts.",
+  "settings.zoomShortcuts.automationName": "AutomationProperties.Name of the read-only zoom shortcut summary.",
+  "settings.zoomShortcuts.hint": "Help text under the zoom shortcut summary.",
+  "settings.zoomShortcuts.none": "Shown next to a zoom shortcut that has no key assigned.",
+  "main.menu.zoomToLevel": "Right-click menu item: zooms to the configured zoom level; {percent} = that level. The shortcut is shown to its right by the app.",
+  "main.menu.zoomToLevel.automationName": "AutomationProperties.Name of the Zoom-to-level menu item."
 }
