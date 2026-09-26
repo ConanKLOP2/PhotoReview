@@ -51,6 +51,13 @@ function Test-Skippable([string]$Target) {
     return $false
 }
 
+function Resolve-MdLink([string]$FileDir, [string]$Target) {
+    # Markdown links render on GitHub relative to the file's directory (or the repo root for a leading '/'),
+    # so unlike backtick doc mentions they must not fall back to other bases.
+    $c = if ($Target.StartsWith('/')) { Join-Path $root $Target.TrimStart('/') } else { Join-Path $FileDir $Target }
+    try { return (Test-Path -LiteralPath ([System.IO.Path]::GetFullPath($c))) } catch { return $false }
+}
+
 function Resolve-DocLink([string]$FileDir, [string]$Target) {
     # Absolute-looking repo paths (starting with docs/, src/, tools/, tests/, etc.)
     # and relative paths are both tried against three bases per the plan:
@@ -95,7 +102,7 @@ foreach ($file in $mdFiles) {
             $target = Get-CleanTarget $rawTarget
             if (Test-Skippable $target) { continue }
             if (Test-Excluded $target) { continue }
-            if (-not (Resolve-DocLink $fileDir $target)) {
+            if (-not (Resolve-MdLink $fileDir $target)) {
                 $broken.Add([PSCustomObject]@{
                     File   = $relFile
                     Line   = $lineNum
