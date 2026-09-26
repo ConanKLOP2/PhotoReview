@@ -8,7 +8,6 @@
 - **GUI check pending (user):** context-menu Zoom (Fit, 200/300/400 %, Zoom levels submenu arrow), "Taken:"/"Modified:" labels (info line + title bar), info-overlay auto-hide (Q-R34), Zoom card in Settings (level, click-to-zoom, arrow step %, shortcuts), sort modes Default / Name A→Z / Z→A (Q-R33), preload window setting (Q-R31). Earlier GUI checks (AR13, AR16, T89 Fit, Q-R30 UI feedback, #109) were reported OK by the user on 2026-09-26.
 - **Open PR (2026-09-27):** `fix/recyclebin-quota-guard` (F-WIN-2 A): Recycle refused when the fixed drive's Recycle Bin is off / too small / unreadable (`RecycleBinCapacity.cs`, ADR 0007 amendment). Awaiting review; not merged.
 - **Open decision:** Q-R29 (NAS: UI-thread stat in `ThumbnailCache.BuildKey`; no I/O cap on whole-folder preload) — awaiting user, see [OPEN-DECISIONS](docs/refactoring/OPEN-DECISIONS.md).
-- **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Releases are manual (Q-R24):** CI only tags `v2.0.N`; a human runs Actions > Release > Run workflow (tag input). Updates in the app: manual "Check for updates" only (Q-R23).
 - **Decision log:** handoff and decisions live on `master` only (no `develop`). Keep this file short: move finished detail to `docs/refactoring/HISTORY.md`.
