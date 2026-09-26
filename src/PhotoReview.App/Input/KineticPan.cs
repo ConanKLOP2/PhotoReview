@@ -165,3 +165,34 @@ internal struct KineticScroller
 
     private static double Finite(double value) => double.IsFinite(value) ? value : 0;
 }
+
+internal enum KeyboardPanResult
+{
+    /// <summary>The image does not scroll on that axis (e.g. Fit): the key keeps its normal meaning.</summary>
+    NotScrollable,
+    Panned,
+    /// <summary>Scrollable, but already at the edge in that direction.</summary>
+    AtEdge,
+}
+
+/// <summary>Arrow-key panning of a zoomed image: one press moves the view by a fraction of the viewport.</summary>
+internal static class KeyboardPan
+{
+    public const double StepFraction = 0.1;
+    // Sub-pixel slack: layout can leave an extent a fraction of a DIP above the viewport at Fit.
+    private const double Epsilon = 0.5;
+
+    public static (KeyboardPanResult Result, double Horizontal, double Vertical) Step(
+        int dx, int dy, double horizontal, double vertical, ScrollBounds bounds)
+    {
+        var max = dx != 0 ? bounds.MaxHorizontal : bounds.MaxVertical;
+        if (max <= Epsilon) return (KeyboardPanResult.NotScrollable, horizontal, vertical);
+        var current = dx != 0 ? horizontal : vertical;
+        var step = (dx != 0 ? bounds.ViewportWidth : bounds.ViewportHeight) * StepFraction * (dx + dy);
+        var target = Math.Clamp(current + step, 0, max);
+        if (Math.Abs(target - current) < Epsilon) return (KeyboardPanResult.AtEdge, horizontal, vertical);
+        return dx != 0
+            ? (KeyboardPanResult.Panned, target, vertical)
+            : (KeyboardPanResult.Panned, horizontal, target);
+    }
+}

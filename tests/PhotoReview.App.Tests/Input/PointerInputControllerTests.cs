@@ -313,6 +313,71 @@ public sealed class PointerInputControllerTests
         public TimeSpan Time { get; } = time;
     }
 
+    // ---- arrow-key panning of a zoomed image ----
+
+    [Fact]
+    public void Arrow_ZoomedImage_PansTenPercentOfTheViewport_WithoutNavigating()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 100;
+        _surface.VerticalOffset = 100;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Equal((180, 100), _surface.Scrolls[^1]);
+        Assert.True(_controller.TryPanByArrow(Key.Down, isRepeat: false));
+        Assert.Equal((180, 160), _surface.Scrolls[^1]);
+        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: true));
+        Assert.Equal((100, 160), _surface.Scrolls[^1]);
+        Assert.True(_controller.TryPanByArrow(Key.Up, isRepeat: true));
+        Assert.Equal((100, 100), _surface.Scrolls[^1]);
+        Assert.Equal(0, _next + _previous);
+    }
+
+    [Fact]
+    public void Arrow_StepIsClampedToTheEdge()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.HorizontalOffset = 1170; // max 1200
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Equal((1200, 0), _surface.Scrolls[^1]);
+    }
+
+    [Fact]
+    public void Arrow_AtFit_IsNotUsed_SoLeftRightStillNavigate()
+    {
+        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(Key.Down, isRepeat: true));
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public void Arrow_AtTheEdge_RepeatIsSwallowed_FreshPressFallsThroughToNavigation()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.HorizontalOffset = 1200;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: true));
+        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Empty(_surface.Scrolls);
+        // The other direction still pans.
+        Assert.True(_controller.TryPanByArrow(Key.Left, isRepeat: false));
+        Assert.Equal((1120, 0), _surface.Scrolls[^1]);
+    }
+
+    [Fact]
+    public void Arrow_OnlyScrollableAxisPans_OtherKeysAndNoImageAreIgnored()
+    {
+        _surface.ExtentWidth = 2000; // wide image: vertical fits
+
+        Assert.False(_controller.TryPanByArrow(Key.Up, isRepeat: false));
+        Assert.False(_controller.TryPanByArrow(Key.A, isRepeat: false));
+        _hasImages = false;
+        Assert.False(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Empty(_surface.Scrolls);
+    }
+
     private sealed class FakeSurface : IImageSurface
     {
         private readonly List<TaskCompletionSource> _heldYields = [];
