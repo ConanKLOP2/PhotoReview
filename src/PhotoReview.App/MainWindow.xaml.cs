@@ -2,9 +2,11 @@ using PhotoReview.Core.Localization;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Input;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Diagnostics;
@@ -360,6 +362,7 @@ public partial class MainWindow : Window
             case ReviewCommandType.Previous: await _viewModel.PreviousAsync(); break;
             case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
+            case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
         }
     }
 
@@ -401,4 +404,71 @@ public partial class MainWindow : Window
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
 
+    // ---- Context menu: "Click zoom level" submenu (presets + Custom…). Built once; refreshed (text + IsChecked) ----
+    // ---- on every open so a live language switch and a setting changed elsewhere both show correctly. ----
+
+    private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150];
+    private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
+
+    private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (_clickZoomPresetItems is null) BuildClickZoomMenu();
+        var current = _settings.ClickZoomPercent;
+        foreach (var item in _clickZoomPresetItems!)
+        {
+            var percent = (int)item.Tag!;
+            item.Header = Tr.MainMenuClickZoomLevelPreset(percent);
+            AutomationProperties.SetName(item, Tr.MainMenuClickZoomLevelPresetAutomationName(percent));
+            item.IsChecked = percent == current;
+        }
+    }
+
+    private void BuildClickZoomMenu()
+    {
+        _clickZoomPresetItems = [];
+        foreach (var percent in ClickZoomPresets)
+        {
+            var item = new System.Windows.Controls.MenuItem { IsCheckable = true, Tag = percent };
+            item.Click += ClickZoomPreset_Click;
+            _clickZoomPresetItems.Add(item);
+            ClickZoomMenu.Items.Add(item);
+        }
+        ClickZoomMenu.Items.Add(new System.Windows.Controls.Separator());
+        var custom = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelCustom };
+        AutomationProperties.SetName(custom, Tr.MainMenuClickZoomLevelCustomAutomationName);
+        custom.Click += ClickZoomCustom_Click;
+        ClickZoomMenu.Items.Add(custom);
+    }
+
+    private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem { Tag: int percent }) return;
+        await ApplyClickZoomLevelAsync(percent);
+    }
+
+    private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ClickZoomCustomDialog(_settings.ClickZoomPercent) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            await ApplyClickZoomLevelAsync(dialog.Value);
+        }
+    }
+
+    /// <summary>Persists the new click zoom level (same pattern as <c>MainViewModel.ToggleInfoOverlay</c>) and applies it now.</summary>
+    private async Task ApplyClickZoomLevelAsync(int percent)
+    {
+        var settings = _settings;
+        settings.ClickZoomPercent = percent;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The image still zooms for this session; only persisting the new level failed.
+            AppLog.Error("Could not save the click zoom level setting", ex);
+        }
+        await _pointer.SetClickZoomLevelAsync(percent);
+    }
 }

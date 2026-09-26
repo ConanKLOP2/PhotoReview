@@ -33,10 +33,17 @@ public class ShortcutMappings
     public string ToggleInfoOverlay { get; set; } = "I";
 
     /// <summary>
+    /// Toggles between Fit and <see cref="AppSettings.ClickZoomPercent"/>, anchored at the viewport centre -- the
+    /// keyboard equivalent of a mouse click-to-zoom (works regardless of <see cref="AppSettings.ClickToZoomEnabled"/>,
+    /// which only governs the mouse click). Empty = disabled. <c>D2</c> is the "2" key.
+    /// </summary>
+    public string ClickZoom { get; set; } = "D2";
+
+    /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
-    public static readonly IReadOnlyList<string> OptionalNames = [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder)];
+    public static readonly IReadOnlyList<string> OptionalNames = [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 

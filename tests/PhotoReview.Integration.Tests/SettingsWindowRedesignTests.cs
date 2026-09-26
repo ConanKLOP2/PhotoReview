@@ -145,6 +145,30 @@ public sealed class SettingsWindowRedesignTests
         });
     }
 
+    [Fact(DisplayName = "Clearing the ClickZoom shortcut is accepted (optional shortcut)")]
+    public async Task ClickZoomShortcutClears_IsAccepted()
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings()) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            try
+            {
+                window.Loaded += (_, _) =>
+                {
+                    Assert.False(string.IsNullOrEmpty(window.ClickZoomText.Text)); // has a default (D2) to begin with
+                    typeof(SettingsWindow).GetMethod("ClearClickZoom_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
+                        .Invoke(window, [window, new RoutedEventArgs()]);
+                    Assert.Equal(string.Empty, window.ClickZoomText.Text);
+                    InvokeSave(window);
+                };
+                Assert.True(window.ShowDialog());
+                Assert.Equal(string.Empty, window.Settings.Shortcuts.ClickZoom);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact(DisplayName = "Alias spellings of one key (Return/Enter, Prior/PageUp) show the duplicate warning and Save rejects them (Q-R25)")]
     public async Task AliasShortcuts_AreDuplicates_LiveAndOnSave()
     {
@@ -234,10 +258,11 @@ public sealed class SettingsWindowRedesignTests
                     window.KineticPanCheck.IsChecked = false;
                     window.MoveCopyReuseLastFolderCheck.IsChecked = true;
                     window.LastImageText.Text = "End";
-                    window.ZoomActualSizeText.Text = "D2";
+                    window.ZoomActualSizeText.Text = "D3"; // D2 is now ClickZoom's default; pick another free key
                     window.ToggleInfoOverlayText.Text = "J";
                     window.MoveToFolderText.Text = "K";
                     window.CopyToFolderText.Text = "L";
+                    window.ClickZoomText.Text = "D9";
                     window.ShowExifInfoCheck.IsChecked = true;
                     window.ExifFieldCameraCheck.IsChecked = true;
                     window.ExifFieldLensCheck.IsChecked = false;
@@ -262,10 +287,11 @@ public sealed class SettingsWindowRedesignTests
                 Assert.False(window.Settings.KineticPanEnabled);
                 Assert.True(window.Settings.MoveCopyReuseLastFolder);
                 Assert.Equal("End", window.Settings.Shortcuts.LastImage);
-                Assert.Equal("D2", window.Settings.Shortcuts.ZoomActualSize);
+                Assert.Equal("D3", window.Settings.Shortcuts.ZoomActualSize);
                 Assert.Equal("J", window.Settings.Shortcuts.ToggleInfoOverlay);
                 Assert.Equal("K", window.Settings.Shortcuts.MoveToFolder);
                 Assert.Equal("L", window.Settings.Shortcuts.CopyToFolder);
+                Assert.Equal("D9", window.Settings.Shortcuts.ClickZoom);
                 Assert.True(window.Settings.ShowExifInfo);
                 Assert.Equal(ExifInfoFields.Camera, window.Settings.ExifInfoFields);
             }

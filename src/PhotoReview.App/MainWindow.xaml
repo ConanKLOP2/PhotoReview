@@ -39,6 +39,8 @@
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
+                <Separator />
+                <MenuItem x:Name="ClickZoomMenu" Header="{loc:Tr main.menu.clickZoomLevel}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.automationName}" SubmenuOpened="ClickZoomMenu_SubmenuOpened" />
             </ContextMenu>
         </Grid.ContextMenu>
         <Border Background="{DynamicResource Dark.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

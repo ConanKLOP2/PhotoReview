@@ -106,6 +106,7 @@ public static class SettingsNormalizer
             shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
             shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";
             shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
+            shortcuts.ClickZoom = shortcuts.ClickZoom?.Trim() ?? "";
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
@@ -160,6 +161,7 @@ public static class SettingsNormalizer
         shortcuts.ToggleInfoOverlay = Resolve(nameof(ShortcutMappings.ToggleInfoOverlay), shortcuts.ToggleInfoOverlay);
         shortcuts.MoveToFolder = Resolve(nameof(ShortcutMappings.MoveToFolder), shortcuts.MoveToFolder);
         shortcuts.CopyToFolder = Resolve(nameof(ShortcutMappings.CopyToFolder), shortcuts.CopyToFolder);
+        shortcuts.ClickZoom = Resolve(nameof(ShortcutMappings.ClickZoom), shortcuts.ClickZoom);
         return disabled;
     }
 }

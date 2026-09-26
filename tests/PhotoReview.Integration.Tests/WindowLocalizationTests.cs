@@ -109,9 +109,13 @@ public sealed class WindowLocalizationTests
             {
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
-                var undo = Assert.IsType<MenuItem>(Assert.Single(root.ContextMenu.Items));
+                var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
+                var undo = menuItems[0];
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
+                var clickZoomLevel = menuItems[1];
+                Assert.Equal("Mức thu phóng khi nhấn", clickZoomLevel.Header);
+                Assert.Equal("Menu con mức thu phóng khi nhấn", AutomationProperties.GetName(clickZoomLevel));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
 
                 var texts = Texts(window);
