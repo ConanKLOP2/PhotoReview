@@ -63,6 +63,23 @@ public sealed class InstanceForwardPipeTests : IDisposable
         }
     }
 
+    [Fact(DisplayName = "A launch with more paths than the protocol limit is still delivered, trimmed to the limit, and the first path is kept (audit F2: only the first is ever opened)")]
+    public async Task Forward_MoreThanMaxPaths_DeliversFirstMaxPathsInOrder()
+    {
+        var (_, received, signal) = StartServer();
+        var files = Enumerable.Range(0, ForwardedPathProtocol.MaxPaths + 5).Select(i => MakeFile($"p{i:D2}.jpg")).ToList();
+
+        var outcome = await new InstanceForwardClient(_pipe).SendAsync(files, Timeout);
+
+        Assert.Equal(ForwardOutcome.Delivered, outcome);
+        Assert.True(await signal.WaitAsync(Timeout));
+        lock (received)
+        {
+            var only = Assert.Single(received);
+            Assert.Equal(files.Take(ForwardedPathProtocol.MaxPaths), only);
+        }
+    }
+
     [Fact(DisplayName = "N concurrent launches through the pipe and the coalescer produce one open of a forwarded path")]
     public async Task Forward_ConcurrentLaunches_CoalesceToOneOpen()
     {

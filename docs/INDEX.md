@@ -1,4 +1,6 @@
 # Documentation Index
+**Current source audit (2026-09-26):** [`refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md`](refactoring/REVIEW-2026-09-26-FULL-SOURCE-AUDIT.md) — five static P2 findings from Core/FileActions, App/WPF, and Imaging/Platform/tools lanes.
+
 **Review 2026-09-25 plan (T1):** [`refactoring/REVIEW-2026-09-25-PLAN.md`](refactoring/REVIEW-2026-09-25-PLAN.md) — verified findings, waves 1–5, Q-R decisions.
 
 Quick reference for finding documentation by purpose. Read-tier guides which files to load.
