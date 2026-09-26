@@ -122,6 +122,35 @@ public sealed class MouseSettingsTests
         Assert.False(reloaded.KineticPanEnabled);
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(-3, 1)]
+    [InlineData(101, 100)]
+    [InlineData(100000, 100)]
+    public void Load_OutOfRangeArrowPanStep_IsClampedAndReported(int stored, int expected)
+    {
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, string.Create(System.Globalization.CultureInfo.InvariantCulture, $$"""{ "ConfigVersion": 3, "ArrowPanStepPercent": {{stored}} }"""));
+
+        var loaded = _store.Load();
+
+        Assert.Equal(expected, loaded.ArrowPanStepPercent);
+        Assert.Contains(nameof(AppSettings.ArrowPanStepPercent), _store.LastLoadRepairs);
+    }
+
+    [Fact]
+    public void ArrowPanStep_DefaultsToTenPercent_AnOldConfigGetsItWithoutARepair_AndItRoundTrips()
+    {
+        Assert.Equal(10, new AppSettings().ArrowPanStepPercent);
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, """{ "ConfigVersion": 3, "KineticPanEnabled": true }""");
+        var loaded = _store.Load();
+        Assert.Equal(10, loaded.ArrowPanStepPercent);
+        Assert.Empty(_store.LastLoadRepairs);
+
+        loaded.ArrowPanStepPercent = 35;
+        _store.Save(loaded);
+        Assert.Equal(35, _store.Load().ArrowPanStepPercent);
+    }
+
     [Fact]
     public void ArrowKeyNavigatesAtZoomEdge_DefaultsOff_AnOldConfigGetsItWithoutARepair_AndItRoundTrips()
     {

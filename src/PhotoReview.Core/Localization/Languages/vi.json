@@ -705,5 +705,9 @@
   "settings.sortMode.hint": "Tên đi theo thứ tự của cửa sổ Explorer đang mở thư mục này (nếu có). Tên A→Z, Tên Z→A và Mặc định không bao giờ theo Explorer. Mặc định hiển thị file đúng thứ tự thư mục liệt kê, không sắp xếp.",
   "settings.arrowKeyNavigatesAtZoomEdge.label": "Phím mũi tên ở mép ảnh đang phóng to chuyển sang ảnh kế/trước",
   "settings.arrowKeyNavigatesAtZoomEdge.automationName": "Phím mũi tên ở mép ảnh đang phóng to",
-  "settings.arrowKeyNavigatesAtZoomEdge.hint": "Tắt (mặc định): phím mũi tên chỉ di chuyển trong ảnh đang phóng to; muốn đổi ảnh hãy quay về Fit. Bật: nhấn phím mũi tên thêm lần nữa ở mép sẽ đổi ảnh."
+  "settings.arrowKeyNavigatesAtZoomEdge.hint": "Tắt (mặc định): phím mũi tên chỉ di chuyển trong ảnh đang phóng to; muốn đổi ảnh hãy quay về Fit. Bật: nhấn phím mũi tên thêm lần nữa ở mép sẽ đổi ảnh.",
+  "settings.arrowPanStepPercent.label": "Bước di chuyển khi nhấn phím mũi tên (ảnh đang phóng to)",
+  "settings.arrowPanStepPercent.automationName": "Bước phím mũi tên, phần trăm khung nhìn",
+  "settings.arrowPanStepPercent.hint": "Mỗi lần nhấn phím mũi tên di chuyển ảnh đang phóng to bao nhiêu phần trăm cửa sổ (mặc định 10).",
+  "dialog.settingsInvalid.arrowPanStepPercent": "Bước phím mũi tên phải là số từ {min} đến {max}."
 }

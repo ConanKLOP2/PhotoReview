@@ -117,6 +117,15 @@ public class AppSettings
     /// <summary>Largest accepted <see cref="ClickZoomPercent"/>.</summary>
     public const int MaxClickZoomPercent = 800;
 
+    /// <summary>Smallest accepted <see cref="ArrowPanStepPercent"/>.</summary>
+    public const int MinArrowPanStepPercent = 1;
+
+    /// <summary>Largest accepted <see cref="ArrowPanStepPercent"/> (a whole viewport per press).</summary>
+    public const int MaxArrowPanStepPercent = 100;
+
+    /// <summary>Default <see cref="ArrowPanStepPercent"/>.</summary>
+    public const int DefaultArrowPanStepPercent = 10;
+
     /// <summary>Default <see cref="ClickZoomPercent"/>: 100 % = one source pixel per device pixel (ADR 0008).</summary>
     public const int DefaultClickZoomPercent = 100;
 
@@ -226,5 +235,8 @@ public class AppSettings
     /// arrow press at the edge of a zoomed image navigates to the next/previous photo (auto-repeat is swallowed).
     /// </summary>
     public bool ArrowKeyNavigatesAtZoomEdge { get; set; }
+
+    /// <summary>How far one arrow press moves a zoomed image, in percent of the viewport; [<see cref="MinArrowPanStepPercent"/>, <see cref="MaxArrowPanStepPercent"/>], default <see cref="DefaultArrowPanStepPercent"/>.</summary>
+    public int ArrowPanStepPercent { get; set; } = DefaultArrowPanStepPercent;
 }
 

@@ -80,6 +80,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.PreloadBackwardCount)] = w => w.PreloadBackwardBox.Text = "16", // 8 -> 16
         // feat/ui-dark-chrome-toolbar
         [nameof(AppSettings.ArrowKeyNavigatesAtZoomEdge)] = w => w.ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = true, // false -> true
+        [nameof(AppSettings.ArrowPanStepPercent)] = w => w.ArrowPanStepBox.Text = "25", // 10 -> 25
         [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = true, // false -> true (Q-R34 default off)
         [nameof(AppSettings.ToolbarAutoHideDelayMs)] = w => w.ToolbarAutoHideDelayBox.Text = "3000", // 1500 -> 3000
         [nameof(AppSettings.InfoOverlayFontSize)] = w => w.InfoOverlayFontSizeBox.Text = "18", // 12 -> 18
@@ -131,6 +132,7 @@ public sealed class SettingsWindowRoundTripTests
         // feat/ui-dark-chrome-toolbar
         [nameof(AppSettings.ArrowKeyNavigatesAtZoomEdge)] = true,
         [nameof(AppSettings.ToolbarAutoHide)] = true,
+        [nameof(AppSettings.ArrowPanStepPercent)] = 25,
         [nameof(AppSettings.ToolbarAutoHideDelayMs)] = 3000,
         [nameof(AppSettings.InfoOverlayFontSize)] = 18.0,
         [nameof(AppSettings.InfoOverlayAutoHide)] = true,

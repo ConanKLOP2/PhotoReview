@@ -585,5 +585,9 @@
   "enum.imageSortMode.default": "Sort option Default: files in the order the folder lists them (no sort, no Explorer order).",
   "enum.imageSortMode.nameAscending": "Sort option NameAscending: the app natural name order, never Explorer order.",
   "enum.imageSortMode.nameDescending": "Sort option NameDescending: exact reverse of NameAscending, never Explorer order.",
-  "settings.sortMode.hint": "Help text under the sort combo box."
+  "settings.sortMode.hint": "Help text under the sort combo box.",
+  "settings.arrowPanStepPercent.label": "Settings > Mouse & zoom: label for the arrow-key pan step box (percent of the viewport per press, 1-100).",
+  "settings.arrowPanStepPercent.automationName": "AutomationProperties.Name of the arrow-key pan step box.",
+  "settings.arrowPanStepPercent.hint": "Help text under the arrow-key pan step box.",
+  "dialog.settingsInvalid.arrowPanStepPercent": "MessageBox text shown on Save when the arrow step is not a number in [{min}, {max}] (AppSettings.MinArrowPanStepPercent/MaxArrowPanStepPercent)."
 }

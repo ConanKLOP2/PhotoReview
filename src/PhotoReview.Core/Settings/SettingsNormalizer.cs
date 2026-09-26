@@ -134,6 +134,12 @@ public static class SettingsNormalizer
             settings.ClickZoomPercent = clickZoom;
             fixedNames.Add(nameof(AppSettings.ClickZoomPercent));
         }
+        var arrowPanStep = Math.Clamp(settings.ArrowPanStepPercent, AppSettings.MinArrowPanStepPercent, AppSettings.MaxArrowPanStepPercent);
+        if (arrowPanStep != settings.ArrowPanStepPercent)
+        {
+            settings.ArrowPanStepPercent = arrowPanStep;
+            fixedNames.Add(nameof(AppSettings.ArrowPanStepPercent));
+        }
 
         // feat/ui-dark-chrome-toolbar
         var toolbarDelay = Math.Clamp(settings.ToolbarAutoHideDelayMs, AppSettings.MinToolbarAutoHideDelayMs, AppSettings.MaxToolbarAutoHideDelayMs);

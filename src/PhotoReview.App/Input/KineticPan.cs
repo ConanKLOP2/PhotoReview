@@ -177,7 +177,7 @@ internal enum KeyboardPanResult
     AtEdge,
 }
 
-/// <summary>Arrow-key panning of a zoomed image: one press moves the view by a fraction of the viewport.</summary>
+/// <summary>Arrow-key panning of a zoomed image: one press moves the view by a fraction of the viewport (<c>ArrowPanStepPercent</c>; <see cref="StepFraction"/> is the default).</summary>
 internal static class KeyboardPan
 {
     public const double StepFraction = 0.1;
@@ -185,12 +185,12 @@ internal static class KeyboardPan
     private const double Epsilon = 0.5;
 
     public static (KeyboardPanResult Result, double Horizontal, double Vertical) Step(
-        int dx, int dy, double horizontal, double vertical, ScrollBounds bounds)
+        int dx, int dy, double horizontal, double vertical, ScrollBounds bounds, double stepFraction = StepFraction)
     {
         var max = dx != 0 ? bounds.MaxHorizontal : bounds.MaxVertical;
         if (max <= Epsilon) return (KeyboardPanResult.NotScrollable, horizontal, vertical);
         var current = dx != 0 ? horizontal : vertical;
-        var step = (dx != 0 ? bounds.ViewportWidth : bounds.ViewportHeight) * StepFraction * (dx + dy);
+        var step = (dx != 0 ? bounds.ViewportWidth : bounds.ViewportHeight) * stepFraction * (dx + dy);
         var target = Math.Clamp(current + step, 0, max);
         if (Math.Abs(target - current) < Epsilon) return (KeyboardPanResult.AtEdge, horizontal, vertical);
         return dx != 0
