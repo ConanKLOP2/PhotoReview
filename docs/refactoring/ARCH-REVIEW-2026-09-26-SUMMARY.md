@@ -22,7 +22,7 @@ Bốn lane đọc mã độc lập (Imaging, App, Core/Platform, build/test) + l
 | F13 | `native/x64/turbojpeg.dll` không bị commit chỉ nhờ pattern chung `x64/` | `.gitignore:24` | P2 | AR12 |
 | F14 | Không có `TreatWarningsAsErrors` dù quy ước là 0 warning | `Directory.Build.props`; `.editorconfig:29,36` | P2 | AR12 |
 | F15 | GC/runtime để mặc định, chưa ghi lý do (khác `PublishReadyToRun` có ghi) | `PhotoReview.App.csproj:10-14` | P3 | AR12 |
-| F16 | `MainWindow.xaml.cs` 708 dòng gộp: lifecycle/DPI, máy trạng thái pan/kinetic/wheel/click-zoom (:34-50, :283-548), hội tụ Fit (:646-698), phím tắt (:565-616), drag-drop, menu | `MainWindow.xaml.cs` | P2 | AR13 |
+| F16 | `MainWindow.xaml.cs` 715 dòng gộp: lifecycle/DPI, máy trạng thái pan/kinetic/wheel/click-zoom (:34-50, :283-548), hội tụ Fit (:646-698), phím tắt (:565-616), drag-drop, menu | `MainWindow.xaml.cs` | P2 | AR13 |
 | F17 | `MainViewModel` tự `new` 3 controller trong ctor; các controller nhận `this` làm sink → không inject thẳng được | `MainViewModel.cs:106-119` | P3 | AR14 |
 | F18 | Hai bản "temp → encode → rename" (`DiskCacheStore.cs:84`, `PreviewCacheFile.cs:110`); hai overload `logContext` không ai gọi và bỏ tham số | `DiskCacheStore.cs:255,317` | P3 | AR15 |
 | F19 | `SourceBytesCache.GetOrRead` chặn đồng bộ trên `Task.Run` dù caller đã ở worker | `SourceBytesCache.cs:52-61` | P3 (flag mặc định tắt) | AR15 |
@@ -38,7 +38,7 @@ Bốn lane đọc mã độc lập (Imaging, App, Core/Platform, build/test) + l
 | AR10 | Ngân sách RAM live (đảo Q-R19) | Q-AR6 | — | Không (perf gate không đổi đường nóng) | sonnet | ❌ CLOSED — Q-AR6 (a), không sửa mã |
 | AR11 | Dọn `AppSettings` tĩnh; round-trip Settings UI | — | — | Không | sonnet | ✅ DONE (integration PR) — allowlist Core `File.*` 6 file có lý do; `SettingsWindow` giữ store tuỳ chọn |
 | AR12 | Vệ sinh build: `.gitignore`, warnings-as-errors, ghi chú GC | — | — | Không | haiku (12a/12c), sonnet (12b) | ✅ DONE (integration PR) — 0 warning cần sửa khi bật warnings-as-errors |
-| AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | ✅ CODE DONE (integration PR) — `MainWindow.xaml.cs` 708 → 358 dòng; **GUI check: người dùng** |
+| AR13 | Tách `MainWindow`: `PointerInputController`, `FitViewController` | — | AR14 nếu làm (cùng vùng) | **GUI** (pan, wheel, click-zoom, Fit = T89) | strongest | ✅ CODE DONE (integration PR) — `MainWindow.xaml.cs` 715 → 404 dòng (phần còn lại: ctor/wiring, lifecycle, `Window_KeyDown`, forward menu — plan cho giữ); **GUI check: người dùng** |
 | AR14 | Lắp ráp controller của `MainViewModel` | Q-AR10 | — | Không | sonnet | ✅ DONE — Q-AR10 (a), chỉ comment |
 | AR15 | Dọn cache Imaging (overload chết, 1 writer nguyên tử, `SourceBytesCache` không hop thread) | — | — | Không | sonnet | ✅ DONE (integration PR) — 15c chờ đo perf `UseSourceBytesCache=true` |
 | AR16 | Probe đọc được khi mở folder: đo rồi quyết | Q-AR7 | — | **Đo trên máy thật** (F4) | strongest (quyết định), sonnet (đo) | 🔄 Bước 1 (đo) chưa chạy |

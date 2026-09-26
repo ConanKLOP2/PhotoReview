@@ -66,7 +66,7 @@ internal sealed class FitViewController(IFitSurface surface, ViewerState viewer,
 }
 ```
 
-- **Giữ đúng hai pass** (rule "No `ApplyFitViewAsync` single-pass without T89 evidence"): chỉ di chuyển, không đổi số pass, không đổi thứ tự `UpdateLayout → UpdateFitSize → yield Render → snapshot`.
+- **Giữ nguyên vòng hội tụ (tối đa 3 pass, dừng sớm khi ổn định)** (rule "No `ApplyFitViewAsync` single-pass without T89 evidence"): chỉ di chuyển, không đổi số pass, không đổi thứ tự `UpdateLayout → UpdateFitSize → yield Render → snapshot`.
 - `UpdateFitSize`/`UpdateTargetDecodeBox` (176–201) ở lại `MainWindow` (chúng gắn `ViewportSizeSource` và `SizeChanged`); controller gọi qua `surface`.
 
 ### Sau khi tách
@@ -79,7 +79,7 @@ internal sealed class FitViewController(IFitSurface surface, ViewerState viewer,
   - Wheel + `MouseWheelAction.Zoom` → gọi `zoomAtPoint`; `Ctrl` đảo sang next/prev theo `WheelGestureInterpreter` (mutation: bỏ `StopKinetic()` đầu `OnWheel` → test "wheel dừng glide" đỏ).
   - Press → move quá ngưỡng → release: `surface.ScrollTo` được gọi với offset đúng; release nhanh (< ngưỡng) không zoom khi `_panMoved`.
   - Click (không move) + `ClickToZoomEnabled` → `clickZoom`; tắt → không.
-  - Glide: release với vận tốc → `HookRenderFrame`; `OnLostCapture` → `Unhook` (mutation: bỏ unhook → đỏ).
+  - Glide: release với vận tốc → `HookRenderFrame`; đóng cửa sổ/`StopKinetic` → `Unhook` (mutation: bỏ unhook → đỏ). Ghi chú khi làm: code thật không dừng glide khi mất capture; giữ nguyên hành vi đó.
   - `Dispose` unhook khi đang glide.
 - `tests/PhotoReview.App.Tests/Coordinators/FitViewControllerTests.cs`
   - Snapshot ổn định sau pass 2 → không chạy pass 3 (đếm `Capture`); không ổn định → đủ 3 pass rồi `ScrollHome` (mutation: đổi `pass < 3` thành `< 1` → đỏ).
