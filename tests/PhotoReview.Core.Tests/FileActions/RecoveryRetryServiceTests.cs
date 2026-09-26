@@ -37,6 +37,42 @@ public sealed class RecoveryRetryServiceTests
         _service = new RecoveryRetryService(_journal, _fs, _clock);
     }
 
+    [Fact(DisplayName = "F3: a Failed size-mismatch Move (source gone, destination present) is DestinationChanged, Retry is refused and Dismiss works")]
+    public async Task SizeMismatchMove_SourceGone_RecoveryRefusesRetryAndAllowsDismiss()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        var fileActions = new FileActionService(_journal, _fs, _clock, new NoRecycle(), (from, to) =>
+        {
+            _fs.Move(from, to);
+            _fs.WriteAllTextAtomic(to, "x");
+            return Task.CompletedTask;
+        });
+        var result = await fileActions.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"D:\Backup"));
+        Assert.True(result.SourceRemoved);
+        var failed = Assert.Single(_journal.ReadFailedOperations());
+
+        var check = new RecoveryFileCheck(_fs).Check(failed);
+        Assert.Equal(RecoveryVerdict.DestinationChanged, check.Verdict);
+
+        var retry = await _service.RetryMoveOrCopyAsync(failed);
+        Assert.False(retry.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreRecoverySourceMissing, retry.Message);
+        Assert.False(_fs.FileExists(source));
+        Assert.True(_fs.FileExists(@"D:\Backup\a.jpg"));
+        Assert.Equal(1, _fs.GetFileStat(@"D:\Backup\a.jpg")!.Length);
+
+        _journal.Dismiss([failed]);
+        Assert.Empty(_journal.ReadFailedOperations());
+        Assert.True(_fs.FileExists(@"D:\Backup\a.jpg"));
+    }
+
+    private sealed class NoRecycle : IRecycleBin
+    {
+        public void SendToRecycleBin(string path) => throw new InvalidOperationException("must not recycle");
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
+    }
+
     [Fact(DisplayName = "RetryMoveOrCopyAsync executes Move successfully")]
     public async Task RetryMove_Success()
     {
