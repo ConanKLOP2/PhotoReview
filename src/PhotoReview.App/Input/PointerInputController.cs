@@ -335,9 +335,10 @@ internal sealed class PointerInputController
 
     /// <summary>
     /// Arrow keys on a zoomed image move the view by <see cref="KeyboardPan.StepFraction"/> of the viewport instead
-    /// of navigating. Returns true when the key was used: it panned, or it is an auto-repeat at the edge (so holding
-    /// the key never runs on into the next images). False when the image does not scroll on that axis (Fit) or on a
-    /// fresh press at the edge, so the key keeps its normal meaning (Left/Right navigate).
+    /// of navigating. Returns true when the key was used. By default (ArrowKeyNavigatesAtZoomEdge off) every arrow key is
+    /// used while the image is zoomed (pan, or nothing at an edge / on a non-scrollable axis); false only at Fit, so
+    /// Left/Right navigate. With the setting on, a fresh press at the edge (or on a non-scrollable axis) is not used
+    /// and navigates; an auto-repeat at the edge is swallowed. See <see cref="KeyboardPan.ConsumesKey"/>.
     /// </summary>
     public bool TryPanByArrow(Key key, bool isRepeat)
     {
@@ -358,10 +359,8 @@ internal sealed class PointerInputController
                 StopKinetic();
                 _surface.ScrollTo(horizontal, vertical);
                 return true;
-            case KeyboardPanResult.AtEdge:
-                return isRepeat;
             default:
-                return false;
+                return KeyboardPan.ConsumesKey(result, isRepeat, _settings().ArrowKeyNavigatesAtZoomEdge, bounds);
         }
     }
 

@@ -197,6 +197,22 @@ internal static class KeyboardPan
             ? (KeyboardPanResult.Panned, target, vertical)
             : (KeyboardPanResult.Panned, horizontal, target);
     }
+
+    /// <summary>True when the image scrolls on either axis (i.e. it is zoomed in, not at Fit).</summary>
+    public static bool IsZoomed(ScrollBounds bounds) => bounds.MaxHorizontal > Epsilon || bounds.MaxVertical > Epsilon;
+
+    /// <summary>
+    /// Whether the arrow key is consumed (true) or falls through to its normal meaning (false, Left/Right navigate).
+    /// Default (<paramref name="navigatesAtEdge"/> false): while zoomed every arrow key is consumed, so a zoomed image
+    /// is never left by accident; only at Fit does the key fall through. With <paramref name="navigatesAtEdge"/>: a pan
+    /// or an auto-repeat at the edge is consumed; a fresh press at the edge or on a non-scrollable axis falls through.
+    /// </summary>
+    public static bool ConsumesKey(KeyboardPanResult result, bool isRepeat, bool navigatesAtEdge, ScrollBounds bounds)
+    {
+        if (result == KeyboardPanResult.Panned) return true;
+        if (!navigatesAtEdge) return IsZoomed(bounds);
+        return result == KeyboardPanResult.AtEdge && isRepeat;
+    }
 }
 
 /// <summary>
