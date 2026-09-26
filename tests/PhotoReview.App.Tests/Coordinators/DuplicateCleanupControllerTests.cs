@@ -1,6 +1,7 @@
 using System.IO;
 using PhotoReview.Imaging;
 using PhotoReview.App.Coordinators;
+using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
@@ -78,6 +79,82 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
 
         Assert.Equal(0, sourceBytes.Count);
         Assert.Equal(Tr.StatusDuplicateCheckCanceledFolderChanged, sink.Statuses[^1]); // a "checking... Esc cancels" status precedes it
+    }
+
+    /// <summary>a.jpg and "a (1).jpg" are identical: "a (1).jpg" is the numbered copy the batch recycles.</summary>
+    private (DuplicateCleanupController Controller, ReloadingSink Sink, RecordingPreload Preload, string Removed) NewBatch()
+    {
+        var folder = Path.Combine(_root, "album");
+        Directory.CreateDirectory(folder);
+        var keep = Path.Combine(folder, "a.jpg");
+        var removed = Path.Combine(folder, "a (1).jpg");
+        File.WriteAllBytes(keep, new byte[2048]);
+        File.WriteAllBytes(removed, new byte[2048]);
+        var catalog = new ReviewCatalog();
+        catalog.Reset([keep, removed]);
+        var fs = new PhysicalFileSystem();
+        var fileActions = new FileActionService(new OperationJournal(new AppPaths(_root), fs, new SystemClock()), fs, new SystemClock(), new DeletingRecycleBin());
+        var preview = new PreviewImageService(new ReviewMetrics(), () => false, () => new DecodeBox(1920, 0), capacityBytes: 16 * 1024 * 1024);
+        var sink = new ReloadingSink();
+        var preload = new RecordingPreload();
+        var controller = new DuplicateCleanupController(
+            new GenerationClock(), catalog, fileActions, new FileHashService(new SourceBytesCache(1024 * 1024)),
+            fs, dialogService: null, new InlineUiScheduler(),
+            preload, thumbnailCache: null, previewService: preview, sink);
+        return (controller, sink, preload, removed);
+    }
+
+    [Fact(DisplayName = "Batch duplicate cleanup: the 'Batch done' status is set after the folder reload, which clears the status line")]
+    public async Task RemoveDuplicatesAsync_BatchDoneStatus_SurvivesFolderReload()
+    {
+        var (controller, sink, _, removed) = NewBatch();
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.False(File.Exists(removed));
+        Assert.Equal(1, sink.Reloads);
+        Assert.Equal(StatusFormatter.BatchDone(1, 0), sink.Current);
+    }
+
+    [Fact(DisplayName = "Batch duplicate cleanup evicts each recycled file from the preload-key set")]
+    public async Task RemoveDuplicatesAsync_EvictsRecycledFilesFromPreloadKeys()
+    {
+        var (controller, _, preload, removed) = NewBatch();
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Equal([Path.GetFullPath(removed).ToUpperInvariant()], preload.RemovedKeys);
+    }
+
+    /// <summary>Like MainViewModel: opening the folder clears the status line.</summary>
+    private sealed class ReloadingSink : IDuplicateCleanupSink
+    {
+        public string? Current { get; private set; }
+        public int Reloads { get; private set; }
+        public void SetStatusText(string status) => Current = status;
+        public Task OpenFolderAsync(string folder, string? initialPath = null)
+        {
+            Reloads++;
+            Current = null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingPreload : IPreloadController
+    {
+        public List<string> RemovedKeys { get; } = [];
+        public Task PreloadAroundAsync(int center) => Task.CompletedTask;
+        public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
+        public void Cancel() { }
+        public void RemovePreloadedKeysForPath(string normalizedPath) => RemovedKeys.Add(normalizedPath);
+        public void ClearPreloadedKeys() { }
+    }
+
+    /// <summary>Fake: deletes the file instead of touching the user's real Recycle Bin (AGENTS.md).</summary>
+    private sealed class DeletingRecycleBin : IRecycleBin
+    {
+        public void SendToRecycleBin(string path) => File.Delete(path);
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
     }
 
     /// <summary>Forwards to the real file system; the first size lookup (the scan's stat pass) simulates a folder switch.</summary>
