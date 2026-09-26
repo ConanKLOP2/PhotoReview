@@ -41,7 +41,7 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.InstanceMode), nameof(AppSettings.ShowInfoOverlay), nameof(AppSettings.ShowFileInfo),
         nameof(AppSettings.ShowFolderInfo), nameof(AppSettings.MouseWheelAction), nameof(AppSettings.ClickToZoomEnabled),
         nameof(AppSettings.ClickZoomPercent), nameof(AppSettings.KineticPanEnabled), nameof(AppSettings.MoveCopyReuseLastFolder),
-        nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields),
+        nameof(AppSettings.ShowExifInfo), nameof(AppSettings.ExifInfoFields), nameof(AppSettings.KineticGlideSmoothing),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]
@@ -232,6 +232,7 @@ public sealed class SettingsWindowRedesignTests
                     window.ClickToZoomCheck.IsChecked = false;
                     window.ClickZoomPercentBox.Text = "222";
                     window.KineticPanCheck.IsChecked = false;
+                    window.KineticGlideSmoothingCombo.SelectedIndex = 0;
                     window.MoveCopyReuseLastFolderCheck.IsChecked = true;
                     window.LastImageText.Text = "End";
                     window.ZoomActualSizeText.Text = "D2";
@@ -260,6 +261,7 @@ public sealed class SettingsWindowRedesignTests
                 Assert.False(window.Settings.ClickToZoomEnabled);
                 Assert.Equal(222, window.Settings.ClickZoomPercent);
                 Assert.False(window.Settings.KineticPanEnabled);
+                Assert.Equal(KineticGlideSmoothing.Off, window.Settings.KineticGlideSmoothing);
                 Assert.True(window.Settings.MoveCopyReuseLastFolder);
                 Assert.Equal("End", window.Settings.Shortcuts.LastImage);
                 Assert.Equal("D2", window.Settings.Shortcuts.ZoomActualSize);
@@ -274,6 +276,31 @@ public sealed class SettingsWindowRedesignTests
         });
     }
 
+    [Theory(DisplayName = "Glide smoothing combo shows the stored mode and an untouched Save keeps it")]
+    [InlineData(KineticGlideSmoothing.Off, 0)]
+    [InlineData(KineticGlideSmoothing.Predict, 1)]
+    public async Task GlideSmoothingCombo_ShowsTheStoredMode_AndSaveKeepsIt(KineticGlideSmoothing stored, int index)
+    {
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings { KineticGlideSmoothing = stored }) { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            var shown = -1;
+            try
+            {
+                window.Loaded += (_, _) =>
+                {
+                    shown = window.KineticGlideSmoothingCombo.SelectedIndex;
+                    InvokeSave(window);
+                };
+                Assert.True(window.ShowDialog());
+
+                Assert.Equal(index, shown);
+                Assert.Equal(stored, window.Settings.KineticGlideSmoothing);
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
     [Fact(DisplayName = "Out-of-range click-zoom percent is rejected by Save")]
     public async Task ClickZoomPercent_OutOfRange_IsRejected()
     {

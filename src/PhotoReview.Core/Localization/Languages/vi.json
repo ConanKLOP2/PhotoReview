@@ -638,5 +638,10 @@
   "benchmark.quickCheck": "Kiểm tra nhanh",
   "benchmark.quickCheck.automationName": "Chạy kiểm tra nhanh 10 lần lặp với Fast Sequential",
   "benchmark.imageLimit.label": "Số ảnh cần kiểm tra (0 = tất cả):",
-  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục"
+  "benchmark.imageLimit.automationName": "Số lượng ảnh đưa vào lượt đo benchmark, 0 nghĩa là tất cả ảnh được hỗ trợ trong thư mục",
+  "settings.kineticGlideSmoothing.label": "Làm mượt khi trượt",
+  "settings.kineticGlideSmoothing.automationName": "Làm mượt chuyển động trượt quán tính",
+  "settings.kineticGlideSmoothing.hint": "Cho ảnh trượt khớp với tần số quét của màn hình. Tắt để so sánh.",
+  "enum.kineticGlideSmoothing.off": "Tắt",
+  "enum.kineticGlideSmoothing.predict": "Khớp tần số màn hình"
 }

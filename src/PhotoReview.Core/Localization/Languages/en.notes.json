@@ -569,5 +569,10 @@
   "benchmark.quickCheck": "Button.Content next to benchmark.run; always runs fast-sequential with 10 iterations, ignoring the profile list selection.",
   "benchmark.quickCheck.automationName": "AutomationProperties.Name of the Quick check button (screen readers).",
   "benchmark.imageLimit.label": "Label next to the image-limit TextBox.",
-  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers)."
+  "benchmark.imageLimit.automationName": "AutomationProperties.Name of the image-limit TextBox (screen readers).",
+  "settings.kineticGlideSmoothing.label": "Settings > Mouse & zoom: label of the combo box choosing how the kinetic glide is timed (Off / match the monitor refresh).",
+  "settings.kineticGlideSmoothing.automationName": "AutomationProperties.Name of the glide smoothing combo box (screen readers).",
+  "settings.kineticGlideSmoothing.hint": "Help text under the glide smoothing combo box.",
+  "enum.kineticGlideSmoothing.off": "Glide smoothing option: the original timing (WPF frame times).",
+  "enum.kineticGlideSmoothing.predict": "Glide smoothing option: each glide step lands on the monitor's next refresh (vblank)."
 }

@@ -171,4 +171,15 @@ Q-R17 works as designed (F4 now keeps the whole folder in ~10 GB of RAM, AGENTS.
 - **Frame pacing is the limit:** glide 95-150 fps on the 240 Hz panel, 30-45 % of frames arrive after a missed vsync (gaps 8-17 ms), judder 50-75 frames/s. The **control scene is the same** (94-153 fps, judder 52-74/s). The gaps are phase-locked to the 59.94 Hz monitor (phase-lock R 0.31-0.76 at 16.68 ms vs <= 0.22 at 16.2/17.2 ms): DWM/WPF pacing with a mixed 240/60 Hz, hybrid-GPU setup. On the Dell itself frames come at 4-17 ms intervals on WPF's 240 Hz clock.
 - **Tried, no effect** (interleaved A/B, same harness): 1 ms timer resolution, process AboveNormal + UI thread Highest, keeping the UI thread busy, extra render ticks.
 - **Drag:** a 125 Hz mouse on a 240 Hz display leaves ~40 % of frames with no movement (inherent to input rate).
-- **Options (not implemented):** render the viewer through a flip-model D3D11/DirectComposition swap chain (large, risky); frame-synchronised drag with pointer interpolation (+1 input interval latency); user-side check: disconnect/disable the 60 Hz monitor or set both to the same rate and compare.
+- **Options:** flip-model D3D11/DirectComposition swap chain (large, risky; not done); frame-synchronised drag with pointer interpolation (+1 input interval of latency; not done); app-side glide smoothing (done, below).
+
+**Glide smoothing `KineticGlideSmoothing` (same branch, default Predict).** A background thread waits for the vblanks of the monitor under the window (`D3DKMTWaitForVerticalBlankEvent`; `WindowsDisplayClock`, DWM fallback) and a `VBlankEstimator` derives period + phase for any rate; `GlideFrameClock` steps each glide frame to the refresh it is expected on (first vblank >= now + 1 ms) instead of RenderingTime. Harness metric "SEEN": a frame is shown from the first vblank of the window's monitor after its UI work + an assumed latency (0.5/2/4 ms, all reported); per shown frame, speed = displacement / refreshes to the next shown frame, error vs the median of 7 neighbours; judder = |error| > 20 % or a change of hold pattern. Off vs Predict interleaved, 6 trials each, CPU 30-80 % (other agents):
+
+| Monitor (real) | Mode | shown fps | speed error RMS (0.5/2/4 ms) | judder/s (0.5/2/4 ms) |
+|---|---|---|---|---|
+| 240 Hz panel | Off | 155-161 | 0.44 / 0.43 / 0.43 | 77 / 78 / 75 |
+| 240 Hz panel | Predict | 144-153 | 0.15 / 0.31 / 0.26 | 71 / 85 / 76 |
+| Dell 59.94 Hz | Off | 60 (675 frames never seen) | 0.69 / 0.62 / 0.32 | 43 / 40 / 31 |
+| Dell 59.94 Hz | Predict | 51-55 | 0.11 / 0.13 / 0.27 | 12 / 13 / 17 |
+
+On 240 Hz the speed jumps drop (>20 % jumps 55 -> 11-32/s) but the irregular hold pattern stays (WPF pacing); on 60 Hz both drop and WPF renders 88 instead of 129 fps. Cadence locks (every 2nd/4th refresh) were measured worse (intervals spread 1-9 refreshes) and dropped. 75/144 Hz: simulated only (unit tests with 13.33/6.94 ms periods); no such monitor here and display settings were not changed.

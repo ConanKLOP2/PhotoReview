@@ -112,6 +112,7 @@ public static class SettingsNormalizer
 
         // feat/mouse-zoom
         if (!Enum.IsDefined(settings.MouseWheelAction)) { settings.MouseWheelAction = MouseWheelAction.Zoom; fixedNames.Add(nameof(AppSettings.MouseWheelAction)); }
+        if (!Enum.IsDefined(settings.KineticGlideSmoothing)) { settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; fixedNames.Add(nameof(AppSettings.KineticGlideSmoothing)); }
         var clickZoom = Math.Clamp(settings.ClickZoomPercent, AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent);
         if (clickZoom != settings.ClickZoomPercent)
         {

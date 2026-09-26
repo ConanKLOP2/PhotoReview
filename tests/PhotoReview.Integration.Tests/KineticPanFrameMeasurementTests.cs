@@ -57,6 +57,7 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
         var presented = new List<string>();
         var csv = new StringBuilder("trial,phase,tick,wallMs,renderingMs,h,v,gen0,gen2,moves,layoutEndMs,opMs\n");
         var byMode = Modes.ToDictionary(m => m, _ => (Drag: new List<PhaseStats>(), Glide: new List<PhaseStats>()));
+        var perceivedByMode = Modes.ToDictionary(m => m, _ => PresentLatencyModelsMs.Select(_ => new List<Perceived>()).ToArray());
 
         try
         {
@@ -89,15 +90,21 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
                     var mode = Modes[trial % Modes.Length];
                     PhaseStats drag, glide;
                     string rows;
-                    using (new ModeScope(mode)) (drag, glide, rows) = await RunTrialAsync(window, trial, moveHz, refresh.PeriodMs);
+                    List<Perceived> seen;
+                    window.Settings.KineticGlideSmoothing = SmoothingFor(mode);
+                    using (new ModeScope(mode)) (drag, glide, rows, seen) = await RunTrialAsync(window, trial, moveHz, refresh.PeriodMs);
                     byMode[mode].Drag.Add(drag);
                     byMode[mode].Glide.Add(glide);
+                    for (var l = 0; l < seen.Count; l++) perceivedByMode[mode][l].Add(seen[l]);
                     csv.Append(rows);
-                    output.WriteLine($"trial {trial} [{mode}]: DRAG  {drag}");
                     output.WriteLine($"trial {trial} [{mode}]: GLIDE {glide}");
+                    output.WriteLine($"trial {trial} [{mode}]: SEEN  {seen[0]}");
                     await Frames(20);
                 }
-            }, TimeSpan.FromMinutes(3));
+                var monitorTiming = PhotoReview.Platform.Windows.WindowsDisplayClock.Instance.GetTiming(new System.Windows.Interop.WindowInteropHelper(window).Handle);
+                output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                    $"monitor under the window: {(monitorTiming is { } mt ? Stopwatch.Frequency / (double)mt.RefreshPeriod : double.NaN):0.000} Hz (vblank observer)"));
+            }, TimeSpan.FromMinutes(5));
         }
         finally
         {
@@ -108,20 +115,26 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
         {
             output.WriteLine($"[{mode}] DRAG  total: " + PhaseStats.Combine(byMode[mode].Drag));
             output.WriteLine($"[{mode}] GLIDE total: " + PhaseStats.Combine(byMode[mode].Glide));
+            for (var l = 0; l < PresentLatencyModelsMs.Length; l++)
+                output.WriteLine($"[{mode}] SEEN(lat {PresentLatencyModelsMs[l]:0.0} ms) total: " + Perceived.Combine(perceivedByMode[mode][l]));
         }
         if (!string.IsNullOrWhiteSpace(csvPath)) File.WriteAllText(csvPath, csv.ToString());
     }
 
-    private static async Task<(PhaseStats Drag, PhaseStats Glide, string Csv)> RunTrialAsync(MainWindow window, int trial, double moveHz, double periodMs)
+    private static async Task<(PhaseStats Drag, PhaseStats Glide, string Csv, List<Perceived> Seen)> RunTrialAsync(MainWindow window, int trial, double moveHz, double periodMs)
     {
         var scroll = window.ImageScroll;
         var pointer = window.PointerInput;
         scroll.ScrollToHorizontalOffset(scroll.ScrollableWidth * 0.1);
         scroll.ScrollToVerticalOffset(scroll.ScrollableHeight * 0.1);
         await Frames(5);
+        // The vblank grid of the monitor under the window (every mode, so the observer thread runs in all of them).
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        for (var warm = 0; warm < 200 && PhotoReview.Platform.Windows.WindowsDisplayClock.Instance.GetTiming(hwnd) is null; warm++) await Frames(1);
 
         var ticks = new List<Tick>(1024);
         var clock = Stopwatch.StartNew();
+        var startTimestamp = Stopwatch.GetTimestamp();
         double lastLayoutEnd = 0;
         var moves = 0;
         var phase = "pre";
@@ -140,12 +153,15 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
         };
         var glideStartedAt = double.NaN;
         var lastChangeAt = 0.0;
+        PhotoReview.Core.Abstractions.DisplayTiming? lastTiming = null;
         var glideDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         EventHandler onLayout = (_, _) => lastLayoutEnd = clock.Elapsed.TotalMilliseconds;
         EventHandler onRender = (_, e) =>
         {
             var args = (RenderingEventArgs)e;
             var now = clock.Elapsed.TotalMilliseconds;
+            // Keeps the monitor's vblank observer running in every mode (it stops after 1.5 s without a query).
+            if (PhotoReview.Platform.Windows.WindowsDisplayClock.Instance.GetTiming(hwnd) is { } observed) lastTiming = observed;
             if (ticks.Count > 0 && (ticks[^1].H != scroll.HorizontalOffset || ticks[^1].V != scroll.VerticalOffset)) lastChangeAt = now;
             if (!double.IsNaN(glideStartedAt) && (now - Math.Max(lastChangeAt, glideStartedAt) >= 250 || now - glideStartedAt > 5000)) glideDone.TrySetResult();
             ticks.Add(new Tick(phase, clock.Elapsed.TotalMilliseconds, args.RenderingTime.TotalMilliseconds,
@@ -223,7 +239,17 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
             csv.Append(string.Create(CultureInfo.InvariantCulture,
                 $"{trial},{k.Phase},{i},{k.WallMs:0.000},{k.RenderingMs:0.000},{k.H:0.0000},{k.V:0.0000},{k.Gen0},{k.Gen2},{k.Moves},{k.LayoutEndMs:0.000},{k.OpMs:0.000}\n"));
         }
-        return (PhaseStats.From(ticks, "drag", periodMs), PhaseStats.From(ticks, "glide", periodMs), csv.ToString());
+        // The vblank grid in this trial's clock: DWM's last vblank (QPC) after the glide, stepped back by the period.
+        var timing = lastTiming;
+        var ticksPerMs = Stopwatch.Frequency / 1000.0;
+        var seen = new List<Perceived>();
+        foreach (var latency in PresentLatencyModelsMs)
+        {
+            seen.Add(timing is { } t
+                ? Perceived.From(ticks, (t.LastVBlank - startTimestamp) / ticksPerMs, t.RefreshPeriod / ticksPerMs, latency)
+                : Perceived.Empty);
+        }
+        return (PhaseStats.From(ticks, "drag", periodMs), PhaseStats.From(ticks, "glide", periodMs), csv.ToString(), seen);
     }
 
     /// <summary>
@@ -363,6 +389,101 @@ public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)
             Process.GetCurrentProcess().PriorityClass = _class;
             Thread.CurrentThread.Priority = _thread;
             if (_mode == "timer") TimerResolutionScope.End();
+        }
+    }
+
+    /// <summary>
+    /// Assumed time from the end of the UI frame (the dispatcher operation that stepped the glide) until the render
+    /// thread's frame can be picked up by the compositor. Unknown on a real machine, so each is reported.
+    /// </summary>
+    private static readonly double[] PresentLatencyModelsMs = [0.5, 2.0, 4.0];
+
+    private static PhotoReview.Core.Model.KineticGlideSmoothing SmoothingFor(string mode) => mode switch
+    {
+        "predict" => PhotoReview.Core.Model.KineticGlideSmoothing.Predict,
+        _ => PhotoReview.Core.Model.KineticGlideSmoothing.Off,
+    };
+
+    /// <summary>
+    /// Approximate perceived judder of a glide. Model: a frame whose UI work ended at c (tick + dispatcher operation)
+    /// is on screen from the first compositor vblank at or after c + latency until the next shown frame; of several
+    /// frames aiming at one vblank only the last is seen. For the shown frames: interval to the next shown frame in
+    /// refreshes (I), displacement (s), speed v = s / I. "Cadence breaks" = I differs from the previous I (the eye sees
+    /// a hold pattern change); "speed error" = v against the median v of its 7 neighbours (the eye sees a jump or a
+    /// lag). "Judder" = a shown frame with either (|speed error| &gt; 20 %).
+    /// </summary>
+    internal sealed record Perceived(double Seconds, int Shown, int Hidden, int CadenceBreaks, int SpeedJudder, int Judder, List<double> SpeedErrors, Dictionary<long, int> Intervals)
+    {
+        public static readonly Perceived Empty = new(0, 0, 0, 0, 0, 0, [], []);
+
+        public static Perceived From(List<Tick> all, double vblankMs, double periodMs, double latencyMs)
+        {
+            var glide = all.Where(k => k.Phase == "glide").ToList();
+            var events = new List<(long Refresh, double H, double V)>();
+            for (var i = 0; i + 1 < glide.Count; i++)
+            {
+                if (glide[i + 1].H == glide[i].H && glide[i + 1].V == glide[i].V) continue;
+                var committed = glide[i].WallMs + (double.IsNaN(glide[i].OpMs) ? 0.5 : glide[i].OpMs);
+                var refresh = (long)Math.Ceiling((committed + latencyMs - vblankMs) / periodMs);
+                events.Add((refresh, glide[i + 1].H, glide[i + 1].V));
+            }
+            var shown = events.GroupBy(e => e.Refresh).Select(g => g.Last()).OrderBy(e => e.Refresh).ToList();
+            if (shown.Count < 3) return Empty with { Shown = shown.Count };
+            var intervals = new List<long>();
+            var speeds = new List<double>();
+            for (var j = 0; j + 1 < shown.Count; j++)
+            {
+                var interval = shown[j + 1].Refresh - shown[j].Refresh;
+                var step = Math.Sqrt(Math.Pow(shown[j + 1].H - shown[j].H, 2) + Math.Pow(shown[j + 1].V - shown[j].V, 2));
+                intervals.Add(interval);
+                speeds.Add(step / interval);
+            }
+            var breaks = 0;
+            for (var j = 1; j < intervals.Count; j++) if (intervals[j] != intervals[j - 1]) breaks++;
+            var errors = new List<double>();
+            var speedJudder = 0;
+            var judder = 0;
+            for (var j = 0; j < speeds.Count; j++)
+            {
+                var broke = j > 0 && intervals[j] != intervals[j - 1];
+                var jumped = false;
+                if (j >= 3 && j + 3 < speeds.Count)
+                {
+                    var window = speeds.Skip(j - 3).Take(7).Order().ToArray();
+                    var median = window[3];
+                    if (median > 0.02)
+                    {
+                        var error = speeds[j] / median - 1;
+                        errors.Add(error);
+                        jumped = Math.Abs(error) > 0.2;
+                        if (jumped) speedJudder++;
+                    }
+                }
+                if (broke || jumped) judder++;
+            }
+            var seconds = (shown[^1].Refresh - shown[0].Refresh) * periodMs / 1000;
+            return new Perceived(seconds, shown.Count, events.Count - shown.Count, breaks, speedJudder, judder, errors,
+                intervals.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count()));
+        }
+
+        public static Perceived Combine(IReadOnlyList<Perceived> list)
+        {
+            var intervals = new Dictionary<long, int>();
+            foreach (var p in list)
+                foreach (var (k, v) in p.Intervals) intervals[k] = intervals.GetValueOrDefault(k) + v;
+            return new Perceived(list.Sum(p => p.Seconds), list.Sum(p => p.Shown), list.Sum(p => p.Hidden), list.Sum(p => p.CadenceBreaks),
+                list.Sum(p => p.SpeedJudder), list.Sum(p => p.Judder), list.SelectMany(p => p.SpeedErrors).ToList(), intervals);
+        }
+
+        public override string ToString()
+        {
+            var s = Seconds > 0 ? Seconds : double.NaN;
+            var rms = SpeedErrors.Count > 0 ? Math.Sqrt(SpeedErrors.Average(e => e * e)) : 0;
+            var total = Intervals.Values.Sum();
+            var hist = string.Join(" ", Intervals.OrderBy(p => p.Key).Where(p => p.Value * 100 >= total).Select(p => $"{p.Key}:{100.0 * p.Value / total:0}%"));
+            return string.Create(CultureInfo.InvariantCulture,
+                $"shown {Shown / s:0.0} fps (+{Hidden} unseen); intervals(refreshes) {hist}; cadence breaks {CadenceBreaks / s:0.0}/s; " +
+                $"speed err rms {rms:0.000}, >20% {SpeedJudder / s:0.0}/s; JUDDER {Judder / s:0.0}/s");
         }
     }
 

@@ -1,4 +1,6 @@
 using System;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Input;
 
@@ -164,4 +166,98 @@ internal struct KineticScroller
     }
 
     private static double Finite(double value) => double.IsFinite(value) ? value : 0;
+}
+
+/// <summary>
+/// Turns the render callbacks of a kinetic glide into the time the glide advances by, per
+/// <see cref="KineticGlideSmoothing"/>. Pure: the caller passes WPF's RenderingTime, the current QPC time and the
+/// vblank timing of the window's monitor, so tests drive it at any refresh rate without a display.
+/// </summary>
+/// <remarks>
+/// <see cref="KineticGlideSmoothing.Off"/> steps by RenderingTime deltas (a repeated RenderingTime is not a new frame).
+/// <see cref="KineticGlideSmoothing.Predict"/> steps to the monitor refresh the frame is expected on: the first vblank
+/// at least <see cref="PresentLeadMs"/> after now, on that monitor's own grid (60, 75, 144, 240 Hz ...). A late frame
+/// therefore shows the position for when it is actually seen, and callbacks aiming at an already reached refresh do
+/// not move (on a 60 Hz monitor WPF may call back several times per refresh). Until the monitor's timing is known,
+/// and for the one frame after its period changes (another monitor, a new refresh rate), it steps like Off.
+/// </remarks>
+internal struct GlideFrameClock
+{
+    /// <summary>Time from the render callback until the frame can reach the compositor (UI work + render thread), ms.</summary>
+    public const double PresentLeadMs = 1.0;
+
+    /// <summary>A refresh period that differs by more than this fraction from the anchored one re-anchors the grid.</summary>
+    public const double PeriodChangeTolerance = 0.02;
+
+    private KineticGlideSmoothing _mode;
+    private double _ticksPerMs;
+    private bool _started;
+    private double _lastRenderingMs;
+    private bool _anchored;
+    private long _anchorVBlank;
+    private long _anchorPeriod;
+    private long _lastIndex;
+
+    /// <summary>True when <see cref="Advance"/> uses the vblank timing (the caller may skip the query otherwise).</summary>
+    public readonly bool NeedsDisplayTiming => _mode != KineticGlideSmoothing.Off;
+
+    /// <summary>Starts a glide; <paramref name="ticksPerMs"/> is the QPC frequency per millisecond.</summary>
+    public void Start(KineticGlideSmoothing mode, double ticksPerMs)
+    {
+        _mode = Enum.IsDefined(mode) && ticksPerMs > 0 ? mode : KineticGlideSmoothing.Off;
+        _ticksPerMs = ticksPerMs;
+        _started = false;
+        _anchored = false;
+    }
+
+    /// <summary>
+    /// Milliseconds the glide advances in this render callback; 0 = do not step (the first frame, a repeated frame,
+    /// or a callback aiming at a refresh that was already stepped to).
+    /// </summary>
+    public double Advance(double renderingTimeMs, long nowTicks, DisplayTiming? timing)
+    {
+        var renderingElapsed = renderingTimeMs - _lastRenderingMs;
+        if (!_started)
+        {
+            _started = true;
+            _lastRenderingMs = renderingTimeMs;
+            if (_mode != KineticGlideSmoothing.Off && timing is { RefreshPeriod: > 0 } first) Anchor(nowTicks, first);
+            return 0;
+        }
+
+        if (_mode != KineticGlideSmoothing.Off && timing is { RefreshPeriod: > 0 } current)
+        {
+            if (_anchored && Math.Abs(current.RefreshPeriod - _anchorPeriod) <= PeriodChangeTolerance * _anchorPeriod)
+            {
+                var index = (long)Math.Round((NextVBlank(nowTicks, current) - _anchorVBlank) / (double)current.RefreshPeriod);
+                if (renderingElapsed > 0) _lastRenderingMs = renderingTimeMs;
+                if (index <= _lastIndex) return 0;
+                var advanced = (index - _lastIndex) * (double)current.RefreshPeriod / _ticksPerMs;
+                _lastIndex = index;
+                return advanced;
+            }
+            // Timing just became available, or the monitor/refresh rate changed: this frame steps by RenderingTime and
+            // the refresh grid starts here.
+            Anchor(nowTicks, current);
+        }
+
+        if (!(renderingElapsed > 0)) return 0; // Rendering can fire more than once per frame with the same RenderingTime
+        _lastRenderingMs = renderingTimeMs;
+        return renderingElapsed;
+    }
+
+    private void Anchor(long nowTicks, DisplayTiming timing)
+    {
+        _anchored = true;
+        _anchorVBlank = NextVBlank(nowTicks, timing);
+        _anchorPeriod = timing.RefreshPeriod;
+        _lastIndex = 0;
+    }
+
+    private readonly long NextVBlank(long nowTicks, DisplayTiming timing)
+    {
+        var target = nowTicks + (long)(PresentLeadMs * _ticksPerMs);
+        var periods = Math.Ceiling((target - timing.LastVBlank) / (double)timing.RefreshPeriod);
+        return timing.LastVBlank + (long)(Math.Max(0, periods) * timing.RefreshPeriod);
+    }
 }

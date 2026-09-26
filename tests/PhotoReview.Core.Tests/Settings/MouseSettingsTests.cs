@@ -121,4 +121,50 @@ public sealed class MouseSettingsTests
         Assert.Equal(250, reloaded.ClickZoomPercent);
         Assert.False(reloaded.KineticPanEnabled);
     }
+
+    [Fact]
+    public void GlideSmoothing_DefaultsToPredict_AndAnOldConfigGetsItWithoutARepair()
+    {
+        Assert.Equal(KineticGlideSmoothing.Predict, new AppSettings().KineticGlideSmoothing);
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, """{ "ConfigVersion": 3, "KineticPanEnabled": true }""");
+
+        var loaded = _store.Load();
+
+        Assert.Equal(KineticGlideSmoothing.Predict, loaded.KineticGlideSmoothing);
+        Assert.Empty(_store.LastLoadRepairs);
+    }
+
+    [Fact]
+    public void Normalize_UndefinedGlideSmoothing_IsResetToTheDefaultAndReported()
+    {
+        var settings = new AppSettings { KineticGlideSmoothing = (KineticGlideSmoothing)42 };
+
+        var repairs = SettingsNormalizer.Normalize(settings);
+
+        Assert.Equal(KineticGlideSmoothing.Predict, settings.KineticGlideSmoothing);
+        Assert.Contains(nameof(AppSettings.KineticGlideSmoothing), repairs);
+    }
+
+    [Theory]
+    [InlineData("\"Off\"", KineticGlideSmoothing.Off)]
+    [InlineData("\"predict\"", KineticGlideSmoothing.Predict)]
+    [InlineData("0", KineticGlideSmoothing.Off)]
+    [InlineData("\"Cadence60\"", KineticGlideSmoothing.Off)] // unknown text -> the enum's zero value (the original timing)
+    public void Load_GlideSmoothingText_IsReadLeniently(string json, KineticGlideSmoothing expected)
+    {
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, $$"""{ "ConfigVersion": 3, "KineticGlideSmoothing": {{json}} }""");
+
+        Assert.Equal(expected, _store.Load().KineticGlideSmoothing);
+    }
+
+    [Fact]
+    public void SaveThenLoad_KeepsGlideSmoothingOff()
+    {
+        _store.Save(new AppSettings { KineticGlideSmoothing = KineticGlideSmoothing.Off });
+        var json = _fileSystem.ReadAllText(_appPaths.ConfigFile);
+        var reloaded = new SettingsStore(_appPaths, _fileSystem, NullLog.Instance, (_, _) => { }).Load();
+
+        Assert.Contains("\"KineticGlideSmoothing\": \"Off\"", json, StringComparison.Ordinal);
+        Assert.Equal(KineticGlideSmoothing.Off, reloaded.KineticGlideSmoothing);
+    }
 }

@@ -131,4 +131,7 @@ public class AppSettings
 
     /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
     public bool KineticPanEnabled { get; set; } = true;
+
+    /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
+    public KineticGlideSmoothing KineticGlideSmoothing { get; set; } = KineticGlideSmoothing.Predict;
 }

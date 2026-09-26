@@ -284,6 +284,77 @@ public sealed class PointerInputControllerTests
         Assert.Equal(0, _surface.Hooks);
     }
 
+    // ---- glide smoothing (KineticGlideSmoothing) ----
+
+    /// <summary>
+    /// Predict steps to the monitor refresh each callback is expected on, whatever RenderingTime says: a glide driven by
+    /// irregular callbacks (several per refresh, missed refreshes) with a useless RenderingTime must land exactly where
+    /// an Off glide lands when its RenderingTime is the refresh time.
+    /// </summary>
+    [Theory]
+    [InlineData(60.0)]
+    [InlineData(75.0)]
+    [InlineData(144.0)]
+    [InlineData(240.0)]
+    public void Predict_StepsToTheMonitorRefresh_LikeOffWithRefreshAlignedFrameTimes(double hz)
+    {
+        var period = System.Diagnostics.Stopwatch.Frequency / hz;
+        var periodMs = 1000 / hz;
+        // Callback times in refreshes: several per refresh, a missed one, one just before a refresh.
+        double[] callbacks = [0.1, 0.3, 0.6, 1.2, 1.5, 3.4, 3.5, 4.05, 4.9, 6.2, 7.7, 7.8, 9.1, 12.4, 13.3];
+
+        _settings.KineticGlideSmoothing = KineticGlideSmoothing.Predict;
+        _surface.DisplayTiming = new PhotoReview.Core.Abstractions.DisplayTiming(LastVBlank: 0, RefreshPeriod: (long)Math.Round(period));
+        StartGlide();
+        var predicted = new List<(double, double)>();
+        for (var i = 0; i < callbacks.Length && _surface.RenderHandler is not null; i++)
+        {
+            _surface.Timestamp = (long)(callbacks[i] * period);
+            _surface.RenderHandler(null, new FrameArgs(TimeSpan.FromMilliseconds(i + 1))); // RenderingTime says 1 ms per callback
+            predicted.Add((_surface.HorizontalOffset, _surface.VerticalOffset));
+        }
+
+        var reference = new PointerInputControllerTests();
+        reference._settings.KineticGlideSmoothing = KineticGlideSmoothing.Off;
+        reference.StartGlide();
+        var off = new List<(double, double)>();
+        for (var i = 0; i < callbacks.Length && reference._surface.RenderHandler is not null; i++)
+        {
+            // The refresh each callback is shown on: the first vblank at least the present lead after it.
+            var lead = GlideFrameClock.PresentLeadMs / periodMs;
+            var refresh = Math.Ceiling(callbacks[i] + lead);
+            reference._surface.RenderHandler(null, new FrameArgs(TimeSpan.FromMilliseconds(refresh * periodMs)));
+            off.Add((reference._surface.HorizontalOffset, reference._surface.VerticalOffset));
+        }
+
+        Assert.Equal(off.Count, predicted.Count);
+        for (var i = 0; i < off.Count; i++)
+        {
+            // 0.01 DIP: TimeSpan keeps 100 ns, so the Off reference's frame times are rounded slightly.
+            Assert.Equal(off[i].Item1, predicted[i].Item1, tolerance: 0.01);
+            Assert.Equal(off[i].Item2, predicted[i].Item2, tolerance: 0.01);
+        }
+        Assert.NotEqual(500, _surface.HorizontalOffset); // it did glide
+    }
+
+    [Fact]
+    public void Predict_ReadsTheMonitorTimingDuringTheDrag_OffNeverDoes()
+    {
+        _settings.KineticGlideSmoothing = KineticGlideSmoothing.Predict;
+        ZoomInSoTheImageCanPan();
+        _controller.OnImagePress(MouseButton.Left, 1, new Point(400, 300), timestamp: 1000);
+        Assert.True(_surface.DisplayTimingReads > 0, "The press did not start the monitor clock.");
+        _controller.CancelPan();
+
+        var off = new PointerInputControllerTests();
+        off._settings.KineticGlideSmoothing = KineticGlideSmoothing.Off;
+        off._surface.DisplayTiming = new PhotoReview.Core.Abstractions.DisplayTiming(0, 1000);
+        off.StartGlide();
+        for (var t = 0; t < 2000 && off._surface.RenderHandler is not null; t += 16)
+            off._surface.RenderHandler(null, new FrameArgs(TimeSpan.FromMilliseconds(t)));
+        Assert.Equal(0, off._surface.DisplayTimingReads);
+    }
+
     private void ZoomInSoTheImageCanPan()
     {
         _viewer.SetZoom(2.0);
@@ -396,5 +467,18 @@ public sealed class PointerInputControllerTests
         }
 
         public TimeSpan? RenderingTime(EventArgs e) => e is FrameArgs frame ? frame.Time : null;
+        public long Timestamp { get; set; }
+        public int DisplayTimingReads { get; private set; }
+        private PhotoReview.Core.Abstractions.DisplayTiming? _displayTiming;
+
+        public PhotoReview.Core.Abstractions.DisplayTiming? DisplayTiming
+        {
+            get
+            {
+                DisplayTimingReads++;
+                return _displayTiming;
+            }
+            set => _displayTiming = value;
+        }
     }
 }

@@ -167,7 +167,7 @@
                     <StackPanel x:Name="MousePage" KeyboardNavigation.TabNavigation="Local">
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.mouseZoom}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="MouseWheelActionLabel" Text="{loc:Tr settings.mouseWheelAction.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                             <ComboBox x:Name="MouseWheelActionCombo" AutomationProperties.LabeledBy="{Binding ElementName=MouseWheelActionLabel}" AutomationProperties.Name="{loc:Tr settings.mouseWheelAction.automationName}" Grid.Row="0" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.mouseWheelAction.zoom}"/><ComboBoxItem Content="{loc:Tr enum.mouseWheelAction.navigate}"/></ComboBox>
                             <TextBlock Text="{loc:Tr settings.mouseWheelAction.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
@@ -175,6 +175,9 @@
                             <TextBlock x:Name="ClickZoomPercentLabel" Text="{loc:Tr settings.clickZoomPercent.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="ClickZoomPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomPercentLabel}" AutomationProperties.Name="{loc:Tr settings.clickZoomPercent.automationName}" Grid.Row="3" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
                             <CheckBox x:Name="KineticPanCheck" Grid.Row="4" Grid.Column="1" Content="{loc:Tr settings.kineticPan.label}"/>
+                            <TextBlock x:Name="KineticGlideSmoothingLabel" Text="{loc:Tr settings.kineticGlideSmoothing.label}" Grid.Row="5" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="KineticGlideSmoothingCombo" AutomationProperties.LabeledBy="{Binding ElementName=KineticGlideSmoothingLabel}" AutomationProperties.Name="{loc:Tr settings.kineticGlideSmoothing.automationName}" Grid.Row="5" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.kineticGlideSmoothing.off}"/><ComboBoxItem Content="{loc:Tr enum.kineticGlideSmoothing.predict}"/></ComboBox>
+                            <TextBlock Text="{loc:Tr settings.kineticGlideSmoothing.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
