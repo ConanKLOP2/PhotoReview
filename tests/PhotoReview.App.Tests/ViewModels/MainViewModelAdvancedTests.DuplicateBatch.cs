@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using Xunit;
@@ -130,5 +131,59 @@ public sealed partial class MainViewModelAdvancedTests
         Assert.False(vm.IsFileActionInProgress);
         Assert.DoesNotContain(vanishing, _recycleBin.RecycledPaths);
         Assert.False(string.IsNullOrEmpty(vm.StatusText));
+    }
+
+    [Fact(DisplayName = "Esc through the view model while the duplicate check hashes cancels it: nothing is recycled and the status says so (Q-R25)")]
+    public async Task CancelDuplicateCheck_WhileHashing_RecyclesNothing()
+    {
+        var folder = Path.Combine(_tempDir, "dup_cancel_vm");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png", ValidPngBytes);
+        CreateImageFile(folder, "photo (1).png", ValidPngBytes);
+        MainViewModel? vm = null;
+        var consumed = new List<bool>();
+        var hookFs = new StatHookFileSystem(_fileSystem, () => consumed.Add(vm!.CancelDuplicateCheck()));
+        (vm, _) = CreateViewModel(hookFs);
+        await vm.OpenFolderAsync(folder);
+        hookFs.Armed = true;
+        _dialogService.BatchReviewResponse = true;
+
+        Assert.False(vm.CancelDuplicateCheck()); // idle: Esc keeps its normal meaning (exit fullscreen / close)
+        await vm.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Equal([true], consumed.Take(1));   // hashing was running when Esc arrived
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.False(_dialogService.BatchReviewCalled);
+        Assert.Equal(PhotoReview.Core.Localization.Tr.StatusDuplicateCheckCanceled, vm.StatusText);
+        Assert.False(vm.IsFileActionInProgress);
+        Assert.False(vm.CancelDuplicateCheck());
+    }
+
+    private sealed class StatHookFileSystem(PhotoReview.Core.Abstractions.IFileSystem inner, Action onFirstStat) : PhotoReview.Core.Abstractions.IFileSystem
+    {
+        private int _statted;
+        public bool Armed { get; set; }
+        public bool FileExists(string path) => inner.FileExists(path);
+        public bool DirectoryExists(string path) => inner.DirectoryExists(path);
+        public PhotoReview.Core.Abstractions.FileStat? GetFileStat(string path)
+        {
+            if (Armed && Interlocked.Increment(ref _statted) == 1) onFirstStat();
+            return inner.GetFileStat(path);
+        }
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Copy(string source, string destination) => inner.Copy(source, destination);
+        public void Delete(string path) => inner.Delete(path);
+        public Stream OpenReadShared(string path, int bufferSize = 65536) => inner.OpenReadShared(path, bufferSize);
+        public Stream OpenAppendDurable(string path) => inner.OpenAppendDurable(path);
+        public Stream OpenAppend(string path, bool durable) => inner.OpenAppend(path, durable);
+        public void WriteAllTextAtomic(string path, string text, bool durable = true) => inner.WriteAllTextAtomic(path, text, durable);
+        public string ReadAllText(string path) => inner.ReadAllText(path);
+        public IEnumerable<string> ReadLines(string path) => inner.ReadLines(path);
+        public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
+        public IEnumerable<(string Path, PhotoReview.Core.Abstractions.FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => inner.EnumerateFilesWithStat(directory, pattern);
+        public IEnumerable<(string Path, PhotoReview.Core.Abstractions.FileStat? Stat)> EnumerateReadableFilesWithStat(string directory, Func<string, bool> include, Action<PhotoReview.Core.Abstractions.SkippedEntry> onSkipped) =>
+            inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
+        public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
     }
 }

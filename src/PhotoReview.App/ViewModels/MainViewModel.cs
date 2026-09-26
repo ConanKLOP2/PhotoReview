@@ -524,6 +524,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _fileActionGate.RunExclusiveAsync(() => _duplicateController.RemoveDuplicatesAsync(removeNumbered));
 
     /// <summary>
+    /// Q-R25: cancels a running duplicate-check hashing phase (Esc). Returns true while one is running so the key is consumed
+    /// (no fullscreen exit / window close); the recycle batch that follows the review dialog is not cancellable here.
+    /// </summary>
+    public bool CancelDuplicateCheck() => _duplicateController.CancelDuplicateCheck();
+
+    /// <summary>
     /// Xóa toàn bộ bộ nhớ đệm preview và thumbnail sau khi người dùng xác nhận.
     /// </summary>
     public async Task ClearCacheAsync() =>

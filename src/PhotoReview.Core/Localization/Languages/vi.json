@@ -632,5 +632,7 @@
   "compare.hash.unknown": " | hash không xác định",
   "status.lateMoveUndoable": "Đã di chuyển {fileName} tới {folder} sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
   "status.lateRecycleUndoable": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp. Nhấn Ctrl+Z để hoàn tác.",
-  "status.lateDeletedPermanently": "Đã xóa vĩnh viễn {fileName} sau khi bạn rời thư mục chứa tệp (không thể hoàn tác)."
+  "status.lateDeletedPermanently": "Đã xóa vĩnh viễn {fileName} sau khi bạn rời thư mục chứa tệp (không thể hoàn tác).",
+  "status.duplicateCheckRunning": "Đang kiểm tra bản trùng lặp... nhấn Esc để hủy.",
+  "status.duplicateCheckCanceled": "Đã hủy kiểm tra bản trùng lặp. Không có tệp nào bị xóa."
 }

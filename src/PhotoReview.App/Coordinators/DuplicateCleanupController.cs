@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
@@ -23,7 +24,7 @@ public sealed class DuplicateCleanupController
     private readonly GenerationClock _clock;
     private readonly ReviewCatalog _catalog;
     private readonly FileActionService? _fileActionService;
-    private readonly FileHashService? _hashService;
+    private readonly IFileHasher? _hashService;
     private readonly IFileSystem _fileSystem;
     private readonly IDialogService? _dialogService;
     private readonly IUiScheduler _uiScheduler;
@@ -36,7 +37,7 @@ public sealed class DuplicateCleanupController
         GenerationClock clock,
         ReviewCatalog catalog,
         FileActionService? fileActionService,
-        FileHashService? hashService,
+        IFileHasher? hashService,
         IFileSystem fileSystem,
         IDialogService? dialogService,
         IUiScheduler uiScheduler,
@@ -58,6 +59,30 @@ public sealed class DuplicateCleanupController
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
     }
 
+    private readonly object _hashGate = new();
+    private CancellationTokenSource? _hashCts;
+
+    /// <summary>
+    /// Q-R25 (option A): cancels a running duplicate-check HASHING phase. Returns true while a check is hashing (so the
+    /// caller, e.g. Esc, consumes the key even on a repeated press) and false when nothing is running - in particular
+    /// after hashing finished, so it can never touch the review dialog or the recycle batch (option B, later).
+    /// </summary>
+    public bool CancelDuplicateCheck()
+    {
+        lock (_hashGate)
+        {
+            if (_hashCts is null) return false;
+            CancelQuietly(_hashCts);
+            return true;
+        }
+    }
+
+    private static void CancelQuietly(CancellationTokenSource cts)
+    {
+        try { cts.Cancel(); }
+        catch (ObjectDisposedException) { } // its owner already finished and disposed it
+    }
+
     public async Task RemoveDuplicatesAsync(bool removeNumbered)
     {
         if (_fileActionService is null || _fileActionService.IsBusy) return;
@@ -68,6 +93,14 @@ public sealed class DuplicateCleanupController
         if (candidates.Length == 0) return;
 
         List<string> remove;
+        var cts = new CancellationTokenSource();
+        lock (_hashGate)
+        {
+            // A fresh check supersedes a previous one that is somehow still hashing (the file-action gate normally prevents it).
+            if (_hashCts is { } previous) CancelQuietly(previous);
+            _hashCts = cts;
+        }
+        _sink.SetStatusText(StatusFormatter.DuplicateCheckRunning());
         try
         {
             remove = await DuplicateFinder.FindAsync(
@@ -83,17 +116,36 @@ public sealed class DuplicateCleanupController
                         () => Tr.ErrIoHashServiceMissing);
                 },
                 _fileSystem,
-                System.Threading.CancellationToken.None);
+                cts.Token);
+            // Esc pressed just as the last hash finished: honor the user's intent, apply nothing.
+            cts.Token.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (!_clock.IsFolderCurrent(preHashGeneration))
         {
             _sink.SetStatusText(StatusFormatter.DuplicateCheckCanceledFolderChanged());
             return;
         }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // A run superseded by a fresh check stays silent: the newer run owns the status text.
+            bool superseded;
+            lock (_hashGate) superseded = !ReferenceEquals(_hashCts, cts);
+            if (!superseded) _sink.SetStatusText(StatusFormatter.DuplicateCheckCanceled());
+            return;
+        }
         catch (Exception ex)
         {
             _sink.SetStatusText(StatusFormatter.DuplicateCheckFailed(UserFacingError.Describe(ex)));
             return;
+        }
+        finally
+        {
+            // Hashing is over (or aborted): from here Esc no longer targets this check, and the source is released.
+            lock (_hashGate)
+            {
+                if (ReferenceEquals(_hashCts, cts)) _hashCts = null;
+            }
+            cts.Dispose();
         }
 
         // Stale Folder Guard: Nếu folder đã bị đổi trong khi hash, hủy bỏ thao tác

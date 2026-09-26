@@ -639,5 +639,7 @@
   "compare.hash.unknown": " | hash unknown",
   "status.lateMoveUndoable": "{fileName} was moved to {folder} after you left its folder. Press Ctrl+Z to undo.",
   "status.lateRecycleUndoable": "{fileName} was moved to the Recycle Bin after you left its folder. Press Ctrl+Z to undo.",
-  "status.lateDeletedPermanently": "{fileName} was deleted permanently after you left its folder (it cannot be undone)."
+  "status.lateDeletedPermanently": "{fileName} was deleted permanently after you left its folder (it cannot be undone).",
+  "status.duplicateCheckRunning": "Checking for duplicates... press Esc to cancel.",
+  "status.duplicateCheckCanceled": "Duplicate check canceled. Nothing was removed."
 }
