@@ -116,4 +116,13 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         };
         window.Show();
     }
+
+    public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries)
+    {
+        var window = new SkippedFilesWindow(entries)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
 }

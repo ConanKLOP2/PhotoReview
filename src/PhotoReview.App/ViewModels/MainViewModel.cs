@@ -546,6 +546,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public void ShowDiagnostics() => _dialogService?.ShowDiagnostics();
 
     /// <summary>
+    /// Hiển thị danh sách tệp bị bỏ qua ở lần nạp thư mục gần nhất (AR19).
+    /// </summary>
+    public void ShowSkippedFiles() => _dialogService?.ShowSkippedFiles(SkippedEntries);
+
+    /// <summary>
     /// Hiển thị cửa sổ benchmark hiệu năng.
     /// </summary>
     public void ShowBenchmark()

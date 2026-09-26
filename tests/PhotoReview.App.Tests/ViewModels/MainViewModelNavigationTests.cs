@@ -54,6 +54,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
     private readonly FakeExplorerOrderProvider _explorerOrder;
     private readonly PhysicalFileSystem _fileSystem;
     private AppSettings _settings;
+    private readonly TestDialogService _dialog = new();
 
     public MainViewModelNavigationTests()
     {
@@ -151,7 +152,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         var journal = new OperationJournal(appPaths, _fileSystem, new SystemClock());
         var fileActions = new FileActionService(journal, _fileSystem, new SystemClock(), new TestRecycleBin());
         var undo = new UndoService(journal, _fileSystem, new TestRecycleBin(), fileActions);
-        var dialog = new TestDialogService();
+        var dialog = _dialog;
 
         vm = new MainViewModel(
             _catalog,
@@ -198,6 +199,8 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         public void ShowDiagnostics() { }
         public bool ShowSettings() => false;
         public void ShowBenchmark(string? folder = null) { }
+        public List<IReadOnlyList<SkippedEntry>> SkippedFilesShown { get; } = [];
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) => SkippedFilesShown.Add(entries);
     }
 
     [Fact]
@@ -433,6 +436,19 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
 
         Assert.False(vm.InfoOverlay.IsFileInfoVisible);
         Assert.True(vm.IsStatusPanelVisible);
+    }
+
+    [Fact]
+    public void ShowSkippedFiles_ShowsTheSkippedEntriesThroughTheDialogService()
+    {
+        var (vm, _, _) = CreateViewModel();
+        var entry = new SkippedEntry(Path.Combine(_tempDir, "x.jpg"), "locked");
+        ((IFolderLoadSink)vm).OnFilesSkipped(_tempDir, [entry]);
+
+        vm.ShowSkippedFiles();
+
+        var shown = Assert.Single(_dialog.SkippedFilesShown);
+        Assert.Equal(entry, Assert.Single(shown));
     }
 
     [Fact]
