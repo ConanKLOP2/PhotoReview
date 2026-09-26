@@ -62,7 +62,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<IAppPaths>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>(),
-            () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability));
+            () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability,
+            liveOperations: sp.GetRequiredService<ILiveOperationRegistry>()));
         services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
@@ -88,6 +89,8 @@ public partial class App : System.Windows.Application, IDisposable
         // 5. Platform Services
         services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();
         services.AddSingleton<IRecycleBin>(_ => WindowsRecycleBin.Instance);
+        // Q-R27: named per-operation markers so another PhotoReview's startup reconcile skips operations still running here.
+        services.AddSingleton<ILiveOperationRegistry>(sp => new WindowsLiveOperationRegistry(sp.GetRequiredService<ILog>()));
         services.AddSingleton<IMemoryProbe>(sp => new WindowsMemoryProbe(sp.GetRequiredService<ILog>()));
         services.AddSingleton<INaturalComparer>(_ => WindowsNaturalComparer.Instance);
         services.AddSingleton<IKeyNameValidator, WpfKeyNameValidator>();

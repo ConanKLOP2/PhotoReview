@@ -215,7 +215,7 @@ public sealed class UndoService
 
                 // Review r7 (INV-6): the undo is itself a Move (destination -> source), journaled Prepared -> Committed/
                 // Failed like any other, so a crash mid-undo leaves a pending entry for startup reconcile / Recovery.
-                var tx = new JournalTransaction(_journal, _clock, new JournalEntry(
+                using var tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     Guid.NewGuid().ToString("N"),
                     FileOperationType.Move,
                     JournalState.Prepared,

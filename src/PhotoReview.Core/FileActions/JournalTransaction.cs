@@ -7,13 +7,17 @@ namespace PhotoReview.Core.FileActions;
 /// Shared Prepared -> mutate -> verify -> Committed/Failed journal sequence (CORE-07), used by
 /// <see cref="FileActionService"/> and <see cref="RecoveryRetryService"/> so a fix applies to both.
 /// Not thread-safe: one instance per operation.
+/// <para>Q-R27: the operation's live marker (<see cref="OperationJournal.LiveOperations"/>) is taken just before Prepared is
+/// appended and released right after the outcome (Committed/Failed) is appended, so another process's startup reconcile
+/// never judges it mid-flight. <see cref="Dispose"/> releases it on any path that ends without an outcome.</para>
 /// </summary>
-internal sealed class JournalTransaction
+internal sealed class JournalTransaction : IDisposable
 {
     private readonly OperationJournal _journal;
     private readonly IClock _clock;
     private readonly JournalEntry _prepared;
     private readonly bool _failWithoutPrepared;
+    private IDisposable? _liveMarker;
 
     /// <param name="failWithoutPrepared">
     /// Retry semantics: an existing Failed record is being re-attempted, so a failure is journaled even when the
@@ -49,9 +53,29 @@ internal sealed class JournalTransaction
 
     public void Begin()
     {
-        _journal.Append(_prepared);
+        // Before the Prepared line exists anywhere: a reconcile that can read it can also see the marker.
+        _liveMarker ??= _journal.LiveOperations.Begin(_prepared.Id);
+        try
+        {
+            _journal.Append(_prepared);
+        }
+        catch
+        {
+            ReleaseLiveMarker(); // nothing pending was written (or a retry's Failed follows under failWithoutPrepared)
+            throw;
+        }
         IsPrepared = true;
     }
+
+    /// <summary>Releases the live marker (idempotent). Called once the outcome is appended, or by <see cref="Dispose"/>.</summary>
+    private void ReleaseLiveMarker()
+    {
+        var marker = _liveMarker;
+        _liveMarker = null;
+        marker?.Dispose();
+    }
+
+    public void Dispose() => ReleaseLiveMarker();
 
     /// <summary>Throws <see cref="JournalCodedException"/> (<paramref name="errorCode"/>) unless the destination has the prepared size.</summary>
     public void VerifyDestination(IFileSystem fileSystem, string destination, string errorCode)
@@ -91,6 +115,10 @@ internal sealed class JournalTransaction
         {
             journalError = journalException.Message;
         }
+        finally
+        {
+            ReleaseLiveMarker(); // only after the outcome line: until then the entry is Prepared and must look live
+        }
         return committed;
     }
 
@@ -101,7 +129,11 @@ internal sealed class JournalTransaction
     public JournalEntry? Fail(Exception failure, out string? journalError)
     {
         journalError = null;
-        if (!IsPrepared && !_failWithoutPrepared) return null;
+        if (!IsPrepared && !_failWithoutPrepared)
+        {
+            ReleaseLiveMarker();
+            return null;
+        }
         var (errorCode, errorText) = JournalErrors.ForJournal(failure);
         var failed = _prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
         try
@@ -111,6 +143,10 @@ internal sealed class JournalTransaction
         catch (Exception journalException)
         {
             journalError = journalException.Message;
+        }
+        finally
+        {
+            ReleaseLiveMarker(); // only after the outcome line (see Commit)
         }
         return failed;
     }
