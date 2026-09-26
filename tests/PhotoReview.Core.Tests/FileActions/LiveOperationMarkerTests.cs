@@ -58,17 +58,17 @@ public sealed class LiveOperationMarkerTests
     private sealed class Rig
     {
         public InMemoryFileSystem Fs { get; } = new();
-        public SnapshotRegistry Registry { get; } = new();
+        public SnapshotRegistry Markers { get; } = new();
         public OperationJournal Journal { get; }
         public ScriptedRecycleBin Bin { get; } = new();
         public List<HashSet<string>> LiveAtAppend { get; } = [];
 
         public Rig()
         {
-            Journal = new OperationJournal(Paths, Fs, new FixedClock(Start), liveOperations: Registry);
+            Journal = new OperationJournal(Paths, Fs, new FixedClock(Start), liveOperations: Markers);
             Fs.OpenAppendHook = _ =>
             {
-                lock (LiveAtAppend) LiveAtAppend.Add(Registry.LiveNow());
+                lock (LiveAtAppend) LiveAtAppend.Add(Markers.LiveNow());
                 return null;
             };
         }
@@ -94,7 +94,7 @@ public sealed class LiveOperationMarkerTests
         public (string Id, bool Live) PendingNow()
         {
             var pending = Assert.Single(Journal.ReadPendingOperations());
-            return (pending.Id, Registry.IsLive(pending.Id));
+            return (pending.Id, Markers.IsLive(pending.Id));
         }
     }
 
@@ -211,7 +211,7 @@ public sealed class LiveOperationMarkerTests
         Assert.Equal(!mutationFails, result.Succeeded);
         Assert.NotNull(duringMutation);
         Assert.True(duringMutation.Value.Live, "the operation must be live while its file mutation runs");
-        Assert.False(rig.Registry.IsLive(duringMutation.Value.Id), "the marker must end with the operation");
+        Assert.False(rig.Markers.IsLive(duringMutation.Value.Id), "the marker must end with the operation");
         rig.AssertEveryAppendUnderItsMarker(expectedLines: 2);
         Assert.Equal(mutationFails ? JournalState.Failed : JournalState.Committed, rig.Lines()[1].State);
     }
@@ -235,7 +235,7 @@ public sealed class LiveOperationMarkerTests
         Assert.Equal(!recycleFails, result.Succeeded);
         Assert.NotNull(duringMutation);
         Assert.True(duringMutation.Value.Live);
-        Assert.False(rig.Registry.IsLive(duringMutation.Value.Id));
+        Assert.False(rig.Markers.IsLive(duringMutation.Value.Id));
         rig.AssertEveryAppendUnderItsMarker(expectedLines: 2);
     }
 
@@ -249,7 +249,7 @@ public sealed class LiveOperationMarkerTests
         var result = await rig.Actions().ExecuteAsync(new FileActionRequest(@"C:\photos\a.jpg", FileOperationType.Move, "sel"));
 
         Assert.False(result.Succeeded);
-        Assert.Empty(rig.Registry.LiveNow());
+        Assert.Empty(rig.Markers.LiveNow());
         Assert.True(rig.Fs.FileExists(@"C:\photos\a.jpg"));
     }
 
@@ -277,7 +277,7 @@ public sealed class LiveOperationMarkerTests
         Assert.Equal(!moveFails, result.Succeeded);
         Assert.NotNull(duringMutation);
         Assert.True(duringMutation.Value.Live);
-        Assert.False(rig.Registry.IsLive(duringMutation.Value.Id));
+        Assert.False(rig.Markers.IsLive(duringMutation.Value.Id));
         rig.AssertEveryAppendUnderItsMarker(expectedLines: 2);
     }
 
@@ -304,7 +304,7 @@ public sealed class LiveOperationMarkerTests
         Assert.NotNull(duringMutation);
         Assert.Equal("retry1", duringMutation.Value.Id);
         Assert.True(duringMutation.Value.Live);
-        Assert.False(rig.Registry.IsLive("retry1"));
+        Assert.False(rig.Markers.IsLive("retry1"));
         rig.AssertEveryAppendUnderItsMarker(expectedLines: 2);
     }
 
