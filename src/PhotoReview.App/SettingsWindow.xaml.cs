@@ -324,6 +324,8 @@ public partial class SettingsWindow : Window
         MouseWheelActionCombo.SelectedIndex = Settings.MouseWheelAction == MouseWheelAction.Navigate ? 1 : 0;
         ClickToZoomCheck.IsChecked = Settings.ClickToZoomEnabled;
         ClickZoomPercentBox.Text = Settings.ClickZoomPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        PreloadForwardBox.Text = Settings.PreloadForwardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        PreloadBackwardBox.Text = Settings.PreloadBackwardCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KineticPanCheck.IsChecked = Settings.KineticPanEnabled;
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
@@ -442,17 +444,61 @@ public partial class SettingsWindow : Window
 
     private readonly long _physicalMemoryBytes = RamBudgetPolicy.GetPhysicalMemoryBytes();
 
-    /// <summary>Slider range = [system minimum, 90] for this device; the value is the saved percent clamped into it.</summary>
+    /// <summary>Slider range = [window-dependent minimum, 90] for this device; the value is the saved percent clamped into it.</summary>
     private void LoadRamCache()
     {
-        RamCacheSlider.Minimum = RamBudgetPolicy.MinimumCachePercent(_physicalMemoryBytes);
-        RamCacheSlider.Maximum = PerformanceOptions.MaxImageCacheRamPercent;
-        RamCacheSlider.Value = RamBudgetPolicy.ClampCachePercent(Settings.ImageCacheRamPercent, _physicalMemoryBytes);
-        RamCacheHint.Text = Tr.SettingsRamCacheHint(FormatGb(_physicalMemoryBytes), (int)RamCacheSlider.Minimum, (int)RamCacheSlider.Maximum);
+        UpdateRamCacheRange();
+        RamCacheSlider.Value = Math.Clamp(Settings.ImageCacheRamPercent, (int)RamCacheSlider.Minimum, (int)RamCacheSlider.Maximum);
         UpdateRamCacheValueText();
+        UpdatePreloadWindowHint();
     }
 
     private void RamCacheSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateRamCacheValueText();
+
+    /// <summary>
+    /// feat/preload-window-setting: the RAM slider's minimum must hold the preload window the user is currently
+    /// editing, not just the saved one -- so it is recomputed whenever <see cref="PreloadForwardBox"/>/
+    /// <see cref="PreloadBackwardBox"/> change, not only on load. An unparsable/out-of-range box falls back to
+    /// its saved value for this preview only; Save itself still validates and refuses those inputs.
+    /// </summary>
+    private void PreloadWindow_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateRamCacheRange();
+        UpdatePreloadWindowHint();
+    }
+
+    private void UpdateRamCacheRange()
+    {
+        if (RamCacheSlider is null) return; // can fire while InitializeComponent is still building the tree
+        RamCacheSlider.Minimum = RamBudgetPolicy.MinimumCachePercent(_physicalMemoryBytes, CurrentPreloadWindowForPreview());
+        RamCacheSlider.Maximum = PerformanceOptions.MaxImageCacheRamPercent;
+        if (RamCacheSlider.Value < RamCacheSlider.Minimum) RamCacheSlider.Value = RamCacheSlider.Minimum;
+        RamCacheHint.Text = Tr.SettingsRamCacheHint(FormatGb(_physicalMemoryBytes), (int)RamCacheSlider.Minimum, (int)RamCacheSlider.Maximum);
+    }
+
+    private void UpdatePreloadWindowHint()
+    {
+        if (PreloadWindowHint is null) return; // can fire while InitializeComponent is still building the tree
+        PreloadWindowHint.Text = Tr.SettingsPreloadWindowHint(PerformanceOptions.MinPreloadBackwardCount, PerformanceOptions.MaxPreloadCount);
+    }
+
+    /// <summary>Best-effort preload window from the current text boxes, for the RAM-floor preview only (Save does the real validation).</summary>
+    private PreloadWindow CurrentPreloadWindowForPreview()
+    {
+        var forward = ParseOrFallback(PreloadForwardBox?.Text, Settings.PreloadForwardCount,
+            PerformanceOptions.MinPreloadForwardCount, PerformanceOptions.MaxPreloadCount);
+        var backward = ParseOrFallback(PreloadBackwardBox?.Text, Settings.PreloadBackwardCount,
+            PerformanceOptions.MinPreloadBackwardCount, PerformanceOptions.MaxPreloadCount);
+        return new PreloadWindow(forward, backward);
+    }
+
+    private static int ParseOrFallback(string? text, int fallback, int min, int max)
+    {
+        if (!int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            || value < min || value > max)
+            return Math.Clamp(fallback, min, max);
+        return value;
+    }
 
     private int SelectedRamCachePercent => (int)Math.Round(RamCacheSlider.Value);
 
@@ -477,6 +523,8 @@ public partial class SettingsWindow : Window
         Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
         Settings.PreloadWorkerCount = PerformanceOptions.PreloadWorkerCount;
         Settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
+        Settings.PreloadForwardCount = PerformanceOptions.PreloadForwardCount;
+        Settings.PreloadBackwardCount = PerformanceOptions.PreloadBackwardCount;
         Settings.PreviewDiskCacheCapacityBytes = PerformanceOptions.PreviewDiskCacheCapacityBytes;
         Settings.UseSourceBytesCache = PerformanceOptions.UseSourceBytesCache;
         Settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;
@@ -572,6 +620,25 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ClickZoomPercent = clickZoomPercent;
+        // feat/preload-window-setting: same pattern as ClickZoomPercent above -- an unparsable or out-of-range
+        // value keeps the dialog open and saves nothing (a hand-edited config.json is still clamped by
+        // SettingsNormalizer, that path is unaffected).
+        if (!int.TryParse(PreloadForwardBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var preloadForward)
+            || preloadForward < PerformanceOptions.MinPreloadForwardCount || preloadForward > PerformanceOptions.MaxPreloadCount)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidPreloadForward(PerformanceOptions.MinPreloadForwardCount, PerformanceOptions.MaxPreloadCount));
+            PreloadForwardBox.Focus();
+            return;
+        }
+        if (!int.TryParse(PreloadBackwardBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var preloadBackward)
+            || preloadBackward < PerformanceOptions.MinPreloadBackwardCount || preloadBackward > PerformanceOptions.MaxPreloadCount)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidPreloadBackward(PerformanceOptions.MinPreloadBackwardCount, PerformanceOptions.MaxPreloadCount));
+            PreloadBackwardBox.Focus();
+            return;
+        }
+        Settings.PreloadForwardCount = preloadForward;
+        Settings.PreloadBackwardCount = preloadBackward;
         if (!int.TryParse(ToolbarAutoHideDelayBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var toolbarAutoHideDelayMs)
             || toolbarAutoHideDelayMs < AppSettings.MinToolbarAutoHideDelayMs || toolbarAutoHideDelayMs > AppSettings.MaxToolbarAutoHideDelayMs)
         {

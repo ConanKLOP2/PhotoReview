@@ -54,28 +54,53 @@ public static class RamBudgetPolicy
     public const int PreloadWindowImageCount = PreloadOrderService.ForwardLookahead + PreloadOrderService.BackwardLookahead + 1;
 
     /// <summary>
-    /// Bytes needed to hold the whole preload window (<see cref="PreloadWindowImageCount"/> previews decoded to a
-    /// <see cref="MinimumBudgetBoxWidth"/> x <see cref="MinimumBudgetBoxHeight"/> box at 4 bytes/pixel, ~1.27 GiB).
-    /// A smaller cache would evict previews the scheduler is still preloading.
+    /// Bytes needed to hold the whole default preload window (<see cref="PreloadWindowImageCount"/> previews decoded
+    /// to a <see cref="MinimumBudgetBoxWidth"/> x <see cref="MinimumBudgetBoxHeight"/> box at 4 bytes/pixel, ~1.27 GiB).
+    /// A smaller cache would evict previews the scheduler is still preloading. feat/preload-window-setting: shortcut
+    /// for <see cref="MinimumPreviewWindowBytes(PreloadWindow)"/> with <see cref="PreloadWindow.Default"/>.
     /// </summary>
-    public const long MinimumPreviewWindowBytes =
-        (long)PreloadWindowImageCount * MinimumBudgetBoxWidth * MinimumBudgetBoxHeight * 4;
+    public static long MinimumPreviewWindowBytes() => MinimumPreviewWindowBytes(PreloadWindow.Default);
 
     /// <summary>
-    /// Smallest selectable cache percent on a device with <paramref name="physicalBytes"/> of RAM: the percent (rounded up)
-    /// that holds <see cref="MinimumPreviewWindowBytes"/>, at least <see cref="PerformanceOptions.MinImageCacheRamPercent"/>
-    /// and never above <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>. Unknown RAM (&lt;= 0) gives the absolute floor.
+    /// Bytes needed to hold the whole preload <paramref name="window"/> (<see cref="PreloadWindow.ImageCount"/> previews
+    /// decoded to a <see cref="MinimumBudgetBoxWidth"/> x <see cref="MinimumBudgetBoxHeight"/> box at 4 bytes/pixel). A
+    /// smaller cache would evict previews the scheduler is still preloading.
     /// </summary>
-    public static int MinimumCachePercent(long physicalBytes)
+    public static long MinimumPreviewWindowBytes(PreloadWindow window) =>
+        (long)window.ImageCount * MinimumBudgetBoxWidth * MinimumBudgetBoxHeight * 4;
+
+    /// <summary>
+    /// Smallest selectable cache percent on a device with <paramref name="physicalBytes"/> of RAM for the default preload
+    /// window: the percent (rounded up) that holds <see cref="MinimumPreviewWindowBytes()"/>, at least
+    /// <see cref="PerformanceOptions.MinImageCacheRamPercent"/> and never above <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>.
+    /// Unknown RAM (&lt;= 0) gives the absolute floor.
+    /// </summary>
+    public static int MinimumCachePercent(long physicalBytes) => MinimumCachePercent(physicalBytes, PreloadWindow.Default);
+
+    /// <summary>
+    /// Smallest selectable cache percent on a device with <paramref name="physicalBytes"/> of RAM for a user-configured
+    /// <paramref name="window"/>: the percent (rounded up) that holds <see cref="MinimumPreviewWindowBytes(PreloadWindow)"/>,
+    /// at least <see cref="PerformanceOptions.MinImageCacheRamPercent"/> and never above
+    /// <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>. Unknown RAM (&lt;= 0) gives the absolute floor.
+    /// </summary>
+    public static int MinimumCachePercent(long physicalBytes, PreloadWindow window)
     {
         if (physicalBytes <= 0) return PerformanceOptions.MinImageCacheRamPercent;
-        var percent = (MinimumPreviewWindowBytes * 100 + physicalBytes - 1) / physicalBytes; // ceiling, no overflow for real RAM sizes
+        var percent = (MinimumPreviewWindowBytes(window) * 100 + physicalBytes - 1) / physicalBytes; // ceiling, no overflow for real RAM sizes
         return (int)Math.Clamp(percent, PerformanceOptions.MinImageCacheRamPercent, PerformanceOptions.MaxImageCacheRamPercent);
     }
 
     /// <summary>Clamps a requested percent to [<see cref="MinimumCachePercent"/>, <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>].</summary>
     public static int ClampCachePercent(int requestedPercent, long physicalBytes) =>
-        Math.Clamp(requestedPercent, MinimumCachePercent(physicalBytes), PerformanceOptions.MaxImageCacheRamPercent);
+        ClampCachePercent(requestedPercent, physicalBytes, PreloadWindow.Default);
+
+    /// <summary>
+    /// Clamps a requested percent to [<see cref="MinimumCachePercent(long, PreloadWindow)"/>, <see cref="PerformanceOptions.MaxImageCacheRamPercent"/>]
+    /// for the user's configured <paramref name="window"/> (Q-R31): a bigger window raises the floor so the cache never
+    /// evicts previews the scheduler is still preloading.
+    /// </summary>
+    public static int ClampCachePercent(int requestedPercent, long physicalBytes, PreloadWindow window) =>
+        Math.Clamp(requestedPercent, MinimumCachePercent(physicalBytes, window), PerformanceOptions.MaxImageCacheRamPercent);
 
     /// <summary><paramref name="percent"/> % of <paramref name="physicalBytes"/> (exact integer math, no overflow); 0 for unknown RAM.</summary>
     public static long BytesForPercent(int percent, long physicalBytes)
@@ -90,24 +115,34 @@ public static class RamBudgetPolicy
     /// <see cref="MaxPhysicalMemoryShare"/>). Never below 1 byte (the LRU cache rejects a zero capacity).
     /// Requires known physical RAM; callers fall back to <see cref="ClampPreviewToPhysicalMemory"/> otherwise.
     /// </summary>
-    public static long PreviewBytesForPercent(int requestedPercent, long physicalBytes, long sourceBytesCapacity)
+    public static long PreviewBytesForPercent(int requestedPercent, long physicalBytes, long sourceBytesCapacity) =>
+        PreviewBytesForPercent(requestedPercent, physicalBytes, sourceBytesCapacity, PreloadWindow.Default);
+
+    /// <inheritdoc cref="PreviewBytesForPercent(int, long, long)"/>
+    /// <remarks>The percent floor follows <paramref name="window"/> (Q-R31).</remarks>
+    public static long PreviewBytesForPercent(int requestedPercent, long physicalBytes, long sourceBytesCapacity, PreloadWindow window)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(physicalBytes);
-        var budget = BytesForPercent(ClampCachePercent(requestedPercent, physicalBytes), physicalBytes);
+        var budget = BytesForPercent(ClampCachePercent(requestedPercent, physicalBytes, window), physicalBytes);
         return Math.Max(1, budget - Math.Max(0, sourceBytesCapacity));
     }
 
     /// <summary>
     /// Source-bytes cache request for a user percent: the usual <see cref="ClampSourceBytesToPhysicalMemory"/> limit, and
-    /// additionally small enough to leave <see cref="MinimumPreviewWindowBytes"/> of the percent budget to the preview cache
+    /// additionally small enough to leave <see cref="MinimumPreviewWindowBytes()"/> of the percent budget to the preview cache
     /// (a low percent must not let the source-bytes cache starve the previews). 0 = no room for a source-bytes cache.
     /// Unknown physical RAM (&lt;= 0) returns the request unchanged.
     /// </summary>
-    public static long SourceBytesForPercent(long requestedBytes, int requestedPercent, long physicalBytes)
+    public static long SourceBytesForPercent(long requestedBytes, int requestedPercent, long physicalBytes) =>
+        SourceBytesForPercent(requestedBytes, requestedPercent, physicalBytes, PreloadWindow.Default);
+
+    /// <inheritdoc cref="SourceBytesForPercent(long, int, long)"/>
+    /// <remarks>The preview room left over follows <paramref name="window"/> (Q-R31).</remarks>
+    public static long SourceBytesForPercent(long requestedBytes, int requestedPercent, long physicalBytes, PreloadWindow window)
     {
         if (physicalBytes <= 0) return requestedBytes;
-        var budget = BytesForPercent(ClampCachePercent(requestedPercent, physicalBytes), physicalBytes);
-        var room = Math.Max(0, budget - MinimumPreviewWindowBytes);
+        var budget = BytesForPercent(ClampCachePercent(requestedPercent, physicalBytes, window), physicalBytes);
+        var room = Math.Max(0, budget - MinimumPreviewWindowBytes(window));
         return Math.Min(ClampSourceBytesToPhysicalMemory(requestedBytes, physicalBytes), room);
     }
 

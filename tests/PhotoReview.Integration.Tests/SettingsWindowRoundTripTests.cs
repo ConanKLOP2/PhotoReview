@@ -76,6 +76,8 @@ public sealed class SettingsWindowRoundTripTests
             w.ExifFieldFocalLengthCheck.IsChecked = false; w.ExifFieldApertureCheck.IsChecked = false;
             w.ExifFieldShutterSpeedCheck.IsChecked = false;
         },
+        [nameof(AppSettings.PreloadForwardCount)] = w => w.PreloadForwardBox.Text = "64", // 32 -> 64
+        [nameof(AppSettings.PreloadBackwardCount)] = w => w.PreloadBackwardBox.Text = "16", // 8 -> 16
         // feat/ui-dark-chrome-toolbar
         [nameof(AppSettings.ArrowKeyNavigatesAtZoomEdge)] = w => w.ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ToolbarAutoHide)] = w => w.ToolbarAutoHideCheck.IsChecked = false, // true -> false
@@ -121,6 +123,8 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.ShowExifInfo)] = true,
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |
             ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed | ExifInfoFields.ModifiedDate),
+        [nameof(AppSettings.PreloadForwardCount)] = 64,
+        [nameof(AppSettings.PreloadBackwardCount)] = 16,
         // feat/ui-dark-chrome-toolbar
         [nameof(AppSettings.ArrowKeyNavigatesAtZoomEdge)] = true,
         [nameof(AppSettings.ToolbarAutoHide)] = false,

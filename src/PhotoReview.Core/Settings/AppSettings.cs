@@ -132,6 +132,19 @@ public class AppSettings
     /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
     public bool KineticPanEnabled { get; set; } = true;
 
+    // ---- Preload window (feat/preload-window-setting). Absent in older configs = these defaults; no migration step. ----
+
+    /// <summary>
+    /// Direction-of-travel preload lookahead, images, [<see cref="PerformanceOptions.MinPreloadForwardCount"/>,
+    /// <see cref="PerformanceOptions.MaxPreloadCount"/>]. Captured once at composition (applies after restart).
+    /// </summary>
+    public int PreloadForwardCount { get; set; } = PerformanceOptions.PreloadForwardCount;
+
+    /// <summary>
+    /// Backward preload lookahead, images, [<see cref="PerformanceOptions.MinPreloadBackwardCount"/>,
+    /// <see cref="PerformanceOptions.MaxPreloadCount"/>]. Captured once at composition (applies after restart).
+    /// </summary>
+    public int PreloadBackwardCount { get; set; } = PerformanceOptions.PreloadBackwardCount;
     // ---- Toolbar auto-hide / info overlay font size (feat/ui-dark-chrome-toolbar). Absent in older configs = these defaults. ----
 
     /// <summary>Smallest accepted <see cref="ToolbarAutoHideDelayMs"/>.</summary>

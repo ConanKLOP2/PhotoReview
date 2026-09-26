@@ -20,21 +20,31 @@ public static class PreloadOrderService
     /// decode finished -- and queues those skipped images right after the shifted window, so they are
     /// still reached first if the user stops. direction = +1, lead = 0 is the original order.
     /// </summary>
-    public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead)
+    public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead) =>
+        Build(center, count, fullFolder, direction, lead, PreloadWindow.Default);
+
+    /// <summary>feat/preload-window-setting: same as the (center, count, fullFolder) overload, but with a user-configurable window.</summary>
+    public static IEnumerable<int> Build(int center, int count, bool fullFolder, PreloadWindow window) =>
+        Build(center, count, fullFolder, direction: 1, lead: 0, window);
+
+    /// <summary>feat/preload-window-setting: same as <see cref="Build(int, int, bool, int, int)"/>, but with a user-configurable window.</summary>
+    public static IEnumerable<int> Build(int center, int count, bool fullFolder, int direction, int lead, PreloadWindow window)
     {
         if (center < 0 || center >= count) yield break;
         var dir = direction < 0 ? -1 : 1;
         lead = Math.Clamp(lead, 0, count);
+        var forward = window.Forward;
+        var backward = window.Backward;
 
-        for (var offset = lead + 1; offset <= lead + ForwardLookahead; offset++)
+        for (var offset = lead + 1; offset <= lead + forward; offset++)
             if (InRange(center + dir * offset, count)) yield return center + dir * offset;
         for (var offset = 1; offset <= lead; offset++)
             if (InRange(center + dir * offset, count)) yield return center + dir * offset;
-        for (var offset = 1; offset <= BackwardLookahead; offset++)
+        for (var offset = 1; offset <= backward; offset++)
             if (InRange(center - dir * offset, count)) yield return center - dir * offset;
         if (!fullFolder) yield break;
-        for (var index = center + dir * (lead + ForwardLookahead + 1); InRange(index, count); index += dir) yield return index;
-        for (var index = center - dir * (BackwardLookahead + 1); InRange(index, count); index -= dir) yield return index;
+        for (var index = center + dir * (lead + forward + 1); InRange(index, count); index += dir) yield return index;
+        for (var index = center - dir * (backward + 1); InRange(index, count); index -= dir) yield return index;
     }
 
     private static bool InRange(int index, int count) => index >= 0 && index < count;
