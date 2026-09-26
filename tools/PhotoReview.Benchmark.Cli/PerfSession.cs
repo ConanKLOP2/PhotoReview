@@ -22,7 +22,8 @@ using PhotoReview.Core.Model;
 
 /// <summary>
 /// D06 in-process scenario driver: <c>--perf-session &lt;scenario.json&gt; &lt;folder&gt; &lt;outDir&gt;
-/// [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA]</c>.
+/// [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA]
+/// [--source-bytes-cache on|off]</c>.
 /// <para>
 /// Safety (PERF-DIAGNOSIS-TASKS rule 4): keys are delivered only as WPF routed events raised on the
 /// window inside this process. No SendInput/SendKeys/keybd_event/AttachThreadInput/SetForegroundWindow,
@@ -113,13 +114,19 @@ internal static class PerfSession
 
     private sealed record StepRecord(int Step, string Kind, long StartQpc, long EndQpc, double Ms, string? Detail);
 
-    private sealed class Options
+    /// <summary>internal (not private): <see cref="ParseArgs"/> and this record are exercised directly
+    /// by CLI-parse tests in PhotoReview.Integration.Tests via InternalsVisibleTo.</summary>
+    internal sealed class Options
     {
         public required string ScenarioPath { get; init; }
         public required string Folder { get; init; }
         public required string OutDir { get; init; }
         public string? Mode { get; set; }
         public string? Decoder { get; set; }
+        /// <summary>perf(harness): AR15c override for <c>AppSettings.UseSourceBytesCache</c>. Null keeps
+        /// whatever the loaded config.json has; "on"/"off" force it in-memory only (config.json untouched),
+        /// the same override pattern as <see cref="Mode"/>/<see cref="Decoder"/>.</summary>
+        public bool? SourceBytesCache { get; set; }
         public int Repeat { get; set; } = 1;
         public string? Alias { get; set; }
         public string? Commit { get; set; }
@@ -152,7 +159,7 @@ internal static class PerfSession
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or IOException or InvalidOperationException)
         {
             Console.Error.WriteLine($"perf-session: {ex.Message}");
-            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR]");
+            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--source-bytes-cache on|off]");
             return 2;
         }
 
@@ -252,6 +259,12 @@ internal static class PerfSession
             overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(AppPaths.FromEnvironment(), options.CacheDir)));
         var settingsStore = services.GetRequiredService<SettingsStore>();
         settingsStore.Load();
+        // perf(harness): unlike Mode/Decoder (read live on every access below), SourceBytesCachePolicy
+        // is a singleton factory (App.ConfigureServices) that reads settings.UseSourceBytesCache exactly
+        // once, the first time it (or a dependent such as ThumbnailCache/PreviewImageService) is resolved.
+        // That first resolution happens inside GetRequiredService<MainWindow>() below, so this override
+        // MUST run before that call or it has no effect (config.json itself is never touched).
+        if (options.SourceBytesCache is { } sbc) settingsStore.Current.UseSourceBytesCache = sbc;
         var window = services.GetRequiredService<MainWindow>();
         window.Width = 1920;
         window.Height = 1080;
@@ -807,7 +820,7 @@ internal static class PerfSession
 
     // ---- Parsing ---------------------------------------------------------------------------------
 
-    private static Options ParseArgs(string[] args)
+    internal static Options ParseArgs(string[] args)
     {
         // args[0] == "--perf-session"
         if (args.Length < 4) throw new ArgumentException("missing arguments");
@@ -838,6 +851,15 @@ internal static class PerfSession
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
                 case "--cache-dir": options.CacheDir = Path.GetFullPath(Next()); break;
+                case "--source-bytes-cache":
+                    var sbc = Next();
+                    options.SourceBytesCache = sbc.ToLowerInvariant() switch
+                    {
+                        "on" => true,
+                        "off" => false,
+                        _ => throw new ArgumentException($"invalid --source-bytes-cache '{sbc}' (on|off)"),
+                    };
+                    break;
                 default: throw new ArgumentException($"unknown option {args[i]}");
             }
         }

@@ -40,6 +40,10 @@
   running), it prints a loud WARNING for every affected run and marks matrix.json's top level `fixtureChanged: true`
   -- treat every cell in that batch as unverified.
 
+  -SourceBytesCache on|off (perf(harness), AR15c): passes --source-bytes-cache to every perf-session
+  invocation, forcing AppSettings.UseSourceBytesCache in-memory for that run (config.json untouched).
+  Omitted (default): whatever the loaded config.json has.
+
 .EXAMPLE
   .\tools\diag\run-matrix.ps1 -Scenarios s2-next-slow -Modes Fast,Preview,Original -Conditions warm -Repeat 3 -FixtureAlias F1
 
@@ -74,7 +78,12 @@ param(
     # Empties the batch's own cache directory before every recorded (non-warmup) run in every
     # cell. Safe specifically because it targets <batchDir>\cache, not the real app's cache --
     # refuses to combine with -SharedAppCache, which would otherwise silently wipe that instead.
-    [switch]$ColdDiskCache
+    [switch]$ColdDiskCache,
+    # perf(harness, AR15c): forces AppSettings.UseSourceBytesCache in every perf-session invocation
+    # via --source-bytes-cache (in-memory only; config.json is never touched). Omitted (default)
+    # leaves whatever the loaded config.json has, same as -Modes/-Decoder-less runs today.
+    [ValidateSet('on', 'off')]
+    [string]$SourceBytesCache
 )
 
 if ($ColdDiskCache -and $SharedAppCache) {
@@ -243,12 +252,13 @@ function Invoke-Session([string]$scenario, [string]$folder, [string]$outDir, [st
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'   # native stderr must not become a terminating error (PS 5.1)
     $cacheArgs = if ($cacheDirForRun) { @('--cache-dir', $cacheDirForRun) } else { @() }
+    $sourceBytesCacheArgs = if ($SourceBytesCache) { @('--source-bytes-cache', $SourceBytesCache) } else { @() }
     try {
         if ($cliExe) {
-            $output = & $cliExe.FullName --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit @cacheArgs 2>&1
+            $output = & $cliExe.FullName --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit @cacheArgs @sourceBytesCacheArgs 2>&1
         }
         else {
-            $output = & dotnet run --project $testsProject -c Release --no-build -- --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit @cacheArgs 2>&1
+            $output = & dotnet run --project $testsProject -c Release --no-build -- --perf-session $scenario $folder $outDir --mode $mode --alias $alias --commit $commit @cacheArgs @sourceBytesCacheArgs 2>&1
         }
         $code = $LASTEXITCODE
     }

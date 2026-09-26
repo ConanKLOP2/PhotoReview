@@ -103,6 +103,37 @@ public sealed class BenchmarkCliArgumentsTests
         Assert.Contains("worker count", ex.Message, StringComparison.Ordinal);
     }
 
+    [Theory(DisplayName = "--perf-session --source-bytes-cache on|off overrides AppSettings.UseSourceBytesCache in-memory (AR15c)")]
+    [InlineData("on", true)]
+    [InlineData("On", true)]
+    [InlineData("off", false)]
+    [InlineData("OFF", false)]
+    public void PerfSession_SourceBytesCache_Valid(string value, bool expected)
+    {
+        var options = PerfSession.ParseArgs(
+            ["--perf-session", "scenario.json", "C:/photos", "C:/out", "--source-bytes-cache", value]);
+        Assert.Equal(expected, options.SourceBytesCache);
+    }
+
+    [Fact(DisplayName = "--perf-session without --source-bytes-cache leaves the override unset (config.json wins)")]
+    public void PerfSession_SourceBytesCache_AbsentByDefault()
+    {
+        var options = PerfSession.ParseArgs(["--perf-session", "scenario.json", "C:/photos", "C:/out"]);
+        Assert.Null(options.SourceBytesCache);
+    }
+
+    [Theory(DisplayName = "--perf-session --source-bytes-cache rejects anything other than on|off")]
+    [InlineData("true")]
+    [InlineData("1")]
+    [InlineData("")]
+    [InlineData("yes")]
+    public void PerfSession_SourceBytesCache_Invalid(string value)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => PerfSession.ParseArgs(
+            ["--perf-session", "scenario.json", "C:/photos", "C:/out", "--source-bytes-cache", value]));
+        Assert.Contains("source-bytes-cache", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "Parsing does not depend on the current culture (Vietnamese)")]
     public void Parsing_IsCultureInvariant()
     {
