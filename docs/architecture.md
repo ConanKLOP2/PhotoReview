@@ -106,9 +106,9 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 | INV-4 | Chỉ một file action chạy cùng lúc | `FileActionService`, `UndoService` |
 | INV-5 | Action cũ không sửa catalog/undo sau đổi folder | `MainViewModel`, `GenerationClock`, `ReviewCatalog` |
 | INV-6 | Recycle; journal Prepared → Committed/Failed; startup reconcile | `FileActionService`, `OperationJournal`, `RecoveryRetryService`, `UndoService`, `JournalStartupRecovery` (gọi từ `App` sau instance lock) |
-| INV-7 | Bỏ snapshot Explorer trễ khi catalog đã tương tác/đổi | `FolderLoadCoordinator`, `ReviewCatalog`, `ExplorerSnapshotValidator` |
+| INV-7 | Bỏ snapshot Explorer trễ khi catalog đã tương tác/đổi; kết quả probe đọc được (AR16) chỉ áp **sau** khi thứ tự Explorer đã chốt, nên snapshot luôn được kiểm tra với toàn bộ danh sách đã liệt kê | `FolderLoadCoordinator`, `ReviewCatalog`, `ExplorerSnapshotValidator` |
 | INV-8 | Handle decode dùng share ReadWrite/Delete, SequentialScan và đóng sớm | Các `IImageDecoder`, `ThumbnailCache` |
-| INV-9 | Mở file: present ngay, điều hướng/action chờ snapshot (`PendingOrder`) rồi đi theo thứ tự Explorer; mở folder present fallback trước | `FolderLoadCoordinator`, `MainViewModel` |
+| INV-9 | Mở file: present ngay, điều hướng/action chờ snapshot (`PendingOrder`) rồi đi theo thứ tự Explorer; mở folder present fallback trước. Probe đọc được bắt đầu sau frame đầu, không giữ `PendingOrder`; gỡ file lỗi giữ ảnh hiện tại theo path (hoặc chuyển tiếp như Delete nếu chính nó lỗi) | `FolderLoadCoordinator`, `MainViewModel` |
 | INV-10 | Logging mặc định tắt; tắt thì không tạo log | `FileLog`, `AppLog`, `AppSettings.LoggingEnabled` |
 | INV-11 | Config hỏng được backup/reset; config khóa dùng default RAM | `SettingsStore` |
 | INV-12 | Backend lỗi fallback WPF; cache không lẫn backend | `ImageDecoderFactory`, `FallbackImageDecoder`, `ImageCacheKey`, `ReviewMetrics` |
@@ -145,4 +145,4 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 ## Chính sách ghi session và file không đọc được (ADR 0007)
 
 - **Session** (`SessionStore.Save`) ghi nguyên tử (file tạm + rename) nhưng **không fsync** (`WriteAllTextAtomic(..., durable: false)`); Settings giữ `durable: true`. `SessionStore.Load` coi file session rỗng/hỏng là "không có session" (chỉ ghi log).
-- **Quét folder**: `IFileSystem.EnumerateReadableFilesWithStat` thử mở đọc từng ảnh; file không đọc được (quyền, bị khóa, lỗi I/O) bị **bỏ qua có báo cáo** qua `IFolderLoadSink.OnFilesSkipped` (log + cảnh báo "Bỏ qua N file không đọc được" và cửa sổ danh sách), không dùng `IgnoreInaccessible` im lặng. Chính folder không liệt kê được vẫn là lỗi (`OnFailed`).
+- **Quét folder** (AR16, Q-AR7 c): `IFileSystem.EnumerateFilesWithStat(dir, include, onSkipped)` chỉ liệt kê (không mở từng file) để trình diễn ảnh đầu ngay; sau frame đầu `FolderLoadCoordinator` chạy `TryProbeReadable` nền (≤ 8 song song, cùng generation). Khi thứ tự Explorer đã chốt, kết quả về UI thread: load cũ → bỏ; còn hiện hành → `ReviewCatalog.RemovePaths` (giữ ảnh hiện tại, hoặc chuyển tiếp như Delete), sink bỏ preload/cache của file đó, và file bị **bỏ qua có báo cáo** qua `IFolderLoadSink.OnFilesSkipped` (log + cảnh báo "Bỏ qua N file không đọc được" và cửa sổ danh sách), không dùng `IgnoreInaccessible` im lặng. Liệt kê bị ngắt giữa chừng vẫn báo ngay khi catalog sẵn sàng; chính folder không liệt kê được vẫn là lỗi (`OnFailed`).

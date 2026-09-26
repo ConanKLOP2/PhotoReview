@@ -304,6 +304,50 @@ public sealed class ReviewCatalog
     }
 
     /// <summary>
+    /// AR16: removes every entry whose path is in <paramref name="paths"/> (the background readability
+    /// probe's unreadable files) and returns the paths actually removed, in catalog order. Like
+    /// <see cref="ReplaceOrder"/>, the current entry is kept by path when it survives. When the current
+    /// entry itself is removed, the position advances as <see cref="Remove"/> does for a Delete: the
+    /// first surviving entry after it, else the last one, or -1 once the catalog is empty.
+    /// </summary>
+    public IReadOnlyList<string> RemovePaths(IEnumerable<string> paths)
+    {
+        AssertOwnerThread();
+        ArgumentNullException.ThrowIfNull(paths);
+        var doomed = new HashSet<string>(paths.Where(p => !string.IsNullOrWhiteSpace(p)), StringComparer.OrdinalIgnoreCase);
+        if (doomed.Count == 0 || _entries.Count == 0) return [];
+
+        var removed = new List<string>();
+        var kept = new List<CatalogEntry>(_entries.Count);
+        var oldCurrent = CurrentIndex;
+        var nextCurrent = -1;
+        for (var i = 0; i < _entries.Count; i++)
+        {
+            var entry = _entries[i];
+            if (doomed.Contains(entry.Path))
+            {
+                removed.Add(entry.Path);
+                continue;
+            }
+
+            // The survivor at the current position (kept current), or the first one after a removed current.
+            if (nextCurrent < 0 && oldCurrent >= 0 && i >= oldCurrent) nextCurrent = kept.Count;
+            kept.Add(entry);
+        }
+
+        if (removed.Count == 0) return [];
+
+        _entries.Clear();
+        _entries.AddRange(kept);
+        InvalidateIndex();
+        CurrentIndex = _entries.Count == 0 ? -1
+            : oldCurrent < 0 ? 0
+            : nextCurrent >= 0 ? nextCurrent
+            : _entries.Count - 1;
+        return removed;
+    }
+
+    /// <summary>
     /// Inserts an entry into the catalog preserving sorted order defined by <paramref name="comparison"/>.
     /// Used for undo operations. Returns the index where the item was inserted.
     /// </summary>

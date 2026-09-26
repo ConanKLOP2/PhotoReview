@@ -29,6 +29,7 @@ public sealed class FolderLoadCoordinator : IDisposable
 
     private CancellationTokenSource? _loadCts;
     private TaskCompletionSource? _pendingOrder;
+    private Task _readabilityProbe = Task.CompletedTask;
     private bool _disposed;
 
     public FolderLoadCoordinator(
@@ -76,6 +77,8 @@ public sealed class FolderLoadCoordinator : IDisposable
         // event after "start"; the extra phases here split T0->T2 into its IO/sort/explorer parts.
         var perf = new FolderPerf(loadGeneration);
         perf.Mark("start");
+        Task<List<SkippedEntry>>? probe = null;
+        var skipped = new List<SkippedEntry>();
 
         try
         {
@@ -101,14 +104,15 @@ public sealed class FolderLoadCoordinator : IDisposable
             // perf(startup): scan and sort in ONE background task. Two separate Task.Run hops made the
             // sort wait for the UI thread in between -- at startup that is the whole of Window.Show().
             // IO05 (ADR 0007 s3): unreadable files are skipped and counted, never dropped silently.
-            var skipped = new List<SkippedEntry>();
+            // AR16: the listing does not open each file; the readability probe runs in the background
+            // after the first frame (StartReadabilityProbe) and removes + reports unreadable files then.
             var (scannedFiles, entries) = await Task.Run(() =>
             {
                 // The scan gets Length/LastWriteUtc from the same directory entry used to list the
                 // file (see PhysicalFileSystem), so this needs no separate GetFileStat() syscall per
-                // file. Files that cannot be opened for reading go to `skipped` (this delegate runs
-                // on this one background task, so the list needs no lock).
-                var scanned = _fileSystem.EnumerateReadableFilesWithStat(folder, ImageFileTypes.IsSupported, skipped.Add)
+                // file. A listing interrupted part-way goes to `skipped` (this delegate runs on this
+                // one background task, so the list needs no lock).
+                var scanned = _fileSystem.EnumerateFilesWithStat(folder, ImageFileTypes.IsSupported, skipped.Add)
                     .Select(f => f.Stat is null
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })
@@ -212,6 +216,10 @@ public sealed class FolderLoadCoordinator : IDisposable
                 perf.Mark("presentStart");
                 await _sink.PresentAsync(targetIndex, presentationGen);
                 perf.Mark("presentDone");
+                // AR16: the per-file open probe starts only now, off the first-visual path. Its result is
+                // applied in the finally below, i.e. after the Explorer order is settled (INV-7/INV-9 see
+                // the full listing), and dropped if this load is no longer current.
+                probe = StartReadabilityProbe(scannedFiles, perf, loadToken);
             }
             else
             {
@@ -277,6 +285,115 @@ public sealed class FolderLoadCoordinator : IDisposable
             // Applied, ignored, timed out, failed or superseded: in every case the order is settled
             // for this load, so gated navigation may proceed (it re-reads the catalog afterwards).
             pendingOrder?.TrySetResult();
+            if (probe is not null)
+            {
+                // Runs on this (UI) context; it re-checks the generation when the probe completes.
+                _readabilityProbe = ApplyReadabilityProbeAsync(probe, folder, loadGeneration, skipped, perf, loadToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// AR16: completes once the latest load's background readability probe has been applied (unreadable
+    /// files removed from the catalog and reported through <see cref="IFolderLoadSink.OnFilesSkipped"/>)
+    /// or dropped (superseded load, nothing unreadable). Already completed when no probe is running.
+    /// <see cref="LoadAsync"/> itself completes when the Explorer order is settled, before this.
+    /// </summary>
+    public Task ReadabilityProbe => _readabilityProbe;
+
+    /// <summary>At most this many files are probed at once (one open/close each).</summary>
+    internal const int ProbeParallelism = 8;
+
+    private Task<List<SkippedEntry>> StartReadabilityProbe(string[] paths, FolderPerf perf, CancellationToken loadToken)
+    {
+        var fileSystem = _fileSystem;
+        return Task.Run(() =>
+        {
+            perf.Mark("probeStart", paths.Length);
+            var failures = new string?[paths.Length];
+            Parallel.For(
+                0,
+                paths.Length,
+                new ParallelOptions { MaxDegreeOfParallelism = ProbeParallelism, CancellationToken = loadToken },
+                i =>
+                {
+                    // A file deleted since the listing is not "unreadable": like any external delete, the
+                    // presenter drops it when it is reached (only failures pay for the extra existence check).
+                    if (!fileSystem.TryProbeReadable(paths[i], out var failure) && fileSystem.FileExists(paths[i]))
+                    {
+                        failures[i] = failure ?? string.Empty;
+                    }
+                });
+
+            // Listing order, so the report is deterministic whatever order the probes finished in.
+            var unreadable = new List<SkippedEntry>();
+            for (var i = 0; i < paths.Length; i++)
+            {
+                if (failures[i] is { } failure) unreadable.Add(new SkippedEntry(paths[i], failure));
+            }
+            perf.Mark("probed", unreadable.Count);
+            return unreadable;
+        }, loadToken);
+    }
+
+    /// <summary>
+    /// AR16, on the UI thread (ADR 0005): drops the result of a superseded load; otherwise removes the
+    /// unreadable files from the catalog (current kept, or advanced like a Delete when it is one of
+    /// them), reports them exactly like the old scan-time skip (ADR 0007 s3: never silently) and lets
+    /// the sink drop their preload/cache and present the new current if needed.
+    /// </summary>
+    private async Task ApplyReadabilityProbeAsync(
+        Task<List<SkippedEntry>> probe,
+        string folder,
+        long loadGeneration,
+        IReadOnlyList<SkippedEntry> listingSkipped,
+        FolderPerf perf,
+        CancellationToken loadToken)
+    {
+        List<SkippedEntry> unreadable;
+        try
+        {
+            unreadable = await probe;
+        }
+        catch (OperationCanceledException)
+        {
+            return; // superseded or closed
+        }
+        catch (Exception ex)
+        {
+            // Nothing is removed: every file stays reachable and a failing one reports its own error when shown.
+            AppLog.Error($"Readability probe failed in '{folder}'; the catalog keeps every listed file", ex);
+            return;
+        }
+
+        if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
+        {
+            perf.Mark("probeDropped");
+            return;
+        }
+
+        if (unreadable.Count == 0) return;
+
+        var currentPath = _catalog.Current?.Path;
+        var removed = _catalog.RemovePaths(unreadable.Select(s => s.Path));
+        if (removed.Count == 0) return; // already gone (deleted/moved by the user meanwhile)
+
+        var removedSet = new HashSet<string>(removed, StringComparer.OrdinalIgnoreCase);
+        var probeSkipped = unreadable.Where(s => removedSet.Contains(s.Path)).ToList();
+        AppLog.Warn($"Readability probe skipped {probeSkipped.Count.ToString(CultureInfo.InvariantCulture)} unreadable file(s) in '{folder}': "
+            + string.Join("; ", probeSkipped.Take(20).Select(s => $"{s.Path} ({s.Reason})")));
+        // The full list replaces an earlier listing-interrupted report of this load.
+        _sink.OnFilesSkipped(folder, [.. listingSkipped, .. probeSkipped]);
+        perf.Mark("probeApplied", removed.Count);
+
+        var currentRemoved = currentPath is not null && removedSet.Contains(currentPath);
+        try
+        {
+            await _sink.OnUnreadableRemovedAsync(removed, currentRemoved);
+        }
+        catch (Exception ex) when (!loadToken.IsCancellationRequested && _clock.IsFolderCurrent(loadGeneration))
+        {
+            _sink.OnFailed(folder, ex);
         }
     }
 

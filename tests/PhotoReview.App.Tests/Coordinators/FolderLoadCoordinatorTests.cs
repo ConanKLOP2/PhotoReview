@@ -31,6 +31,19 @@ public sealed partial class FolderLoadCoordinatorTests
         public int SessionReadCount { get; private set; }
         /// <summary>Runs on the scan's background thread at the start of a directory listing (used to block a scan).</summary>
         public Action? OnEnumerateFiles { get; set; }
+        /// <summary>AR16: files the readability probe reports as unreadable (path → reason).</summary>
+        public Dictionary<string, string> Unreadable { get; } = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>AR16: runs on the probe's background thread before each probe (used to hold the probe back).</summary>
+        public Action<string>? OnProbe { get; set; }
+        private int _probeCount;
+        public int ProbeCount => Volatile.Read(ref _probeCount);
+
+        public bool TryProbeReadable(string path, out string? failure)
+        {
+            OnProbe?.Invoke(path);
+            Interlocked.Increment(ref _probeCount);
+            return !Unreadable.TryGetValue(path, out failure);
+        }
 
         public bool DirectoryExists(string path) => Directories.Contains(Path.GetFullPath(path));
         public bool FileExists(string path) => Files.ContainsKey(Path.GetFullPath(path));
@@ -138,6 +151,7 @@ public sealed partial class FolderLoadCoordinatorTests
         public Task PresentAsync(int index, long presentationGeneration)
         {
             Presented.Add((index, presentationGeneration));
+            FirstPresented.TrySetResult();
             return Task.CompletedTask;
         }
         public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session)
@@ -152,6 +166,17 @@ public sealed partial class FolderLoadCoordinatorTests
             LastOrderCurrentKept = currentKept;
         }
         public void OnFailed(string folder, Exception exception) => Failures.Add((folder, exception));
+
+        // AR16 readability probe
+        public TaskCompletionSource FirstPresented { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public List<(string Folder, IReadOnlyList<SkippedEntry> Skipped)> SkippedCalls { get; } = [];
+        public List<(IReadOnlyList<string> Paths, bool CurrentRemoved)> Removals { get; } = [];
+        public void OnFilesSkipped(string folder, IReadOnlyList<SkippedEntry> skipped) => SkippedCalls.Add((folder, skipped));
+        public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved)
+        {
+            Removals.Add((removedPaths, currentRemoved));
+            return Task.CompletedTask;
+        }
     }
 
     private readonly FakeFileSystem _fs = new();

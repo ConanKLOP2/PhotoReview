@@ -72,14 +72,43 @@ public interface IFileSystem
         EnumerateFiles(directory, pattern).Select(path => (path, GetFileStat(path)));
 
     /// <summary>
-    /// Như <see cref="EnumerateFilesWithStat"/> nhưng chỉ trả các tệp thỏa <paramref name="include"/> mà
-    /// đọc được: tệp không mở được (quyền, bị khóa, lỗi I/O) hoặc lỗi giữa chừng khi liệt kê được BỎ QUA
-    /// và báo qua <paramref name="onSkipped"/> thay vì làm hỏng cả lần quét (ADR 0007 mục 3). Mặc định
-    /// không dò khả năng đọc (fake trong bộ nhớ); <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè.
+    /// Liệt kê nhanh cho lần mở folder (AR16): các tệp thỏa <paramref name="include"/> kèm stat, KHÔNG dò khả
+    /// năng đọc từng file. Lỗi giữa chừng khi liệt kê (sau mục đầu tiên) được báo qua <paramref name="onSkipped"/>
+    /// (<see cref="SkippedKind.ListingInterrupted"/>) và giữ phần đã đọc; lỗi trước mục đầu tiên ném ra (ADR 0007
+    /// mục 3). Mặc định (fake trong bộ nhớ) = <see cref="EnumerateFilesWithStat(string, string)"/> + lọc.
     /// </summary>
-    IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(
+    IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(
         string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
         EnumerateFilesWithStat(directory, "*").Where(f => include(f.Path));
+
+    /// <summary>
+    /// Dò một tệp có mở đọc được không (một lần open/close, không đọc byte). Trả false và lý do kỹ thuật
+    /// trong <paramref name="failure"/> khi tệp bị khóa/không quyền/lỗi I/O (ADR 0007 mục 3). Mặc định true
+    /// (fake trong bộ nhớ); <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè.
+    /// </summary>
+    bool TryProbeReadable(string path, out string? failure)
+    {
+        failure = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Như <see cref="EnumerateFilesWithStat(string, Func{string, bool}, Action{SkippedEntry})"/> nhưng chỉ trả
+    /// các tệp đọc được: tệp mà <see cref="TryProbeReadable"/> báo lỗi được BỎ QUA và báo qua
+    /// <paramref name="onSkipped"/> thay vì làm hỏng cả lần quét (ADR 0007 mục 3). Lần mở folder không còn gọi
+    /// hàm này (AR16: probe chạy nền sau frame đầu); giữ cho các caller/test khác.
+    /// </summary>
+    IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(
+        string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped)
+    {
+        ArgumentNullException.ThrowIfNull(onSkipped);
+        return EnumerateFilesWithStat(directory, include, onSkipped).Where(f =>
+        {
+            if (TryProbeReadable(f.Path, out var failure)) return true;
+            onSkipped(new SkippedEntry(f.Path, failure ?? string.Empty));
+            return false;
+        });
+    }
 
     /// <summary>Liệt kê các thư mục con trong thư mục chỉ định.</summary>
     IEnumerable<string> EnumerateDirectories(string directory);

@@ -490,6 +490,8 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => _getSink().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => _getSink().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => _getSink().OnFailed(folder, exception);
+        public void OnFilesSkipped(string folder, IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> skipped) => _getSink().OnFilesSkipped(folder, skipped);
+        public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => _getSink().OnUnreadableRemovedAsync(removedPaths, currentRemoved);
     }
 
     private sealed class TestPresentationSink : IPresentationSink
@@ -505,10 +507,21 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
 
     private sealed class TestPreloadController : IPreloadController
     {
-        public Task PreloadAroundAsync(int center) => Task.CompletedTask;
+        private readonly List<string> _calls = [];
+
+        /// <summary>AR16: "cancel", "evict:&lt;normalized path&gt;" and "around:&lt;index&gt;", in call order.</summary>
+        public IReadOnlyList<string> Calls { get { lock (_calls) return _calls.ToArray(); } }
+
+        private void Record(string call) { lock (_calls) _calls.Add(call); }
+
+        public Task PreloadAroundAsync(int center)
+        {
+            Record("around:" + center.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return Task.CompletedTask;
+        }
         public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
-        public void Cancel() { }
-        public void RemovePreloadedKeysForPath(string normalizedPath) { }
+        public void Cancel() => Record("cancel");
+        public void RemovePreloadedKeysForPath(string normalizedPath) => Record("evict:" + normalizedPath);
         public void ClearPreloadedKeys() { }
     }
 

@@ -191,6 +191,7 @@ public sealed class ExifLineViewModelTests : IDisposable
         public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => getSink().OnEmpty(folder, session);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => getSink().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => getSink().OnFailed(folder, exception);
+        public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => getSink().OnUnreadableRemovedAsync(removedPaths, currentRemoved);
     }
 
     private sealed class NullSink : IPresentationSink
