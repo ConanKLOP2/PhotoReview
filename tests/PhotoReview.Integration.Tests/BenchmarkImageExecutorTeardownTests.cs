@@ -28,6 +28,11 @@ public sealed class BenchmarkImageExecutorTeardownTests : IDisposable
         var cacheDir = executor.DiskCacheDirectory;
 
         foreach (var file in files) await executor.DecodeAsync(file);
+        // The RAM cache is far bigger than 5 tiny previews, so nothing gets evicted/persisted to disk from the
+        // decodes above -- seed the scratch directory directly so this test actually exercises "was the
+        // directory removed", independent of whether a real persist/prune pass happened to run.
+        Directory.CreateDirectory(cacheDir);
+        File.WriteAllText(Path.Combine(cacheDir, "seed.pv4"), "seed");
 
         var sw = Stopwatch.StartNew();
         await executor.DisposeAsync();
