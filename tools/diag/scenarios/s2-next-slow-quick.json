@@ -1,0 +1,10 @@
+{
+  "name": "S2-next-slow",
+  "note": "perf(harness): shorter S2 for -Profile quick (routine checks) -- identical to s2-next-slow but repeat:40 instead of 100, so a quick run's S2 cell takes less wall time. -Profile gate/full keep the full 100-key s2-next-slow scenario for decisions. Same 'name' as s2-next-slow (S2-next-slow) so PerfAnalyze groups/labels it identically -- only the file name (and the recorded key count) differs.",
+  "steps": [
+    { "open": "folder" },
+    { "waitIdle": true, "timeoutMs": 60000 },
+    { "key": "Right", "repeat": 40, "intervalMs": 1500, "settle": true },
+    { "waitMs": 2000 }
+  ]
+}

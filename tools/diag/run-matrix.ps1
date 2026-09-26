@@ -28,12 +28,24 @@
   OS file cache and PhotoReview's disk cache before the recorded runs. Pass -FullWarmup to run the full scenario as
   the warm-up instead (old behaviour).
 
+  perf(harness, AR17 step 1/3a): a -Profile gate batch on F4 measured 2026-09-26 spent 146s of 393s (37%) in
+  warm-up runs -- the batch's cache dir is already shared across every cell (see Cache isolation above), so a
+  warm-up after the very first one mostly re-primes a cache that is already warm. Default behavior now runs
+  ONE warm-up per (fixture, mode, condition) combo per batch, before that combo's first scenario, instead of
+  once per scenario/fixture/mode/condition cell. Pass -WarmupEveryCell to restore the old per-cell warm-up
+  (e.g. to isolate one scenario's timing from the others in the same batch); -FullWarmup implies it.
+
   -Profile quick|gate|full selects a scenario set and repeat count together (see table below). An explicit
   -Scenarios and/or -Repeat overrides the profile's corresponding value; -Modes/-Conditions/-FixtureAlias are never
   touched by -Profile.
-    quick  S2 + S3, Repeat 1  (fast smoke check of the event-driven settle path)
-    gate   S2 + S3 + S4, Repeat 2
-    full   S1 + S1b + S2 + S3 + S4, Repeat 3  (the previous unconditional default set)
+    quick  S2(quick, repeat:40) + S3, Repeat 1  (fast smoke check of the event-driven settle path; routine
+           checks between changes -- NOT for gate/decision numbers, since S2 only presses Next 40 times)
+    gate   S2 + S3 + S4, Repeat 2               (decisions: before/after a perf-affecting change)
+    full   S1 + S1b + S2 + S3 + S4, Repeat 3    (decisions needing S1/S1b too; the previous unconditional default set)
+
+  perf(harness): pass -SkipBuild whenever the Release build is already current (e.g. right after your own
+  `dotnet build PhotoReview.slnx -c Release`) -- it skips the CLI project's own build step below and uses the
+  already-built exe, saving a build per invocation.
 
   Fixture-change guard: before the batch, and after every run, this script records each fixture folder's file count
   and total byte size. If either changes mid-batch (e.g. someone copies photos into the folder while a batch is
@@ -67,6 +79,16 @@ param(
     [string]$Profile,
     [string]$WarmupScenario = 's1-open-folder',
     [switch]$FullWarmup,
+    # perf(harness, AR17 step 1): Step-1 measurement on F4 (2026-09-26) showed warm-up runs were
+    # 146s of a 393s gate batch (37%) -- the batch's cache dir is already shared across every
+    # scenario/cell (see $cacheDir above), so a warm-up after the first one mostly re-primed a
+    # cache that was already warm. Default behavior (this switch OFF) now runs ONE warm-up per
+    # (fixture, mode) per batch, before that combo's first scenario, instead of once per
+    # scenario/fixture/mode/condition cell. Pass -WarmupEveryCell to restore the old per-cell
+    # behavior (e.g. to isolate one scenario's timing from every other scenario in the batch).
+    # -FullWarmup (running the actual scenario, not $WarmupScenario, as its own warm-up) only
+    # makes sense per scenario, so it implies -WarmupEveryCell.
+    [switch]$WarmupEveryCell,
     # perf(harness): by default every run in this batch passes --cache-dir <batchDir>\cache to
     # perf-session, so preview+thumbnail disk caches live under this batch's own folder instead
     # of the real %LOCALAPPDATA%\PhotoReview\{cache,thumbnails} (shared with whatever else is
@@ -110,7 +132,10 @@ if ($SharedAppCache -and $Conditions -contains 'cold-diskcache') {
 # -Profile picks a scenario set + repeat count; an explicitly-passed -Scenarios/-Repeat wins over the profile.
 if ($Profile) {
     $profileScenarios = switch ($Profile) {
-        'quick' { @('s2-next-slow', 's3-next-burst') }
+        # perf(harness, AR17 step 3b): 'quick' is for routine checks between changes, not for gate/decision
+        # numbers -- it uses the shorter s2-next-slow-quick (repeat:40 instead of 100) so a quick run's S2
+        # cell takes less wall time. 'gate'/'full' keep the full 100-key s2-next-slow: use them for decisions.
+        'quick' { @('s2-next-slow-quick', 's3-next-burst') }
         'gate' { @('s2-next-slow', 's3-next-burst', 's4-jump') }
         'full' { @('s1-open-folder', 's1b-open-file', 's2-next-slow', 's3-next-burst', 's4-jump') }
     }
@@ -119,6 +144,11 @@ if ($Profile) {
     if (-not $PSBoundParameters.ContainsKey('Repeat')) { $Repeat = $profileRepeat }
     Write-Host "Profile '$Profile': scenarios=$($Scenarios -join ',') repeat=$Repeat"
 }
+
+# -FullWarmup only makes sense per scenario (it warms up with the scenario itself, not a shared
+# $WarmupScenario), so it implies -WarmupEveryCell; the batched (once per fixture/mode) path below
+# only ever uses $warmupScenarioFile.
+if ($FullWarmup) { $WarmupEveryCell = $true }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $scenarioDir = Join-Path $PSScriptRoot 'scenarios'
@@ -271,43 +301,67 @@ function Invoke-Session([string]$scenario, [string]$folder, [string]$outDir, [st
     return [pscustomobject]@{ ExitCode = $code; Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1) }
 }
 
-foreach ($scenario in $scenarioFiles) {
-    $scenarioName = [System.IO.Path]::GetFileNameWithoutExtension($scenario)
+# perf(harness, AR17 step 3a): loop order is alias > mode > condition > scenario (scenario moved
+# innermost) so a batched warm-up can run ONCE per (fixture, mode, condition) combo, before that
+# combo's first scenario, instead of once per scenario. $WarmupEveryCell (or -FullWarmup) restores
+# the old per-cell warm-up by looping scenario outermost instead -- see the two branches below.
+function Invoke-ScenarioCell([string]$scenario, [string]$scenarioName, [string]$alias, [string]$mode, [string]$condition, [bool]$warmedUpAlready) {
+    $cellDir = Join-Path $batchDir "$scenarioName\$alias-$mode-$condition"
+    $runs = if ($condition -eq 'cold-os') { 1 } else { $Repeat }
+    if ($condition -eq 'warm' -and ($WarmupEveryCell -or -not $warmedUpAlready)) {
+        $warmupTarget = if ($FullWarmup) { $scenario } else { $warmupScenarioFile }
+        $warmupTargetName = [System.IO.Path]::GetFileNameWithoutExtension($warmupTarget)
+        Write-Host "[$scenarioName $alias $mode $condition] warm-up ($warmupTargetName)"
+        $warm = Invoke-Session $warmupTarget $folders[$alias] (Join-Path $cellDir 'warmup') $mode $alias $cacheDir
+        $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = 0; warmup = $true
+                warmupScenario = $warmupTargetName
+                status = $(if ($warm.ExitCode -eq 0) { 'ok' } else { "fail($($warm.ExitCode))" }); seconds = $warm.Seconds
+                outDir = (Join-Path $cellDir 'warmup') })
+        Save-Matrix
+    }
+    for ($run = 1; $run -le $runs; $run++) {
+        # 'cold-diskcache' (a -Conditions value) always targets whichever cache root
+        # is actually active for this batch: the batch-scoped $cacheDir by default, or
+        # the real $localApp when -SharedAppCache restored the old behavior.
+        $condColdCacheRoot = if ($cacheDir) { $cacheDir } else { $localApp }
+        if ($condition -eq 'cold-diskcache') { Clear-DiskCache $condColdCacheRoot }
+        # -ColdDiskCache (a standalone switch, independent of -Conditions) additionally
+        # empties the batch's own cache dir before every recorded run in every cell,
+        # regardless of condition; the param block above already refuses to combine it
+        # with -SharedAppCache, so $cacheDir is always non-null here.
+        if ($ColdDiskCache) { Clear-DiskCache $cacheDir }
+        $outDir = Join-Path $cellDir ('run-{0:00}' -f $run)
+        Write-Host "[$scenarioName $alias $mode $condition] run $run/$runs"
+        $started = (Get-Date).ToString('o')
+        $result = Invoke-Session $scenario $folders[$alias] $outDir $mode $alias $cacheDir
+        $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = $run; warmup = $false
+                status = $(if ($result.ExitCode -eq 0) { 'ok' } else { "fail($($result.ExitCode))" }); started = $started
+                seconds = $result.Seconds; outDir = $outDir })
+        Save-Matrix
+    }
+}
+
+if ($WarmupEveryCell) {
+    foreach ($scenario in $scenarioFiles) {
+        $scenarioName = [System.IO.Path]::GetFileNameWithoutExtension($scenario)
+        foreach ($alias in $FixtureAlias) {
+            foreach ($mode in $Modes) {
+                foreach ($condition in $Conditions) {
+                    Invoke-ScenarioCell $scenario $scenarioName $alias $mode $condition $false
+                }
+            }
+        }
+    }
+}
+else {
     foreach ($alias in $FixtureAlias) {
         foreach ($mode in $Modes) {
             foreach ($condition in $Conditions) {
-                $cellDir = Join-Path $batchDir "$scenarioName\$alias-$mode-$condition"
-                $runs = if ($condition -eq 'cold-os') { 1 } else { $Repeat }
-                if ($condition -eq 'warm') {
-                    $warmupTarget = if ($FullWarmup) { $scenario } else { $warmupScenarioFile }
-                    $warmupTargetName = [System.IO.Path]::GetFileNameWithoutExtension($warmupTarget)
-                    Write-Host "[$scenarioName $alias $mode $condition] warm-up ($warmupTargetName)"
-                    $warm = Invoke-Session $warmupTarget $folders[$alias] (Join-Path $cellDir 'warmup') $mode $alias $cacheDir
-                    $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = 0; warmup = $true
-                            warmupScenario = $warmupTargetName
-                            status = $(if ($warm.ExitCode -eq 0) { 'ok' } else { "fail($($warm.ExitCode))" }); seconds = $warm.Seconds
-                            outDir = (Join-Path $cellDir 'warmup') })
-                    Save-Matrix
-                }
-                for ($run = 1; $run -le $runs; $run++) {
-                    # 'cold-diskcache' (a -Conditions value) always targets whichever cache root
-                    # is actually active for this batch: the batch-scoped $cacheDir by default, or
-                    # the real $localApp when -SharedAppCache restored the old behavior.
-                    $condColdCacheRoot = if ($cacheDir) { $cacheDir } else { $localApp }
-                    if ($condition -eq 'cold-diskcache') { Clear-DiskCache $condColdCacheRoot }
-                    # -ColdDiskCache (a standalone switch, independent of -Conditions) additionally
-                    # empties the batch's own cache dir before every recorded run in every cell,
-                    # regardless of condition; the param block above already refuses to combine it
-                    # with -SharedAppCache, so $cacheDir is always non-null here.
-                    if ($ColdDiskCache) { Clear-DiskCache $cacheDir }
-                    $outDir = Join-Path $cellDir ('run-{0:00}' -f $run)
-                    Write-Host "[$scenarioName $alias $mode $condition] run $run/$runs"
-                    $started = (Get-Date).ToString('o')
-                    $result = Invoke-Session $scenario $folders[$alias] $outDir $mode $alias $cacheDir
-                    $cells.Add([ordered]@{ scenario = $scenarioName; fixture = $alias; mode = $mode; condition = $condition; run = $run; warmup = $false
-                            status = $(if ($result.ExitCode -eq 0) { 'ok' } else { "fail($($result.ExitCode))" }); started = $started
-                            seconds = $result.Seconds; outDir = $outDir })
-                    Save-Matrix
+                $warmedUpAlready = $false
+                foreach ($scenario in $scenarioFiles) {
+                    $scenarioName = [System.IO.Path]::GetFileNameWithoutExtension($scenario)
+                    Invoke-ScenarioCell $scenario $scenarioName $alias $mode $condition $warmedUpAlready
+                    $warmedUpAlready = $true
                 }
             }
         }
