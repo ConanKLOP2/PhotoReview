@@ -37,7 +37,7 @@ Consolidation of decisions (Q-*) across task groups. Status of task groups: [`do
 | Q-AR9 | AR 2026-09-26 | Benchmark window in the product app | ✅ DECIDED 2026-09-26 — (a) keep, documented as a feature; assembly loads lazily | [AR18](arch-review/AR18-benchmark-in-app.md) |
 | Q-AR10 | AR 2026-09-26 | AR14 controller composition / AR19 dialog split | ✅ DECIDED 2026-09-26 — AR14 (a) comment only; AR19 (a) `ShowSkippedFiles` via `IDialogService`, no interface split | [AR14](arch-review/AR14-viewmodel-composition.md), [AR19](arch-review/AR19-dialog-service-split.md) |
 | Q-R26 | Perf 2026-09-26 | Q-R17 whole-folder preload on F4: ~10 GB RAM, every image cached, but first-visual P50/P95 ~2.5–3× higher (4.4/8.6 vs 1.6/2.8 ms; GC: heap 532 vs 37 MB, gen2 149 vs 69) | 🔄 PENDING — options in chat 2026-09-26 | [PERF-STATUS](PERF-STATUS.md) |
-| Q-R27 | Journal | Startup reconcile in a second process (PerFolder mode) can mark an operation still running in the first process Failed (false "N operations failed" dialog; the journal self-heals when it commits) | 🔄 PENDING — options in chat 2026-09-26 | `JournalStartupRecovery`, `OperationJournal.ReconcilePendingOperations` |
+| Q-R27 | Journal | Startup reconcile in a second process (PerFolder mode) can mark an operation still running in the first process Failed (false "N operations failed" dialog; the journal self-heals when it commits) | ✅ DECIDED 2026-09-26 (user) — D: per-operation named kernel object held Prepared→outcome; reconcile skips live ops; implemented on branch fix/q-r27-reconcile-live-ops | `JournalStartupRecovery`, `OperationJournal.ReconcilePendingOperations` |
 
 **Legend:** ✅ Decided/Accepted · 🔄 Pending · ⏸ Blocked
 
