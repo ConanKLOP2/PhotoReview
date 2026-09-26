@@ -123,8 +123,8 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
                 var clickZoomLevel = menuItems[3];
-                Assert.Equal("Mức thu phóng khi nhấn", clickZoomLevel.Header);
-                Assert.Equal("Menu con mức thu phóng khi nhấn", AutomationProperties.GetName(clickZoomLevel));
+                Assert.Equal("Thu phóng", clickZoomLevel.Header);
+                Assert.Equal("Menu con thu phóng", AutomationProperties.GetName(clickZoomLevel));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
 
                 var texts = Texts(window);

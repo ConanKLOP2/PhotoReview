@@ -1,6 +1,6 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-26 | **Base:** master `bbde228` (#127) | **Open PRs:** #129
+**Updated:** 2026-09-26 | **Base:** master `bf7e99a` (#128) | **Open PRs:** #129
 
 ## Now
 
@@ -13,8 +13,9 @@
 - **Q-R28 = A (i18n export, branch `feat/i18n-export-all`):** Settings > Export strings to translate now writes every key (missing first + `_missing` list, then current translations, notes for all); `plural: none` languages no longer get unused `.one` keys. Settings > Reload translations now shows a message: "no problems" or the list of problems (skipped files, entries falling back to English; first 15, rest counted). Tests + 9 mutations pass; GUI look of the message still to be checked by the user.
 - **Tests never touch the real config.json (`fix/isolate-test-config`, merged):** `DataRootFixture` sets `PHOTOREVIEW_ISOLATE_CONFIG=1`, so `config.json` goes under the temp data root.
 - **Releases are manual (user, 2026-09-26):** CI only tags `v2.0.N`; no automatic draft. Actions > Release > Run workflow (tag input) publishes directly (`draft` box optional).
-- **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan (never leaves a zoomed image; `ArrowKeyNavigatesAtZoomEdge`), dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields (default folder name), optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **User GUI check pending.** #109 GUI check: OK.
+- **UI feedback Q-R30 — merged (#119, #123, release build 2.0.127):** arrow-key pan (never leaves a zoomed image; `ArrowKeyNavigatesAtZoomEdge`), dark title bar + scrollbars, toolbar auto-hide, context menu (Open folder/Settings/Click zoom level), title-bar fields (default folder name), optional Modified date EXIF field, info font size, click-zoom key `2`, glide smoothing `Predict`. **User GUI check: OK.** #109 GUI check: OK.
 - **Sort (Q-R33, #127):** Default / Name A→Z / Z→A ignore Explorer order; Name follows it.
+- **Zoom submenu (branch `feat/zoom-menu-presets`):** context menu "Zoom": Fit + 200/300/400 % added; GUI check pending.
 - **Info auto-hide (Q-R34, `feat/info-overlay-autohide`):** `ToolbarAutoHide` default off (saved `true` kept; own delay, opacity % min 20); new `InfoOverlayAutoHide` (off, own delay 3000) fades status/EXIF/folder info, never while a message/Compare/dialog. **GUI check pending.**
 - **Flaky:** `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
