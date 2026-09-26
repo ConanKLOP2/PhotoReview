@@ -46,6 +46,17 @@ public sealed class ReviewCatalog
     // O(1) lookups paid for by an occasional O(n) rebuild.
     private readonly Dictionary<string, int> _indexByPath = new(StringComparer.OrdinalIgnoreCase);
     private bool _indexDirty = true;
+
+    // Remove is the hot mutation of the review loop (Recycle/Move burst), so it must not force an O(n) rebuild of the
+    // index before the next photo is shown. Instead the dictionary keeps its (now stale) positions and the removed
+    // positions are recorded here, sorted; the live index is `stored - (removed positions below stored)`.
+    // A full rebuild only happens once this list grows past MaxRemovedBeforeRebuild.
+    private const int MaxRemovedBeforeRebuild = 64;
+    private readonly List<int> _removedPositions = [];
+    private bool _indexHasDuplicateKeys; // case-variant duplicate paths: a removal could unhide the second one, so rebuild
+
+    /// <summary>Test seam: how many times the path index was rebuilt from scratch.</summary>
+    internal int IndexRebuildCountForTests { get; private set; }
     private string[]? _pathsCache;
 
     /// <summary>
@@ -95,18 +106,24 @@ public sealed class ReviewCatalog
     {
         if (string.IsNullOrWhiteSpace(path)) return -1;
         EnsureIndex();
-        return _indexByPath.TryGetValue(path, out var index) ? index : -1;
+        if (!_indexByPath.TryGetValue(path, out var stored)) return -1;
+        if (_removedPositions.Count == 0) return stored;
+        var found = _removedPositions.BinarySearch(stored);
+        return found >= 0 ? -1 : stored - ~found; // ~found = number of removed positions below `stored`
     }
 
     private void EnsureIndex()
     {
         if (!_indexDirty) return;
         _indexByPath.Clear();
+        _removedPositions.Clear();
+        _indexHasDuplicateKeys = false;
+        IndexRebuildCountForTests++;
         for (var i = 0; i < _entries.Count; i++)
         {
             // First occurrence wins for unusual case-variant duplicate paths, matching the
             // previous linear-scan behavior (first match).
-            _indexByPath.TryAdd(_entries[i].Path, i);
+            if (!_indexByPath.TryAdd(_entries[i].Path, i)) _indexHasDuplicateKeys = true;
         }
         _indexDirty = false;
     }
@@ -218,8 +235,21 @@ public sealed class ReviewCatalog
         var removedIndex = IndexOf(path);
         if (removedIndex < 0) return CurrentIndex;
 
-        _entries.RemoveAt(removedIndex);
-        InvalidateIndex();
+        // IndexOf just made the index clean, so the stored position of `path` is known.
+        if (!_indexHasDuplicateKeys && _removedPositions.Count < MaxRemovedBeforeRebuild
+            && _indexByPath.TryGetValue(path, out var storedPosition))
+        {
+            var at = _removedPositions.BinarySearch(storedPosition);
+            _removedPositions.Insert(~at, storedPosition);
+            _entries.RemoveAt(removedIndex);
+            _pathsCache = null;
+            StructuralVersion++;
+        }
+        else
+        {
+            _entries.RemoveAt(removedIndex);
+            InvalidateIndex();
+        }
         if (_entries.Count == 0)
         {
             CurrentIndex = -1;
