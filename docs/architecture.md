@@ -22,13 +22,12 @@ PhotoReview.Imaging.TurboJpeg ─> PhotoReview.Imaging + PhotoReview.Core
 
 **AppHost (AR02a–d, xong):** `PhotoReview.App.Composition.AppHost.BuildServices(overrides)` là điểm vào duy nhất dựng `IServiceProvider` — nó gọi `App.ConfigureServices`, áp `overrides` (nếu có), rồi `BuildServiceProvider()`. `App.App_Startup`, `Benchmark.Cli` (AR02c) và test tích hợp (AR02b) đều dùng cùng hàm này, chỉ khác override để thay `IPreloadController`, `IPresentationObserver` hay `IMoveOverride`. `MainWindow` giờ chỉ còn **một constructor DI duy nhất** (AR02d xoá các constructor phi-DI và `MainWindowHelpers.CreateTestViewModel` — composition root thứ hai không còn tồn tại); các trường public trước đây (`_files`, `_index`, `_compareSelectedPath`, `_metrics`, `_fileActionInProgress`) đã thành thuộc tính chỉ-đọc (`Files`, `CurrentIndex`, `CompareSelectedPath`, `Metrics`, `IsFileActionInProgress`). Các seam production hỗ trợ override: `ViewportSizeSource` (F3 — `MainWindow` gán `Get` về `GetViewportSize` ngay sau `InitializeComponent()`), `IPresentationObserver`/`NullPresentationObserver`, seam preload (`MainViewModelCompositionRoot` chỉ dựng `PreloadScheduler` thật khi không có `IPreloadController` nào được đăng ký) và seam di chuyển tệp (`IMoveOverride`, `null` ở production).
 
-## Khoảng trống đã biết (rà soát 2026-09-23)
+## Khoảng trống đã biết (cập nhật 2026-09-27)
 
-Chi tiết và kế hoạch: [`refactoring/ARCH-REVIEW-SUMMARY.md`](refactoring/ARCH-REVIEW-SUMMARY.md).
+Rà soát kiến trúc 2026-09-23 và 2026-09-26 đã xong (tóm tắt: [`refactoring/HISTORY.md`](refactoring/HISTORY.md)): một composition root (`AppHost`), thread affinity thực thi bằng test (ADR 0005), `AppSettings` không còn persistence tĩnh.
 
-- ~~**Hai composition root** (F2, F3): test và `Benchmark.Cli --perf-session` dựng `MainViewModel` qua `MainWindowHelpers.CreateTestViewModel` (không preload, cache 64 MiB, không disk cache), khác đồ thị production mô tả ở đây.~~ → **AR02 xong (a–d):** chỉ còn một composition root (`AppHost.BuildServices`), xem mục AppHost ở trên.
-- **Disk cache bỏ qua `IAppPaths`** (F4): `ThumbnailCache`/`PreviewImageService` nay đọc thư mục đĩa từ `IAppPaths.ThumbnailCacheDir`/`PreviewCacheDir` thay vì tự hard-code lại default giống hệt (AR02a, đã xong — không còn 2 nguồn sự thật). Nhưng bản thân `AppPaths` vẫn cố ý giữ hai thư mục cache dưới `%LOCALAPPDATA%\PhotoReview` bất kể `PHOTOREVIEW_DATA_ROOT` (chỉ Journal/Sessions/Log theo override) — cô lập cache đĩa theo `PHOTOREVIEW_DATA_ROOT` vẫn là khoảng trống mở, nằm ngoài phạm vi AR02a.
-- ~~**Thread affinity chưa được thực thi** (F5)~~ — đã xử lý bởi AR04 (ADR 0005), xem mục [Threading](#threading-adr-0005). Còn lại: xác nhận perf gate/GUI trên máy thật.
+- **Cache đĩa không theo `PHOTOREVIEW_DATA_ROOT`:** `AppPaths` cố ý giữ `cache\` và `thumbnails\` dưới `%LOCALAPPDATA%\PhotoReview` (chỉ Journal/Sessions/Log theo override) — cô lập cache đĩa theo data root vẫn là khoảng trống mở.
+- **NAS / ổ chậm (Q-R29, mở):** `ThumbnailCache.BuildKey` stat đồng bộ trên UI thread mỗi lần điều hướng nguội; preload cả folder chưa có giới hạn ưu tiên I/O.
 
 ## Luồng mở folder và trình diễn ảnh
 
@@ -95,6 +94,8 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 `PreviewImageService` chụp backend hiện hành khi tạo `ImageCacheKey`. Key gồm path chuẩn hóa, length, mtime, Original/target width, backend và orientation. RAM cache, disk cache và in-flight dedup dùng identity này. `ImageDecoderFactory` tạo backend được chọn; WIC Direct và TurboJPEG được bọc bởi `FallbackImageDecoder`, quay về WPF cho nhóm lỗi codec được phép và ghi metrics backend thực tế.
 
 **Zoom (option A cho #43):** ngoài Fit, `ViewerState.Zoom` tính theo pixel GỐC — phần tử ảnh có kích thước `OriginalWidth × Zoom / DpiScale` DIP (100 % = 1 pixel nguồn trên 1 pixel thiết bị), không phụ thuộc bitmap đang hiển thị. `ImagePresenter` hiện preview ngay ở đúng kích thước đó, còn `ZoomDetailLoader` gọi `PreviewImageService.DecodeOriginalAsync` (thread riêng, không vào RAM LRU/disk cache) cho ảnh HIỆN TẠI rồi thay `Source` mà không đổi layout/scroll. Chỉ giữ tối đa một original (của ảnh hiện tại); điều hướng sẽ hủy decode chưa chạy, bỏ kết quả trễ (token navigation) và thả original. Về Fit thì dùng lại preview. Quyết định: [ADR 0008](adr/0008-zoom-source-pixel.md).
+
+**Nhập liệu khi zoom:** phím mũi tên trên ảnh đang zoom chỉ pan (`KeyboardPan`, bước = `ArrowPanStepPercent`, mặc định 10 % viewport, 1–100); không bao giờ chuyển ảnh trừ khi bật `ArrowKeyNavigatesAtZoomEdge` (mặc định tắt, Q-R32). Menu chuột phải: Fit, "Zoom to N %" (`ClickZoomPercent`), submenu Zoom levels; cùng nhóm Zoom trong Settings ▸ Mouse & zoom (level luôn sửa được, click-to-zoom, bước pan, phím tắt zoom chỉ đọc). Kéo/pan/glide/wheel/click-zoom nằm ở `PointerInputController`, Fit ở `FitViewController` (AR13).
 
 `SourceBytesCache` là tầng tùy chọn trước decode. Khi `UseSourceBytesCache=false`, service đọc stream nguồn như bình thường. Khi bật, preview, hash, preload và thumbnail JPEG dùng chung byte theo fingerprint; PNG thumbnail giữ stream fallback. Clear/evict dùng generation/epoch để tác vụ cũ không hồi sinh entry.
 

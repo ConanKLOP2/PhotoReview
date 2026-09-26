@@ -11,10 +11,10 @@ PhotoReview is a Windows WPF application for browsing, comparing, and organizing
 
 ### Key Features
 
-- Reads file order from Windows Explorer when a valid native snapshot is available; falls back to an internal sorting order during wait times or when Shell is unavailable.
+- Reads file order from Windows Explorer when a valid native snapshot is available; falls back to an internal sorting order during wait times or when Shell is unavailable. Sort modes `Default` (folder order as returned by the file system) and `Name A→Z / Z→A` (app order) skip the Explorer query.
 - Features Fast, Preview, and Original modes; bounded RAM/disk image caching; memory pressure checks for preloading.
 - Delete operations move files to the Recycle Bin; Move/Copy/Delete actions are journaled to support Undo and recovery.
-- Supports side-by-side Compare, optional hash/dimension verification, batch duplicate cleanup with a confirmation step, zoom/Fit/fullscreen views, and keyboard shortcuts.
+- Supports side-by-side Compare, optional hash/dimension verification, batch duplicate cleanup with a confirmation step, zoom in source pixels (wheel, click-to-zoom, arrow-key pan, right-click Zoom menu), Fit and fullscreen views, and keyboard shortcuts.
 - Images and file paths are processed locally; internal diagnostics are only enabled when configured.
 - Optional manual update check (Settings > General > Updates): only when you click the button, the app asks GitHub for the latest release number and offers a link to the download page. This is the only feature that uses the network; nothing about your photos or paths is sent, and nothing is downloaded or installed automatically.
 
@@ -100,10 +100,10 @@ PhotoReview là ứng dụng Windows WPF để duyệt, so sánh và phân loạ
 
 ### Điểm chính
 
-- Đọc thứ tự file từ Windows Explorer khi snapshot native hợp lệ; dùng thứ tự fallback trong lúc chờ hoặc khi Shell không sẵn sàng.
+- Đọc thứ tự file từ Windows Explorer khi snapshot native hợp lệ; dùng thứ tự fallback trong lúc chờ hoặc khi Shell không sẵn sàng. Chế độ sắp xếp `Default` (thứ tự thư mục do file system trả về) và `Name A→Z / Z→A` (thứ tự của phần mềm) không truy vấn Explorer.
 - Có chế độ Fast, Preview và Original; cache ảnh trong RAM/đĩa có giới hạn, preload có kiểm tra áp lực bộ nhớ.
 - Delete chuyển file vào Recycle Bin; Move/Copy/Delete được ghi journal để hỗ trợ Undo và recovery.
-- Hỗ trợ Compare, kiểm tra hash/kích thước tùy chọn, batch duplicate có bước xác nhận, zoom/Fit/fullscreen và phím tắt.
+- Hỗ trợ Compare, kiểm tra hash/kích thước tùy chọn, batch duplicate có bước xác nhận, zoom theo pixel nguồn (lăn chuột, click-to-zoom, pan bằng mũi tên, menu chuột phải Zoom), Fit/fullscreen và phím tắt.
 - Ảnh và đường dẫn được xử lý cục bộ; diagnostics nội bộ chỉ bật theo cấu hình.
 - Có nút kiểm tra cập nhật thủ công (Cài đặt → Chung → Cập nhật): chỉ khi bạn bấm, ứng dụng hỏi GitHub số phiên bản mới nhất và đưa liên kết tới trang tải về. Đây là tính năng duy nhất dùng mạng; không gửi gì về ảnh hoặc đường dẫn, và không tự tải hay tự cài đặt.
 
