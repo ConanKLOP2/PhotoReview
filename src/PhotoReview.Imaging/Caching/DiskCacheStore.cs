@@ -252,9 +252,6 @@ public sealed class DiskCacheStore
         return total;
     }
 
-    public static void PruneDirectory(string directory, string searchPattern, long maxBytes, string? logContext, string? companionSuffix = null)
-        => PruneDirectory(directory, searchPattern, maxBytes, log: null, companionSuffix);
-
     /// <summary>
     /// Removes every file matching this store's pattern in its directory, plus leftover atomic-write temp files
     /// (<see cref="TempFilePattern"/>), which the store pattern never matches.
@@ -313,9 +310,6 @@ public sealed class DiskCacheStore
             TryDelete(path, log);
         }
     }
-
-    public static void ClearDirectory(string directory, string searchPattern, string? logContext)
-        => ClearDirectory(directory, searchPattern, log: null);
 
     /// <summary>
     /// Safely deletes a file, catching IOException and UnauthorizedAccessException.
