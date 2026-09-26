@@ -60,6 +60,20 @@ public static class SettingsNormalizer
             settings.PreloadMemoryLoadLimit = PerformanceOptions.PreloadMemoryLoadLimit;
             fixedNames.Add(nameof(AppSettings.PreloadMemoryLoadLimit));
         }
+        var preloadForward = Math.Clamp(settings.PreloadForwardCount,
+            PerformanceOptions.MinPreloadForwardCount, PerformanceOptions.MaxPreloadCount);
+        if (preloadForward != settings.PreloadForwardCount)
+        {
+            settings.PreloadForwardCount = preloadForward;
+            fixedNames.Add(nameof(AppSettings.PreloadForwardCount));
+        }
+        var preloadBackward = Math.Clamp(settings.PreloadBackwardCount,
+            PerformanceOptions.MinPreloadBackwardCount, PerformanceOptions.MaxPreloadCount);
+        if (preloadBackward != settings.PreloadBackwardCount)
+        {
+            settings.PreloadBackwardCount = preloadBackward;
+            fixedNames.Add(nameof(AppSettings.PreloadBackwardCount));
+        }
 
         if (!Enum.IsDefined(settings.InitialViewMode)) { settings.InitialViewMode = InitialViewMode.Fit; fixedNames.Add(nameof(AppSettings.InitialViewMode)); }
         if (!Enum.IsDefined(settings.LoadingMode)) { settings.LoadingMode = LoadingMode.Preview; fixedNames.Add(nameof(AppSettings.LoadingMode)); }
