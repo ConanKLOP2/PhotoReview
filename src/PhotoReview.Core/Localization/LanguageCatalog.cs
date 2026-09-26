@@ -24,8 +24,10 @@ public sealed class LanguageCatalog
     public const string MetaKey = "_meta";
 
     private LanguageCatalog(string code, string name, string nativeName, PluralRule plural, IReadOnlyList<string> authors,
-        IReadOnlyDictionary<string, string> entries)
+        IReadOnlyDictionary<string, string> entries, bool nativeNameDeclared = true, bool pluralDeclared = true)
     {
+        NativeNameDeclared = nativeNameDeclared;
+        PluralDeclared = pluralDeclared;
         Code = code;
         Name = name;
         NativeName = nativeName;
@@ -44,6 +46,12 @@ public sealed class LanguageCatalog
     public string NativeName { get; }
 
     public PluralRule Plural { get; }
+
+    /// <summary>True when the file's <c>_meta</c> spelled out a name / nativeName (else <see cref="NativeName"/> is only the code fallback).</summary>
+    public bool NativeNameDeclared { get; }
+
+    /// <summary>True when the file's <c>_meta</c> spelled out <c>plural</c> (else <see cref="Plural"/> is only the one-other default).</summary>
+    public bool PluralDeclared { get; }
 
     public IReadOnlyList<string> Authors { get; }
 
@@ -92,13 +100,14 @@ public sealed class LanguageCatalog
 
             string? code = null, name = null, nativeName = null;
             var plural = PluralRule.OneOther;
+            var pluralDeclared = false;
             var authors = new List<string>();
             var entries = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var property in doc.RootElement.EnumerateObject())
             {
                 if (property.NameEquals(MetaKey))
                 {
-                    ReadMeta(property.Value, source, warnings, ref code, ref name, ref nativeName, ref plural, authors);
+                    ReadMeta(property.Value, source, warnings, ref code, ref name, ref nativeName, ref plural, ref pluralDeclared, authors);
                     continue;
                 }
                 if (property.Name.StartsWith('_')) continue;
@@ -121,13 +130,14 @@ public sealed class LanguageCatalog
             }
 
             code = code.ToLowerInvariant();
-            catalog = new LanguageCatalog(code, name ?? code, nativeName ?? name ?? code, plural, authors, entries);
+            catalog = new LanguageCatalog(code, name ?? code, nativeName ?? name ?? code, plural, authors, entries,
+                nativeNameDeclared: nativeName is not null || name is not null, pluralDeclared: pluralDeclared);
             return true;
         }
     }
 
     private static void ReadMeta(JsonElement meta, string source, ICollection<string> warnings,
-        ref string? code, ref string? name, ref string? nativeName, ref PluralRule plural, List<string> authors)
+        ref string? code, ref string? name, ref string? nativeName, ref PluralRule plural, ref bool pluralDeclared, List<string> authors)
     {
         if (meta.ValueKind != JsonValueKind.Object)
         {
@@ -143,6 +153,7 @@ public sealed class LanguageCatalog
                 case "nativeName" when p.Value.ValueKind == JsonValueKind.String: nativeName = p.Value.GetString(); break;
                 case "plural" when p.Value.ValueKind == JsonValueKind.String:
                     var rule = p.Value.GetString();
+                    pluralDeclared = true;
                     if (string.Equals(rule, "none", StringComparison.OrdinalIgnoreCase)) plural = PluralRule.None;
                     else
                     {
