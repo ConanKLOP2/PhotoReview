@@ -418,7 +418,7 @@ public sealed class MainViewModelMoveCopyToTests : IDisposable
 
     private sealed class NullPresentationSink : IPresentationSink
     {
-        public void SetCurrentImage(object? image) { }
+        public void SetCurrentImage(object? image, bool isFileChange = false) { }
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }

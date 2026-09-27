@@ -51,6 +51,13 @@ public sealed class SettingsWindowRedesignTests
         nameof(AppSettings.ArrowPanStepPercent),
         // PR-B (feat/fit-width-height-keep-zoom)
         nameof(AppSettings.FitWidthAnchor), nameof(AppSettings.KeepZoomAcrossImages),
+        // PR-A (feat/zoom-key-anchor-kinetic-arrows): KeyboardZoomAnchorCombo in the Zoom card.
+        nameof(AppSettings.KeyboardZoomAnchor),
+        // PR-D (feat/image-crossfade): ImageTransitionCombo/ImageTransitionMsBox in the Zoom card. Missing this
+        // entry let the walker treat ImageTransitionMs as "not shown in UI" and mutate it to 120+12345 = 12465,
+        // way outside [40, 400] -- Save then rejected it and, since this window has no InvalidSettingsWarning
+        // seam wired, fell through to a REAL modal MessageBox.Show that hangs a headless CI runner forever.
+        nameof(AppSettings.ImageTransition), nameof(AppSettings.ImageTransitionMs),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]

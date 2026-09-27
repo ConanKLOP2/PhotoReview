@@ -979,7 +979,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         private TaskCompletionSource<bool>? _countBarrier;
         private int _targetCount;
 
-        public void SetCurrentImage(object? image) => Images.Add(image);
+        public void SetCurrentImage(object? image, bool isFileChange = false) => Images.Add(image);
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path)

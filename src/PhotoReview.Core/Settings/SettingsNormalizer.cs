@@ -178,6 +178,15 @@ public static class SettingsNormalizer
             settings.InfoOverlayFontSize = infoFontSize;
             fixedNames.Add(nameof(AppSettings.InfoOverlayFontSize));
         }
+
+        // feat/image-crossfade
+        if (!Enum.IsDefined(settings.ImageTransition)) { settings.ImageTransition = new AppSettings().ImageTransition; fixedNames.Add(nameof(AppSettings.ImageTransition)); }
+        var imageTransitionMs = Math.Clamp(settings.ImageTransitionMs, AppSettings.MinImageTransitionMs, AppSettings.MaxImageTransitionMs);
+        if (imageTransitionMs != settings.ImageTransitionMs)
+        {
+            settings.ImageTransitionMs = imageTransitionMs;
+            fixedNames.Add(nameof(AppSettings.ImageTransitionMs));
+        }
         return fixedNames;
     }
 

@@ -4,7 +4,7 @@
 
 ## Now
 - **GUI check pending (user):** context-menu Zoom (Fit, 200/300/400 %, Zoom levels submenu arrow), "Taken:"/"Modified:" labels (info line + title bar), info-overlay auto-hide (Q-R34), Zoom card in Settings (level, click-to-zoom, arrow step %, shortcuts), sort modes Default / Name A→Z / Z→A (Q-R33), preload window setting (Q-R31). Earlier GUI checks (AR13, AR16, T89 Fit, Q-R30 UI feedback, #109) were reported OK by the user on 2026-09-26.
-- **Merged (2026-09-27):** `feat/fit-width-height-keep-zoom` (PR-B, #178, Q-R36): Fit width/Fit height/Click zoom level initial-view presets, `FitWidthAnchor` (default Centre) setting, `KeepZoomAcrossImages` setting, shortcuts W/H/K. GUI check still pending (user).
+- **Merged (2026-09-27):** `feat/zoom-key-anchor-kinetic-arrows` (PR-A, #177), `feat/fit-width-height-keep-zoom` (PR-B, #178), `fix/docs-conflict-markers` (#182), `feat/image-crossfade` (PR-D, #181, Q-R37). Master is at v2.0.186+.
 - **Open PR (2026-09-27):** `feat/context-menu-redesign` (PR-C, #183, Q-R38): right-click context menu redesign (Undo first, Fit/Zoom-to-N%/Zoom submenu/Settings always visible, folder-items group togglable via `ShowFolderMenuItems`), reduced Zoom submenu presets + `SetZoomAlsoSetsClickLevel` toggle + "set current zoom as click level", dark theme for `ContextMenu`/`MenuItem`/`Separator`. Awaiting review; not merged.
 - **Open decision:** Q-R29 (NAS: UI-thread stat in `ThumbnailCache.BuildKey`; no I/O cap on whole-folder preload) — awaiting user, see [OPEN-DECISIONS](docs/refactoring/OPEN-DECISIONS.md).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.

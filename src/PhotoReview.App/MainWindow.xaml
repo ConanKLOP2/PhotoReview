@@ -75,6 +75,19 @@
                        LostMouseCapture="MainImage_LostMouseCapture" />
             </ScrollViewer>
         </Border>
+        <!-- feat/image-crossfade: outgoing-frame layer for the optional fade when the CURRENT PHOTO CHANGES.
+             Lives OUTSIDE ImageScroll (a sibling here, clipped to the viewport by the root Grid's
+             ClipToBounds) so it can keep the previous framing (size + scroll offset, frozen via a
+             TranslateTransform set in code-behind) while ImageScroll switches to the new image's size/offsets
+             underneath. Collapsed by default: zero extra render cost when ImageTransition=None (see MainWindow.xaml.cs). -->
+        <Image x:Name="OutgoingImage"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"
+               Focusable="False"
+               Stretch="Fill"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               RenderTransformOrigin="0,0" />
         <Border x:Name="ComparePanel"
                 Visibility="{Binding Compare.IsVisible, Converter={StaticResource BoolToVis}}"
                 Background="{DynamicResource Dark.Canvas}"

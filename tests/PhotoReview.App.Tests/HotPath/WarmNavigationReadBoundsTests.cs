@@ -507,7 +507,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
 
     private sealed class StubPresentationSink : IPresentationSink
     {
-        public void SetCurrentImage(object? image) { }
+        public void SetCurrentImage(object? image, bool isFileChange = false) { }
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }
@@ -519,7 +519,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
     {
         private readonly object _gate = new();
 
-        public void SetCurrentImage(object? image) { }
+        public void SetCurrentImage(object? image, bool isFileChange = false) { }
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
 
