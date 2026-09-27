@@ -301,6 +301,15 @@ internal static class PerfSession
                     new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()),
                     TimeSpan.FromMilliseconds(options.SlowLinkLatencyMs!.Value),
                     slowLinkBandwidth));
+            if (slowLinkEnabled)
+                // Q-R29 option C-2: the SAME SharedBandwidthLimiter instance as above, but wired onto the
+                // ISourceReader seam SourceBytesCache/the decoders/PreviewImageService's diag pre-read
+                // actually open source bytes through (see SlowLinkSourceReader's own doc comment) --
+                // unlike IFileSystem.OpenReadShared, this one genuinely reaches the image-byte read path,
+                // so the foreground viewer decode and every preload worker really do share one capped
+                // link's bandwidth budget in this measurement. Perf-harness only; never a production default.
+                overrides.AddSingleton<ISourceReader>(_ => new PhotoReview.Benchmarking.SlowLinkSourceReader(
+                    PhysicalSourceReader.Instance, slowLinkBandwidth));
         });
         var settingsStore = services.GetRequiredService<SettingsStore>();
         settingsStore.Load();
