@@ -43,7 +43,7 @@
         <Grid.ContextMenu>
             <ContextMenu x:Name="ImageContextMenu" Opened="ImageContextMenu_Opened">
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
-                <Separator />
+                <Separator x:Name="ZoomGroupSeparator" />
                 <MenuItem x:Name="FitMenuItem" Header="{loc:Tr main.menu.clickZoomLevel.fit}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.fit.automationName}" Click="ClickZoomFit_Click" />
                 <MenuItem x:Name="ZoomToLevelMenuItem" Click="ZoomToLevel_Click" />
                 <!-- PR-C: presets/Custom/toggle/"set current" are built in code (BuildZoomMenu) so their headers can be -->

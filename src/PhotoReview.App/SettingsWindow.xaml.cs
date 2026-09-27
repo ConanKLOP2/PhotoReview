@@ -378,6 +378,7 @@ public partial class SettingsWindow : Window
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
         ShowFolderMenuItemsCheck.IsChecked = Settings.ShowFolderMenuItems;
+        ShowZoomMenuItemsCheck.IsChecked = Settings.ShowZoomMenuItems;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
         ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
@@ -630,7 +631,7 @@ public partial class SettingsWindow : Window
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
-        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems;
+        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
@@ -695,6 +696,7 @@ public partial class SettingsWindow : Window
         Settings.KineticGlideSmoothing = KineticGlideSmoothingCombo.SelectedIndex == 1 ? KineticGlideSmoothing.Predict : KineticGlideSmoothing.Off;
         Settings.ArrowKeyNavigatesAtZoomEdge = ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked == true;
         Settings.ShowFolderMenuItems = ShowFolderMenuItemsCheck.IsChecked == true;
+        Settings.ShowZoomMenuItems = ShowZoomMenuItemsCheck.IsChecked == true;
         Settings.KeyboardZoomAnchor = KeyboardZoomAnchorCombo.SelectedIndex == 1 ? KeyboardZoomAnchor.ViewportCentre : KeyboardZoomAnchor.Pointer;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;
