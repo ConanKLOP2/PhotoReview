@@ -16,20 +16,31 @@ internal sealed class JournalTransaction : IDisposable
     private readonly OperationJournal _journal;
     private readonly IClock _clock;
     private readonly JournalEntry _prepared;
-    private readonly bool _failWithoutPrepared;
+    private readonly JournalEntry? _retryOf;
     private IDisposable? _liveMarker;
 
-    /// <param name="failWithoutPrepared">
-    /// Retry semantics: an existing Failed record is being re-attempted, so a failure is journaled even when the
-    /// Prepared append itself failed (the caller then reports JournalPersisted=false).
+    /// <param name="retryOf">
+    /// Retry semantics (<see cref="RecoveryRetryService"/>): the existing Failed record being re-attempted. A failure is
+    /// then journaled even when the Prepared append itself failed (the caller reports JournalPersisted=false), and --
+    /// P02 -- every append except Committed is conditional on the journal still showing no other writer's record for
+    /// this Id since <paramref name="retryOf"/> (<see cref="OperationJournal.AppendIfUnchangedSince"/>): Prepared only
+    /// when <paramref name="retryOf"/> is still the latest entry, Failed only when the entries after it are exactly
+    /// this transaction's own Prepared. Otherwise nothing is appended and <see cref="Superseded"/> is set.
     /// </param>
-    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, bool failWithoutPrepared = false)
+    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, JournalEntry? retryOf = null)
     {
-        _failWithoutPrepared = failWithoutPrepared;
+        _retryOf = retryOf;
         _journal = journal;
         _clock = clock;
         _prepared = prepared;
     }
+
+    /// <summary>
+    /// P02: true when a retry's Prepared or Failed append was skipped because another writer (another PhotoReview process
+    /// sharing the journal) appended a record for this Id after the retried snapshot -- the operation was already handled
+    /// elsewhere, and this transaction's view of it is stale.
+    /// </summary>
+    public bool Superseded { get; private set; }
 
     /// <summary>True once the Prepared record was appended (a Failed record is only written after this).</summary>
     public bool IsPrepared { get; private set; }
@@ -53,18 +64,44 @@ internal sealed class JournalTransaction : IDisposable
 
     public void Begin()
     {
+        if (!TryBegin())
+            throw new InvalidOperationException("The retried journal entry was superseded by another writer.");
+    }
+
+    /// <summary>
+    /// Takes the live marker and appends Prepared. Returns false only for a retry whose snapshot is stale (P02, see the
+    /// constructor): nothing is appended, the marker is released and <see cref="Superseded"/> is set.
+    /// </summary>
+    public bool TryBegin()
+    {
         // Before the Prepared line exists anywhere: a reconcile that can read it can also see the marker.
         _liveMarker ??= _journal.LiveOperations.Begin(_prepared.Id);
+        bool appended;
         try
         {
-            _journal.Append(_prepared);
+            if (_retryOf is null)
+            {
+                _journal.Append(_prepared);
+                appended = true;
+            }
+            else
+            {
+                appended = _journal.AppendIfUnchangedSince(_retryOf, [], _prepared);
+            }
         }
         catch
         {
-            ReleaseLiveMarker(); // nothing pending was written (or a retry's Failed follows under failWithoutPrepared)
+            ReleaseLiveMarker(); // nothing pending was written (or a retry's Failed follows)
             throw;
         }
+        if (!appended)
+        {
+            Superseded = true;
+            ReleaseLiveMarker();
+            return false;
+        }
         IsPrepared = true;
+        return true;
     }
 
     /// <summary>Releases the live marker (idempotent). Called once the outcome is appended, or by <see cref="Dispose"/>.</summary>
@@ -123,13 +160,14 @@ internal sealed class JournalTransaction : IDisposable
     }
 
     /// <summary>
-    /// Appends Failed for <paramref name="failure"/> when Prepared was written. Returns the record (null when none was
-    /// due) and the journal error message if the append itself failed.
+    /// Appends Failed for <paramref name="failure"/> when Prepared was written (or, for a retry, always). Returns the record
+    /// (null when none was due, or when a retry's append was skipped as <see cref="Superseded"/>) and the journal error
+    /// message if the append itself failed.
     /// </summary>
     public JournalEntry? Fail(Exception failure, out string? journalError)
     {
         journalError = null;
-        if (!IsPrepared && !_failWithoutPrepared)
+        if (!IsPrepared && _retryOf is null)
         {
             ReleaseLiveMarker();
             return null;
@@ -138,7 +176,18 @@ internal sealed class JournalTransaction : IDisposable
         var failed = _prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
         try
         {
-            _journal.Append(failed);
+            if (_retryOf is null)
+            {
+                _journal.Append(failed);
+            }
+            else if (!_journal.AppendIfUnchangedSince(_retryOf, IsPrepared ? [_prepared] : [], failed))
+            {
+                // P02: another process retried the same entry concurrently and already appended its own outcome (typically
+                // Committed -- our mutation failed because it had already moved the file). A Failed record now would win
+                // latest-entry resolution and durably misdescribe a completed operation, so nothing is appended.
+                Superseded = true;
+                return null;
+            }
         }
         catch (Exception journalException)
         {

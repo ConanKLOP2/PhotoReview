@@ -256,13 +256,22 @@ public partial class RecoveryWindow : Window
         _retrying = true;
         Cursor = System.Windows.Input.Cursors.Wait;
         UpdateButtons();
-        try { return await _retry(entry); }
+        RecoveryRetryResult result;
+        try { result = await _retry(entry); }
         finally
         {
             _retrying = false;
             Cursor = null;
             UpdateButtons();
         }
+        if (result.Superseded)
+        {
+            // P02: another PhotoReview window already handled this Id (or is retrying it now); like a skipped Dismiss (R09)
+            // the row no longer describes the journal's current state, so it is dropped instead of re-checked.
+            _rows.RemoveAll(row => string.Equals(row.Entry.Id, entry.Id, StringComparison.Ordinal));
+            RefreshEntries();
+        }
+        return result;
     }
 
     /// <summary>
@@ -290,6 +299,11 @@ public partial class RecoveryWindow : Window
             return;
         }
         if (!IsLoaded) return; // defensive: OnClosing normally keeps the window open while a retry runs
+        if (result.Superseded)
+        {
+            System.Windows.MessageBox.Show(this, result.Message, Tr.RecoveryRetryStaleTitle, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         var journalWarning = result.Succeeded && !result.JournalPersisted;
         var title = result.Succeeded
             ? journalWarning ? Tr.DialogRetryDoneJournalFailedTitle : Tr.DialogRetrySucceededTitle

@@ -437,6 +437,39 @@ public sealed class OperationJournal
         }
     }
 
+    /// <summary>
+    /// P02 (R09-style guard for Recovery retry): appends <paramref name="entry"/> only if, for <paramref name="anchor"/>'s
+    /// Id, the journal holds <paramref name="anchor"/> followed by exactly <paramref name="ownSince"/> and nothing else --
+    /// i.e. no other writer (another process sharing this journal on <c>InstanceMode.PerFolder</c>, or another retry)
+    /// appended a record for the Id since the snapshot the caller acted on. Returns false (nothing appended) otherwise.
+    /// When <paramref name="anchor"/> itself is not in the journal (a caller-built snapshot), the Id's whole history
+    /// counts as "since": it must then be exactly <paramref name="ownSince"/>. A retry passes its Failed snapshot as the anchor:
+    /// an empty <paramref name="ownSince"/> before Prepared (the snapshot is still the latest entry), and its own Prepared
+    /// before Failed, so a loser's Failed can never land after the winner's Committed. Checking the whole tail (not only
+    /// the latest entry) also covers a loser whose Prepared was appended after the winner's Committed.
+    /// Same read-latest/compare/act-only-if-still-current discipline as <see cref="AppendIfStillPending"/> and
+    /// <see cref="Dismiss"/>: atomic per instance; across processes the window is a single read.
+    /// </summary>
+    internal bool AppendIfUnchangedSince(JournalEntry anchor, IReadOnlyList<JournalEntry> ownSince, JournalEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(anchor);
+        ArgumentNullException.ThrowIfNull(ownSince);
+        ArgumentNullException.ThrowIfNull(entry);
+        lock (_gate)
+        {
+            var history = new List<JournalEntry>();
+            ReadEntries(e => { if (string.Equals(e.Id, anchor.Id, StringComparison.Ordinal)) history.Add(e); });
+            var at = history.FindLastIndex(e => e == anchor); // -1: not found, the whole history is "since"
+            if (history.Count - at - 1 != ownSince.Count) return false;
+            for (var i = 0; i < ownSince.Count; i++)
+            {
+                if (history[at + 1 + i] != ownSince[i]) return false;
+            }
+            Append(entry);
+            return true;
+        }
+    }
+
     private bool IsExecuting(string operationId) => _liveOperations.IsLive(operationId);
 
     // Journal text is invariant (AGENTS.md rule 4): a failure stores its code plus English, never the UI language.

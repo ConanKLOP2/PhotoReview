@@ -611,5 +611,7 @@
   "settings.keyboardZoomAnchor.automationName": "AutomationProperties.Name of the keyboard-zoom-anchor combo.",
   "settings.keyboardZoomAnchor.hint": "Help text under the keyboard-zoom-anchor combo.",
   "enum.keyboardZoomAnchor.pointer": "KeyboardZoomAnchor option: anchor at the mouse position when it is over the viewport.",
-  "enum.keyboardZoomAnchor.viewportCentre": "KeyboardZoomAnchor option: always anchor at the viewport centre."
+  "enum.keyboardZoomAnchor.viewportCentre": "KeyboardZoomAnchor option: always anchor at the viewport centre.",
+  "core.recovery.alreadyHandled": "RecoveryRetryResult.Message when a retry detected (P02) that another process sharing the journal already appended a newer record for the entry, or is executing it: nothing was moved/copied or journaled.",
+  "recovery.retry.stale.title": "Info dialog caption for the retry-race message above."
 }

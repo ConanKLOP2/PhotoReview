@@ -67,7 +67,9 @@ public sealed class UndoServiceTests
         _fs.AddFile(destination, "image-content", writeTime);
 
         _journal.Append(new JournalEntry("1", FileOperationType.Move, JournalState.Committed, source, destination, 13, writeTime, _clock.UtcNow));
-        _service.LoadFromJournal();
+        // P03 (2026-09-27): Undo is session-only; the journal entry above is not picked up automatically, so
+        // register the Move as the in-session path (FileActionService/UndoService.Register) would.
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
 
         Assert.True(_service.CanUndoMove);
         Assert.Equal(1, _service.MoveHistoryCount);
@@ -149,19 +151,19 @@ public sealed class UndoServiceTests
         Assert.Equal(JournalErrors.MoveSourceNotRemoved, Assert.Single(_journal.ReadFailedOperations()).ErrorCode);
     }
 
-    [Fact(DisplayName = "A journaled undo is not loaded back as undoable history at startup")]
-    public async Task LoadFromJournal_AfterUndo_DoesNotOfferReverseMove()
+    [Fact(DisplayName = "P03: a restarted UndoService has nothing to undo, journaled undo or not")]
+    public async Task Restart_AfterUndo_HasNothingToUndo()
     {
         var source = @"C:\photos\photo1.jpg";
         var destination = @"C:\photos\sorted\photo1.jpg";
         var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
         _fs.AddFile(destination, "image-content", writeTime);
         _journal.Append(new JournalEntry("1", FileOperationType.Move, JournalState.Committed, source, destination, 13, writeTime, _clock.UtcNow));
-        _service.LoadFromJournal();
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
         Assert.True((await _service.UndoMoveAsync()).Succeeded);
 
+        // Simulates a restart: a brand-new UndoService over the same (now Committed-undo-laden) journal.
         var restarted = new UndoService(_journal, _fs, _recycleBin);
-        restarted.LoadFromJournal();
 
         Assert.False(restarted.CanUndoMove);
     }
@@ -198,7 +200,7 @@ public sealed class UndoServiceTests
         _fs.AddFile(destination, "modified-longer-content", writeTime);
 
         _journal.Append(new JournalEntry("1", FileOperationType.Move, JournalState.Committed, source, destination, 10, writeTime, _clock.UtcNow));
-        _service.LoadFromJournal();
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 10, writeTime, null));
 
         var result = await _service.UndoMoveAsync();
 

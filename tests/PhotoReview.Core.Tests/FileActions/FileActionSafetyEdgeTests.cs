@@ -26,36 +26,6 @@ public sealed class FileActionSafetyEdgeTests
     private static JournalEntry Move(string id, string from, string to, JournalState state = JournalState.Committed, bool? undo = null) =>
         new(id, FileOperationType.Move, state, from, to, 5, Stamp, Stamp, Undo: undo);
 
-    [Fact(DisplayName = "Startup undo history has one entry per destination after move, undo, move again")]
-    public void ReadStartupHistory_MoveUndoMoveAgain_ListsTheFileOnce()
-    {
-        var disk = new InMemoryFileSystem();
-        disk.AddFile(@"C:\photos\sel\a.jpg", "12345", Stamp);
-        var journal = new OperationJournal(Paths, disk, new Clock());
-        journal.Append(Move("m1", @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg"));
-        journal.Append(Move("u1", @"C:\photos\sel\a.jpg", @"C:\photos\a.jpg", undo: true));
-        journal.Append(Move("m2", @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg"));
-        var undo = new UndoService(journal, disk, new Bin());
-
-        var history = undo.ReadStartupHistory();
-
-        // Two identical stack entries would make the second Ctrl+Z fail on a stale entry and block every older undo.
-        Assert.Equal("m2", Assert.Single(history).Id);
-    }
-
-    [Fact(DisplayName = "Startup undo history keeps separate files and their order")]
-    public void ReadStartupHistory_DistinctFiles_KeepOrder()
-    {
-        var disk = new InMemoryFileSystem();
-        disk.AddFile(@"C:\photos\sel\a.jpg", "12345", Stamp);
-        disk.AddFile(@"C:\photos\sel\b.jpg", "12345", Stamp);
-        var journal = new OperationJournal(Paths, disk, new Clock());
-        journal.Append(Move("m1", @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg"));
-        journal.Append(Move("m2", @"C:\photos\b.jpg", @"C:\photos\sel\b.jpg"));
-
-        Assert.Equal(["m1", "m2"], new UndoService(journal, disk, new Bin()).ReadStartupHistory().Select(e => e.Id));
-    }
-
     [Fact(DisplayName = "Recycle undo releases the busy gate even when the filesystem probe throws")]
     public async Task UndoRecycle_FileSystemThrows_GateIsReleased()
     {
@@ -182,21 +152,6 @@ public sealed class FileActionSafetyEdgeTests
         disk.AddFile(Paths.JournalFile, text.ToString());
         Assert.True(disk.GetFileStat(Paths.JournalFile)!.Length >= 1024 * 1024);
         return new OperationJournal(Paths, disk, new Clock());
-    }
-
-    [Fact(DisplayName = "Large journal (reverse reader): move, undo, move again still leaves only the newest entry for the destination")]
-    public void ReadStartupHistory_LargeJournal_MoveUndoMoveAgain_KeepsNewest()
-    {
-        var disk = new InMemoryFileSystem();
-        disk.AddFile(@"C:\photos\sel.jpg", "12345", Stamp);
-        var journal = LargeJournal(disk);
-        journal.Append(Move("m1", @"C:\photos.jpg", @"C:\photos\sel.jpg"));
-        journal.Append(Move("u1", @"C:\photos\sel.jpg", @"C:\photos.jpg", undo: true));
-        journal.Append(Move("m2", @"C:\photos.jpg", @"C:\photos\sel.jpg"));
-
-        var history = new UndoService(journal, disk, new Bin()).ReadStartupHistory();
-
-        Assert.Equal("m2", Assert.Single(history).Id);
     }
 
     [Fact(DisplayName = "Large journal (reverse reader) and small journal agree when a stale reconcile Failed follows a Committed Move")]
