@@ -1,3 +1,10 @@
+---
+id: SEC-03
+order: 22
+summary: |-
+  Publish-guard containment made component-aware (path segments, not a raw string prefix) and resolves reparse points before checking approval, with a new `-SelfTest` gate in `verify-all.ps1`.
+---
+
 # SEC-03 — harden the publish-directory ownership guard
 
 ## Problem

@@ -321,6 +321,12 @@ Invoke-Gate 'Check documentation links' {
     & (Join-Path $PSScriptRoot 'check-doc-links.ps1')
 }
 
+# Fails if docs/refactoring/OPEN-DECISIONS.md's generated Decided table doesn't match what
+# tools/generate-open-decisions.ps1 produces right now (same gate as CI's own step).
+Invoke-Gate 'Check OPEN-DECISIONS generated table' {
+    & (Join-Path $PSScriptRoot 'check-open-decisions.ps1')
+}
+
 # L10: the strict JSON validator (comments/trailing commas/duplicate keys) behaves as intended, proven
 # in-memory before it is trusted against real files (same gate as CI's "Check translation catalogs" step).
 Invoke-Gate 'Check translation catalogs (self-test)' {

@@ -3,10 +3,16 @@
 Status of work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) Â· finished groups: [`HISTORY.md`](HISTORY.md).
 Full rationale of older rows: `git show 1de561c:docs/refactoring/OPEN-DECISIONS.md` and `...:docs/refactoring/archive/OPEN-DECISIONS-detail.md`.
 
-**Adding a decision (avoid merge conflicts across parallel PRs):** put ALL detail (method names, file:line, measurements) in a new
-file under [`decisions/`](decisions/) named after the ID, never inline here. Add exactly ONE new row below in the Decided table
-with a true one-sentence summary and a Markdown link to that new file -- a long inline row is exactly what caused repeated
-multi-round merge conflicts on 2026-09-27 (a growing shared file that most concurrent PRs all append to).
+**Adding a decision (avoid merge conflicts across parallel PRs):** the Decided table below is GENERATED -- never hand-edit it.
+Put ALL detail (method names, file:line, measurements) in a new file under [`decisions/`](decisions/) named after the ID, with a
+frontmatter block at the top (`id:` = the ID(s) as they should appear in the table, `order:` = an integer placing the row, `summary:`
+= a true one-sentence prose summary, no link). Then run `tools/generate-open-decisions.ps1`, which rewrites the generated region
+from every `decisions/*.md` file's frontmatter, and commit the result. A routine PR therefore only ever adds its OWN new file under
+`decisions/` plus the regenerated table -- it can never conflict with another PR's own new file, which is what the old
+"add exactly one new row inline" convention could not guarantee (repeated multi-round merge conflicts on 2026-09-27, a shared file
+every concurrent PR appended to). `tools/check-open-decisions.ps1` (wired into CI and `tools/verify-all.ps1`) fails the build if the
+generated region doesn't match what the generator produces right now -- e.g. a hand-edited row, or a new `decisions/*.md` file
+added without frontmatter or without re-running the generator.
 
 ## Open
 
@@ -17,6 +23,7 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 
 **Older groups** (rationale in ADRs, `HISTORY.md`, git): Q-D1..D4, Q-ST1..ST4, Q-T1..T4, Q-OC14/15, Q-S3, Q-AR1..AR5, Q-L1..L8, Q-IO1 - all decided and implemented.
 
+<!-- BEGIN GENERATED DECIDED TABLE (tools/generate-open-decisions.ps1 -- do not hand-edit below) -->
 | ID | Decision |
 |---|---|
 | Q-Z1 | Zoom 100 % = 1 source pixel, original decoded on demand (#43, #47, [ADR 0008](../adr/0008-zoom-source-pixel.md)). |
@@ -57,10 +64,12 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | P01-P03 | Post-ledger review of master changes since 3ef2bb5 (#186-#198+) plus screened-static hot-path rows outside Imaging: no defects in the reviewed diff; two document-only journal/undo races found (concurrent-retry misreport, cross-folder Undo contamination). [Detail](decisions/POST-LEDGER-REVIEW.md) |
 | P03 | Undo limited to the current session; journal history no longer seeds Ctrl+Z at startup (user, 2026-09-27). [Detail](decisions/P03.md) |
 | P02 | Recovery retry re-checks the journal's latest entry and live marker so a concurrent retry in another window can no longer journal a completed Move as Failed. [Detail](decisions/P02.md) |
-| Q-R29 | User chose B then C-if-needed (2026-09-27); C part 1 done (stat off UI thread), part 2 preload throttle pending seam -- [detail](decisions/Q-R29-C.md) |
+| Q-R29 | User chose B then C-if-needed (2026-09-27); C part 1 done (stat off UI thread), part 2 preload throttle pending seam -- [Detail](decisions/Q-R29-C.md) |
 | GUI-CHECK-AUTOMATION | 5 of the 11 "GUI checks (user)" items now need no manual check; the rest reduced to one short visual/feel step each (new context-menu-structure, crossfade and KeepZoomAcrossImages UI tests). [Detail](decisions/GUI-CHECK-AUTOMATION.md) |
 | TEST-HANG-GUARD | `tests/test.runsettings` (wired in via `tests/Directory.Build.props`) bounds every `dotnet test` to a 120 s per-test hang timeout and a 20 min session timeout with no CLI flags required; CI/verify-all.ps1's own `--blame-hang*` flags coexist without a duplicate-collector error (2026-09-27). [Detail](decisions/TEST-HANG-GUARD.md) |
 | FLAKY-FolderLoad | CI flake in the folder-switch race test was a fixture bug (session sweep listing took the scan-block hook), not a production race; fake fixed (#209). [Detail](decisions/FLAKY-FolderLoad.md) |
 | Q-R39 | New `ShowZoomMenuItems` setting hides the context menu's zoom cluster (Fit/Zoom to N%/Zoom submenu) as one unit; default off, unlike `ShowFolderMenuItems` (user request). [Detail](decisions/Q-R39.md) |
-| CI-CROSSFADE-ANIMATION-FLAKE | Confirmed via real CI diagnostics the compositor ticks fine on `windows-latest`; the crossfade completion test's 40ms fade could finish inside a single poll gap, not a CI rendering limitation -- widened just that test's duration, no source change. [Detail](decisions/CI-CROSSFADE-ANIMATION-FLAKE.md) |
+| CI-CROSSFADE-ANIMATION-FLAKE | Confirmed via real CI diagnostics the compositor ticks fine on `windows-latest`; the fixed-poll assertion could miss a fast 40ms fade under load -- replaced it with a value-changed watcher (no source change). [Detail](decisions/CI-CROSSFADE-ANIMATION-FLAKE.md) |
+| TEST-SUITE-REVIEW-2026-09-27 | External test-suite review's 9 findings independently re-verified: 6 confirmed and fixed (test-only, no `src/` changes), 2 rejected as false positives/already-sanctioned, 1 left as a documented coverage gap. [Detail](decisions/TEST-SUITE-REVIEW-2026-09-27.md) |
 | SEC-03 | Publish-guard containment made component-aware (path segments, not a raw string prefix) and resolves reparse points before checking approval, with a new `-SelfTest` gate in `verify-all.ps1`. [Detail](decisions/SEC-03-publish-guard-hardening.md) |
+<!-- END GENERATED DECIDED TABLE -->
