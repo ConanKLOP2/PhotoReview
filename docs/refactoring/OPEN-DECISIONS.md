@@ -56,3 +56,4 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | Q-R05 / Q-R12 | Navigation notification count deduped; stale doc-comment links retargeted (#193). [Detail](decisions/Q-R05-Q-R12.md) |
 | R15/R16/R17/R18 | Hash-service stat, catalog snapshot, drag-drop `Exists` checks and diagnostics-metrics sort all measured negligible; no fix. [Detail](decisions/R15-R16-R17-R18.md) |
 | P01-P03 | Post-ledger review of master changes since 3ef2bb5 (#186-#198+) plus screened-static hot-path rows outside Imaging: no defects in the reviewed diff; two document-only journal/undo races found (concurrent-retry misreport, cross-folder Undo contamination). [Detail](decisions/POST-LEDGER-REVIEW.md) |
+| P03 | Undo limited to the current session; journal history no longer seeds Ctrl+Z at startup (user, 2026-09-27). [Detail](decisions/P03.md) |

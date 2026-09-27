@@ -7,8 +7,10 @@ Date: 2026-09-19
 
 `OperationJournal.ReadCommittedMoves` uses a full forward scan for journals
 smaller than 1 MiB. For larger journals it reads JSONL lines backwards from the
-end of the file and returns the 200 most recent committed Move entries. This is
-the startup path used by `UndoService.LoadFromJournal`.
+end of the file and returns the 200 most recent committed Move entries. It
+remains used by `UndoService`'s in-session fallback fingerprint lookup and by
+journal consistency checks; see the P03 amendment below for the startup
+Undo-bootstrap caller that used to sit on top of it.
 
 Pending operation reconciliation remains a full scan. That preserves INV-6:
 every latest `Prepared` entry is reconciled before recovery, including entries
@@ -51,3 +53,18 @@ folder, same journal) that is mid-flight is not marked Failed: since Q-R27 the
 reconcile skips entries whose live marker (`ILiveOperationRegistry`) exists (see
 `architecture.md`, "Thao tác đang chạy"). Only the narrow window described in the
 FA-01 comment remains; such an entry shows in Recovery with its real file state.
+
+## Amendment: Undo bootstrap removed (P03, 2026-09-27)
+
+The "only the Undo history is seeded on the UI thread" step described above is
+gone. `JournalStartupRecovery.RunAsync` no longer takes an `UndoService`/
+`IUiScheduler` at all - it only reconciles pending operations now. Reason
+(decision P03, [`decisions/P03.md`](../refactoring/decisions/P03.md)): seeding
+the Undo stack from the journal at startup let Ctrl+Z move back a file the
+user never touched in this session (after a restart, or from another window in
+`InstanceMode.PerFolder`). Undo is now strictly limited to actions registered
+in the current process. `UndoService.LoadFromJournal`, `ReadStartupHistory` and
+`SeedHistory` were deleted as dead code. `OperationJournal.ReadCommittedMoves`
+(and its reverse-tail reading, still described above) stays: it is still used
+by `UndoService`'s in-session fingerprint fallback and directly by tests that
+assert journal consistency.
