@@ -39,6 +39,48 @@ this measurement pass); `None`'s code path adds one cheap `ImageTransitionDecisi
 `UpdateCurrentImage` call and returns before touching any WPF element (`OutgoingImage` stays `Visibility.Collapsed`,
 no animation clock), so no measurable difference from `master` is expected and none was observed against noise.
 
+## R01/R02/R03/R13 UI-thread metadata I/O (2026-09-27; F4 = 2058 files, 18.9 GB; local NVMe, no NAS fixture on this box)
+
+Full review write-up: [WORK-FULL-CODE-REVIEW-2026-09-27.md](WORK-FULL-CODE-REVIEW-2026-09-27.md) (merged in #185).
+Scope: measure the four confirmed pre-await/UI-continuation synchronous file-metadata reads before deciding whether to
+fix any of them. `-Profile quick -FixtureAlias F4` (S2 40-key, `-Repeat` combined to 3 independent `s2-next-slow-quick`
+runs) plus one `s4-jump` run for the harness-based numbers; R02/R03/R13 add a direct Stopwatch measurement of the exact
+`FileInfo`/`IFileSystem` calls those methods make, run 500x against real F4 files, since the harness has no scripted
+Compare or file-action scenario and this box has whole-folder preload (Q-R17) keeping the S2/S4 RAM-hit rate at ~100%,
+which starves `ThumbnailCache.GetAsync` of real invocations to instrument end-to-end.
+
+| Finding | What was measured | Local-disk result (median / P95 / worst observed) |
+|---|---|---:|
+| R01 `ImagePresenter.TryGetFileStat` | `PhotoReviewPerf.Stat` event, 3x `s2-next-slow-quick` runs (N=40 RAM-hit navs each) + 1x `s4-jump` (N=61) | 0.11-0.16 ms / 0.15-0.24 ms / 11.7 ms (nav #62 of 62, session-boundary outlier; every mid-run sample was 0.10-0.22 ms) |
+| R02 `ThumbnailCache.BuildKey` | Isolated Stopwatch around `new FileInfo(path)` + `.Length` + `.LastWriteTimeUtc` (same 3 fields `BuildKey` reads), 500 real F4 files | 0.08 ms / 0.13 ms / 10.8 ms (1st file only; files 2-500 were 0.07-0.18 ms) |
+| R03 `CompareViewModel.TryGetFileSize` x2 | Isolated Stopwatch around `new FileInfo(path).Exists` + `.Length` (same call `TryGetFileSize` makes), 500 real F4 files, x2 to match the Left+Right calls | 0.16 ms combined (2x0.08 ms) / 0.26 ms / ~21.6 ms worst-case combined |
+| R13 `RecoveryRetryService`/`FileActionService`/`UndoService` preflight | Isolated Stopwatch around `File.Exists` + `GetFileStat`-equivalent + `File.Exists` (3 ops, matching `RetryMoveOrCopyAsync`'s source-exists/stat/destination-exists chain), 500 real F4 files | 0.21 ms / 0.29 ms / 19.0 ms (1st file only) |
+
+Key-to-present P50/P95 across the 3 `s2-next-slow-quick` runs (same batch as the R01 Stat samples, for scale): P50 1.79 /
+2.07 / 2.24 ms, P95 3.78 / 3.99 / 4.06 ms. R01's ~0.15 ms median stat is 6-8% of P50 and well inside this box's ~5 ms
+same-build run-to-run noise (see the file header). `s4-jump`: P50 1.94 ms, P95 3.83 ms, same order.
+
+**What was not measured:** NAS/slow-share timing (Q-R29 asks for this specifically; no network-share or throttled-I/O
+fixture exists on this machine, and `work/diag/fixtures.local.json` only defines the local F4 folder) and full
+Compare-open / file-action click-to-feedback latency as their own scripted scenarios (the harness has no
+`compare-open` or `file-action` scenario yet; the isolated-call numbers above stand in for the metadata-I/O portion
+specifically, which is what R01-R13 are about — the surrounding image decode / Move-Copy I/O dwarfs it either way).
+
+**Decision (no code change for any of the four):** every synchronous call these four findings point at costs
+0.1-0.3 ms on this box's local NVMe with a warm OS metadata cache, i.e. under 10% of an already-small key-to-present
+budget and far below the ~100 ms threshold where UI latency becomes perceptible. The isolated single-outlier spikes
+(10-21 ms, always the first file touched in a batch or a run's last navigation) look like one-time NTFS
+metadata-cache/session-boundary cost, not a per-navigation steady-state tax — 60/62 `s4-jump` samples and 499/500
+isolated-call samples landed in the same tight 0.07-0.3 ms band regardless of position. Per this project's
+performance-over-abstraction priority (AGENTS.md "Mandatory Process") and the explicit instruction for this pass, a
+negligible, unmeasured-on-slow-storage cost does not justify adding `Task.Run`/async-stat plumbing, a second
+`IFileSystem` async surface, or threading a shared stat through `ImagePresenter` into `ThumbnailCache` (the R02
+dual-improvement idea from the review) -- that would be speculative complexity against a cost this box cannot show is
+real. No test was added for any of the four findings; none of the four code paths changed. This narrows Q-R29
+(the NAS-specific stat/preload-bandwidth question) rather than closing it: local-disk cost is now measured and
+ruled negligible, but the NAS case Q-R29 asks about is still open and still needs a slow-share/NAS fixture to answer
+for real.
+
 ## Baseline AR02e (production graph, 2026-09-23; F4 = 1625 files, 13.2 GB)
 
 Window 1920x1080, Preview, warm, cache 16 GiB, 8 preload workers, WicDirect, disk cache on. "After" = decode width restored (#31).

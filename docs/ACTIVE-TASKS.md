@@ -1,6 +1,6 @@
 # Active Tasks
 
-**Updated:** 2026-09-27 | **Base:** `master` `f82084d` (#183, tag `v2.0.188`) | **Open PRs:** none
+**Updated:** 2026-09-27 | **Base:** `origin/master` `23230b8` | **Open PR:** #196 (review handoff); #185 merged
 
 Finished groups (AR, ST, OC, TS, TC, DF/T89, CQ, WD, IO, D, DT, L, reviews, perf night, UI feedback): one line each in
 [`refactoring/HISTORY.md`](refactoring/HISTORY.md). Decisions: [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md).
@@ -12,6 +12,7 @@ This file is the only place for open work (`task_on_progress.md` links here, do 
 |---|---|---|
 | **GUI checks (user)** | Pending since #128-#134: context-menu Zoom (Fit + 200/300/400 %, Zoom levels submenu with arrow), "Taken:"/"Modified:" labels (info line + title bar), info-overlay auto-hide (Q-R34), Zoom card in Settings (level, click-to-zoom, arrow step %, read-only shortcuts), sort modes (Q-R33), preload window setting (Q-R31). PLUS today's merges (#177, #178, #181, #183): +/- zoom stays under the mouse, arrow keys glide (PR-A); W/H, Initial zoom presets, K keeps zoom (PR-B); Settings > transition Fade, browse fast with auto-repeat (PR-D); full context-menu layout, dark styling, folder-items toggle, Zoom submenu behaviour (PR-C). | User confirms or reports. |
 | **Q-R29** (NAS follow-ups) | Open: (1) `ThumbnailCache.BuildKey` stats the file on the UI thread per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap, so on a slow NAS link 8 workers can delay the next viewer decode. The 40 s first-image delay itself was fixed by AR16 (test `FolderLoadCoordinatorTests.SlowStorage`). | Awaiting user decision (see OPEN-DECISIONS). |
+| **Whole-project review** | #185 merged: 18 findings and a ledger for 8,586 bodies at `3ef2bb5`. 8,096 have screening only; 289 need deeper review. #191 measured R01/R02/R03/R13 on local NVMe; #192 fixed R09 and ruled out R10. | Continue semantic/test-oracle review; re-inventory #190-#192's code delta; measure NAS/runtime impact before changes. See [WORK report](refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md). |
 | **Flaky test** | `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder). | Fix if it recurs in CI. |
 | **Caution** | `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation. | - |
 

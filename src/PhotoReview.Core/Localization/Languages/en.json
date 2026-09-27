@@ -303,6 +303,8 @@
   "recovery.dismiss.confirm.message": "Clear {count} entries from the Recovery list?\n\nThis only removes them from the list; no file is moved or deleted. Cleared entries can no longer be retried.",
   "recovery.dismiss.confirm.title": "Confirm clearing",
   "recovery.dismiss.failed.title": "Could not clear",
+  "recovery.dismiss.stale.message": "{count} entries were already resolved elsewhere (e.g. a retry completed) and were not cleared. The list has been refreshed.",
+  "recovery.dismiss.stale.title": "Some entries were not cleared",
   "recovery.detail.action": "Suggested action",
   "recovery.detail.bytes": "{size} bytes",
   "recovery.detail.checking": "Checking this entry...",

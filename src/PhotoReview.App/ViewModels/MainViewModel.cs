@@ -444,7 +444,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Thực hiện action từ danh sách Action Profiles theo chỉ số index.
     /// </summary>
-    public Task RunActionAsync(int index) => _fileActionGate.RunExclusiveAsync(async () =>
+    public Task RunActionAsync(int index) => _fileActionGate.RunQueuedAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RunActionAsync(index, _compare.SelectedPath, _catalog.Current?.Path);
@@ -453,16 +453,20 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>
     /// Chuyển ảnh hiện tại vào thùng rác (Recycle Bin).
     /// </summary>
-    public Task RecycleAsync() => _fileActionGate.RunExclusiveAsync(async () =>
+    public Task RecycleAsync() => _fileActionGate.RunQueuedAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.RecycleAsync(_compare.SelectedPath, _catalog.Current?.Path);
     });
 
-    /// <summary>OC14: single gate shared by file actions and undo.</summary>
+    /// <summary>
+    /// OC14: single gate shared by file actions and undo. Move/Delete/Copy review actions queue
+    /// behind each other (Q-T1, <see cref="FileActionGate.RunQueuedAsync"/>); Undo and duplicate
+    /// cleanup stay exclusive and are no-ops while anything else holds the gate.
+    /// </summary>
     private readonly FileActionGate _fileActionGate = new();
 
-    /// <summary>True while a file action or undo is in flight (read-only projection of the gate).</summary>
+    /// <summary>True while a file action, a queued Move/Delete action, or undo is in flight (read-only projection of the gate).</summary>
     public bool IsFileActionInProgress => _fileActionGate.IsHeld;
 
     /// <summary>R7-7: completes once no file action or undo holds the gate (window close waits for it).</summary>
@@ -933,8 +937,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>"Copy to…" (default Y): like <see cref="MoveToFolderAsync"/> but copies.</summary>
     public Task CopyToFolderAsync(bool forcePicker = false) => MoveOrCopyToFolderAsync(FileOperationType.Copy, forcePicker);
 
-    /// <returns>False when the gate was already held (nothing ran).</returns>
-    private Task<bool> MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker) => _fileActionGate.RunExclusiveAsync(async () =>
+    /// <returns>False when an exclusive holder (Undo/duplicate cleanup) held the gate (nothing queued/ran); otherwise queues behind any other running/queued Move-Delete-family action (Q-T1).</returns>
+    private Task<bool> MoveOrCopyToFolderAsync(FileOperationType operation, bool forcePicker) => _fileActionGate.RunQueuedAsync(async () =>
     {
         await WaitForPendingExplorerOrderAsync();
         await _fileActionController.MoveOrCopyToFolderAsync(operation, forcePicker, () => (_compare.SelectedPath, _catalog.Current?.Path));
