@@ -11,6 +11,11 @@ public sealed class SourceBytesCache
     private readonly BoundedLruCache<Key, byte[]> _cache;
     private readonly ConcurrentDictionary<Key, Lazy<byte[]>> _inFlight = new();
     private int _generation;
+    // Makes "version still current -> Set" atomic against Evict/Clear's "bump -> remove", so a read that finishes
+    // after an eviction can never republish the evicted bytes. Held only around in-memory work, never a disk read.
+    private readonly object _publishGate = new();
+    // Test seam: runs inside the gate between the version check and the Set.
+    internal Action? BeforePublishForTests { get; set; }
     // Per-path eviction versions: evicting one moved/deleted file must not invalidate in-flight reads of OTHER paths
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
     private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
@@ -87,8 +92,11 @@ public sealed class SourceBytesCache
 
     public void Clear()
     {
-        Interlocked.Increment(ref _generation);
-        _cache.Clear();
+        lock (_publishGate)
+        {
+            Interlocked.Increment(ref _generation);
+            _cache.Clear();
+        }
     }
 
     public void Evict(string path)
@@ -96,8 +104,11 @@ public sealed class SourceBytesCache
         // In-flight reads of this path capture its version before opening the file. Advance it before removing
         // the entry so a read that completes after eviction cannot republish bytes for the evicted source.
         var full = Path.GetFullPath(path);
-        _pathVersions.AddOrUpdate(full, 1, (_, version) => version + 1);
-        _cache.RemoveWhere(key => string.Equals(key.Path, full, StringComparison.OrdinalIgnoreCase));
+        lock (_publishGate)
+        {
+            _pathVersions.AddOrUpdate(full, 1, (_, version) => version + 1);
+            _cache.RemoveWhere(key => string.Equals(key.Path, full, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private byte[] ReadAndCache(Key key, int generation, int pathVersion)
@@ -116,7 +127,14 @@ public sealed class SourceBytesCache
         var current = new FileInfo(key.Path);
         if (current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
             throw UserFacingError.Localized(new IOException($"File changed while reading: {key.Path}"), () => Tr.ErrIoFileChangedWhileReading(key.Path));
-        if (generation == Volatile.Read(ref _generation) && pathVersion == _pathVersions.GetValueOrDefault(key.Path)) _cache.Set(key, bytes);
+        lock (_publishGate)
+        {
+            if (generation == Volatile.Read(ref _generation) && pathVersion == _pathVersions.GetValueOrDefault(key.Path))
+            {
+                BeforePublishForTests?.Invoke();
+                _cache.Set(key, bytes);
+            }
+        }
         return bytes;
     }
 

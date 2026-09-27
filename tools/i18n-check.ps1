@@ -514,7 +514,8 @@ function Read-Catalog([string]$File) {
         Warnings = New-Object System.Collections.Generic.List[string]
     }
     $name = Split-Path -Leaf $File
-    $isNotesFile = $name -like '*.notes.json'
+    # Same rule as LanguageLoader/TranslationExport: a base name containing '.' (en.notes.json, de.todo.json) is not a catalog.
+    $isNotesFile = [IO.Path]::GetFileNameWithoutExtension($name).Contains('.')
 
     if ((Get-Item -LiteralPath $File).Length -gt $maxFileBytes) {
         $result.Errors.Add("$name is larger than $maxFileBytes bytes")
@@ -616,7 +617,7 @@ foreach ($dir in $Path) {
 foreach ($s in $sources) {
     $file = $s[1]
     $leaf = Split-Path -Leaf $file
-    $isNotesFile = $leaf -like '*.notes.json'
+    $isNotesFile = [IO.Path]::GetFileNameWithoutExtension($leaf).Contains('.')
     if ($s[0] -eq 'shipped' -and $leaf -eq 'en.json') { continue }
 
     $cat = Read-Catalog $file
