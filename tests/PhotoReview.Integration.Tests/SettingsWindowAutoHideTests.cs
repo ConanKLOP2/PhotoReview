@@ -9,6 +9,7 @@ namespace PhotoReview.Integration.Tests;
 /// Q-R34: the Settings window's two independent auto-hide groups (toolbar / info over the photo) and the toolbar
 /// opacity slider: each delay box is enabled only by its own checkbox, and the slider cannot go below the minimum.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsWindowAutoHideTests
 {

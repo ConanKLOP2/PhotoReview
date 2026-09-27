@@ -14,6 +14,7 @@ namespace PhotoReview.Integration.Tests;
 /// test data root, never under the user's %LOCALAPPDATA%\PhotoReview. The real file is never read or written here:
 /// the assertions compare resolved paths and inspect only the temp root.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class WindowPlacementIsolationTests
 {

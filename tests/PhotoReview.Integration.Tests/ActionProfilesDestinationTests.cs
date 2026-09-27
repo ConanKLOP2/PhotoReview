@@ -10,6 +10,7 @@ namespace PhotoReview.Integration.Tests;
 /// CORE-03 / Q-R2, Settings side: Apply refuses a relative destination that escapes the photo folder, so the
 /// window stays open (DialogResult unset) and nothing reaches the settings.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class ActionProfilesDestinationTests
 {

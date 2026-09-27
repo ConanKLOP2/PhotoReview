@@ -8,6 +8,7 @@ using PhotoReview.Integration.Tests.Infrastructure;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>Settings > General > Updates: behavior of the manual check with a fake checker (no network).</summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsWindowUpdateCheckTests
 {

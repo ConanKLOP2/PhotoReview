@@ -14,6 +14,7 @@ namespace PhotoReview.Integration.Tests;
 /// F-WIN-8: closing/disposing the Benchmark window while a multi-profile run is between profiles used to make the
 /// next profile read <c>_cts.Token</c> from a nulled field (NullReferenceException) and record a bogus Fail row.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class BenchmarkWindowCloseMidRunTests
 {

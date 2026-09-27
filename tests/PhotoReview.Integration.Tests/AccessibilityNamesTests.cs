@@ -14,6 +14,7 @@ namespace PhotoReview.Integration.Tests;
 /// (<c>AutomationProperties.LabeledBy</c>). The name is what a screen reader announces; without it a text box
 /// is just "edit". The check asks the real automation peer, so it fails for exactly what Narrator would miss.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class AccessibilityNamesTests
 {

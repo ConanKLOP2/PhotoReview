@@ -20,6 +20,7 @@ namespace PhotoReview.App.Tests;
 /// window merge) through <see cref="RenderTargetBitmap"/> and samples the actual pixels, so reverting
 /// the merge or the ScrollViewer corner template fails this test.
 /// </summary>
+[Trait("Category", "UI")]
 public sealed class DarkScrollBarRenderingTests
 {
     [Fact(DisplayName = "ScrollViewer styled with the app's dark theme renders a dark thumb and a dark corner")]

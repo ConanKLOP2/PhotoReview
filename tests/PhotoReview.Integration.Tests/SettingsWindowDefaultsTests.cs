@@ -9,6 +9,7 @@ namespace PhotoReview.Integration.Tests;
 /// Behavior replacement for the former "Settings defaults reset compare options" source-presence check:
 /// runs the real Settings window's Restore-defaults handler and reads the resulting settings and controls.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsWindowDefaultsTests
 {
