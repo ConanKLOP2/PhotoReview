@@ -269,13 +269,59 @@ public sealed class OperationJournalUnitTests
         journal.Append(new JournalEntry("kept", FileOperationType.Recycle, JournalState.Failed,
             @"C:\photos\e.jpg", null, 1024, _clock.UtcNow, _clock.UtcNow, "Locked"));
 
-        var dismissed = journal.Dismiss([journal.ReadFailedOperations().Single(x => x.Id == "failed"), journal.ReadPendingOperations().Single()]);
+        var outcome = journal.Dismiss([journal.ReadFailedOperations().Single(x => x.Id == "failed"), journal.ReadPendingOperations().Single()]);
 
-        Assert.All(dismissed, x => Assert.Equal(JournalState.Dismissed, x.State));
+        Assert.All(outcome.Dismissed, x => Assert.Equal(JournalState.Dismissed, x.State));
+        Assert.Empty(outcome.Skipped);
         Assert.Empty(journal.ReadPendingOperations());
         Assert.Equal("kept", Assert.Single(journal.ReadFailedOperations()).Id);
         Assert.Empty(journal.ReconcilePendingOperations());
-        Assert.Empty(journal.Dismiss([]));
+        Assert.Empty(journal.Dismiss([]).Dismissed);
+    }
+
+    /// <summary>
+    /// R09: two <see cref="OperationJournal"/> instances share one journal file/path here (the fake for two processes,
+    /// or a retry racing the Recovery window in this same process, sharing <c>InstanceMode.PerFolder</c>'s journal).
+    /// The Recovery window snapshots an entry, a concurrent retry then commits a newer entry for the SAME Id, and only
+    /// then does Dismiss run against the stale snapshot -- it must not win and hide the retry's outcome.
+    /// </summary>
+    [Fact(DisplayName = "Dismiss_StaleSnapshotRacedByAConcurrentRetry_SkipsInsteadOfOverwritingTheNewerEntry")]
+    public void Dismiss_StaleSnapshotRacedByAConcurrentRetry_SkipsInsteadOfOverwritingTheNewerEntry()
+    {
+        var owner = CreateJournal();   // holds the Recovery window's snapshot
+        var retrier = CreateJournal(); // a concurrent retry sharing the same journal file/path
+
+        var snapshot = new JournalEntry("op-race", FileOperationType.Move, JournalState.Prepared,
+            @"C:\photos\race.jpg", @"C:\photos\sel\race.jpg", 1024, _clock.UtcNow, _clock.UtcNow);
+        owner.Append(snapshot);
+        // The Recovery window would have read `snapshot` here via ReadPendingAndFailedOperations.
+
+        // The retry completes for the SAME Id before the user clicks Dismiss.
+        var completed = snapshot with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow.AddSeconds(1) };
+        retrier.Append(completed);
+
+        var outcome = owner.Dismiss([snapshot]); // Dismiss is called against the now-stale snapshot
+
+        Assert.Empty(outcome.Dismissed);
+        Assert.Same(snapshot, Assert.Single(outcome.Skipped));
+        Assert.Empty(owner.ReadPendingOperations());
+        Assert.Empty(owner.ReadFailedOperations());
+        Assert.Contains(owner.ReadCommittedMoves(), x => x.Id == "op-race"); // the retry's outcome was not hidden
+    }
+
+    [Fact(DisplayName = "Dismiss_NoConcurrentChange_StillDismissesNormally")]
+    public void Dismiss_NoConcurrentChange_StillDismissesNormally()
+    {
+        var journal = CreateJournal();
+        var failed = new JournalEntry("op-normal", FileOperationType.Move, JournalState.Failed,
+            @"C:\photos\normal.jpg", @"C:\photos\sel\normal.jpg", 1024, _clock.UtcNow, _clock.UtcNow, "boom");
+        journal.Append(failed);
+
+        var outcome = journal.Dismiss([failed]);
+
+        Assert.Empty(outcome.Skipped);
+        Assert.Equal(JournalState.Dismissed, Assert.Single(outcome.Dismissed).State);
+        Assert.Empty(journal.ReadFailedOperations());
     }
 
     [Fact(DisplayName = "Tolerates invalid and corrupted JSONL lines")]
