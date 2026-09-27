@@ -11,6 +11,7 @@ using PhotoReview.Integration.Tests.Infrastructure;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>RAM%: the real Settings window's cache slider is bounded to [device minimum, 90] and saves the percent.</summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsRamCacheSliderTests
 {

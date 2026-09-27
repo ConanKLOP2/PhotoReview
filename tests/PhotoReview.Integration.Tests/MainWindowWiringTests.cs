@@ -18,6 +18,7 @@ namespace PhotoReview.Integration.Tests;
 /// observed through the live window and routed events, and the native window placement is round-tripped through a real
 /// HWND. Replaces the former source-text / XAML-grep checks.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class MainWindowWiringTests
 {

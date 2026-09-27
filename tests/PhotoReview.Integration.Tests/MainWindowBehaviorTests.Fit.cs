@@ -17,6 +17,7 @@ namespace PhotoReview.Integration.Tests;
 /// These tests verify that double-clicking on the main image applies the Fit operation.
 /// All cases expect usage of StaTestHost.WaitForAsync; no Task.Delay.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public partial class MainWindowBehaviorTests
 {

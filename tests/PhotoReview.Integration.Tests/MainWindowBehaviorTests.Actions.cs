@@ -30,6 +30,7 @@ namespace PhotoReview.Integration.Tests;
 /// the T14a follow-up note.
 /// </para>
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
 public sealed class MainWindowBehaviorActionTests

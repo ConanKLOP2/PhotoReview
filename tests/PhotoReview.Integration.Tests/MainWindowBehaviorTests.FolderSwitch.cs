@@ -24,6 +24,7 @@ namespace PhotoReview.Integration.Tests;
 /// into the new folder's catalog).
 /// </para>
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
 public sealed class MainWindowBehaviorFolderSwitchTests

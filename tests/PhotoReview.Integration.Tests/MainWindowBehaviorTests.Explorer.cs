@@ -22,6 +22,7 @@ namespace PhotoReview.Integration.Tests;
 /// Runs in the "GlobalState" collection because hosting MainWindow mutates the process-wide
 /// PHOTOREVIEW_DATA_ROOT; <see cref="DataRootFixture"/> owns that variable and its cleanup.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
 public sealed class MainWindowExplorerOrderTests

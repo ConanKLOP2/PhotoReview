@@ -24,6 +24,7 @@ namespace PhotoReview.Integration.Tests;
 /// PHOTOREVIEW_KINETIC_PRELOAD=1 (real preload graph instead of none), PHOTOREVIEW_KINETIC_CSV=&lt;file&gt; (raw ticks),
 /// PHOTOREVIEW_KINETIC_TRIALS=N (default 5), PHOTOREVIEW_KINETIC_MOVE_HZ (simulated mouse rate, default 125).
 /// </remarks>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Manual")]
 public sealed class KineticPanFrameMeasurementTests(ITestOutputHelper output)

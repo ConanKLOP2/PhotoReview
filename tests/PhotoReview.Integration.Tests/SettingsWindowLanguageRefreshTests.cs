@@ -6,6 +6,7 @@ using PhotoReview.Integration.Tests.Infrastructure;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>Texts the Settings window assigns in code follow a language change / "Reload translations" like the {loc:Tr} XAML texts do.</summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsWindowLanguageRefreshTests
 {
