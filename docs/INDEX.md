@@ -11,8 +11,8 @@ Find a document by purpose. Read tiers: **T0** (every session, ≤16 KB total) �
 | [`APP-MECHANISMS-VI.md`](APP-MECHANISMS-VI.md) | Core app flows and settings (Vietnamese) | T1, app flow |
 | [`adr/`](adr/) | Decisions 0001 decoder · 0002 UI framework · 0003 journal startup · 0004 no Presentation project · 0005 UI-thread affinity · 0006 localization catalogs · 0007 I/O durability · 0008 zoom = source pixel | T1, relevant area |
 | [`TRANSLATING.md`](TRANSLATING.md) | Add/fix a language (JSON catalogs) | T1, translations |
-| [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) | Q-* decisions: one open row + one line per decided | T1, decision lookup |
-| [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) | Perf baselines and measured conclusions | T1, perf work |
+| [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) + [`decisions/`](refactoring/decisions/) | Q-* index + one file per decision | T1, decision lookup |
+| [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) + [`perf/`](refactoring/perf/) | Methodology + one file per measurement | T1, perf work |
 | [`refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md`](refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md) | Current whole-project review, function-level candidates and coverage | T1, review work |
 | [`refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv`](refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv) | Per-body ledger for source, tools and tests; query selected rows by ID/file | Reference artifact, query on demand |
 | [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
