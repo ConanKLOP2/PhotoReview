@@ -42,8 +42,6 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
         await using (pipe.ConfigureAwait(false))
         {
             var written = false;
-            var reply = new byte[16];
-            var length = 0;
             try
             {
                 await pipe.ConnectAsync(deadline.Token).ConfigureAwait(false);
@@ -52,16 +50,26 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
                 await pipe.FlushAsync(deadline.Token).ConfigureAwait(false);
                 written = true;
 
+                var reply = new byte[16];
+                var length = 0;
                 while (length < reply.Length && Array.IndexOf(reply, (byte)'\n', 0, length) < 0)
                 {
                     var read = await pipe.ReadAsync(reply.AsMemory(length), deadline.Token).ConfigureAwait(false);
                     if (read == 0) break;
                     length += read;
                 }
-                // An owner that accepted the request always answers OK or ERR; hanging up silently means it read nothing
-                // (read timeout, oversized input, shutting down), so fall back to opening here.
-                if (length == 0) return ForwardOutcome.NoInstance;
-                return ClassifyReply(reply, length);
+                // R08 (full-code-review-2026-09-27): an owner that ACCEPTED the request (decoded it and invoked
+                // its handler) can still hang up before replying -- e.g. the owner process exits or the pipe
+                // breaks between the handler running and the reply write. That is indistinguishable here from a
+                // genuinely unaccepted request (nobody home), so once the write above succeeded (`written`),
+                // report Unknown rather than NoInstance: SecondInstanceHandoff.TryForwardAsync (Q-R12) already
+                // treats Unknown the same as Delivered ("very likely took over, this process can simply exit"),
+                // which is the safe default -- it risks occasionally not opening a path that truly had no owner,
+                // never a duplicate window for a path the owner already handled.
+                if (length == 0) return written ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
+                return Encoding.ASCII.GetString(reply, 0, length).StartsWith("OK", StringComparison.Ordinal)
+                    ? ForwardOutcome.Delivered
+                    : ForwardOutcome.Rejected;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -70,28 +78,11 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _log.Warn($"Forward client could not reach the running instance: {ex.GetType().Name}");
-                // R08: bytes already in `reply` (e.g. just the accept marker) mean the owner took the request and
-                // died/disconnected before finishing its OK/ERR ack. Reporting NoInstance there would make this
-                // process open a second window behind a live owner, so treat any received byte as Unknown instead.
-                return length > 0 ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
+                // R08: same reasoning as the empty-reply case above -- a pipe error AFTER the request was
+                // written cannot be told apart from the owner having accepted and then dropped the connection.
+                return written ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
             }
         }
-    }
-
-    /// <summary>
-    /// R08: <paramref name="reply"/> may start with <see cref="InstanceForwardPipe.AcceptMarker"/>, sent as soon as
-    /// the owner accepted the request, before it ran the handler or wrote the real OK/ERR text. Skip it when present,
-    /// then classify what follows; a reply that stops right after the marker (owner died before finishing the ack)
-    /// is Unknown, not NoInstance, so this process does not open a second window behind a live owner.
-    /// </summary>
-    private static ForwardOutcome ClassifyReply(byte[] reply, int length)
-    {
-        var marker = InstanceForwardPipe.AcceptMarker;
-        var offset = length >= marker.Length && reply.AsSpan(0, marker.Length).SequenceEqual(marker) ? marker.Length : 0;
-        var text = Encoding.ASCII.GetString(reply, offset, length - offset);
-        if (text.StartsWith("OK", StringComparison.Ordinal)) return ForwardOutcome.Delivered;
-        if (text.StartsWith("ERR", StringComparison.Ordinal)) return ForwardOutcome.Rejected;
-        return offset > 0 ? ForwardOutcome.Unknown : ForwardOutcome.Rejected;
     }
 
     private void TryAllowForeground(NamedPipeClientStream pipe)

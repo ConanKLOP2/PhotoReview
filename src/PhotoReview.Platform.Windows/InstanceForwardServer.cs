@@ -14,14 +14,6 @@ namespace PhotoReview.Platform.Windows;
 public static class InstanceForwardPipe
 {
     /// <summary>
-    /// R08: a single non-ASCII byte the server writes as soon as it accepts a request, before running the handler or
-    /// writing the real <c>OK</c>/<c>ERR</c> reply. It never collides with that reply text, so the client can tell
-    /// "owner took the request but the ack was lost" (<see cref="ForwardOutcome.Unknown"/>) apart from "owner never
-    /// took it" (<see cref="ForwardOutcome.NoInstance"/>), even when the final write fails or the owner dies mid-handler.
-    /// </summary>
-    internal static readonly byte[] AcceptMarker = [0x01];
-
-    /// <summary>
     /// Pipe name for the same folder key as <see cref="InstanceKeys"/>, additionally scoped by user SID and logon session
     /// (the mutex is session-local, so a pipe of another session must never be mistaken for the owner).
     /// </summary>
@@ -132,18 +124,6 @@ public sealed class InstanceForwardServer : IInstanceForwardServer
         var accepted = ForwardedPathProtocol.TryDecode(buffer.AsSpan(0, length), _pathExists, out var paths);
         if (accepted)
         {
-            // R08: send the accept marker before running the handler, so a disconnect during/after _onPaths
-            // (owner dies right there, or the final OK/ERR write below fails) still leaves proof on the wire that
-            // the request was taken. The client then reports Unknown instead of NoInstance and does not open a
-            // second window behind a live owner. A best-effort write: if it fails, the caller sees a clean/aborted
-            // close with zero bytes, same as before this change (no worse than the pre-fix behavior).
-            try
-            {
-                await pipe.WriteAsync(InstanceForwardPipe.AcceptMarker, timeout.Token).ConfigureAwait(false);
-                await pipe.FlushAsync(timeout.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException) { }
-
             try { _onPaths(paths); }
             catch (Exception ex) { _log.Error("Instance forward handler failed", ex); accepted = false; }
         }
