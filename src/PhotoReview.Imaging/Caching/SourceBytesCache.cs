@@ -16,6 +16,8 @@ public sealed class SourceBytesCache
     private readonly object _publishGate = new();
     // Test seam: runs inside the gate between the version check and the Set.
     internal Action? BeforePublishForTests { get; set; }
+    // Test seam: runs after the read loop, just before the Length/LastWriteTime re-check, so a test can change the file at exactly that point.
+    internal Action? AfterReadForTests { get; set; }
     // Per-path eviction versions: evicting one moved/deleted file must not invalidate in-flight reads of OTHER paths
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
     private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
@@ -124,6 +126,7 @@ public sealed class SourceBytesCache
             if (read == 0) throw UserFacingError.Localized(new EndOfStreamException($"Unexpected EOF while reading {key.Path}"), () => Tr.ErrIoUnexpectedEof(key.Path));
             offset += read;
         }
+        AfterReadForTests?.Invoke();
         var current = new FileInfo(key.Path);
         if (current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
             throw UserFacingError.Localized(new IOException($"File changed while reading: {key.Path}"), () => Tr.ErrIoFileChangedWhileReading(key.Path));
