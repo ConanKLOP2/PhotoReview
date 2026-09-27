@@ -254,5 +254,13 @@ public class AppSettings
     /// the mouse is not over the image viewport). Default <see cref="Model.FitWidthAnchor.Centre"/>.
     /// </summary>
     public Model.FitWidthAnchor FitWidthAnchor { get; set; } = Model.FitWidthAnchor.Centre;
+
+    /// <summary>
+    /// feat/zoom-key-anchor: what point stays under the zoom for +/- (keyboard zoom in/out), 100 % and the
+    /// click-zoom shortcut/menu (mouse wheel and click-to-zoom already anchor at the cursor regardless of this
+    /// setting). Default <see cref="KeyboardZoomAnchor.Pointer"/>: the cursor when it is over the image viewport,
+    /// the viewport centre otherwise. Absent in older configs = <see cref="KeyboardZoomAnchor.Pointer"/>.
+    /// </summary>
+    public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.Pointer;
 }
 

@@ -734,5 +734,10 @@
   "settings.shortcut.fitHeight": "Vừa chiều cao",
   "settings.shortcut.fitHeight.clearAutomationName": "Xóa phím tắt Vừa chiều cao",
   "settings.shortcut.toggleKeepZoom": "Bật/tắt giữ zoom",
-  "settings.shortcut.toggleKeepZoom.clearAutomationName": "Xóa phím tắt Bật/tắt giữ zoom"
+  "settings.shortcut.toggleKeepZoom.clearAutomationName": "Xóa phím tắt Bật/tắt giữ zoom",
+  "settings.keyboardZoomAnchor.label": "Thu phóng bằng phím tắt neo tại",
+  "settings.keyboardZoomAnchor.automationName": "Điểm neo khi thu phóng bằng bàn phím",
+  "settings.keyboardZoomAnchor.hint": "Nơi giữ nguyên vị trí ảnh khi thu phóng +/- bằng bàn phím, 100% và phím tắt thu phóng nhanh. Con lăn chuột và nhấn để thu phóng luôn neo tại vị trí con trỏ.",
+  "enum.keyboardZoomAnchor.pointer": "Vị trí con trỏ chuột",
+  "enum.keyboardZoomAnchor.viewportCentre": "Giữa khung nhìn"
 }

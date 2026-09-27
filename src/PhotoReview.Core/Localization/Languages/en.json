@@ -742,5 +742,10 @@
   "settings.shortcut.fitHeight": "Fit height",
   "settings.shortcut.fitHeight.clearAutomationName": "Clear the Fit height shortcut",
   "settings.shortcut.toggleKeepZoom": "Toggle keep zoom",
-  "settings.shortcut.toggleKeepZoom.clearAutomationName": "Clear the Toggle keep zoom shortcut"
+  "settings.shortcut.toggleKeepZoom.clearAutomationName": "Clear the Toggle keep zoom shortcut",
+  "settings.keyboardZoomAnchor.label": "Keyboard zoom anchors at",
+  "settings.keyboardZoomAnchor.automationName": "Keyboard zoom anchor point",
+  "settings.keyboardZoomAnchor.hint": "Where +/- keyboard zoom, 100 % and the click-zoom shortcut keep the image in place. Mouse wheel and click-to-zoom always anchor at the cursor.",
+  "enum.keyboardZoomAnchor.pointer": "Mouse position",
+  "enum.keyboardZoomAnchor.viewportCentre": "Centre of the view"
 }

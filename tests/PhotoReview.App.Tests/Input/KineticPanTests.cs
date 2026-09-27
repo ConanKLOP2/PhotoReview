@@ -214,6 +214,102 @@ public sealed class KineticPanTests
         Assert.Equal((50.0, 60.0), (h, v));
     }
 
+    // ---- AddImpulse (feat/zoom-key-anchor: kinetic arrow-key panning) ----
+
+    [Fact]
+    public void AddImpulse_WhileIdle_StartsAGlideAtThatVelocity()
+    {
+        var scroller = new KineticScroller();
+
+        scroller.AddImpulse(1.5, -0.5);
+
+        Assert.True(scroller.IsActive);
+        Assert.Equal(1.5, scroller.VelocityX, 6);
+        Assert.Equal(-0.5, scroller.VelocityY, 6);
+    }
+
+    [Fact]
+    public void AddImpulse_WhileGliding_AccumulatesOntoTheCurrentVelocity()
+    {
+        var scroller = new KineticScroller();
+        scroller.AddImpulse(1.0, 0.2);
+
+        scroller.AddImpulse(0.5, 0.1);
+
+        Assert.Equal(1.5, scroller.VelocityX, 6);
+        Assert.Equal(0.3, scroller.VelocityY, 6);
+    }
+
+    [Fact]
+    public void AddImpulse_OppositeDirection_ReducesOrReversesTheVelocity()
+    {
+        var scroller = new KineticScroller();
+        scroller.AddImpulse(2.0, 0);
+
+        scroller.AddImpulse(-0.5, 0);
+        Assert.Equal(1.5, scroller.VelocityX, 6);
+
+        scroller.AddImpulse(-3.0, 0);
+        Assert.Equal(-1.5, scroller.VelocityX, 6);
+        Assert.True(scroller.IsActive); // still gliding, just the other way
+    }
+
+    [Fact]
+    public void AddImpulse_ClampsEachAxisToMaxVelocity()
+    {
+        var scroller = new KineticScroller();
+
+        scroller.AddImpulse(KineticScroller.MaxVelocity * 10, -KineticScroller.MaxVelocity * 10);
+
+        Assert.Equal(KineticScroller.MaxVelocity, scroller.VelocityX, 6);
+        Assert.Equal(-KineticScroller.MaxVelocity, scroller.VelocityY, 6);
+    }
+
+    [Fact]
+    public void AddImpulse_NonFiniteComponent_IsIgnored_OtherAxisStillApplies()
+    {
+        var scroller = new KineticScroller();
+
+        scroller.AddImpulse(double.NaN, 1.0);
+        Assert.Equal(0.0, scroller.VelocityX, 6);
+        Assert.Equal(1.0, scroller.VelocityY, 6);
+
+        scroller.AddImpulse(double.PositiveInfinity, double.NegativeInfinity);
+        Assert.Equal(0.0, scroller.VelocityX, 6);
+        Assert.Equal(1.0, scroller.VelocityY, 6);
+    }
+
+    // ---- KeyboardPan.ImpulseVelocity ----
+
+    [Fact]
+    public void ImpulseVelocity_SignMatchesTheStepDirection()
+    {
+        var (vx, vy) = KeyboardPan.ImpulseVelocity(-80, 60);
+
+        Assert.True(vx < 0);
+        Assert.True(vy > 0);
+    }
+
+    [Fact]
+    public void ImpulseVelocity_DrivenToRest_TravelsTheStepDistance_WithinOneDip()
+    {
+        const double step = 80.0;
+        var (vx, _) = KeyboardPan.ImpulseVelocity(step, 0);
+        var scroller = new KineticScroller();
+        scroller.AddImpulse(vx, 0);
+        var h = 0.0;
+
+        var frames = 0;
+        while (scroller.IsActive && frames < 10_000)
+        {
+            h = scroller.Step(16.7, h, 0, Large).Horizontal;
+            frames++;
+        }
+
+        Assert.InRange(frames, 1, 9_999); // it did stop on its own
+        Assert.Equal(step, h, tolerance: 1.0);
+    }
+
     // ---- ConsumesKey: arrow keys inside a zoomed image ----
 
     private static readonly ScrollBounds Fit = new(800, 600, 800, 600);

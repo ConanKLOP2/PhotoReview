@@ -97,4 +97,15 @@ internal sealed class WpfImageSurface(ScrollViewer scroll, Image image, ViewerSt
         displayClock is not null && PresentationSource.FromVisual(scroll) is System.Windows.Interop.HwndSource source
             ? displayClock.GetTiming(source.Handle)
             : null;
+
+    public Point? PointerPosition
+    {
+        get
+        {
+            var position = Mouse.GetPosition(scroll);
+            return position.X >= 0 && position.Y >= 0 && position.X <= scroll.ViewportWidth && position.Y <= scroll.ViewportHeight
+                ? position
+                : null;
+        }
+    }
 }
