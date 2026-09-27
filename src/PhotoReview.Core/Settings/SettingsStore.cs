@@ -93,7 +93,7 @@ public sealed class SettingsStore
                         LogStartupError("Could not back up config.json with unreadable values", copyEx);
                     }
                 }
-                FinishDeserialize(loaded);
+                FinishDeserialize(loaded, json);
                 LastLoadRepairs = [.. salvagedFrom, .. SettingsNormalizer.Normalize(loaded).Except(salvagedFrom, StringComparer.Ordinal)];
                 if (LastLoadRepairs.Count > 0)
                     _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
@@ -134,7 +134,17 @@ public sealed class SettingsStore
         var settings = new AppSettings();
         if (path is null)
         {
-            Save(settings);
+            try
+            {
+                Save(settings);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // First run / corrupt config: a failed default write (disk full, locked or read-only folder) must not fail startup.
+                LogStartupError("Could not write default config.json, using in-memory defaults for this session", ex);
+                _current = settings;
+                Changed?.Invoke(this, _current);
+            }
         }
         else
         {
@@ -237,15 +247,34 @@ public sealed class SettingsStore
     internal static AppSettings Parse(string json)
     {
         var loaded = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
-        FinishDeserialize(loaded);
+        FinishDeserialize(loaded, json);
         return loaded;
     }
 
-    private static void FinishDeserialize(AppSettings loaded)
+    private static void FinishDeserialize(AppSettings loaded, string json)
     {
+        MarkUnversionedAsLegacy(loaded, json);
         Migrate(loaded);
         loaded.Shortcuts ??= ShortcutMappings.Default();
         loaded.Actions ??= ReviewAction.Defaults();
+    }
+
+    /// <summary>
+    /// <see cref="AppSettings.ConfigVersion"/> defaults to the current version, so a pre-versioned config (no key) would
+    /// deserialize as current and skip every migration (Q-L1: such users must keep the Vietnamese UI). Peek at the raw JSON.
+    /// </summary>
+    private static void MarkUnversionedAsLegacy(AppSettings loaded, string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && !doc.RootElement.TryGetProperty("ConfigVersion", out _))
+                loaded.ConfigVersion = 1;
+        }
+        catch (JsonException)
+        {
+            // Not parseable here: leave the version as deserialized.
+        }
     }
 
     public static void Migrate(AppSettings settings)
