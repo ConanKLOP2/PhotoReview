@@ -55,3 +55,4 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | L01/L02 | Deep review of the 289 `needs-deep-review` Imaging ledger rows: 287 no issue, 2 low-severity fixes (weak WicDirect memory-buffer test oracle; wasted disk-cache-path hash when the disk cache is disabled). [Detail](decisions/LEDGER-DEEP-REVIEW.md) |
 | Q-R05 / Q-R12 | Navigation notification count deduped; stale doc-comment links retargeted (#193). [Detail](decisions/Q-R05-Q-R12.md) |
 | R15/R16/R17/R18 | Hash-service stat, catalog snapshot, drag-drop `Exists` checks and diagnostics-metrics sort all measured negligible; no fix. [Detail](decisions/R15-R16-R17-R18.md) |
+| GUI-CHECK-AUTOMATION | 5 of the 11 "GUI checks (user)" items now need no manual check; the rest reduced to one short visual/feel step each (new context-menu-structure, crossfade and KeepZoomAcrossImages UI tests). [Detail](decisions/GUI-CHECK-AUTOMATION.md) |
