@@ -57,7 +57,7 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 
 ### File Associations (Optional)
 
-Register "Open with" for `.jpg`, `.jpeg`, and `.png`:
+Register "Open with" for every extension in `ImageFileTypes` (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes the same seven:
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
@@ -146,7 +146,7 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 
 ### File association (tùy chọn)
 
-Đăng ký Open With cho `.jpg`, `.jpeg`, `.png`:
+Đăng ký Open With cho mọi đuôi trong `ImageFileTypes` (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này:
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'

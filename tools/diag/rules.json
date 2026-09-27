@@ -1,7 +1,6 @@
 {
   "R-IO": {
-    "sourceMissIoSharePct": 40,
-    "minSourceOpensPerImage": 2
+    "sourceMissIoSharePct": 40
   },
   "R-DEC": {
     "decodeSharePct": 40
@@ -30,7 +29,6 @@
     "diskVsReadDecodeFactor": 1.0
   },
   "R-FOLDER": {
-    "folderT0ToT2Ms": 1000,
-    "explorerShareOfT2Pct": 50
+    "folderT0ToT2Ms": 1000
   }
 }
