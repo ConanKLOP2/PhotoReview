@@ -774,6 +774,9 @@
   "settings.showFolderMenuItems.label": "Show folder items (Open, Next, Previous)",
   "settings.showFolderMenuItems.automationName": "Show folder items in the right-click menu",
   "settings.showFolderMenuItems.hint": "Off hides Open folder, Next folder and Previous folder from the right-click menu. Their shortcuts keep working either way.",
+  "settings.showZoomMenuItems.label": "Show zoom items (Fit, Zoom to N%, Zoom)",
+  "settings.showZoomMenuItems.automationName": "Show zoom items in the right-click menu",
+  "settings.showZoomMenuItems.hint": "Off (default) hides Fit to window, Zoom to N% and the Zoom submenu from the right-click menu. Their shortcuts keep working either way.",
   "core.recovery.alreadyHandled": "This entry was already handled by another PhotoReview window, or is being retried there right now. Nothing was changed; the entry has been removed from this list.",
   "recovery.retry.stale.title": "Already handled elsewhere"
 }

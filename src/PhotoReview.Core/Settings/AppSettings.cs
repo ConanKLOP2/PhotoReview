@@ -301,5 +301,13 @@ public class AppSettings
     /// when the menu items are hidden.
     /// </summary>
     public bool ShowFolderMenuItems { get; set; } = true;
+
+    /// <summary>
+    /// Shows the zoom cluster ("Fit to window", "Zoom to N%" and the "Zoom" submenu) in the right-click context
+    /// menu, as one unit including the separator above it. Default false (new behaviour; unlike
+    /// <see cref="ShowFolderMenuItems"/>, this cluster starts hidden). Toggled from Settings only (no shortcut);
+    /// the underlying zoom actions still work via their own shortcuts when the menu items are hidden.
+    /// </summary>
+    public bool ShowZoomMenuItems { get; set; }
 }
 

@@ -771,7 +771,9 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Refreshes the top-level items on every open: the level in "Zoom to N%", each item's shortcut (as configured,
-    /// shown right-aligned like an accelerator; empty when the shortcut is cleared), and the folder group's visibility
+    /// shown right-aligned like an accelerator; empty when the shortcut is cleared), the zoom cluster's visibility
+    /// (<see cref="AppSettings.ShowZoomMenuItems"/>) -- Fit to window/Zoom to N%/the Zoom submenu and the separator
+    /// right above them are hidden together as one unit -- and the folder group's visibility
     /// (<see cref="AppSettings.ShowFolderMenuItems"/>, PR-C) -- Open folder/Next folder/Previous folder and the
     /// separator right above them are hidden together as one unit.
     /// </summary>
@@ -782,6 +784,12 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ZoomToLevelMenuItem, Tr.MainMenuZoomToLevelAutomationName(percent));
         ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
+
+        var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
+        ZoomGroupSeparator.Visibility = zoomClusterVisibility;
+        FitMenuItem.Visibility = zoomClusterVisibility;
+        ZoomToLevelMenuItem.Visibility = zoomClusterVisibility;
+        ZoomMenu.Visibility = zoomClusterVisibility;
 
         var folderGroupVisibility = _settings.ShowFolderMenuItems ? Visibility.Visible : Visibility.Collapsed;
         FolderGroupSeparator.Visibility = folderGroupVisibility;

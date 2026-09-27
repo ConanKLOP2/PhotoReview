@@ -10,8 +10,9 @@ namespace PhotoReview.Integration.Tests;
 
 /// <summary>
 /// PR-C (feat/context-menu-redesign): the folder group's visibility (<see cref="AppSettings.ShowFolderMenuItems"/>),
-/// the "Zoom" submenu's "also set as click zoom level" toggle (<see cref="AppSettings.SetZoomAlsoSetsClickLevel"/>)
-/// and "set current zoom as click level". Vietnamese is the ambient language (LocalizationModuleInit).
+/// the zoom cluster's visibility (<see cref="AppSettings.ShowZoomMenuItems"/>), the "Zoom" submenu's "also set as
+/// click zoom level" toggle (<see cref="AppSettings.SetZoomAlsoSetsClickLevel"/>) and "set current zoom as click
+/// level". Vietnamese is the ambient language (LocalizationModuleInit).
 /// </summary>
 [Trait("Category", "UI")]
 [Collection("GlobalState")]
@@ -64,10 +65,13 @@ public sealed class ContextMenuRedesignTests
     }
 
     /// <summary>
-    /// Q-R38 structural layout: Undo first, then Fit/Zoom-to-N%/Zoom submenu, then the togglable folder
-    /// group, then Settings last -- always in this fixed order and always present in <c>Items</c> (only the
-    /// folder group's four elements toggle <see cref="Visibility"/>; nothing is added/removed from the menu).
-    /// Complements <see cref="ContextMenuOpen_FolderGroupVisible_WhenSettingOn"/>, which only checks visibility.
+    /// Q-R38 structural layout: Undo first, then the togglable zoom cluster (Fit/Zoom-to-N%/Zoom submenu), then
+    /// the togglable folder group, then Settings last -- always in this fixed order and always present in
+    /// <c>Items</c> (only the zoom cluster's four elements and the folder group's four elements toggle
+    /// <see cref="Visibility"/>; nothing is added/removed from the menu). The zoom cluster defaults to hidden
+    /// (<see cref="AppSettings.ShowZoomMenuItems"/> = false), unlike the folder group, which defaults to visible.
+    /// Complements <see cref="ContextMenuOpen_FolderGroupVisible_WhenSettingOn"/> and
+    /// <see cref="ZoomCluster_Visible_WhenSettingOn"/>, which only check visibility.
     /// </summary>
     [Fact]
     public async Task ContextMenuStructure_UndoFirst_FolderGroupTogglable_SettingsAlwaysLast()
@@ -79,7 +83,7 @@ public sealed class ContextMenuRedesignTests
 
             var undo = Assert.IsType<MenuItem>(items[0]);
             Assert.False(string.IsNullOrEmpty(undo.Header as string));
-            Assert.IsType<Separator>(items[1]);
+            Assert.Same(window.ZoomGroupSeparator, items[1]);
             Assert.Same(window.FitMenuItem, items[2]);
             Assert.Same(window.ZoomToLevelMenuItem, items[3]);
             Assert.Same(window.ZoomMenu, items[4]);
@@ -91,11 +95,14 @@ public sealed class ContextMenuRedesignTests
             var settings = Assert.IsType<MenuItem>(items[10]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
 
-            // Settings is always visible, whichever way the folder group is toggled.
+            // Settings is always visible, whichever way the zoom cluster and folder group are toggled -- including
+            // the "Undo, Settings" case where both clusters are hidden (no dangling double separator).
+            window.Settings.ShowZoomMenuItems = false;
             window.Settings.ShowFolderMenuItems = false;
             OpenMenu(window);
             Assert.Equal(Visibility.Visible, undo.Visibility);
             Assert.Equal(Visibility.Visible, settings.Visibility);
+            window.Settings.ShowZoomMenuItems = true;
             window.Settings.ShowFolderMenuItems = true;
             OpenMenu(window);
             Assert.Equal(Visibility.Visible, undo.Visibility);
@@ -137,6 +144,43 @@ public sealed class ContextMenuRedesignTests
             window.Settings.ShowFolderMenuItems = true;
             OpenMenu(window);
             Assert.Equal(Visibility.Visible, window.OpenFolderMenuItem.Visibility);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task ZoomCluster_Visible_WhenSettingOn()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            window.Settings.ShowZoomMenuItems = true;
+            OpenMenu(window);
+
+            Assert.Equal(Visibility.Visible, window.ZoomGroupSeparator.Visibility);
+            Assert.Equal(Visibility.Visible, window.FitMenuItem.Visibility);
+            Assert.Equal(Visibility.Visible, window.ZoomToLevelMenuItem.Visibility);
+            Assert.Equal(Visibility.Visible, window.ZoomMenu.Visibility);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task ZoomCluster_Hidden_AsOneUnit_WhenSettingOff()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            window.Settings.ShowZoomMenuItems = false;
+            OpenMenu(window);
+
+            Assert.Equal(Visibility.Collapsed, window.ZoomGroupSeparator.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.FitMenuItem.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.ZoomToLevelMenuItem.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.ZoomMenu.Visibility);
+
+            // Refreshed on every open, not just the first.
+            window.Settings.ShowZoomMenuItems = true;
+            OpenMenu(window);
+            Assert.Equal(Visibility.Visible, window.FitMenuItem.Visibility);
             return Task.CompletedTask;
         });
     }
