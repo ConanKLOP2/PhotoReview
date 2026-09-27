@@ -16,11 +16,20 @@ public static class AppLog
         set => _instance = value ?? FileLog.Default;
     }
 
+    private static int _enabledWrites;
+
     public static bool Enabled
     {
         get => _instance.Enabled;
-        set => _instance.Enabled = value;
+        set
+        {
+            Interlocked.Increment(ref _enabledWrites);
+            _instance.Enabled = value;
+        }
     }
+
+    /// <summary>Counts every write to <see cref="Enabled"/>, so a temporary override can tell whether someone else changed it meanwhile.</summary>
+    public static int EnabledWriteCount => Volatile.Read(ref _enabledWrites);
 
     public static string FilePath => _instance.FilePath;
 

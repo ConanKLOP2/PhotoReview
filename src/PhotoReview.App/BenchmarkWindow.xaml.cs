@@ -167,7 +167,7 @@ public partial class BenchmarkWindow : Window, IDisposable
                 // toggling AppLog around the run, both profiles measured identical (whatever
                 // the app's ambient setting happened to be) logging overhead.
                 // (shared with the CLI via BenchmarkProfileScope so both front ends apply the profile identically)
-                using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled);
+                using var loggingScope = BenchmarkProfileScope.ApplyLogging(profile, () => AppLog.Enabled, enabled => AppLog.Enabled = enabled, () => AppLog.EnabledWriteCount);
                 try
                 {
                     // The per-iteration workload logic (correctness guard, file-action mapping,
