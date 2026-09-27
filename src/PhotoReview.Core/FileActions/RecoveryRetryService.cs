@@ -48,15 +48,16 @@ public sealed class RecoveryRetryService
         if (_fileSystem.FileExists(failed.Destination))
             return new(false, Tr.CoreRecoveryDestinationExists, null);
 
-        var prepared = new JournalEntry(
-            failed.Id,
-            failed.Type,
-            JournalState.Prepared,
-            failed.Source,
-            failed.Destination,
-            sourceStat.Length,
-            sourceStat.LastWriteUtc,
-            _clock.UtcNow);
+        // `with` keeps Undo / Permanent: dropping Undo turns a retried undo-Move into a redo on the next Ctrl+Z after a restart.
+        var prepared = failed with
+        {
+            State = JournalState.Prepared,
+            Error = null,
+            ErrorCode = null,
+            Size = sourceStat.Length,
+            LastWriteUtc = sourceStat.LastWriteUtc,
+            TimestampUtc = _clock.UtcNow,
+        };
 
         return await Task.Run(() => ExecuteRetry(failed, prepared), ct).ConfigureAwait(false);
     }

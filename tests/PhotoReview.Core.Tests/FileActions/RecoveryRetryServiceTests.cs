@@ -73,6 +73,24 @@ public sealed class RecoveryRetryServiceTests
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
     }
 
+    [Fact(DisplayName = "Retrying a failed undo-Move keeps the Undo flag on the committed entry (no redo after restart)")]
+    public async Task RetryMove_FailedUndoMove_CommittedEntryKeepsUndoFlag()
+    {
+        var source = @"D:\sorted\a.jpg";
+        var dest = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+
+        var failed = new JournalEntry("op-undo", FileOperationType.Move, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error", Undo: true);
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.Entry!.Undo);
+        Assert.All(_journal.ReadCommittedMoves().Where(e => e.Id == "op-undo"), e => Assert.True(e.Undo));
+    }
+
     [Fact(DisplayName = "RetryMoveOrCopyAsync executes Move successfully")]
     public async Task RetryMove_Success()
     {
