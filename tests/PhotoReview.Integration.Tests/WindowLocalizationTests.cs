@@ -21,6 +21,7 @@ namespace PhotoReview.Integration.Tests;
 /// visual tree), and a language switch updates them live without reopening the window (Q-L8).
 /// Switches the ambient language, so it runs in the non-parallel "GlobalState" collection and restores Vietnamese.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class WindowLocalizationTests
 {

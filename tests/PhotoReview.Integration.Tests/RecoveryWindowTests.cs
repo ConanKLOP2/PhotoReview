@@ -12,6 +12,7 @@ namespace PhotoReview.Integration.Tests;
 /// Recovery window: the live check runs when the window opens and the details panel shows source and destination.
 /// Real temp files + the physical file system; the window is never shown (RunChecksAsync is what Loaded triggers).
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class RecoveryWindowTests
 {

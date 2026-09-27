@@ -8,6 +8,7 @@ param(
     [switch]$Slow,
     [switch]$All,
     [switch]$TestReport,
+    [switch]$Parallel,
     [Parameter(DontShow)]
     [scriptblock]$TestCommandInvoker
 )
@@ -18,6 +19,17 @@ param(
 # ./verify-all.ps1 -Native             # Include real-OS tests (Recycle Bin, shell)
 # ./verify-all.ps1 -All                # Everything (CI+local exhaustive)
 # ./verify-all.ps1 -TestReport         # Print test timing report (requires running tests)
+# ./verify-all.ps1 -Parallel           # Run each test project's xUnit gate concurrently (one process
+#                                       # per project) instead of one after another. Cuts local wall-clock
+#                                       # roughly in half (measured 170s -> 81s on the default filter across
+#                                       # the 5 projects); each project is still a separate OS process, so this
+#                                       # does not change xUnit's own within-assembly [Collection("GlobalState")]
+#                                       # serialization. NOTE: Integration.Tests spins real WPF windows/dialogs
+#                                       # (Category=UI); running it alongside another worktree's own Integration
+#                                       # test run on the same machine can pop a real, visible MessageBox on the
+#                                       # shared desktop (both are separate processes, so nothing serializes them
+#                                       # against each other) -- harmless, just click it, but avoid -Parallel when
+#                                       # you know another session is mid Integration-test run.
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -232,22 +244,53 @@ $testProjects = @(
     'PhotoReview.Integration.Tests',
     'PhotoReview.App.Tests'
 )
-foreach ($testProject in $testProjects) {
-    Invoke-Gate "Run xUnit: $testProject" {
-        $testArgs = @(
-            (Join-Path $root "tests\$testProject\$testProject.csproj"),
-            '-c', $Configuration,
-            '--no-build',
-            '--nologo',
-            '--filter', $filter,
-            '--blame-hang',
-            '--blame-hang-timeout', '120s',
-            '--blame-hang-dump-type', 'none'
-        )
-        if ($TestReport) {
-            $testArgs += @('--logger', "trx;LogFileName=$testProject.trx", '--results-directory', (Join-Path $root "TestResults\$testProject"))
+
+function Get-XunitTestArgs([string]$TestProject) {
+    $testArgs = @(
+        (Join-Path $root "tests\$TestProject\$TestProject.csproj"),
+        '-c', $Configuration,
+        '--no-build',
+        '--nologo',
+        '--filter', $filter,
+        '--blame-hang',
+        '--blame-hang-timeout', '120s',
+        '--blame-hang-dump-type', 'none'
+    )
+    if ($TestReport) {
+        $testArgs += @('--logger', "trx;LogFileName=$TestProject.trx", '--results-directory', (Join-Path $root "TestResults\$TestProject"))
+    }
+    return $testArgs
+}
+
+if ($Parallel -and $null -eq $TestCommandInvoker) {
+    # One `dotnet test` process per project, running concurrently. Each project is already its own
+    # OS process/assembly, so this does not disturb xUnit's own [Collection("GlobalState")] serialization
+    # within a project -- it only overlaps the projects against each other.
+    Write-Host "`n=== Run xUnit (parallel: $($testProjects.Count) projects) ===" -ForegroundColor Cyan
+    $jobs = foreach ($testProject in $testProjects) {
+        $testArgsForJob = Get-XunitTestArgs $testProject
+        Start-Job -ScriptBlock {
+            param($TestArgs, $TestProject)
+            & dotnet test @TestArgs
+            [pscustomobject]@{ Project = $TestProject; ExitCode = $LASTEXITCODE }
+        } -ArgumentList $testArgsForJob, $testProject
+    }
+    $results = @($jobs | Wait-Job | Receive-Job)
+    $jobs | Remove-Job
+    $failed = @($results | Where-Object { $_.ExitCode -ne 0 })
+    foreach ($r in $results | Sort-Object Project) {
+        $status = if ($r.ExitCode -eq 0) { 'OK' } else { "FAILED (exit $($r.ExitCode))" }
+        Write-Host "  $($r.Project): $status"
+    }
+    if ($failed) {
+        throw "Gate failed: Run xUnit (parallel) -- $($failed.Count) of $($testProjects.Count) project(s) failed"
+    }
+}
+else {
+    foreach ($testProject in $testProjects) {
+        Invoke-Gate "Run xUnit: $testProject" {
+            dotnet test @(Get-XunitTestArgs $testProject)
         }
-        dotnet test @testArgs
     }
 }
 

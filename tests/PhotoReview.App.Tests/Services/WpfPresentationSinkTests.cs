@@ -11,6 +11,7 @@ namespace PhotoReview.App.Tests.Services;
 /// AR04 / ADR 0005: WpfPresentationSink keeps its Dispatcher.Invoke fallback as a safety net, but
 /// every time it is taken it is counted in ReviewMetrics.CrossThreadPresentCount (expected 0).
 /// </summary>
+[Trait("Category", "UI")]
 public sealed class WpfPresentationSinkTests
 {
     [Fact(DisplayName = "AR04: sink update from a non-dispatcher thread is marshalled and counted")]
