@@ -85,7 +85,10 @@ public static class ExifFormatter
         return model.StartsWith(makeWord, StringComparison.OrdinalIgnoreCase) ? model : make + " " + model;
     }
 
-    /// <summary>1/250 s for short exposures (exact when the numerator is 1), decimal seconds from 0.5 s up.</summary>
+    /// <summary>
+    /// 1/250 s for short exposures when the fraction is faithful (numerator 1, or 1/seconds within 1% of a whole number),
+    /// decimal seconds from 0.5 s up and for non-unit fractions from 0.1 s (4/10 s is "0.4 s", not "1/2 s").
+    /// </summary>
     internal static string? ShutterText(ExifRational? exposure, IFormatProvider provider)
     {
         if (exposure is not { Numerator: > 0, Denominator: > 0 } time) return null;
@@ -94,7 +97,10 @@ public static class ExifFormatter
         var seconds = time.Value;
         if (seconds < 0.5)
         {
-            var denominator = Math.Round(1 / seconds);
+            var reciprocal = 1 / seconds;
+            var denominator = Math.Round(reciprocal, MidpointRounding.AwayFromZero);
+            if (seconds >= 0.1 && Math.Abs(reciprocal - denominator) > denominator * 0.01)
+                return Tr.ExifShutterSeconds(seconds.ToString("0.##", provider));
             return Tr.ExifShutterFraction(denominator.ToString("0", provider));
         }
         return Tr.ExifShutterSeconds(seconds.ToString("0.#", provider));
