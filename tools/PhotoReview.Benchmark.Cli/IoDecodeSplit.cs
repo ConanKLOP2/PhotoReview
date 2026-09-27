@@ -61,7 +61,7 @@ internal static class IoDecodeSplit
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .Take(Math.Max(1, max))
             .ToArray();
-        if (files.Length == 0) throw new InvalidOperationException("No supported images found in: (see console arg)");
+        if (files.Length == 0) throw new InvalidOperationException($"No supported images found in: {folder}");
 
         var rawCsv = new StringBuilder("index,metric,width,run,ms,bytes\n");
         var results = new List<FileResult>(files.Length);
