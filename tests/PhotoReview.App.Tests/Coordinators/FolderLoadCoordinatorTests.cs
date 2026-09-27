@@ -244,6 +244,9 @@ public sealed partial class FolderLoadCoordinatorTests
     public FolderLoadCoordinatorTests()
     {
         _settingsStore = new SettingsStore(_paths, _fs, new Core.Diagnostics.NullLog());
+        // Most tests in this class exercise Explorer-order integration, which only Name (not the app's
+        // now-default ImageSortMode.Default) queries; tests for the other modes set ImageSortMode themselves.
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Name;
         _sessionStore = new SessionStore(_paths, _fs);
     }
 

@@ -96,6 +96,9 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         var appPaths = new AppPaths(_tempDir);
         _sessionStore = new SessionStore(appPaths, _fileSystem);
         _settingsStore = new SettingsStore(appPaths, _fileSystem, new NullLog());
+        // These tests exercise Explorer-order integration, which only Name (not the app's now-default
+        // ImageSortMode.Default) queries.
+        _settingsStore.Current.ImageSortMode = ImageSortMode.Name;
     }
 
     public void Dispose()

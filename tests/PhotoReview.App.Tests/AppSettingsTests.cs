@@ -40,10 +40,10 @@ public sealed class AppSettingsTests
     [Fact(DisplayName = "Source bytes cache is disabled by default")]
     public void SourceBytesCacheDefaultsOff() => Assert.False(new AppSettings().UseSourceBytesCache);
 
-    [Fact(DisplayName = "ImageSortMode defaults to Name and deserializes aliases")]
+    [Fact(DisplayName = "ImageSortMode defaults to Default (file system order) and deserializes aliases")]
     public void ImageSortModeDefaultsAndDeserializesAliases()
     {
-        Assert.Equal(ImageSortMode.Name, new AppSettings().ImageSortMode);
+        Assert.Equal(ImageSortMode.Default, new AppSettings().ImageSortMode);
         Assert.Equal(ImageSortMode.SizeDescending, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"Size\"}")!.ImageSortMode);
         Assert.Equal(ImageSortMode.SizeAscending, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"sizeascending\"}")!.ImageSortMode);
         Assert.Equal(ImageSortMode.Name, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"Unknown\"}")!.ImageSortMode);

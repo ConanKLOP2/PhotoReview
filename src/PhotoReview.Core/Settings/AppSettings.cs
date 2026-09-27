@@ -10,7 +10,7 @@ public class AppSettings
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
     public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
     public bool LoggingEnabled { get; set; }
-    public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Name;
+    public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Default;
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
     public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
@@ -139,7 +139,7 @@ public class AppSettings
     public int ClickZoomPercent { get; set; } = DefaultClickZoomPercent;
 
     /// <summary>After a drag-pan is released the image keeps gliding with the release velocity and slows down.</summary>
-    public bool KineticPanEnabled { get; set; } = true;
+    public bool KineticPanEnabled { get; set; }
 
     // ---- Preload window (feat/preload-window-setting). Absent in older configs = these defaults; no migration step. ----
 
@@ -258,10 +258,10 @@ public class AppSettings
     /// <summary>
     /// feat/zoom-key-anchor: what point stays under the zoom for +/- (keyboard zoom in/out), 100 % and the
     /// click-zoom shortcut/menu (mouse wheel and click-to-zoom already anchor at the cursor regardless of this
-    /// setting). Default <see cref="KeyboardZoomAnchor.Pointer"/>: the cursor when it is over the image viewport,
-    /// the viewport centre otherwise. Absent in older configs = <see cref="KeyboardZoomAnchor.Pointer"/>.
+    /// setting). Default <see cref="KeyboardZoomAnchor.ViewportCentre"/>; absent in older configs also loads as
+    /// <see cref="KeyboardZoomAnchor.ViewportCentre"/> (the property initializer is the deserialization default).
     /// </summary>
-    public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.Pointer;
+    public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.ViewportCentre;
 
     // ---- Image change transition (PR-D feat/image-crossfade). Absent in older configs = these defaults; no migration step. ----
 

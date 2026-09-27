@@ -16,7 +16,7 @@ public sealed class AppSettingsPocoTests
         Assert.Equal(InitialViewMode.Fit, s.InitialViewMode);
         Assert.Equal(LoadingMode.Preview, s.LoadingMode);
         Assert.False(s.LoggingEnabled);
-        Assert.Equal(ImageSortMode.Name, s.ImageSortMode);
+        Assert.Equal(ImageSortMode.Default, s.ImageSortMode);
         Assert.True(s.CompareHashEnabled);
         Assert.True(s.CompareSizeEnabled);
         Assert.NotEmpty(s.Actions);
