@@ -328,6 +328,10 @@ public partial class App : System.Windows.Application, IDisposable
         PhotoReviewPerf.StartupMark("instanceLock");
         var window = _services.GetRequiredService<MainWindow>();
         window.ViewModel.FolderOwnership = _instanceScope;
+        // Manual/agent verification convenience: set PHOTOREVIEW_DIAG_INSTANCE_LABEL (e.g. "AGENT CHECK")
+        // before launching the built exe directly to mark the title bar, so it is never mistaken for the
+        // user's real everyday window. Zero effect when unset (the normal launch).
+        if (DiagOptions.InstanceLabel is { } instanceLabel) window.ViewModel.InstanceLabel = instanceLabel;
         PhotoReviewPerf.StartupMark("mainWindowConstructed");
         window.InitializeWithInitialPath(initial ?? initialFolder);
         MainWindow = window;
