@@ -6,7 +6,8 @@ using PhotoReview.Core.Tests.Fakes;
 
 namespace PhotoReview.Core.Tests.FileActions;
 
-/// <summary>Review r7 item 1: the INV-6 / ADR 0003 startup reconcile + Undo bootstrap is wired again.</summary>
+/// <summary>Review r7 item 1: the INV-6 / ADR 0003 startup reconcile is wired again. P03 (2026-09-27): the Undo
+/// bootstrap from journal history it also used to do is gone - Undo is limited to the current session.</summary>
 public sealed class JournalStartupRecoveryTests
 {
     private sealed class FakeClock(DateTime utcNow) : IClock
@@ -37,19 +38,43 @@ public sealed class JournalStartupRecoveryTests
     private static JournalEntry Pending(string id, FileOperationType type, string source, string? destination, long size, DateTime prepared) =>
         new(id, type, JournalState.Prepared, source, destination, size, WriteTime, prepared);
 
-    [Fact(DisplayName = "Startup reconciles a pending Move that completed and offers it for Undo")]
-    public async Task RunAsync_CompletedPendingMove_CommittedAndUndoable()
+    [Fact(DisplayName = "Startup reconciles a pending Move that completed, but P03 no longer offers it for Undo")]
+    public async Task RunAsync_CompletedPendingMove_CommittedButNotUndoable()
     {
         _fs.AddFile(@"C:\photos\sel\a.jpg", "12345", WriteTime);
         _journal.Append(Pending("m1", FileOperationType.Move, @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", 5, Start.AddMinutes(-5)));
 
-        var failed = await JournalStartupRecovery.RunAsync(_journal, _undo, _clock, ImmediateUiScheduler.Instance);
+        var failed = await JournalStartupRecovery.RunAsync(_journal, _clock);
 
         Assert.Empty(failed);
         Assert.Empty(_journal.ReadPendingOperations());
         Assert.Equal("m1", Assert.Single(_journal.ReadCommittedMoves()).Id);
+        // P03 (2026-09-27): Undo is limited to the current session; RunAsync does not touch UndoService at all,
+        // so a freshly constructed one has nothing to undo even though the journal now has a Committed Move.
+        Assert.False(_undo.CanUndoMove);
+    }
+
+    [Fact(DisplayName = "P03: a journal full of committed Moves from a previous run does not seed the Undo stack, but in-session Moves are still undoable")]
+    public async Task RunAsync_JournalHasCommittedMoves_UndoStackEmptyUntilSessionRegistersAMove()
+    {
+        _fs.AddFile(@"C:\photos\sel\old.jpg", "12345", WriteTime);
+        // Simulates a previous session/run: already Committed before this process's startup began.
+        _journal.Append(new JournalEntry("old", FileOperationType.Move, JournalState.Committed,
+            @"C:\photos\old.jpg", @"C:\photos\sel\old.jpg", 5, WriteTime, Start.AddDays(-1)));
+
+        var failed = await JournalStartupRecovery.RunAsync(_journal, _clock);
+
+        Assert.Empty(failed);
+        // Mutation-check: re-adding a call that seeds `_undo` from journal history here would make this fail.
+        Assert.False(_undo.CanUndoMove);
+        Assert.Equal(0, _undo.MoveHistoryCount);
+
+        // In-session undo still works: a Move registered after startup is undoable regardless of journal history.
+        _fs.AddFile(@"C:\photos\sel\new.jpg", "abc", WriteTime);
+        _undo.Register(new FileActionResult(true, FileOperationType.Move, @"C:\photos\new.jpg", @"C:\photos\sel\new.jpg", 3, WriteTime, null));
+
         Assert.True(_undo.CanUndoMove);
-        Assert.Equal((@"C:\photos\a.jpg", @"C:\photos\sel\a.jpg"), _undo.MoveHistory.Peek());
+        Assert.Equal((@"C:\photos\new.jpg", @"C:\photos\sel\new.jpg"), _undo.MoveHistory.Peek());
     }
 
     [Fact(DisplayName = "Startup returns the interrupted operations it had to mark Failed")]
@@ -58,7 +83,7 @@ public sealed class JournalStartupRecoveryTests
         _fs.AddFile(@"C:\photos\b.jpg", "x", WriteTime); // recycle never happened
         _journal.Append(Pending("r1", FileOperationType.Recycle, @"C:\photos\b.jpg", null, 1, Start.AddMinutes(-1)));
 
-        var failed = await JournalStartupRecovery.RunAsync(_journal, _undo, _clock, ImmediateUiScheduler.Instance);
+        var failed = await JournalStartupRecovery.RunAsync(_journal, _clock);
 
         Assert.Equal("r1", Assert.Single(failed).Id);
         Assert.Equal("r1", Assert.Single(_journal.ReadFailedOperations()).Id);
@@ -70,7 +95,7 @@ public sealed class JournalStartupRecoveryTests
         _fs.AddFile(@"C:\photos\c.jpg", "x", WriteTime);
         _journal.Append(Pending("live", FileOperationType.Move, @"C:\photos\c.jpg", @"C:\photos\sel\c.jpg", 1, Start));
 
-        var failed = await JournalStartupRecovery.RunAsync(_journal, _undo, _clock, ImmediateUiScheduler.Instance);
+        var failed = await JournalStartupRecovery.RunAsync(_journal, _clock);
 
         Assert.Empty(failed);
         Assert.Equal("live", Assert.Single(_journal.ReadPendingOperations()).Id);
@@ -84,30 +109,12 @@ public sealed class JournalStartupRecoveryTests
         // Bounded so a synchronous implementation fails the assertion below instead of hanging the run.
         _fs.OpenReadHook = _ => { release.Wait(TimeSpan.FromSeconds(10)); return null; };
 
-        var run = JournalStartupRecovery.RunAsync(_journal, _undo, _clock, ImmediateUiScheduler.Instance);
+        var run = JournalStartupRecovery.RunAsync(_journal, _clock);
         var completedBeforeRelease = run.IsCompleted;
         release.Set();
         await run;
 
         Assert.False(completedBeforeRelease);
-    }
-
-    private sealed class ThrowingUiScheduler : IUiScheduler
-    {
-        public void Post(Action action) => throw new InvalidOperationException("dispatcher gone");
-        public Task InvokeAsync(Action action) => throw new InvalidOperationException("dispatcher gone");
-        public ValueTask YieldAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-    }
-
-    [Fact(DisplayName = "A failing UI dispatch does not hide the entries reconcile marked Failed")]
-    public async Task RunAsync_SeedThrows_StillReturnsFailed()
-    {
-        _fs.AddFile(@"C:\photos.jpg", "x", WriteTime);
-        _journal.Append(Pending("r1", FileOperationType.Recycle, @"C:\photos.jpg", null, 1, Start.AddMinutes(-1)));
-
-        var failed = await JournalStartupRecovery.RunAsync(_journal, _undo, _clock, new ThrowingUiScheduler());
-
-        Assert.Equal("r1", Assert.Single(failed).Id);
     }
 
     [Fact(DisplayName = "Dismissing a Failed entry drops its error code as well as its text")]
@@ -134,36 +141,8 @@ public sealed class JournalStartupRecoveryTests
         _journal.Append(Pending("m1", FileOperationType.Move, @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", 5, Start.AddMinutes(-5)));
         _fs.OpenReadHook = _ => new IOException("locked");
 
-        var failed = await JournalStartupRecovery.RunAsync(_journal, _undo, _clock, ImmediateUiScheduler.Instance);
+        var failed = await JournalStartupRecovery.RunAsync(_journal, _clock);
 
         Assert.Empty(failed);
-    }
-
-    [Fact(DisplayName = "Journal history is seeded below Moves the user made before seeding finished")]
-    public void SeedHistory_KeepsSessionMovesOnTop()
-    {
-        _fs.AddFile(@"C:\photos\sel\old.jpg", "12345", WriteTime);
-        _journal.Append(new JournalEntry("old", FileOperationType.Move, JournalState.Committed,
-            @"C:\photos\old.jpg", @"C:\photos\sel\old.jpg", 5, WriteTime, Start.AddDays(-1)));
-        var history = _undo.ReadStartupHistory();
-        _undo.Register(new FileActionResult(true, FileOperationType.Move, @"C:\photos\new.jpg", @"C:\photos\sel\new.jpg", 3, WriteTime, null));
-
-        _undo.SeedHistory(history);
-
-        Assert.Equal(2, _undo.MoveHistoryCount);
-        Assert.Equal((@"C:\photos\new.jpg", @"C:\photos\sel\new.jpg"), _undo.MoveHistory.Peek());
-    }
-
-    [Fact(DisplayName = "A Move registered during startup is not added twice from the journal")]
-    public void SeedHistory_SkipsMoveAlreadyRegisteredInSession()
-    {
-        _fs.AddFile(@"C:\photos\sel\a.jpg", "12345", WriteTime);
-        _journal.Append(new JournalEntry("a", FileOperationType.Move, JournalState.Committed,
-            @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", 5, WriteTime, Start));
-        _undo.Register(new FileActionResult(true, FileOperationType.Move, @"C:\photos\a.jpg", @"C:\photos\sel\a.jpg", 5, WriteTime, null));
-
-        _undo.SeedHistory(_undo.ReadStartupHistory());
-
-        Assert.Equal(1, _undo.MoveHistoryCount);
     }
 }

@@ -343,10 +343,11 @@ public partial class App : System.Windows.Application, IDisposable
     }
 
     /// <summary>
-    /// INV-6 / ADR 0003 (review r7): reconcile pending journal operations and load the Undo history. Runs after the
-    /// instance lock and after the window is shown; the journal work itself is on the thread pool
-    /// (<see cref="JournalStartupRecovery"/>), so the first image is not delayed. Operations it had to mark Failed are
-    /// reported once, with an offer to open the Recovery window.
+    /// INV-6 / ADR 0003 (review r7): reconcile pending journal operations. Runs after the instance lock and after the
+    /// window is shown; the journal work itself is on the thread pool (<see cref="JournalStartupRecovery"/>), so the
+    /// first image is not delayed. Operations it had to mark Failed are reported once, with an offer to open the
+    /// Recovery window. Decision P03 (2026-09-27): this no longer seeds the Undo stack from journal history - Undo
+    /// is limited to the current session.
     /// </summary>
     private async Task RecoverJournalAsync(MainWindow window)
     {
@@ -357,9 +358,7 @@ public partial class App : System.Windows.Application, IDisposable
             var services = _services!;
             var failed = await JournalStartupRecovery.RunAsync(
                 services.GetRequiredService<OperationJournal>(),
-                services.GetRequiredService<UndoService>(),
                 services.GetRequiredService<IClock>(),
-                services.GetRequiredService<IUiScheduler>(),
                 services.GetRequiredService<ILog>());
             if (failed.Count == 0) return;
             var dialogs = services.GetRequiredService<IDialogService>();
