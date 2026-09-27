@@ -72,6 +72,20 @@ public sealed class ImageCrossfadeIntegrationTests
 
             var outgoingBitmap = window.MainImage.Source;
             Assert.NotNull(outgoingBitmap);
+
+            // CI-CROSSFADE-ANIMATION-FLAKE (see docs/refactoring/decisions/): a point-in-time poll for
+            // "Opacity < 1.0" (StaTestHost.WaitForAsync: 10ms Task.Delay + a Background-priority dispatch)
+            // can permanently miss the whole animation on a loaded GitHub Actions windows-latest runner --
+            // the fade genuinely starts and fully completes (Opacity reverted to its pre-fade base value of
+            // 1.0 by OnImageFadeCompleted once the clock is removed) inside a single gap of that
+            // Background-priority poll, however long AppSettings.ImageTransitionMs is; the CI evidence for
+            // this file shows the compositor itself ticking fine (CompositionTarget.Rendering ~67 Hz,
+            // RenderCapability.Tier=0x00020000). Like the other two crossfade tests' VisibilityWatch below,
+            // a value-changed watcher catches ANY transient dip below 1.0, however briefly, so it cannot
+            // miss a fade that genuinely ran -- it is driven by the same per-frame property-changed
+            // notification that updates the visual, not by this test's own poll cadence.
+            using var opacityWatch = WatchForOpacityDrop(window.OutgoingImage);
+
             // Fire-and-forget, then poll with a bound: never await the navigation task directly -- if it were
             // ever to hang (a real bug, or extreme contention from other processes on a shared machine), an
             // unbounded await would block this test (and the whole run) forever instead of failing cleanly.
@@ -80,8 +94,8 @@ public sealed class ImageCrossfadeIntegrationTests
 
             Assert.Equal(Visibility.Visible, window.OutgoingImage.Visibility);
             Assert.Same(outgoingBitmap, window.OutgoingImage.Source); // froze the OUTGOING frame, not the new one
-            Assert.True(await StaTestHost.WaitForAsync(() => window.OutgoingImage.Opacity < 1.0, FadeTimeout), "The fade animation never started.");
             Assert.True(await StaTestHost.WaitForAsync(() => window.OutgoingImage.Visibility == Visibility.Collapsed, FadeTimeout), "The fade never completed (OnImageFadeCompleted).");
+            Assert.True(opacityWatch.EverDropped, "The fade animation never started.");
             Assert.Null(window.OutgoingImage.Source); // released once the fade completes
         });
     }
@@ -124,6 +138,32 @@ public sealed class ImageCrossfadeIntegrationTests
     /// briefly -- a race-proof alternative to "wait a while, then check the final value" for a fade fast
     /// enough to start and fully complete (reverting Visibility to Collapsed) inside the drain window.</summary>
     private static VisibilityWatch WatchForTransientVisible(Image image) => new(image);
+
+    /// <summary>Watches <paramref name="image"/>'s Opacity for any transient dip below 1.0, however briefly --
+    /// see CI-CROSSFADE-ANIMATION-FLAKE at the call site for why a point-in-time poll for this cannot be
+    /// trusted on a loaded CI runner.</summary>
+    private static OpacityWatch WatchForOpacityDrop(Image image) => new(image);
+
+    private sealed class OpacityWatch : IDisposable
+    {
+        private static readonly DependencyPropertyDescriptor Descriptor =
+            DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty, typeof(Image));
+        private readonly Image _image;
+        private readonly EventHandler _handler;
+        private bool _everDropped;
+
+        public OpacityWatch(Image image)
+        {
+            _image = image;
+            _everDropped = image.Opacity < 1.0;
+            _handler = (_, _) => { if (_image.Opacity < 1.0) _everDropped = true; };
+            Descriptor.AddValueChanged(_image, _handler);
+        }
+
+        public bool EverDropped => _everDropped;
+
+        public void Dispose() => Descriptor.RemoveValueChanged(_image, _handler);
+    }
 
     private sealed class VisibilityWatch : IDisposable
     {
