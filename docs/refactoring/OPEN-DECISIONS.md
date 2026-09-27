@@ -70,4 +70,5 @@ added without frontmatter or without re-running the generator.
 | FLAKY-FolderLoad | CI flake in the folder-switch race test was a fixture bug (session sweep listing took the scan-block hook), not a production race; fake fixed (#209). [Detail](decisions/FLAKY-FolderLoad.md) |
 | Q-R39 | New `ShowZoomMenuItems` setting hides the context menu's zoom cluster (Fit/Zoom to N%/Zoom submenu) as one unit; default off, unlike `ShowFolderMenuItems` (user request). [Detail](decisions/Q-R39.md) |
 | CI-CROSSFADE-ANIMATION-FLAKE | Confirmed via real CI diagnostics the compositor ticks fine on `windows-latest`; the fixed-poll assertion could miss a fast 40ms fade under load -- replaced it with a value-changed watcher (no source change). [Detail](decisions/CI-CROSSFADE-ANIMATION-FLAKE.md) |
+| TEST-SUITE-REVIEW-2026-09-27 | External test-suite review's 9 findings independently re-verified: 6 confirmed and fixed (test-only, no `src/` changes), 2 rejected as false positives/already-sanctioned, 1 left as a documented coverage gap. [Detail](decisions/TEST-SUITE-REVIEW-2026-09-27.md) |
 <!-- END GENERATED DECIDED TABLE -->
