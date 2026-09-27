@@ -75,6 +75,8 @@ public sealed class SettingsWindowRoundTripTests
             w.ExifFieldLensCheck.IsChecked = false; w.ExifFieldIsoCheck.IsChecked = false;
             w.ExifFieldFocalLengthCheck.IsChecked = false; w.ExifFieldApertureCheck.IsChecked = false;
             w.ExifFieldShutterSpeedCheck.IsChecked = false;
+            // Off by default (ExifInfoFields.Default), so it must be flipped on to prove Save/Load carry it.
+            w.ExifFieldModifiedDateCheck.IsChecked = true;
         },
         [nameof(AppSettings.PreloadForwardCount)] = w => w.PreloadForwardBox.Text = "64", // 32 -> 64
         [nameof(AppSettings.PreloadBackwardCount)] = w => w.PreloadBackwardBox.Text = "16", // 8 -> 16
@@ -126,7 +128,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = true,
         [nameof(AppSettings.ShowExifInfo)] = true,
         [nameof(AppSettings.ExifInfoFields)] = ExifInfoFields.All & ~(ExifInfoFields.DateTaken | ExifInfoFields.Camera | ExifInfoFields.Lens |
-            ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed | ExifInfoFields.ModifiedDate),
+            ExifInfoFields.Iso | ExifInfoFields.FocalLength | ExifInfoFields.Aperture | ExifInfoFields.ShutterSpeed),
         [nameof(AppSettings.PreloadForwardCount)] = 64,
         [nameof(AppSettings.PreloadBackwardCount)] = 16,
         // feat/ui-dark-chrome-toolbar

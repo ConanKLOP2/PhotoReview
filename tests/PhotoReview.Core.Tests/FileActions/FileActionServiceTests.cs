@@ -4,6 +4,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
+using PhotoReview.TestSupport;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;
@@ -424,29 +425,35 @@ public sealed class FileActionServiceTests
         _fs.WriteAllTextAtomic(source1, "content1");
         _fs.WriteAllTextAtomic(source2, "content2");
 
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _fs.MoveHook = (src, dst) =>
         {
-            tcs.Task.Wait();
+            // Bounded: a failed assertion below must not leave a pool thread parked for the rest of the run.
+            tcs.Task.Wait(TimeSpan.FromSeconds(30));
             return null;
         };
 
-        var task1 = Task.Run(() => _service.ExecuteAsync(new FileActionRequest(source1, FileOperationType.Move, @"C:\photos\dest")));
-
-        // Wait until task1 has acquired the gate
-        while (!_service.IsBusy)
+        Task<FileActionResult>? task1 = null;
+        try
         {
-            await Task.Delay(10);
+            task1 = Task.Run(() => _service.ExecuteAsync(new FileActionRequest(source1, FileOperationType.Move, @"C:\photos\dest")));
+
+            // Wait until task1 has acquired the gate
+            await Wait.UntilAsync(() => _service.IsBusy || task1.IsCompleted, "first action holds the gate");
+            Assert.True(_service.IsBusy, "First action ended before it held the gate.");
+
+            var result2 = await _service.ExecuteAsync(new FileActionRequest(source2, FileOperationType.Move, @"C:\photos\dest"));
+
+            Assert.True(result2.Rejected);
+            Assert.False(result2.Succeeded);
+            Assert.Equal("Thao tác trước đó vẫn đang chạy.", result2.Error);
+        }
+        finally
+        {
+            tcs.TrySetResult(true);
         }
 
-        var result2 = await _service.ExecuteAsync(new FileActionRequest(source2, FileOperationType.Move, @"C:\photos\dest"));
-
-        Assert.True(result2.Rejected);
-        Assert.False(result2.Succeeded);
-        Assert.Equal("Thao tác trước đó vẫn đang chạy.", result2.Error);
-
-        tcs.SetResult(true);
-        var result1 = await task1;
+        var result1 = await task1.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.True(result1.Succeeded);
         Assert.False(_service.IsBusy);
     }

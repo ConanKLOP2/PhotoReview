@@ -78,7 +78,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                     await StaTestHost.WaitForAsync(() => Volatile.Read(ref moveCompleted) == 1 && FileActionInProgress(window) == 0, SettleTimeout),
                     "The move action did not complete.");
 
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 // Verification of normal (non-switched) Move outcome:
                 var moveHistory = GetMoveHistory(window);
@@ -98,7 +98,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => FileActionInProgress(window) == 0, SettleTimeout),
                     "The undo action never released its in-flight guard.");
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 // Undo restored the file to the source and re-added it to the catalog:
                 Assert.True(File.Exists(first), "The undone file was not restored to the source folder.");
@@ -198,7 +198,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                     await StaTestHost.WaitForAsync(() => Volatile.Read(ref moveCompleted) == 1 && FileActionInProgress(window) == 0, SettleTimeout),
                     "The parked move action never completed or released the in-flight guard.");
 
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 // 5. INV-5 Invariant Assertions:
                 // (a) Catalog of Folder B is untouched:
@@ -230,7 +230,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => window.Files.Any(p => string.Equals(p, fileA1, StringComparison.OrdinalIgnoreCase)), PresentTimeout),
                     $"Undo did not reopen folder A at the restored file. StatusText={window.StatusText.Text}");
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 Assert.True(File.Exists(fileA1), "Undo did not restore a1.png to folder A.");
                 Assert.False(File.Exists(movedTarget), "Undo left a1.png in the destination.");
@@ -301,7 +301,7 @@ public sealed class MainWindowBehaviorFolderSwitchTests
                 Assert.True(
                     await StaTestHost.WaitForAsync(() => FileActionInProgress(window) == 0, SettleTimeout),
                     "The failed move never released the in-flight guard.");
-                await DrainAsync(DrainWindow);
+                await StaTestHost.DrainAsync(DrainWindow);
 
                 // Without the stale-folder guard the failure branch would Restore(a1) into folder B's catalog.
                 Assert.Equal(
@@ -382,18 +382,6 @@ public sealed class MainWindowBehaviorFolderSwitchTests
         var field = typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
             ?? throw new InvalidOperationException($"MainWindow.{name} no longer exists.");
         return (T)field.GetValue(window)!;
-    }
-
-    private static async Task DrainAsync(TimeSpan duration)
-    {
-        // TC09: Replace Task.Delay with multiple dispatcher pumps.
-        // Each pump ensures queued work from the previous invocation is processed.
-        // Pump multiple times to ensure deferred work executes.
-        var estimatedPumps = Math.Max(40, (int)(duration.TotalMilliseconds / 10));
-        for (int i = 0; i < estimatedPumps; i++)
-        {
-            await StaTestHost.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-        }
     }
 
     private static async Task CloseAsync(MainWindow? window)
