@@ -101,6 +101,130 @@ public sealed class PointerInputControllerTests
         Assert.Empty(_surface.Scrolls);
     }
 
+    // ---- PR-B: Fit width / Fit height / keep zoom across images ----
+
+    [Fact]
+    public async Task FitWidthAsync_NoMouse_UsesTheConfiguredAnchor_DefaultCentre()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.FitWidthAsync(mouseOverViewport: null);
+
+        Assert.False(_viewer.IsFit);
+        // SetZoom (inside ZoomToFitWidth) resets MaxImageWidth to Infinity, so FitWidthZoom reads back 0 afterwards --
+        // assert the concrete expected zoom (800 DIP viewport / 2000 px source) instead of re-reading the property.
+        Assert.Equal(0.4, _viewer.Zoom, 6);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_NoMouse_TopThirdAnchor_ScrollsLessFarThanCentre()
+    {
+        // A scrollable range is needed for the two anchors to land on different offsets (with none, both clamp to 0).
+        _surface.ExtentHeight = 1200;
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _settings.FitWidthAnchor = FitWidthAnchor.Centre;
+
+        await _controller.FitWidthAsync(null);
+        var centreVertical = _surface.Scrolls[^1].V;
+
+        _surface.Scrolls.Clear();
+        _surface.VerticalOffset = 0; // the fake keeps its offset across calls; reset so both anchors start from the same place
+        _viewer.SetZoom(1.0); // undo the previous FitWidth so the second call starts from the same place
+        _settings.FitWidthAnchor = FitWidthAnchor.TopThird;
+
+        await _controller.FitWidthAsync(null);
+        var topThirdVertical = _surface.Scrolls[^1].V;
+
+        // Top-third keeps a point further UP the image at the viewport centre, so it needs LESS downward scroll.
+        Assert.True(topThirdVertical < centreVertical);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_MouseOverViewport_AnchorsAtTheMousePointInstead()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.FitWidthAsync(new Point(400, 100)); // near the top of the (pre-zoom Fit) viewport
+
+        Assert.False(_viewer.IsFit);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitHeightAsync_AlwaysAnchorsAtImageCentre()
+    {
+        _viewer.SetSourceSize(4000, 2000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.FitHeightAsync();
+
+        Assert.False(_viewer.IsFit);
+        // 600 DIP viewport height / 2000 px source height (see the FitWidthZoom comment above for why this can't
+        // re-read FitHeightZoom after the fact).
+        Assert.Equal(0.3, _viewer.Zoom, 6);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_WithoutImages_DoesNothing()
+    {
+        _hasImages = false;
+
+        await _controller.FitWidthAsync(null);
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_Fit_ResetsFitWithNoScrollPlacementPass()
+    {
+        _viewer.SetZoom(3.0);
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.Fit, clickZoomPercent: 100);
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls); // Fit's own convergence pass is FitViewController's job, not this one's
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_FitWidth_AppliesZoomThenPlacesScrollAtTheConfiguredAnchor()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.FitWidth, clickZoomPercent: 100);
+
+        Assert.Equal(0.4, _viewer.Zoom, 6); // 800 DIP viewport width / 2000 px source width
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_ClickZoomLevel_ZoomsButDoesNotScroll()
+    {
+        await _controller.ApplyInitialViewAsync(InitialViewMode.ClickZoomLevel, clickZoomPercent: 150);
+
+        Assert.Equal(1.5, _viewer.Zoom, 6);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_KeepZoomAcrossImages_IsANoOp()
+    {
+        _viewer.SetZoom(3.0);
+        _settings.KeepZoomAcrossImages = true;
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.Fit, clickZoomPercent: 100);
+
+        Assert.Equal(3.0, _viewer.Zoom);
+        Assert.False(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
     // ---- pan ----
 
     [Fact]

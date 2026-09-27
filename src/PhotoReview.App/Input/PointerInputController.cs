@@ -108,9 +108,18 @@ internal sealed class PointerInputController
     /// Applies a zoom change and then scrolls so the image point that was under <paramref name="mouse"/>
     /// (ImageScroll coordinates) stays under it. Shared by the wheel and click-to-zoom.
     /// </summary>
-    private async Task ZoomAtPointAsync(Point mouse, Action applyZoom)
+    private Task ZoomAtPointAsync(Point mouse, Action applyZoom) => ZoomToImagePointAsync(CaptureZoomAnchor(mouse), mouse, applyZoom);
+
+    /// <summary>
+    /// General form of <see cref="ZoomAtPointAsync"/> (PR-B, Fit width/Fit height): applies <paramref name="applyZoom"/>
+    /// and then scrolls so the image-fraction point <paramref name="anchor"/> (see
+    /// <see cref="MainWindowHelpers.ZoomImagePoint"/>) ends up under <paramref name="viewportPoint"/> (ImageScroll
+    /// coordinates) instead of always the original cursor position -- e.g. the viewport centre for Fit width/height.
+    /// A navigation that starts while the render pass is awaited (<see cref="ViewportOperationVersion"/>) drops the
+    /// scroll, same guard as the original method.
+    /// </summary>
+    private async Task ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
     {
-        var anchor = CaptureZoomAnchor(mouse);
         var version = _viewportVersion.Next();
         applyZoom();
         await _surface.YieldToRenderAsync();
@@ -124,8 +133,8 @@ internal sealed class PointerInputController
             imageOrigin.Y,
             _surface.ImageActualWidth,
             _surface.ImageActualHeight,
-            mouse.X,
-            mouse.Y,
+            viewportPoint.X,
+            viewportPoint.Y,
             _surface.HorizontalOffset,
             _surface.VerticalOffset,
             _surface.ExtentWidth,
@@ -133,6 +142,64 @@ internal sealed class PointerInputController
             _surface.ViewportWidth,
             _surface.ViewportHeight);
         _surface.ScrollTo(offsets.Horizontal, offsets.Vertical);
+    }
+
+    private Point ViewportCentre => new(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+
+    /// <summary>
+    /// FitWidth shortcut (PR-B): fills the viewport width. When <paramref name="mouseOverViewport"/> is given (the
+    /// mouse is over the image viewport -- the caller decides that from real hit-testing), the image point under the
+    /// mouse becomes the vertical anchor, shown at the viewport centre; otherwise the anchor follows
+    /// <see cref="AppSettings.FitWidthAnchor"/> (top third by default). The initial view (image change) always uses
+    /// the setting -- see <see cref="ApplyInitialViewAsync"/>.
+    /// </summary>
+    public Task FitWidthAsync(Point? mouseOverViewport)
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        var anchor = mouseOverViewport is { } mouse
+            ? new MainWindowHelpers.ZoomImagePoint(0.5, CaptureZoomAnchor(mouse).Y)
+            : MainWindowHelpers.CalculateFitWidthAnchorPoint(_settings().FitWidthAnchor);
+        return ZoomToImagePointAsync(anchor, ViewportCentre, () =>
+        {
+            _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
+            _viewer.ZoomToFitWidth();
+        });
+    }
+
+    /// <summary>FitHeight shortcut (PR-B): fills the viewport height, always centred (image point (0.5, 0.5)).</summary>
+    public Task FitHeightAsync()
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        return ZoomToImagePointAsync(new MainWindowHelpers.ZoomImagePoint(0.5, 0.5), ViewportCentre, () =>
+        {
+            _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
+            _viewer.ZoomToFitHeight();
+        });
+    }
+
+    /// <summary>
+    /// Applies the configured initial view on an image change (PR-B): the callback wired into
+    /// <c>WpfPresentationSink.ApplyInitialViewMode</c> through <c>ImagePresenter.Sink</c>. <see cref="ViewerState.ApplyInitialViewMode"/>
+    /// does the zoom/mode change (and is a no-op when <see cref="AppSettings.KeepZoomAcrossImages"/> is on); Fit
+    /// width/Fit height then get their scroll placement here (top-third/centre per <see cref="AppSettings.FitWidthAnchor"/>,
+    /// or always centre for Fit height) because the pointer controller owns the surface.
+    /// </summary>
+    public Task ApplyInitialViewAsync(InitialViewMode mode, int clickZoomPercent)
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        var settings = _settings();
+        var applied = _viewer.ApplyInitialViewMode(mode, _surface.ViewportWidth, _surface.ViewportHeight, clickZoomPercent, settings.KeepZoomAcrossImages);
+        if (!applied || mode is not (InitialViewMode.FitWidth or InitialViewMode.FitHeight)) return Task.CompletedTask;
+
+        var anchor = mode == InitialViewMode.FitWidth
+            ? MainWindowHelpers.CalculateFitWidthAnchorPoint(settings.FitWidthAnchor)
+            : new MainWindowHelpers.ZoomImagePoint(0.5, 0.5);
+        // The zoom was already applied by ViewerState above; this pass only places the scroll offsets.
+        return ZoomToImagePointAsync(anchor, ViewportCentre, static () => { });
     }
 
     /// <summary>The image point under <paramref name="mouse"/> as a fraction of the displayed image.</summary>

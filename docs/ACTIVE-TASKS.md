@@ -14,6 +14,7 @@ This file is the only place for open work (`task_on_progress.md` links here, do 
 | **Q-R29** (NAS follow-ups) | Open: (1) `ThumbnailCache.BuildKey` stats the file on the UI thread per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap, so on a slow NAS link 8 workers can delay the next viewer decode. The 40 s first-image delay itself was fixed by AR16 (test `FolderLoadCoordinatorTests.SlowStorage`). | Awaiting user decision (see OPEN-DECISIONS). |
 | **Flaky test** | `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder). | Fix if it recurs in CI. |
 | **Caution** | `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation. | - |
+| **PR-B feat/fit-width-height-keep-zoom** | Open PR, awaiting review; GUI checks: W/H, Initial zoom presets, K keeps zoom. | User confirms or reports. |
 
 ## Closed on purpose (do not reopen without a new measurement)
 

@@ -29,6 +29,9 @@ public sealed class ShortcutRouter
     private Key? _moveToFolderKey;
     private Key? _copyToFolderKey;
     private Key? _clickZoomKey;
+    private Key? _fitWidthKey;
+    private Key? _fitHeightKey;
+    private Key? _toggleKeepZoomKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -65,6 +68,9 @@ public sealed class ShortcutRouter
         _moveToFolderKey = ParseKey(settings.Shortcuts.MoveToFolder); // empty = disabled (null)
         _copyToFolderKey = ParseKey(settings.Shortcuts.CopyToFolder);
         _clickZoomKey = ParseKey(settings.Shortcuts.ClickZoom);
+        _fitWidthKey = ParseKey(settings.Shortcuts.FitWidth);
+        _fitHeightKey = ParseKey(settings.Shortcuts.FitHeight);
+        _toggleKeepZoomKey = ParseKey(settings.Shortcuts.ToggleKeepZoom);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -141,6 +147,12 @@ public sealed class ShortcutRouter
             return ReviewCommand.ToggleInfoOverlay;
         }
 
+        // 5c. PR-B: Bật/tắt giữ nguyên zoom khi đổi ảnh -- không cần ảnh (chỉ đổi và lưu cài đặt), cùng nhóm với 5b.
+        if (_toggleKeepZoomKey.HasValue && key == _toggleKeepZoomKey.Value)
+        {
+            return ReviewCommand.ToggleKeepZoom;
+        }
+
         // 6. Nhóm lệnh sau if (_index < 0) return: chỉ chạy khi có ảnh hợp lệ
         if (!hasImage)
         {
@@ -203,6 +215,16 @@ public sealed class ShortcutRouter
         if (_clickZoomKey.HasValue && key == _clickZoomKey.Value)
         {
             return ReviewCommand.ClickZoom;
+        }
+
+        // 12c. PR-B: Fit width / Fit height, same group as the other zoom keys.
+        if (_fitWidthKey.HasValue && key == _fitWidthKey.Value)
+        {
+            return ReviewCommand.FitWidth;
+        }
+        if (_fitHeightKey.HasValue && key == _fitHeightKey.Value)
+        {
+            return ReviewCommand.FitHeight;
         }
 
         // 13. Next / Previous

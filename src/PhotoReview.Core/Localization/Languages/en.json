@@ -725,5 +725,22 @@
   "settings.zoomShortcuts.none": "not set",
   "main.menu.zoomToLevel": "Zoom to {percent}%",
   "main.menu.zoomToLevel.automationName": "Zoom to the configured level, {percent} percent",
-  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone."
+  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone.",
+  "enum.initialViewMode.fitWidth": "Fit width",
+  "enum.initialViewMode.fitHeight": "Fit height",
+  "enum.initialViewMode.clickZoomLevel": "Click zoom level",
+  "enum.fitWidthAnchor.centre": "Centre",
+  "enum.fitWidthAnchor.topThird": "Top third",
+  "settings.fitWidthAnchor.label": "Fit width shows",
+  "settings.fitWidthAnchor.automationName": "Fit width vertical anchor",
+  "settings.fitWidthAnchor.hint": "Which part of the image stays at the centre of the view after Fit width: Centre (default) or Top third (portraits usually have the face there).",
+  "settings.keepZoomAcrossImages.label": "Keep zoom level when changing photo",
+  "settings.keepZoomAcrossImages.automationName": "Keep zoom level across images",
+  "settings.keepZoomAcrossImages.hint": "On: the view (Fit or a zoom level) stays the same when you move to the next photo, instead of resetting to the initial view. Default off.",
+  "settings.shortcut.fitWidth": "Fit width",
+  "settings.shortcut.fitWidth.clearAutomationName": "Clear the Fit width shortcut",
+  "settings.shortcut.fitHeight": "Fit height",
+  "settings.shortcut.fitHeight.clearAutomationName": "Clear the Fit height shortcut",
+  "settings.shortcut.toggleKeepZoom": "Toggle keep zoom",
+  "settings.shortcut.toggleKeepZoom.clearAutomationName": "Clear the Toggle keep zoom shortcut"
 }
