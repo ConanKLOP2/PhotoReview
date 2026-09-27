@@ -197,8 +197,15 @@ public class CompositionRootTests
         {
             try
             {
+                // Check-then-create is not atomic: DarkScrollBarRenderingTests (a parallel collection) creates the
+                // process-wide Application the same way, and losing that race throws "Cannot create more than one
+                // Application instance in the same AppDomain" (see docs/refactoring/decisions/FLAKY-FolderLoad.md).
+                // Losing is harmless: the other test's Application is all this test needs.
                 if (System.Windows.Application.Current is null)
-                    _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+                {
+                    try { _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown }; }
+                    catch (InvalidOperationException) when (System.Windows.Application.Current is not null) { }
+                }
                 try
                 {
                     System.Windows.Application.ResourceAssembly = typeof(MainWindow).Assembly;
@@ -459,8 +466,15 @@ public class CompositionRootTests
         {
             try
             {
+                // Check-then-create is not atomic: DarkScrollBarRenderingTests (a parallel collection) creates the
+                // process-wide Application the same way, and losing that race throws "Cannot create more than one
+                // Application instance in the same AppDomain" (see docs/refactoring/decisions/FLAKY-FolderLoad.md).
+                // Losing is harmless: the other test's Application is all this test needs.
                 if (System.Windows.Application.Current is null)
-                    _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+                {
+                    try { _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown }; }
+                    catch (InvalidOperationException) when (System.Windows.Application.Current is not null) { }
+                }
                 try
                 {
                     System.Windows.Application.ResourceAssembly = typeof(MainWindow).Assembly;
@@ -511,8 +525,15 @@ public class CompositionRootTests
         {
             try
             {
+                // Check-then-create is not atomic: DarkScrollBarRenderingTests (a parallel collection) creates the
+                // process-wide Application the same way, and losing that race throws "Cannot create more than one
+                // Application instance in the same AppDomain" (see docs/refactoring/decisions/FLAKY-FolderLoad.md).
+                // Losing is harmless: the other test's Application is all this test needs.
                 if (System.Windows.Application.Current is null)
-                    _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+                {
+                    try { _ = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown }; }
+                    catch (InvalidOperationException) when (System.Windows.Application.Current is not null) { }
+                }
                 try
                 {
                     System.Windows.Application.ResourceAssembly = typeof(MainWindow).Assembly;

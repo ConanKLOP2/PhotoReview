@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
@@ -11,6 +12,23 @@ namespace PhotoReview.App.Tests.Coordinators;
 /// <summary>Folder switching while loading, stale scan/Explorer results and misuse of a coordinator that was closed.</summary>
 public sealed partial class FolderLoadCoordinatorTests
 {
+    [Fact(DisplayName = "Fixture guard: the session store's background temp-file sweep listing never fires the folder-scan block hook")]
+    public void FakeFileSystem_SessionSweepListing_DoesNotFireTheScanHook()
+    {
+        // FLAKY-FolderLoad: SessionStore's constructor sweeps *.tmp on a pool thread through EnumerateFiles. When that
+        // sweep started late it hit the race tests' "block the first listing" hook instead of the folder scan, so the
+        // scan ran unblocked and the race under test never happened. This is the listing the sweep performs.
+        var hookCalls = 0;
+        _fs.OnEnumerateFiles = () => Interlocked.Increment(ref hookCalls);
+
+        _ = _fs.EnumerateFiles(_paths.SessionsDir, "*.tmp").ToList();
+        Assert.Equal(0, Volatile.Read(ref hookCalls));
+
+        _fs.CreateDirectory(@"C:\photos");
+        _ = _fs.EnumerateFilesWithStat(@"C:\photos", _ => true, _ => { }).ToList();
+        Assert.Equal(1, Volatile.Read(ref hookCalls)); // the folder scan's listing still fires it
+    }
+
     [Fact(DisplayName = "Switching folder while the first scan is still running: the slow first load never touches the catalog or the sink")]
     public async Task LoadAsync_SecondFolderWhileFirstScanBlocked_FirstLoadIsDroppedSilently()
     {
