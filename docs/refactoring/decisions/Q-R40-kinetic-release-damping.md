@@ -1,6 +1,6 @@
 ---
 id: Q-R40
-order: 24
+order: 27
 summary: |-
   Mouse-release kinetic glide velocity is scaled by a new `KineticScroller.PointerReleaseSpeedFactor` (0.65) to feel calmer, without touching the already-measured `KineticGlideSmoothing.Predict` frame-timing default or the keyboard-panning impulse path.
 ---

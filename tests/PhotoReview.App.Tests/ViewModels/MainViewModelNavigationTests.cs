@@ -287,6 +287,36 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         Assert.Contains(Path.GetFileName(folder), vm.FolderTitle, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "InstanceLabel prefixes both the empty-folder and folder-loaded title; unset leaves today's title byte-for-byte unchanged")]
+    public async Task InstanceLabel_PrefixesTitle_UnsetLeavesTitleUnchanged()
+    {
+        var folder = Path.Combine(_tempDir, "instance_label");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        var (vm, _, _) = CreateViewModel();
+
+        // Unset (default, the normal user launch): today's exact title, before and after a folder loads.
+        var emptyTitleBefore = vm.FolderTitle;
+        Assert.Equal(Tr.AppTitle, emptyTitleBefore);
+        await vm.OpenFolderAsync(folder);
+        var loadedTitleUnset = vm.FolderTitle;
+        Assert.DoesNotContain("[", loadedTitleUnset, StringComparison.Ordinal);
+
+        // No folder open: the label still applies to the plain Tr.AppTitle text.
+        var (vmEmpty, _, _) = CreateViewModel();
+        vmEmpty.InstanceLabel = "LABEL";
+        Assert.Equal($"[LABEL] {Tr.AppTitle}", vmEmpty.FolderTitle);
+
+        // Folder loaded: same prefix, same folder content as the unset case.
+        vm.InstanceLabel = "LABEL";
+        Assert.StartsWith("[LABEL] ", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.Equal($"[LABEL] {loadedTitleUnset}", vm.FolderTitle);
+
+        // Clearing it restores exactly today's behaviour again.
+        vm.InstanceLabel = null;
+        Assert.Equal(loadedTitleUnset, vm.FolderTitle);
+    }
+
     [Fact]
     public async Task OpenPathAsync_InvalidInput_SetsWarningStatus()
     {
