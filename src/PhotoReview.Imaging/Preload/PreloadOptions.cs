@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Options configuring background preload behavior and memory safety limits.
-/// Defaults match PerformanceOptions.
+/// Fallback defaults only: production passes the user's PerformanceOptions values explicitly (e.g. PerformanceOptions.PreloadMemoryLoadLimit is 0.90, not 0.80).
 /// </summary>
 public sealed record PreloadOptions(
     int WorkerCount = 8,
