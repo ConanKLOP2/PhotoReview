@@ -121,36 +121,74 @@ public partial class BenchmarkWindow : Window, IDisposable
         cts.Dispose();
     }
 
-    private async Task RunAsync(BenchmarkProfile[] profiles)
+    /// <summary>How many top-level entries <see cref="EnumerateAndStat"/> checks between cancellation polls: fine
+    /// enough that Cancel/Close lands promptly on a huge or slow/NAS folder, coarse enough that checking the token
+    /// is not itself a per-file cost.</summary>
+    private const int EnumerationCancellationCheckInterval = 256;
+
+    /// <summary>
+    /// Background-thread scan (R11): folder existence, the full top-level file listing filtered to supported image
+    /// types (in the same enumeration order as before), the image-count cap (see <see cref="ApplyImageLimit"/>) and
+    /// the stat pass over the capped subset for the total source-byte count. A large or slow/NAS folder can hold tens
+    /// of thousands of top-level entries, so this used to run synchronously on the dialog's dispatcher before its
+    /// first await; moving it here keeps the window (and Cancel) responsive while the scan runs.
+    /// <see cref="Directory.EnumerateFiles(string, string, System.IO.SearchOption)"/> has no cancellation overload,
+    /// so <paramref name="cancellationToken"/> is polled every <see cref="EnumerationCancellationCheckInterval"/>
+    /// entries instead -- Cancel/Close can interrupt a slow scan instead of only the profile run that used to
+    /// follow it. A test seam for the actual production logic.
+    /// </summary>
+    internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, CancellationToken cancellationToken = default)
     {
-        if (!Directory.Exists(FolderText.Text)) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
-        string[] files;
-        try
+        if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
+        var supported = new List<string>();
+        var seen = 0;
+        foreach (var path in Directory.EnumerateFiles(folder, "*.*", System.IO.SearchOption.TopDirectoryOnly))
         {
-            files = Directory.EnumerateFiles(FolderText.Text, "*.*", System.IO.SearchOption.TopDirectoryOnly).Where(ImageFileTypes.IsSupported).ToArray();
+            if (++seen % EnumerationCancellationCheckInterval == 0) cancellationToken.ThrowIfCancellationRequested();
+            if (ImageFileTypes.IsSupported(path)) supported.Add(path);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            StatusText.Text = Tr.BenchmarkStatusCannotReadFolder(ex.Message);
-            return;
-        }
-        if (files.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoImages; return; }
+        cancellationToken.ThrowIfCancellationRequested();
         // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,
         // same idea as the CLI's --benchmark-all Take(64) -- a large real folder no longer forces every run
         // (including "Quick check") to decode thousands of images just to compare configurations. 0 = all.
-        files = ApplyImageLimit(files, ImageLimit);
+        var files = ApplyImageLimit(supported, imageLimit);
         var totalSourceBytes = files.Sum(path => { try { return new FileInfo(path).Length; } catch { return 0L; } });
+        return (files, totalSourceBytes);
+    }
 
-        RunButton.IsEnabled = false; QuickCheckButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false; ImageLimitText.IsEnabled = false;
-        _rows.Clear();
-        RunProgress.Value = 0;
+    private async Task RunAsync(BenchmarkProfile[] profiles)
+    {
+        // UI-thread reads captured before the background hop; DirectoryNotFoundException (thrown by
+        // EnumerateAndStat when the folder is gone) is a subtype of IOException, so it must be caught
+        // ahead of the generic IOException/UnauthorizedAccessException clause below to keep its own message.
+        var folder = FolderText.Text;
+        var imageLimit = ImageLimit;
+        // Created before the scan (not after, as before this change) so Cancel/Close can interrupt a slow
+        // enumeration too, not only the profile run that used to follow it.
         _cts = new CancellationTokenSource();
         // Captured once: Dispose() (window closed mid-run) nulls _cts, and re-reading it per profile threw an NRE that
         // was reported as a bogus Fail row. A cancelled token instead ends the run through the normal cancel path.
         var runToken = _cts.Token;
+        RunButton.IsEnabled = false; QuickCheckButton.IsEnabled = false; CancelButton.IsEnabled = true; BrowseButton.IsEnabled = false; ProfilesList.IsEnabled = false; ImageLimitText.IsEnabled = false;
+        _rows.Clear();
+        RunProgress.Value = 0;
         var sessionReports = new List<BenchmarkReport>();
         try
         {
+            string[] files;
+            long totalSourceBytes;
+            try
+            {
+                (files, totalSourceBytes) = await Task.Run(() => EnumerateAndStat(folder, imageLimit, runToken), runToken);
+            }
+            catch (DirectoryNotFoundException) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                StatusText.Text = Tr.BenchmarkStatusCannotReadFolder(ex.Message);
+                return;
+            }
+            if (files.Length == 0) { StatusText.Text = Tr.BenchmarkStatusNoImages; return; }
+
             var profileIndex = 0;
             foreach (var profile in profiles)
             {

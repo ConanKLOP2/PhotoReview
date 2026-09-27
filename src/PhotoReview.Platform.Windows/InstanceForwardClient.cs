@@ -58,9 +58,15 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
                     if (read == 0) break;
                     length += read;
                 }
-                // An owner that accepted the request always answers OK or ERR; hanging up silently means it read nothing
-                // (read timeout, oversized input, shutting down), so fall back to opening here.
-                if (length == 0) return ForwardOutcome.NoInstance;
+                // R08 (full-code-review-2026-09-27): an owner that ACCEPTED the request (decoded it and invoked
+                // its handler) can still hang up before replying -- e.g. the owner process exits or the pipe
+                // breaks between the handler running and the reply write. That is indistinguishable here from a
+                // genuinely unaccepted request (nobody home), so once the write above succeeded (`written`),
+                // report Unknown rather than NoInstance: SecondInstanceHandoff.TryForwardAsync (Q-R12) already
+                // treats Unknown the same as Delivered ("very likely took over, this process can simply exit"),
+                // which is the safe default -- it risks occasionally not opening a path that truly had no owner,
+                // never a duplicate window for a path the owner already handled.
+                if (length == 0) return written ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
                 return Encoding.ASCII.GetString(reply, 0, length).StartsWith("OK", StringComparison.Ordinal)
                     ? ForwardOutcome.Delivered
                     : ForwardOutcome.Rejected;
@@ -72,7 +78,9 @@ public sealed class InstanceForwardClient : IInstanceForwardClient
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _log.Warn($"Forward client could not reach the running instance: {ex.GetType().Name}");
-                return ForwardOutcome.NoInstance;
+                // R08: same reasoning as the empty-reply case above -- a pipe error AFTER the request was
+                // written cannot be told apart from the owner having accepted and then dropped the connection.
+                return written ? ForwardOutcome.Unknown : ForwardOutcome.NoInstance;
             }
         }
     }
