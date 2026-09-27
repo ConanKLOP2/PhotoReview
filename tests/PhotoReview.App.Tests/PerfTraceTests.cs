@@ -199,7 +199,10 @@ public sealed class PerfTraceTests : IDisposable
     [Fact(DisplayName = "Source decode emits Decode and Verify under the caller's NavContext")]
     public async Task SourceDecodeEmitsDecodeAndVerifyWithNav()
     {
-        var image = _root.File("nav/decode.png", TestImages.PreviewPng);
+        // Must be wider than the service's 512px target box (see CreatePreviewService) so the
+        // decode is actually downscaled -- TestImages.PreviewPng is a 1x1 fixture that can never
+        // trigger DecodeBox.Fit's downscale path (Fit never upscales a smaller source).
+        var image = _root.File("nav/decode.png", TestImages.BuildRgbaPng(600, 400, (_, _) => 255));
         var diskCache = _root.Dir("nav-cache");
         var service = CreatePreviewService(diskCache);
         var pathId = PhotoReviewPerf.PathId(image);
@@ -229,7 +232,12 @@ public sealed class PerfTraceTests : IDisposable
     [Fact(DisplayName = "A RAM miss served from the preview disk cache emits DiskCacheRead")]
     public async Task DiskCacheHitEmitsDiskCacheRead()
     {
-        var image = _root.File("disk/disk.png", TestImages.OpaquePng);
+        // Must be wider than the service's 512px target box: DecodeAndCache only persists a
+        // preview to disk when it actually decoded downscaled (see the comment above
+        // PersistToDiskCache's call site in PreviewImageService) -- TestImages.OpaquePng is a
+        // 64x64 fixture that never exceeds the box, so it never gets persisted and the disk-cache
+        // hit below could never happen.
+        var image = _root.File("disk/disk.png", TestImages.BuildRgbaPng(600, 400, (_, _) => 255));
         var diskCache = _root.Dir("disk-cache");
         var service = CreatePreviewService(diskCache);
         var pathId = PhotoReviewPerf.PathId(image);
