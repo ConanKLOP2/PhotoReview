@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Media.Imaging;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Decoding;
@@ -10,14 +11,21 @@ namespace PhotoReview.Imaging.Decoding;
 /// </summary>
 public sealed class WpfBitmapImageDecoder : IImageDecoder
 {
+    private readonly ISourceReader _sourceReader;
+
+    /// <param name="sourceReader">
+    /// Q-R29 option C-2 seam: null (every existing call site) uses <see cref="PhysicalSourceReader"/>,
+    /// byte-for-byte the direct <see cref="FileStream"/> this decoder opened before the seam existed.
+    /// </param>
+    public WpfBitmapImageDecoder(ISourceReader? sourceReader = null) => _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
+
     public IDecodedImage Decode(DecodeRequest request)
-        => DecodeWithFallback(request);
+        => DecodeWithFallback(request, _sourceReader);
 
     public ImageInfo ReadInfo(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+        using var stream = _sourceReader.OpenSource(path, SourceReadPriority.Viewer, 1024 * 1024);
         // PixelWidth/Height and orientation only need the image header. DelayCreation prevents decoding pixel data.
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
         var frame = decoder.Frames[0];
@@ -25,16 +33,21 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
         return new ImageInfo(frame.PixelWidth, frame.PixelHeight, orientation);
     }
 
-    public static IDecodedImage DecodeWithFallback(DecodeRequest request)
+    /// <param name="sourceReader">
+    /// Q-R29 option C-2 seam: null (every existing static call site, e.g. <c>ThumbnailCache</c> and
+    /// tests) uses <see cref="PhysicalSourceReader"/>, identical to this method's behavior before the
+    /// seam existed. The instance <see cref="Decode"/> above passes this decoder's own injected reader.
+    /// </param>
+    public static IDecodedImage DecodeWithFallback(DecodeRequest request, ISourceReader? sourceReader = null)
     {
         try
         {
-            return DecodeWithoutProfileFallback(request);
+            return DecodeWithoutProfileFallback(request, sourceReader);
         }
         catch (Exception ex) when (request.IsDownscaleRequested && IsDownscaleFallbackException(ex))
         {
             // Full-resolution retry: same path (and EXIF extraction) as a normal decode, just unconstrained.
-            return DecodeWithoutProfileFallback(new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes));
+            return DecodeWithoutProfileFallback(new DecodeRequest(request.Path, 0, request.ApplyOrientation, request.Bytes, Priority: request.Priority), sourceReader);
         }
     }
 
@@ -43,26 +56,26 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
     /// EXIF/ICC block there fails the whole decode with <see cref="ArgumentException"/> although the pixel data is fine.
     /// The retry ignores the colour profile: an untagged (sRGB) picture beats an error for a photo whose metadata is bad.
     /// </summary>
-    private static WpfDecodedImage DecodeWithoutProfileFallback(DecodeRequest request)
+    private static WpfDecodedImage DecodeWithoutProfileFallback(DecodeRequest request, ISourceReader? sourceReader)
     {
         try
         {
-            return DecodeImage(request, ignoreColorProfile: false);
+            return DecodeImage(request, ignoreColorProfile: false, sourceReader);
         }
         catch (ArgumentException)
         {
-            return DecodeImage(request, ignoreColorProfile: true);
+            return DecodeImage(request, ignoreColorProfile: true, sourceReader);
         }
     }
 
-    private static WpfDecodedImage DecodeImage(DecodeRequest request, bool ignoreColorProfile)
+    private static WpfDecodedImage DecodeImage(DecodeRequest request, bool ignoreColorProfile, ISourceReader? sourceReader)
     {
-        var bitmap = DecodeSource(request, ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
+        var bitmap = DecodeSource(request, ignoreColorProfile, sourceReader, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out var exif);
         return new WpfDecodedImage(bitmap, downscaled, orientation: orientation,
             originalWidth: originalWidth, originalHeight: originalHeight, exif: exif);
     }
 
-    private static BitmapSource DecodeSource(DecodeRequest request, bool ignoreColorProfile, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
+    private static BitmapSource DecodeSource(DecodeRequest request, bool ignoreColorProfile, ISourceReader? sourceReader, out int orientation, out bool downscaled, out int originalWidth, out int originalHeight, out ExifSummary? exif)
     {
         // With pre-read bytes the path is only a label (TurboJpeg accepts any); a file is opened only without them.
         if (!request.Bytes.HasValue) ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
@@ -73,8 +86,7 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
             return DecodeStream(memoryStream, request, ignoreColorProfile, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
         }
 
-        using var stream = new FileStream(request.Path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+        using var stream = (sourceReader ?? PhysicalSourceReader.Instance).OpenSource(request.Path, request.Priority, 1024 * 1024);
         return DecodeStream(stream, request, ignoreColorProfile, out orientation, out downscaled, out originalWidth, out originalHeight, out exif);
     }
 

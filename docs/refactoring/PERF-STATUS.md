@@ -29,3 +29,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-09-27 -- Q-R29 slow-link simulation (option B)](perf/2026-09-27-qr29-slow-link-sim.md)
 - [2026-09-27 -- R15/R16/R17/R18 hash/catalog/drag-drop/diagnostics costs](perf/2026-09-27-r15-r18.md)
 - [2026-09-27 -- Q-R29 option C: navigation stat off the UI thread](perf/2026-09-27-qr29-option-c.md)
+- [2026-09-28 -- Q-R29 option C-2: ISourceReader seam, preload/viewer bandwidth contention](perf/2026-09-28-qr29-c2-preload-throttle.md)

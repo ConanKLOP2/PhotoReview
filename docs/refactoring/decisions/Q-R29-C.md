@@ -2,7 +2,7 @@
 id: Q-R29
 order: 15
 summary: |-
-  User chose B then C-if-needed (2026-09-27); C part 1 done (stat off UI thread), part 2 preload throttle pending seam --
+  User chose B then C-if-needed (2026-09-27); C part 1 (stat off UI thread) done here, part 2 (preload/viewer bandwidth contention) done in Q-R29-C2.
 ---
 
 # Q-R29 option C -- navigation stat off the UI thread (part 1) and a preload read-throttle seam (part 2, proposal)
@@ -70,34 +70,7 @@ on the worker (M7, `NavigationStatWorkerTests`) -- all killed; details in the pe
 noise (the stat stays on the critical path by design). Note: `ReviewMetrics.PresentedImages` is recorded after the
 post-present refresh stat, so in a fast burst it undercounts shown images (superseded before that stat returned).
 
-## Part 2 -- proposal only (no behavior change): a throttle-able seam for preload byte reads
+## Part 2 -- done: `ISourceReader` seam, measured, preload/viewer contention fix
 
-**Problem (from #202):** image bytes never go through `IFileSystem.OpenReadShared`; each reader opens its own `FileStream`:
-`SourceBytesCache.ReadAndCache`, `WicDirectDecoder` (two sites), `WpfBitmapImageDecoder` (two sites), `TurboJpegDecoder`
-(`File.ReadAllBytes` + two `FileStream`s), `EmbeddedThumbnailReader`, `PreviewImageService.DecodeFromSource` (diag pre-read),
-`FileHashService` (compare hash). So neither a bandwidth cap (harness) nor a foreground-first policy (product) can be applied,
-and Q-R29's "preload competes with the photo on screen for the link" half stays unmeasured.
-
-**Proposed seam (one choke point, priority carried from the caller):**
-
-1. `PhotoReview.Core.Abstractions.ISourceReader` (or an `IFileSystem` extension) with
-   `Stream OpenSource(string path, SourceReadPriority priority)` where `SourceReadPriority` is `Viewer | Preload | Background`.
-   Default implementation = today's `FileStream(path, Open, Read, ReadWrite|Delete, 1 MiB, SequentialScan)` -- byte-for-byte the
-   current behavior.
-2. `DecodeRequest` gains `SourceReadPriority Priority` (default `Viewer`), set in `PreviewImageService.DecodeAndCache` from the
-   lane that started the decode (`DecodeForViewerAsync` = Viewer; `DecodeAndCacheAsync` from preload = Preload; compare = Viewer).
-   `SourceBytesCache.GetOrRead(path, priority)` and every decoder's `new FileStream` call `ISourceReader.OpenSource` instead
-   (constructor-injected; decoders are built by `ImageDecoderFactory`, so one registration covers all backends).
-3. A `ThrottledSourceReader` decorator implements the policy: Viewer reads never wait; Preload reads draw from a token bucket
-   whose rate drops while a Viewer read is in flight (or recently measured slower than N MB/s) and preload has not reached
-   that file -- the "de-prioritize, don't disable" rule #202's lat10-bw20 run supports (preload OFF was ~8x slower per
-   navigation). Optional OS hint: `SetFileInformationByHandle(FileIoPriorityHintInfo, IoPriorityHintLow)` on Preload handles
-   (helps local disks; not carried over SMB, so the bucket is still needed for a NAS).
-4. Harness: #202's `SharedBandwidthLimiter` plugs into the same seam (`--slow-link-bandwidth-mbps` wraps `ISourceReader`
-   instead of only `IFileSystem.OpenReadShared`), which finally makes the bandwidth half measurable -- measure
-   `s3-next-burst`/`s4-jump` (bursts outrunning preload) at 5/20/60 MB/s before choosing the bucket policy.
-
-**Cost/risk of the seam:** touches the decode hot path of every backend (constructor signatures, `ImageDecoderFactory`, tests
-that construct decoders directly); must keep one open per file (priority 1) and must not add an allocation per read. Needs its
-own PR + gate perf run (decode P50/P95 unchanged with the pass-through reader) before any throttling policy is enabled.
-**State:** pending -- not started; open a separate task when the user wants part 2.
+Implemented, measured on a simulated slow link, and fixed (2026-09-28). Full detail, measurements and the mutation-checked
+test: [Q-R29-C2.md](Q-R29-C2.md).
