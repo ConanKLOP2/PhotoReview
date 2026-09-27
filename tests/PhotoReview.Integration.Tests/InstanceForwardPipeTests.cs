@@ -163,9 +163,18 @@ public sealed class InstanceForwardPipeTests : IDisposable
         Assert.Equal(ForwardOutcome.Unknown, outcome);
     }
 
-    [Fact(DisplayName = "An owner that hangs up without answering (nothing accepted) yields NoInstance so the second launch opens its own window")]
-    public async Task Client_OwnerHangsUpSilently_ReportsNoInstance()
+    [Fact(DisplayName = "R08 fix: any silent hangup after the request was written yields Unknown, not NoInstance -- the client can never tell 'nobody home' apart from 'owner accepted, then dropped' (Q-R12: prefer not duplicating a window)")]
+    public async Task Client_OwnerHangsUpSilentlyAfterWrite_ReportsUnknown()
     {
+        // This fake server never even reads/decodes the request -- from the SERVER's point of view this is a
+        // "never accepted" hangup. But the CLIENT has no way to observe that: its own write succeeded, and all
+        // it sees afterward is an empty/broken read, identical to what Client_OwnerAcceptsThenHangsUpBeforeReplying_ReportsUnknown
+        // below sees. R08 (full-code-review-2026-09-27) confirmed this ambiguity is structural, not a bug in one
+        // code path: without a wire-protocol accept-ack (the rejected, more invasive remedy option), the client
+        // cannot distinguish these two cases, so both now resolve to Unknown -- SecondInstanceHandoff.TryForwardAsync
+        // (Q-R12) already treats Unknown like Delivered ("very likely took over, exit"), which is the safer
+        // default: it risks occasionally not opening a path that truly had no owner, never a duplicate window
+        // for one the owner already handled.
         var listening = new SemaphoreSlim(0);
         var serverTask = Task.Run(async () =>
         {
@@ -180,16 +189,16 @@ public sealed class InstanceForwardPipeTests : IDisposable
         var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("silent.jpg")], Timeout);
         await serverTask.WaitAsync(Timeout);
 
-        Assert.Equal(ForwardOutcome.NoInstance, outcome);
+        Assert.Equal(ForwardOutcome.Unknown, outcome);
     }
 
-    [Fact(DisplayName = "R08 evidence: an owner that ACCEPTS the request (decodes it and invokes onPaths) then hangs up before replying is CURRENTLY indistinguishable from a never-accepted hangup -- both report NoInstance")]
-    public async Task Client_OwnerAcceptsThenHangsUpBeforeReplying_CurrentlyReportsNoInstance()
+    [Fact(DisplayName = "R08 fix: an owner that ACCEPTS the request (decodes it and invokes onPaths) then hangs up before replying now yields Unknown, not NoInstance")]
+    public async Task Client_OwnerAcceptsThenHangsUpBeforeReplying_ReportsUnknown()
     {
-        // Unlike Client_OwnerHangsUpSilently_ReportsNoInstance above (which never decodes the request at all --
-        // a genuinely "never accepted" hangup), this fake server does what InstanceForwardServer.HandleAsync does
-        // up to and including invoking onPaths, and only then drops the connection without ever writing "OK\n"/
-        // "ERR\n" -- the real server always attempts that reply, so this scenario needs its own fake harness.
+        // Unlike Client_OwnerHangsUpSilentlyAfterWrite_ReportsUnknown above (which never decodes the request at
+        // all -- a genuinely "never accepted" hangup), this fake server does what InstanceForwardServer.HandleAsync
+        // does up to and including invoking onPaths, and only then drops the connection without ever writing
+        // "OK\n"/"ERR\n" -- the real server always attempts that reply, so this scenario needs its own fake harness.
         var file = MakeFile("accepted-then-dropped.jpg");
         var accepted = new SemaphoreSlim(0);
         var listening = new SemaphoreSlim(0);
@@ -217,12 +226,10 @@ public sealed class InstanceForwardPipeTests : IDisposable
         await serverTask.WaitAsync(Timeout);
 
         Assert.True(await accepted.WaitAsync(TimeSpan.Zero), "the fake server never actually accepted/decoded the request");
-        // CONFIRMED (not merely hypothesized, per the review's R08 entry): today's IOException/empty-reply
-        // paths in InstanceForwardClient.SendAsync cannot tell an accepted-then-dropped connection apart from
-        // one that was never accepted at all -- both currently report NoInstance. This pins TODAY's behavior;
-        // it is evidence for a product decision, not an endorsement of it. See OPEN-DECISIONS.md / the PR
-        // description for the two remedy options (Unknown reclassification vs. an explicit accept-ack).
-        Assert.Equal(ForwardOutcome.NoInstance, outcome);
+        // R08 FIXED (see InstanceForwardClient.SendAsync): the accepted-then-dropped case now resolves to
+        // Unknown instead of NoInstance, so a second launch treats it as "very likely handled" and exits
+        // instead of silently opening a duplicate window for a path the owner already processed.
+        Assert.Equal(ForwardOutcome.Unknown, outcome);
     }
 
     [Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]

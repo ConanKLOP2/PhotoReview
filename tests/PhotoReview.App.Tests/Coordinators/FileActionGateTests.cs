@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using Xunit;
@@ -35,6 +36,54 @@ public sealed class FileActionGateTests
         Assert.True(await first);
         Assert.Equal(1, runs);
         Assert.False(gate.IsHeld);
+    }
+
+    [Fact(DisplayName = "Q-T1: RunQueuedAsync queues a second call while the first is running (does not drop it)")]
+    public async Task RunQueuedAsync_SecondCallWhileRunning_IsQueuedNotDropped()
+    {
+        var gate = new FileActionGate();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var order = new List<int>();
+
+        var first = gate.RunQueuedAsync(async () => { order.Add(1); await release.Task; });
+        var second = gate.RunQueuedAsync(() => { order.Add(2); return Task.CompletedTask; });
+
+        // The second action must not have run yet: it is queued behind the first, which is still
+        // blocked on `release`, so its task cannot legitimately be complete at this point.
+        Assert.False(second.IsCompleted);
+        Assert.True(gate.IsHeld);
+
+        release.SetResult();
+        Assert.True(await first);
+        Assert.True(await second);
+        Assert.Equal([1, 2], order);
+        Assert.False(gate.IsHeld);
+    }
+
+    [Fact(DisplayName = "Q-T1: RunQueuedAsync is a no-op while an exclusive holder (RunExclusiveAsync/TryEnter) holds the gate")]
+    public async Task RunQueuedAsync_WhileExclusivelyHeld_IsNoOp()
+    {
+        var gate = new FileActionGate();
+        Assert.True(gate.TryEnter());
+
+        var queued = await gate.RunQueuedAsync(() => Task.CompletedTask);
+
+        Assert.False(queued);
+        gate.Exit();
+    }
+
+    [Fact(DisplayName = "Q-T1: RunExclusiveAsync is a no-op while a queued action is pending/running")]
+    public async Task RunExclusiveAsync_WhileQueuedActionPending_IsNoOp()
+    {
+        var gate = new FileActionGate();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var queued = gate.RunQueuedAsync(() => release.Task);
+        var exclusive = await gate.RunExclusiveAsync(() => Task.CompletedTask);
+
+        Assert.False(exclusive);
+        release.SetResult();
+        Assert.True(await queued);
     }
 
     [Fact(DisplayName = "R7-7: WhenReleasedAsync completes only once the holder releases the gate")]

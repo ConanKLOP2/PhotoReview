@@ -53,7 +53,7 @@ public sealed class RecoveryWindowTests
         var entries = SampleEntries(temp.Path);
         await StaTestHost.RunAsync(async () =>
         {
-            var window = new RecoveryWindow(entries, retry: _ => throw new InvalidOperationException("must not retry"), dismiss: _ => { });
+            var window = new RecoveryWindow(entries, retry: _ => throw new InvalidOperationException("must not retry"), dismiss: _ => new DismissOutcome([], []));
             Assert.All(window.VisibleRows, row => Assert.Null(row.Check)); // not checked yet: "checking" state
 
             await window.RunChecksAsync();
@@ -93,7 +93,7 @@ public sealed class RecoveryWindowTests
         await StaTestHost.RunAsync(async () =>
         {
             var gate = new TaskCompletionSource<RecoveryRetryResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var window = new RecoveryWindow(entries, retry: _ => gate.Task, dismiss: _ => { });
+            var window = new RecoveryWindow(entries, retry: _ => gate.Task, dismiss: _ => new DismissOutcome([], []));
             await window.RunChecksAsync();
             window.SelectRow(0);
             Assert.True(window.RetryButton.IsEnabled);
@@ -123,7 +123,7 @@ public sealed class RecoveryWindowTests
         await StaTestHost.RunAsync(async () =>
         {
             var gate = new TaskCompletionSource<RecoveryRetryResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var window = new RecoveryWindow(entries, retry: _ => gate.Task, dismiss: _ => { });
+            var window = new RecoveryWindow(entries, retry: _ => gate.Task, dismiss: _ => new DismissOutcome([], []));
             var closed = false;
             window.Closed += (_, _) => closed = true;
             await window.RunChecksAsync();

@@ -533,6 +533,38 @@ public sealed class PointerInputControllerTests
         Assert.Equal(2.0, _viewer.Zoom, 6);
     }
 
+    /// <summary>
+    /// R10 (2026-09-27 code review): a press that stops a running glide but never reaches <c>OnImagePress</c> (e.g. a
+    /// toolbar button -- only the window-level tunnel fires for it) sets <c>_pressStoppedGlide</c>. Traced against WPF's
+    /// routed-event order: <c>Window_PreviewMouseDown</c> is subscribed directly on the Window (the root of the visual
+    /// tree the image lives in), and the tunnel for a SINGLE physical press visits every ancestor, including the Window,
+    /// before it can reach the image's own <c>PreviewMouseLeftButtonDown</c> handler -- so a LATER, separate press that
+    /// does land on the image always re-triggers <c>OnWindowPreviewMouseDown</c> for ITSELF first, overwriting the stale
+    /// flag with that press's own (correct) <c>StopKinetic()</c> result before <c>OnImagePress</c> ever reads it. There is
+    /// no code path in this app where <c>OnImagePress</c> fires without an immediately preceding <c>OnWindowPreviewMouseDown</c>
+    /// call for the very same press (popups/dialogs that skip the window tunnel also never reach the image, since the
+    /// image lives only in the main window's own visual tree). Conclusion: R10 does not reproduce; this test pins the
+    /// correct current behavior instead of a code change, so a future refactor that breaks this ordering assumption fails
+    /// the test first.
+    /// </summary>
+    [Fact]
+    public void GlideStoppedByAnUnrelatedPress_ThenASeparateImageClick_StillTriggersClickToZoom()
+    {
+        StartGlide();
+
+        // Press A: e.g. a toolbar button. Only the window-level tunnel fires -- OnImagePress is never called for it.
+        _controller.OnWindowPreviewMouseDown();
+        Assert.Null(_surface.RenderHandler); // press A's own action stopped the glide
+
+        // Press B: a later, unrelated press+release on the image with no glide running any more. WPF tunnels
+        // OnWindowPreviewMouseDown for THIS press too, immediately before OnImagePress, for the same physical click.
+        _controller.OnWindowPreviewMouseDown();
+        Assert.True(_controller.OnImagePress(MouseButton.Left, 1, new Point(300, 300), timestamp: 6000));
+        Assert.True(_controller.OnImageRelease(new Point(300, 300), timestamp: 6010)); // no drag: a click
+
+        Assert.Equal(1, _fits); // click-to-zoom fired (already at ClickZoomPercent -> back to Fit), not swallowed
+    }
+
     [Fact]
     public void Navigation_StopsAGlide_ButTheSameIndexDoesNot()
     {
