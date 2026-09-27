@@ -26,3 +26,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-09-27 -- R01/R02/R03/R13 metadata I/O](perf/2026-09-27-r01-r02-r03-r13-metadata-io.md)
 - [2026-09-27 -- R04 preload contention / R14 startup sweep](perf/2026-09-27-r04-preload-contention-r14-startup-sweep.md)
 - [2026-09-27 -- R06/R07/R11 benchmark/cache misc](perf/2026-09-27-r06-r07-r11-benchmark-cache-misc.md)
+- [2026-09-27 -- Q-R29 slow-link simulation (option B)](perf/2026-09-27-qr29-slow-link-sim.md)

@@ -18,6 +18,7 @@ using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 
 /// <summary>
@@ -137,6 +138,21 @@ internal static class PerfSession
         /// original behavior (shared with the real app) for a caller that doesn't pass it.
         /// </summary>
         public string? CacheDir { get; set; }
+        /// <summary>
+        /// Q-R29 slow-link measurement (perf(harness) only -- never a production default): extra latency,
+        /// in whole milliseconds, added before every metadata-only <see cref="IFileSystem"/> call
+        /// (<c>FileExists</c>/<c>DirectoryExists</c>/<c>GetFileStat</c>/enumerate-with-stat). Null/0 = disabled
+        /// (the plain <c>PhysicalFileSystem</c> is used, byte-for-byte the production graph). See
+        /// <see cref="PhotoReview.Benchmarking.SlowLinkFileSystem"/>.
+        /// </summary>
+        public int? SlowLinkLatencyMs { get; set; }
+        /// <summary>
+        /// Q-R29 slow-link measurement: total bandwidth cap, in MB/s (1,000,000 bytes/s), shared by every
+        /// reader in this process (foreground decode + preload workers) -- models one wifi link. Null =
+        /// no cap. Only meaningful together with <see cref="SlowLinkLatencyMs"/> being non-null (both flags
+        /// are independent, but a bandwidth cap with zero added stat latency does not model Q-R29's NAS case).
+        /// </summary>
+        public double? SlowLinkBandwidthMbps { get; set; }
     }
 
     // ---- Entry point -----------------------------------------------------------------------------
@@ -159,7 +175,7 @@ internal static class PerfSession
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or IOException or InvalidOperationException)
         {
             Console.Error.WriteLine($"perf-session: {ex.Message}");
-            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--source-bytes-cache on|off]");
+            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--source-bytes-cache on|off] [--slow-link-latency-ms N] [--slow-link-bandwidth-mbps N]");
             return 2;
         }
 
@@ -257,8 +273,29 @@ internal static class PerfSession
         // cache the real app on this machine uses -- and one run's warm cache silently changes
         // another's numbers. --cache-dir points both caches at a directory this driver owns
         // instead; a later AddSingleton<IAppPaths> registration wins over ConfigureServices' own.
-        using var services = AppHost.BuildServices(options.CacheDir is null ? null : overrides =>
-            overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(AppPaths.FromEnvironment(), options.CacheDir)));
+        // perf(harness, Q-R29): a second, independent override -- when --slow-link-* is passed, IFileSystem
+        // is replaced by SlowLinkFileSystem wrapping the same PhysicalFileSystem the production graph uses
+        // (App.ConfigureServices' own registration is a singleton too; the later AddSingleton here wins the
+        // same way the IAppPaths override above does). Every consumer of IFileSystem in this process --
+        // ImagePresenter's TryGetFileStat, folder enumeration, preload's OpenReadShared reads -- resolves the
+        // SAME instance, so the bandwidth cap is genuinely shared across the foreground read and preload
+        // workers, modelling one wifi link. Never touches config.json or any other machine's state.
+        var slowLinkEnabled = options.SlowLinkLatencyMs is not null;
+        var slowLinkBandwidth = options.SlowLinkBandwidthMbps is { } mbps
+            ? new PhotoReview.Benchmarking.SharedBandwidthLimiter((long)(mbps * 1_000_000))
+            : null;
+        using var services = AppHost.BuildServices(options.CacheDir is null && !slowLinkEnabled ? null : overrides =>
+        {
+            if (options.CacheDir is not null)
+                overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(AppPaths.FromEnvironment(), options.CacheDir));
+            if (slowLinkEnabled)
+                // Wraps the same CountingFileSystem(PhysicalFileSystem) App.ConfigureServices builds (so
+                // ReviewMetrics.StatCount still counts real metadata calls) with the extra latency/bandwidth cap.
+                overrides.AddSingleton<IFileSystem>(sp => new PhotoReview.Benchmarking.SlowLinkFileSystem(
+                    new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()),
+                    TimeSpan.FromMilliseconds(options.SlowLinkLatencyMs!.Value),
+                    slowLinkBandwidth));
+        });
         var settingsStore = services.GetRequiredService<SettingsStore>();
         settingsStore.Load();
         // perf(harness): unlike Mode/Decoder (read live on every access below), SourceBytesCachePolicy
@@ -474,6 +511,10 @@ internal static class PerfSession
             // one is comparing different starting cache states, not just different code.
             cacheIsolation = options.CacheDir is null ? "shared" : "isolated",
             cacheDir = options.CacheDir is null ? null : "<cache-dir>",
+            // Q-R29 slow-link measurement harness (perf(harness) only): null/null means the plain
+            // production PhysicalFileSystem was used unmodified.
+            slowLinkLatencyMs = options.SlowLinkLatencyMs,
+            slowLinkBandwidthMbps = options.SlowLinkBandwidthMbps,
         };
         window.Close();
         var endQpc = Stopwatch.GetTimestamp();
@@ -856,6 +897,12 @@ internal static class PerfSession
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
                 case "--cache-dir": options.CacheDir = Path.GetFullPath(Next()); break;
+                case "--slow-link-latency-ms":
+                    options.SlowLinkLatencyMs = int.TryParse(Next(), out var slm) && slm >= 0 ? slm : throw new ArgumentException("--slow-link-latency-ms must be >= 0");
+                    break;
+                case "--slow-link-bandwidth-mbps":
+                    options.SlowLinkBandwidthMbps = double.TryParse(Next(), System.Globalization.CultureInfo.InvariantCulture, out var sbw) && sbw > 0 ? sbw : throw new ArgumentException("--slow-link-bandwidth-mbps must be > 0");
+                    break;
                 case "--source-bytes-cache":
                     var sbc = Next();
                     options.SourceBytesCache = sbc.ToLowerInvariant() switch
