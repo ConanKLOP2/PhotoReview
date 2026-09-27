@@ -1,3 +1,10 @@
+---
+id: SEC-01
+order: 22
+summary: |-
+  A relative Move/Copy destination through an existing junction/symlink could resolve outside the photo folder; `ActionDestinationPolicy`/`FileActionService` now also check the resolved (reparse-point-followed) path, via a new `IFileSystem.ResolveRealPath` seam.
+---
+
 # SEC-01 — relative Move/Copy destination could escape the photo folder through an existing junction/symlink
 
 ## Finding (external static review, verified 2026-09-27)
