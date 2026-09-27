@@ -1,5 +1,6 @@
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Settings;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -203,7 +204,7 @@ public sealed class ViewerQuickSettingsTests
         var settings = new AppSettings();
         settings.Shortcuts.FirstImage = "";
 
-        Assert.NotNull(new SettingsValidator(new AllKeysValid()).ValidateShortcuts(settings));
+        Assert.Equal(Tr.CoreSettingsShortcutInvalid(nameof(ShortcutMappings.FirstImage)), new SettingsValidator(new AllKeysValid()).ValidateShortcuts(settings));
     }
 
     [Theory]
