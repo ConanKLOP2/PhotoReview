@@ -1,6 +1,6 @@
 # Decisions (Q-*)
 
-Status of work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) · finished groups: [`HISTORY.md`](HISTORY.md).
+Status of work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) Â· finished groups: [`HISTORY.md`](HISTORY.md).
 Full rationale of older rows: `git show 1de561c:docs/refactoring/OPEN-DECISIONS.md` and `...:docs/refactoring/archive/OPEN-DECISIONS-detail.md`.
 
 **Adding a decision (avoid merge conflicts across parallel PRs):** put ALL detail (method names, file:line, measurements) in a new
@@ -12,7 +12,6 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 
 | ID | Question | State |
 |---|---|---|
-| **Q-R29** | NAS (500 x 3-7 MB JPEG over wifi): (1) `ThumbnailCache.BuildKey` UI-thread stat per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap. Both parts narrowed to negligible/no-sync-gap on local disk (see [R01-R13](decisions/R01-R02-R03-R13.md), [R04-R14](decisions/R04-R14.md)); the NAS/slow-link case itself is still untested and open. | OPEN 2026-09-26 - awaiting user. Present options with pros/cons (see AGENTS.md) before deciding. |
 
 ## Decided (one line each)
 
@@ -58,4 +57,5 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | P01-P03 | Post-ledger review of master changes since 3ef2bb5 (#186-#198+) plus screened-static hot-path rows outside Imaging: no defects in the reviewed diff; two document-only journal/undo races found (concurrent-retry misreport, cross-folder Undo contamination). [Detail](decisions/POST-LEDGER-REVIEW.md) |
 | P03 | Undo limited to the current session; journal history no longer seeds Ctrl+Z at startup (user, 2026-09-27). [Detail](decisions/P03.md) |
 | P02 | Recovery retry re-checks the journal's latest entry and live marker so a concurrent retry in another window can no longer journal a completed Move as Failed. [Detail](decisions/P02.md) |
+| Q-R29 | User chose B then C-if-needed (2026-09-27); C part 1 done (stat off UI thread), part 2 preload throttle pending seam -- [detail](decisions/Q-R29-C.md) |
 | GUI-CHECK-AUTOMATION | 5 of the 11 "GUI checks (user)" items now need no manual check; the rest reduced to one short visual/feel step each (new context-menu-structure, crossfade and KeepZoomAcrossImages UI tests). [Detail](decisions/GUI-CHECK-AUTOMATION.md) |

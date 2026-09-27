@@ -258,6 +258,12 @@ internal static class PerfSession
         var idleTimeouts = 0;
         var keySettleMs = new List<double>();
         var keySettleTimeouts = 0;
+        // perf(harness, Q-R29 option C): UI-thread cost of each key. keyDispatchMs = the synchronous part of the
+        // key handler (everything a navigation runs before its first await, e.g. a UI-thread stat); keyUiBusyMs =
+        // total dispatcher-operation time from a settle key until it settled (continuations and rendering included).
+        var keyDispatchMs = new List<double>();
+        var keyUiBusyMs = new List<double>();
+        using var uiBusy = UiBusyMeter.Attach(dispatcher);
 
         // AR02c: build the production DI graph (AppHost.BuildServices == App.ConfigureServices, no
         // test-root overrides) so --perf-session measures the shipped configuration (F2). SettingsStore
@@ -383,9 +389,13 @@ internal static class PerfSession
                                 {
                                     var presentedBefore = window.Metrics.Snapshot().PresentedImages;
                                     keysSent++;
+                                    var busyBefore = uiBusy?.BusyTicks ?? 0;
+                                    var dispatchStart = Stopwatch.GetTimestamp();
                                     if (SendKey(window, key)) keysHandled++;
+                                    keyDispatchMs.Add(PhotoReviewPerf.Ms(dispatchStart));
                                     var (settled, settleElapsedMs) = await WaitKeySettleAsync(
                                         dispatcher, window, presentedBefore, TimeSpan.FromMilliseconds(settleMaxMs));
+                                    if (uiBusy is not null) keyUiBusyMs.Add((uiBusy.BusyTicks - busyBefore) * 1000.0 / Stopwatch.Frequency);
                                     keySettleMs.Add(settleElapsedMs);
                                     if (!settled) { timeouts++; keySettleTimeouts++; }
                                     var remainingMs = settleMinMs - settleElapsedMs;
@@ -398,7 +408,9 @@ internal static class PerfSession
                                 for (var i = 0; i < repeat; i++)
                                 {
                                     keysSent++;
+                                    var dispatchStart = Stopwatch.GetTimestamp();
                                     if (SendKey(window, key)) keysHandled++;
+                                    keyDispatchMs.Add(PhotoReviewPerf.Ms(dispatchStart));
                                     if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
                                     else await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
                                 }
@@ -520,6 +532,8 @@ internal static class PerfSession
         var endQpc = Stopwatch.GetTimestamp();
         var endUtc = DateTime.UtcNow;
         var sortedKeySettleMs = keySettleMs.OrderBy(v => v).ToArray();
+        var sortedKeyDispatchMs = keyDispatchMs.OrderBy(v => v).ToArray();
+        var sortedKeyUiBusyMs = keyUiBusyMs.OrderBy(v => v).ToArray();
 
         process.Refresh();
         var processInfo = new
@@ -567,6 +581,21 @@ internal static class PerfSession
                 p50Ms = Math.Round(Percentile(sortedKeySettleMs, 50), 1),
                 p95Ms = Math.Round(Percentile(sortedKeySettleMs, 95), 1),
                 timeouts = keySettleTimeouts,
+            },
+            // perf(harness, Q-R29 option C): see keyDispatchMs/keyUiBusyMs above.
+            keyDispatch = keyDispatchMs.Count == 0 ? null : new
+            {
+                count = keyDispatchMs.Count,
+                p50Ms = Math.Round(Percentile(sortedKeyDispatchMs, 50), 3),
+                p95Ms = Math.Round(Percentile(sortedKeyDispatchMs, 95), 3),
+                maxMs = Math.Round(sortedKeyDispatchMs[^1], 3),
+            },
+            keyUiBusy = keyUiBusyMs.Count == 0 ? null : new
+            {
+                count = keyUiBusyMs.Count,
+                p50Ms = Math.Round(Percentile(sortedKeyUiBusyMs, 50), 3),
+                p95Ms = Math.Round(Percentile(sortedKeyUiBusyMs, 95), 3),
+                maxMs = Math.Round(sortedKeyUiBusyMs[^1], 3),
             },
             startUtc,
             endUtc,

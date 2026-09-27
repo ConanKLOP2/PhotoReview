@@ -157,5 +157,35 @@ public sealed class ThumbnailCacheTests : IDisposable
 
         Assert.Null(thumbnail);
     }
+
+    [Fact(DisplayName = "Q-R29 C: GetAsync with the caller's stat keys by that version -- the same key a fresh stat gives, a new one for a changed file")]
+    public async Task GetAsyncWithKnownStat_KeysByThatVersion()
+    {
+        var readerCalls = 0;
+        using var cache = new ThumbnailCache(
+            _diskDir,
+            maxRamBytes: 16 * 1024 * 1024,
+            persistNewThumbnails: false,
+            embeddedThumbnailReader: (path, ct) =>
+            {
+                Interlocked.Increment(ref readerCalls);
+                return Task.FromResult(EmbeddedThumbnailReader.TryRead(path));
+            });
+        var info = new FileInfo(_jpegWithThumbnailPath);
+        var current = new PhotoReview.Core.Abstractions.FileStat(info.Length, info.LastWriteTimeUtc);
+
+        var first = await cache.GetAsync(_jpegWithThumbnailPath, current);
+        // The stat-free key equals the fresh-stat key for an unchanged file: RAM (and the disk cache) keep hitting.
+        var viaFreshStat = await cache.GetAsync(_jpegWithThumbnailPath);
+        Assert.Same(first, viaFreshStat);
+        Assert.Equal(1, readerCalls);
+
+        // A different version (as the navigation's stat reports after an edit) must never hit the old entry, although
+        // the file on disk is unchanged here: the key comes from the stat passed in, not from a stat of its own.
+        var edited = new PhotoReview.Core.Abstractions.FileStat(info.Length + 1, info.LastWriteTimeUtc.AddSeconds(1));
+        var second = await cache.GetAsync(_jpegWithThumbnailPath, edited);
+        Assert.NotSame(first, second);
+        Assert.Equal(2, readerCalls);
+    }
 }
 

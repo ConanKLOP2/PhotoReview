@@ -8,6 +8,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -202,13 +203,31 @@ public sealed class ImagePresenter
         }
 
         _compareViewModel.Select(null);
+        // Q-R29 option C: the stat below is awaited off the UI thread, so this navigation is "in progress" from here on:
+        // the photo information line must not keep describing the previous image meanwhile (it is set again below).
+        CurrentPhotoInfo = null;
 
         if (AppLog.Enabled)
             AppLog.Info($"ShowImage start index={index} count={_catalog.Count} token={token} path={path}");
 
         // 2. Stat; file mất thì xóa khỏi catalog và chuyển tiếp
+        // Q-R29 option C: the stat runs on the navigation stat worker, never on the UI thread -- on a NAS/wifi share
+        // one metadata call is 2-30 ms (or a stalled SMB request), all of it UI-thread time when taken here directly.
+        // Nothing below looks at a cache before this stat returns, so a changed file can never be served stale from
+        // RAM; a navigation superseded while its stat was pending stops here without touching the catalog or screen.
         long perfStat = perf ? Stopwatch.GetTimestamp() : 0;
-        var initialOutcome = TryGetFileStat(path, out var initialStat, out var initialStatError);
+        StatResult initial;
+        try
+        {
+            initial = await StatOffUiThreadAsync(path, viewerDecodeCts.Token);
+        }
+        catch (OperationCanceledException) when (!_clock.IsNavigationCurrent(token))
+        {
+            if (AppLog.Enabled) AppLog.Info($"ShowImage superseded during stat token={token} path={path}");
+            return;
+        }
+        if (!_clock.IsNavigationCurrent(token)) return;
+        var initialOutcome = initial.Outcome;
         if (initialOutcome != StatOutcome.Found)
         {
             if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
@@ -218,6 +237,7 @@ public sealed class ImagePresenter
             }
             else
             {
+                var initialStatError = initial.Error;
                 // An unreadable file (share hiccup, access denied) is not a missing one: keep it in the catalog.
                 AppLog.Error($"ShowImage stat failed token={token} index={index} path={path}", initialStatError!);
                 CurrentPhotoInfo = null;
@@ -237,6 +257,7 @@ public sealed class ImagePresenter
         // catalog) cached under keys the viewer never asked for. Refresh the entry from the stat just taken
         // (no extra I/O) and drop the old version's RAM entries (stale disk entries are keyed by length+mtime
         // and are never served; the disk LRU prunes them).
+        var initialStat = initial.Stat!;
         var initialEntry = _catalog.Find(path);
         if (initialEntry is not null && !initialEntry.Matches(initialStat))
         {
@@ -246,9 +267,10 @@ public sealed class ImagePresenter
             initialEntry = _catalog.Find(path);
         }
         var initialSize = initialStat.Length;
-        var currentKey = initialEntry is not null
-            ? _previewService.GetCurrentCacheKey(initialEntry)
-            : _previewService.GetCurrentCacheKey(path);
+        // Q-R29 option C: both keys come from the stat just taken (no second stat on the UI thread): an entry that
+        // left the catalog meanwhile gets a key built from that stat, not from a fresh FileInfo.
+        var currentKey = _previewService.GetCurrentCacheKey(
+            initialEntry ?? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc));
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
@@ -306,7 +328,8 @@ public sealed class ImagePresenter
                 long perfThumb = perf ? Stopwatch.GetTimestamp() : 0;
                 if (perf) PhotoReviewPerf.Log.ThumbStart(token, perfPathId);
 
-                var thumbnailTask = _thumbnailCache.GetAsync(path);
+                // Q-R29 option C: the thumbnail key reuses this navigation's stat (no second, UI-thread stat in BuildKey).
+                var thumbnailTask = _thumbnailCache.GetAsync(path, initialStat);
                 // Cast to the non-generic Task overload: thumbnailTask (IDecodedImage?) and
                 // previewTask (IDecodedImage) have different nullability of the same reference
                 // type, and Task.WhenAny<T> can't unify those without a nullability warning.
@@ -474,13 +497,17 @@ public sealed class ImagePresenter
 
                 var original = settings.LoadingMode == LoadingMode.Original
                     ? (Width: image.PixelWidth, Height: image.PixelHeight)
-                    : await _previewService.GetOriginalDimensionsAsync(path);
+                    : await _previewService.GetOriginalDimensionsAsync(path, currentKey);
 
                 if (perfDims != 0) PhotoReviewPerf.Log.PostEnd(token, "dims", PhotoReviewPerf.Ms(perfDims));
 
                 if (!_clock.IsNavigationCurrent(token)) return;
 
-                if (TryGetFileStat(path, out var currentInfo, out _) != StatOutcome.Found) return;
+                // Q-R29 option C: the post-present refresh stat runs off the UI thread too.
+                var current = await StatOffUiThreadAsync(path, CancellationToken.None);
+                if (!_clock.IsNavigationCurrent(token)) return;
+                if (current.Outcome != StatOutcome.Found) return;
+                var currentInfo = current.Stat!;
                 if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
                 {
                     _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
@@ -557,7 +584,10 @@ public sealed class ImagePresenter
 
             var nextPath = _catalog.PathAt(nextIndex);
             // Only a file that is really gone is skipped; an unreadable one is presented so its error is reported.
-            if (TryGetFileStat(nextPath, out _, out _) != StatOutcome.Missing)
+            // Q-R29 option C: off the UI thread; the navigation token is re-checked before the catalog is touched.
+            var next = await StatOffUiThreadAsync(nextPath, CancellationToken.None);
+            if (!_clock.IsNavigationCurrent(token)) return;
+            if (next.Outcome != StatOutcome.Missing)
             {
                 await PresentAsync(nextIndex);
                 return;
@@ -619,40 +649,55 @@ public sealed class ImagePresenter
         _sink.SetStatusText(status);
     }
 
+    /// <summary>
+    /// Q-R29 option C: where the navigation path's stats run (<see cref="NavigationStatWorker.Shared"/>). A test seam:
+    /// a test that blocks a stat gets its own worker so it never stalls presenters of other tests.
+    /// </summary>
+    internal NavigationStatWorker StatWorker { get; init; } = NavigationStatWorker.Shared;
+
     private enum StatOutcome { Found, Missing, Error }
+
+    /// <summary>Result of one <see cref="StatNow"/>: <see cref="Stat"/> is set for Found, <see cref="Error"/> for Error.</summary>
+    private readonly record struct StatResult(StatOutcome Outcome, FileStat? Stat, Exception? Error);
+
+    /// <summary>
+    /// Q-R29 option C: <see cref="StatNow"/> on <see cref="StatWorker"/>, never on the calling (UI)
+    /// thread. Cancelled without touching the disk when <paramref name="cancellationToken"/> fires before the stat
+    /// starts (the navigation was superseded while it waited). The caller resumes on its own context and must
+    /// re-check its navigation token before using the result.
+    /// </summary>
+    private Task<StatResult> StatOffUiThreadAsync(string path, CancellationToken cancellationToken) =>
+        StatWorker.RunAsync(() => StatNow(path), cancellationToken);
 
     /// <summary>
     /// One stat: existence plus the Length/LastWriteUtc the cache key is built from. Only "not there" is
     /// <see cref="StatOutcome.Missing"/> (the caller drops the item from the catalog); any other failure is
     /// <see cref="StatOutcome.Error"/> with the exception, so a flaky share never silently loses a photo.
+    /// Blocking file-system I/O: called only through <see cref="StatOffUiThreadAsync"/>. Never throws.
     /// </summary>
-    private StatOutcome TryGetFileStat(string path, out FileStat stat, out Exception? error)
+    private StatResult StatNow(string path)
     {
-        stat = null!;
-        error = null;
         try
         {
             // When an IFileSystem is available, its (counted, mockable) stat is the source of truth.
             if (_fileSystem != null)
             {
-                if (_fileSystem.GetFileStat(path) is not { } fsStat) return StatOutcome.Missing;
-                stat = fsStat;
-                return StatOutcome.Found;
+                return _fileSystem.GetFileStat(path) is { } fsStat
+                    ? new StatResult(StatOutcome.Found, fsStat, null)
+                    : new StatResult(StatOutcome.Missing, null, null);
             }
             var info = new FileInfo(path);
-            if (!info.Exists) return StatOutcome.Missing;
-            stat = new FileStat(info.Length, info.LastWriteTimeUtc);
-            return StatOutcome.Found;
+            if (!info.Exists) return new StatResult(StatOutcome.Missing, null, null);
+            return new StatResult(StatOutcome.Found, new FileStat(info.Length, info.LastWriteTimeUtc), null);
         }
         // A path that can never name a file (blank, illegal characters, too long, unsupported) is as good as missing.
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return StatOutcome.Missing;
+            return new StatResult(StatOutcome.Missing, null, null);
         }
         catch (Exception ex)
         {
-            error = ex;
-            return StatOutcome.Error;
+            return new StatResult(StatOutcome.Error, null, ex);
         }
     }
 

@@ -73,7 +73,16 @@ public sealed class ThumbnailCache : IDisposable
         _ramCache = new BoundedLruCache<string, IDecodedImage>(_maxRamBytes, EstimateBytes, StringComparer.OrdinalIgnoreCase);
     }
 
-    public Task<IDecodedImage?> GetAsync(string sourcePath, CancellationToken cancellationToken = default)
+    public Task<IDecodedImage?> GetAsync(string sourcePath, CancellationToken cancellationToken = default) =>
+        GetAsync(sourcePath, knownStat: null, cancellationToken);
+
+    /// <summary>
+    /// Q-R29 option C: as <see cref="GetAsync(string, CancellationToken)"/>, but the cache key is built from
+    /// <paramref name="knownStat"/> -- a stat of <paramref name="sourcePath"/> the caller just took (off the UI
+    /// thread) -- instead of a fresh <see cref="FileInfo"/> on the calling thread. Null falls back to that stat.
+    /// Freshness is the caller's stat's: a key built from it names exactly that Length/LastWriteUtc version.
+    /// </summary>
+    public Task<IDecodedImage?> GetAsync(string sourcePath, FileStat? knownStat, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         // D04 perf: ThumbEnd(source=ram) covers the key build (one stat) + RAM lookup.
@@ -88,7 +97,7 @@ public sealed class ThumbnailCache : IDisposable
             disposeToken = _disposeCts.Token;
         }
         var fullPath = Path.GetFullPath(sourcePath);
-        var key = BuildKey(fullPath);
+        var key = knownStat is null ? BuildKey(fullPath) : BuildKey(fullPath, knownStat.Length, knownStat.LastWriteUtc);
 
         if (_ramCache.TryGet(key, out var cached))
         {
@@ -245,7 +254,12 @@ public sealed class ThumbnailCache : IDisposable
     private static string BuildKey(string path)
     {
         var info = new FileInfo(path);
-        var stamp = $"{path}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{MaxThumbnailWidth}|orient=1";
+        return BuildKey(path, info.Length, info.LastWriteTimeUtc);
+    }
+
+    private static string BuildKey(string path, long length, DateTime lastWriteUtc)
+    {
+        var stamp = $"{path}|{length}|{lastWriteUtc.Ticks}|{MaxThumbnailWidth}|orient=1";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(stamp))).ToLowerInvariant();
     }
 
