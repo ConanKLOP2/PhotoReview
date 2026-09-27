@@ -183,6 +183,48 @@ public sealed class InstanceForwardPipeTests : IDisposable
         Assert.Equal(ForwardOutcome.NoInstance, outcome);
     }
 
+    [Fact(DisplayName = "R08 evidence: an owner that ACCEPTS the request (decodes it and invokes onPaths) then hangs up before replying is CURRENTLY indistinguishable from a never-accepted hangup -- both report NoInstance")]
+    public async Task Client_OwnerAcceptsThenHangsUpBeforeReplying_CurrentlyReportsNoInstance()
+    {
+        // Unlike Client_OwnerHangsUpSilently_ReportsNoInstance above (which never decodes the request at all --
+        // a genuinely "never accepted" hangup), this fake server does what InstanceForwardServer.HandleAsync does
+        // up to and including invoking onPaths, and only then drops the connection without ever writing "OK\n"/
+        // "ERR\n" -- the real server always attempts that reply, so this scenario needs its own fake harness.
+        var file = MakeFile("accepted-then-dropped.jpg");
+        var accepted = new SemaphoreSlim(0);
+        var listening = new SemaphoreSlim(0);
+        var serverTask = Task.Run(async () =>
+        {
+            await using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            listening.Release();
+            await server.WaitForConnectionAsync();
+            var buffer = new byte[ForwardedPathProtocol.MaxMessageBytes + 1];
+            var length = 0;
+            while (length <= ForwardedPathProtocol.MaxMessageBytes && !ForwardedPathProtocol.IsComplete(buffer.AsSpan(0, length)))
+            {
+                var read = await server.ReadAsync(buffer.AsMemory(length, buffer.Length - length));
+                if (read == 0) break;
+                length += read;
+            }
+            if (ForwardedPathProtocol.TryDecode(buffer.AsSpan(0, length), _ => true, out _))
+                accepted.Release(); // proves the request was actually decoded/accepted before the hangup below
+            // No reply, no flush: `await using` disposes the pipe here -- the "server accepted, started
+            // handling, then the connection dropped before it could reply" scenario R08 is about.
+        });
+        await listening.WaitAsync(Timeout);
+
+        var outcome = await new InstanceForwardClient(_pipe).SendAsync([file], Timeout);
+        await serverTask.WaitAsync(Timeout);
+
+        Assert.True(await accepted.WaitAsync(TimeSpan.Zero), "the fake server never actually accepted/decoded the request");
+        // CONFIRMED (not merely hypothesized, per the review's R08 entry): today's IOException/empty-reply
+        // paths in InstanceForwardClient.SendAsync cannot tell an accepted-then-dropped connection apart from
+        // one that was never accepted at all -- both currently report NoInstance. This pins TODAY's behavior;
+        // it is evidence for a product decision, not an endorsement of it. See OPEN-DECISIONS.md / the PR
+        // description for the two remedy options (Unknown reclassification vs. an explicit accept-ack).
+        Assert.Equal(ForwardOutcome.NoInstance, outcome);
+    }
+
     [Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]
     public async Task Client_NoServer_ReportsNoInstance()
     {

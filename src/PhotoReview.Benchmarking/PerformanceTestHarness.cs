@@ -27,6 +27,11 @@ public static class PerformanceTestHarness
     /// untimed warm-up, which decodes an in-memory image and never touches a measured file.</summary>
     internal static Action<bool, string?>? DecodeObserver { get; set; }
 
+    /// <summary>R07 test seam: invoked once per file right after its concurrency slot is acquired, immediately before
+    /// that file's decode starts, so a test can assert bounded concurrency (via increment/decrement counters) without
+    /// relying on wall-clock timing.</summary>
+    internal static Action<string>? ParallelDecodeObserver { get; set; }
+
     public static string CreateFixture(string root, int count = 30)
     {
         var folder = Path.Combine(root, "performance-fixture");
@@ -91,12 +96,35 @@ public static class PerformanceTestHarness
         var before = CurrentWorkingSet();
         var times = new long[files.Length]; var waits = new long[files.Length]; long reads = 0;
         var gate = new SemaphoreSlim(workers, workers); var queue = Stopwatch.StartNew();
-        await Task.WhenAll(files.Select((path, i) => Task.Run(async () =>
+        // R07: the semaphore slot is acquired here, in the loop, BEFORE each file's Task is created --
+        // not inside it. Previously every selected file got its own Task.Run (and its own queued
+        // thread-pool work item) up front, all waiting on the same gate; for a `take` far larger than
+        // `workers` that meant thousands of pre-created Task objects queued at once even though only
+        // `workers` of them could ever be doing anything. Now at most `workers` file-Tasks are ever
+        // running concurrently, and the loop itself blocks (awaiting the gate) instead of pre-creating
+        // the next file's Task -- `running` only ever holds already-started-or-finished Tasks, not
+        // pre-queued ones. `queued`/`waits[i]` keep the same meaning as before (elapsed time from
+        // "this file is next in line" to "its slot was acquired").
+        var running = new List<Task>(Math.Min(files.Length, 4096));
+        for (var i = 0; i < files.Length; i++)
         {
-            var queued = queue.ElapsedMilliseconds; await gate.WaitAsync(ct); waits[i] = queue.ElapsedMilliseconds - queued;
-            try { var sw = Stopwatch.StartNew(); await Task.Run(() => { using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct); times[i] = sw.ElapsedMilliseconds; Interlocked.Increment(ref reads); }
-            finally { gate.Release(); }
-        }, ct)));
+            var index = i; var path = files[i];
+            var queued = queue.ElapsedMilliseconds;
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            waits[index] = queue.ElapsedMilliseconds - queued;
+            running.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    ParallelDecodeObserver?.Invoke(path);
+                    var sw = Stopwatch.StartNew();
+                    await Task.Run(() => { using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan); var image = Decode(stream, 2200); GC.KeepAlive(image); }, ct);
+                    times[index] = sw.ElapsedMilliseconds; Interlocked.Increment(ref reads);
+                }
+                finally { gate.Release(); }
+            }, ct));
+        }
+        await Task.WhenAll(running);
         return Sample($"parallel-read-{workers}", times, before, CurrentWorkingSet(), reads, 0, 0, Percentile(waits, .95));
     }
 
