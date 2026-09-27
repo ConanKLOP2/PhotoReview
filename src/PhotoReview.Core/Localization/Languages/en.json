@@ -725,5 +725,10 @@
   "settings.zoomShortcuts.none": "not set",
   "main.menu.zoomToLevel": "Zoom to {percent}%",
   "main.menu.zoomToLevel.automationName": "Zoom to the configured level, {percent} percent",
-  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone."
+  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone.",
+  "settings.keyboardZoomAnchor.label": "Keyboard zoom anchors at",
+  "settings.keyboardZoomAnchor.automationName": "Keyboard zoom anchor point",
+  "settings.keyboardZoomAnchor.hint": "Where +/- keyboard zoom, 100 % and the click-zoom shortcut keep the image in place. Mouse wheel and click-to-zoom always anchor at the cursor.",
+  "enum.keyboardZoomAnchor.pointer": "Mouse position",
+  "enum.keyboardZoomAnchor.viewportCentre": "Centre of the view"
 }

@@ -69,4 +69,11 @@ internal interface IImageSurface
 
     /// <summary>Vblank timing of the monitor showing the image (<see cref="IDisplayClock"/>), or null when not known (yet). Non-blocking; reading it starts the clock.</summary>
     DisplayTiming? DisplayTiming { get; }
+
+    /// <summary>
+    /// feat/zoom-key-anchor: the mouse position in ImageScroll coordinates, or null when the mouse is outside the
+    /// viewport (or its position is not available, e.g. the window is not active). Used to anchor a keyboard/menu
+    /// zoom at the cursor (<see cref="PhotoReview.Core.Model.KeyboardZoomAnchor.Pointer"/>).
+    /// </summary>
+    Point? PointerPosition { get; }
 }

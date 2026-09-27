@@ -597,5 +597,10 @@
   "settings.zoomShortcuts.none": "Shown next to a zoom shortcut that has no key assigned.",
   "main.menu.zoomToLevel": "Right-click menu item: zooms to the configured zoom level; {percent} = that level. The shortcut is shown to its right by the app.",
   "main.menu.zoomToLevel.automationName": "AutomationProperties.Name of the Zoom-to-level menu item.",
-  "core.recycle.binCannotHold": "Error shown when Delete/Recycle is refused on a local drive because its Recycle Bin is turned off, too small for the file, or unreadable (the file would be deleted permanently); {name} = file name."
+  "core.recycle.binCannotHold": "Error shown when Delete/Recycle is refused on a local drive because its Recycle Bin is turned off, too small for the file, or unreadable (the file would be deleted permanently); {name} = file name.",
+  "settings.keyboardZoomAnchor.label": "Settings > Mouse & zoom: label for the keyboard-zoom-anchor combo (feat/zoom-key-anchor).",
+  "settings.keyboardZoomAnchor.automationName": "AutomationProperties.Name of the keyboard-zoom-anchor combo.",
+  "settings.keyboardZoomAnchor.hint": "Help text under the keyboard-zoom-anchor combo.",
+  "enum.keyboardZoomAnchor.pointer": "KeyboardZoomAnchor option: anchor at the mouse position when it is over the viewport.",
+  "enum.keyboardZoomAnchor.viewportCentre": "KeyboardZoomAnchor option: always anchor at the viewport centre."
 }

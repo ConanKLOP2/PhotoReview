@@ -124,6 +124,7 @@ Tầng App (ViewModel, Coordinator, Services, Window) gắn với UI thread: **k
 | `ScalingQuality` | `HighQuality` mặc định; `Linear` | `MainViewModel` → `ViewerState` → WPF `RenderOptions.BitmapScalingMode`; không đổi decode/cache key. |
 | `UseSourceBytesCache` | `false` mặc định | Được chụp lúc composition trong `App.xaml.cs`; bật cache byte 16 GiB cho service hỗ trợ. Thay đổi cần khởi động lại để toàn bộ dependency nhận cùng policy. |
 | `PreloadForwardCount` / `PreloadBackwardCount` | `32` / `8` mặc định; `1`-`500` / `0`-`500` | `SettingsStore` → `PreloadWindow.FromSettings` → `PreloadScheduler`/`PreloadOrderService.Build`; sàn phần trăm RAM (`RamBudgetPolicy.MinimumCachePercent`) tính theo cửa sổ này. Được chụp lúc composition trong `App.xaml.cs`; có hiệu lực sau khi khởi động lại (giống `PreloadWorkerCount`). |
+| `KeyboardZoomAnchor` | `Pointer` mặc định (neo tại con trỏ nếu đang ở trên viewport, giữa khung nhìn nếu không); `ViewportCentre` | `PointerInputController.ResolveKeyboardAnchor` (dùng `PointerGestures.ResolveKeyboardZoomAnchor` + `IImageSurface.PointerPosition`) cho `ZoomInAsync`/`ZoomOutAsync`/`ZoomActualSizeAsync`/`ToggleClickZoomAsync`; con lăn chuột và click-to-zoom luôn neo tại con trỏ, không đọc setting này. |
 
 ## Kiểm tra cập nhật thủ công (chỉ dùng mạng ở đây)
 

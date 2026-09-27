@@ -82,6 +82,7 @@ public static class SettingsNormalizer
         if (!Enum.IsDefined(settings.DecoderBackend)) { settings.DecoderBackend = DecoderBackend.WicDirect; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
         if (!Enum.IsDefined(settings.JournalDurability)) { settings.JournalDurability = JournalDurability.Fast; fixedNames.Add(nameof(AppSettings.JournalDurability)); }
         if (!Enum.IsDefined(settings.InstanceMode)) { settings.InstanceMode = InstanceMode.SingleWindow; fixedNames.Add(nameof(AppSettings.InstanceMode)); }
+        if (!Enum.IsDefined(settings.KeyboardZoomAnchor)) { settings.KeyboardZoomAnchor = KeyboardZoomAnchor.Pointer; fixedNames.Add(nameof(AppSettings.KeyboardZoomAnchor)); }
 
         if (settings.Actions is { } actions)
         {

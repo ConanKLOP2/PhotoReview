@@ -94,14 +94,43 @@ internal sealed class PointerInputController
         }
     }
 
-    /// <summary>ZoomActualSize: 100 % (ADR 0008) keeping the image point at the viewport centre in place.</summary>
+    /// <summary>
+    /// ZoomActualSize: 100 % (ADR 0008) keeping the anchored image point in place -- the cursor when
+    /// <see cref="Core.Settings.AppSettings.KeyboardZoomAnchor"/> is <see cref="KeyboardZoomAnchor.Pointer"/> and it
+    /// is over the viewport, the viewport centre otherwise (see <see cref="ResolveKeyboardAnchor"/>).
+    /// </summary>
     public async Task ZoomActualSizeAsync()
     {
         if (!_commands.HasImages()) return;
         CancelPan();
         StopKinetic();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
-        await ZoomAtPointAsync(centre, _commands.ZoomActualSize);
+        await ZoomAtPointAsync(ResolveKeyboardAnchor(), _commands.ZoomActualSize);
+    }
+
+    /// <summary>
+    /// The anchor point (ImageScroll coordinates) for a keyboard/menu zoom: +/- (<see cref="ZoomInAsync"/>/
+    /// <see cref="ZoomOutAsync"/>), <see cref="ZoomActualSizeAsync"/> and <see cref="ToggleClickZoomAsync"/>.
+    /// Mouse wheel and click-to-zoom always anchor at the cursor and do not go through this helper.
+    /// </summary>
+    private Point ResolveKeyboardAnchor() =>
+        PointerGestures.ResolveKeyboardZoomAnchor(_settings().KeyboardZoomAnchor, _surface.PointerPosition, _surface.ViewportWidth, _surface.ViewportHeight);
+
+    /// <summary>+/- keyboard zoom in: anchored like <see cref="ZoomActualSizeAsync"/> instead of leaving the raw scroll offsets in place.</summary>
+    public async Task ZoomInAsync()
+    {
+        if (!_commands.HasImages()) return;
+        CancelPan();
+        StopKinetic();
+        await ZoomAtPointAsync(ResolveKeyboardAnchor(), () => _viewer.ZoomIn());
+    }
+
+    /// <summary>+/- keyboard zoom out: anchored like <see cref="ZoomActualSizeAsync"/> instead of leaving the raw scroll offsets in place.</summary>
+    public async Task ZoomOutAsync()
+    {
+        if (!_commands.HasImages()) return;
+        CancelPan();
+        StopKinetic();
+        await ZoomAtPointAsync(ResolveKeyboardAnchor(), () => _viewer.ZoomOut());
     }
 
     /// <summary>
@@ -280,7 +309,8 @@ internal sealed class PointerInputController
 
     /// <summary>
     /// ClickZoom shortcut: the same Fit &lt;-&gt; ClickZoomPercent toggle as a mouse click-to-zoom (<see cref="ClickZoomAsync"/>),
-    /// but anchored at the viewport centre instead of the cursor, and independent of <c>ClickToZoomEnabled</c> (which
+    /// anchored like <see cref="ZoomActualSizeAsync"/> (the cursor over the viewport with <see cref="KeyboardZoomAnchor.Pointer"/>,
+    /// the viewport centre otherwise) instead of always the cursor, and independent of <c>ClickToZoomEnabled</c> (which
     /// only governs the mouse click).
     /// </summary>
     public Task ToggleClickZoomAsync()
@@ -288,8 +318,7 @@ internal sealed class PointerInputController
         if (!_commands.HasImages()) return Task.CompletedTask;
         CancelPan();
         StopKinetic();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
-        return ClickZoomAsync(centre);
+        return ClickZoomAsync(ResolveKeyboardAnchor());
     }
 
     /// <summary>
@@ -334,12 +363,35 @@ internal sealed class PointerInputController
     }
 
     /// <summary>
+    /// feat/zoom-key-anchor: adds a SCROLL-offset velocity impulse (<see cref="KineticScroller.AddImpulse"/>) to the
+    /// glide, starting one if idle; an auto-repeating key therefore keeps adding to the existing velocity (capped at
+    /// <see cref="KineticScroller.MaxVelocity"/>) instead of restarting the glide from scratch. The glide clock is
+    /// (re)started only for a fresh glide -- an impulse added mid-glide keeps its existing timing/anchoring.
+    /// </summary>
+    private void StartKineticImpulse(double velocityX, double velocityY)
+    {
+        var wasActive = _kinetic.IsActive;
+        _kinetic.AddImpulse(velocityX, velocityY);
+        if (!wasActive) _glideClock.Start(_settings().KineticGlideSmoothing, TicksPerMs);
+        if (_kineticHooked) return;
+        _surface.HookRenderFrame(_kineticFrameHandler);
+        _kineticHooked = true;
+    }
+
+    /// <summary>
     /// Arrow keys on a zoomed image move the view by <see cref="KeyboardPan.StepFraction"/> of the viewport instead
     /// of navigating. Returns true when the key was used. By default (ArrowKeyNavigatesAtZoomEdge off) every arrow key is
     /// used while the image is zoomed (pan, or nothing at an edge / on a non-scrollable axis); false only at Fit, so
     /// Left/Right navigate. With the setting on, a fresh press at the edge (or on a non-scrollable axis) is not used
     /// and navigates; an auto-repeat at the edge is swallowed. See <see cref="KeyboardPan.ConsumesKey"/>.
     /// </summary>
+    /// <remarks>
+    /// With <see cref="Core.Settings.AppSettings.KineticPanEnabled"/> a pan starts (or adds to) a kinetic glide with
+    /// the same friction as a mouse flick (<see cref="StartKineticImpulse"/>) instead of jumping straight to the
+    /// target offset, so holding the key accelerates smoothly and releasing it lets the glide decelerate on its own.
+    /// The edge/consume decision still reads the CURRENT (already-scrolled) offset via <see cref="KeyboardPan.Step"/>;
+    /// only the instant <c>ScrollTo</c> is skipped in kinetic mode.
+    /// </remarks>
     public bool TryPanByArrow(Key key, bool isRepeat)
     {
         var (dx, dy) = key switch
@@ -357,8 +409,16 @@ internal sealed class PointerInputController
         switch (result)
         {
             case KeyboardPanResult.Panned:
-                StopKinetic();
-                _surface.ScrollTo(horizontal, vertical);
+                if (_settings().KineticPanEnabled)
+                {
+                    var (velocityX, velocityY) = KeyboardPan.ImpulseVelocity(horizontal - _surface.HorizontalOffset, vertical - _surface.VerticalOffset);
+                    StartKineticImpulse(velocityX, velocityY);
+                }
+                else
+                {
+                    StopKinetic();
+                    _surface.ScrollTo(horizontal, vertical);
+                }
                 return true;
             default:
                 return KeyboardPan.ConsumesKey(result, isRepeat, _settings().ArrowKeyNavigatesAtZoomEdge, bounds);
