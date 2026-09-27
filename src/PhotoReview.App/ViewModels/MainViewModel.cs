@@ -106,7 +106,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // AR14 (Q-AR10 option a): the controllers below are built here on purpose, not injected. Each takes this
         // view-model as its sink (IFileActionSink / ISiblingNavigatorSink / IDuplicateCleanupSink) plus delegates
         // reading its state (() => Settings, () => _currentSession), so DI cannot create them before the VM exists:
-        // the controller -> sink = VM cycle is by design. See docs/refactoring/arch-review/AR14-viewmodel-composition.md.
+        // the controller -> sink = VM cycle is by design (AR14, see docs/refactoring/HISTORY.md).
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
             _naturalComparer, () => Settings, this,
@@ -367,8 +367,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock.NextInteraction();
         var nextIdx = Math.Min(_catalog.CurrentIndex + 1, _catalog.Count - 1);
         _statusText = string.Empty;
+        // R05: no explicit NotifyNavigationStateChanged() here -- PresentAsync always drives at least one
+        // (via NotifyCurrentImageChanged when the image is assigned, then again via NotifyPresentationChanged
+        // once the final status text, e.g. with dimensions, is known) before it returns, for every index this
+        // method can pass (0 <= nextIdx < _catalog.Count, already guaranteed above). An extra call here would
+        // just re-raise the same, already-current state a second time; see
+        // MainViewModelNavigationTests.NextAsync_RaisesNavigationStateChanged_ExactlyThreeTimes (pinned count).
         await _presenter.PresentAsync(nextIdx);
-        NotifyNavigationStateChanged();
     }
 
     /// <summary>
@@ -381,8 +386,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock.NextInteraction();
         var prevIdx = Math.Max(_catalog.CurrentIndex - 1, 0);
         _statusText = string.Empty;
+        // R05: see the comment in NextAsync -- PresentAsync already notifies before returning.
         await _presenter.PresentAsync(prevIdx);
-        NotifyNavigationStateChanged();
     }
 
     /// <summary>
@@ -394,8 +399,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_catalog.Count == 0) return;
         _clock.NextInteraction();
         _statusText = string.Empty;
+        // R05: see the comment in NextAsync -- PresentAsync already notifies before returning.
         await _presenter.PresentAsync(0);
-        NotifyNavigationStateChanged();
     }
 
     /// <summary>
@@ -407,8 +412,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_catalog.Count == 0) return;
         _clock.NextInteraction();
         _statusText = string.Empty;
+        // R05: see the comment in NextAsync -- PresentAsync already notifies before returning.
         await _presenter.PresentAsync(_catalog.Count - 1);
-        NotifyNavigationStateChanged();
     }
 
     /// <summary>
@@ -432,8 +437,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
         var nextIdx = Math.Min(_catalog.CurrentIndex + 1, _catalog.Count - 1);
         _statusText = string.Empty;
+        // R05: see the comment in NextAsync -- PresentAsync already notifies before returning.
         await _presenter.PresentAsync(nextIdx);
-        NotifyNavigationStateChanged();
     }
 
     /// <summary>

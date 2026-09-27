@@ -9,8 +9,9 @@ namespace PhotoReview.PerfAnalysis;
 /// <summary>
 /// D11 `--perf-analyze &lt;runDir&gt; [--rules &lt;json&gt;]`: reads every perf-*.csv under runDir
 /// (recursively), reassembles navigations, aggregates preload/dispatcher/folder data, applies the
-/// R-* decision rules (PERF-DIAGNOSIS-PLAN.md mục 8), and writes summary.md + summary.json into
-/// runDir. See docs/refactoring/PERF-DIAGNOSIS-TASKS.md, mục D11, for the full spec.
+/// R-* decision rules (documented in docs/archive/evidence/D-diagnosis-REPORT.md), and writes
+/// summary.md + summary.json into runDir. See docs/archive/historical/PERF-DIAGNOSIS-TASKS.md,
+/// mục D11, for the full spec.
 /// </summary>
 public static class PerfAnalyze
 {
