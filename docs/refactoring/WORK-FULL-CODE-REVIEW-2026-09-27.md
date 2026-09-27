@@ -1,6 +1,6 @@
 # Whole-project code review and optimization candidates
 
-**Date:** 2026-09-27. **Initial review baseline:** `origin/master` `13e33df` (`v2.0.187`); #183 merged as `f82084d` while review ran. **Final review base:** `f82084d`. **Status:** static review; no production changes. The #183 context-menu/settings diff was checked separately; no concrete issue found in that delta. GUI behavior still needs real-desktop verification.
+**Date:** 2026-09-27. **Initial review baseline:** `origin/master` `13e33df` (`v2.0.187`); #183 merged as `f82084d` while review ran. **Final review base:** `f82084d`. **Status:** PR #185 open for review; static review, no production changes. The #183 context-menu/settings diff was checked separately; no concrete issue found in that delta. GUI behavior still needs real-desktop verification.
 
 ## Method and coverage
 
