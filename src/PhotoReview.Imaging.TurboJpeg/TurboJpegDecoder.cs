@@ -220,8 +220,9 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
         if (TryReadDimensions(headerBytes, out int width, out int height, out _)) return new ImageInfo(width, height, orientation);
 
-        // The header area was cut by the read cap or the file is damaged: one last try on the whole file.
-        byte[] fullBytes = File.ReadAllBytes(path);
+        // The header area was cut by the read cap or the file is damaged: extend the read using exponential growth
+        // instead of re-reading the whole file, reusing the headerBytes buffer already acquired.
+        byte[] fullBytes = ExtendHeaderArea(path, headerBytes);
         if (fullBytes.Length > headerBytes.Length &&
             TryReadDimensions(fullBytes, out width, out height, out _))
         {
@@ -257,6 +258,40 @@ public sealed class TurboJpegDecoder : IImageDecoder
         while (buffer.Length < length && buffer.Length < HeaderReadCap && HeaderNeedsMoreData(buffer))
         {
             var grown = new byte[(int)Math.Min(Math.Min(length, HeaderReadCap), (long)buffer.Length * 2)];
+            buffer.CopyTo(grown, 0);
+            fs.ReadExactly(grown.AsSpan(buffer.Length));
+            buffer = grown;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>
+    /// Extends the initial header read using exponential growth without the cap.
+    /// This avoids re-reading the entire file when the header area exceeded the initial 8 MB cap.
+    /// Reuses the buffer passed in and continues from where ReadHeaderArea left off.
+    /// </summary>
+    private static byte[] ExtendHeaderArea(string path, byte[] initialBuffer)
+    {
+        using var fs = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            bufferSize: HeaderReadChunk,
+            FileOptions.SequentialScan);
+        var length = fs.Length;
+
+        // Skip to where the initial read ended
+        fs.Seek(initialBuffer.Length, SeekOrigin.Begin);
+
+        byte[] buffer = initialBuffer;
+        // Continue doubling without the HeaderReadCap limit, until we either:
+        // - reach the end of the file
+        // - the header marker walk says we have the full header
+        while (buffer.Length < length && HeaderNeedsMoreData(buffer))
+        {
+            var grown = new byte[(int)Math.Min(length, (long)buffer.Length * 2)];
             buffer.CopyTo(grown, 0);
             fs.ReadExactly(grown.AsSpan(buffer.Length));
             buffer = grown;
