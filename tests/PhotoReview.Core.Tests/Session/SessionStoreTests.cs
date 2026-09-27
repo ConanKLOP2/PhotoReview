@@ -1,4 +1,5 @@
-﻿using PhotoReview.Core.Abstractions;
+﻿using System.Diagnostics;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -136,14 +137,17 @@ public sealed class SessionStoreTests
     }
 
     [Fact(DisplayName = "Constructor sweeps day-old orphan temp files but keeps fresh ones and real sessions (R2-F-34)")]
-    public void Constructor_SweepsStaleTempFiles()
+    public async Task Constructor_SweepsStaleTempFiles()
     {
         var old = DateTime.UtcNow.AddDays(-3);
         _fs.AddFile(_sessionsDir + @"\abc.json.1111.tmp", "x", old);
         _fs.AddFile(_sessionsDir + @"\abc.json.2222.tmp", "x");
         _fs.AddFile(_sessionsDir + @"\abc.json", "{}", old);
 
-        _ = CreateStore();
+        var store = CreateStore();
+        // R14: the sweep runs on a background task now (startup no longer blocks on it); await it
+        // deterministically instead of polling/sleeping for its effect.
+        await store.StartupSweepTask;
 
         Assert.False(_fs.FileExists(_sessionsDir + @"\abc.json.1111.tmp"));
         Assert.True(_fs.FileExists(_sessionsDir + @"\abc.json.2222.tmp"));
@@ -151,14 +155,15 @@ public sealed class SessionStoreTests
     }
 
     [Fact(DisplayName = "One undeletable stale temp file does not stop the sweep of the others")]
-    public void Constructor_SweepContinuesAfterOneDeleteFails()
+    public async Task Constructor_SweepContinuesAfterOneDeleteFails()
     {
         var old = DateTime.UtcNow.AddDays(-3);
         _fs.AddFile(_sessionsDir + @"\a.json.1111.tmp", "x", old);
         _fs.AddFile(_sessionsDir + @"\b.json.2222.tmp", "x", old);
         _fs.DeleteHook = path => path.EndsWith("a.json.1111.tmp", StringComparison.OrdinalIgnoreCase) ? new IOException("locked") : null;
 
-        _ = CreateStore();
+        var store = CreateStore();
+        await store.StartupSweepTask;
 
         Assert.True(_fs.FileExists(_sessionsDir + @"\a.json.1111.tmp"));
         Assert.False(_fs.FileExists(_sessionsDir + @"\b.json.2222.tmp"));
@@ -176,6 +181,48 @@ public sealed class SessionStoreTests
         Assert.Equal(@"C:\photos\nullskip\a.jpg", loaded.CurrentPath);
         Assert.NotNull(loaded.Skipped);
         Assert.Empty(loaded.Skipped);
+    }
+
+    [Fact(DisplayName = "Save/Load do not depend on the background startup sweep having finished (R14)")]
+    public async Task SaveAndLoad_WhileStartupSweepStillRunning_AreUnaffected()
+    {
+        var old = DateTime.UtcNow.AddDays(-3);
+        _fs.AddFile(_sessionsDir + @"\stale1.json.1111.tmp", "x", old);
+        _fs.AddFile(_sessionsDir + @"\stale2.json.2222.tmp", "x", old);
+
+        // Blocks the sweep's first per-file stat until the test signals it (bounded so a real
+        // dependency shows up as a clear elapsed-time failure below, not a hang), forcing Save()/Load()
+        // to run concurrently with (before completion of) the still-in-flight background sweep.
+        using var gate = new ManualResetEventSlim(false);
+        var statCount = 0;
+        _fs.StatHook = _ =>
+        {
+            if (Interlocked.Increment(ref statCount) == 1) gate.Wait(TimeSpan.FromSeconds(10));
+            return null;
+        };
+
+        var store = CreateStore();
+        var folder = @"C:\photos\concurrent";
+        var state = new SessionState { Folder = folder, CurrentPath = @"C:\photos\concurrent\a.jpg" };
+
+        // Save/Load must succeed now, without waiting for StartupSweepTask: they only ever touch the
+        // real *.json path, never the *.tmp files the sweep is enumerating. If either called
+        // StartupSweepTask.Wait()/blocked on the sweep, this would take (most of) the 10 s gate above
+        // instead of completing immediately -- a real elapsed-time regression, not run-to-run noise.
+        var stopwatch = Stopwatch.StartNew();
+        store.Save(state);
+        var loaded = store.Load(folder);
+        stopwatch.Stop();
+        Assert.Equal(@"C:\photos\concurrent\a.jpg", loaded.CurrentPath);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2),
+            $"Save/Load took {stopwatch.Elapsed.TotalMilliseconds:F0} ms while the startup sweep was still gated -- looks like they now depend on it finishing.");
+
+        gate.Set();
+        await store.StartupSweepTask;
+
+        Assert.False(_fs.FileExists(_sessionsDir + @"\stale1.json.1111.tmp"));
+        Assert.False(_fs.FileExists(_sessionsDir + @"\stale2.json.2222.tmp"));
+        Assert.True(_fs.FileExists(store.GetPath(folder)));
     }
 
     [Theory(DisplayName = "Session file name is the persisted format: SHA-256 of the upper-cased folder without trailing separator (files from older builds still load)")]
