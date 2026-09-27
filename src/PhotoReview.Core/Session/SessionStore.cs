@@ -35,12 +35,28 @@ public sealed class SessionStore
         ArgumentNullException.ThrowIfNull(paths);
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _sessionsDir = paths.SessionsDir;
-        SweepStaleTempFiles(DateTime.UtcNow);
+        // R14 (2026-09-27 review): resolved eagerly on the UI thread at startup
+        // (MainViewModelCompositionRoot -> App's DI singleton). Measured on real disk: ~0.25-0.3 ms per
+        // stale *.tmp file (FileInfo stat + File.Delete each), so a worst-case population of a few
+        // thousand leftover markers (R2-F-34: one per crash between an atomic write's temp-create and
+        // rename) costs several hundred ms to over a second -- material against the ~1.8 s
+        // app-start-to-first-image budget (PERF-STATUS.md). Safe to run off the UI thread: Load/Save
+        // never touch *.tmp files (Load reads the real *.json path; Save's own temp file is renamed away
+        // or, on failure, cleaned up by WriteAllTextAtomic itself), and the 1-day age guard below means a
+        // background sweep can never delete a temp file a concurrent Save() is still writing (that file
+        // is milliseconds old, never "stale"). StartupSweepTask is exposed only so tests can await
+        // completion deterministically instead of polling or sleeping.
+        StartupSweepTask = Task.Run(() => SweepStaleTempFiles(DateTime.UtcNow));
     }
+
+    /// <summary>Test seam: lets a test await the background startup sweep (see R14) deterministically.</summary>
+    internal Task StartupSweepTask { get; }
 
     /// <summary>
     /// R2-F-34: an atomic write killed between creating <c>*.tmp</c> and the rename leaves the temp file behind for good.
     /// Removes temp files older than a day (a live writer's temp file is milliseconds old); best effort, never throws.
+    /// Runs on a background thread pool task from the constructor (R14) -- callers needing to observe its
+    /// effect deterministically (tests) should await <see cref="StartupSweepTask"/> first.
     /// </summary>
     internal int SweepStaleTempFiles(DateTime utcNow)
     {
