@@ -41,6 +41,15 @@ public sealed class PermanentDeleteTests
 
         public bool CanRecycle(string path) => HasRecycleBin;
 
+        public bool BinFits { get; set; } = true;
+        public List<(string Path, long Size)> FitsQueries { get; } = [];
+
+        public bool FitsInRecycleBin(string path, long fileSize)
+        {
+            FitsQueries.Add((path, fileSize));
+            return BinFits;
+        }
+
         public void SendToRecycleBin(string path)
         {
             if (!HasRecycleBin) throw new IOException("no recycle bin");
@@ -124,6 +133,50 @@ public sealed class PermanentDeleteTests
         Assert.Empty(_bin.Permanent);
         Assert.All(JournalEntries(), e => Assert.Null(e.Permanent));
         Assert.DoesNotContain("Permanent", _fs.ReadAllText(Journal), StringComparison.Ordinal); // omitted when null: old shape kept
+    }
+
+    [Theory(DisplayName = "F-WIN-2: bin turned off or too small on a fixed drive: refused, file kept, nothing journaled, never deleted permanently")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Recycle_BinCannotHoldFile_RefusesBeforeJournal(bool allowPermanentDelete)
+    {
+        _bin.HasRecycleBin = true;
+        _bin.BinFits = false;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(Photo, FileOperationType.Recycle, AllowPermanentDelete: allowPermanentDelete));
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.PermanentlyDeleted);
+        Assert.Equal(Tr.CoreRecycleBinCannotHold("a.jpg"), result.Error);
+        Assert.True(_fs.FileExists(Photo));
+        Assert.Empty(_bin.Recycled);
+        Assert.Empty(_bin.Permanent);
+        Assert.Empty(JournalEntries());
+    }
+
+    [Fact(DisplayName = "F-WIN-2: the capacity check gets the already-known file size and a fitting file is recycled as before")]
+    public async Task Recycle_BinFits_PassesStatSizeAndRecycles()
+    {
+        _bin.HasRecycleBin = true;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(Photo, FileOperationType.Recycle));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal((Photo, 10L), Assert.Single(_bin.FitsQueries));
+        Assert.Equal(Photo, Assert.Single(_bin.Recycled));
+        Assert.Equal([JournalState.Prepared, JournalState.Committed], JournalEntries().Select(e => e.State));
+    }
+
+    [Fact(DisplayName = "F-WIN-2: a drive without a Recycle Bin never asks the capacity check (permanent-delete path unchanged)")]
+    public async Task Recycle_NoRecycleBin_DoesNotAskCapacity()
+    {
+        _bin.BinFits = false;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(Photo, FileOperationType.Recycle, AllowPermanentDelete: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.True(result.PermanentlyDeleted);
+        Assert.Empty(_bin.FitsQueries);
     }
 
     [Fact(DisplayName = "Undo after a permanent delete reports it cannot restore and never asks the Recycle Bin")]
