@@ -227,6 +227,54 @@ public sealed class UndoServiceTests
         Assert.True(_service.CanUndoMove);
     }
 
+    [Fact(DisplayName = "A Move whose destination was deleted outside the app is reported once and dropped, so older moves stay undoable")]
+    public async Task UndoMoveAsync_DestinationDeletedExternally_ReportsOnceAndDropsEntry()
+    {
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        var oldSource = @"C:\photos\old.jpg";
+        var oldDestination = @"C:\photos\sorted\old.jpg";
+        var brokenSource = @"C:\photos\broken.jpg";
+        var brokenDestination = @"C:\photos\sorted\broken.jpg";
+        _fs.AddFile(oldDestination, "old!", writeTime);
+        _fs.AddFile(brokenDestination, "brok", writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Move, oldSource, oldDestination, 4, writeTime, null));
+        _service.Register(new FileActionResult(true, FileOperationType.Move, brokenSource, brokenDestination, 4, writeTime, null));
+        _fs.Delete(brokenDestination);
+
+        var first = await _service.UndoLastAsync();
+
+        Assert.False(first.Succeeded);
+        Assert.Equal(1, _service.MoveHistoryCount);
+        Assert.False(_service.HasLastAction);
+
+        var second = await _service.UndoMoveAsync();
+
+        Assert.True(second.Succeeded);
+        Assert.Equal(oldSource, second.Source);
+        Assert.True(_fs.FileExists(oldSource));
+        Assert.Equal(0, _service.MoveHistoryCount);
+    }
+
+    [Fact(DisplayName = "A Move whose source name is temporarily occupied stays in the history")]
+    public async Task UndoMoveAsync_SourceOccupied_KeepsEntryUntilSourceFreed()
+    {
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"C:\photos\sorted\photo1.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(source, "blocker", writeTime);
+        _fs.AddFile(destination, "dest", writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 4, writeTime, null));
+
+        var blocked = await _service.UndoLastAsync();
+        Assert.False(blocked.Succeeded);
+        Assert.True(_service.HasLastAction);
+
+        _fs.Delete(source);
+        var retry = await _service.UndoLastAsync();
+
+        Assert.True(retry.Succeeded);
+    }
+
     [Fact]
     public async Task UndoMoveAsync_CaseInsensitiveDestinationMatch_P12()
     {

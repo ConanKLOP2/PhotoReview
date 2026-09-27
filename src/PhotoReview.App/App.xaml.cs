@@ -85,6 +85,7 @@ public partial class App : System.Windows.Application, IDisposable
 
         // 4. Diagnostics & Metrics
         services.AddSingleton<ReviewMetrics>();
+        services.AddSingleton<LatestExplorerSnapshot>();
 
         // 5. Platform Services
         services.AddSingleton<IExplorerOrderProvider, ExplorerOrderService>();

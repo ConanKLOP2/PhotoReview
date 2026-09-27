@@ -87,7 +87,8 @@ internal static class MainViewModelCompositionRoot
 
         var coordinator = new FolderLoadCoordinator(
             catalog, clock, explorerOrder, fs, sessionStore, settingsStore,
-            new ForwardingFolderSink(() => vm ?? throw new InvalidOperationException("MainViewModel is not created yet.")), sessionWriter);
+            new ForwardingFolderSink(() => vm ?? throw new InvalidOperationException("MainViewModel is not created yet.")), sessionWriter,
+            sp.GetService<LatestExplorerSnapshot>());
 
         vm = new MainViewModel(
             catalog, clock, coordinator, presenter, viewer, compare, settingsStore, sessionStore,

@@ -68,8 +68,8 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("1 tệp sẽ được đưa vào Thùng rác. Hãy kiểm tra danh sách trước khi xác nhận.", batch.SummaryText.Text);
                 Assert.Equal($"gone.jpg    (không còn tồn tại)    {Path.Combine(temp.Path, "gone.jpg")}", batch.FilesList.Items[0]);
 
-                // Operation combo: order is load-bearing (SelectedIndex mapping).
-                Assert.Equal(["Di chuyển", "Sao chép", "Đưa vào Thùng rác", "Xóa (vào Thùng rác)"],
+                // Operation combo: order is load-bearing (SelectedIndex mapping); no separate legacy "Delete" item.
+                Assert.Equal(["Di chuyển", "Sao chép", "Đưa vào Thùng rác"],
                     actions.OperationCombo.Items.Cast<ComboBoxItem>().Select(i => (string)i.Content));
                 Assert.Contains("+ Thêm", Texts(actions));
 

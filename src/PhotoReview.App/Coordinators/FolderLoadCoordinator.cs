@@ -26,6 +26,7 @@ public sealed class FolderLoadCoordinator : IDisposable
     private readonly SessionWriter? _sessionWriter;
     private readonly SettingsStore _settingsStore;
     private readonly IFolderLoadSink _sink;
+    private readonly LatestExplorerSnapshot? _latestExplorer;
 
     private CancellationTokenSource? _loadCts;
     private TaskCompletionSource? _pendingOrder;
@@ -40,7 +41,8 @@ public sealed class FolderLoadCoordinator : IDisposable
         SessionStore sessionStore,
         SettingsStore settingsStore,
         IFolderLoadSink sink,
-        SessionWriter? sessionWriter = null)
+        SessionWriter? sessionWriter = null,
+        LatestExplorerSnapshot? latestExplorer = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -50,6 +52,7 @@ public sealed class FolderLoadCoordinator : IDisposable
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         _sessionWriter = sessionWriter;
+        _latestExplorer = latestExplorer;
     }
 
     /// <summary>
@@ -103,6 +106,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                     16,
                     loadToken);
                 perf.TraceExplorer(explorerTask);
+                _latestExplorer?.Set(explorerTask);
             }
             else
             {
@@ -113,6 +117,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                     folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable,
                     "Explorer order not used by this sort mode", DateTime.UtcNow));
                 perf.Mark("explorerSkipped");
+                _latestExplorer?.Set(null); // Diagnostics shows "not queried" rather than the placeholder result above
             }
 
             // perf(startup): scan and sort in ONE background task. Two separate Task.Run hops made the
