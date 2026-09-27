@@ -55,3 +55,4 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | L01/L02 | Deep review of the 289 `needs-deep-review` Imaging ledger rows: 287 no issue, 2 low-severity fixes (weak WicDirect memory-buffer test oracle; wasted disk-cache-path hash when the disk cache is disabled). [Detail](decisions/LEDGER-DEEP-REVIEW.md) |
 | Q-R05 / Q-R12 | Navigation notification count deduped; stale doc-comment links retargeted (#193). [Detail](decisions/Q-R05-Q-R12.md) |
 | R15/R16/R17/R18 | Hash-service stat, catalog snapshot, drag-drop `Exists` checks and diagnostics-metrics sort all measured negligible; no fix. [Detail](decisions/R15-R16-R17-R18.md) |
+| P01-P03 | Post-ledger review of master changes since 3ef2bb5 (#186-#198+) plus screened-static hot-path rows outside Imaging: no defects in the reviewed diff; two document-only journal/undo races found (concurrent-retry misreport, cross-folder Undo contamination). [Detail](decisions/POST-LEDGER-REVIEW.md) |
