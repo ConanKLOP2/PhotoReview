@@ -75,13 +75,22 @@ public static class SettingsNormalizer
             fixedNames.Add(nameof(AppSettings.PreloadBackwardCount));
         }
 
-        if (!Enum.IsDefined(settings.InitialViewMode)) { settings.InitialViewMode = InitialViewMode.Fit; fixedNames.Add(nameof(AppSettings.InitialViewMode)); }
+        // PR-B: the Settings combo no longer offers Percent400; a config that still has it (old or hand-edited) is
+        // migrated to Percent200 rather than treated as invalid, so it keeps loading with a supported value.
+        if (settings.InitialViewMode == InitialViewMode.Percent400)
+        {
+            settings.InitialViewMode = InitialViewMode.Percent200;
+            fixedNames.Add(nameof(AppSettings.InitialViewMode));
+        }
+        else if (!Enum.IsDefined(settings.InitialViewMode)) { settings.InitialViewMode = InitialViewMode.Fit; fixedNames.Add(nameof(AppSettings.InitialViewMode)); }
         if (!Enum.IsDefined(settings.LoadingMode)) { settings.LoadingMode = LoadingMode.Preview; fixedNames.Add(nameof(AppSettings.LoadingMode)); }
         if (!Enum.IsDefined(settings.ImageSortMode)) { settings.ImageSortMode = ImageSortMode.Name; fixedNames.Add(nameof(AppSettings.ImageSortMode)); }
         if (!Enum.IsDefined(settings.ScalingQuality)) { settings.ScalingQuality = ScalingQuality.HighQuality; fixedNames.Add(nameof(AppSettings.ScalingQuality)); }
         if (!Enum.IsDefined(settings.DecoderBackend)) { settings.DecoderBackend = DecoderBackend.WicDirect; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
         if (!Enum.IsDefined(settings.JournalDurability)) { settings.JournalDurability = JournalDurability.Fast; fixedNames.Add(nameof(AppSettings.JournalDurability)); }
         if (!Enum.IsDefined(settings.InstanceMode)) { settings.InstanceMode = InstanceMode.SingleWindow; fixedNames.Add(nameof(AppSettings.InstanceMode)); }
+        if (!Enum.IsDefined(settings.FitWidthAnchor)) { settings.FitWidthAnchor = FitWidthAnchor.Centre; fixedNames.Add(nameof(AppSettings.FitWidthAnchor)); }
+        if (!Enum.IsDefined(settings.KeyboardZoomAnchor)) { settings.KeyboardZoomAnchor = KeyboardZoomAnchor.Pointer; fixedNames.Add(nameof(AppSettings.KeyboardZoomAnchor)); }
 
         if (settings.Actions is { } actions)
         {
@@ -121,6 +130,9 @@ public static class SettingsNormalizer
             shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";
             shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
             shortcuts.ClickZoom = shortcuts.ClickZoom?.Trim() ?? "";
+            shortcuts.FitWidth = shortcuts.FitWidth?.Trim() ?? "";
+            shortcuts.FitHeight = shortcuts.FitHeight?.Trim() ?? "";
+            shortcuts.ToggleKeepZoom = shortcuts.ToggleKeepZoom?.Trim() ?? "";
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
@@ -218,6 +230,9 @@ public static class SettingsNormalizer
         shortcuts.MoveToFolder = Resolve(nameof(ShortcutMappings.MoveToFolder), shortcuts.MoveToFolder);
         shortcuts.CopyToFolder = Resolve(nameof(ShortcutMappings.CopyToFolder), shortcuts.CopyToFolder);
         shortcuts.ClickZoom = Resolve(nameof(ShortcutMappings.ClickZoom), shortcuts.ClickZoom);
+        shortcuts.FitWidth = Resolve(nameof(ShortcutMappings.FitWidth), shortcuts.FitWidth);
+        shortcuts.FitHeight = Resolve(nameof(ShortcutMappings.FitHeight), shortcuts.FitHeight);
+        shortcuts.ToggleKeepZoom = Resolve(nameof(ShortcutMappings.ToggleKeepZoom), shortcuts.ToggleKeepZoom);
         return disabled;
     }
 }

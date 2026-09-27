@@ -48,6 +48,8 @@ public sealed class SettingsWindowRedesignTests
         // Q-R34
         nameof(AppSettings.InfoOverlayAutoHide), nameof(AppSettings.InfoOverlayAutoHideDelayMs), nameof(AppSettings.ToolbarOpacityPercent),
         nameof(AppSettings.ArrowPanStepPercent),
+        // PR-B (feat/fit-width-height-keep-zoom)
+        nameof(AppSettings.FitWidthAnchor), nameof(AppSettings.KeepZoomAcrossImages),
     };
 
     [Fact(DisplayName = "Every AppSettings property without a Settings control survives open + Save (the SAVE-01 bug this branch fixes)")]
@@ -267,7 +269,10 @@ public sealed class SettingsWindowRedesignTests
                     window.LastImageText.Text = "End";
                     window.ZoomActualSizeText.Text = "D3"; // D2 is now ClickZoom's default; pick another free key
                     window.ToggleInfoOverlayText.Text = "J";
-                    window.MoveToFolderText.Text = "K";
+                    // PR-B: "K" is now ToggleKeepZoom's default shortcut; "N" keeps this test about MoveToFolder's
+                    // own round trip instead of tripping SettingsValidator's duplicate check (which would pop a real,
+                    // undismissable MessageBox and hang the STA test host).
+                    window.MoveToFolderText.Text = "N";
                     window.CopyToFolderText.Text = "L";
                     window.ClickZoomText.Text = "D9";
                     window.ShowExifInfoCheck.IsChecked = true;
@@ -297,7 +302,7 @@ public sealed class SettingsWindowRedesignTests
                 Assert.Equal("End", window.Settings.Shortcuts.LastImage);
                 Assert.Equal("D3", window.Settings.Shortcuts.ZoomActualSize);
                 Assert.Equal("J", window.Settings.Shortcuts.ToggleInfoOverlay);
-                Assert.Equal("K", window.Settings.Shortcuts.MoveToFolder);
+                Assert.Equal("N", window.Settings.Shortcuts.MoveToFolder);
                 Assert.Equal("L", window.Settings.Shortcuts.CopyToFolder);
                 Assert.Equal("D9", window.Settings.Shortcuts.ClickZoom);
                 Assert.True(window.Settings.ShowExifInfo);

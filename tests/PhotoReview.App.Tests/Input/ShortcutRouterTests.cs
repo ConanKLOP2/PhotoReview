@@ -252,4 +252,42 @@ public sealed class ShortcutRouterTests
         var cmd = _router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, hasImage: true);
         Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
     }
+
+    // ---- PR-B: FitWidth (W) / FitHeight (H) / ToggleKeepZoom (K) -- the fixture's Shortcuts object initializer ----
+    // ---- leaves these at ShortcutMappings' own defaults, so no extra wiring is needed here. ----
+
+    [Fact]
+    public void FitWidth_ResolvesOnlyWithAnImage()
+    {
+        Assert.Equal(ReviewCommandType.FitWidth, _router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
+        Assert.Null(_router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, hasImage: false));
+    }
+
+    [Fact]
+    public void FitHeight_ResolvesOnlyWithAnImage()
+    {
+        Assert.Equal(ReviewCommandType.FitHeight, _router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, hasImage: true)?.Type);
+        Assert.Null(_router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, hasImage: false));
+    }
+
+    [Fact]
+    public void ToggleKeepZoom_ResolvesWithoutAnImage_LikeToggleInfoOverlay()
+    {
+        Assert.Equal(ReviewCommandType.ToggleKeepZoom, _router.TryResolve(Key.K, Key.None, ModifierKeys.None, false, hasImage: false)?.Type);
+    }
+
+    [Fact]
+    public void EmptyFitWidthHeightKeepZoomShortcuts_ResolveToNothing()
+    {
+        var settings = new AppSettings { Shortcuts = new ShortcutMappings() };
+        var router = new ShortcutRouter(settings);
+        settings.Shortcuts.FitWidth = "";
+        settings.Shortcuts.FitHeight = "";
+        settings.Shortcuts.ToggleKeepZoom = "";
+        router.Rebuild(settings);
+
+        Assert.Null(router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, true));
+        Assert.Null(router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, true));
+        Assert.Null(router.TryResolve(Key.K, Key.None, ModifierKeys.None, false, true));
+    }
 }

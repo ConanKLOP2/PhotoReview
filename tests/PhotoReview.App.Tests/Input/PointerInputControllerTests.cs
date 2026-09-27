@@ -101,6 +101,130 @@ public sealed class PointerInputControllerTests
         Assert.Empty(_surface.Scrolls);
     }
 
+    // ---- PR-B: Fit width / Fit height / keep zoom across images ----
+
+    [Fact]
+    public async Task FitWidthAsync_NoMouse_UsesTheConfiguredAnchor_DefaultCentre()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.FitWidthAsync(mouseOverViewport: null);
+
+        Assert.False(_viewer.IsFit);
+        // SetZoom (inside ZoomToFitWidth) resets MaxImageWidth to Infinity, so FitWidthZoom reads back 0 afterwards --
+        // assert the concrete expected zoom (800 DIP viewport / 2000 px source) instead of re-reading the property.
+        Assert.Equal(0.4, _viewer.Zoom, 6);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_NoMouse_TopThirdAnchor_ScrollsLessFarThanCentre()
+    {
+        // A scrollable range is needed for the two anchors to land on different offsets (with none, both clamp to 0).
+        _surface.ExtentHeight = 1200;
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _settings.FitWidthAnchor = FitWidthAnchor.Centre;
+
+        await _controller.FitWidthAsync(null);
+        var centreVertical = _surface.Scrolls[^1].V;
+
+        _surface.Scrolls.Clear();
+        _surface.VerticalOffset = 0; // the fake keeps its offset across calls; reset so both anchors start from the same place
+        _viewer.SetZoom(1.0); // undo the previous FitWidth so the second call starts from the same place
+        _settings.FitWidthAnchor = FitWidthAnchor.TopThird;
+
+        await _controller.FitWidthAsync(null);
+        var topThirdVertical = _surface.Scrolls[^1].V;
+
+        // Top-third keeps a point further UP the image at the viewport centre, so it needs LESS downward scroll.
+        Assert.True(topThirdVertical < centreVertical);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_MouseOverViewport_AnchorsAtTheMousePointInstead()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.FitWidthAsync(new Point(400, 100)); // near the top of the (pre-zoom Fit) viewport
+
+        Assert.False(_viewer.IsFit);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitHeightAsync_AlwaysAnchorsAtImageCentre()
+    {
+        _viewer.SetSourceSize(4000, 2000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.FitHeightAsync();
+
+        Assert.False(_viewer.IsFit);
+        // 600 DIP viewport height / 2000 px source height (see the FitWidthZoom comment above for why this can't
+        // re-read FitHeightZoom after the fact).
+        Assert.Equal(0.3, _viewer.Zoom, 6);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_WithoutImages_DoesNothing()
+    {
+        _hasImages = false;
+
+        await _controller.FitWidthAsync(null);
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_Fit_ResetsFitWithNoScrollPlacementPass()
+    {
+        _viewer.SetZoom(3.0);
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.Fit, clickZoomPercent: 100);
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls); // Fit's own convergence pass is FitViewController's job, not this one's
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_FitWidth_AppliesZoomThenPlacesScrollAtTheConfiguredAnchor()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.FitWidth, clickZoomPercent: 100);
+
+        Assert.Equal(0.4, _viewer.Zoom, 6); // 800 DIP viewport width / 2000 px source width
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_ClickZoomLevel_ZoomsButDoesNotScroll()
+    {
+        await _controller.ApplyInitialViewAsync(InitialViewMode.ClickZoomLevel, clickZoomPercent: 150);
+
+        Assert.Equal(1.5, _viewer.Zoom, 6);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_KeepZoomAcrossImages_IsANoOp()
+    {
+        _viewer.SetZoom(3.0);
+        _settings.KeepZoomAcrossImages = true;
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.Fit, clickZoomPercent: 100);
+
+        Assert.Equal(3.0, _viewer.Zoom);
+        Assert.False(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
     // ---- pan ----
 
     [Fact]
@@ -260,6 +384,115 @@ public sealed class PointerInputControllerTests
 
         Assert.True(_viewer.IsFit);
         Assert.Empty(_surface.Scrolls);
+    }
+
+    // ---- keyboard/menu zoom anchor (feat/zoom-key-anchor) ----
+
+    [Fact]
+    public async Task ZoomInAsync_WithoutImages_DoesNothing()
+    {
+        _hasImages = false;
+
+        await _controller.ZoomInAsync();
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ZoomOutAsync_WithoutImages_DoesNothing()
+    {
+        _hasImages = false;
+
+        await _controller.ZoomOutAsync();
+
+        Assert.True(_viewer.IsFit);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task ZoomInAsync_IncreasesZoom_ZoomOutAsync_DecreasesItBack()
+    {
+        ZoomInSoTheImageCanPan(); // not Fit, so the step is symmetric around the current zoom
+        var before = _viewer.Zoom;
+
+        await _controller.ZoomInAsync();
+        Assert.True(_viewer.Zoom > before);
+
+        var afterIn = _viewer.Zoom;
+        await _controller.ZoomOutAsync();
+        Assert.True(_viewer.Zoom < afterIn);
+    }
+
+    [Fact]
+    public async Task ZoomInAsync_StopsARunningGlide()
+    {
+        StartGlide();
+
+        await _controller.ZoomInAsync();
+
+        Assert.Null(_surface.RenderHandler);
+    }
+
+    [Fact]
+    public async Task ZoomInAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
+    {
+        _surface.PointerPosition = new Point(100, 50);
+
+        await _controller.ZoomInAsync();
+
+        Assert.Equal(new Point(100, 50), _surface.ToImageElementCalls[^1]);
+    }
+
+    [Fact]
+    public async Task ZoomInAsync_PointerOutsideTheViewport_FallsBackToTheCentre()
+    {
+        _surface.PointerPosition = null;
+
+        await _controller.ZoomInAsync();
+
+        Assert.Equal(new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2), _surface.ToImageElementCalls[^1]);
+    }
+
+    [Fact]
+    public async Task ZoomInAsync_ViewportCentreSetting_IgnoresThePointer_EvenWhenItIsOverTheViewport()
+    {
+        _settings.KeyboardZoomAnchor = KeyboardZoomAnchor.ViewportCentre;
+        _surface.PointerPosition = new Point(100, 50);
+
+        await _controller.ZoomInAsync();
+
+        Assert.Equal(new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2), _surface.ToImageElementCalls[^1]);
+    }
+
+    [Fact]
+    public async Task ZoomOutAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
+    {
+        _surface.PointerPosition = new Point(650, 500);
+
+        await _controller.ZoomOutAsync();
+
+        Assert.Equal(new Point(650, 500), _surface.ToImageElementCalls[^1]);
+    }
+
+    [Fact]
+    public async Task ZoomActualSizeAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
+    {
+        _surface.PointerPosition = new Point(120, 80);
+
+        await _controller.ZoomActualSizeAsync();
+
+        Assert.Equal(new Point(120, 80), _surface.ToImageElementCalls[^1]);
+    }
+
+    [Fact]
+    public async Task ToggleClickZoomAsync_PointerOverTheViewport_ZoomsAtThePointer_NotTheCentre()
+    {
+        _surface.PointerPosition = new Point(120, 80);
+
+        await _controller.ToggleClickZoomAsync();
+
+        Assert.Equal(new Point(120, 80), _surface.ToImageElementCalls[^1]);
     }
 
     // ---- kinetic glide ----
@@ -450,6 +683,7 @@ public sealed class PointerInputControllerTests
     [Fact]
     public void Arrow_ZoomedImage_PansTenPercentOfTheViewport_WithoutNavigating()
     {
+        _settings.KineticPanEnabled = false; // this test asserts the instant step, not the kinetic glide
         _surface.ExtentWidth = 2000;
         _surface.ExtentHeight = 1500;
         _surface.HorizontalOffset = 100;
@@ -469,6 +703,7 @@ public sealed class PointerInputControllerTests
     [Fact]
     public void Arrow_StepFollowsTheArrowPanStepPercentSetting()
     {
+        _settings.KineticPanEnabled = false; // this test asserts the instant step, not the kinetic glide
         _settings.ArrowPanStepPercent = 25;
         _surface.ExtentWidth = 2000;
         _surface.ExtentHeight = 1500;
@@ -484,6 +719,7 @@ public sealed class PointerInputControllerTests
     [Fact]
     public void Arrow_StepIsClampedToTheEdge()
     {
+        _settings.KineticPanEnabled = false; // this test asserts the instant step, not the kinetic glide
         _surface.ExtentWidth = 2000;
         _surface.HorizontalOffset = 1170; // max 1200
 
@@ -502,6 +738,7 @@ public sealed class PointerInputControllerTests
     [Fact]
     public void Arrow_LegacySetting_AtTheEdge_RepeatIsSwallowed_FreshPressFallsThroughToNavigation()
     {
+        _settings.KineticPanEnabled = false; // this test asserts the instant step, not the kinetic glide
         _settings.ArrowKeyNavigatesAtZoomEdge = true;
         _surface.ExtentWidth = 2000;
         _surface.HorizontalOffset = 1200;
@@ -578,6 +815,73 @@ public sealed class PointerInputControllerTests
         Assert.Empty(_surface.Scrolls);
     }
 
+    // ---- arrow-key kinetic impulse (feat/zoom-key-anchor: KineticPanEnabled true, the default in this fixture) ----
+
+    [Fact]
+    public void Arrow_KineticPanEnabled_Panned_StartsAGlide_InsteadOfAnInstantScrollTo()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 100;
+        _surface.VerticalOffset = 100;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+
+        Assert.Equal(1, _surface.Hooks);
+        Assert.NotNull(_surface.RenderHandler);
+        Assert.Empty(_surface.Scrolls); // no instant ScrollTo -- only the glide's own frame steps move it
+        Assert.Equal(0, _next + _previous);
+    }
+
+    [Fact]
+    public void Arrow_KineticPanEnabled_DrivenToRest_TravelsAboutTheConfiguredStep()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 100;
+        _surface.VerticalOffset = 100;
+        var before = _surface.HorizontalOffset;
+
+        _controller.TryPanByArrow(Key.Right, isRepeat: false);
+        var handler = _surface.RenderHandler!;
+        for (var t = 0; t < 20_000 && _surface.RenderHandler is not null; t += 16)
+            handler(null, new FrameArgs(TimeSpan.FromMilliseconds(t)));
+
+        Assert.Null(_surface.RenderHandler); // the glide stopped on its own
+        // The step at ArrowPanStepPercent=10 % of an 800-wide viewport is 80 DIP (matches the instant-mode test).
+        Assert.Equal(before + 80, _surface.HorizontalOffset, tolerance: 1.0);
+    }
+
+    [Fact]
+    public void Arrow_KineticPanEnabled_AutoRepeat_AddsToTheRunningGlide_WithoutRehooking()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 100;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+        Assert.Equal(1, _surface.Hooks);
+        var handlerAfterFirst = _surface.RenderHandler;
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: true));
+
+        Assert.Equal(1, _surface.Hooks); // still hooked once, not re-hooked
+        Assert.Same(handlerAfterFirst, _surface.RenderHandler);
+    }
+
+    [Fact]
+    public void Arrow_KineticPanEnabled_AtTheEdge_ConsumedAsANoOp_DoesNotStartAGlide()
+    {
+        _surface.ExtentWidth = 2000;
+        _surface.ExtentHeight = 1500;
+        _surface.HorizontalOffset = 1200; // already at the max
+
+        Assert.True(_controller.TryPanByArrow(Key.Right, isRepeat: false));
+
+        Assert.Equal(0, _surface.Hooks);
+        Assert.Null(_surface.RenderHandler);
+    }
+
     private sealed class FakeSurface : IImageSurface
     {
         private readonly List<TaskCompletionSource> _heldYields = [];
@@ -626,7 +930,15 @@ public sealed class PointerInputControllerTests
         }
 
         public Point ImageOrigin => new(0, 0);
-        public Point ToImageElement(Point surfacePoint) => new(surfacePoint.X + HorizontalOffset, surfacePoint.Y + VerticalOffset);
+
+        /// <summary>Every mouse/anchor point <see cref="PointerInputController"/> zoomed at (test seam for the keyboard-zoom-anchor tests).</summary>
+        public List<Point> ToImageElementCalls { get; } = [];
+
+        public Point ToImageElement(Point surfacePoint)
+        {
+            ToImageElementCalls.Add(surfacePoint);
+            return new(surfacePoint.X + HorizontalOffset, surfacePoint.Y + VerticalOffset);
+        }
         public double ImageActualWidth => ExtentWidth;
         public double ImageActualHeight => ExtentHeight;
         public (double Width, double Height)? SourceSize => (ExtentWidth, ExtentHeight);
@@ -674,5 +986,7 @@ public sealed class PointerInputControllerTests
             }
             set => _displayTiming = value;
         }
+
+        public Point? PointerPosition { get; set; }
     }
 }

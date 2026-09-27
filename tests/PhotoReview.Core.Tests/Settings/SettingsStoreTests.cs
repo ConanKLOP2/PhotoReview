@@ -281,7 +281,7 @@ public sealed class SettingsStoreTests
             "ImageCacheCapacityBytes": 17179869184,
             "PreloadWorkerCount": 8,
             "Shortcuts": { "Next": "D", "Previous": "A" },
-            "Actions": [ { "Name": "Keep", "Shortcut": "K", "Operation": "Copy", "Destination": "Keep" } ]
+            "Actions": [ { "Name": "Keep", "Shortcut": "L", "Operation": "Copy", "Destination": "Keep" } ]
         }
         """;
         _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, json);
@@ -289,6 +289,9 @@ public sealed class SettingsStoreTests
         var loaded = _store.Load();
         var expected = JsonSerializer.Deserialize<AppSettings>(json)!;
         SettingsStore.Migrate(expected); // Load migrates v2 -> current (UiLanguage, ADR 0006); compare deserializers only
+        // PR-B: DisableConflictingOptionalShortcuts (also run by Load) would disable ToggleKeepZoom's default "K" if
+        // the fixture's action shortcut collided with it; "L" keeps this test about the reflection/source-gen byte
+        // comparison, not about shortcut conflict resolution (that has its own tests).
 
         Assert.Equal(JsonSerializer.Serialize(expected, ReflectionIndented), JsonSerializer.Serialize(loaded, ReflectionIndented));
         Assert.Equal("D", loaded.Shortcuts.Next);

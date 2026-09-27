@@ -14,16 +14,19 @@ namespace PhotoReview.Core.Diagnostics;
 /// <see cref="PreloadWorkers"/> and <see cref="DisableDiskCache"/> are consumed by D10
 /// (PreloadScheduler / PreviewImageService disk cache); D05 only declares them and covers them with
 /// tests. <see cref="PreRead"/> is consumed here in D05, by <c>PreviewImageService.DecodeFromSource</c>.
+/// <see cref="ForceLog"/> is consumed by <c>App.xaml.cs</c> to enable <c>AppLog</c> at startup for a
+/// single debugging run, without touching <c>AppSettings.LoggingEnabled</c> (config.json) or rebuilding.
 /// </summary>
 public static class DiagOptions
 {
     internal const string PreReadVar = "PHOTOREVIEW_DIAG_PREREAD";
     internal const string PreloadWorkersVar = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS";
     internal const string DisableDiskCacheVar = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";
+    internal const string ForceLogVar = "PHOTOREVIEW_DIAG_FORCE_LOG";
 
     private static volatile Lazy<Snapshot> _snapshot = new(ReadFromEnvironment);
 
-    private sealed record Snapshot(bool PreRead, int? PreloadWorkers, bool DisableDiskCache);
+    private sealed record Snapshot(bool PreRead, int? PreloadWorkers, bool DisableDiskCache, bool ForceLog);
 
     /// <summary>PHOTOREVIEW_DIAG_PREREAD=1: read the whole source file into memory before decoding,
     /// so <c>SourceRead</c> and <c>Decode</c> perf events report I/O and decode time separately.</summary>
@@ -37,8 +40,12 @@ public static class DiagOptions
     /// (D10).</summary>
     public static bool DisableDiskCache => _snapshot.Value.DisableDiskCache;
 
+    /// <summary>PHOTOREVIEW_DIAG_FORCE_LOG=1: force <c>AppLog.Enabled</c> on at startup regardless of
+    /// <c>AppSettings.LoggingEnabled</c>, for a single debugging run.</summary>
+    public static bool ForceLog => _snapshot.Value.ForceLog;
+
     /// <summary>True when any PHOTOREVIEW_DIAG_* variable above is in effect.</summary>
-    public static bool AnyEnabled => PreRead || PreloadWorkers.HasValue || DisableDiskCache;
+    public static bool AnyEnabled => PreRead || PreloadWorkers.HasValue || DisableDiskCache || ForceLog;
 
     /// <summary>Stable, human-readable summary of every active flag, e.g. "PREREAD=1;PRELOAD_WORKERS=2".
     /// Used for the forced startup log line and the " · DIAG" title suffix.</summary>
@@ -49,6 +56,7 @@ public static class DiagOptions
         if (snapshot.PreRead) parts.Add("PREREAD=1");
         if (snapshot.PreloadWorkers.HasValue) parts.Add($"PRELOAD_WORKERS={snapshot.PreloadWorkers.Value}");
         if (snapshot.DisableDiskCache) parts.Add("DISABLE_DISKCACHE=1");
+        if (snapshot.ForceLog) parts.Add("FORCE_LOG=1");
         return parts.Count == 0 ? "(none)" : string.Join(";", parts);
     }
 
@@ -62,9 +70,10 @@ public static class DiagOptions
     {
         var preRead = Environment.GetEnvironmentVariable(PreReadVar) == "1";
         var disableDiskCache = Environment.GetEnvironmentVariable(DisableDiskCacheVar) == "1";
+        var forceLog = Environment.GetEnvironmentVariable(ForceLogVar) == "1";
         int? workers = null;
         var workersRaw = Environment.GetEnvironmentVariable(PreloadWorkersVar);
         if (int.TryParse(workersRaw, out var parsed) && parsed is >= 0 and <= 16) workers = parsed;
-        return new Snapshot(preRead, workers, disableDiskCache);
+        return new Snapshot(preRead, workers, disableDiskCache, forceLog);
     }
 }

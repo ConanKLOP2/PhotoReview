@@ -21,6 +21,8 @@ Open work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md). Decisions: [`OPEN-DECISIO
 | **Overnight review + source audit 2026-09-26** | Function-level fixes (#96, #97, #103, #99); source audit F0-F4 all closed (F2 by design, F3 #101, F0/F1/F4 #103). Q-R25. | |
 | **Perf night 2026-09-24 / 09-26** | Decode-to-viewport, ICC via WIC, disk cache, direction-aware preload (#39-#48); benchmark harness speed-up (#109); Q-R26 cause found (`preloadKick` on the UI thread) and fixed. Numbers: `PERF-STATUS.md`. | |
 | **UI feedback 2026-09-26** | Q-R30: dark title bar/scrollbars, toolbar + info auto-hide (Q-R34), title-bar fields, click-zoom key `2`, glide smoothing, arrow-key pan that never leaves a zoomed image (Q-R32, `ArrowKeyNavigatesAtZoomEdge`), sort modes Default / Name A-Z / Z-A (Q-R33), preload window setting (Q-R31), Zoom menu + Zoom card in Settings, `ArrowPanStepPercent`, Taken/Modified labels. | #119-#134 |
+| **Diag 2026-09-27** | `PHOTOREVIEW_DIAG_FORCE_LOG=1` env var forces `AppLog` on at startup for one debugging run, regardless of `AppSettings.LoggingEnabled`/config.json; no rebuild needed. | |
+| **Test flake 2026-09-27** | `DarkScrollBarRenderingTests` CI flake ("Cannot create more than one Application instance") was a TOCTOU race between the `Application.Current is null` check and `new Application()`; not reproduced locally (11 runs incl. 2-vCPU emulation) but hardened by catching the race instead of asserting it away. | #179 CI run |
 
 ## Handoff log (older detail dropped)
 

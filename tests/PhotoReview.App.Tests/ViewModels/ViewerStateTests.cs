@@ -231,7 +231,9 @@ public sealed class ViewerStateTests
     [InlineData(InitialViewMode.Fit, 1.0, ViewerStretchMode.Uniform)]
     [InlineData(InitialViewMode.Percent100, 1.0, ViewerStretchMode.None)]
     [InlineData(InitialViewMode.Percent200, 2.0, ViewerStretchMode.None)]
-    [InlineData(InitialViewMode.Percent400, 4.0, ViewerStretchMode.None)]
+    // PR-B: 400 % was removed from the Settings combo; a legacy config value now behaves like 200 % (SettingsNormalizer
+    // migrates it on load, but ViewerState itself treats a stray Percent400 the same way defensively).
+    [InlineData(InitialViewMode.Percent400, 2.0, ViewerStretchMode.None)]
     public void ApplyInitialViewMode_ConfiguresStateCorrectly(InitialViewMode mode, double expectedZoom, ViewerStretchMode expectedStretch)
     {
         var state = new ViewerState();
@@ -239,6 +241,143 @@ public sealed class ViewerStateTests
 
         Assert.Equal(expectedZoom, state.Zoom);
         Assert.Equal(expectedStretch, state.Stretch);
+    }
+
+    [Fact]
+    public void ApplyInitialViewMode_FitWidth_ZoomsToFitWidthAfterRefreshingViewport()
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(2000, 4000); // tall portrait: width-fit != height-fit
+        state.DpiScale = 1.0;
+
+        var applied = state.ApplyInitialViewMode(InitialViewMode.FitWidth, 1000, 2000);
+
+        Assert.True(applied);
+        Assert.Equal(0.5, state.Zoom, 6); // 1000 / 2000 source width
+        Assert.Equal(ViewerStretchMode.None, state.Stretch);
+    }
+
+    [Fact]
+    public void ApplyInitialViewMode_FitHeight_ZoomsToFitHeightAfterRefreshingViewport()
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(2000, 4000);
+        state.DpiScale = 1.0;
+
+        var applied = state.ApplyInitialViewMode(InitialViewMode.FitHeight, 1000, 2000);
+
+        Assert.True(applied);
+        Assert.Equal(0.5, state.Zoom, 6); // 2000 / 4000 source height
+        Assert.Equal(ViewerStretchMode.None, state.Stretch);
+    }
+
+    [Fact]
+    public void ApplyInitialViewMode_ClickZoomLevel_ZoomsToConfiguredPercent()
+    {
+        var state = new ViewerState();
+
+        var applied = state.ApplyInitialViewMode(InitialViewMode.ClickZoomLevel, 1920, 1080, clickZoomPercent: 150);
+
+        Assert.True(applied);
+        Assert.Equal(1.5, state.Zoom, 6);
+    }
+
+    [Fact]
+    public void ApplyInitialViewMode_KeepZoomAcrossImages_IsANoOpAndReturnsFalse()
+    {
+        var state = new ViewerState();
+        state.SetZoom(3.0);
+
+        var applied = state.ApplyInitialViewMode(InitialViewMode.Fit, 1920, 1080, keepZoomAcrossImages: true);
+
+        Assert.False(applied);
+        Assert.Equal(3.0, state.Zoom); // untouched: still the zoom from before the image change
+        Assert.False(state.IsFit);
+    }
+
+    [Theory]
+    [InlineData(1000, 500, 100, 1.0)]  // width alone determines the zoom regardless of height
+    [InlineData(1000, 500, 200, 2.0)]  // DPI 2.0: same viewport DIPs need twice the zoom to fill the same source width
+    public void FitWidthZoom_FillsViewportWidthAtDpiScale(int sourceWidth, int sourceHeight, int dpiPercent, double expectedZoom)
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(sourceWidth, sourceHeight);
+        state.DpiScale = dpiPercent / 100.0;
+        state.UpdateViewport(sourceWidth, 10000, force: true); // viewport DIP width == source width at 100 % DPI
+
+        Assert.Equal(expectedZoom, state.FitWidthZoom, 6);
+    }
+
+    [Fact]
+    public void FitWidthZoom_UnknownSourceOrViewport_IsZero()
+    {
+        var state = new ViewerState();
+        Assert.Equal(0, state.FitWidthZoom);
+
+        state.SetSourceSize(1000, 1000);
+        Assert.Equal(0, state.FitWidthZoom); // viewport still unknown (Infinity)
+    }
+
+    [Theory]
+    [InlineData(500, 1000, 100, 1.0)]
+    [InlineData(500, 1000, 200, 2.0)]
+    public void FitHeightZoom_FillsViewportHeightAtDpiScale(int sourceWidth, int sourceHeight, int dpiPercent, double expectedZoom)
+    {
+        var state = new ViewerState();
+        state.SetSourceSize(sourceWidth, sourceHeight);
+        state.DpiScale = dpiPercent / 100.0;
+        state.UpdateViewport(10000, sourceHeight, force: true);
+
+        Assert.Equal(expectedZoom, state.FitHeightZoom, 6);
+    }
+
+    [Fact]
+    public void FitHeightZoom_UnknownSourceOrViewport_IsZero()
+    {
+        var state = new ViewerState();
+        Assert.Equal(0, state.FitHeightZoom);
+    }
+
+    [Fact]
+    public void ZoomToFitWidth_UnknownSize_DoesNotChangeZoom()
+    {
+        var state = new ViewerState();
+        state.SetZoom(2.0);
+
+        state.ZoomToFitWidth(); // FitWidthZoom is 0 (no source size): must not clobber the current zoom
+
+        Assert.Equal(2.0, state.Zoom);
+    }
+
+    [Fact]
+    public void ZoomToFitHeight_UnknownSize_DoesNotChangeZoom()
+    {
+        var state = new ViewerState();
+        state.SetZoom(2.0);
+
+        state.ZoomToFitHeight();
+
+        Assert.Equal(2.0, state.Zoom);
+    }
+
+    // ---- PR-B: FitWidthAnchor pure helper (contract change: default is Centre, not TopThird) ----
+
+    [Fact]
+    public void FitWidthAnchorPoint_Centre_IsImageCentre()
+    {
+        var point = MainWindowHelpers.CalculateFitWidthAnchorPoint(FitWidthAnchor.Centre);
+
+        Assert.Equal(0.5, point.X, 6);
+        Assert.Equal(0.5, point.Y, 6);
+    }
+
+    [Fact]
+    public void FitWidthAnchorPoint_TopThird_IsOneThirdDownTheImage()
+    {
+        var point = MainWindowHelpers.CalculateFitWidthAnchorPoint(FitWidthAnchor.TopThird);
+
+        Assert.Equal(0.5, point.X, 6);
+        Assert.Equal(1.0 / 3.0, point.Y, 6);
     }
 
     [Fact]

@@ -136,6 +136,20 @@ internal struct KineticScroller
     }
 
     /// <summary>
+    /// feat/zoom-key-anchor: adds a SCROLL-offset velocity (DIP/ms, same sign as an offset delta -- unlike
+    /// <see cref="Start"/>'s pointer velocity, which is negated) to the current velocity, starting a glide if the
+    /// scroller was idle. Each axis is clamped to <see cref="MaxVelocity"/> independently, so repeated impulses (an
+    /// auto-repeating key) accelerate smoothly up to the cap instead of stacking without bound. A non-finite
+    /// component (NaN/Infinity) is ignored (treated as zero) rather than aborting the whole call.
+    /// </summary>
+    public void AddImpulse(double scrollVelocityX, double scrollVelocityY)
+    {
+        VelocityX = Math.Clamp(VelocityX + Finite(scrollVelocityX), -MaxVelocity, MaxVelocity);
+        VelocityY = Math.Clamp(VelocityY + Finite(scrollVelocityY), -MaxVelocity, MaxVelocity);
+        IsActive = true;
+    }
+
+    /// <summary>
     /// Advances the glide by <paramref name="elapsedMs"/> from the current offsets and returns the new, clamped
     /// offsets. Becomes inactive when both axes have stopped (edge or friction).
     /// </summary>
@@ -200,6 +214,26 @@ internal static class KeyboardPan
 
     /// <summary>True when the image scrolls on either axis (i.e. it is zoomed in, not at Fit).</summary>
     public static bool IsZoomed(ScrollBounds bounds) => bounds.MaxHorizontal > Epsilon || bounds.MaxVertical > Epsilon;
+
+    /// <summary>
+    /// feat/zoom-key-anchor: the <see cref="KineticScroller.AddImpulse"/> velocity that makes a glide travel
+    /// (<paramref name="stepX"/>, <paramref name="stepY"/>) DIP -- the reachable step distance from <see cref="Step"/>
+    /// (already clamped to the scroll edge). A glide's total distance is v0 * <see cref="KineticScroller.TimeConstantMs"/>
+    /// (see that type's remarks) only in the limit t -&gt; infinity; the glide actually stops as soon as its speed falls
+    /// below <see cref="KineticScroller.StopVelocity"/>, which by itself would leave the last
+    /// <c>StopVelocity * TimeConstantMs</c> (~6.5 DIP) short. Padding v0 by <see cref="KineticScroller.StopVelocity"/>
+    /// cancels that shortfall (the glide crosses the stop threshold at the same v0 - StopVelocity remaining "reach"
+    /// either way), so the glide lands within about a DIP of the exact step instead of consistently undershooting it.
+    /// </summary>
+    public static (double VelocityX, double VelocityY) ImpulseVelocity(double stepX, double stepY) =>
+        (Impulse(stepX), Impulse(stepY));
+
+    private static double Impulse(double step)
+    {
+        if (step == 0) return 0;
+        var magnitude = Math.Abs(step) / KineticScroller.TimeConstantMs + KineticScroller.StopVelocity;
+        return Math.CopySign(magnitude, step);
+    }
 
     /// <summary>
     /// Whether the arrow key is consumed (true) or falls through to its normal meaning (false, Left/Right navigate).

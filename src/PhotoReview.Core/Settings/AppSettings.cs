@@ -239,6 +239,32 @@ public class AppSettings
     /// <summary>How far one arrow press moves a zoomed image, in percent of the viewport; [<see cref="MinArrowPanStepPercent"/>, <see cref="MaxArrowPanStepPercent"/>], default <see cref="DefaultArrowPanStepPercent"/>.</summary>
     public int ArrowPanStepPercent { get; set; } = DefaultArrowPanStepPercent;
 
+    // ---- Fit width / Fit height, keep zoom across images (PR-B feat/fit-width-height-keep-zoom). Absent in older configs = these defaults; no migration step. ----
+
+    /// <summary>
+    /// When true, an image change does not reset the view at all: <see cref="ViewModels.ViewerState.ApplyInitialViewMode"/>
+    /// (called by <c>ImagePresenter</c> through <c>IPresentationSink.ApplyInitialViewMode</c>) is a no-op, so Fit stays
+    /// Fit and a zoom stays at the same zoom -- the ScrollViewer keeps/clamps its offsets, giving the same framing for
+    /// same-sized photos. Default off. Toggled by <see cref="ShortcutMappings.ToggleKeepZoom"/> (key <c>K</c>).
+    /// </summary>
+    public bool KeepZoomAcrossImages { get; set; }
+
+    /// <summary>
+    /// Vertical anchor for <see cref="Model.InitialViewMode.FitWidth"/> (initial view and the FitWidth shortcut when
+    /// the mouse is not over the image viewport). Default <see cref="Model.FitWidthAnchor.Centre"/>.
+    /// </summary>
+    public Model.FitWidthAnchor FitWidthAnchor { get; set; } = Model.FitWidthAnchor.Centre;
+
+    /// <summary>
+    /// feat/zoom-key-anchor: what point stays under the zoom for +/- (keyboard zoom in/out), 100 % and the
+    /// click-zoom shortcut/menu (mouse wheel and click-to-zoom already anchor at the cursor regardless of this
+    /// setting). Default <see cref="KeyboardZoomAnchor.Pointer"/>: the cursor when it is over the image viewport,
+    /// the viewport centre otherwise. Absent in older configs = <see cref="KeyboardZoomAnchor.Pointer"/>.
+    /// </summary>
+    public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.Pointer;
+
+    // ---- Image change transition (PR-D feat/image-crossfade). Absent in older configs = these defaults; no migration step. ----
+
     /// <summary>Smallest accepted <see cref="ImageTransitionMs"/>.</summary>
     public const int MinImageTransitionMs = 40;
 

@@ -64,6 +64,13 @@ public sealed class ImagePresenter
 
     private readonly IUiScheduler? _uiScheduler;
 
+    /// <summary>
+    /// PR-B: lets <c>MainWindow</c> hook <c>WpfPresentationSink.ApplyInitialViewModeOverride</c> to
+    /// <c>PointerInputController.ApplyInitialViewAsync</c> after the pointer controller (which owns the surface) is
+    /// constructed -- the sink itself is built earlier, in <c>MainViewModelCompositionRoot</c>, before the window exists.
+    /// </summary>
+    public IPresentationSink Sink => _sink;
+
     public ImagePresenter(
         ReviewCatalog catalog,
         GenerationClock clock,

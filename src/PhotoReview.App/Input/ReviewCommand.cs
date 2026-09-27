@@ -26,7 +26,10 @@ public enum ReviewCommandType
     Previous,
     MoveToFolder,
     CopyToFolder,
-    ClickZoom
+    ClickZoom,
+    FitWidth,
+    FitHeight,
+    ToggleKeepZoom
 }
 
 /// <summary>Rules about how a resolved command reacts to keyboard auto-repeat.</summary>
@@ -39,11 +42,13 @@ public static class ReviewCommandTypeExtensions
     /// ToggleInfoOverlay is listed too: it flips and SAVES a setting, so holding the key would flicker the overlay
     /// and rewrite config.json on every repeat. Fullscreen, ToggleCompare and ClickZoom are pure toggles: holding the key
     /// would flip them at the key-repeat rate (and re-present the image for ToggleCompare), so they act once.
+    /// ToggleKeepZoom (PR-B) is the same kind of toggle-and-save as ToggleInfoOverlay.
     /// </summary>
     public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
         type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo
             or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder or ReviewCommandType.ToggleInfoOverlay
-            or ReviewCommandType.Fullscreen or ReviewCommandType.ToggleCompare or ReviewCommandType.ClickZoom;
+            or ReviewCommandType.Fullscreen or ReviewCommandType.ToggleCompare or ReviewCommandType.ClickZoom
+            or ReviewCommandType.ToggleKeepZoom;
 }
 
 /// <summary>
@@ -74,4 +79,7 @@ public readonly record struct ReviewCommand(ReviewCommandType Type, int ActionIn
     public static ReviewCommand MoveToFolder(bool forcePicker) => new(ReviewCommandType.MoveToFolder, ForcePicker: forcePicker);
     public static ReviewCommand CopyToFolder(bool forcePicker) => new(ReviewCommandType.CopyToFolder, ForcePicker: forcePicker);
     public static ReviewCommand ClickZoom => new(ReviewCommandType.ClickZoom);
+    public static ReviewCommand FitWidth => new(ReviewCommandType.FitWidth);
+    public static ReviewCommand FitHeight => new(ReviewCommandType.FitHeight);
+    public static ReviewCommand ToggleKeepZoom => new(ReviewCommandType.ToggleKeepZoom);
 }

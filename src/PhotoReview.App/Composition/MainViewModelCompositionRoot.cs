@@ -71,10 +71,15 @@ internal static class MainViewModelCompositionRoot
         var sink = new WpfPresentationSink(
             onSetCurrentImage: (_, isFileChange) => vm?.NotifyCurrentImageChanged(isFileChange),
             onSetStatusText: _ => vm?.NotifyPresentationChanged(),
+            // PR-B: default (no scroll placement) used until MainWindow wires WpfPresentationSink.ApplyInitialViewModeOverride
+            // to PointerInputController.ApplyInitialViewAsync (which does Fit width/Fit height placement -- the pointer
+            // controller owns the surface, built after the ViewModel/sink here). Tests that build a MainViewModel
+            // without a MainWindow keep getting a correct zoom/mode change, just without the scroll placement.
             onApplyInitialViewMode: () =>
             {
                 var (w, h) = viewport.Get();
-                vm?.Viewer.ApplyInitialViewMode(settingsStore.Current.InitialViewMode, w, h);
+                var current = settingsStore.Current;
+                vm?.Viewer.ApplyInitialViewMode(current.InitialViewMode, w, h, current.ClickZoomPercent, current.KeepZoomAcrossImages);
             },
             onPresented: observer.OnPresented,
             metrics: sp.GetRequiredService<ReviewMetrics>());

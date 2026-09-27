@@ -94,23 +94,61 @@ internal sealed class PointerInputController
         }
     }
 
-    /// <summary>ZoomActualSize: 100 % (ADR 0008) keeping the image point at the viewport centre in place.</summary>
+    /// <summary>
+    /// ZoomActualSize: 100 % (ADR 0008) keeping the anchored image point in place -- the cursor when
+    /// <see cref="Core.Settings.AppSettings.KeyboardZoomAnchor"/> is <see cref="KeyboardZoomAnchor.Pointer"/> and it
+    /// is over the viewport, the viewport centre otherwise (see <see cref="ResolveKeyboardAnchor"/>).
+    /// </summary>
     public async Task ZoomActualSizeAsync()
     {
         if (!_commands.HasImages()) return;
         CancelPan();
         StopKinetic();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
-        await ZoomAtPointAsync(centre, _commands.ZoomActualSize);
+        await ZoomAtPointAsync(ResolveKeyboardAnchor(), _commands.ZoomActualSize);
+    }
+
+    /// <summary>
+    /// The anchor point (ImageScroll coordinates) for a keyboard/menu zoom: +/- (<see cref="ZoomInAsync"/>/
+    /// <see cref="ZoomOutAsync"/>), <see cref="ZoomActualSizeAsync"/> and <see cref="ToggleClickZoomAsync"/>.
+    /// Mouse wheel and click-to-zoom always anchor at the cursor and do not go through this helper.
+    /// </summary>
+    private Point ResolveKeyboardAnchor() =>
+        PointerGestures.ResolveKeyboardZoomAnchor(_settings().KeyboardZoomAnchor, _surface.PointerPosition, _surface.ViewportWidth, _surface.ViewportHeight);
+
+    /// <summary>+/- keyboard zoom in: anchored like <see cref="ZoomActualSizeAsync"/> instead of leaving the raw scroll offsets in place.</summary>
+    public async Task ZoomInAsync()
+    {
+        if (!_commands.HasImages()) return;
+        CancelPan();
+        StopKinetic();
+        await ZoomAtPointAsync(ResolveKeyboardAnchor(), () => _viewer.ZoomIn());
+    }
+
+    /// <summary>+/- keyboard zoom out: anchored like <see cref="ZoomActualSizeAsync"/> instead of leaving the raw scroll offsets in place.</summary>
+    public async Task ZoomOutAsync()
+    {
+        if (!_commands.HasImages()) return;
+        CancelPan();
+        StopKinetic();
+        await ZoomAtPointAsync(ResolveKeyboardAnchor(), () => _viewer.ZoomOut());
     }
 
     /// <summary>
     /// Applies a zoom change and then scrolls so the image point that was under <paramref name="mouse"/>
     /// (ImageScroll coordinates) stays under it. Shared by the wheel and click-to-zoom.
     /// </summary>
-    private async Task ZoomAtPointAsync(Point mouse, Action applyZoom)
+    private Task ZoomAtPointAsync(Point mouse, Action applyZoom) => ZoomToImagePointAsync(CaptureZoomAnchor(mouse), mouse, applyZoom);
+
+    /// <summary>
+    /// General form of <see cref="ZoomAtPointAsync"/> (PR-B, Fit width/Fit height): applies <paramref name="applyZoom"/>
+    /// and then scrolls so the image-fraction point <paramref name="anchor"/> (see
+    /// <see cref="MainWindowHelpers.ZoomImagePoint"/>) ends up under <paramref name="viewportPoint"/> (ImageScroll
+    /// coordinates) instead of always the original cursor position -- e.g. the viewport centre for Fit width/height.
+    /// A navigation that starts while the render pass is awaited (<see cref="ViewportOperationVersion"/>) drops the
+    /// scroll, same guard as the original method.
+    /// </summary>
+    private async Task ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
     {
-        var anchor = CaptureZoomAnchor(mouse);
         var version = _viewportVersion.Next();
         applyZoom();
         await _surface.YieldToRenderAsync();
@@ -124,8 +162,8 @@ internal sealed class PointerInputController
             imageOrigin.Y,
             _surface.ImageActualWidth,
             _surface.ImageActualHeight,
-            mouse.X,
-            mouse.Y,
+            viewportPoint.X,
+            viewportPoint.Y,
             _surface.HorizontalOffset,
             _surface.VerticalOffset,
             _surface.ExtentWidth,
@@ -133,6 +171,64 @@ internal sealed class PointerInputController
             _surface.ViewportWidth,
             _surface.ViewportHeight);
         _surface.ScrollTo(offsets.Horizontal, offsets.Vertical);
+    }
+
+    private Point ViewportCentre => new(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
+
+    /// <summary>
+    /// FitWidth shortcut (PR-B): fills the viewport width. When <paramref name="mouseOverViewport"/> is given (the
+    /// mouse is over the image viewport -- the caller decides that from real hit-testing), the image point under the
+    /// mouse becomes the vertical anchor, shown at the viewport centre; otherwise the anchor follows
+    /// <see cref="AppSettings.FitWidthAnchor"/> (top third by default). The initial view (image change) always uses
+    /// the setting -- see <see cref="ApplyInitialViewAsync"/>.
+    /// </summary>
+    public Task FitWidthAsync(Point? mouseOverViewport)
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        var anchor = mouseOverViewport is { } mouse
+            ? new MainWindowHelpers.ZoomImagePoint(0.5, CaptureZoomAnchor(mouse).Y)
+            : MainWindowHelpers.CalculateFitWidthAnchorPoint(_settings().FitWidthAnchor);
+        return ZoomToImagePointAsync(anchor, ViewportCentre, () =>
+        {
+            _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
+            _viewer.ZoomToFitWidth();
+        });
+    }
+
+    /// <summary>FitHeight shortcut (PR-B): fills the viewport height, always centred (image point (0.5, 0.5)).</summary>
+    public Task FitHeightAsync()
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        CancelPan();
+        StopKinetic();
+        return ZoomToImagePointAsync(new MainWindowHelpers.ZoomImagePoint(0.5, 0.5), ViewportCentre, () =>
+        {
+            _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
+            _viewer.ZoomToFitHeight();
+        });
+    }
+
+    /// <summary>
+    /// Applies the configured initial view on an image change (PR-B): the callback wired into
+    /// <c>WpfPresentationSink.ApplyInitialViewMode</c> through <c>ImagePresenter.Sink</c>. <see cref="ViewerState.ApplyInitialViewMode"/>
+    /// does the zoom/mode change (and is a no-op when <see cref="AppSettings.KeepZoomAcrossImages"/> is on); Fit
+    /// width/Fit height then get their scroll placement here (top-third/centre per <see cref="AppSettings.FitWidthAnchor"/>,
+    /// or always centre for Fit height) because the pointer controller owns the surface.
+    /// </summary>
+    public Task ApplyInitialViewAsync(InitialViewMode mode, int clickZoomPercent)
+    {
+        if (!_commands.HasImages()) return Task.CompletedTask;
+        var settings = _settings();
+        var applied = _viewer.ApplyInitialViewMode(mode, _surface.ViewportWidth, _surface.ViewportHeight, clickZoomPercent, settings.KeepZoomAcrossImages);
+        if (!applied || mode is not (InitialViewMode.FitWidth or InitialViewMode.FitHeight)) return Task.CompletedTask;
+
+        var anchor = mode == InitialViewMode.FitWidth
+            ? MainWindowHelpers.CalculateFitWidthAnchorPoint(settings.FitWidthAnchor)
+            : new MainWindowHelpers.ZoomImagePoint(0.5, 0.5);
+        // The zoom was already applied by ViewerState above; this pass only places the scroll offsets.
+        return ZoomToImagePointAsync(anchor, ViewportCentre, static () => { });
     }
 
     /// <summary>The image point under <paramref name="mouse"/> as a fraction of the displayed image.</summary>
@@ -280,7 +376,8 @@ internal sealed class PointerInputController
 
     /// <summary>
     /// ClickZoom shortcut: the same Fit &lt;-&gt; ClickZoomPercent toggle as a mouse click-to-zoom (<see cref="ClickZoomAsync"/>),
-    /// but anchored at the viewport centre instead of the cursor, and independent of <c>ClickToZoomEnabled</c> (which
+    /// anchored like <see cref="ZoomActualSizeAsync"/> (the cursor over the viewport with <see cref="KeyboardZoomAnchor.Pointer"/>,
+    /// the viewport centre otherwise) instead of always the cursor, and independent of <c>ClickToZoomEnabled</c> (which
     /// only governs the mouse click).
     /// </summary>
     public Task ToggleClickZoomAsync()
@@ -288,8 +385,7 @@ internal sealed class PointerInputController
         if (!_commands.HasImages()) return Task.CompletedTask;
         CancelPan();
         StopKinetic();
-        var centre = new Point(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
-        return ClickZoomAsync(centre);
+        return ClickZoomAsync(ResolveKeyboardAnchor());
     }
 
     /// <summary>
@@ -334,12 +430,35 @@ internal sealed class PointerInputController
     }
 
     /// <summary>
+    /// feat/zoom-key-anchor: adds a SCROLL-offset velocity impulse (<see cref="KineticScroller.AddImpulse"/>) to the
+    /// glide, starting one if idle; an auto-repeating key therefore keeps adding to the existing velocity (capped at
+    /// <see cref="KineticScroller.MaxVelocity"/>) instead of restarting the glide from scratch. The glide clock is
+    /// (re)started only for a fresh glide -- an impulse added mid-glide keeps its existing timing/anchoring.
+    /// </summary>
+    private void StartKineticImpulse(double velocityX, double velocityY)
+    {
+        var wasActive = _kinetic.IsActive;
+        _kinetic.AddImpulse(velocityX, velocityY);
+        if (!wasActive) _glideClock.Start(_settings().KineticGlideSmoothing, TicksPerMs);
+        if (_kineticHooked) return;
+        _surface.HookRenderFrame(_kineticFrameHandler);
+        _kineticHooked = true;
+    }
+
+    /// <summary>
     /// Arrow keys on a zoomed image move the view by <see cref="KeyboardPan.StepFraction"/> of the viewport instead
     /// of navigating. Returns true when the key was used. By default (ArrowKeyNavigatesAtZoomEdge off) every arrow key is
     /// used while the image is zoomed (pan, or nothing at an edge / on a non-scrollable axis); false only at Fit, so
     /// Left/Right navigate. With the setting on, a fresh press at the edge (or on a non-scrollable axis) is not used
     /// and navigates; an auto-repeat at the edge is swallowed. See <see cref="KeyboardPan.ConsumesKey"/>.
     /// </summary>
+    /// <remarks>
+    /// With <see cref="Core.Settings.AppSettings.KineticPanEnabled"/> a pan starts (or adds to) a kinetic glide with
+    /// the same friction as a mouse flick (<see cref="StartKineticImpulse"/>) instead of jumping straight to the
+    /// target offset, so holding the key accelerates smoothly and releasing it lets the glide decelerate on its own.
+    /// The edge/consume decision still reads the CURRENT (already-scrolled) offset via <see cref="KeyboardPan.Step"/>;
+    /// only the instant <c>ScrollTo</c> is skipped in kinetic mode.
+    /// </remarks>
     public bool TryPanByArrow(Key key, bool isRepeat)
     {
         var (dx, dy) = key switch
@@ -357,8 +476,16 @@ internal sealed class PointerInputController
         switch (result)
         {
             case KeyboardPanResult.Panned:
-                StopKinetic();
-                _surface.ScrollTo(horizontal, vertical);
+                if (_settings().KineticPanEnabled)
+                {
+                    var (velocityX, velocityY) = KeyboardPan.ImpulseVelocity(horizontal - _surface.HorizontalOffset, vertical - _surface.VerticalOffset);
+                    StartKineticImpulse(velocityX, velocityY);
+                }
+                else
+                {
+                    StopKinetic();
+                    _surface.ScrollTo(horizontal, vertical);
+                }
                 return true;
             default:
                 return KeyboardPan.ConsumesKey(result, isRepeat, _settings().ArrowKeyNavigatesAtZoomEdge, bounds);

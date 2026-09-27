@@ -61,6 +61,7 @@ public partial class SettingsWindow : Window
             NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
             ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
             SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText, ClickZoomText,
+            FitWidthText, FitHeightText, ToggleKeepZoomText,
         };
         foreach (var textBox in allShortcutBoxes)
         {
@@ -328,8 +329,22 @@ public partial class SettingsWindow : Window
         LastImageText.Text = Settings.Shortcuts.LastImage; ZoomActualSizeText.Text = Settings.Shortcuts.ZoomActualSize; ToggleInfoOverlayText.Text = Settings.Shortcuts.ToggleInfoOverlay;
         MoveToFolderText.Text = Settings.Shortcuts.MoveToFolder; CopyToFolderText.Text = Settings.Shortcuts.CopyToFolder;
         ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
+        FitWidthText.Text = Settings.Shortcuts.FitWidth; FitHeightText.Text = Settings.Shortcuts.FitHeight; ToggleKeepZoomText.Text = Settings.Shortcuts.ToggleKeepZoom;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
-        ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch { InitialViewMode.Percent100 => 1, InitialViewMode.Percent200 => 2, InitialViewMode.Percent400 => 3, _ => 0 };
+        // PR-B: Percent400 was removed from the combo; SettingsNormalizer migrates a loaded value to Percent200 before
+        // this window ever sees it, but a stray Percent400 (e.g. this window built directly on an unnormalized
+        // AppSettings in a test) still lands on the 200% item rather than falling through to Fit.
+        ViewModeCombo.SelectedIndex = Settings.InitialViewMode switch
+        {
+            InitialViewMode.FitWidth => 1,
+            InitialViewMode.FitHeight => 2,
+            InitialViewMode.ClickZoomLevel => 3,
+            InitialViewMode.Percent100 => 4,
+            InitialViewMode.Percent200 or InitialViewMode.Percent400 => 5,
+            _ => 0
+        };
+        FitWidthAnchorCombo.SelectedIndex = Settings.FitWidthAnchor == FitWidthAnchor.TopThird ? 1 : 0;
+        KeepZoomAcrossImagesCheck.IsChecked = Settings.KeepZoomAcrossImages;
         LoadingModeCombo.SelectedIndex = Settings.LoadingMode switch { LoadingMode.Preview => 1, LoadingMode.Original => 2, _ => 0 };
         SortModeCombo.SelectedIndex = Math.Max(0, SortModeCombo.Items.Cast<ComboBoxItem>().ToList().FindIndex(item => Equals(item.Tag, Settings.ImageSortMode.ToString())));
         ScalingQualityCombo.SelectedIndex = Settings.ScalingQuality == ScalingQuality.Linear ? 1 : 0;
@@ -363,6 +378,7 @@ public partial class SettingsWindow : Window
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
         ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
         ImageTransitionMsBox.Text = Settings.ImageTransitionMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         UpdateImageTransitionMsEnabled();
@@ -414,7 +430,9 @@ public partial class SettingsWindow : Window
             $"{Tr.SettingsShortcutToggleFit}: {Key(ToggleFitText)}",
             $"{Tr.SettingsShortcutZoomActualSize}: {Key(ZoomActualSizeText)}",
             $"{Tr.SettingsShortcutZoomIn}: {Key(ZoomInText)}",
-            $"{Tr.SettingsShortcutZoomOut}: {Key(ZoomOutText)}");
+            $"{Tr.SettingsShortcutZoomOut}: {Key(ZoomOutText)}",
+            $"{Tr.SettingsShortcutFitWidth}: {Key(FitWidthText)}",
+            $"{Tr.SettingsShortcutFitHeight}: {Key(FitHeightText)}");
     }
 
     private void ToolbarAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateToolbarAutoHideEnabled();
@@ -473,6 +491,9 @@ public partial class SettingsWindow : Window
     private void ClearMoveToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(MoveToFolderText);
     private void ClearCopyToFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(CopyToFolderText);
     private void ClearClickZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ClickZoomText);
+    private void ClearFitWidth_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitWidthText);
+    private void ClearFitHeight_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitHeightText);
+    private void ClearToggleKeepZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleKeepZoomText);
 
     private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
 
@@ -507,6 +528,7 @@ public partial class SettingsWindow : Window
                 Skip = SkipText.Text, Undo = UndoText.Text, Compare = CompareText.Text,
                 MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
                 ClickZoom = ClickZoomText.Text,
+                FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
             },
         };
         try { probe.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? []; }
@@ -603,9 +625,10 @@ public partial class SettingsWindow : Window
         Settings.UseSourceBytesCache = PerformanceOptions.UseSourceBytesCache;
         Settings.SourceBytesCapacityBytes = PerformanceOptions.SourceBytesCapacityBytes;
         Settings.InitialViewMode = InitialViewMode.Fit; Settings.LoadingMode = LoadingMode.Preview; Settings.ImageSortMode = ImageSortMode.Name; Settings.ScalingQuality = ScalingQuality.HighQuality; Settings.DecoderBackend = new AppSettings().DecoderBackend; Settings.CompareHashEnabled = true; Settings.CompareSizeEnabled = true; Settings.Shortcuts = ShortcutMappings.Default();
+        Settings.FitWidthAnchor = FitWidthAnchor.Centre; Settings.KeepZoomAcrossImages = false;
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
-        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent;
+        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = true; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
@@ -634,12 +657,22 @@ public partial class SettingsWindow : Window
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
-        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text };
+        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text, FitWidthText.Text, FitHeightText.Text, ToggleKeepZoomText.Text };
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
-        Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch { 1 => InitialViewMode.Percent100, 2 => InitialViewMode.Percent200, 3 => InitialViewMode.Percent400, _ => InitialViewMode.Fit };
+        Settings.InitialViewMode = ViewModeCombo.SelectedIndex switch
+        {
+            1 => InitialViewMode.FitWidth,
+            2 => InitialViewMode.FitHeight,
+            3 => InitialViewMode.ClickZoomLevel,
+            4 => InitialViewMode.Percent100,
+            5 => InitialViewMode.Percent200,
+            _ => InitialViewMode.Fit
+        };
+        Settings.FitWidthAnchor = FitWidthAnchorCombo.SelectedIndex == 1 ? FitWidthAnchor.TopThird : FitWidthAnchor.Centre;
+        Settings.KeepZoomAcrossImages = KeepZoomAcrossImagesCheck.IsChecked == true;
         Settings.ImageSortMode = SortModeCombo.SelectedItem is ComboBoxItem { Tag: string sortTag } && Enum.TryParse<ImageSortMode>(sortTag, out var chosenSort) ? chosenSort : ImageSortMode.Name;
         Settings.ScalingQuality = ScalingQualityCombo.SelectedIndex == 1 ? ScalingQuality.Linear : ScalingQuality.HighQuality;
         Settings.DecoderBackend = DecoderBackendCombo.SelectedIndex switch { 1 => DecoderBackend.WicDirect, 2 => DecoderBackend.TurboJpeg, _ => DecoderBackend.Wpf };
@@ -659,6 +692,7 @@ public partial class SettingsWindow : Window
         Settings.KineticPanEnabled = KineticPanCheck.IsChecked == true;
         Settings.KineticGlideSmoothing = KineticGlideSmoothingCombo.SelectedIndex == 1 ? KineticGlideSmoothing.Predict : KineticGlideSmoothing.Off;
         Settings.ArrowKeyNavigatesAtZoomEdge = ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked == true;
+        Settings.KeyboardZoomAnchor = KeyboardZoomAnchorCombo.SelectedIndex == 1 ? KeyboardZoomAnchor.ViewportCentre : KeyboardZoomAnchor.Pointer;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;
         Settings.ExifInfoFields =
@@ -762,6 +796,9 @@ public partial class SettingsWindow : Window
         Settings.Shortcuts.LastImage = ShortcutKeyCanonical.Canonicalize(LastImageText.Text); Settings.Shortcuts.ZoomActualSize = ShortcutKeyCanonical.Canonicalize(ZoomActualSizeText.Text); Settings.Shortcuts.ToggleInfoOverlay = ShortcutKeyCanonical.Canonicalize(ToggleInfoOverlayText.Text);
         Settings.Shortcuts.MoveToFolder = ShortcutKeyCanonical.Canonicalize(MoveToFolderText.Text); Settings.Shortcuts.CopyToFolder = ShortcutKeyCanonical.Canonicalize(CopyToFolderText.Text);
         Settings.Shortcuts.ClickZoom = ShortcutKeyCanonical.Canonicalize(ClickZoomText.Text);
+        Settings.Shortcuts.FitWidth = ShortcutKeyCanonical.Canonicalize(FitWidthText.Text);
+        Settings.Shortcuts.FitHeight = ShortcutKeyCanonical.Canonicalize(FitHeightText.Text);
+        Settings.Shortcuts.ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(ToggleKeepZoomText.Text);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];

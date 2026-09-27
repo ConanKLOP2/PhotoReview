@@ -15,6 +15,7 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.Fullscreen)] // pure toggles: holding the key must not flicker them
     [InlineData(ReviewCommandType.ToggleCompare)]
     [InlineData(ReviewCommandType.ClickZoom)]
+    [InlineData(ReviewCommandType.ToggleKeepZoom)] // PR-B: flips and saves a setting, same as ToggleInfoOverlay
     public void FileChangingCommandsIgnoreAutoRepeat(ReviewCommandType type) =>
         Assert.True(type.IgnoresAutoRepeat());
 
@@ -29,6 +30,8 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.Skip)]
     [InlineData(ReviewCommandType.NextFolder)]
     [InlineData(ReviewCommandType.PreviousFolder)]
+    [InlineData(ReviewCommandType.FitWidth)] // PR-B: like ToggleFit, harmless to re-apply on repeat
+    [InlineData(ReviewCommandType.FitHeight)]
     public void NavigationCommandsKeepAutoRepeat(ReviewCommandType type) =>
         Assert.False(type.IgnoresAutoRepeat());
 }

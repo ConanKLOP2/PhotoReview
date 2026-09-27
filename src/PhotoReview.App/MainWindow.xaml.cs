@@ -96,6 +96,14 @@ public partial class MainWindow : Window
         _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
             new PointerCommands(() => _viewModel.HasImages, _viewModel.NextAsync, _viewModel.PreviousAsync, _viewModel.ZoomActualSize, ApplyFitViewAsync));
         _fit = new FitViewController(_surface, _viewModel.Viewer, _viewportVersion, _pointer.CancelPan);
+        // PR-B: the sink (built in MainViewModelCompositionRoot, before this window exists) gets its initial-view
+        // hook overridden now that the pointer controller (which owns the surface) is available, so Fit width/Fit
+        // height get their scroll placement (see PointerInputController.ApplyInitialViewAsync).
+        if (_viewModel.Presenter.Sink is WpfPresentationSink initialViewSink)
+        {
+            initialViewSink.ApplyInitialViewModeOverride = () =>
+                _ = _pointer.ApplyInitialViewAsync(_settings.InitialViewMode, _settings.ClickZoomPercent);
+        }
         AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, new RoutedEventHandler(ReturnFocusAfterButtonClick), handledEventsToo: true);
         PhotoReviewPerf.StartupMark("xamlLoaded");
         ContentRendered += (_, _) => PhotoReviewPerf.StartupMark("contentRendered");
@@ -525,9 +533,17 @@ public partial class MainWindow : Window
     private async void Window_KeyDown(object sender, KeyEventArgs e)
     {
         var pressedKey = e.Key == Key.System ? e.SystemKey : e.Key;
-        _pointer.StopKinetic(); // feat/mouse-zoom: any key press stops a glide
+        // feat/zoom-key-anchor: an arrow key that TryPanByArrow consumes owns the glide decision itself (it may
+        // start/extend a kinetic impulse); every other key still stops a running glide unconditionally.
+        var arrowConsumed = Keyboard.Modifiers == ModifierKeys.None && !_viewModel.Compare.IsVisible && _pointer.TryPanByArrow(pressedKey, e.IsRepeat);
+        if (!arrowConsumed) _pointer.StopKinetic(); // feat/mouse-zoom: any other key press stops a glide
         if (PhotoReviewPerf.Log.IsEnabled())
             PhotoReviewPerf.Log.KeyInput(0, pressedKey.ToString(), unchecked(Environment.TickCount - e.Timestamp));
+        if (arrowConsumed)
+        {
+            e.Handled = true;
+            return;
+        }
 
         // R7-6: Esc with the tools popup open closes the popup, not the whole app.
         if (pressedKey == Key.Escape && ToolsButton.IsChecked == true)
@@ -548,13 +564,6 @@ public partial class MainWindow : Window
         // A mouse click leaves focus on the toolbar button, so ReturnFocusAfterButtonClick hands it back to the window;
         // otherwise Space/Enter would keep re-activating that button instead of Skip / Move to folder 2.
         if (pressedKey is Key.Space or Key.Enter && e.OriginalSource is DependencyObject source && OwnsActivationKeys(source)) return;
-
-        // Arrow keys on a zoomed image pan the view (Left/Right navigate again at Fit, or on a fresh press at the edge).
-        if (Keyboard.Modifiers == ModifierKeys.None && !_viewModel.Compare.IsVisible && _pointer.TryPanByArrow(pressedKey, e.IsRepeat))
-        {
-            e.Handled = true;
-            return;
-        }
 
         var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible);
         if (cmd is null) return;
@@ -580,13 +589,45 @@ public partial class MainWindow : Window
             case ReviewCommandType.Recycle: await _viewModel.RecycleAsync(); break;
             case ReviewCommandType.Skip: await _viewModel.SkipAsync(); break;
             case ReviewCommandType.ToggleFit: _ = ApplyFitViewAsync(); break;
-            case ReviewCommandType.ZoomIn: _viewModel.ZoomIn(); break;
-            case ReviewCommandType.ZoomOut: _viewModel.ZoomOut(); break;
+            case ReviewCommandType.ZoomIn: await _pointer.ZoomInAsync(); break;
+            case ReviewCommandType.ZoomOut: await _pointer.ZoomOutAsync(); break;
             case ReviewCommandType.Next: await _viewModel.NextAsync(); break;
             case ReviewCommandType.Previous: await _viewModel.PreviousAsync(); break;
             case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
+            case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(MouseOverImageViewport()); break;
+            case ReviewCommandType.FitHeight: await _pointer.FitHeightAsync(); break;
+            case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
+        }
+    }
+
+    /// <summary>
+    /// PR-B: the FitWidth shortcut anchors at the mouse when it is over the image viewport (ImageScroll), otherwise
+    /// falls back to <see cref="AppSettings.FitWidthAnchor"/> (see <see cref="PointerInputController.FitWidthAsync"/>).
+    /// </summary>
+    private Point? MouseOverImageViewport()
+    {
+        var position = Mouse.GetPosition(ImageScroll);
+        var overViewport = position.X >= 0 && position.Y >= 0 && position.X <= ImageScroll.ActualWidth && position.Y <= ImageScroll.ActualHeight;
+        return overViewport ? position : null;
+    }
+
+    /// <summary>
+    /// Flips and persists <see cref="AppSettings.KeepZoomAcrossImages"/> (PR-B), same pattern as
+    /// <see cref="MainViewModel.ToggleInfoOverlay"/>.
+    /// </summary>
+    private void ToggleKeepZoomAcrossImages()
+    {
+        var settings = _settings;
+        settings.KeepZoomAcrossImages = !settings.KeepZoomAcrossImages;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Error("Could not save the keep-zoom setting", ex);
         }
     }
 
