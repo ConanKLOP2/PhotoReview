@@ -65,7 +65,7 @@ public sealed class ContextMenuRedesignTests
     }
 
     /// <summary>
-    /// Q-R38 structural layout: Undo first, then the togglable zoom cluster (Fit/Zoom-to-N%/Zoom submenu), then
+    /// Q-R38 structural layout: Undo first, Delete (primary destructive action), then the togglable zoom cluster (Fit/Zoom-to-N%/Zoom submenu), then
     /// the togglable folder group, then Settings last -- always in this fixed order and always present in
     /// <c>Items</c> (only the zoom cluster's four elements and the folder group's four elements toggle
     /// <see cref="Visibility"/>; nothing is added/removed from the menu). The zoom cluster defaults to hidden
@@ -74,38 +74,41 @@ public sealed class ContextMenuRedesignTests
     /// <see cref="ZoomCluster_Visible_WhenSettingOn"/>, which only check visibility.
     /// </summary>
     [Fact]
-    public async Task ContextMenuStructure_UndoFirst_FolderGroupTogglable_SettingsAlwaysLast()
+    public async Task ContextMenuStructure_UndoFirst_DeleteSecond_FolderGroupTogglable_SettingsAlwaysLast()
     {
         await WithWindowAsync(null, window =>
         {
             var items = window.ImageContextMenu.Items;
-            Assert.Equal(11, items.Count);
+            Assert.Equal(12, items.Count);
 
             var undo = Assert.IsType<MenuItem>(items[0]);
             Assert.False(string.IsNullOrEmpty(undo.Header as string));
-            Assert.Same(window.ZoomGroupSeparator, items[1]);
-            Assert.Same(window.FitMenuItem, items[2]);
-            Assert.Same(window.ZoomToLevelMenuItem, items[3]);
-            Assert.Same(window.ZoomMenu, items[4]);
-            Assert.Same(window.FolderGroupSeparator, items[5]);
-            Assert.Same(window.OpenFolderMenuItem, items[6]);
-            Assert.Same(window.NextFolderMenuItem, items[7]);
-            Assert.Same(window.PreviousFolderMenuItem, items[8]);
-            Assert.IsType<Separator>(items[9]);
-            var settings = Assert.IsType<MenuItem>(items[10]);
+            Assert.Same(window.DeleteMenuItem, items[1]);
+            Assert.Same(window.ZoomGroupSeparator, items[2]);
+            Assert.Same(window.FitMenuItem, items[3]);
+            Assert.Same(window.ZoomToLevelMenuItem, items[4]);
+            Assert.Same(window.ZoomMenu, items[5]);
+            Assert.Same(window.FolderGroupSeparator, items[6]);
+            Assert.Same(window.OpenFolderMenuItem, items[7]);
+            Assert.Same(window.NextFolderMenuItem, items[8]);
+            Assert.Same(window.PreviousFolderMenuItem, items[9]);
+            Assert.IsType<Separator>(items[10]);
+            var settings = Assert.IsType<MenuItem>(items[11]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
 
             // Settings is always visible, whichever way the zoom cluster and folder group are toggled -- including
-            // the "Undo, Settings" case where both clusters are hidden (no dangling double separator).
+            // the "Undo, Delete, Settings" case where both clusters are hidden (no dangling double separator).
             window.Settings.ShowZoomMenuItems = false;
             window.Settings.ShowFolderMenuItems = false;
             OpenMenu(window);
             Assert.Equal(Visibility.Visible, undo.Visibility);
+            Assert.Equal(Visibility.Visible, window.DeleteMenuItem.Visibility);
             Assert.Equal(Visibility.Visible, settings.Visibility);
             window.Settings.ShowZoomMenuItems = true;
             window.Settings.ShowFolderMenuItems = true;
             OpenMenu(window);
             Assert.Equal(Visibility.Visible, undo.Visibility);
+            Assert.Equal(Visibility.Visible, window.DeleteMenuItem.Visibility);
             Assert.Equal(Visibility.Visible, settings.Visibility);
             return Task.CompletedTask;
         });
@@ -281,6 +284,24 @@ public sealed class ContextMenuRedesignTests
 
             Assert.Equal(251, window.Settings.ClickZoomPercent); // 2.505 * 100 rounded away-from-zero
             Assert.Equal(2.505, window.ViewModel.Viewer.Zoom, 6); // unchanged: no re-zoom needed
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public async Task DeleteMenuItem_Click_RecyclesCurrentImage()
+    {
+        using var folder = new TempRoot("context-menu-delete");
+        var png = Path.Combine(folder.Path, "test.png");
+        WriteImage(png);
+        await WithWindowAsync(folder.Path, async window =>
+        {
+            Assert.True(await StaTestHost.WaitForAsync(() => window.ViewModel.HasImages && File.Exists(png), TimeSpan.FromSeconds(5)));
+            OpenMenu(window);
+            Click(window.DeleteMenuItem);
+            // RecycleAsync should move the file; verify the current image index changed or folder is empty
+            Assert.True(await StaTestHost.WaitForAsync(() => !window.ViewModel.HasImages || window.ViewModel.CurrentIndex != 0, TimeSpan.FromSeconds(5)),
+                "File should have been moved to Recycle or folder emptied");
         });
     }
 

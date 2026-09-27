@@ -668,6 +668,7 @@ public partial class MainWindow : Window
     private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(true);
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
+    private async void Delete_Click(object sender, RoutedEventArgs e) => await _viewModel.RecycleAsync();
 
     // ---- Context menu: "Zoom" submenu (Fit width/height, presets + Custom…, "also set" toggle, "set current as ----
     // ---- click level"). Built once; refreshed (text + IsChecked/IsEnabled) on every open so a live language ----
