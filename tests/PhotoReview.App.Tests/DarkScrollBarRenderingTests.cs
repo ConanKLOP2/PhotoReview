@@ -51,8 +51,23 @@ public sealed class DarkScrollBarRenderingTests
 
     private static (Color Thumb, Color Corner) RenderAndSample()
     {
+        // TOCTOU: Application.Current can go from null to non-null between this check and the
+        // constructor below (observed once in CI, "Cannot create more than one Application instance
+        // in the same AppDomain" -- xUnit's test-collection parallelism gives no guarantee this test's
+        // check-then-create is atomic against whatever else runs in the same process). Racing to
+        // construct and losing just means someone else's Application already satisfies what this test
+        // needs (an Application to exist for pack URI resolution below), so swallow the race instead of
+        // failing the render.
         if (Application.Current is null)
-            _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        {
+            try
+            {
+                _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
         // Merely creating an Application and resolving any "pack://application:,,,/..." URI (even one
         // that names its own assembly explicitly, as below) can lazily latch
         // Application.ResourceAssembly to Assembly.GetEntryAssembly() (testhost.exe here) as a side
