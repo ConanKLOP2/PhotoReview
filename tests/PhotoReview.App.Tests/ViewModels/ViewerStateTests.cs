@@ -380,6 +380,36 @@ public sealed class ViewerStateTests
         Assert.Equal(1.0 / 3.0, point.Y, 6);
     }
 
+    // ---- PR-C: "set current zoom as click level" pure helper (round + clamp) ----
+
+    [Fact]
+    public void ClickLevelFromEffectiveZoom_Null_ReturnsNull_Fit()
+    {
+        Assert.Null(MainWindowHelpers.CalculateClickLevelFromEffectiveZoom(null));
+    }
+
+    [Theory]
+    [InlineData(1.0, 100)]
+    [InlineData(1.499, 150)] // rounds to the nearest percent
+    [InlineData(1.501, 150)]
+    [InlineData(2.505, 251)] // AwayFromZero on the .5 boundary, not banker's rounding
+    public void ClickLevelFromEffectiveZoom_RoundsToNearestPercent(double zoom, int expected)
+    {
+        Assert.Equal(expected, MainWindowHelpers.CalculateClickLevelFromEffectiveZoom(zoom));
+    }
+
+    [Fact]
+    public void ClickLevelFromEffectiveZoom_BelowMinimum_ClampsToMinimum()
+    {
+        Assert.Equal(AppSettings.MinClickZoomPercent, MainWindowHelpers.CalculateClickLevelFromEffectiveZoom(0.01));
+    }
+
+    [Fact]
+    public void ClickLevelFromEffectiveZoom_AboveMaximum_ClampsToMaximum()
+    {
+        Assert.Equal(AppSettings.MaxClickZoomPercent, MainWindowHelpers.CalculateClickLevelFromEffectiveZoom(50.0));
+    }
+
     [Fact]
     public void Fullscreen_ToggleAndExit()
     {

@@ -253,6 +253,14 @@
                             <CheckBox x:Name="ArrowKeyNavigatesAtZoomEdgeCheck" AutomationProperties.Name="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.automationName}" Grid.Row="5" Grid.Column="1" Content="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.label}"/>
                             <TextBlock Text="{loc:Tr settings.arrowKeyNavigatesAtZoomEdge.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
+
+                        <!-- PR-C feat/context-menu-redesign -->
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.contextMenu}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <CheckBox x:Name="ShowFolderMenuItemsCheck" Grid.Row="0" Grid.Column="1" Content="{loc:Tr settings.showFolderMenuItems.label}" AutomationProperties.Name="{loc:Tr settings.showFolderMenuItems.automationName}"/>
+                            <TextBlock Text="{loc:Tr settings.showFolderMenuItems.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                        </Grid></GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 

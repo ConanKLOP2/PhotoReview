@@ -14,11 +14,9 @@ This file is the only place for open work (`task_on_progress.md` links here, do 
 | **Q-R29** (NAS follow-ups) | Open: (1) `ThumbnailCache.BuildKey` stats the file on the UI thread per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap, so on a slow NAS link 8 workers can delay the next viewer decode. The 40 s first-image delay itself was fixed by AR16 (test `FolderLoadCoordinatorTests.SlowStorage`). | Awaiting user decision (see OPEN-DECISIONS). |
 | **Flaky test** | `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder). | Fix if it recurs in CI. |
 | **Caution** | `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation. | - |
-<<<<<<< HEAD
-| **PR-B feat/fit-width-height-keep-zoom** | Open PR, awaiting review; GUI checks: W/H, Initial zoom presets, K keeps zoom. | User confirms or reports. |
-=======
+| **PR-C** `feat/context-menu-redesign` | Open PR, awaiting review; GUI check: full context-menu layout, dark styling, folder-items toggle, Zoom submenu behaviour. | User confirms or reports. |
+| **PR-B** `feat/fit-width-height-keep-zoom` (#178) | Merged 2026-09-27. | GUI check for user: W/H, Initial zoom presets, K keeps zoom. |
 | **PR-A** `feat/zoom-key-anchor-kinetic-arrows` (#177) | Merged 2026-09-27 (v2.0.181). | GUI check for user: +/- zoom stays under the mouse; arrow keys glide. |
->>>>>>> origin/master
 
 ## Closed on purpose (do not reopen without a new measurement)
 

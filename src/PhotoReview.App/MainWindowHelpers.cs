@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.App;
 
@@ -131,6 +132,16 @@ internal static class MainWindowHelpers
         return Math.Clamp(double.IsFinite(value) ? value : 0, 0, maximum);
     }
 
+    /// <summary>
+    /// PR-C: "Set current zoom as click level" menu item's target percent -- <paramref name="effectiveZoom"/> (a
+    /// factor, e.g. 1.5 = 150 %) rounded to the nearest percent and clamped to <see cref="AppSettings.MinClickZoomPercent"/>/
+    /// <see cref="AppSettings.MaxClickZoomPercent"/>. Null when <paramref name="effectiveZoom"/> is null (the viewer
+    /// is in Fit), which has no zoom factor to capture; the caller disables the menu item in that case.
+    /// </summary>
+    internal static int? CalculateClickLevelFromEffectiveZoom(double? effectiveZoom) =>
+        effectiveZoom is { } zoom
+            ? Math.Clamp((int)Math.Round(zoom * 100, MidpointRounding.AwayFromZero), AppSettings.MinClickZoomPercent, AppSettings.MaxClickZoomPercent)
+            : null;
 }
 
 internal sealed class ForwardingFolderSink(Func<IFolderLoadSink> target) : IFolderLoadSink

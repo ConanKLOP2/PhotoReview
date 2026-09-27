@@ -113,26 +113,33 @@ public sealed class WindowLocalizationTests
             {
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
-                // feat/ui-dark-chrome-toolbar: "Open folder…", "Settings…" (+ a Separator), Undo, a Separator, then Fit, Zoom-to-level (its header is filled when the menu opens) and the zoom-levels submenu.
+                // PR-C feat/context-menu-redesign: Undo, a Separator, Fit, Zoom-to-level (header filled on open), the
+                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(6, menuItems.Count);
-                var openFolder = menuItems[0];
-                var settings = menuItems[1];
-                var undo = menuItems[2];
-                Assert.Equal("Mở thư mục…", openFolder.Header);
-                Assert.Equal("Mở thư mục ảnh", AutomationProperties.GetName(openFolder));
-                Assert.Equal("Cài đặt…", settings.Header);
-                Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
+                Assert.Equal(8, menuItems.Count);
+                var undo = menuItems[0];
+                var fit = menuItems[1];
+                var zoomToLevel = menuItems[2];
+                var zoomMenu = menuItems[3];
+                var openFolder = menuItems[4];
+                var nextFolder = menuItems[5];
+                var previousFolder = menuItems[6];
+                var settings = menuItems[7];
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
-                var fit = menuItems[3];
                 Assert.Equal("Vừa khung hình", fit.Header);
                 Assert.Equal("Đưa ảnh vừa khung cửa sổ", AutomationProperties.GetName(fit));
-                var clickZoomLevel = menuItems[5];
-                Assert.Equal("Mức thu phóng", clickZoomLevel.Header);
+                Assert.NotNull(zoomToLevel);
+                Assert.Equal("Thu phóng", zoomMenu.Header);
                 // Populated before the first open: an empty MenuItem shows no submenu arrow and cannot open.
-                Assert.True(clickZoomLevel.HasItems);
-                Assert.Equal("Menu con các mức thu phóng", AutomationProperties.GetName(clickZoomLevel));
+                Assert.True(zoomMenu.HasItems);
+                Assert.Equal("Menu con Thu phóng", AutomationProperties.GetName(zoomMenu));
+                Assert.Equal("Mở thư mục…", openFolder.Header);
+                Assert.Equal("Mở thư mục ảnh", AutomationProperties.GetName(openFolder));
+                Assert.Equal("Thư mục kế tiếp", nextFolder.Header);
+                Assert.Equal("Thư mục trước", previousFolder.Header);
+                Assert.Equal("Cài đặt…", settings.Header);
+                Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
                 Assert.Equal("Ảnh xem trước bên phải, nhấn để chọn", AutomationProperties.GetName(window.CompareRightBorder));
 

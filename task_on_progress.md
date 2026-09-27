@@ -1,12 +1,11 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-27 | **Base:** master `1de561c` (#134, tag `v2.0.137`) | **Open PRs:** none (last merged: #128-#134)
+**Updated:** 2026-09-27 | **Base:** master `1de561c` (#134, tag `v2.0.137`) | **Open PRs:** `feat/context-menu-redesign` (PR-C, not merged; last merged: #128-#178)
 
 ## Now
-
-- **Nothing in progress.** Everything up to #134 is merged; the 2026-09-27 docs cleanup removed finished plans/evidence (see [HISTORY](docs/refactoring/HISTORY.md)).
 - **GUI check pending (user):** context-menu Zoom (Fit, 200/300/400 %, Zoom levels submenu arrow), "Taken:"/"Modified:" labels (info line + title bar), info-overlay auto-hide (Q-R34), Zoom card in Settings (level, click-to-zoom, arrow step %, shortcuts), sort modes Default / Name A→Z / Z→A (Q-R33), preload window setting (Q-R31). Earlier GUI checks (AR13, AR16, T89 Fit, Q-R30 UI feedback, #109) were reported OK by the user on 2026-09-26.
-- **Open PR (2026-09-27):** `feat/fit-width-height-keep-zoom` (PR-B, #178, Q-R36): Fit width/Fit height/Click zoom level initial-view presets, `FitWidthAnchor` (default Centre) setting, `KeepZoomAcrossImages` setting, shortcuts W/H/K. Awaiting review; not merged.
+- **Merged (2026-09-27):** `feat/fit-width-height-keep-zoom` (PR-B, #178, Q-R36): Fit width/Fit height/Click zoom level initial-view presets, `FitWidthAnchor` (default Centre) setting, `KeepZoomAcrossImages` setting, shortcuts W/H/K. GUI check still pending (user).
+- **In progress:** `feat/context-menu-redesign` (PR-C): right-click context menu redesign (Undo first, Fit/Zoom-to-N%/Zoom submenu/Settings always visible, folder-items group togglable via `ShowFolderMenuItems`), reduced Zoom submenu presets + `SetZoomAlsoSetsClickLevel` toggle + "set current zoom as click level", dark theme for `ContextMenu`/`MenuItem`/`Separator`.
 - **Open decision:** Q-R29 (NAS: UI-thread stat in `ThumbnailCache.BuildKey`; no I/O cap on whole-folder preload) — awaiting user, see [OPEN-DECISIONS](docs/refactoring/OPEN-DECISIONS.md).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Releases are manual (Q-R24):** CI only tags `v2.0.N`; a human runs Actions > Release > Run workflow (tag input). Updates in the app: manual "Check for updates" only (Q-R23).
