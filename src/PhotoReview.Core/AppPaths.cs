@@ -54,9 +54,10 @@ public sealed class AppPaths : IAppPaths
         LogFile = Path.Combine(logRoot, "logs", "app.log");
 
         // Caches và WindowPlacementFile luôn nằm dưới appRoot (%LOCALAPPDATA%\PhotoReview)
-        PreviewCacheDir = Path.Combine(appRoot, "cache");
-        ThumbnailCacheDir = Path.Combine(appRoot, "thumbnails");
-        WindowPlacementFile = Path.Combine(appRoot, "window-placement.json");
+        var userRoot = isolateConfig && hasOverride ? overrideRoot! : appRoot;
+        PreviewCacheDir = Path.Combine(userRoot, "cache");
+        ThumbnailCacheDir = Path.Combine(userRoot, "thumbnails");
+        WindowPlacementFile = Path.Combine(userRoot, "window-placement.json");
     }
 
     private static string? ResolveOverride(string? value)

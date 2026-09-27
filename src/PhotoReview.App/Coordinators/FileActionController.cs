@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.App.ViewModels;
@@ -148,12 +149,22 @@ public sealed class FileActionController
         }
 
         var sourceIndex = _catalog.IndexOf(source);
-        _clock.StopForAction();
-        _preloadController?.Cancel();
-        var folderGen = _clock.CurrentFolder;
-
         var isRemove = operation is FileOperationType.Move or FileOperationType.Recycle;
+        // Only a Move/Recycle takes the file out of the catalog and re-presents the next photo (which also restarts
+        // preload). A Copy changes nothing on screen and nothing would restart what StopForAction/Cancel stopped, so it
+        // must not invalidate the in-flight present or the preload window (it also reads the source with sharing).
+        if (isRemove)
+        {
+            _clock.StopForAction();
+            _preloadController?.Cancel();
+        }
+
+        var folderGen = _clock.CurrentFolder;
         int nextIndex = -1;
+        // The fire-and-forget presenter writes the status line when it finishes; a failure message must be set after it.
+        Task? presentTask = null;
+        // Neighbour that precedes the source in the review order: Undo of a Move puts the photo back after it.
+        var previousPath = isRemove && sourceIndex > 0 ? _catalog.PathAt(sourceIndex - 1) : null;
 
         if (isRemove)
         {
@@ -163,7 +174,7 @@ public sealed class FileActionController
             // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
             if (nextIndex >= 0)
             {
-                _ = _sink.PresentAsync(nextIndex);
+                presentTask = _sink.PresentAsync(nextIndex);
             }
             else
             {
@@ -190,6 +201,7 @@ public sealed class FileActionController
             if (result.Succeeded)
             {
                 _undoService?.Register(result);
+                if (operation == FileOperationType.Move && sourceIndex >= 0) RememberMovePosition(source, previousPath);
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
 
                 if (_catalog.Count == 0)
@@ -208,6 +220,7 @@ public sealed class FileActionController
             // No Undo is registered: the destination no longer matches the fingerprint of the prepared source.
             if (operation == FileOperationType.Move && result.SourceRemoved)
             {
+                if (presentTask is not null) await presentTask;
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
                 _sink.SetStatusText(Tr.StatusMoveUnverified(Path.GetFileName(source)));
                 return false;
@@ -219,6 +232,7 @@ public sealed class FileActionController
                 _catalog.Restore(source, sourceIndex);
             }
 
+            if (presentTask is not null) await presentTask;
             _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, result.Error));
             return false;
         }
@@ -226,6 +240,44 @@ public sealed class FileActionController
         {
             _sink.NotifyNavigationStateChanged();
         }
+    }
+
+    /// <summary>Upper bound of remembered Move positions; older ones fall back to the name-ordered insert.</summary>
+    private const int MaxRememberedMovePositions = 256;
+
+    // Undo of a Move: the photo before the moved one in the review order (null = it was first), by source path.
+    private readonly Dictionary<string, string?> _movePreviousPath = new(StringComparer.OrdinalIgnoreCase);
+
+    private void RememberMovePosition(string source, string? previousPath)
+    {
+        if (_movePreviousPath.Count >= MaxRememberedMovePositions) _movePreviousPath.Clear();
+        _movePreviousPath[source] = previousPath;
+    }
+
+    /// <summary>
+    /// Puts an undone Move back where it was in the review order (after its former predecessor) instead of by file
+    /// name, which is only right when the catalog is sorted by ascending name (Explorer, size, folder order, Z-A differ).
+    /// Falls back to the natural name order when the position is unknown or the predecessor is no longer listed.
+    /// </summary>
+    private void InsertRestoredMove(string source)
+    {
+        if (_movePreviousPath.Remove(source, out var previousPath))
+        {
+            if (previousPath is null)
+            {
+                _catalog.Restore(source, 0);
+                return;
+            }
+
+            var previousIndex = _catalog.IndexOf(previousPath);
+            if (previousIndex >= 0)
+            {
+                _catalog.Restore(source, previousIndex + 1);
+                return;
+            }
+        }
+
+        _catalog.InsertSorted(source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
     }
 
     /// <summary>
@@ -276,7 +328,7 @@ public sealed class FileActionController
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
             && IsInFolder(result.Source, currentFolder))
         {
-            _catalog.InsertSorted(result.Source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
+            InsertRestoredMove(result.Source);
             _sink.OnCatalogChanged(null);
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
