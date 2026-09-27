@@ -596,5 +596,6 @@
   "settings.zoomShortcuts.hint": "Help text under the zoom shortcut summary.",
   "settings.zoomShortcuts.none": "Shown next to a zoom shortcut that has no key assigned.",
   "main.menu.zoomToLevel": "Right-click menu item: zooms to the configured zoom level; {percent} = that level. The shortcut is shown to its right by the app.",
-  "main.menu.zoomToLevel.automationName": "AutomationProperties.Name of the Zoom-to-level menu item."
+  "main.menu.zoomToLevel.automationName": "AutomationProperties.Name of the Zoom-to-level menu item.",
+  "core.recycle.binCannotHold": "Error shown when Delete/Recycle is refused on a local drive because its Recycle Bin is turned off, too small for the file, or unreadable (the file would be deleted permanently); {name} = file name."
 }

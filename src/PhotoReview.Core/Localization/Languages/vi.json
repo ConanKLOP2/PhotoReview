@@ -716,5 +716,6 @@
   "settings.zoomShortcuts.hint": "Chỉ để xem: đổi các phím này ở trang Phím tắt.",
   "settings.zoomShortcuts.none": "chưa đặt",
   "main.menu.zoomToLevel": "Thu phóng về {percent}%",
-  "main.menu.zoomToLevel.automationName": "Thu phóng về mức đã cấu hình, {percent} phần trăm"
+  "main.menu.zoomToLevel.automationName": "Thu phóng về mức đã cấu hình, {percent} phần trăm",
+  "core.recycle.binCannotHold": "\"{name}\" KHÔNG được xóa: Thùng rác của ổ này đang tắt, nhỏ hơn tệp này, hoặc không đọc được cài đặt của nó, nên Windows sẽ xóa vĩnh viễn tệp. Hãy kiểm tra cài đặt của ổ trong Thùng rác > Properties, hoặc xóa trong Explorer nếu bạn thật sự muốn xóa."
 }

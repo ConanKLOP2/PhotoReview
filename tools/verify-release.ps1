@@ -27,7 +27,8 @@ $required = @(
 $required += if ($SelfContained) { @('coreclr.dll', 'hostfxr.dll') } else { @() }
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $resolved $_) -PathType Leaf) })
 if ($missing.Count -gt 0) {
-    $missing | ForEach-Object { Write-Error "Missing release file: $_" }
+    # One message: Write-Error is terminating under $ErrorActionPreference='Stop', so a per-file loop would list only the first.
+    Write-Error ('Missing release file(s): ' + ($missing -join ', '))
     exit 1
 }
 

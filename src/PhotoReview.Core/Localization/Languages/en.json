@@ -724,5 +724,6 @@
   "settings.zoomShortcuts.hint": "Read-only: change these keys on the Shortcuts page.",
   "settings.zoomShortcuts.none": "not set",
   "main.menu.zoomToLevel": "Zoom to {percent}%",
-  "main.menu.zoomToLevel.automationName": "Zoom to the configured level, {percent} percent"
+  "main.menu.zoomToLevel.automationName": "Zoom to the configured level, {percent} percent",
+  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone."
 }
