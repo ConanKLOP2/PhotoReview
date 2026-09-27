@@ -12,6 +12,9 @@ public sealed class ReviewCommandAutoRepeatTests
     [InlineData(ReviewCommandType.MoveToFolder)]
     [InlineData(ReviewCommandType.CopyToFolder)]
     [InlineData(ReviewCommandType.ToggleInfoOverlay)] // flips and saves a setting
+    [InlineData(ReviewCommandType.Fullscreen)] // pure toggles: holding the key must not flicker them
+    [InlineData(ReviewCommandType.ToggleCompare)]
+    [InlineData(ReviewCommandType.ClickZoom)]
     public void FileChangingCommandsIgnoreAutoRepeat(ReviewCommandType type) =>
         Assert.True(type.IgnoresAutoRepeat());
 

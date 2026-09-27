@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
@@ -188,9 +188,11 @@ public sealed class DecoderQualityGateTests : IDisposable
                 var result = decoder.Decode(new DecodeRequest(truncatedScanPath, TargetWidth: 0));
                 Assert.NotNull(result);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is InvalidDataException or FileFormatException or NotSupportedException or IOException)
             {
-                Assert.IsNotType<AccessViolationException>(ex);
+                // A typed failure is an accepted outcome for a corrupt scan. Anything else (NullReference,
+                // IndexOutOfRange, OutOfMemory, InvalidCast, ...) is a decoder leak and propagates, failing the test.
+                // (AccessViolationException is uncatchable in .NET Core: it kills the run, so it needs no assertion.)
             }
         }
 

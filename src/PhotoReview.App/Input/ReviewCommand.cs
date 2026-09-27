@@ -37,11 +37,13 @@ public static class ReviewCommandTypeExtensions
     /// them, otherwise photos are sent away faster than they can be looked at (R2-F-06).
     /// Navigation and zoom keys are deliberately not listed so they keep repeating for fast browsing.
     /// ToggleInfoOverlay is listed too: it flips and SAVES a setting, so holding the key would flicker the overlay
-    /// and rewrite config.json on every repeat.
+    /// and rewrite config.json on every repeat. Fullscreen, ToggleCompare and ClickZoom are pure toggles: holding the key
+    /// would flip them at the key-repeat rate (and re-present the image for ToggleCompare), so they act once.
     /// </summary>
     public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
         type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo
-            or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder or ReviewCommandType.ToggleInfoOverlay;
+            or ReviewCommandType.MoveToFolder or ReviewCommandType.CopyToFolder or ReviewCommandType.ToggleInfoOverlay
+            or ReviewCommandType.Fullscreen or ReviewCommandType.ToggleCompare or ReviewCommandType.ClickZoom;
 }
 
 /// <summary>

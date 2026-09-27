@@ -167,7 +167,7 @@ public sealed class RecoveryWindowTests
     {
         using var temp = new PhotoReview.TestSupport.TempRoot("recovery-readonly");
         var entries = SampleEntries(temp.Path);
-        var before = Directory.EnumerateFileSystemEntries(temp.Path, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+        var before = Snapshot(temp.Path);
         await StaTestHost.RunAsync(async () =>
         {
             var window = new RecoveryWindow(entries);
@@ -175,7 +175,22 @@ public sealed class RecoveryWindowTests
             await window.RunChecksAsync(); // Re-check
             window.Close();
         });
-        var after = Directory.EnumerateFileSystemEntries(temp.Path, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
+        var after = Snapshot(temp.Path);
         Assert.Equal(before, after);
     }
+
+    /// <summary>Every entry with its size, last-write stamp and content hash, so a rewrite or touch is visible, not just a rename.</summary>
+    private static string[] Snapshot(string root) =>
+        Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories)
+            .Select(path =>
+            {
+                var relative = Path.GetRelativePath(root, path);
+                if (Directory.Exists(path))
+                    return $"{relative}|dir|{Directory.GetLastWriteTimeUtc(path).Ticks}";
+                var info = new FileInfo(path);
+                var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+                return $"{relative}|{info.Length}|{info.LastWriteTimeUtc.Ticks}|{hash}";
+            })
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 }

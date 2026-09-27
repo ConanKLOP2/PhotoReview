@@ -212,6 +212,9 @@ public sealed class DuplicateCleanupController
             if (result.Succeeded)
             {
                 succeeded++;
+                // The file is in the Recycle Bin: drop its previews/source bytes from RAM and its preload keys
+                // (FileActionController does this through OnCatalogChanged for a single Recycle).
+                _previewService?.EvictCachedPath(path, normalized => _preloadController?.RemovePreloadedKeysForPath(normalized));
             }
             else
             {
@@ -224,12 +227,7 @@ public sealed class DuplicateCleanupController
             return;
         }
 
-        _sink.SetStatusText(StatusFormatter.BatchDone(succeeded, failures.Count));
-        if (failures.Count > 0 && _dialogService is not null)
-        {
-            _dialogService.ShowError(Tr.DialogBatchErrorsTitle, string.Join(Environment.NewLine, failures));
-        }
-
+        // Reload first: OpenFolderAsync clears the status line, which would wipe the result of the batch.
         if (succeeded > 0 && remove.Count > 0)
         {
             var folder = Path.GetDirectoryName(remove[0]);
@@ -237,6 +235,12 @@ public sealed class DuplicateCleanupController
             {
                 await _sink.OpenFolderAsync(folder);
             }
+        }
+
+        _sink.SetStatusText(StatusFormatter.BatchDone(succeeded, failures.Count));
+        if (failures.Count > 0 && _dialogService is not null)
+        {
+            _dialogService.ShowError(Tr.DialogBatchErrorsTitle, string.Join(Environment.NewLine, failures));
         }
     }
 

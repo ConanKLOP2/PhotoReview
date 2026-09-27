@@ -137,7 +137,10 @@ public sealed class ExifLineViewModelTests : IDisposable
 
         await vm.NextAsync(); // a compare pair: two images, the compare status describes them, no single-image line
 
-        Assert.True(vm.Compare.IsVisible || vm.CurrentImage is null);
+        Assert.True(vm.Compare.IsVisible, "NextAsync did not reach the compare pair.");
+        Assert.EndsWith("c.jpg", vm.Compare.LeftPath ?? vm.Compare.RightPath, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(vm.Compare.LeftPath);
+        Assert.NotNull(vm.Compare.RightPath);
         Assert.Equal(string.Empty, vm.ExifText);
         Assert.False(vm.IsExifLineVisible);
     }

@@ -35,7 +35,11 @@ public static class TitleBarFormatter
         var parts = new List<string>(14);
 
         if (fields.HasFlag(TitleBarFields.FolderName) && !string.IsNullOrWhiteSpace(folderPath))
-            parts.Add(System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(folderPath)));
+        {
+            var name = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(folderPath));
+            // A drive root ("D:\") has no name of its own: show the root instead of a dangling separator.
+            parts.Add(name.Length > 0 ? name : folderPath);
+        }
         if (fields.HasFlag(TitleBarFields.FolderPath) && !string.IsNullOrWhiteSpace(folderPath))
             parts.Add(folderPath);
         if (fields.HasFlag(TitleBarFields.IndexCount) && index is { } idx && count is > 0)

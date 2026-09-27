@@ -11,7 +11,6 @@ delay|tests/PhotoReview.App.Tests/Coordinators/ImagePresenterTests.cs|1
 delay|tests/PhotoReview.App.Tests/Coordinators/ZoomDetailTests.cs|2
 delay|tests/PhotoReview.App.Tests/HotPath/NativeRecycleBinTests.cs|1
 delay|tests/PhotoReview.Core.Tests/Diagnostics/FileLogLifecycleTests.cs|1
-delay|tests/PhotoReview.Core.Tests/FileActions/FileActionServiceTests.cs|1
 delay|tests/PhotoReview.Core.Tests/Instance/ForwardingCoreTests.cs|1
 delay|tests/PhotoReview.Core.Tests/Session/SessionWriterTests.cs|1
 delay|tests/PhotoReview.Core.Tests/Updates/UpdateCheckerTests.cs|2

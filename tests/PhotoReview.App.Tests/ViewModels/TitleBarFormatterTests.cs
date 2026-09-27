@@ -81,6 +81,14 @@ public sealed class TitleBarFormatterTests
             TitleBarFormatter.Format(TitleBarFields.FolderName | field, Folder, null, null, null, null, 0, 0, null, null, Invariant));
     }
 
+    [Fact(DisplayName = "A drive-root folder shows the root, not an empty name with a dangling separator")]
+    public void DriveRoot_FolderName_ShowsRoot()
+    {
+        Assert.Equal(@"D:\ · 1/40 · IMG_1.jpg",
+            TitleBarFormatter.Format(TitleBarFields.FolderName | TitleBarFields.IndexCount | TitleBarFields.FileName,
+                @"D:\", 0, 40, "IMG_1.jpg", null, 0, 0, null, null, Invariant));
+    }
+
     [Fact(DisplayName = "Selecting nothing produces an empty string (caller falls back to the folder name)")]
     public void NoFieldsSelected_ProducesEmpty()
     {
