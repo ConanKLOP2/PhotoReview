@@ -16,6 +16,11 @@ public sealed class InMemoryFileSystem : IFileSystem
     private readonly Dictionary<string, byte[]> _files = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _fileWriteTimes = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _directories = new(StringComparer.OrdinalIgnoreCase);
+    // SEC-01: normalized path -> real target it "points to", simulating a symlink/junction without touching the
+    // real OS filesystem. Populated only by AddReparsePoint; ResolveRealPath walks segment by segment and
+    // substitutes the target whenever a segment is registered here, exactly like PhysicalFileSystem does for a
+    // real reparse point.
+    private readonly Dictionary<string, string> _reparsePoints = new(StringComparer.OrdinalIgnoreCase);
 
     // --- Hook chèn lỗi cho unit testing ---
     public Func<string, Exception?>? OpenReadHook { get; set; }
@@ -400,6 +405,54 @@ public sealed class InMemoryFileSystem : IFileSystem
         {
             InternalCreateDirectory(NormalizeDirectoryPath(path));
         }
+    }
+
+    /// <summary>
+    /// SEC-01 test seam: registers <paramref name="path"/> as an existing symlink/junction whose real target is
+    /// <paramref name="target"/> (both simulated — no real OS reparse point is created). <paramref name="path"/>
+    /// is also created as an ordinary directory entry so <see cref="DirectoryExists"/>/enumeration see it exist,
+    /// matching a real junction which is itself a directory entry.
+    /// </summary>
+    public void AddReparsePoint(string path, string target)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(target);
+        lock (_lock)
+        {
+            var normalized = NormalizeDirectoryPath(path);
+            var parent = Path.GetDirectoryName(normalized);
+            if (!string.IsNullOrEmpty(parent)) InternalCreateDirectory(NormalizeDirectoryPath(parent));
+            _directories.Add(normalized);
+            _reparsePoints[normalized] = NormalizeDirectoryPath(target);
+        }
+    }
+
+    /// <summary>SEC-01: walks <paramref name="path"/> segment by segment, substituting any segment registered via
+    /// <see cref="AddReparsePoint"/> with its simulated target — mirrors what <c>PhysicalFileSystem.ResolveRealPath</c>
+    /// does for a real symlink/junction, so tests can exercise the escape check without touching the real OS.</summary>
+    public string ResolveRealPath(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        if (string.IsNullOrEmpty(root)) return full;
+
+        var relative = full[root.Length..];
+        var segments = relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var current = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        lock (_lock)
+        {
+            foreach (var segment in segments)
+            {
+                var candidate = current.Length == 0 ? segment : current + Path.DirectorySeparatorChar + segment;
+                current = _reparsePoints.TryGetValue(NormalizeDirectoryPath(candidate), out var target) ? target : candidate;
+            }
+        }
+
+        return current;
     }
 
     private void InternalCreateDirectory(string normalizedDir)

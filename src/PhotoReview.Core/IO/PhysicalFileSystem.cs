@@ -273,4 +273,49 @@ public sealed class PhysicalFileSystem : IFileSystem
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Directory.CreateDirectory(path);
     }
+
+    /// <summary>
+    /// SEC-01: walks <paramref name="path"/> one segment at a time from its root, following the real reparse
+    /// point (symlink/junction) target whenever an existing segment is one, including the final segment (the
+    /// destination file/folder itself). A segment that does not exist yet is appended as-is (nothing to
+    /// resolve). This is what makes containment checks in <c>ActionDestinationPolicy</c>/<c>FileActionService</c>
+    /// resistant to a junction planted inside the photo folder that points elsewhere on disk.
+    /// </summary>
+    public string ResolveRealPath(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        if (string.IsNullOrEmpty(root)) return full;
+
+        var relative = full[root.Length..];
+        var segments = relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var current = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        foreach (var segment in segments)
+        {
+            var candidate = current.Length == 0 ? segment : current + Path.DirectorySeparatorChar + segment;
+            current = ResolveIfReparsePoint(candidate);
+        }
+
+        return current;
+    }
+
+    /// <summary>Returns the fully-resolved final target when <paramref name="candidate"/> exists and is a reparse
+    /// point (symlink or junction); otherwise returns <paramref name="candidate"/> unchanged.</summary>
+    private static string ResolveIfReparsePoint(string candidate)
+    {
+        FileSystemInfo info;
+        if (Directory.Exists(candidate)) info = new DirectoryInfo(candidate);
+        else if (File.Exists(candidate)) info = new FileInfo(candidate);
+        else return candidate; // doesn't exist yet: nothing to resolve
+
+        // LinkTarget is non-null only for a reparse point .NET understands (symlink or, on Windows, a junction).
+        if (info.LinkTarget is null) return candidate;
+
+        var resolved = info.ResolveLinkTarget(returnFinalTarget: true);
+        return resolved?.FullName ?? candidate;
+    }
 }

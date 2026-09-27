@@ -1,4 +1,5 @@
 using System.IO;
+using PhotoReview.Core.Abstractions;
 
 namespace PhotoReview.Core.FileActions;
 
@@ -47,6 +48,35 @@ public static class ActionDestinationPolicy
         }
 
         return ActionDestinationCheck.Ok;
+    }
+
+    /// <summary>
+    /// SEC-01: <see cref="Validate"/> only inspects the destination STRING (no "..", not rooted). It cannot see
+    /// that an intermediate directory that already exists on disk is a symlink/junction whose real target is
+    /// outside <paramref name="sourceFolder"/> — the actual Move/Copy would then land outside the photo folder
+    /// even though the lexical path looked contained. This resolves every reparse point that already exists
+    /// along <paramref name="destinationFolderOrPath"/> (via <see cref="IFileSystem.ResolveRealPath"/>, including
+    /// the final path segment — a symlinked destination FILE is caught the same way) and checks the RESOLVED
+    /// path is still inside the RESOLVED <paramref name="sourceFolder"/>. Only call this for a non-rooted
+    /// (relative) destination: an absolute destination is an explicit user choice that is allowed to leave the
+    /// photo folder (see <see cref="Validate"/> remarks) and must not be run through this check.
+    /// </summary>
+    public static ActionDestinationCheck ValidateNoEscapeViaReparsePoint(
+        string sourceFolder, string destinationFolderOrPath, IFileSystem fileSystem)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceFolder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationFolderOrPath);
+        ArgumentNullException.ThrowIfNull(fileSystem);
+
+        var realSource = Path.TrimEndingDirectorySeparator(fileSystem.ResolveRealPath(sourceFolder));
+        var realDestination = Path.TrimEndingDirectorySeparator(fileSystem.ResolveRealPath(destinationFolderOrPath));
+
+        if (string.Equals(realDestination, realSource, StringComparison.OrdinalIgnoreCase))
+            return ActionDestinationCheck.Ok;
+
+        return realDestination.StartsWith(realSource + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            ? ActionDestinationCheck.Ok
+            : ActionDestinationCheck.EscapesSourceFolder;
     }
 
     /// <summary>
