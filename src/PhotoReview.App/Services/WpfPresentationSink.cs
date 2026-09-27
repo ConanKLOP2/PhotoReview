@@ -64,7 +64,14 @@ public sealed class WpfPresentationSink : IPresentationSink
 
     public void SetStatusText(string status) => InvokeUi(() => _onSetStatusText?.Invoke(status));
 
-    public void ApplyInitialViewMode() => InvokeUi(() => _onApplyInitialViewMode?.Invoke());
+    /// <summary>
+    /// PR-B: set by <c>MainWindow</c> after constructing <c>PointerInputController</c> (<c>_pointer.ApplyInitialViewAsync</c>)
+    /// so the initial-view application can do Fit width/Fit height scroll placement, which needs the surface the
+    /// pointer controller owns. Overrides the constructor's <c>onApplyInitialViewMode</c> callback when set.
+    /// </summary>
+    public Action? ApplyInitialViewModeOverride { get; set; }
+
+    public void ApplyInitialViewMode() => InvokeUi(() => (ApplyInitialViewModeOverride ?? _onApplyInitialViewMode)?.Invoke());
 
     public void OnPresented(string path) => InvokeUi(() => _onPresented?.Invoke(path));
 

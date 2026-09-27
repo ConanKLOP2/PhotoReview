@@ -45,7 +45,9 @@ public sealed class SettingsWindowRoundTripTests
     /// </summary>
     private static readonly Dictionary<string, Action<SettingsWindow>> ControlMutations = new(StringComparer.Ordinal)
     {
-        [nameof(AppSettings.InitialViewMode)] = w => w.ViewModeCombo.SelectedIndex = 1, // Fit -> Percent100
+        [nameof(AppSettings.InitialViewMode)] = w => w.ViewModeCombo.SelectedIndex = 4, // Fit -> Percent100 (PR-B: index shifted by FitWidth/FitHeight/ClickZoomLevel)
+        [nameof(AppSettings.FitWidthAnchor)] = w => w.FitWidthAnchorCombo.SelectedIndex = 1, // Centre -> TopThird
+        [nameof(AppSettings.KeepZoomAcrossImages)] = w => w.KeepZoomAcrossImagesCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.LoadingMode)] = w => w.LoadingModeCombo.SelectedIndex = 2, // Preview -> Original
         [nameof(AppSettings.ImageSortMode)] = w => w.SortModeCombo.SelectedIndex = 4, // Name -> SizeAscending (item 4 of the Tag-mapped order; see SortModeCombo_ListsSixModes...)
         [nameof(AppSettings.CompareHashEnabled)] = w => w.CompareHashCheck.IsChecked = false, // true -> false
@@ -106,6 +108,8 @@ public sealed class SettingsWindowRoundTripTests
     private static readonly Dictionary<string, object> ExpectedValues = new(StringComparer.Ordinal)
     {
         [nameof(AppSettings.InitialViewMode)] = InitialViewMode.Percent100,
+        [nameof(AppSettings.FitWidthAnchor)] = FitWidthAnchor.TopThird,
+        [nameof(AppSettings.KeepZoomAcrossImages)] = true,
         [nameof(AppSettings.LoadingMode)] = LoadingMode.Original,
         [nameof(AppSettings.ImageSortMode)] = ImageSortMode.SizeAscending,
         [nameof(AppSettings.CompareHashEnabled)] = false,

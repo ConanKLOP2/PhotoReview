@@ -95,6 +95,16 @@ internal static class MainWindowHelpers
             viewportWidth,
             viewportHeight);
 
+    /// <summary>
+    /// PR-B: the vertical anchor for <see cref="PhotoReview.Core.Model.InitialViewMode.FitWidth"/> (initial view, and
+    /// the FitWidth shortcut when the mouse is not over the viewport), as an image-fraction point (see
+    /// <see cref="ZoomImagePoint"/>). <see cref="PhotoReview.Core.Model.FitWidthAnchor.TopThird"/> keeps the point a
+    /// third of the way down the image at the viewport centre (portraits usually have the face there);
+    /// <see cref="PhotoReview.Core.Model.FitWidthAnchor.Centre"/> keeps the image's vertical centre there instead.
+    /// </summary>
+    internal static ZoomImagePoint CalculateFitWidthAnchorPoint(PhotoReview.Core.Model.FitWidthAnchor anchor) =>
+        anchor == PhotoReview.Core.Model.FitWidthAnchor.Centre ? new ZoomImagePoint(0.5, 0.5) : new ZoomImagePoint(0.5, 1.0 / 3.0);
+
     internal static ZoomViewportOffsets CalculatePanOffsets(
         double currentHorizontalOffset,
         double currentVerticalOffset,

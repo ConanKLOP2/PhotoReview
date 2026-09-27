@@ -133,6 +133,38 @@ public sealed partial class ViewerState : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Original-relative zoom at which the current image's width exactly fills <see cref="MaxImageWidth"/> at the
+    /// current <see cref="DpiScale"/> (0 = unknown). Same formula shape as <see cref="FitZoom"/>, but width only.
+    /// </summary>
+    public double FitWidthZoom
+    {
+        get
+        {
+            if (SourcePixelWidth <= 0) return 0;
+            if (!double.IsFinite(MaxImageWidth) || MaxImageWidth <= 1) return 0;
+            var dpi = NormalizeDpi(DpiScale);
+            var fit = MaxImageWidth * dpi / SourcePixelWidth;
+            return double.IsFinite(fit) && fit > 0 ? fit : 0;
+        }
+    }
+
+    /// <summary>
+    /// Original-relative zoom at which the current image's height exactly fills <see cref="MaxImageHeight"/> at the
+    /// current <see cref="DpiScale"/> (0 = unknown). Same formula shape as <see cref="FitZoom"/>, but height only.
+    /// </summary>
+    public double FitHeightZoom
+    {
+        get
+        {
+            if (SourcePixelHeight <= 0) return 0;
+            if (!double.IsFinite(MaxImageHeight) || MaxImageHeight <= 1) return 0;
+            var dpi = NormalizeDpi(DpiScale);
+            var fit = MaxImageHeight * dpi / SourcePixelHeight;
+            return double.IsFinite(fit) && fit > 0 ? fit : 0;
+        }
+    }
+
     /// <summary>Windows scales 100 %..500 %; anything outside a generous range (0, NaN, Infinity, denormals) is a broken reading.</summary>
     private const double MinPlausibleDpiScale = 0.25;
     private const double MaxPlausibleDpiScale = 16;
@@ -186,6 +218,18 @@ public sealed partial class ViewerState : ObservableObject
     /// be 1.0, and raises <see cref="ZoomModeChanged"/> so the current image's original is decoded on demand.
     /// </summary>
     public void ZoomToActualSize() => SetZoom(ActualSizeZoom);
+
+    /// <summary>Zooms so the image width exactly fills <see cref="MaxImageWidth"/> (<see cref="FitWidthZoom"/>); no-op when unknown.</summary>
+    public void ZoomToFitWidth()
+    {
+        if (FitWidthZoom > 0) SetZoom(FitWidthZoom);
+    }
+
+    /// <summary>Zooms so the image height exactly fills <see cref="MaxImageHeight"/> (<see cref="FitHeightZoom"/>); no-op when unknown.</summary>
+    public void ZoomToFitHeight()
+    {
+        if (FitHeightZoom > 0) SetZoom(FitHeightZoom);
+    }
 
     /// <summary>
     /// Tăng mức zoom thêm 0.25 (tối đa 4.0).
@@ -255,24 +299,45 @@ public sealed partial class ViewerState : ObservableObject
     }
 
     /// <summary>
-    /// Áp dụng chế độ xem ban đầu theo cấu hình InitialViewMode.
+    /// Áp dụng chế độ xem ban đầu theo cấu hình InitialViewMode. Returns false (no-op, nothing changed) when
+    /// <paramref name="keepZoomAcrossImages"/> is true (<see cref="AppSettings.KeepZoomAcrossImages"/>): Fit stays
+    /// Fit and a zoom stays at the same zoom across an image change. <see cref="InitialViewMode.FitWidth"/>/
+    /// <see cref="InitialViewMode.FitHeight"/> refresh the viewport limits first (<see cref="UpdateViewport"/> with
+    /// <c>force: true</c>) so <see cref="MaxImageWidth"/>/<see cref="MaxImageHeight"/> are current before computing
+    /// <see cref="FitWidthZoom"/>/<see cref="FitHeightZoom"/>; scroll placement (top-third/centre) is the caller's
+    /// job (<c>PointerInputController</c> owns the surface).
     /// </summary>
-    public void ApplyInitialViewMode(InitialViewMode mode, double viewportWidth, double viewportHeight)
+    public bool ApplyInitialViewMode(InitialViewMode mode, double viewportWidth, double viewportHeight,
+        int clickZoomPercent = AppSettings.DefaultClickZoomPercent, bool keepZoomAcrossImages = false)
     {
-        if (mode == InitialViewMode.Fit)
+        if (keepZoomAcrossImages) return false;
+        switch (mode)
         {
-            ResetFit(viewportWidth, viewportHeight);
+            case InitialViewMode.Fit:
+                ResetFit(viewportWidth, viewportHeight);
+                break;
+            case InitialViewMode.FitWidth:
+                UpdateViewport(viewportWidth, viewportHeight, force: true);
+                ZoomToFitWidth();
+                break;
+            case InitialViewMode.FitHeight:
+                UpdateViewport(viewportWidth, viewportHeight, force: true);
+                ZoomToFitHeight();
+                break;
+            case InitialViewMode.ClickZoomLevel:
+                SetZoom(clickZoomPercent / 100.0);
+                break;
+            case InitialViewMode.Percent200:
+                SetZoom(2.0);
+                break;
+            case InitialViewMode.Percent400: // legacy: SettingsNormalizer migrates a saved value to Percent200; kept defensively
+                SetZoom(2.0);
+                break;
+            default: // Percent100 (and any unrecognized value)
+                SetZoom(1.0);
+                break;
         }
-        else
-        {
-            var zoom = mode switch
-            {
-                InitialViewMode.Percent200 => 2.0,
-                InitialViewMode.Percent400 => 4.0,
-                _ => 1.0
-            };
-            SetZoom(zoom);
-        }
+        return true;
     }
 
     /// <summary>

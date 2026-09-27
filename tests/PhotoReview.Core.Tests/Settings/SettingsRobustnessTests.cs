@@ -345,9 +345,18 @@ public sealed class SettingsRobustnessTests : IDisposable
         string Key() => pool.Dequeue();
         var text = new[] { "", "Group-2", "Đích \u65E5\u672C\u8A9E", "\u0645\u062C\u0644\u062F", "tr\u0130\u0131", "a\"b\\c", "{name}", "line\nbreak", new string('x', 500) };
         string Text() => text[r.Next(text.Length)];
+        // PR-B: Percent400 is excluded -- SettingsNormalizer now migrates it to Percent200 on Load, which would make
+        // the (unnormalized) original mismatch the reloaded JSON below on its own, unrelated to what this fuzzer probes.
+        var initialViewModes = new[]
+        {
+            InitialViewMode.Fit, InitialViewMode.Percent100, InitialViewMode.Percent200,
+            InitialViewMode.FitWidth, InitialViewMode.FitHeight, InitialViewMode.ClickZoomLevel,
+        };
         var s = new AppSettings
         {
-            InitialViewMode = (InitialViewMode)r.Next(0, 4),
+            InitialViewMode = initialViewModes[r.Next(initialViewModes.Length)],
+            FitWidthAnchor = Enum.GetValues<FitWidthAnchor>()[r.Next(Enum.GetValues<FitWidthAnchor>().Length)],
+            KeepZoomAcrossImages = r.Next(2) == 0,
             LoadingMode = Enum.GetValues<LoadingMode>()[r.Next(Enum.GetValues<LoadingMode>().Length)],
             LoggingEnabled = r.Next(2) == 0,
             ImageSortMode = Enum.GetValues<ImageSortMode>()[r.Next(Enum.GetValues<ImageSortMode>().Length)],
@@ -383,6 +392,12 @@ public sealed class SettingsRobustnessTests : IDisposable
                 MoveToFolder = r.Next(3) == 0 ? "" : Key(), CopyToFolder = r.Next(3) == 0 ? "" : Key(),
                 LastImage = r.Next(3) == 0 ? "" : Key(), ZoomActualSize = r.Next(3) == 0 ? "" : Key(),
                 ToggleInfoOverlay = r.Next(3) == 0 ? "" : Key(),
+                // PR-B: drawn from the same pool (not left at their "W"/"H"/"K" defaults), otherwise they could
+                // silently collide with an unrelated property's random draw and get disabled on Load but not on the
+                // original -- a spurious round-trip mismatch, not a real bug.
+                ClickZoom = r.Next(3) == 0 ? "" : Key(),
+                FitWidth = r.Next(3) == 0 ? "" : Key(), FitHeight = r.Next(3) == 0 ? "" : Key(),
+                ToggleKeepZoom = r.Next(3) == 0 ? "" : Key(),
             },
             Actions = [],
         };

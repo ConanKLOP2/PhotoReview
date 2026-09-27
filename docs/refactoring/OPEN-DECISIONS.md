@@ -39,4 +39,8 @@ Full rationale of older rows: `git show 1de561c:docs/refactoring/OPEN-DECISIONS.
 | Q-R33 | Sort modes `Default` (file-system order, no sort), `NameAscending`/`NameDescending` (app natural order) ignore Explorer order; `Name` follows Explorer and is the default for new installs (#127). |
 | Q-R34 | `ToolbarAutoHide` default off (saved true kept); new `InfoOverlayAutoHide` (default off, own delay 3000 ms) fades info on the photo, never while a message/progress/compare/dialog needs it (#129). |
 | F-WIN-2 | (A) 2026-09-27: on a fixed drive whose Recycle Bin is off, too small for the file, or unreadable, Recycle is refused before journaling (no silent permanent delete; "allow permanent delete" does not apply), [ADR 0007](../adr/0007-io-durability-contract.md) amendment; branch `fix/recyclebin-quota-guard`. |
+<<<<<<< HEAD
+| Q-R36 | Initial zoom presets: Fit, Fit width (top third centred), Fit height, Click zoom level, 100 %, 200 % (400 % removed, migrated to 200 %); shortcuts W/H; Fit width anchor setting, default Centre, TopThird option; `KeepZoomAcrossImages` (default off, key K) skips the per-image view reset (#PR). |
+=======
 | Q-R35 | Keyboard +/- zoom anchors at the pointer (setting `KeyboardZoomAnchor`, default `Pointer`, `ViewportCentre` option); arrow keys pan a zoomed image with a kinetic impulse (same friction as a mouse flick) when `KineticPanEnabled`, hard step otherwise (#177). |
+>>>>>>> origin/master

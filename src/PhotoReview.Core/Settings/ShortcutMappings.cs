@@ -39,11 +39,22 @@ public class ShortcutMappings
     /// </summary>
     public string ClickZoom { get; set; } = "D2";
 
+    /// <summary>Fits the viewport width exactly (<see cref="PhotoReview.Core.Model.InitialViewMode.FitWidth"/>). Empty = disabled.</summary>
+    public string FitWidth { get; set; } = "W";
+
+    /// <summary>Fits the viewport height exactly (<see cref="PhotoReview.Core.Model.InitialViewMode.FitHeight"/>). Empty = disabled.</summary>
+    public string FitHeight { get; set; } = "H";
+
+    /// <summary>Toggles <see cref="AppSettings.KeepZoomAcrossImages"/> and persists it (same pattern as <see cref="ToggleInfoOverlay"/>). Empty = disabled.</summary>
+    public string ToggleKeepZoom { get; set; } = "K";
+
     /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
-    public static readonly IReadOnlyList<string> OptionalNames = [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom)];
+    public static readonly IReadOnlyList<string> OptionalNames =
+        [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom),
+         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 
