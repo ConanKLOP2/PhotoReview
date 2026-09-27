@@ -53,3 +53,4 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | R04/Q-R29 (partial) / R14 | Preload contention: no sync gap found locally (NAS still open); startup temp-file sweep moved to background (#195). [Detail](decisions/R04-R14.md) |
 | R06/R07/R08/R11 | Benchmark/cache misc fixes; instance-forward ambiguity reclassified to `Unknown` (#194). [Detail](decisions/R06-R07-R11-R08.md) |
 | Q-R05 / Q-R12 | Navigation notification count deduped; stale doc-comment links retargeted (#193). [Detail](decisions/Q-R05-Q-R12.md) |
+| R15/R16/R17/R18 | Hash-service stat, catalog snapshot, drag-drop `Exists` checks and diagnostics-metrics sort all measured negligible; no fix. [Detail](decisions/R15-R16-R17-R18.md) |
