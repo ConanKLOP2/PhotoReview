@@ -62,6 +62,9 @@ public static class DuplicateFinder
             .Where(item => item.Size >= 0)
             .GroupBy(item => item.Size)
             .Where(group => group.Count() > 1)
+            // A size group where no member matches the naming rule can never yield a removal (hash groups are sub-groups),
+            // so do not read its files at all.
+            .Where(group => group.Any(item => NumberedPattern.IsMatch(Path.GetFileNameWithoutExtension(item.Path)) == removeNumbered))
             .Select(group => (Size: group.Key, Paths: group.Select(item => item.Path).ToList()))
             .ToList(), cancellationToken).ConfigureAwait(false);
 
