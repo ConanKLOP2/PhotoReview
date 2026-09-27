@@ -1,4 +1,5 @@
 using System;
+using System.Windows;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.App.Input;
@@ -130,4 +131,13 @@ internal static class PointerGestures
     /// <summary>Converts the <c>ClickZoomPercent</c> setting to an original-relative zoom factor (ADR 0008), clamped to 10 %..800 %.</summary>
     public static double ClickZoomFactor(int percent) =>
         Math.Clamp(percent, PhotoReview.Core.Settings.AppSettings.MinClickZoomPercent, PhotoReview.Core.Settings.AppSettings.MaxClickZoomPercent) / 100.0;
+
+    /// <summary>
+    /// feat/zoom-key-anchor: the point a keyboard/menu zoom (+/-, 100 %, click-zoom shortcut/menu) anchors at, in
+    /// ImageScroll coordinates. <see cref="KeyboardZoomAnchor.Pointer"/> uses <paramref name="pointer"/> when it is
+    /// over the viewport (mouse wheel and click-to-zoom already do this unconditionally); otherwise -- and always
+    /// for <see cref="KeyboardZoomAnchor.ViewportCentre"/> -- the viewport centre.
+    /// </summary>
+    public static Point ResolveKeyboardZoomAnchor(KeyboardZoomAnchor mode, Point? pointer, double viewportWidth, double viewportHeight) =>
+        mode == KeyboardZoomAnchor.Pointer && pointer is { } point ? point : new Point(viewportWidth / 2, viewportHeight / 2);
 }

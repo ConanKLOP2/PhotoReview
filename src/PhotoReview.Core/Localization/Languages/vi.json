@@ -717,5 +717,10 @@
   "settings.zoomShortcuts.none": "chưa đặt",
   "main.menu.zoomToLevel": "Thu phóng về {percent}%",
   "main.menu.zoomToLevel.automationName": "Thu phóng về mức đã cấu hình, {percent} phần trăm",
-  "core.recycle.binCannotHold": "\"{name}\" KHÔNG được xóa: Thùng rác của ổ này đang tắt, nhỏ hơn tệp này, hoặc không đọc được cài đặt của nó, nên Windows sẽ xóa vĩnh viễn tệp. Hãy kiểm tra cài đặt của ổ trong Thùng rác > Properties, hoặc xóa trong Explorer nếu bạn thật sự muốn xóa."
+  "core.recycle.binCannotHold": "\"{name}\" KHÔNG được xóa: Thùng rác của ổ này đang tắt, nhỏ hơn tệp này, hoặc không đọc được cài đặt của nó, nên Windows sẽ xóa vĩnh viễn tệp. Hãy kiểm tra cài đặt của ổ trong Thùng rác > Properties, hoặc xóa trong Explorer nếu bạn thật sự muốn xóa.",
+  "settings.keyboardZoomAnchor.label": "Thu phóng bằng phím tắt neo tại",
+  "settings.keyboardZoomAnchor.automationName": "Điểm neo khi thu phóng bằng bàn phím",
+  "settings.keyboardZoomAnchor.hint": "Nơi giữ nguyên vị trí ảnh khi thu phóng +/- bằng bàn phím, 100% và phím tắt thu phóng nhanh. Con lăn chuột và nhấn để thu phóng luôn neo tại vị trí con trỏ.",
+  "enum.keyboardZoomAnchor.pointer": "Vị trí con trỏ chuột",
+  "enum.keyboardZoomAnchor.viewportCentre": "Giữa khung nhìn"
 }

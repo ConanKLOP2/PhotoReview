@@ -1,3 +1,4 @@
+using System.Windows;
 using PhotoReview.App.Input;
 using PhotoReview.Core.Model;
 using Xunit;
@@ -218,5 +219,31 @@ public sealed class MouseGesturesTests
 
         Assert.Equal(1200, offsets.Horizontal, 6);
         Assert.Equal(400, offsets.Vertical, 6);
+    }
+
+    // ---- ResolveKeyboardZoomAnchor (feat/zoom-key-anchor) ----
+
+    [Fact]
+    public void ResolveKeyboardZoomAnchor_PointerMode_OverTheViewport_UsesThePointer()
+    {
+        var anchor = PointerGestures.ResolveKeyboardZoomAnchor(KeyboardZoomAnchor.Pointer, new Point(120, 40), viewportWidth: 800, viewportHeight: 600);
+
+        Assert.Equal(new Point(120, 40), anchor);
+    }
+
+    [Fact]
+    public void ResolveKeyboardZoomAnchor_PointerMode_OutsideTheViewport_UsesTheCentre()
+    {
+        var anchor = PointerGestures.ResolveKeyboardZoomAnchor(KeyboardZoomAnchor.Pointer, null, viewportWidth: 800, viewportHeight: 600);
+
+        Assert.Equal(new Point(400, 300), anchor);
+    }
+
+    [Fact]
+    public void ResolveKeyboardZoomAnchor_ViewportCentreMode_IgnoresThePointer_EvenWhenItIsOverTheViewport()
+    {
+        var anchor = PointerGestures.ResolveKeyboardZoomAnchor(KeyboardZoomAnchor.ViewportCentre, new Point(120, 40), viewportWidth: 800, viewportHeight: 600);
+
+        Assert.Equal(new Point(400, 300), anchor);
     }
 }

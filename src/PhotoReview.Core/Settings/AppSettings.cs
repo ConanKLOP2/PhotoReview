@@ -238,5 +238,13 @@ public class AppSettings
 
     /// <summary>How far one arrow press moves a zoomed image, in percent of the viewport; [<see cref="MinArrowPanStepPercent"/>, <see cref="MaxArrowPanStepPercent"/>], default <see cref="DefaultArrowPanStepPercent"/>.</summary>
     public int ArrowPanStepPercent { get; set; } = DefaultArrowPanStepPercent;
+
+    /// <summary>
+    /// feat/zoom-key-anchor: what point stays under the zoom for +/- (keyboard zoom in/out), 100 % and the
+    /// click-zoom shortcut/menu (mouse wheel and click-to-zoom already anchor at the cursor regardless of this
+    /// setting). Default <see cref="KeyboardZoomAnchor.Pointer"/>: the cursor when it is over the image viewport,
+    /// the viewport centre otherwise. Absent in older configs = <see cref="KeyboardZoomAnchor.Pointer"/>.
+    /// </summary>
+    public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.Pointer;
 }
 

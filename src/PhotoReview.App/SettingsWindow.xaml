@@ -219,7 +219,7 @@
                     <StackPanel x:Name="MousePage" KeyboardNavigation.TabNavigation="Local">
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.zoom}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="ClickZoomPercentLabel" Text="{loc:Tr settings.clickZoomPercent.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="ClickZoomPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomPercentLabel}" AutomationProperties.Name="{loc:Tr settings.clickZoomPercent.automationName}" Grid.Row="0" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
                             <TextBlock Text="{loc:Tr settings.clickZoomPercent.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
@@ -227,9 +227,12 @@
                             <TextBlock x:Name="ArrowPanStepLabel" Text="{loc:Tr settings.arrowPanStepPercent.label}" Grid.Row="3" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="ArrowPanStepBox" AutomationProperties.LabeledBy="{Binding ElementName=ArrowPanStepLabel}" AutomationProperties.Name="{loc:Tr settings.arrowPanStepPercent.automationName}" Grid.Row="3" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
                             <TextBlock Text="{loc:Tr settings.arrowPanStepPercent.hint}" Grid.Row="4" Grid.Column="1" Style="{StaticResource HelpText}"/>
-                            <TextBlock Text="{loc:Tr settings.zoomShortcuts.title}" Grid.Row="5" Style="{StaticResource FormLabel}"/>
-                            <TextBlock x:Name="ZoomShortcutsSummary" Grid.Row="5" Grid.Column="1" TextWrapping="Wrap" AutomationProperties.Name="{loc:Tr settings.zoomShortcuts.automationName}"/>
-                            <TextBlock Text="{loc:Tr settings.zoomShortcuts.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <TextBlock x:Name="KeyboardZoomAnchorLabel" Text="{loc:Tr settings.keyboardZoomAnchor.label}" Grid.Row="5" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="KeyboardZoomAnchorCombo" AutomationProperties.LabeledBy="{Binding ElementName=KeyboardZoomAnchorLabel}" AutomationProperties.Name="{loc:Tr settings.keyboardZoomAnchor.automationName}" Grid.Row="5" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.keyboardZoomAnchor.pointer}"/><ComboBoxItem Content="{loc:Tr enum.keyboardZoomAnchor.viewportCentre}"/></ComboBox>
+                            <TextBlock Text="{loc:Tr settings.keyboardZoomAnchor.hint}" Grid.Row="6" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <TextBlock Text="{loc:Tr settings.zoomShortcuts.title}" Grid.Row="7" Style="{StaticResource FormLabel}"/>
+                            <TextBlock x:Name="ZoomShortcutsSummary" Grid.Row="7" Grid.Column="1" TextWrapping="Wrap" AutomationProperties.Name="{loc:Tr settings.zoomShortcuts.automationName}"/>
+                            <TextBlock Text="{loc:Tr settings.zoomShortcuts.hint}" Grid.Row="8" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.mouseZoom}"><Grid>
