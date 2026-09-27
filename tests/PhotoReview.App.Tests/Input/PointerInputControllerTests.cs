@@ -17,7 +17,7 @@ public sealed class PointerInputControllerTests
 {
     private readonly FakeSurface _surface = new();
     private readonly ViewerState _viewer = new();
-    private readonly AppSettings _settings = new() { MouseWheelAction = MouseWheelAction.Zoom, ClickToZoomEnabled = true, ClickZoomPercent = 200, KineticPanEnabled = true };
+    private readonly AppSettings _settings = new() { MouseWheelAction = MouseWheelAction.Zoom, ClickToZoomEnabled = true, ClickZoomPercent = 200, KineticPanEnabled = true, KeyboardZoomAnchor = KeyboardZoomAnchor.Pointer };
     private readonly ViewportOperationVersion _version = new();
     private int _next;
     private int _previous;

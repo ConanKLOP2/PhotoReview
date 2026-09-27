@@ -50,7 +50,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.FitWidthAnchor)] = w => w.FitWidthAnchorCombo.SelectedIndex = 1, // Centre -> TopThird
         [nameof(AppSettings.KeepZoomAcrossImages)] = w => w.KeepZoomAcrossImagesCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.LoadingMode)] = w => w.LoadingModeCombo.SelectedIndex = 2, // Preview -> Original
-        [nameof(AppSettings.ImageSortMode)] = w => w.SortModeCombo.SelectedIndex = 4, // Name -> SizeAscending (item 4 of the Tag-mapped order; see SortModeCombo_ListsSixModes...)
+        [nameof(AppSettings.ImageSortMode)] = w => w.SortModeCombo.SelectedIndex = 4, // Default -> SizeAscending (item 4 of the Tag-mapped order; see SortModeCombo_ListsSixModes...)
         [nameof(AppSettings.CompareHashEnabled)] = w => w.CompareHashCheck.IsChecked = false, // true -> false
         [nameof(AppSettings.CompareSizeEnabled)] = w => w.CompareSizeCheck.IsChecked = false, // true -> false
         [nameof(AppSettings.ScalingQuality)] = w => w.ScalingQualityCombo.SelectedIndex = 1, // HighQuality -> Linear
@@ -66,7 +66,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.MouseWheelAction)] = w => w.MouseWheelActionCombo.SelectedIndex = 1, // Zoom -> Navigate
         [nameof(AppSettings.ClickToZoomEnabled)] = w => w.ClickToZoomCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ClickZoomPercent)] = w => w.ClickZoomPercentBox.Text = "222", // 100 -> 222
-        [nameof(AppSettings.KineticPanEnabled)] = w => w.KineticPanCheck.IsChecked = false, // true -> false
+        [nameof(AppSettings.KineticPanEnabled)] = w => w.KineticPanCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.KineticGlideSmoothing)] = w => w.KineticGlideSmoothingCombo.SelectedIndex = 0, // Predict -> Off
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = w => w.MoveCopyReuseLastFolderCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ShowExifInfo)] = w => w.ShowExifInfoCheck.IsChecked = true, // false -> true
@@ -128,7 +128,7 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.MouseWheelAction)] = MouseWheelAction.Navigate,
         [nameof(AppSettings.ClickToZoomEnabled)] = true,
         [nameof(AppSettings.ClickZoomPercent)] = 222,
-        [nameof(AppSettings.KineticPanEnabled)] = false,
+        [nameof(AppSettings.KineticPanEnabled)] = true,
         [nameof(AppSettings.KineticGlideSmoothing)] = KineticGlideSmoothing.Off,
         [nameof(AppSettings.MoveCopyReuseLastFolder)] = true,
         [nameof(AppSettings.ShowExifInfo)] = true,
