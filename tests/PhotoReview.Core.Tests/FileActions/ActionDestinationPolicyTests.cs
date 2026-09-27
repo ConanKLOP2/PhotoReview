@@ -1,4 +1,5 @@
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Tests.Fakes;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.FileActions;
@@ -30,5 +31,50 @@ public sealed class ActionDestinationPolicyTests
     public void Validate_ClassifiesDestinations(string destination, ActionDestinationCheck expected)
     {
         Assert.Equal(expected, ActionDestinationPolicy.Validate(destination));
+    }
+
+    [Fact(DisplayName = "SEC-01: a junction resolving outside the source folder is rejected even though the lexical path is contained")]
+    public void ValidateNoEscapeViaReparsePoint_JunctionEscapesFolder_Rejected()
+    {
+        var fs = new InMemoryFileSystem();
+        fs.AddReparsePoint(@"C:\photos\link", @"C:\outside");
+
+        var result = ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(@"C:\photos", @"C:\photos\link\processed", fs);
+
+        Assert.Equal(ActionDestinationCheck.EscapesSourceFolder, result);
+    }
+
+    [Fact(DisplayName = "SEC-01: a junction that resolves back inside the source folder is still allowed")]
+    public void ValidateNoEscapeViaReparsePoint_JunctionStaysInsideFolder_Allowed()
+    {
+        var fs = new InMemoryFileSystem();
+        fs.AddReparsePoint(@"C:\photos\link", @"C:\photos\real");
+
+        var result = ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(@"C:\photos", @"C:\photos\link\processed", fs);
+
+        Assert.Equal(ActionDestinationCheck.Ok, result);
+    }
+
+    [Fact(DisplayName = "SEC-01: an ordinary destination with no reparse points anywhere is unaffected")]
+    public void ValidateNoEscapeViaReparsePoint_OrdinaryDestination_Allowed()
+    {
+        var fs = new InMemoryFileSystem();
+
+        var result = ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(@"C:\photos", @"C:\photos\sub\deeper", fs);
+
+        Assert.Equal(ActionDestinationCheck.Ok, result);
+    }
+
+    [Fact(DisplayName = "SEC-01: a destination FILE that is itself a symlink pointing outside the source folder is rejected")]
+    public void ValidateNoEscapeViaReparsePoint_DestinationFileIsSymlinkOutside_Rejected()
+    {
+        var fs = new InMemoryFileSystem();
+        // The final path segment itself (not just an intermediate directory) is registered as a reparse point,
+        // simulating a symlinked destination file whose real target is outside the photo folder.
+        fs.AddReparsePoint(@"C:\photos\a.jpg", @"C:\outside\a.jpg");
+
+        var result = ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(@"C:\photos", @"C:\photos\a.jpg", fs);
+
+        Assert.Equal(ActionDestinationCheck.EscapesSourceFolder, result);
     }
 }
