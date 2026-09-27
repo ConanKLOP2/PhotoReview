@@ -1,3 +1,5 @@
+using PhotoReview.Core.Abstractions;
+
 namespace PhotoReview.Imaging.Decoding;
 
 /// <summary>
@@ -16,16 +18,24 @@ namespace PhotoReview.Imaging.Decoding;
 /// Decoders scale to the largest size inside the box, preserving aspect, never upscaling
 /// (see <see cref="DecodeBox.Fit"/>).
 /// </param>
+/// <param name="Priority">
+/// Q-R29 option C-2: which lane this decode's own source-file open belongs to (only used when
+/// <paramref name="Bytes"/> is null, i.e. the decoder itself opens the file). Default
+/// <see cref="SourceReadPriority.Viewer"/> matches every call site that does not explicitly set it,
+/// so existing callers are unaffected. See <see cref="ISourceReader"/>.
+/// </param>
 public readonly record struct DecodeRequest(
     string Path,
     int TargetWidth,
     bool ApplyOrientation = true,
     ReadOnlyMemory<byte>? Bytes = null,
-    int TargetHeight = 0)
+    int TargetHeight = 0,
+    SourceReadPriority Priority = SourceReadPriority.Viewer)
 {
     /// <summary>Builds a request that decodes into <paramref name="box"/>.</summary>
-    public DecodeRequest(string path, DecodeBox box, bool applyOrientation = true, ReadOnlyMemory<byte>? bytes = null)
-        : this(path, box.Width, applyOrientation, bytes, box.Height) { }
+    public DecodeRequest(string path, DecodeBox box, bool applyOrientation = true, ReadOnlyMemory<byte>? bytes = null,
+        SourceReadPriority priority = SourceReadPriority.Viewer)
+        : this(path, box.Width, applyOrientation, bytes, box.Height, priority) { }
 
     public DecodeBox Box => new(TargetWidth, TargetHeight);
 

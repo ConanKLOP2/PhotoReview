@@ -29,6 +29,12 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<IAppPaths>(_ => PhotoReview.Core.AppPaths.FromEnvironment());
         // Metadata queries are counted into ReviewMetrics (StatCount) for the diagnostics/benchmark reports.
         services.AddSingleton<IFileSystem>(sp => new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()));
+        // Q-R29 option C-2: the one choke point every source-image byte read (SourceBytesCache, the
+        // decoders, PreviewImageService's diag pre-read) goes through. Production default is a pure
+        // pass-through, byte-for-byte the direct FileStream each of those opened before this seam
+        // existed -- only tools/PhotoReview.Benchmark.Cli overrides it (with a throttling decorator)
+        // for perf-session measurement, never a production default.
+        services.AddSingleton<ISourceReader>(_ => PhysicalSourceReader.Instance);
         services.AddSingleton<IClock, SystemClock>();
         // AR02c/AR02b: FileLog.Default is a process-wide static singleton whose Shutdown/Dispose
         // lifecycle is owned by the process (App.Dispose / PerfSession's own AppLog.Shutdown()), not by
@@ -105,7 +111,7 @@ public partial class App : System.Windows.Application, IDisposable
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>
         {
-            return new ImageDecoderFactory(Composition.DecoderProviders.Create(), sp.GetService<ILog>(), sp.GetService<ReviewMetrics>());
+            return new ImageDecoderFactory(Composition.DecoderProviders.Create(sp.GetRequiredService<ISourceReader>()), sp.GetService<ILog>(), sp.GetService<ReviewMetrics>());
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
@@ -125,7 +131,7 @@ public partial class App : System.Windows.Application, IDisposable
                 sp.GetService<ILog>()?.Warn("Source-bytes cache disabled: the RAM cache share leaves no room beyond the preview preload window.");
                 return new SourceBytesCachePolicy(null);
             }
-            return new SourceBytesCachePolicy(new SourceBytesCache(sourceBytes));
+            return new SourceBytesCachePolicy(new SourceBytesCache(sourceBytes, sp.GetRequiredService<ISourceReader>()));
         });
 
         services.AddSingleton<PreviewStateContext>();
@@ -153,7 +159,8 @@ public partial class App : System.Windows.Application, IDisposable
                 cacheRamPercent: settingsStore.Current.ImageCacheRamPercent,
                 // feat/preload-window-setting: captured once (applies after restart, like PreloadWorkerCount/Q-AR6/Q-R19);
                 // only affects the "allowed X-90%" text logged when the requested percent is clamped.
-                preloadWindow: PreloadWindow.FromSettings(settingsStore.Current));
+                preloadWindow: PreloadWindow.FromSettings(settingsStore.Current),
+                sourceReader: sp.GetRequiredService<ISourceReader>());
         });
 
         services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>

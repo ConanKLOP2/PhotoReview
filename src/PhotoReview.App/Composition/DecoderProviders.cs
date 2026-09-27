@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
@@ -17,12 +18,16 @@ namespace PhotoReview.App.Composition;
 /// </summary>
 internal static class DecoderProviders
 {
-    public static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create()
+    /// <param name="sourceReader">
+    /// Q-R29 option C-2 seam: shared with every decoder this builds, so a perf-harness throttling
+    /// decorator (never a production default) can see every decode's own source-file open.
+    /// </param>
+    public static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create(ISourceReader sourceReader)
     {
         var providers = new List<(DecoderBackend, Func<IImageDecoder>)>
         {
-            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
-            (DecoderBackend.WicDirect, () => new WicDirectDecoder())
+            (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder(sourceReader)),
+            (DecoderBackend.WicDirect, () => new WicDirectDecoder(sourceReader))
         };
 
         if (TurboJpegAvailability.Probe(out string? reason))

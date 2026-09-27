@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Core.Localization;
@@ -18,6 +19,13 @@ public sealed class WicDirectDecoder : IImageDecoder
 {
     private const string ExifOrientationQuery = "/app1/ifd/{ushort=274}";
     private const string WindowsOrientationQuery = "System.Photo.Orientation";
+    private readonly ISourceReader _sourceReader;
+
+    /// <param name="sourceReader">
+    /// Q-R29 option C-2 seam: null (every existing call site) uses <see cref="PhysicalSourceReader"/>,
+    /// byte-for-byte the direct <see cref="FileStream"/> this decoder opened before the seam existed.
+    /// </param>
+    public WicDirectDecoder(ISourceReader? sourceReader = null) => _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
 
     public IDecodedImage Decode(DecodeRequest request)
     {
@@ -26,8 +34,7 @@ public sealed class WicDirectDecoder : IImageDecoder
 
         Stream stream = request.Bytes.HasValue
             ? ReadOnlyMemoryStreamFactory.Create(request.Bytes.Value)
-            : new FileStream(request.Path, FileMode.Open, FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+            : _sourceReader.OpenSource(request.Path, request.Priority, 1024 * 1024);
 
         using (stream)
         {
@@ -39,8 +46,7 @@ public sealed class WicDirectDecoder : IImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.SequentialScan);
+        using var stream = _sourceReader.OpenSource(path, SourceReadPriority.Viewer, 64 * 1024);
 
         var factory = CreateFactory();
         using var managedStream = new ManagedIStream(stream);

@@ -60,6 +60,7 @@ public sealed class PreviewImageService : IPreloadTarget
     // disagree about whether the disk cache is on.
     private readonly bool _disableDiskCache;
     private readonly SourceBytesCache? _sourceBytesCache;
+    private readonly ISourceReader _sourceReader;
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
@@ -95,10 +96,11 @@ public sealed class PreviewImageService : IPreloadTarget
         SourceBytesCache? sourceBytesCache = null,
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
         int? cacheRamPercent = null,
-        PreloadWindow? preloadWindow = null)
+        PreloadWindow? preloadWindow = null,
+        ISourceReader? sourceReader = null)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity, cacheRamPercent, preloadWindow)
+            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader)
     {
     }
 
@@ -127,8 +129,10 @@ public sealed class PreviewImageService : IPreloadTarget
         SourceBytesCache? sourceBytesCache = null,
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
         int? cacheRamPercent = null,
-        PreloadWindow? preloadWindow = null)
+        PreloadWindow? preloadWindow = null,
+        ISourceReader? sourceReader = null)
     {
+        _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
         _targetDecodeBox = targetDecodeBox ?? throw new ArgumentNullException(nameof(targetDecodeBox));
@@ -409,8 +413,10 @@ public sealed class PreviewImageService : IPreloadTarget
 
     // D04 perf: Task.Run captures the ExecutionContext, so PhotoReviewPerf.NavContext read inside
     // the lambda is the nav of the caller that created the Lazy (viewer token or -1 for preload).
+    // Q-R29 option C-2: this path is preload/compare (viewer=false at the call site), so its own
+    // source-file open (if any) is tagged Preload -- metadata only, see SourceReadPriority.
     private Task<IDecodedImage> DecodeAndCacheAsync(string path, ImageCacheKey key, DecodeBox targetBox, long cacheEpoch) =>
-        Task.Run(() => DecodeAndCache(path, key, targetBox, cacheEpoch));
+        Task.Run(() => DecodeAndCache(path, key, targetBox, cacheEpoch, SourceReadPriority.Preload));
 
     // perf(preload): see GetViewerPreviewAsync. The 1.3 s "thumbnail shown, preview late" outlier at
     // the end of a key-held burst was every superseded navigation's decode still running: each nav
@@ -438,7 +444,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 // safe; it lets the current image win the CPU against the (normal-priority) preload
                 // decodes without slowing the UI thread, which stays idle while this runs.
                 Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
-                return DecodeAndCache(path, key, targetBox, cacheEpoch);
+                return DecodeAndCache(path, key, targetBox, cacheEpoch, SourceReadPriority.Viewer);
             }, CancellationToken.None, TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default)
                 .ConfigureAwait(false);
         }
@@ -449,7 +455,7 @@ public sealed class PreviewImageService : IPreloadTarget
         }
     }
 
-    private IDecodedImage DecodeAndCache(string path, ImageCacheKey key, DecodeBox targetBox, long cacheEpoch)
+    private IDecodedImage DecodeAndCache(string path, ImageCacheKey key, DecodeBox targetBox, long cacheEpoch, SourceReadPriority priority)
     {
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
@@ -501,13 +507,13 @@ public sealed class PreviewImageService : IPreloadTarget
                 // Best-effort: TryDelete logs and swallows only IO/access failures; the entry is re-decoded from source below.
                 DiskCacheStore.TryDelete(cachePath, _log);
                 sourceRead = true;
-                decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId);
+                decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId, priority);
             }
         }
         else
         {
             sourceRead = true;
-            decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId);
+            decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId, priority);
         }
 
         // A path can be replaced while decode is in flight. Never publish
@@ -638,7 +644,7 @@ public sealed class PreviewImageService : IPreloadTarget
     private IImageDecoder GetDecoder(DecoderBackend backend) =>
         _decoderFactory is null ? _decoder : _decodersByBackend.GetOrAdd(backend, _decoderFactory.Create);
 
-    private IDecodedImage DecodeFromSource(string path, long sourceLength, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId)
+    private IDecodedImage DecodeFromSource(string path, long sourceLength, DecoderBackend backend, DecodeBox targetBox, bool perf, long perfNav, string perfPathId, SourceReadPriority priority = SourceReadPriority.Viewer)
     {
         ReadOnlyMemory<byte>? preReadBytes = null;
         // A file the byte cache cannot hold is not pre-read here (the WPF/WIC decoders stream it; TurboJpeg still reads it whole
@@ -646,13 +652,13 @@ public sealed class PreviewImageService : IPreloadTarget
         // several at once under preload) only to drop it again.
         if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
         {
-            preReadBytes = _sourceBytesCache.GetOrRead(path);
+            preReadBytes = _sourceBytesCache.GetOrRead(path, priority);
         }
         else if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
             long readStart = perf ? Stopwatch.GetTimestamp() : 0;
             byte[] bytes;
-            using (var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan))
+            using (var fileStream = _sourceReader.OpenSource(path, priority))
             {
                 bytes = new byte[fileStream.Length];
                 var offset = 0;
@@ -666,7 +672,7 @@ public sealed class PreviewImageService : IPreloadTarget
         _metrics.RecordSourceOpen(path);
 
         long perfT0 = perf ? Stopwatch.GetTimestamp() : 0;
-        var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetBox, bytes: preReadBytes));
+        var decoded = GetDecoder(backend).Decode(new DecodeRequest(path, targetBox, bytes: preReadBytes, priority: priority));
         if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetBox.Width, decoded.Downscaled, !targetBox.IsUnbounded && !decoded.Downscaled);
         return decoded;
     }
