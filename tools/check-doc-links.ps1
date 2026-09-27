@@ -1,15 +1,25 @@
 ﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  AR07 §3: link-check gate for non-archive Markdown docs.
+  AR07 §3: link-check gate for non-archive Markdown docs, plus a stale-doc-reference
+  scan over source comments (R12).
 
-  Scans every non-archive *.md file for:
+  Part 1 scans every non-archive *.md file for:
     - Markdown links: [text](path)
     - Back-ticked doc paths: `docs/.../something.md`
   and verifies each local (non-http/mailto/#anchor) target resolves relative
   to the referencing file's directory, the repo root, or docs/.
 
-  Exits 1 and lists every broken link if any are found; exits 0 otherwise.
+  Part 2 scans every `src/**/*.cs` and `tests/**/*.cs` comment (// line comments,
+  /// doc comments, /* */ blocks) for a filename that looks like this repo's real
+  doc-naming convention (starts with an uppercase letter, e.g. `AGENTS.md`,
+  `AR14-viewmodel-composition.md`, `PERF-DIAGNOSIS-PLAN.md`) and verifies each one
+  names a file that still exists somewhere in the repo (docs/ or the repo root).
+  This is deliberately conservative: lower-case names (`summary.md`, generated
+  output filenames, etc.) are not checked, so false positives should be rare, at
+  the cost of not catching every possible stale reference.
+
+  Exits 1 and lists every broken link/reference if any are found; exits 0 otherwise.
 #>
 [CmdletBinding()]
 param()
@@ -127,13 +137,108 @@ foreach ($file in $mdFiles) {
     }
 }
 
-if ($broken.Count -gt 0) {
-    Write-Host "`n[FAIL] $($broken.Count) broken doc link(s):`n" -ForegroundColor Red
-    foreach ($b in $broken) {
-        Write-Host "  $($b.File):$($b.Line) -> $($b.Target)" -ForegroundColor Red
+# --- Part 2: stale doc-filename references inside src/**/*.cs and tests/**/*.cs comments (R12) ---
+
+# Every *.md file anywhere in the repo (not just docs/) is a "known" doc for this purpose, so a
+# reference to e.g. an analyzer-release file or a tests/Fixtures README still resolves.
+$allDocFiles = Get-ChildItem -LiteralPath $root -Recurse -Filter '*.md' -File |
+    Where-Object {
+        $rel = $_.FullName.Substring($root.Length + 1) -replace '\\', '/'
+        -not (Test-Excluded $rel) -or $rel -match '^docs[\\/]archive' -or $rel -match '^docs[\\/]refactoring[\\/](archive|arch-review)'
+    } |
+    ForEach-Object { $_.Name }
+$knownExact = [System.Collections.Generic.HashSet[string]]::new([string[]]($allDocFiles | ForEach-Object { $_.ToLowerInvariant() }))
+
+function Test-KnownDocName([string]$Name) {
+    $lower = $Name.ToLowerInvariant()
+    if ($knownExact.Contains($lower)) { return $true }
+    foreach ($f in $allDocFiles) {
+        if ($f.ToLowerInvariant().EndsWith($lower)) { return $true }
+    }
+    return $false
+}
+
+# Conservative: only names that look like this repo's real doc convention (starts uppercase).
+$DocNameRegex = [regex]'\b[A-Z][A-Za-z0-9-]*\.md\b'
+
+$codeFiles = @()
+foreach ($sub in @('src', 'tests')) {
+    $dir = Join-Path $root $sub
+    if (Test-Path -LiteralPath $dir) {
+        $codeFiles += Get-ChildItem -LiteralPath $dir -Recurse -Filter '*.cs' -File |
+            Where-Object {
+                $rel = $_.FullName.Substring($root.Length + 1) -replace '\\', '/'
+                $rel -notmatch '([\\/])(bin|obj)([\\/]|$)'
+            }
+    }
+}
+
+$brokenCodeRefs = New-Object System.Collections.Generic.List[object]
+
+foreach ($file in $codeFiles) {
+    $relFile = $file.FullName.Substring($root.Length + 1) -replace '\\', '/'
+    $lineNum = 0
+    $inBlockComment = $false
+    foreach ($line in Get-Content -LiteralPath $file.FullName -Encoding UTF8) {
+        $lineNum++
+        $commentText = ''
+
+        if ($inBlockComment) {
+            $endIdx = $line.IndexOf('*/')
+            if ($endIdx -ge 0) {
+                $commentText += $line.Substring(0, $endIdx)
+                $inBlockComment = $false
+            } else {
+                $commentText += $line
+            }
+        }
+
+        if (-not $inBlockComment) {
+            $lineComment = [regex]::Match($line, '//.*$')
+            if ($lineComment.Success) { $commentText += ' ' + $lineComment.Value }
+
+            $blockStart = $line.IndexOf('/*')
+            if ($blockStart -ge 0) {
+                $blockEnd = $line.IndexOf('*/', $blockStart)
+                if ($blockEnd -ge 0) {
+                    $commentText += ' ' + $line.Substring($blockStart, $blockEnd - $blockStart)
+                } else {
+                    $commentText += ' ' + $line.Substring($blockStart)
+                    $inBlockComment = $true
+                }
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($commentText)) { continue }
+
+        foreach ($m in $DocNameRegex.Matches($commentText)) {
+            $name = $m.Value
+            if (-not (Test-KnownDocName $name)) {
+                $brokenCodeRefs.Add([PSCustomObject]@{
+                    File   = $relFile
+                    Line   = $lineNum
+                    Target = $name
+                })
+            }
+        }
+    }
+}
+
+if ($broken.Count -gt 0 -or $brokenCodeRefs.Count -gt 0) {
+    if ($broken.Count -gt 0) {
+        Write-Host "`n[FAIL] $($broken.Count) broken doc link(s):`n" -ForegroundColor Red
+        foreach ($b in $broken) {
+            Write-Host "  $($b.File):$($b.Line) -> $($b.Target)" -ForegroundColor Red
+        }
+    }
+    if ($brokenCodeRefs.Count -gt 0) {
+        Write-Host "`n[FAIL] $($brokenCodeRefs.Count) stale doc reference(s) in source comments:`n" -ForegroundColor Red
+        foreach ($b in $brokenCodeRefs) {
+            Write-Host "  $($b.File):$($b.Line) -> $($b.Target)" -ForegroundColor Red
+        }
     }
     exit 1
 }
 
-Write-Host "[PASS] 0 broken doc links ($($mdFiles.Count) files checked)" -ForegroundColor Green
+Write-Host "[PASS] 0 broken doc links ($($mdFiles.Count) files checked), 0 stale doc references ($($codeFiles.Count) source files checked)" -ForegroundColor Green
 exit 0
