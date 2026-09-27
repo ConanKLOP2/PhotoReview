@@ -1,6 +1,6 @@
 ---
 id: OPT-IMAGING-FIXES
-order: 29
+order: 30
 summary: |-
   OPT-1: Eliminate double disk I/O for large JPEG headers (>8 MB) by extending exponential-growth pattern instead of re-reading entire file.
   OPT-2: Add SourceBytesCache.CreateKey overloads accepting pre-computed stats to avoid redundant FileInfo allocation (Q-R29 pattern).
