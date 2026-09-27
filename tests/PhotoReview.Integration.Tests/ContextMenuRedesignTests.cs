@@ -13,6 +13,7 @@ namespace PhotoReview.Integration.Tests;
 /// the "Zoom" submenu's "also set as click zoom level" toggle (<see cref="AppSettings.SetZoomAlsoSetsClickLevel"/>)
 /// and "set current zoom as click level". Vietnamese is the ambient language (LocalizationModuleInit).
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class ContextMenuRedesignTests
 {
@@ -60,6 +61,47 @@ public sealed class ContextMenuRedesignTests
                     return Task.CompletedTask;
                 });
         }
+    }
+
+    /// <summary>
+    /// Q-R38 structural layout: Undo first, then Fit/Zoom-to-N%/Zoom submenu, then the togglable folder
+    /// group, then Settings last -- always in this fixed order and always present in <c>Items</c> (only the
+    /// folder group's four elements toggle <see cref="Visibility"/>; nothing is added/removed from the menu).
+    /// Complements <see cref="ContextMenuOpen_FolderGroupVisible_WhenSettingOn"/>, which only checks visibility.
+    /// </summary>
+    [Fact]
+    public async Task ContextMenuStructure_UndoFirst_FolderGroupTogglable_SettingsAlwaysLast()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            var items = window.ImageContextMenu.Items;
+            Assert.Equal(11, items.Count);
+
+            var undo = Assert.IsType<MenuItem>(items[0]);
+            Assert.False(string.IsNullOrEmpty(undo.Header as string));
+            Assert.IsType<Separator>(items[1]);
+            Assert.Same(window.FitMenuItem, items[2]);
+            Assert.Same(window.ZoomToLevelMenuItem, items[3]);
+            Assert.Same(window.ZoomMenu, items[4]);
+            Assert.Same(window.FolderGroupSeparator, items[5]);
+            Assert.Same(window.OpenFolderMenuItem, items[6]);
+            Assert.Same(window.NextFolderMenuItem, items[7]);
+            Assert.Same(window.PreviousFolderMenuItem, items[8]);
+            Assert.IsType<Separator>(items[9]);
+            var settings = Assert.IsType<MenuItem>(items[10]);
+            Assert.False(string.IsNullOrEmpty(settings.Header as string));
+
+            // Settings is always visible, whichever way the folder group is toggled.
+            window.Settings.ShowFolderMenuItems = false;
+            OpenMenu(window);
+            Assert.Equal(Visibility.Visible, undo.Visibility);
+            Assert.Equal(Visibility.Visible, settings.Visibility);
+            window.Settings.ShowFolderMenuItems = true;
+            OpenMenu(window);
+            Assert.Equal(Visibility.Visible, undo.Visibility);
+            Assert.Equal(Visibility.Visible, settings.Visibility);
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]
