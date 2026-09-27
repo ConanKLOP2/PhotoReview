@@ -188,6 +188,13 @@ public sealed class FileActionService
                 if (permanent && !request.AllowPermanentDelete)
                     throw new IOException(Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(source)));
 
+                // F-WIN-2: a fixed drive whose Recycle Bin is turned off, or too small for this file, makes the shell delete
+                // it permanently without asking while the journal would say "recycle" (Ctrl+Z could not restore it).
+                // Refuse BEFORE anything is journaled; the size is the stat above, so no extra file-system read.
+                // AllowPermanentDelete does not apply here: it only covers drives that have no Recycle Bin at all.
+                if (!permanent && !_recycleBin.FitsInRecycleBin(source, sourceSize))
+                    throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(source)));
+
                 tx = new JournalTransaction(_journal, _clock, new JournalEntry(
                     operationId,
                     FileOperationType.Recycle,

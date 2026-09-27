@@ -71,10 +71,8 @@ internal static class IoDecodeSplit
             // measures raw decode cost, not UI-thread contention, so no STA/dispatcher is involved.
             var result = await Task.Run(() => MeasureFile(i, files[i], widths, rawCsv));
             results.Add(result);
-            Console.WriteLine(
-                $"[{i + 1}/{files.Length}] read(warm)={result.Read.WarmP50:F1}ms " +
-                $"decodeMem@{widths[0]}(warm)={result.DecodeFromMem[widths[0]].WarmP50:F1}ms " +
-                $"{result.OriginalWidth}x{result.OriginalHeight}");
+            Console.WriteLine(FormattableString.Invariant(
+                $"[{i + 1}/{files.Length}] read(warm)={result.Read.WarmP50:F1}ms decodeMem@{widths[0]}(warm)={result.DecodeFromMem[widths[0]].WarmP50:F1}ms {result.OriginalWidth}x{result.OriginalHeight}"));
         }
 
         var rawPath = Path.Combine(outDir, "raw.csv");

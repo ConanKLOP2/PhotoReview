@@ -26,7 +26,7 @@ if (-not (Test-Path -LiteralPath $nativeDir)) {
     New-Item -ItemType Directory -Path $nativeDir -Force | Out-Null
 }
 
-$tempPkg = Join-Path ([System.IO.Path]::GetTempPath()) "libjpeg-turbo-native-windows.3.0.0.zip"
+$tempPkg = Join-Path ([System.IO.Path]::GetTempPath()) "libjpeg-turbo-native-windows.3.0.0.$([guid]::NewGuid().ToString('N')).zip"
 Write-Host "Downloading libjpeg-turbo 3.0.0 package..."
 try {
     # https only, also across redirects: the pinned SHA-256 below is the integrity guarantee, this stops a downgrade to http.

@@ -24,12 +24,21 @@ public sealed class InfoOverlayFaultTests
     public async Task SiblingSearchFault_ShowsTheFolderWithoutSiblings_NotAStuckPlaceholder(Type exceptionType)
     {
         var settings = new AppSettings { ShowInfoOverlay = true, ShowFolderInfo = true };
+        // The finder blocks until the test releases it, so the search cannot fault (and its continuation cannot
+        // overwrite the text) while the placeholder is being asserted.
+        using var release = new ManualResetEventSlim(false);
         var overlay = new InfoOverlayViewModel(
             () => settings,
-            (_, _) => throw (Exception)Activator.CreateInstance(exceptionType, "boom")!);
+            (_, ct) =>
+            {
+                if (!release.Wait(TimeSpan.FromSeconds(10), ct)) throw new TimeoutException("test never released the finder");
+                throw (Exception)Activator.CreateInstance(exceptionType, "boom")!;
+            });
 
         overlay.SetFolder(@"C:\photos\trip");
         Assert.Contains(Tr.MainFolderInfoPending, overlay.FolderInfoText, StringComparison.Ordinal); // placeholder while searching
+        Assert.False(overlay.PendingSiblings.IsCompleted); // held by the gate: nothing may have replaced the placeholder
+        release.Set();
         await overlay.PendingSiblings.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.DoesNotContain(Tr.MainFolderInfoPending, overlay.FolderInfoText, StringComparison.Ordinal);
