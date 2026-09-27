@@ -91,7 +91,14 @@ public sealed class FileLogLifecycleTests : IDisposable
             })).ToArray();
             foreach (var thread in threads) thread.Start();
             start.Set();
-            Thread.Sleep(round % 5);
+            // Deterministically land Dispose inside the writers' active window instead of a fixed-delay
+            // sleep: wait for real evidence that at least one entry has actually been queued (round varies
+            // how many, so different rounds race Dispose against different amounts of in-flight work),
+            // then race Dispose against the still-running writer threads immediately.
+            var queuedThreshold = round * 25;
+            Assert.True(
+                SpinWait.SpinUntil(() => log.PendingCount > queuedThreshold || threads.All(t => !t.IsAlive), TimeSpan.FromSeconds(10)),
+                $"writers never queued more than {queuedThreshold} entries within the timeout (round {round}).");
             log.Dispose();
             foreach (var thread in threads) Assert.True(thread.Join(30_000), "writer thread hung");
             Assert.Empty(errors);
@@ -101,8 +108,11 @@ public sealed class FileLogLifecycleTests : IDisposable
 
     /// <summary>
     /// Entries are dropped only once the log stops accepting, so per writer thread what reached the disk is the contiguous
-    /// prefix 0..k-1 (no gaps, no duplicates, no torn lines). The deterministic drain-on-Dispose guard is
-    /// <see cref="Dispose_DrainsEveryQueuedEntryToDisk"/>.
+    /// prefix 0..k-1 (no gaps, no duplicates, no torn lines) when nothing was dropped. When the shared queue overflowed
+    /// (<paramref name="dropped"/> != 0) gaps are legitimate, but the retained entries for a given thread must still be
+    /// in strictly increasing, duplicate-free order (no reordering/duplication introduced by the race with Dispose), and
+    /// any gap below the last retained index must be small enough to be explained by the documented overflow-drop path.
+    /// The deterministic drain-on-Dispose guard is <see cref="Dispose_DrainsEveryQueuedEntryToDisk"/>.
     /// </summary>
     private static void AssertOnDiskIsPerThreadPrefix(string path, long dropped)
     {
@@ -119,9 +129,31 @@ public sealed class FileLogLifecycleTests : IDisposable
             }
         }
 
-        if (dropped != 0) return; // queue overflow drops the oldest entries, so gaps are legitimate then
         foreach (var (t, list) in seen)
-            Assert.Equal(Enumerable.Range(0, list.Count), list);
+        {
+            // Holds regardless of drops: a writer thread's own entries are enqueued in order, and the shared
+            // queue only ever drops from the front, so whatever survives for this thread must still appear in
+            // the order it was produced -- no reordering, no duplicate replay of the same entry.
+            for (var i = 1; i < list.Count; i++)
+                Assert.True(list[i] > list[i - 1],
+                    $"thread {t}: retained entry {list[i]} is not strictly after {list[i - 1]} (reordered or duplicated retained entry)");
+
+            if (dropped == 0)
+            {
+                // No drops anywhere: every writer's retained sequence must be the full contiguous prefix 0..k-1.
+                Assert.Equal(Enumerable.Range(0, list.Count), list);
+            }
+            else if (list.Count > 0)
+            {
+                // Drops happened somewhere in the shared queue, so gaps in this thread's sequence are legitimate --
+                // but the number of missing indices below the highest retained one can never exceed the total
+                // dropped count (a bug losing entries some other way, e.g. unrelated to the documented overflow
+                // path, would produce a gap the drop count cannot account for).
+                var missingBelowMax = list[^1] + 1 - list.Count;
+                Assert.True(missingBelowMax <= dropped,
+                    $"thread {t}: {missingBelowMax} entries missing below index {list[^1]} exceeds total dropped count {dropped}");
+            }
+        }
     }
 
     [Fact(DisplayName = "Multi-line messages, unicode and embedded braces are written verbatim")]

@@ -1,3 +1,10 @@
+---
+id: FLAKY-FolderLoad
+order: 18
+summary: |-
+  CI flake in the folder-switch race test was a fixture bug (session sweep listing took the scan-block hook), not a production race; fake fixed (#209).
+---
+
 # FLAKY-FolderLoad — root cause of the `FolderLoadCoordinatorTests` race flake (2026-09-27)
 
 ## Symptom
