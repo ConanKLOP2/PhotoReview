@@ -28,7 +28,7 @@ public sealed class MouseSettingsTests
         // Off by default: the click-to-zoom gesture must be opted into.
         Assert.False(settings.ClickToZoomEnabled);
         Assert.Equal(100, settings.ClickZoomPercent);
-        Assert.True(settings.KineticPanEnabled);
+        Assert.False(settings.KineticPanEnabled);
         Assert.Equal(10, AppSettings.MinClickZoomPercent);
         Assert.Equal(800, AppSettings.MaxClickZoomPercent);
     }
@@ -43,7 +43,7 @@ public sealed class MouseSettingsTests
         Assert.Equal(MouseWheelAction.Zoom, loaded.MouseWheelAction);
         Assert.False(loaded.ClickToZoomEnabled);
         Assert.Equal(100, loaded.ClickZoomPercent);
-        Assert.True(loaded.KineticPanEnabled);
+        Assert.False(loaded.KineticPanEnabled);
         Assert.Empty(_store.LastLoadRepairs);
     }
 
