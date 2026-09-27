@@ -363,6 +363,9 @@ public partial class SettingsWindow : Window
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
+        ImageTransitionMsBox.Text = Settings.ImageTransitionMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        UpdateImageTransitionMsEnabled();
         MoveCopyReuseLastFolderCheck.IsChecked = Settings.MoveCopyReuseLastFolder;
         ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
         ExifFieldFileNameCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FileName);
@@ -421,6 +424,14 @@ public partial class SettingsWindow : Window
     private void InfoOverlayAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateInfoOverlayAutoHideEnabled();
 
     private void UpdateInfoOverlayAutoHideEnabled() => InfoOverlayAutoHideDelayBox.IsEnabled = InfoOverlayAutoHideCheck.IsChecked == true;
+
+    private void ImageTransitionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateImageTransitionMsEnabled();
+
+    private void UpdateImageTransitionMsEnabled()
+    {
+        if (ImageTransitionMsBox is null) return; // SelectionChanged can fire while InitializeComponent is still building the tree
+        ImageTransitionMsBox.IsEnabled = ImageTransitionCombo.SelectedIndex == 1;
+    }
 
     private void ToolbarOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateToolbarOpacityValueText();
 
@@ -691,6 +702,15 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ArrowPanStepPercent = arrowPanStep;
+        Settings.ImageTransition = ImageTransitionCombo.SelectedIndex == 1 ? ImageTransition.Fade : ImageTransition.None;
+        if (!int.TryParse(ImageTransitionMsBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var imageTransitionMs)
+            || imageTransitionMs < AppSettings.MinImageTransitionMs || imageTransitionMs > AppSettings.MaxImageTransitionMs)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidImageTransitionMs(AppSettings.MinImageTransitionMs, AppSettings.MaxImageTransitionMs));
+            ImageTransitionMsBox.Focus();
+            return;
+        }
+        Settings.ImageTransitionMs = imageTransitionMs;
         // feat/preload-window-setting: same pattern as ClickZoomPercent above -- an unparsable or out-of-range
         // value keeps the dialog open and saves nothing (a hand-edited config.json is still clamped by
         // SettingsNormalizer, that path is unaffected).

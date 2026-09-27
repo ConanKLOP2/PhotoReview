@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
@@ -17,6 +18,7 @@ using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 using DragEventArgs = System.Windows.DragEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -104,6 +106,7 @@ public partial class MainWindow : Window
         WireViewModelEvents();
         InitToolbarAutoHide();
         InitInfoOverlayAutoHide();
+        InitImageTransition();
     }
 
     public void InitializeWithInitialPath(string? initialPath)
@@ -333,6 +336,77 @@ public partial class MainWindow : Window
         var outcome = InfoOverlayAutoHidePolicy.Evaluate(
             _settings.InfoOverlayAutoHide, _viewModel.HasImages, _viewModel.StatusNeedsAttention, _viewModel.Compare.IsVisible, IsActive, _infoIdleElapsed);
         FadeTo(InfoOverlayHost, _infoFadeGate, outcome.Opacity > 0);
+    }
+
+    // ---- feat/image-crossfade: optional fade when the CURRENT PHOTO CHANGES (navigation to another file).
+    // Never fires for the progressive upgrades of the same image (ImagePresenter/MainViewModel guarantee
+    // ImageChanging.IsFileChange is true only for the first bitmap of a navigation to a different file). Zero
+    // cost when Settings.ImageTransition is None: the handler below returns before touching OutgoingImage,
+    // which stays Collapsed (no layout/render, no animation clock). ----
+
+    private readonly TranslateTransform _outgoingImageTransform = new();
+
+    private void InitImageTransition()
+    {
+        OutgoingImage.RenderTransform = _outgoingImageTransform;
+        _viewModel.ImageChanging += OnImageChanging;
+    }
+
+    private void OnImageChanging(object? sender, ImageChangingEventArgs e)
+    {
+        if (!e.IsFileChange) return;
+        if (_settings.ImageTransition != ImageTransition.None) StartImageFade();
+    }
+
+    /// <summary>
+    /// Called synchronously while <c>MainImage.Source</c> still holds the OUTGOING bitmap (the file being
+    /// navigated away from) and <c>ImageScroll</c> still has its OLD size/scroll offsets -- the new image and
+    /// layout are applied to MainImage/ImageScroll right after this returns (unchanged, seamless as today).
+    /// Freezes the outgoing frame's geometry into OutgoingImage (a sibling OUTSIDE ImageScroll) and fades only
+    /// that layer's opacity 1 -> 0; the incoming image underneath is already fully opaque, so there is no dark
+    /// dip and only one animation runs at a time. If a new navigation starts before the fade ends, this method
+    /// runs again and BeginAnimation's SnapshotAndReplace cancels the running clock instantly and restarts from
+    /// whatever is on screen right now -- fades are never queued and the new image is never delayed by this.
+    /// </summary>
+    private void StartImageFade()
+    {
+        // First image after opening a folder (or after an error/empty state): nothing to fade from.
+        if (MainImage.Source is not { } outgoingSource) return;
+        var width = MainImage.ActualWidth;
+        var height = MainImage.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+
+        // The element's top-left in ImageScroll coordinates already includes both the scroll offsets and the
+        // letterbox centring at Fit (a zoomed image starts at -offset; a Fit image at (viewport - image) / 2).
+        var origin = MainImage.TranslatePoint(new Point(0, 0), ImageScroll);
+        if (!double.IsFinite(origin.X) || !double.IsFinite(origin.Y)) return;
+
+        OutgoingImage.Source = outgoingSource;
+        OutgoingImage.Width = width;
+        OutgoingImage.Height = height;
+        _outgoingImageTransform.X = origin.X;
+        _outgoingImageTransform.Y = origin.Y;
+        OutgoingImage.Visibility = Visibility.Visible;
+        OutgoingImage.Opacity = 1.0;
+
+        var durationMs = Math.Clamp(_settings.ImageTransitionMs, AppSettings.MinImageTransitionMs, AppSettings.MaxImageTransitionMs);
+        var animation = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(durationMs))
+        {
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        animation.Completed += OnImageFadeCompleted;
+        // SnapshotAndReplace: if a fade is already running, this instantly replaces its clock (no queueing);
+        // the new one starts from the outgoing bitmap captured just above (whatever is on screen right now).
+        OutgoingImage.BeginAnimation(OpacityProperty, animation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private void OnImageFadeCompleted(object? sender, EventArgs e)
+    {
+        // Stop the clock and release the bitmap reference (cache eviction is unaffected either way, but
+        // this avoids an extra live reference to a possibly-evicted preview sitting in the visual tree).
+        OutgoingImage.BeginAnimation(OpacityProperty, null);
+        OutgoingImage.Source = null;
+        OutgoingImage.Visibility = Visibility.Collapsed;
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();

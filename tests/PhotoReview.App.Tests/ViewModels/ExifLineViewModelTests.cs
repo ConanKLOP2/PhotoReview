@@ -201,7 +201,7 @@ public sealed class ExifLineViewModelTests : IDisposable
 
     private sealed class NullSink : IPresentationSink
     {
-        public void SetCurrentImage(object? image) { }
+        public void SetCurrentImage(object? image, bool isFileChange = false) { }
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }

@@ -552,7 +552,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
     {
         public List<object?> Images { get; } = [];
         public List<string> Statuses { get; } = [];
-        public void SetCurrentImage(object? image) => Images.Add(image);
+        public void SetCurrentImage(object? image, bool isFileChange = false) => Images.Add(image);
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }

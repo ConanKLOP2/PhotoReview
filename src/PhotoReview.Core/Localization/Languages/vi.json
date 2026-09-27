@@ -717,5 +717,13 @@
   "settings.zoomShortcuts.none": "chưa đặt",
   "main.menu.zoomToLevel": "Thu phóng về {percent}%",
   "main.menu.zoomToLevel.automationName": "Thu phóng về mức đã cấu hình, {percent} phần trăm",
-  "core.recycle.binCannotHold": "\"{name}\" KHÔNG được xóa: Thùng rác của ổ này đang tắt, nhỏ hơn tệp này, hoặc không đọc được cài đặt của nó, nên Windows sẽ xóa vĩnh viễn tệp. Hãy kiểm tra cài đặt của ổ trong Thùng rác > Properties, hoặc xóa trong Explorer nếu bạn thật sự muốn xóa."
+  "core.recycle.binCannotHold": "\"{name}\" KHÔNG được xóa: Thùng rác của ổ này đang tắt, nhỏ hơn tệp này, hoặc không đọc được cài đặt của nó, nên Windows sẽ xóa vĩnh viễn tệp. Hãy kiểm tra cài đặt của ổ trong Thùng rác > Properties, hoặc xóa trong Explorer nếu bạn thật sự muốn xóa.",
+  "settings.imageTransition.label": "Hiệu ứng khi đổi ảnh",
+  "settings.imageTransition.automationName": "Hiệu ứng khi đổi ảnh",
+  "settings.imageTransition.hint": "Chỉ áp dụng khi chuyển sang ảnh khác; việc nâng chất lượng của cùng một ảnh (thumbnail lên bản đầy đủ) luôn tức thời.",
+  "enum.imageTransition.none": "Không hiệu ứng",
+  "enum.imageTransition.fade": "Mờ dần (Fade)",
+  "settings.imageTransitionMs.label": "Thời lượng mờ dần (ms)",
+  "settings.imageTransitionMs.automationName": "Thời lượng mờ dần, tính bằng mili giây",
+  "dialog.settingsInvalid.imageTransitionMs": "Thời lượng mờ dần phải là số nguyên từ {min} đến {max} mili giây."
 }

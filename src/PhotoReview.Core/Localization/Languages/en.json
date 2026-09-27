@@ -725,5 +725,13 @@
   "settings.zoomShortcuts.none": "not set",
   "main.menu.zoomToLevel": "Zoom to {percent}%",
   "main.menu.zoomToLevel.automationName": "Zoom to the configured level, {percent} percent",
-  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone."
+  "core.recycle.binCannotHold": "\"{name}\" was NOT deleted: the Recycle Bin on this drive is turned off, is smaller than this file, or its settings could not be read, so Windows would delete the file permanently. Check the drive's settings in Recycle Bin > Properties, or delete the file in Explorer if you really want it gone.",
+  "settings.imageTransition.label": "Transition when changing photo",
+  "settings.imageTransition.automationName": "Transition when changing photo",
+  "settings.imageTransition.hint": "Only when navigating to a different photo; the thumbnail-to-full-quality upgrade of the same photo always stays instant.",
+  "enum.imageTransition.none": "None",
+  "enum.imageTransition.fade": "Fade",
+  "settings.imageTransitionMs.label": "Fade duration (ms)",
+  "settings.imageTransitionMs.automationName": "Fade duration, in milliseconds",
+  "dialog.settingsInvalid.imageTransitionMs": "Fade duration must be a whole number between {min} and {max} milliseconds."
 }

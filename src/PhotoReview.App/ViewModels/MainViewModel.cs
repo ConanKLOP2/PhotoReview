@@ -129,11 +129,21 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     }
 
     /// <summary>
+    /// feat/image-crossfade: raised synchronously by <see cref="NotifyCurrentImageChanged"/>, BEFORE
+    /// <c>CurrentImage</c>'s own <see cref="INotifyPropertyChanged.PropertyChanged"/> (so <c>MainImage.Source</c>
+    /// still holds the OUTGOING bitmap when a subscriber handles it). <c>IsFileChange</c> is true only for the
+    /// first bitmap of a navigation to a different file -- never for a same-file thumbnail/preview/original
+    /// upgrade, and never when there is nothing to fade from.
+    /// </summary>
+    public event EventHandler<ImageChangingEventArgs>? ImageChanging;
+
+    /// <summary>
     /// The presenter replaced the displayed bitmap (thumbnail, preview or full-resolution decode):
     /// size the viewer from the source's original dimensions, then refresh bindings.
     /// </summary>
-    public void NotifyCurrentImageChanged()
+    public void NotifyCurrentImageChanged(bool isFileChange = false)
     {
+        if (isFileChange) ImageChanging?.Invoke(this, new ImageChangingEventArgs(isFileChange));
         _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
         NotifyNavigationStateChanged();
     }
@@ -295,6 +305,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             }
         }
         _statusText = string.Empty;
+        // feat/image-crossfade: the new folder's first image must never fade in from whatever the previous
+        // folder left on screen.
+        _presenter.ResetFileIdentity();
         try
         {
             FolderLoadTask = _folderCoordinator.LoadAsync(folder, initialPath);
@@ -973,4 +986,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(ExifAutomationName));
         OnPropertyChanged(nameof(IsStatusPanelVisible));
     }
+}
+
+/// <summary>See <see cref="MainViewModel.ImageChanging"/>.</summary>
+public sealed class ImageChangingEventArgs(bool isFileChange) : EventArgs
+{
+    public bool IsFileChange { get; } = isFileChange;
 }

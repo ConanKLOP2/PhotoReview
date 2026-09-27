@@ -56,6 +56,12 @@ public sealed class ImagePresenter
     private int _compareIndexVersion = -1;
     private Dictionary<string, (string Left, string Right)>? _compareIndex;
 
+    // feat/image-crossfade: the file path currently anchoring the displayed bitmap (whatever stage:
+    // thumbnail, preview or original). Used to tell "this PresentAsync moved to a different file" (fire the
+    // transition once) apart from "this PresentAsync is upgrading the SAME file's bitmap" (thumbnail -> preview
+    // -> original within one navigation must stay an instant, seamless replacement). Null before the first image.
+    private string? _presentedFilePath;
+
     private readonly IUiScheduler? _uiScheduler;
 
     public ImagePresenter(
@@ -92,7 +98,9 @@ public sealed class ImagePresenter
         _onPresentedHook = onPresentedHook;
         _uiScheduler = uiScheduler;
         _sessionWriter = sessionWriter;
-        _zoomDetail = new ZoomDetailLoader(_previewService, _clock, UpdateCurrentImage);
+        // feat/image-crossfade: ZoomDetailLoader upgrades the SAME image's bitmap (zoom-triggered full-resolution
+        // decode) -- never a file change, so no path is passed (UpdateCurrentImage's isFileChange stays false).
+        _zoomDetail = new ZoomDetailLoader(_previewService, _clock, (image, w, h) => UpdateCurrentImage(image, w, h));
     }
 
     private readonly ZoomDetailLoader _zoomDetail;
@@ -325,7 +333,7 @@ public sealed class ImagePresenter
                         var (thumbWidth, thumbHeight) = _previewService.TryGetKnownOriginalDimensions(currentKey, out var known)
                             ? known
                             : (thumbnail.OriginalWidth, thumbnail.OriginalHeight);
-                        UpdateCurrentImage(thumbnail.PlatformImage, thumbWidth, thumbHeight);
+                        UpdateCurrentImage(thumbnail.PlatformImage, thumbWidth, thumbHeight, path);
                         if (perf) _sink.TracePresented(token, "thumbnail", Stopwatch.GetTimestamp());
 
                         if (AppLog.Enabled) AppLog.Info($"ShowImage thumbnail-presented token={token} path={path}");
@@ -367,7 +375,7 @@ public sealed class ImagePresenter
             var uiAssign = Stopwatch.StartNew();
 
             CurrentPhotoInfo = PhotoInfo.From(path, image);
-            UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
+            UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight, path);
 
             long perfAssigned = perf ? Stopwatch.GetTimestamp() : 0;
             _metrics.RecordUiAssign(uiAssign.ElapsedMilliseconds);
@@ -424,7 +432,7 @@ public sealed class ImagePresenter
                     AppLog.Error($"ShowImage compare partner failed token={token} path={path} partner={partner}", ex);
                     _compareViewModel.Clear();
                     CurrentPhotoInfo = PhotoInfo.From(path, image);
-                    UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight);
+                    UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight, path);
                     _sink.ApplyInitialViewMode();
                     UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(partner), UserFacingError.Describe(ex)), needsAttention: true);
                     return;
@@ -567,14 +575,28 @@ public sealed class ImagePresenter
         }
     }
 
-    private void UpdateCurrentImage(object? image, int originalWidth = 0, int originalHeight = 0)
+    /// <summary>
+    /// feat/image-crossfade: called once when a new folder starts loading, so the folder's first image is never
+    /// treated as a "file changed" transition (no outgoing image conceptually) even though a previous folder's
+    /// bitmap may still be on screen at that moment.
+    /// </summary>
+    public void ResetFileIdentity() => _presentedFilePath = null;
+
+    private void UpdateCurrentImage(object? image, int originalWidth = 0, int originalHeight = 0, string? path = null)
     {
         // Dimensions first: the sink's image-changed callback reads them to size the element
         // (feat(zoom): original-relative zoom), in the same UI pass as the new Source.
         CurrentOriginalWidth = image is null ? 0 : originalWidth;
         CurrentOriginalHeight = image is null ? 0 : originalHeight;
         CurrentImage = image;
-        _sink.SetCurrentImage(image);
+
+        // feat/image-crossfade: true only for the FIRST bitmap of a navigation to a different file (whichever
+        // stage wins the race: thumbnail or preview). A same-file upgrade within the same navigation (thumbnail
+        // replaced by preview) sees _presentedFilePath already equal to path (set by the earlier call below) and
+        // reports false, so it stays an instant, seamless replacement as today.
+        var isFileChange = ImageTransitionDecision.ShouldTransition(_presentedFilePath, image is null ? null : path, _compareViewModel.IsVisible);
+        _presentedFilePath = image is null ? null : path;
+        _sink.SetCurrentImage(image, isFileChange);
     }
 
     /// <summary>
