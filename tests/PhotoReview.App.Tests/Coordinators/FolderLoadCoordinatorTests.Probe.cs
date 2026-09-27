@@ -348,18 +348,29 @@ public sealed partial class FolderLoadCoordinatorTests
     {
         var (a, b, c) = CreateThreeImages(@"C:\photos");
         _fs.Unreadable[b] = "locked";
+        // FLAKY-FolderLoad: without this hold, a starved "UI" thread could be preempted between StartReadabilityProbe
+        // and the finally block long enough for the probe to finish first; ApplyReadabilityProbeAsync's `await probe`
+        // then completed synchronously inside LoadAsync, nothing was ever queued and WaitForQueued timed out.
+        // Holding the probe until LoadAsync has returned makes the apply step always go through the context queue.
+        using var releaseProbe = new ManualResetEventSlim(false);
+        HoldProbeOf(b, releaseProbe);
         var coordinator = CreateCoordinator();
         var context = new QueueContext();
 
+        Exception? bodyFailure = null;
         var thread = new Thread(() =>
         {
             SynchronizationContext.SetSynchronizationContext(context);
             var body = BodyAsync();
             context.Pump(body);
-            body.GetAwaiter().GetResult();
+            try { body.GetAwaiter().GetResult(); }
+            catch (Exception ex) { bodyFailure = ex; } // surfaced below instead of crashing the test host
         });
         thread.Start();
-        Assert.True(thread.Join(Wait.DefaultTimeout), "test body finished");
+        var finished = thread.Join(Wait.DefaultTimeout);
+        releaseProbe.Set(); // never leave a pool thread blocked, whatever happened
+        Assert.True(finished, "test body finished");
+        Assert.Null(bodyFailure);
 
         Assert.Equal([a, b, c], _catalog.Paths);
         Assert.Empty(_sink.SkippedCalls);
@@ -368,6 +379,7 @@ public sealed partial class FolderLoadCoordinatorTests
         async Task BodyAsync()
         {
             await coordinator.LoadAsync(@"C:\photos");
+            releaseProbe.Set(); // the apply step is now already awaiting the probe, so its continuation must be posted
             // LoadAsync is done, so only the probe's apply continuation can be queued: wait until the probe has
             // completed and posted it, then cancel the load BEFORE the "UI thread" gets to run it.
             Assert.True(context.WaitForQueued(Wait.DefaultTimeout), "the probe completed and queued its apply step");

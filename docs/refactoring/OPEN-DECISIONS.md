@@ -59,3 +59,4 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | P03 | Undo limited to the current session; journal history no longer seeds Ctrl+Z at startup (user, 2026-09-27). [Detail](decisions/P03.md) |
 | P02 | Recovery retry re-checks the journal's latest entry and live marker so a concurrent retry in another window can no longer journal a completed Move as Failed. [Detail](decisions/P02.md) |
 | GUI-CHECK-AUTOMATION | 5 of the 11 "GUI checks (user)" items now need no manual check; the rest reduced to one short visual/feel step each (new context-menu-structure, crossfade and KeepZoomAcrossImages UI tests). [Detail](decisions/GUI-CHECK-AUTOMATION.md) |
+| FLAKY-FolderLoad | CI flake in the folder-switch race test was a fixture bug (session sweep listing took the scan-block hook), not a production race; fake fixed (#TBD). [Detail](decisions/FLAKY-FolderLoad.md) |
