@@ -1,6 +1,6 @@
 ---
 id: CI-TAG-VERSION-BATCH-PUSH
-order: 22
+order: 24
 summary: |-
   `tag-version`'s single batched `git push origin "${created[@]}"` failed the whole job on every run because of one permanently un-pushable historical tag (v2.0.179) -- switched to pushing each tag individually and treating that one known GitHub restriction as an expected, logged skip instead of a job failure.
 ---
