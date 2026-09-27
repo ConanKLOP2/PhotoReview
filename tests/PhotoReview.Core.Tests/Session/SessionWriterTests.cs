@@ -214,11 +214,32 @@ public sealed class SessionWriterTests
         Assert.True(drained.Wait(TimeSpan.FromSeconds(10)), "the timer never drained its batch");
 
         writer.AfterDrainForTests = null;
-        writer.Dispose(); // nothing pending, no write in flight: previously disposed the semaphore here
-        proceed.Set();
+        writer.BeforeShutdownWaitForTests = proceed.Set; // Dispose is waiting for the drained batch: let the timer thread write it
+        writer.Dispose(); // previously disposed the semaphore here (ObjectDisposedException); now waits for the in-flight write
 
-        await writer.WhenIdleAsync(); // faulted with ObjectDisposedException before the fix
+        await writer.WhenIdleAsync(); // faulted with ObjectDisposedException before the R2-A-04 fix
         Assert.Equal("a", store.Load(@"C:\photos").CurrentPath);
+    }
+
+    [Fact(DisplayName = "Dispose waits for a batch the timer thread already drained: the last write is on disk when Dispose returns")]
+    public void Dispose_WhileTimerHoldsDrainedBatch_ReturnsOnlyAfterTheWriteLanded()
+    {
+        using var drained = new ManualResetEventSlim(false);
+        using var disposeWaiting = new ManualResetEventSlim(false);
+        var (writer, store) = Create();
+        writer.AfterDrainForTests = () =>
+        {
+            drained.Set();
+            disposeWaiting.Wait(TimeSpan.FromSeconds(10));
+        };
+        writer.BeforeShutdownWaitForTests = disposeWaiting.Set;
+        writer.Update(State(@"C:\photos", "a"));
+        _timer.FireAll();
+        Assert.True(drained.Wait(TimeSpan.FromSeconds(10)), "the timer never drained its batch");
+
+        writer.Dispose();
+
+        Assert.Equal("a", store.Load(@"C:\photos").CurrentPath); // no polling: Dispose itself waited
     }
 
     [Fact(DisplayName = "A non-IO failure in one folder's write does not lose the other folders in the batch")]
