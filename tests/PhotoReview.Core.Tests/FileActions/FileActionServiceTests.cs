@@ -86,6 +86,39 @@ public sealed class FileActionServiceTests
         Assert.Empty(_journal.ReadFailedOperations());
     }
 
+    [Theory(DisplayName = "SEC-01: a relative destination through an existing junction whose real target is outside the photo folder is rejected")]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
+    public async Task ExecuteAsync_RelativeDestinationThroughJunctionEscapesFolder_FailsWithoutJournalOrMove(FileOperationType operation)
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        // "link" is a junction inside the photo folder whose real target is outside it: the lexical destination
+        // "link\processed" has no ".." and is not rooted, so ActionDestinationPolicy.Validate alone would pass it.
+        _fs.AddReparsePoint(@"C:\photos\link", @"C:\outside");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, operation, @"link\processed"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Core.Localization.Tr.CoreFileActionDestinationOutsideSource, result.Error);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(@"C:\outside\processed\a.jpg"));
+        Assert.DoesNotContain(_fs.Events, e => e.Kind is "move" or "copy" or "append");
+        Assert.False(_fs.FileExists(@"C:\data\operations.jsonl"));
+    }
+
+    [Fact(DisplayName = "SEC-01: a junction inside the photo folder whose real target is also inside it stays allowed")]
+    public async Task ExecuteAsync_RelativeDestinationThroughJunctionStaysInsideFolder_Succeeds()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.WriteAllTextAtomic(source, "hello photo");
+        _fs.AddReparsePoint(@"C:\photos\link", @"C:\photos\real");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"link\processed"));
+
+        Assert.True(result.Succeeded);
+    }
+
     [Theory]
     [InlineData(FileOperationType.Move)]
     [InlineData(FileOperationType.Copy)]

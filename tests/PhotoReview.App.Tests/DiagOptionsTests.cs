@@ -18,11 +18,13 @@ public sealed class DiagOptionsTests : IDisposable
     private const string PreloadWorkersVar = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS";
     private const string DisableDiskCacheVar = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";
     private const string ForceLogVar = "PHOTOREVIEW_DIAG_FORCE_LOG";
+    private const string InstanceLabelVar = "PHOTOREVIEW_DIAG_INSTANCE_LABEL";
 
     private readonly string? _previousPreRead = Environment.GetEnvironmentVariable(PreReadVar);
     private readonly string? _previousWorkers = Environment.GetEnvironmentVariable(PreloadWorkersVar);
     private readonly string? _previousDisableDiskCache = Environment.GetEnvironmentVariable(DisableDiskCacheVar);
     private readonly string? _previousForceLog = Environment.GetEnvironmentVariable(ForceLogVar);
+    private readonly string? _previousInstanceLabel = Environment.GetEnvironmentVariable(InstanceLabelVar);
     private readonly TempRoot _root = new("diag-options");
 
     public void Dispose()
@@ -31,6 +33,7 @@ public sealed class DiagOptionsTests : IDisposable
         Environment.SetEnvironmentVariable(PreloadWorkersVar, _previousWorkers);
         Environment.SetEnvironmentVariable(DisableDiskCacheVar, _previousDisableDiskCache);
         Environment.SetEnvironmentVariable(ForceLogVar, _previousForceLog);
+        Environment.SetEnvironmentVariable(InstanceLabelVar, _previousInstanceLabel);
         DiagOptions.ResetForTests();
         _root.Dispose();
     }
@@ -41,6 +44,7 @@ public sealed class DiagOptionsTests : IDisposable
         Environment.SetEnvironmentVariable(PreloadWorkersVar, null);
         Environment.SetEnvironmentVariable(DisableDiskCacheVar, null);
         Environment.SetEnvironmentVariable(ForceLogVar, null);
+        Environment.SetEnvironmentVariable(InstanceLabelVar, null);
         DiagOptions.ResetForTests();
     }
 
@@ -53,8 +57,31 @@ public sealed class DiagOptionsTests : IDisposable
         Assert.Null(DiagOptions.PreloadWorkers);
         Assert.False(DiagOptions.DisableDiskCache);
         Assert.False(DiagOptions.ForceLog);
+        Assert.Null(DiagOptions.InstanceLabel);
         Assert.False(DiagOptions.AnyEnabled);
         Assert.Equal("(none)", DiagOptions.Describe());
+    }
+
+    [Fact(DisplayName = "PHOTOREVIEW_DIAG_INSTANCE_LABEL sets InstanceLabel; unset/blank means null (zero effect)")]
+    public void InstanceLabelParsesNonBlankValues()
+    {
+        ClearAll();
+        Assert.Null(DiagOptions.InstanceLabel);
+        Assert.False(DiagOptions.AnyEnabled);
+
+        Environment.SetEnvironmentVariable(InstanceLabelVar, "AGENT CHECK");
+        DiagOptions.ResetForTests();
+        Assert.Equal("AGENT CHECK", DiagOptions.InstanceLabel);
+        Assert.True(DiagOptions.AnyEnabled);
+        Assert.Contains("INSTANCE_LABEL=AGENT CHECK", DiagOptions.Describe());
+
+        foreach (var blank in new[] { "", "   " })
+        {
+            Environment.SetEnvironmentVariable(InstanceLabelVar, blank);
+            DiagOptions.ResetForTests();
+            Assert.Null(DiagOptions.InstanceLabel);
+            Assert.False(DiagOptions.AnyEnabled);
+        }
     }
 
     [Fact(DisplayName = "PHOTOREVIEW_DIAG_PREREAD=1 enables PreRead; other values do not")]
@@ -142,6 +169,7 @@ public sealed class DiagOptionsTests : IDisposable
         Environment.SetEnvironmentVariable(PreloadWorkersVar, "2");
         Environment.SetEnvironmentVariable(DisableDiskCacheVar, "1");
         Environment.SetEnvironmentVariable(ForceLogVar, "1");
+        Environment.SetEnvironmentVariable(InstanceLabelVar, "AGENT CHECK");
         DiagOptions.ResetForTests();
 
         Assert.True(DiagOptions.AnyEnabled);
@@ -150,6 +178,7 @@ public sealed class DiagOptionsTests : IDisposable
         Assert.Contains("PRELOAD_WORKERS=2", description);
         Assert.Contains("DISABLE_DISKCACHE=1", description);
         Assert.Contains("FORCE_LOG=1", description);
+        Assert.Contains("INSTANCE_LABEL=AGENT CHECK", description);
     }
 
     [Fact(DisplayName = "ResetForTests re-reads the environment instead of caching the first read forever")]

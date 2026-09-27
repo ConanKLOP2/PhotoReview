@@ -111,6 +111,14 @@ public sealed class FileActionService
 
                 destinationPath = Path.Combine(destinationFolder, Path.GetFileName(source));
 
+                // SEC-01: the lexical checks above (Validate + the StartsWith above) can be satisfied by a
+                // destination that traverses an existing symlink/junction whose real target is outside the photo
+                // folder. Only a relative destination is checked — an absolute one is an explicit user choice
+                // that is allowed to leave the folder (unchanged behavior).
+                if (!Path.IsPathRooted(request.Destination)
+                    && ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(sourceFolder, destinationPath, _fileSystem) != ActionDestinationCheck.Ok)
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+
                 if (_fileSystem.FileExists(destinationPath))
                     throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
 

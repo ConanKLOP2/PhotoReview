@@ -102,6 +102,22 @@ internal struct KineticScroller
     /// <summary>Release speed cap (DIP/ms), against a stray sample making the image fly off.</summary>
     public const double MaxVelocity = 8;
 
+    /// <summary>
+    /// Q-R40: damping applied ONLY to a mouse-release velocity in <see cref="Start"/>, not to <see cref="AddImpulse"/>
+    /// (keyboard panning). Users reported the flick-release glide as "chóng mặt" (dizzying) on a hybrid-GPU/mixed
+    /// refresh-rate laptop; <c>docs/refactoring/perf/2026-09-26-kinetic-pan-glide.md</c> already measured that the
+    /// judder itself is a frame-pacing artifact fixed by <c>KineticGlideSmoothing.Predict</c> (default), not something
+    /// this factor addresses -- this instead reduces the raw perceived speed and total glide distance (still
+    /// proportional to <see cref="TimeConstantMs"/> in the limit) so a fast flick feels calmer without changing the
+    /// deceleration curve's shape or timing. 0.65 was chosen as a middle value in the requested 0.5-0.7 range: it cuts
+    /// initial speed and total travel by about a third (noticeably calmer) while still keeping a firm flick's glide
+    /// well above <see cref="StartVelocity"/>, so ordinary flicks still glide. Keyboard arrow-key panning
+    /// (<see cref="AddImpulse"/>) is untouched: its velocity is deliberately sized by
+    /// <see cref="KeyboardPan.ImpulseVelocity"/> to land within about 1 DIP of an exact step distance, and damping it
+    /// would make arrow-key panning systematically undershoot.
+    /// </summary>
+    public const double PointerReleaseSpeedFactor = 0.65;
+
     /// <summary>A frame gap longer than this (ms, e.g. the window was busy) is integrated as this much.</summary>
     public const double MaxFrameMs = 100;
 
@@ -111,12 +127,14 @@ internal struct KineticScroller
 
     /// <summary>
     /// Starts a glide from a POINTER release velocity (DIP/ms); returns false (and stays idle) when the release
-    /// was too slow to glide.
+    /// was too slow to glide. The raw pointer velocity is scaled by <see cref="PointerReleaseSpeedFactor"/> before
+    /// clamping/storing (see that constant's remarks) -- this is the ONLY path that is damped; <see cref="AddImpulse"/>
+    /// (keyboard panning) is not.
     /// </summary>
     public bool Start(double pointerVelocityX, double pointerVelocityY)
     {
-        var vx = Math.Clamp(-Finite(pointerVelocityX), -MaxVelocity, MaxVelocity);
-        var vy = Math.Clamp(-Finite(pointerVelocityY), -MaxVelocity, MaxVelocity);
+        var vx = Math.Clamp(-Finite(pointerVelocityX) * PointerReleaseSpeedFactor, -MaxVelocity, MaxVelocity);
+        var vy = Math.Clamp(-Finite(pointerVelocityY) * PointerReleaseSpeedFactor, -MaxVelocity, MaxVelocity);
         if (Math.Sqrt(vx * vx + vy * vy) < StartVelocity)
         {
             Stop();

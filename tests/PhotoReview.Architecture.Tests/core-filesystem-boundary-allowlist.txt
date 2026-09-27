@@ -9,7 +9,7 @@
 # an unrelated IFileSystem migration of the whole Core project.
 
 # The one designated implementation of IFileSystem; direct File./Directory. calls are its entire purpose.
-src/PhotoReview.Core/IO/PhysicalFileSystem.cs|14
+src/PhotoReview.Core/IO/PhysicalFileSystem.cs|16
 
 # Process-wide log writer (FileLog.Default), constructed before any DI container/IFileSystem exists and
 # shared by every composition root (App, Benchmark.Cli, PerfSession); has no IFileSystem seam today.
