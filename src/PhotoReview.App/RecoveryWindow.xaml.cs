@@ -46,12 +46,12 @@ public partial class RecoveryWindow : Window
     private readonly List<RecoveryRow> _rows;
     private readonly Func<JournalEntry, Task<RecoveryRetryResult>>? _retry;
     private bool _retrying;
-    private readonly Action<IReadOnlyList<JournalEntry>>? _dismiss;
+    private readonly Func<IReadOnlyList<JournalEntry>, DismissOutcome>? _dismiss;
     private readonly RecoveryFileCheck _checker;
     private readonly System.Collections.ObjectModel.ObservableCollection<RecoveryRow> _visible = [];
     private Action? _cancelCheck;
 
-    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, Task<RecoveryRetryResult>>? retry = null, Action<IReadOnlyList<JournalEntry>>? dismiss = null, IFileSystem? fileSystem = null)
+    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, Task<RecoveryRetryResult>>? retry = null, Func<IReadOnlyList<JournalEntry>, DismissOutcome>? dismiss = null, IFileSystem? fileSystem = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         InitializeComponent();
@@ -227,15 +227,23 @@ public partial class RecoveryWindow : Window
         if (_dismiss is null || rows.Count == 0) return;
         var prompt = Tr.RecoveryDismissConfirmMessage(rows.Count);
         if (System.Windows.MessageBox.Show(this, prompt, Tr.RecoveryDismissConfirmTitle, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        try { _dismiss(rows.Select(row => row.Entry).ToList()); }
+        DismissOutcome outcome;
+        try { outcome = _dismiss(rows.Select(row => row.Entry).ToList()); }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, ex.Message, Tr.RecoveryDismissFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var dismissed = rows.ToHashSet(); // RemoveAll(rows.Contains) is O(rows * dismissed)
-        _rows.RemoveAll(dismissed.Contains);
+        // R09: a row is removed from the list when it was actually dismissed, or when the journal's current state no
+        // longer matches what this window snapshotted (skipped-as-stale) -- either way the row this window is
+        // holding is no longer an accurate description of that Id, so it must not stay in the list looking current.
+        var byId = rows.Select(row => row.Entry.Id).ToHashSet(StringComparer.Ordinal);
+        _rows.RemoveAll(row => byId.Contains(row.Entry.Id));
         RefreshEntries();
+        if (outcome.Skipped.Count > 0)
+        {
+            System.Windows.MessageBox.Show(this, Tr.RecoveryDismissStaleMessage(outcome.Skipped.Count), Tr.RecoveryDismissStaleTitle, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
     }
 
     /// <summary>

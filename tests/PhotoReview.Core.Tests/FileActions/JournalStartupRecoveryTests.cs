@@ -121,7 +121,7 @@ public sealed class JournalStartupRecoveryTests
         };
         _journal.Append(failed);
 
-        var dismissed = Assert.Single(_journal.Dismiss([failed]));
+        var dismissed = Assert.Single(_journal.Dismiss([failed]).Dismissed);
 
         Assert.Null(dismissed.ErrorCode);
         var lines = _fs.ReadAllText(new AppPaths(@"C:\Users\test\AppData\Local").JournalFile).Split('\n', StringSplitOptions.RemoveEmptyEntries);
