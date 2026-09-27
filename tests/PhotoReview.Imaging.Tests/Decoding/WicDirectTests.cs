@@ -95,6 +95,10 @@ public sealed class WicDirectTests : IClassFixture<OrientationFixture>, IDisposa
         var path = Path.Combine(_tempDir, "memory.jpg");
         FixtureGenerator.GenerateGradientJpeg(path, 64, 48);
         var bytes = File.ReadAllBytes(path);
+        // L01: delete the on-disk file before decoding so this test can only pass if the decoder
+        // actually reads from Bytes -- if a regression made it fall back to re-reading Path, the
+        // File.Delete below would make that fallback throw instead of silently succeeding.
+        File.Delete(path);
 
         var decoded = _wicDecoder.Decode(new DecodeRequest(path, TargetWidth: 0, Bytes: bytes));
 

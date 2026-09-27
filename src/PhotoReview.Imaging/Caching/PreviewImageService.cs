@@ -457,13 +457,18 @@ public sealed class PreviewImageService : IPreloadTarget
         long perfT0 = 0;
         var stopwatch = Stopwatch.StartNew();
         var sourceRead = false;
-        var cachePath = GetDiskCachePath(key);
+        // L02: computed lazily -- when the disk cache is disabled (below), nothing ever reads or
+        // persists under this path, so hashing the key here on every decode would be pure waste.
+        string? cachePath = null;
         IDecodedImage decodedImage;
 
         // D10: PHOTOREVIEW_DIAG_DISABLE_DISKCACHE=1 measures decode/contention without the
         // disk cache muddying the numbers. Treat the cache as if the file didn't exist -- this
         // never deletes an existing entry, it just skips reading (and, below, persisting) it.
-        if (!_disableDiskCache && File.Exists(cachePath))
+        if (!_disableDiskCache)
+            cachePath = GetDiskCachePath(key);
+
+        if (cachePath is not null && File.Exists(cachePath))
         {
             try
             {
@@ -537,7 +542,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // records which backend actually produced the pixels (PreviewCacheFile.ReadResult.ActualBackend
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
-        if (!_disableDiskCache && sourceRead &&
+        if (cachePath is not null && sourceRead &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight, decodedImage.Exif);
         stopwatch.Stop();
