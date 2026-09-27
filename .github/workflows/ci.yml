@@ -177,19 +177,24 @@ jobs:
   # One tag per merge to master: v<MajorMinor>.<N>, the same number the build embeds
   # (Directory.Build.targets). Runs only after build + tests + publish and the repo checks succeeded. No release is created
   # here: a human runs the Release workflow (Actions > Release > Run workflow) for the tag they want.
+  #
+  # The condition lives on each STEP, not on the job, so a PR run reports this job success (its steps
+  # individually skipped) instead of the whole job showing skipped in the PR checks list -- purely a
+  # display choice, the job never did anything on a PR either way.
   tag-version:
     needs: [build-test-publish, repo-checks]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Create version tags (current + any missed)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         shell: bash
         run: |
           set -euo pipefail
