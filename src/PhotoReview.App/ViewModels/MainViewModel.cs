@@ -677,17 +677,43 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     public void UpdateTitle(string? folder = null) => UpdateFolderTitle(folder);
 
+    private string? _instanceLabel;
+
+    /// <summary>
+    /// Marks every title this window renders with a "[label] " prefix, so a window created for
+    /// automated tests or a manual/agent verification run is never mistaken for the user's real,
+    /// everyday window. Null/empty (the default) leaves the title exactly as before this existed --
+    /// two seams set it: <c>TestAppHost.CreateMainWindow</c> (fixed test label, unconditional) and
+    /// <c>PHOTOREVIEW_DIAG_INSTANCE_LABEL</c> read once at production startup
+    /// (<see cref="PhotoReview.Core.Diagnostics.DiagOptions.InstanceLabel"/>). Both funnel through this
+    /// one property so the prefix is applied in exactly one place (<see cref="ApplyInstanceLabel"/>).
+    /// </summary>
+    public string? InstanceLabel
+    {
+        get => _instanceLabel;
+        set
+        {
+            _instanceLabel = value;
+            UpdateFolderTitle();
+        }
+    }
+
+    /// <summary>Single seam that prepends <see cref="InstanceLabel"/> (see its doc) to a composed title; a no-op when unset.</summary>
+    private string ApplyInstanceLabel(string title) =>
+        string.IsNullOrEmpty(_instanceLabel) ? title : $"[{_instanceLabel}] {title}";
+
     private void UpdateFolderTitle(string? folder = null)
     {
         folder ??= _currentSession?.Folder ?? "";
         var settings = Settings;
         if (string.IsNullOrWhiteSpace(folder))
         {
-            FolderTitle = Tr.AppTitle;
+            FolderTitle = ApplyInstanceLabel(Tr.AppTitle);
             return;
         }
         var content = BuildTitleBarContent(folder, settings.TitleBarFields);
-        FolderTitle = settings.LoggingEnabled ? Tr.MainTitleWithFolderLogging(content) : Tr.MainTitleWithFolder(content);
+        var title = settings.LoggingEnabled ? Tr.MainTitleWithFolderLogging(content) : Tr.MainTitleWithFolder(content);
+        FolderTitle = ApplyInstanceLabel(title);
     }
 
     /// <summary>
