@@ -22,4 +22,14 @@ public interface IRecycleBin
 
     /// <summary>Thử khôi phục tệp tin từ thùng rác.</summary>
     bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc);
+
+    /// <summary>
+    /// F-WIN-2: true only when the Recycle Bin of <paramref name="path"/>'s volume is known to accept a file of
+    /// <paramref name="fileSize"/> bytes. False when that bin is turned off ("Don't move files to the Recycle Bin", policy),
+    /// is smaller than the file, or its settings cannot be read: the shell would then delete the file PERMANENTLY without
+    /// asking, so the caller must refuse instead of calling <see cref="SendToRecycleBin"/>. Only asked for paths where
+    /// <see cref="CanRecycle"/> is true; the size is the caller's already-known stat (no extra file-system read).
+    /// Default true for fakes.
+    /// </summary>
+    bool FitsInRecycleBin(string path, long fileSize) => true;
 }

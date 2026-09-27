@@ -39,15 +39,26 @@ $parsed = foreach ($line in $lines) {
 # ---------------------------------------------------------------------------
 # Group ShowImage lines by token
 # ---------------------------------------------------------------------------
+# app.log is appended to across app runs and the navigation token restarts at 0 in every process, so entries are keyed by
+# (run, token). A new run starts when a 'ShowImage start' token is lower than the previous start token.
 $tokens = @{}
+$runIndex = 0
+$lastStartToken = -1
 foreach ($p in $parsed) {
     $m = $p.Msg
     if ($m -match '^ShowImage (?<phase>start|cache-state|thumbnail-presented|preview-presented|stale-file)\b.*?\btoken=(?<token>\d+)') {
-        $token = $Matches.token
+        $tokenNumber = [int]$Matches.token
         $phase = $Matches.phase
+        if ($phase -eq 'start') {
+            if ($tokenNumber -lt $lastStartToken) { $runIndex++ }
+            $lastStartToken = $tokenNumber
+        }
+        $token = "$runIndex/$tokenNumber"
         if (-not $tokens.ContainsKey($token)) {
             $tokens[$token] = [ordered]@{
-                Token = $token
+                Key = $token
+                Run = $runIndex
+                Token = $tokenNumber
                 StartTs = $null
                 CacheStateTs = $null
                 RamReady = $null
@@ -83,6 +94,8 @@ $rows = foreach ($t in $tokens.Values) {
     $startToThumb = if ($t.StartTs -and $t.ThumbTs) { ($t.ThumbTs - $t.StartTs).TotalMilliseconds } else { $null }
     $startToPreview = if ($t.StartTs -and $t.PreviewTs) { ($t.PreviewTs - $t.StartTs).TotalMilliseconds } else { $null }
     [pscustomobject]@{
+        Key             = $t.Key
+        Run             = $t.Run
         Token           = $t.Token
         Path            = $t.Path
         Mode            = $t.Mode
@@ -94,7 +107,7 @@ $rows = foreach ($t in $tokens.Values) {
     }
 }
 
-$rows | Sort-Object { [int]$_.Token } | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
+$rows | Sort-Object { [int]$_.Run }, { [int]$_.Token } | Select-Object -ExcludeProperty Key * | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
 
 # ---------------------------------------------------------------------------
 # Counters: Preload paused, Preload progress, Explorer lines
@@ -111,10 +124,10 @@ $explorerViewFallback = @($explorerLines | Where-Object { $_.Msg -like 'Explorer
 # T0 -> first preview-presented (approx T0->T2)
 # ---------------------------------------------------------------------------
 $loadFolderStart = ($parsed | Where-Object { $_.Msg -like 'LoadFolder start*' } | Select-Object -First 1).Ts
-$firstPreview = ($rows | Where-Object { $_.StartToPreviewMs -ne $null } | Sort-Object { [int]$_.Token } | Select-Object -First 1)
+$firstPreview = ($rows | Where-Object { $_.StartToPreviewMs -ne $null } | Sort-Object { [int]$_.Run }, { [int]$_.Token } | Select-Object -First 1)
 $t0t2 = $null
 if ($loadFolderStart -and $firstPreview) {
-    $firstPreviewTs = $tokens[$firstPreview.Token].PreviewTs
+    $firstPreviewTs = $tokens[$firstPreview.Key].PreviewTs
     $t0t2 = ($firstPreviewTs - $loadFolderStart).TotalMilliseconds
 }
 
@@ -137,6 +150,7 @@ function Write-Group {
     $vals = $Group | ForEach-Object { $_.StartToPreviewMs } | Where-Object { $_ -ne $null }
     $valsD = @($vals | ForEach-Object { [double]$_ })
     $n = $valsD.Count
+    if ($n -eq 0) { return ("{0,-12} n={1,-4} P50=n/a      P95=n/a      max=n/a" -f $Name, $n) }
     $p50 = Get-Percentile -Values $valsD -Percentile 50
     $p95 = Get-Percentile -Values $valsD -Percentile 95
     $max = if ($n -gt 0) { ($valsD | Measure-Object -Maximum).Maximum } else { $null }
