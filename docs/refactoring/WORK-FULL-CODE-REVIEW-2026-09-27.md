@@ -1,6 +1,8 @@
 # Whole-project code review and optimization candidates
 
-**Date:** 2026-09-27. **Initial review baseline:** `origin/master` `13e33df` (`v2.0.187`); #183 merged as `f82084d` while review ran. **Latest source base:** `origin/master` `3ef2bb5` (#188 fixes two test fixtures). **Status:** PR #185 open for review; static review, no production changes. The #183 context-menu/settings diff was checked separately; no concrete issue found in that delta. GUI behavior still needs real-desktop verification.
+**Date:** 2026-09-27. **Initial review baseline:** `origin/master` `13e33df` (`v2.0.187`); #183 merged as `f82084d` while review ran. **Source base reviewed:** `3ef2bb5` (#188 fixes two test fixtures). **Status:** PR #185 merged into master as `1c167cd`; static review, no production changes. The #183 context-menu/settings diff was checked separately; no concrete issue found in that delta. GUI behavior still needs real-desktop verification.
+
+PR #185 changed five documentation artifacts: `task_on_progress.md` (handoff), `docs/ACTIVE-TASKS.md` (remaining work), `docs/INDEX.md` (links), this report (findings), and `FUNCTION-BODY-AUDIT-2026-09-27.tsv` (per-body ledger). The `PerfTraceTests.cs` fixture change came from #188, and the `AGENTS.md` workflow change came from #189; both were already on the master base before #185 merged. Neither was modified by the review PR.
 
 ## Method and coverage
 
