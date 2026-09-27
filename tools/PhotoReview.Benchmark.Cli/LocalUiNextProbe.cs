@@ -131,9 +131,8 @@ internal static class LocalUiNextProbe
                 }
                 Array.Sort(durations);
                 double At(double fraction) => PerfStats.NearestRank(durations, fraction * 100.0);
-                return $"PASS: local WPF warm navigation count={sampleCount} " +
-                    $"medianMs={At(.5):F2} p95Ms={At(.95):F2} maxMs={durations[^1]:F2} " +
-                    $"firstNextStatus={status}";
+                return FormattableString.Invariant(
+                    $"PASS: local WPF warm navigation count={sampleCount} medianMs={At(.5):F2} p95Ms={At(.95):F2} maxMs={durations[^1]:F2} firstNextStatus={status}");
             }
             finally
             {
