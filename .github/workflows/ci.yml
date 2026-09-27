@@ -22,6 +22,34 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
+  # Docs/i18n gates need no .NET, no build and no git history beyond `git ls-files`, so they run in
+  # parallel with build-test-publish instead of lengthening it. Same gates as tools/verify-all.ps1.
+  repo-checks:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # L10: strict JSON validator self-test (comments/trailing commas/duplicate keys) before trusting it
+      # against real files.
+      - name: Check translation catalogs (self-test)
+        shell: powershell
+        run: ./tools/i18n-check.ps1 -SelfTest
+
+      # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.
+      - name: Check translation catalogs
+        shell: powershell
+        run: ./tools/i18n-check.ps1
+
+      # Same documentation gates as tools/verify-all.ps1: T0/T1 size budget, and no broken links outside docs/archive.
+      - name: Check documentation budget
+        shell: powershell
+        run: ./tools/docs-budget.ps1 -Check
+
+      - name: Check documentation links
+        shell: powershell
+        run: ./tools/check-doc-links.ps1
+
   build-test-publish:
     runs-on: windows-latest
     env:
@@ -75,26 +103,6 @@ jobs:
           # R2-F-18: a build without git history is versioned 2.0.0-nogit; never let that reach the tag/artifact steps.
           if ($v -match '-nogit' -or $v -notmatch '\+[0-9a-fA-F]+') { Write-Error "Build has no git commit identity: $v"; exit 1 }
           "PhotoReview **$v**" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-
-      # L10: strict JSON validator self-test (comments/trailing commas/duplicate keys) before trusting it
-      # against real files.
-      - name: Check translation catalogs (self-test)
-        shell: powershell
-        run: ./tools/i18n-check.ps1 -SelfTest
-
-      # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.
-      - name: Check translation catalogs
-        shell: powershell
-        run: ./tools/i18n-check.ps1
-
-      # Same documentation gates as tools/verify-all.ps1: T0/T1 size budget, and no broken links outside docs/archive.
-      - name: Check documentation budget
-        shell: powershell
-        run: ./tools/docs-budget.ps1 -Check
-
-      - name: Check documentation links
-        shell: powershell
-        run: ./tools/check-doc-links.ps1
 
       # CI runs the HotPath tests plus the Category=Integration tests (fast, mocked deps, no real
       # Recycle Bin); Native/Slow/Manual run locally only (verify-all.ps1 -Native/-Slow).
@@ -160,10 +168,10 @@ jobs:
           path: TestResults
 
   # One tag per merge to master: v<MajorMinor>.<N>, the same number the build embeds
-  # (Directory.Build.targets). Runs only after build + tests + publish succeeded. No release is created
+  # (Directory.Build.targets). Runs only after build + tests + publish and the repo checks succeeded. No release is created
   # here: a human runs the Release workflow (Actions > Release > Run workflow) for the tag they want.
   tag-version:
-    needs: build-test-publish
+    needs: [build-test-publish, repo-checks]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
