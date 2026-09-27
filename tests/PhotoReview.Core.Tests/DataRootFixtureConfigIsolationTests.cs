@@ -18,6 +18,7 @@ public sealed class DataRootFixtureConfigIsolationTests
         var realConfig = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PhotoReview", "config.json");
 
+        var isolateBefore = Environment.GetEnvironmentVariable(AppPaths.IsolateConfigEnvironmentVariable);
         using (var fixture = new DataRootFixture())
         {
             var configFile = AppPaths.FromEnvironment().ConfigFile;
@@ -25,6 +26,6 @@ public sealed class DataRootFixtureConfigIsolationTests
             Assert.StartsWith(fixture.Path, configFile, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Null(Environment.GetEnvironmentVariable(AppPaths.IsolateConfigEnvironmentVariable));
+        Assert.Equal(isolateBefore, Environment.GetEnvironmentVariable(AppPaths.IsolateConfigEnvironmentVariable));
     }
 }
