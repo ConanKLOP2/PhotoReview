@@ -59,6 +59,9 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Không có thao tác đang chờ hoặc thất bại cần xem.", recovery.SummaryText.Text);
                 Assert.Equal("Thử lại thao tác Di chuyển hoặc Sao chép bị lỗi", AutomationProperties.GetName(recovery.RetryButton));
                 Assert.Contains("Đóng", Texts(recovery));
+                Assert.Contains("Thử lại Di chuyển/Sao chép", Texts(recovery));
+                Assert.Contains("Xóa các mục đã chọn khỏi danh sách phục hồi", Texts(recovery));
+                Assert.Contains("Xóa tất cả mục khỏi danh sách phục hồi", Texts(recovery));
 
                 Assert.Equal("Chưa truy vấn", diagnostics.ExplorerOrderText.Text);
                 Assert.Equal("Không có", diagnostics.HitRateText.Text);
@@ -131,9 +134,11 @@ public sealed class WindowLocalizationTests
                 Assert.True(clickZoomLevel.HasItems);
                 Assert.Equal("Menu con các mức thu phóng", AutomationProperties.GetName(clickZoomLevel));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));
+                Assert.Equal("Ảnh xem trước bên phải, nhấn để chọn", AutomationProperties.GetName(window.CompareRightBorder));
 
                 var texts = Texts(window);
                 Assert.Contains("Mở thư mục ảnh", texts);   // automation name of the folder button and its tooltip
+                Assert.Contains("Mở cài đặt", texts);       // automation name of the toolbar settings button
                 Assert.Contains("Vừa khung", texts);        // Fit toolbar button
                 Assert.Contains("Bỏ bản (1) trùng hash", texts); // inside the tools Popup
                 Assert.Contains("Mở chẩn đoán hiệu năng", texts);

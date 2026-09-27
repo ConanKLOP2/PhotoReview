@@ -28,7 +28,7 @@ internal static class TestAppHost
     /// <see cref="MainWindow"/> from it, and starts loading <paramref name="initialPath"/> if given.
     /// The window disposes its own <see cref="ServiceProvider"/> when closed.
     /// </summary>
-    internal static MainWindow CreateMainWindow(string? initialPath, TestHostHooks? hooks = null)
+    internal static MainWindow CreateMainWindow(string? initialPath, TestHostHooks? hooks = null, string? placementFile = null)
     {
         var sp = AppHost.BuildServices(services =>
         {
@@ -42,13 +42,16 @@ internal static class TestAppHost
                 services.AddSingleton<IPresentationObserver>(new DelegatePresentationObserver(onPresented));
             if (hooks?.MoveOverride is { } moveOverride)
                 services.AddSingleton<IMoveOverride>(new DelegateMoveOverride(moveOverride));
+            // A test that exercises window placement gets its own file; every other test is suppressed below.
+            if (placementFile is not null)
+                services.AddSingleton<PhotoReview.Core.Abstractions.IAppPaths>(_ => new PlacementFileOverride(PhotoReview.Core.AppPaths.FromEnvironment(), placementFile));
             if (hooks?.DisablePreload == true)
                 services.AddSingleton<IPreloadController>(new NoOpPreloadController());
         });
 
         var window = sp.GetRequiredService<MainWindow>();
         // R7-11: never restore or overwrite the user's real window-placement.json from a test window.
-        window.SuppressWindowPlacement();
+        if (placementFile is null) window.SuppressWindowPlacement();
         window.Closed += (_, _) => sp.Dispose();
         window.InitializeWithInitialPath(initialPath);
         return window;
@@ -117,4 +120,16 @@ internal sealed class NoOpPreloadController : IPreloadController
     public void Cancel() { }
     public void RemovePreloadedKeysForPath(string normalizedPath) { }
     public void ClearPreloadedKeys() { }
+}
+
+/// <summary>The environment's paths with only <c>WindowPlacementFile</c> redirected (it is not covered by the data-root override).</summary>
+internal sealed class PlacementFileOverride(PhotoReview.Core.Abstractions.IAppPaths inner, string placementFile) : PhotoReview.Core.Abstractions.IAppPaths
+{
+    public string ConfigFile => inner.ConfigFile;
+    public string JournalFile => inner.JournalFile;
+    public string SessionsDir => inner.SessionsDir;
+    public string LogFile => inner.LogFile;
+    public string PreviewCacheDir => inner.PreviewCacheDir;
+    public string ThumbnailCacheDir => inner.ThumbnailCacheDir;
+    public string WindowPlacementFile => placementFile;
 }
