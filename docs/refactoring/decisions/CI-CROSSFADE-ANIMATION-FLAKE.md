@@ -66,21 +66,35 @@ This is a **test-timing flake**, not a CI-environment rendering limitation and n
 
 ## Fix
 
-`ImageCrossfadeIntegrationTests.NavigatingToADifferentFile_WithFadeEnabled_AnimatesTheOutgoingLayerThenReleasesIt`
-now overrides `Settings.ImageTransitionMs` to a new `FadeDurationForCompletionAssertionMs = 200` (still well
-under `AppSettings.MaxImageTransitionMs` and `FadeTimeout`) just for this test, immediately before triggering
-the navigation. 200ms leaves multiple render frames inside the fade window even under CI load, so the
-`Background`-priority poll reliably samples an in-flight `Opacity` value. The other two crossfade tests are
-unaffected and keep the fast `MinImageTransitionMs` default:
+**First attempt (insufficient, disproved by real CI, kept here for the record):** widening
+`Settings.ImageTransitionMs` to 200ms for just this test. This was pushed to `fix/ci-crossfade-animation-flake`
+and **still failed on real CI** (run
+[36329663970](https://github.com/ConanKLOP2/PhotoReview/actions/runs/36329663970), same "The fade animation
+never started." after the full 3s `FadeTimeout`). This proved duration alone doesn't fix it: the fade only has
+one ~200ms window near the start of the whole 3s wait, and if the test's own `Background`-priority poll
+(`StaTestHost.WaitForAsync`) is starved for a stretch longer than that on a loaded, resource-shared CI runner,
+it can still miss the entire window — a longer timeout doesn't help because the opportunity to observe
+`Opacity < 1.0` doesn't get longer, only the dead time around it does.
+
+**Actual fix:** replace the point-in-time poll for `Opacity < 1.0` with a value-changed watcher (`OpacityWatch`,
+mirroring the existing `VisibilityWatch` used by the other two tests in this file), registered on
+`window.OutgoingImage` **before** the navigation is triggered. `DependencyPropertyDescriptor.AddValueChanged`
+fires from the same per-frame property-invalidation path that updates the animated value for rendering, not
+from this test's poll loop, so it cannot miss a transient dip below `1.0` regardless of how the CI runner
+schedules the test's own polling. The assertion changed from "poll and see `Opacity < 1.0` at some sampled
+instant" to "was `Opacity` ever observed below `1.0`, however briefly, by the time the fade fully completed" —
+strictly stronger, not weaker: it still requires a real WPF animation to have actually run. No change to
+`Settings.ImageTransitionMs` was needed; the shared helper's fast `AppSettings.MinImageTransitionMs` (40ms) is
+kept for all three crossfade tests.
 
 - `NavigatingToADifferentFile_WithTransitionNone_NeverShowsTheOutgoingLayer` and
-  `ZoomingTheSameImage_WithFadeEnabled_NeverStartsAFade` both use a `VisibilityWatch` (a
-  `DependencyPropertyDescriptor` value-changed handler), not a point-in-time poll for a specific value — they
-  catch a transient `Visible` however briefly, so they are not subject to the same race and needed no change.
+  `ZoomingTheSameImage_WithFadeEnabled_NeverStartsAFade` already used this same `VisibilityWatch` pattern and
+  needed no change.
 
 Mutation-check: temporarily removing the `OutgoingImage.BeginAnimation(OpacityProperty, animation,
-HandoffBehavior.SnapshotAndReplace)` call in `StartImageFade` still makes the fixed test fail with "The fade
-animation never started." — confirmed locally before and after the fix.
+HandoffBehavior.SnapshotAndReplace)` call in `StartImageFade` still makes the fixed test fail (now on "The fade
+never completed (OnImageFadeCompleted)." since neither the animation nor its completion ever fires) — confirmed
+locally before and after the fix.
 
 Verified on real GitHub Actions CI (not just locally) on `fix/ci-crossfade-animation-flake`: see the PR for run
 links; at least two consecutive green `build-test-publish` runs are required before merge.
@@ -92,7 +106,10 @@ links; at least two consecutive green `build-test-publish` runs are required bef
   both healthy), so downgrading real CI coverage would be throwing away a working regression test for no reason.
 - **Assert only the wiring via a code seam** (that `BeginAnimation` was called with the right values), dropping
   the completion-observation assertions: rejected for the same reason — CI can observe the real animation
-  end-to-end once given a duration that survives its poll granularity, so there is no need to weaken the test.
-- **Raise `FadeTimeout`**: would not have helped — the failure was never about running out of time within the
-  3s window, it was about the entire 40ms animation completing between two polls; a longer timeout does not
-  create more render frames inside a 40ms animation.
+  end-to-end once the assertion is decoupled from this test's own poll cadence, so there is no need to weaken it.
+- **Raise `FadeTimeout`**: would not help — the failure was never about running out of time within the 3s
+  window, it was about the entire animation completing between two polls of a fixed-cadence loop; a longer
+  timeout does not create more opportunities to sample the one short animation window.
+- **Widen `Settings.ImageTransitionMs` alone (200ms)**: tried first, disproved by real CI (run 36329663970,
+  above) — the poll can still starve past a 200ms window under load, so this only reduces the failure
+  probability, it doesn't eliminate the race.
