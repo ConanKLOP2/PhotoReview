@@ -283,5 +283,23 @@ public class AppSettings
 
     /// <summary>Duration of the <see cref="ImageTransition.Fade"/> transition, in milliseconds; [<see cref="MinImageTransitionMs"/>, <see cref="MaxImageTransitionMs"/>], default <see cref="DefaultImageTransitionMs"/>.</summary>
     public int ImageTransitionMs { get; set; } = DefaultImageTransitionMs;
+
+    // ---- Context menu redesign (PR-C feat/context-menu-redesign). Absent in older configs = these defaults; no migration step. ----
+
+    /// <summary>
+    /// When true (default, matches the behaviour before this setting existed), choosing a preset or Custom in the
+    /// right-click "Zoom" submenu also updates <see cref="ClickZoomPercent"/>, like "Zoom to N%" then reads back.
+    /// When false, the same choice still zooms the image immediately (<c>PointerInputController.SetClickZoomLevelAsync</c>)
+    /// but is a one-off: it does not touch the saved click zoom level.
+    /// </summary>
+    public bool SetZoomAlsoSetsClickLevel { get; set; } = true;
+
+    /// <summary>
+    /// Shows the folder group (Open folder / Next folder / Previous folder) in the right-click context menu, as one
+    /// unit including the separator above it. Default true. Toggled from Settings only (no shortcut); Next/Previous
+    /// folder still work via their own shortcuts (<see cref="ShortcutMappings.NextFolder"/>/<see cref="ShortcutMappings.PreviousFolder"/>)
+    /// when the menu items are hidden.
+    /// </summary>
+    public bool ShowFolderMenuItems { get; set; } = true;
 }
 

@@ -21,7 +21,7 @@ public sealed class ZoomContextMenuTests
         window.ImageContextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, window.ImageContextMenu));
 
     private static void OpenSubmenu(MainWindow window) =>
-        window.ClickZoomMenu.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, window.ClickZoomMenu));
+        window.ZoomMenu.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, window.ZoomMenu));
 
     private static async Task WithWindowAsync(string? folder, Func<MainWindow, Task> body)
     {
@@ -99,17 +99,17 @@ public sealed class ZoomContextMenuTests
     {
         await WithWindowAsync(null, window =>
         {
-            Assert.True(window.ClickZoomMenu.HasItems);
-            var presets = window.ClickZoomMenu.Items.OfType<MenuItem>().Where(i => i.Tag is int).ToList();
+            Assert.True(window.ZoomMenu.HasItems);
+            var presets = window.ZoomMenu.Items.OfType<MenuItem>().Where(i => i.Tag is int).ToList();
             Assert.NotEmpty(presets);
 
             window.Settings.ClickZoomPercent = 150;
             OpenSubmenu(window);
             Assert.Equal([150], presets.Where(i => i.IsChecked).Select(i => (int)i.Tag!));
 
-            window.Settings.ClickZoomPercent = 30;
+            window.Settings.ClickZoomPercent = 70;
             OpenSubmenu(window);
-            Assert.Equal([30], presets.Where(i => i.IsChecked).Select(i => (int)i.Tag!));
+            Assert.Equal([70], presets.Where(i => i.IsChecked).Select(i => (int)i.Tag!));
 
             // A custom level that is not a preset checks nothing.
             window.Settings.ClickZoomPercent = 175;
@@ -127,8 +127,11 @@ public sealed class ZoomContextMenuTests
             await WithWindowAsync(null, async window =>
             {
                 OpenSubmenu(window);
-                var custom = window.ClickZoomMenu.Items.OfType<MenuItem>().Last();
-                var preset150 = window.ClickZoomMenu.Items.OfType<MenuItem>().Single(i => i.Tag is 150);
+                // Custom… is the first non-preset item right after the last preset (Fit width/Fit height come first;
+                // "also set"/"set current" come after -- see MainWindow.BuildZoomMenu).
+                var zoomItems = window.ZoomMenu.Items.OfType<MenuItem>().ToList();
+                var custom = zoomItems[zoomItems.FindLastIndex(i => i.Tag is int) + 1];
+                var preset150 = zoomItems.Single(i => i.Tag is 150);
                 Assert.Equal("Tùy chỉnh…", custom.Header);
                 Assert.Equal("Thu phóng đến 150 phần trăm", AutomationProperties.GetName(preset150));
 
