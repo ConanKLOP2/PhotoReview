@@ -157,7 +157,42 @@ jobs:
             # Explicit previous_tag_name: the summary is exactly $prev..$env:TAG (merged PRs + full-changelog link).
             $body = gh api "repos/$repo/releases/generate-notes" -f tag_name=$env:TAG -f previous_tag_name=$prev --jq .body
             if ($LASTEXITCODE -ne 0) { throw "generate-notes failed ($LASTEXITCODE)" }
-            $changes = "## Changes since $prev`n`n$body"
+
+            # Group entries by their conventional-commit prefix so the body reads as
+            # sections instead of one flat bullet wall (PR titles follow type(scope): ... here).
+            $categories = [ordered]@{
+              feat = 'Features'; fix = 'Fixes'; perf = 'Performance'
+              test = 'Tests'; docs = 'Docs'; ci = 'CI / Tooling'
+            }
+            $buckets = [ordered]@{}
+            foreach ($key in $categories.Keys) { $buckets[$key] = [System.Collections.Generic.List[string]]::new() }
+            $other = [System.Collections.Generic.List[string]]::new()
+            $fullChangelogLine = $null
+            foreach ($line in ($body -split "`n")) {
+              if ($line -match '^\*\*Full Changelog\*\*') { $fullChangelogLine = $line.Trim(); continue }
+              if ($line -notmatch '^\*\s+(.*)$') { continue }
+              $entry = $Matches[1]
+              if ($entry -match '^(feat|fix|perf|test|docs|ci)(\([^)]*\))?:\s*(.*)$' -and $buckets.Contains($Matches[1])) {
+                $buckets[$Matches[1]].Add("- $($Matches[3])")
+              } else {
+                $other.Add("- $entry")
+              }
+            }
+            $sections = [System.Collections.Generic.List[string]]::new()
+            foreach ($key in $categories.Keys) {
+              if ($buckets[$key].Count -gt 0) {
+                $sections.Add("### $($categories[$key])")
+                $sections.Add(($buckets[$key] -join "`n"))
+                $sections.Add('')
+              }
+            }
+            if ($other.Count -gt 0) {
+              $sections.Add('### Other')
+              $sections.Add(($other -join "`n"))
+              $sections.Add('')
+            }
+            if ($fullChangelogLine) { $sections.Add($fullChangelogLine) }
+            $changes = "## Changes since $prev`n`n" + ($sections -join "`n")
           }
           $notes = @"
           Requires Windows 10/11 x64 and the **.NET 10 Windows Desktop Runtime**. Unzip and run ``PhotoReview.App.exe``.

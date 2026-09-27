@@ -765,5 +765,7 @@
   "settings.group.contextMenu": "Menu chuột phải",
   "settings.showFolderMenuItems.label": "Hiện mục thư mục (Mở, Kế tiếp, Trước)",
   "settings.showFolderMenuItems.automationName": "Hiện mục thư mục trong menu chuột phải",
-  "settings.showFolderMenuItems.hint": "Tắt sẽ ẩn Mở thư mục, Thư mục kế tiếp và Thư mục trước khỏi menu chuột phải. Phím tắt của chúng vẫn hoạt động."
+  "settings.showFolderMenuItems.hint": "Tắt sẽ ẩn Mở thư mục, Thư mục kế tiếp và Thư mục trước khỏi menu chuột phải. Phím tắt của chúng vẫn hoạt động.",
+  "core.recovery.alreadyHandled": "Mục này đã được một cửa sổ PhotoReview khác xử lý, hoặc đang được thử lại ở đó. Không có gì bị thay đổi; mục đã được gỡ khỏi danh sách này.",
+  "recovery.retry.stale.title": "Đã được xử lý ở nơi khác"
 }
