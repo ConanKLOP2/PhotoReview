@@ -24,6 +24,17 @@ namespace PhotoReview.Integration.Tests.Infrastructure;
 internal static class TestAppHost
 {
     /// <summary>
+    /// Fixed, unconditional title-bar label for every <see cref="MainWindow"/> this factory creates (see
+    /// <see cref="PhotoReview.App.ViewModels.MainViewModel.InstanceLabel"/>): a Category=UI integration test
+    /// spins up a real WPF window that can occasionally flash visibly on screen (e.g. an
+    /// <c>Application</c>-singleton race), and this makes it unmistakable from the user's own everyday
+    /// window even then -- no environment variable, no opt-in, so it can never be forgotten. Separate from
+    /// (and set unconditionally after) the <c>PHOTOREVIEW_DIAG_INSTANCE_LABEL</c> seam production reads at
+    /// startup, which stays purely opt-in there.
+    /// </summary>
+    internal const string TestInstanceLabel = "TEST";
+
+    /// <summary>
     /// Builds the production service graph (with the requested test overrides), resolves
     /// <see cref="MainWindow"/> from it, and starts loading <paramref name="initialPath"/> if given.
     /// The window disposes its own <see cref="ServiceProvider"/> when closed.
@@ -50,6 +61,10 @@ internal static class TestAppHost
         });
 
         var window = sp.GetRequiredService<MainWindow>();
+        // Unconditional, regardless of any environment state: this is the single production-composition-root
+        // path every Category=UI integration test's MainWindow goes through, so tagging it here (rather than
+        // via an env var a test could forget to set) is foolproof.
+        window.ViewModel.InstanceLabel = TestInstanceLabel;
         // R7-11: never restore or overwrite the user's real window-placement.json from a test window.
         if (placementFile is null) window.SuppressWindowPlacement();
         window.Closed += (_, _) => sp.Dispose();

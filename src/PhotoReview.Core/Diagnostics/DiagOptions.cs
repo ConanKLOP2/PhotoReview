@@ -23,10 +23,11 @@ public static class DiagOptions
     internal const string PreloadWorkersVar = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS";
     internal const string DisableDiskCacheVar = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";
     internal const string ForceLogVar = "PHOTOREVIEW_DIAG_FORCE_LOG";
+    internal const string InstanceLabelVar = "PHOTOREVIEW_DIAG_INSTANCE_LABEL";
 
     private static volatile Lazy<Snapshot> _snapshot = new(ReadFromEnvironment);
 
-    private sealed record Snapshot(bool PreRead, int? PreloadWorkers, bool DisableDiskCache, bool ForceLog);
+    private sealed record Snapshot(bool PreRead, int? PreloadWorkers, bool DisableDiskCache, bool ForceLog, string? InstanceLabel);
 
     /// <summary>PHOTOREVIEW_DIAG_PREREAD=1: read the whole source file into memory before decoding,
     /// so <c>SourceRead</c> and <c>Decode</c> perf events report I/O and decode time separately.</summary>
@@ -44,11 +45,19 @@ public static class DiagOptions
     /// <c>AppSettings.LoggingEnabled</c>, for a single debugging run.</summary>
     public static bool ForceLog => _snapshot.Value.ForceLog;
 
+    /// <summary>
+    /// PHOTOREVIEW_DIAG_INSTANCE_LABEL=&lt;text&gt;: label shown as a "[text] " prefix on the main window's
+    /// title bar (<c>MainViewModel.InstanceLabel</c>), so an instance launched directly for manual/agent
+    /// verification is never mistaken for the user's everyday window. Null when unset or blank -- same
+    /// "disabled by default" contract as every other flag here.
+    /// </summary>
+    public static string? InstanceLabel => _snapshot.Value.InstanceLabel;
+
     /// <summary>True when any PHOTOREVIEW_DIAG_* variable above is in effect.</summary>
-    public static bool AnyEnabled => PreRead || PreloadWorkers.HasValue || DisableDiskCache || ForceLog;
+    public static bool AnyEnabled => PreRead || PreloadWorkers.HasValue || DisableDiskCache || ForceLog || InstanceLabel is not null;
 
     /// <summary>Stable, human-readable summary of every active flag, e.g. "PREREAD=1;PRELOAD_WORKERS=2".
-    /// Used for the forced startup log line and the " · DIAG" title suffix.</summary>
+    /// Used for the forced startup log line.</summary>
     public static string Describe()
     {
         var snapshot = _snapshot.Value;
@@ -57,6 +66,7 @@ public static class DiagOptions
         if (snapshot.PreloadWorkers.HasValue) parts.Add($"PRELOAD_WORKERS={snapshot.PreloadWorkers.Value}");
         if (snapshot.DisableDiskCache) parts.Add("DISABLE_DISKCACHE=1");
         if (snapshot.ForceLog) parts.Add("FORCE_LOG=1");
+        if (snapshot.InstanceLabel is { } label) parts.Add($"INSTANCE_LABEL={label}");
         return parts.Count == 0 ? "(none)" : string.Join(";", parts);
     }
 
@@ -74,6 +84,8 @@ public static class DiagOptions
         int? workers = null;
         var workersRaw = Environment.GetEnvironmentVariable(PreloadWorkersVar);
         if (int.TryParse(workersRaw, out var parsed) && parsed is >= 0 and <= 16) workers = parsed;
-        return new Snapshot(preRead, workers, disableDiskCache, forceLog);
+        var instanceLabelRaw = Environment.GetEnvironmentVariable(InstanceLabelVar);
+        var instanceLabel = string.IsNullOrWhiteSpace(instanceLabelRaw) ? null : instanceLabelRaw;
+        return new Snapshot(preRead, workers, disableDiskCache, forceLog, instanceLabel);
     }
 }
