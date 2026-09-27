@@ -8,6 +8,7 @@ using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
@@ -202,6 +203,9 @@ public sealed class ImagePresenter
         }
 
         _compareViewModel.Select(null);
+        // Q-R29 option C: the stat below is awaited off the UI thread, so this navigation is "in progress" from here on:
+        // the photo information line must not keep describing the previous image meanwhile (it is set again below).
+        CurrentPhotoInfo = null;
 
         if (AppLog.Enabled)
             AppLog.Info($"ShowImage start index={index} count={_catalog.Count} token={token} path={path}");

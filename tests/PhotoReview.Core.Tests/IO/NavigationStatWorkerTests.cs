@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using PhotoReview.App.Coordinators;
+using PhotoReview.Core.IO;
 using Xunit;
 
-namespace PhotoReview.App.Tests.Coordinators;
+namespace PhotoReview.Core.Tests.IO;
 
 [Trait("Category", "HotPath")]
 public sealed class NavigationStatWorkerTests

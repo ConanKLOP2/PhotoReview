@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace PhotoReview.App.Coordinators;
+namespace PhotoReview.Core.IO;
 
 /// <summary>
 /// Q-R29 option C: runs the navigation path's file-metadata calls (the per-navigation stat that decides
-/// missing / unreadable / changed, see <see cref="ImagePresenter"/>) on one dedicated background thread, so a
-/// slow share (NAS / wifi: 2-30 ms per metadata call, or a stalled SMB request) never blocks the UI thread.
+/// missing / unreadable / changed, see <c>ImagePresenter</c>) on one dedicated background thread, so a
+/// slow share (NAS / wifi: 2-30 ms per metadata call, or a stalled SMB request) never blocks the UI thread. Lives in Core, not the
+/// UI-affine App layer: it owns a thread that blocks by design (ADR 0005 forbids blocking waits in App).
 /// </summary>
 /// <remarks>
 /// A dedicated thread rather than the thread pool: the whole-folder preload keeps up to 8 pool threads busy with
@@ -20,9 +21,9 @@ namespace PhotoReview.App.Coordinators;
 /// free for the next stat. The thread starts on first use and is a background thread for the process lifetime
 /// (it owns nothing disposable, so the shared instance needs no shutdown).
 /// </remarks>
-internal sealed class NavigationStatWorker
+public sealed class NavigationStatWorker
 {
-    /// <summary>The process-wide worker used by <see cref="ImagePresenter"/>.</summary>
+    /// <summary>The process-wide worker used by <c>ImagePresenter</c>.</summary>
     public static NavigationStatWorker Shared { get; } = new();
 
     private readonly Queue<Action> _queue = new();

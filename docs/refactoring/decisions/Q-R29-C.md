@@ -15,7 +15,7 @@ Before, every `ImagePresenter.PresentAsync` ran on the UI thread, before its fir
 stat-ed each next file synchronously too. On a NAS each of these is one network round trip (2-30 ms, or a stalled SMB call)
 during which the window cannot repaint or take input.
 
-Now (`src/PhotoReview.App/Coordinators/ImagePresenter.cs`, `NavigationStatWorker.cs`):
+Now (`src/PhotoReview.App/Coordinators/ImagePresenter.cs`, `src/PhotoReview.Core/IO/NavigationStatWorker.cs` -- in Core because it owns a deliberately blocking thread, which ADR 0005 forbids in the UI-affine App layer):
 
 - **Stat on a dedicated worker.** `StatOffUiThreadAsync` runs the unchanged stat logic (`StatNow`, never throws) on
   `NavigationStatWorker`: one process-wide, above-normal-priority background thread with a FIFO queue. Not the thread pool:
@@ -46,6 +46,7 @@ Now (`src/PhotoReview.App/Coordinators/ImagePresenter.cs`, `NavigationStatWorker
 | Deleted while navigating | Test: file deleted while its stat is held -> removed, next photo shown, its cached preview never set. |
 | Navigation generation (INV-1) | Token re-checked after every off-thread stat; test: superseded navigation's failing stat leaves image/status/catalog alone. Stale queued stats skipped (test). |
 | Crossfade pre-change event | Unchanged: `UpdateCurrentImage` (which decides `isFileChange` and raises `ImageChanging` via the sink) still runs on the UI context after the await; `_presentedFilePath` logic untouched. |
+| Photo info line never shows the previous image's EXIF | `CurrentPhotoInfo` is cleared synchronously when the navigation starts (before, the synchronous stat made that happen before the handler returned); guarded by the existing `ExifLineViewModelTests.LineFollowsPresentedImageAndSettings`, which failed without it. |
 | UI thread never blocked by the stat | Test: `PresentAsync` returns to its caller while the stat is held, and no stat ever runs on the caller's thread. |
 
 **Accepted trade-offs.** (1) Every navigation, including a RAM hit, now has one worker hop + one Dispatcher post before the
@@ -55,8 +56,12 @@ before, the whole window froze). (3) While the stat is pending the previous imag
 flash for the common fast case).
 
 **Mutation-checked:** synchronous stat (M1), missing token re-check after the stat (M2), R7-1 refresh disabled (M3), queued-
-stat cancellation removed (M4), Missing treated as Error (M5), thumbnail ignoring `knownStat` (M6) -- results in the perf
-fragment.
+stat cancellation removed (M4), Missing treated as Error (M5), thumbnail ignoring `knownStat` (M6), synchronous continuations
+on the worker (M7, `NavigationStatWorkerTests`) -- all killed; details in the perf fragment.
+
+**Result (simulated link, F4):** UI-thread time per key 15/45 ms (10/30 ms link) -> ~0.4 ms; key-to-present unchanged within
+noise (the stat stays on the critical path by design). Note: `ReviewMetrics.PresentedImages` is recorded after the
+post-present refresh stat, so in a fast burst it undercounts shown images (superseded before that stat returned).
 
 ## Part 2 -- proposal only (no behavior change): a throttle-able seam for preload byte reads
 
