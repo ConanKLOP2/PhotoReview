@@ -129,18 +129,22 @@ public static class StaTestHost
     /// <summary>
     /// Keeps the dispatcher pumping for the full wall-clock <paramref name="duration"/> so work that arrives late
     /// (a pool-thread decode or continuation posting back to the UI) has a real chance to show up before a
-    /// "nothing else happened" assertion. Bounded by elapsed time, not by a pump count: back-to-back pumps of an
-    /// empty queue finish in microseconds and would not wait for anything.
+    /// "nothing else happened" assertion. The wait is signal-based: a <see cref="DispatcherTimer"/> completes a
+    /// task when the time is up, and the body's enclosing <see cref="DispatcherFrame"/> keeps processing every
+    /// queued item until then. A Stopwatch guards against the timer firing early.
     /// </summary>
     public static async Task DrainAsync(TimeSpan duration)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        do
+        while (sw.Elapsed < duration)
         {
-            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
-            await Task.Delay(10);
+            var remaining = duration - sw.Elapsed;
+            var fired = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = remaining };
+            timer.Tick += (_, _) => { timer.Stop(); fired.TrySetResult(null); };
+            timer.Start();
+            await fired.Task;
         }
-        while (sw.Elapsed < duration);
     }
 }
 
