@@ -1,3 +1,10 @@
+---
+id: SEC-02
+order: 23
+summary: |-
+  External review of `InstanceForwardClient`/`ForwardedPathProtocol`: pipe `FlushAsync`-after-successful-`WriteAsync` misreport traced as unreachable (named-pipe flush is a local no-op, no source change); `Encode`/`TryDecode` validation asymmetry confirmed and fixed (`Encode` now shares `IsAcceptablePath`).
+---
+
 # SEC-02 — external static review of `InstanceForwardClient`/`ForwardedPathProtocol`
 
 External static review (2026-09-27) raised two claims about the Q-R10 second-instance forwarding path. Both investigated with real evidence before deciding whether to fix, per the lead session's request.

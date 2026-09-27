@@ -50,6 +50,13 @@ jobs:
         shell: powershell
         run: ./tools/check-doc-links.ps1
 
+      # Fails if docs/refactoring/OPEN-DECISIONS.md's generated Decided table doesn't match what
+      # tools/generate-open-decisions.ps1 produces right now (hand-edited row, or a new
+      # decisions/*.md file added/changed without re-running the generator).
+      - name: Check OPEN-DECISIONS generated table
+        shell: powershell
+        run: ./tools/check-open-decisions.ps1
+
   build-test-publish:
     runs-on: windows-latest
     env:
