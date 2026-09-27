@@ -120,9 +120,12 @@ public sealed class Localizer
         var plural = english.Plural;
         foreach (var overlay in overlays)
         {
+            // A partial override of the same language (docs/TRANSLATING.md: only { "_meta": { "code": "vi" }, ...keys }) must not
+            // reset the shipped nativeName / plural rule to defaults; a different language starts from its own values.
+            var sameLanguage = string.Equals(overlay.Code, code, StringComparison.Ordinal);
             code = overlay.Code;
-            nativeName = overlay.NativeName;
-            plural = overlay.Plural;
+            if (overlay.NativeNameDeclared || !sameLanguage) nativeName = overlay.NativeName;
+            if (overlay.PluralDeclared || !sameLanguage) plural = overlay.Plural;
             foreach (var (key, text) in overlay.Entries)
             {
                 if (!englishTemplates.TryGetValue(key, out var source))
