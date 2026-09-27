@@ -60,7 +60,7 @@ public class ReviewCatalogThreadGuardTests
             catch (Exception ex) { observed = ex; }
         });
         thread.Start();
-        thread.Join();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "worker thread hung");
 
 #if DEBUG
         var ex = Assert.IsType<InvalidOperationException>(observed);

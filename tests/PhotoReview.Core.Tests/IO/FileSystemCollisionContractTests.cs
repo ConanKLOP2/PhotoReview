@@ -172,7 +172,7 @@ public sealed class FileSystemCollisionContractTests : IDisposable
             }
         })).ToList();
         threads.ForEach(t => t.Start());
-        threads.ForEach(t => t.Join());
+        foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(30)), "writer thread hung");
 
         Assert.Empty(failures); // the rename over a target another writer is replacing is retried, not surfaced as "access denied"
         Assert.Contains(fs.ReadAllText(path), texts);

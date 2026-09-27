@@ -305,7 +305,7 @@ public sealed class RecoveryRetryServiceTests
         });
         thread.Start();
         var result = await done.Task;
-        thread.Join();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(10)), "worker thread hung");
 
         Assert.True(result.Succeeded);
         Assert.NotEqual(-1, mutationThread);

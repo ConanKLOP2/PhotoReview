@@ -73,6 +73,10 @@ public sealed class TurboJpegTests : IClassFixture<OrientationFixture>, IDisposa
         var path = Path.Combine(_tempDir, "memory.jpg");
         FixtureGenerator.GenerateGradientJpeg(path, 64, 48);
         var bytes = File.ReadAllBytes(path);
+        // L01-style oracle: delete the on-disk file before decoding so this test can only pass if the decoder
+        // actually reads from Bytes -- a regression that fell back to re-reading Path would throw instead of
+        // silently succeeding (see tests-imaging ledger batch, 2026-09-27).
+        File.Delete(path);
 
         var decoded = _turboDecoder.Decode(new DecodeRequest(path, TargetWidth: 0, Bytes: bytes));
 
