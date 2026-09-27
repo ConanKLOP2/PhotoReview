@@ -122,10 +122,45 @@ public sealed class PerfTraceTests : IDisposable
         Assert.Equal(first, lower);
     }
 
-    [Fact(DisplayName = "Listener does not block under a 200k-event burst and accounts for every event")]
-    public void ListenerDoesNotBlockUnderBurstAndAccountsForEveryEvent()
+    [Fact(DisplayName = "Listener accounts for every event under a 200k-event burst (no event lost or duplicated)")]
+    public void ListenerAccountsForEveryEventUnderBurst()
     {
         var dir = _root.Dir("burst");
+        Environment.SetEnvironmentVariable("PHOTOREVIEW_PERF_TRACE", dir);
+
+        var listener = PerfCsvListener.TryStartFromEnvironment();
+        Assert.NotNull(listener);
+
+        const int total = 200_000;
+        for (var i = 0; i < total; i++)
+        {
+            PhotoReviewPerf.Log.KeyInput(0, "x", 0.0);
+        }
+        listener!.Dispose();
+
+        var file = Directory.GetFiles(dir, "perf-*.csv").Single();
+        var lines = ReadLines(file);
+        var droppedLine = lines[^1];
+        Assert.StartsWith("# dropped=", droppedLine);
+        var dropped = long.Parse(droppedLine["# dropped=".Length..], CultureInfo.InvariantCulture);
+
+        // The real oracle: every emitted event is either written or explicitly accounted for as dropped.
+        // No wall-clock assertion here (see ListenerDoesNotBlockProducerUnderBurst below for why).
+        var dataLines = lines[2..^1].Length;
+        Assert.Equal(total, dataLines + dropped);
+    }
+
+    [Trait("Category", "Slow")]
+    [Fact(DisplayName = "Listener does not block the producer under a 200k-event burst (perf guard, excluded from the default gate)")]
+    public void ListenerDoesNotBlockProducerUnderBurst()
+    {
+        // This is a genuine performance regression guard, not a correctness oracle (accounting for every
+        // event is covered by ListenerAccountsForEveryEventUnderBurst above, with no timing dependency).
+        // An absolute wall-clock threshold here has already been observed to fail under heavy CI/full-suite
+        // load (see docs/refactoring/decisions/FLAKY-FolderLoad.md), so this is tagged Slow and excluded
+        // from the default local/CI gate ("Category!=Manual&Category!=Native&Category!=Slow") instead of
+        // being tightened or loosened to a different fixed number that would just move the flakiness.
+        var dir = _root.Dir("burst-timing");
         Environment.SetEnvironmentVariable("PHOTOREVIEW_PERF_TRACE", dir);
 
         var listener = PerfCsvListener.TryStartFromEnvironment();
@@ -137,20 +172,10 @@ public sealed class PerfTraceTests : IDisposable
         {
             PhotoReviewPerf.Log.KeyInput(0, "x", 0.0);
         }
+        var producerElapsed = sw.Elapsed;
         listener!.Dispose();
-        sw.Stop();
 
-        // TC09: AUDIT - Timing assertion; consider using clock fake or deterministic test instead
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"Took {sw.Elapsed}");
-
-        var file = Directory.GetFiles(dir, "perf-*.csv").Single();
-        var lines = ReadLines(file);
-        var droppedLine = lines[^1];
-        Assert.StartsWith("# dropped=", droppedLine);
-        var dropped = long.Parse(droppedLine["# dropped=".Length..], CultureInfo.InvariantCulture);
-
-        var dataLines = lines[2..^1].Length;
-        Assert.Equal(total, dataLines + dropped);
+        Assert.True(producerElapsed < TimeSpan.FromSeconds(5), $"Producer loop took {producerElapsed}");
     }
 
     // ---- D04: instrumentation points in PreviewImageService ----

@@ -54,14 +54,23 @@ public sealed class DecoderContractRegressionTests : IDisposable
     [Fact]
     public void TurboHeaderFailureAttemptsWpfFallbackExactlyOnceAndPreservesFinalException()
     {
+        // FallbackImageDecoder.Decode's contract (see production source): when the primary fails with a
+        // fallbackable exception, the fallback is tried exactly once and, if IT also fails, that fallback
+        // exception propagates completely unwrapped -- not the primary's original exception, and not
+        // wrapped in some aggregate/translation type. A fake fallback that throws a distinct sentinel lets
+        // this test tell "preserved the fallback's own exception" apart from "any exception happened to
+        // come out" (which Assert.ThrowsAny<Exception> could not distinguish).
         string path = Path.Combine(_tempDir, "bad-header.jpg");
         File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x02, 0xFF, 0xD9]);
-        var fallback = new CountingDecoder(new WpfBitmapImageDecoder());
+        var sentinel = new FileFormatException("sentinel: fallback's own final failure");
+        var fallback = new CountingDecoder(new ThrowingDecoder(sentinel));
         var decoder = new FallbackImageDecoder(
             new TurboJpegDecoder(), DecoderBackend.TurboJpeg,
             fallback, DecoderBackend.Wpf);
 
-        Assert.ThrowsAny<Exception>(() => decoder.Decode(new DecodeRequest(path, 0)));
+        var thrown = Assert.Throws<FileFormatException>(() => decoder.Decode(new DecodeRequest(path, 0)));
+
+        Assert.Same(sentinel, thrown);
         Assert.Equal(1, fallback.DecodeCalls);
     }
 
