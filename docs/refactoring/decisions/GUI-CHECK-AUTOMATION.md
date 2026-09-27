@@ -1,3 +1,10 @@
+---
+id: GUI-CHECK-AUTOMATION
+order: 16
+summary: |-
+  5 of the 11 "GUI checks (user)" items now need no manual check; the rest reduced to one short visual/feel step each (new context-menu-structure, crossfade and KeepZoomAcrossImages UI tests).
+---
+
 # GUI-CHECK-AUTOMATION — reducing the "GUI checks (user)" manual list
 
 Context: `docs/ACTIVE-TASKS.md` "GUI checks (user)" listed 11 features (from #128-#134 and

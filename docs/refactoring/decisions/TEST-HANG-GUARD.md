@@ -1,3 +1,10 @@
+---
+id: TEST-HANG-GUARD
+order: 17
+summary: |-
+  `tests/test.runsettings` (wired in via `tests/Directory.Build.props`) bounds every `dotnet test` to a 120 s per-test hang timeout and a 20 min session timeout with no CLI flags required; CI/verify-all.ps1's own `--blame-hang*` flags coexist without a duplicate-collector error (2026-09-27).
+---
+
 # TEST-HANG-GUARD — repo-wide hang guard for `dotnet test`
 
 ## Problem

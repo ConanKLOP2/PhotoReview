@@ -1,3 +1,10 @@
+---
+id: TITLE-BAR-INSTANCE-LABEL
+order: 24
+summary: |-
+  `MainViewModel.InstanceLabel` tags the title bar `[label] ...`: `TestAppHost.CreateMainWindow` sets it unconditionally (`[TEST]`) for every `Category=UI` window, and `PHOTOREVIEW_DIAG_INSTANCE_LABEL` opts a manually/agent-launched real exe into the same marker; unset is byte-for-byte unchanged.
+---
+
 # TITLE-BAR-INSTANCE-LABEL
 
 The user runs the real built app themselves every day; agents and manual verification sometimes launch the

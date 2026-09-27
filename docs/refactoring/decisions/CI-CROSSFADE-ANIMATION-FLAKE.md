@@ -1,3 +1,10 @@
+---
+id: CI-CROSSFADE-ANIMATION-FLAKE
+order: 20
+summary: |-
+  Confirmed via real CI diagnostics the compositor ticks fine on `windows-latest`; the fixed-poll assertion could miss a fast 40ms fade under load -- replaced it with a value-changed watcher (no source change).
+---
+
 # CI-CROSSFADE-ANIMATION-FLAKE — `ImageCrossfadeIntegrationTests` fade-completion flake on GitHub Actions
 
 ## Symptom
