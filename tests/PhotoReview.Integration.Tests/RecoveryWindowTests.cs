@@ -116,6 +116,45 @@ public sealed class RecoveryWindowTests
     }
 
     [Fact]
+    public async Task Retry_SupersededByAnotherWindow_DropsTheStaleRow()
+    {
+        using var temp = new PhotoReview.TestSupport.TempRoot("recovery-retry-superseded");
+        var entries = SampleEntries(temp.Path);
+        await StaTestHost.RunAsync(async () =>
+        {
+            var window = new RecoveryWindow(entries, retry: _ => Task.FromResult(new RecoveryRetryResult(false, "handled elsewhere", null, Superseded: true)), dismiss: _ => new DismissOutcome([], []));
+            await window.RunChecksAsync();
+            window.SelectRow(0);
+
+            var result = await window.ExecuteRetryAsync(entries[0]);
+
+            Assert.True(result.Superseded);
+            Assert.DoesNotContain(window.VisibleRows, row => row.Entry.Id == entries[0].Id);
+            Assert.Equal(entries.Count - 1, window.VisibleRows.Count);
+            window.Close();
+        });
+    }
+
+    [Fact]
+    public async Task Retry_NotSuperseded_KeepsTheRow()
+    {
+        using var temp = new PhotoReview.TestSupport.TempRoot("recovery-retry-rejected");
+        var entries = SampleEntries(temp.Path);
+        await StaTestHost.RunAsync(async () =>
+        {
+            var window = new RecoveryWindow(entries, retry: _ => Task.FromResult(new RecoveryRetryResult(false, "rejected", null)), dismiss: _ => new DismissOutcome([], []));
+            await window.RunChecksAsync();
+            window.SelectRow(0);
+
+            await window.ExecuteRetryAsync(entries[0]);
+
+            Assert.Contains(window.VisibleRows, row => row.Entry.Id == entries[0].Id);
+            Assert.Equal(entries.Count, window.VisibleRows.Count);
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task Close_WhileRetryRunning_IsRefusedUntilRetryCompletes()
     {
         using var temp = new PhotoReview.TestSupport.TempRoot("recovery-retry-close");
