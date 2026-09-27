@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Repo-wide hang guard for `dotnet test`.
+
+  Problem (2026-09-27): CI (.github/workflows/ci.yml) and tools/verify-all.ps1 always pass the CLI
+  flags blame-hang, blame-hang-timeout 120s and blame-hang-dump-type none, but a raw
+  `dotnet test PhotoReview.slnx ...` (the command agents and AGENTS.md "Quick Checks" actually run
+  day to day) has no hang guard at all. A single deadlocked UI test then hangs the whole session
+  indefinitely (observed: 80+ minutes) instead of failing fast.
+
+  This file is wired into every project under tests/ via tests/Directory.Build.props
+  (RunSettingsFilePath), so it applies automatically to `dotnet test` even with no extra flags.
+
+  TestSessionTimeout: 1200000 ms = 20 minutes per `dotnet test` *session* (one process, i.e. one
+  project). Measured wall-clock on this machine (Release, no-build, default filter
+  Category!=Manual&Category!=Native&Category!=Slow):
+    - PhotoReview.Architecture.Tests / Core.Tests / Imaging.Tests / App.Tests: each well under 60s.
+    - PhotoReview.Integration.Tests (the slowest normal project, has the real WPF/UI tests): ~70s.
+    - Whole filtered suite across all 5 projects sequentially: ~3 minutes.
+  20 minutes is well over 10x the slowest single-project run observed, so it will not fire on a
+  healthy run, but it still bounds a `dotnet test` invocation that doesn't hang on any one test yet
+  somehow never finishes (e.g. a livelock across many tests). It is intentionally not tight to the
+  ~70s figure: that number moves with machine load (this repo is routinely built with several
+  concurrent agent sessions), and TestSessionTimeout aborts the whole session (not just the
+  offending test), so it must stay generous. The per-test hang is what actually matters day to day,
+  and that is bounded to 120s by the blame collector below, independent of this session cap.
+
+  Native/Slow full runs (tools/verify-all.ps1 -Native / -Slow) are not bounded tighter by this file:
+  those suites include intentionally slow real-OS tests and can legitimately run longer in
+  aggregate, but verify-all.ps1 still invokes `dotnet test` once per project even in -Native/-Slow
+  mode, and each project's slowest observed run (including Slow-tagged tests) stayed well under the
+  20-minute cap locally, so no single session should approach it. If a future Slow/Native run ever
+  needs more headroom, override per-invocation on the command line with
+  RunConfiguration.TestSessionTimeout=<ms> after a literal double dash, rather than raising this
+  file's default for every other run.
+
+  Blame hang collector: kills and *names* an individual hung test after 120s, matching the CLI
+  blame-hang-timeout 120s / blame-hang-dump-type none flags already used by CI and verify-all.ps1.
+  Having it here means a bare `dotnet test` (no CLI flags at all) gets the same guard. CI and
+  verify-all.ps1 keep passing their own blame-hang* flags too; VSTest treats the explicit CLI blame
+  flags as the effective configuration when both are present (they configure the same "blame" data
+  collector under the hood) rather than erroring on a duplicate collector. Verified empirically for
+  this repo; see docs/refactoring/decisions/TEST-HANG-GUARD.md for the exact command and output.
+-->
+<RunSettings>
+  <RunConfiguration>
+    <TestSessionTimeout>1200000</TestSessionTimeout>
+  </RunConfiguration>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="blame" enabled="True">
+        <Configuration>
+          <CollectDumpOnTestSessionHang TestTimeout="120s" HangDumpType="None" />
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

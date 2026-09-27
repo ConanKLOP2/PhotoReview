@@ -1,0 +1,13 @@
+<Project>
+
+  <Import Project="..\Directory.Build.props" />
+
+  <!-- TEST-HANG-GUARD (2026-09-27): apply the repo-wide hang guard to every project under tests/
+       automatically, so a bare "dotnet test" (no CLI flags) still aborts a hung test after
+       120s and the whole session after 20 minutes, instead of hanging indefinitely.
+       See tests/test.runsettings and docs/refactoring/decisions/TEST-HANG-GUARD.md. -->
+  <PropertyGroup>
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
+
+</Project>
