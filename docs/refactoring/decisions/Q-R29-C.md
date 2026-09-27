@@ -1,3 +1,10 @@
+---
+id: Q-R29
+order: 15
+summary: |-
+  User chose B then C-if-needed (2026-09-27); C part 1 done (stat off UI thread), part 2 preload throttle pending seam --
+---
+
 # Q-R29 option C -- navigation stat off the UI thread (part 1) and a preload read-throttle seam (part 2, proposal)
 
 **Decision (user, 2026-09-27):** "B (slow-link simulation) then C if needed". B is PR #202 (`perf/qr29-slow-link-sim`,
