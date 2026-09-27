@@ -20,7 +20,13 @@ public static class ForwardedPathProtocol
         ArgumentNullException.ThrowIfNull(paths);
         if (paths.Count > MaxPaths) throw new ArgumentException("Too many paths.", nameof(paths));
         var sb = new StringBuilder(Header).Append('\n');
-        foreach (var p in paths) sb.Append(p).Append('\n');
+        foreach (var p in paths)
+        {
+            // SEC-02: share the exact acceptability contract with the receiver's IsAcceptablePath, so Encode can never
+            // produce a message that TryDecode would then reject on the owner side (silent handoff failure).
+            if (!IsAcceptablePath(p)) throw new ArgumentException($"Path is not acceptable for forwarding: '{p}'.", nameof(paths));
+            sb.Append(p).Append('\n');
+        }
         sb.Append('\n');
         var bytes = StrictUtf8.GetBytes(sb.ToString());
         if (bytes.Length > MaxMessageBytes) throw new ArgumentException("Message too large.", nameof(paths));

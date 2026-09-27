@@ -56,6 +56,39 @@ public sealed class ForwardingCoreTests
         Assert.Empty(paths);
     }
 
+    [Theory(DisplayName = "SEC-02: Encode rejects any path IsAcceptablePath/TryDecode would reject, so the two can never disagree")]
+    [InlineData("C:\\a\tb.jpg")] // control character
+    [InlineData("relative\\a.jpg")] // not fully qualified
+    [InlineData(@"C:\fwd\..\a.jpg")] // ".." segment
+    [InlineData(@"\\?\C:\x.jpg")] // extended-length namespace
+    [InlineData(@"\\.\C:\x.jpg")] // device namespace
+    [InlineData(@"\??\C:\x.jpg")] // NT object prefix
+    [InlineData("")] // empty
+    public void Protocol_Encode_RejectsWhatDecodeWouldReject(string badPath)
+    {
+        // Before the SEC-02 fix, Encode happily produced a message for these inputs while TryDecode's
+        // IsAcceptablePath rejected them on the receiving side -- a silent handoff failure (Encode succeeds,
+        // the owner process rejects the whole message, and the caller only finds out via ForwardOutcome.Rejected
+        // after round-tripping through the pipe instead of failing fast, locally, before ever sending).
+        var ex = Assert.Throws<ArgumentException>(() => ForwardedPathProtocol.Encode([badPath]));
+        Assert.Equal("paths", ex.ParamName);
+    }
+
+    [Theory(DisplayName = "SEC-02: every path Encode accepts, TryDecode also accepts (round-trip property)")]
+    [InlineData(@"C:\a.jpg")]
+    [InlineData(@"C:\folder with spaces\a.jpg")]
+    [InlineData(@"C:\ünïcödé\日本語.jpg")]
+    [InlineData(@"C:\a.b.c.jpg")]
+    [InlineData(@"C:\.hidden\a.jpg")]
+    [InlineData(@"C:\a\b\c\d\e\f.jpg")]
+    public void Protocol_Encode_OutputIsAlwaysAcceptedByDecode(string path)
+    {
+        var ok = ForwardedPathProtocol.TryDecode(ForwardedPathProtocol.Encode([path]), _ => true, out var paths);
+
+        Assert.True(ok);
+        Assert.Equal([path], paths);
+    }
+
     [Fact(DisplayName = "Invalid UTF-8, oversized and over-long lists are rejected")]
     public void Protocol_RejectsInvalidUtf8_Oversize_TooMany()
     {
