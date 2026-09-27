@@ -256,7 +256,7 @@ public partial class App : System.Windows.Application, IDisposable
             _services.GetRequiredService<IExplorerOrderProvider>().Prefetch(launchFolder, ExplorerPrefetchTimeout);
 
         var store = _services.GetRequiredService<SettingsStore>();
-        store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled;
+        store.Changed += (_, settings) => AppLog.Enabled = settings.LoggingEnabled || DiagOptions.ForceLog;
         // perf(startup): config.json (IO + JSON metadata, ~100 ms) is read on the thread pool while the
         // UI thread is blocked connecting to WPF's render thread (~350 ms, it would otherwise happen
         // inside MainWindow's InitializeComponent). Nothing reads the settings in between; the await
@@ -275,7 +275,7 @@ public partial class App : System.Windows.Application, IDisposable
         var (appSettings, localizer) = await settingsLoad;
         localization.Apply(appSettings.UiLanguage, localizer);
         PhotoReviewPerf.StartupMark("settingsLoaded");
-        AppLog.Enabled = appSettings.LoggingEnabled;
+        AppLog.Enabled = appSettings.LoggingEnabled || DiagOptions.ForceLog;
         if (AppLog.Enabled) AppLog.Info($"Startup args={string.Join(" | ", e.Args)}");
         // D05: PHOTOREVIEW_DIAG_* variables change app behavior for measurement purposes, so their
         // presence must be visible in the log even when logging is otherwise disabled -- same reasoning

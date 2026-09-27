@@ -17,10 +17,12 @@ public sealed class DiagOptionsTests : IDisposable
     private const string PreReadVar = "PHOTOREVIEW_DIAG_PREREAD";
     private const string PreloadWorkersVar = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS";
     private const string DisableDiskCacheVar = "PHOTOREVIEW_DIAG_DISABLE_DISKCACHE";
+    private const string ForceLogVar = "PHOTOREVIEW_DIAG_FORCE_LOG";
 
     private readonly string? _previousPreRead = Environment.GetEnvironmentVariable(PreReadVar);
     private readonly string? _previousWorkers = Environment.GetEnvironmentVariable(PreloadWorkersVar);
     private readonly string? _previousDisableDiskCache = Environment.GetEnvironmentVariable(DisableDiskCacheVar);
+    private readonly string? _previousForceLog = Environment.GetEnvironmentVariable(ForceLogVar);
     private readonly TempRoot _root = new("diag-options");
 
     public void Dispose()
@@ -28,6 +30,7 @@ public sealed class DiagOptionsTests : IDisposable
         Environment.SetEnvironmentVariable(PreReadVar, _previousPreRead);
         Environment.SetEnvironmentVariable(PreloadWorkersVar, _previousWorkers);
         Environment.SetEnvironmentVariable(DisableDiskCacheVar, _previousDisableDiskCache);
+        Environment.SetEnvironmentVariable(ForceLogVar, _previousForceLog);
         DiagOptions.ResetForTests();
         _root.Dispose();
     }
@@ -37,6 +40,7 @@ public sealed class DiagOptionsTests : IDisposable
         Environment.SetEnvironmentVariable(PreReadVar, null);
         Environment.SetEnvironmentVariable(PreloadWorkersVar, null);
         Environment.SetEnvironmentVariable(DisableDiskCacheVar, null);
+        Environment.SetEnvironmentVariable(ForceLogVar, null);
         DiagOptions.ResetForTests();
     }
 
@@ -48,6 +52,7 @@ public sealed class DiagOptionsTests : IDisposable
         Assert.False(DiagOptions.PreRead);
         Assert.Null(DiagOptions.PreloadWorkers);
         Assert.False(DiagOptions.DisableDiskCache);
+        Assert.False(DiagOptions.ForceLog);
         Assert.False(DiagOptions.AnyEnabled);
         Assert.Equal("(none)", DiagOptions.Describe());
     }
@@ -114,13 +119,29 @@ public sealed class DiagOptionsTests : IDisposable
         Assert.False(DiagOptions.DisableDiskCache);
     }
 
-    [Fact(DisplayName = "Describe lists every active flag and AnyEnabled reflects all three")]
+    [Fact(DisplayName = "PHOTOREVIEW_DIAG_FORCE_LOG=1 enables ForceLog; other values do not")]
+    public void ForceLogParsesOnlyExactly1()
+    {
+        ClearAll();
+        Environment.SetEnvironmentVariable(ForceLogVar, "1");
+        DiagOptions.ResetForTests();
+        Assert.True(DiagOptions.ForceLog);
+        Assert.True(DiagOptions.AnyEnabled);
+        Assert.Contains("FORCE_LOG=1", DiagOptions.Describe());
+
+        Environment.SetEnvironmentVariable(ForceLogVar, "0");
+        DiagOptions.ResetForTests();
+        Assert.False(DiagOptions.ForceLog);
+    }
+
+    [Fact(DisplayName = "Describe lists every active flag and AnyEnabled reflects all four")]
     public void DescribeAndAnyEnabledCombineAllFlags()
     {
         ClearAll();
         Environment.SetEnvironmentVariable(PreReadVar, "1");
         Environment.SetEnvironmentVariable(PreloadWorkersVar, "2");
         Environment.SetEnvironmentVariable(DisableDiskCacheVar, "1");
+        Environment.SetEnvironmentVariable(ForceLogVar, "1");
         DiagOptions.ResetForTests();
 
         Assert.True(DiagOptions.AnyEnabled);
@@ -128,6 +149,7 @@ public sealed class DiagOptionsTests : IDisposable
         Assert.Contains("PREREAD=1", description);
         Assert.Contains("PRELOAD_WORKERS=2", description);
         Assert.Contains("DISABLE_DISKCACHE=1", description);
+        Assert.Contains("FORCE_LOG=1", description);
     }
 
     [Fact(DisplayName = "ResetForTests re-reads the environment instead of caching the first read forever")]
