@@ -183,6 +183,28 @@ public sealed class InstanceForwardPipeTests : IDisposable
         Assert.Equal(ForwardOutcome.NoInstance, outcome);
     }
 
+    [Fact(DisplayName = "An owner that accepts a request then dies before acknowledging yields Unknown, not NoInstance (R08: no duplicate window behind a live owner)")]
+    public async Task Client_OwnerAcceptsThenDiesBeforeAck_ReportsUnknown()
+    {
+        var listening = new SemaphoreSlim(0);
+        var serverTask = Task.Run(async () =>
+        {
+            await using var server = new NamedPipeServerStream(_pipe, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            listening.Release();
+            await server.WaitForConnectionAsync();
+            var buffer = new byte[256];
+            _ = await server.ReadAsync(buffer); // read the request, as if accepted
+            await server.WriteAsync(InstanceForwardPipe.AcceptMarker); // send only the accept marker, then vanish
+            await server.FlushAsync();
+        });
+        await listening.WaitAsync(Timeout);
+
+        var outcome = await new InstanceForwardClient(_pipe).SendAsync([MakeFile("accepted-then-died.jpg")], Timeout);
+        await serverTask.WaitAsync(Timeout);
+
+        Assert.Equal(ForwardOutcome.Unknown, outcome);
+    }
+
     [Fact(DisplayName = "With no listening instance the client reports NoInstance within its timeout (stale mutex fallback)")]
     public async Task Client_NoServer_ReportsNoInstance()
     {

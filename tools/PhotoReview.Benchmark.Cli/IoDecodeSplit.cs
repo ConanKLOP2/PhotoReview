@@ -30,7 +30,7 @@ internal static class IoDecodeSplit
     /// <summary>One timed quantity across 3 runs. <see cref="WarmP50"/> is the average of runs 2-3
     /// (median of two values), used everywhere a single "warm" number is reported; run 1 ("cold") is
     /// kept separately because it is not necessarily cold with respect to the OS file-system cache --
-    /// only with respect to this process (see io-decode-split.md caveats).</summary>
+    /// only with respect to this process.</summary>
     internal readonly record struct Measurement(double Cold, double Warm2, double Warm3, long Bytes)
     {
         public double WarmP50 => (Warm2 + Warm3) / 2.0;

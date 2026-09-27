@@ -106,7 +106,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // AR14 (Q-AR10 option a): the controllers below are built here on purpose, not injected. Each takes this
         // view-model as its sink (IFileActionSink / ISiblingNavigatorSink / IDuplicateCleanupSink) plus delegates
         // reading its state (() => Settings, () => _currentSession), so DI cannot create them before the VM exists:
-        // the controller -> sink = VM cycle is by design. See docs/refactoring/arch-review/AR14-viewmodel-composition.md.
+        // the controller -> sink = VM cycle is by design (decided comment-only, see docs/refactoring/HISTORY.md, "AR 2026-09-26").
         _fileActionController = new FileActionController(
             _catalog, _clock, _fileActionService, _undoService, _dialogService, _preloadController,
             _naturalComparer, () => Settings, this,

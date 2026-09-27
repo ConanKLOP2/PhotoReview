@@ -7,8 +7,8 @@ using System.Text.Json;
 namespace PhotoReview.PerfAnalysis;
 
 /// <summary>Loads tools/diag/rules.json (or an override path): a nested {rule: {key: number}}
-/// document of thresholds, so R-* thresholds can be tuned without rebuilding (D11 spec item 4 /
-/// PERF-DIAGNOSIS-PLAN.md mục 8).</summary>
+/// document of thresholds, so R-* thresholds can be tuned without rebuilding (D11 spec item 4;
+/// retired perf-diagnosis plan mục 8, see docs/refactoring/HISTORY.md for context).</summary>
 public sealed class RulesConfig
 {
     private readonly Dictionary<string, Dictionary<string, double>> _data;
@@ -35,10 +35,10 @@ public sealed class RulesConfig
 public sealed record RuleResult(string Rule, bool? Triggered, string Evidence, string? Note = null);
 
 /// <summary>
-/// Pure, independently-testable evaluators for the nine decision rules in
-/// docs/refactoring/PERF-DIAGNOSIS-PLAN.md mục 8. Each takes plain aggregates (not the full
-/// pipeline) so PerfAnalyzeTests can build a group's numbers by hand and check both the
-/// triggered and not-triggered branch.
+/// Pure, independently-testable evaluators for the nine decision rules from the retired
+/// perf-diagnosis plan mục 8 (see docs/refactoring/HISTORY.md for context). Each takes plain
+/// aggregates (not the full pipeline) so PerfAnalyzeTests can build a group's numbers by hand and
+/// check both the triggered and not-triggered branch.
 /// </summary>
 public static class PerfRules
 {
