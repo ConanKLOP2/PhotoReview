@@ -597,7 +597,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
 
         public int PresentationCount => PresentedPaths.Count;
 
-        public void SetCurrentImage(object? image) => Images.Add(image);
+        public void SetCurrentImage(object? image, bool isFileChange = false) => Images.Add(image);
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path)

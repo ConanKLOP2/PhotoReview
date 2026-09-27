@@ -414,7 +414,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
         Assert.Equal(expectedImage, vm.Catalog.Current.Path);
     }
 
-    [Fact(DisplayName = "TC06: Move/Delete with queue behavior (Q-T1) - skipped: queue not yet implemented", Skip = "Q-T1 decided but not implemented: production still drops actions when busy; open separate task")]
+    [Fact(DisplayName = "TC06: Move/Delete with queue behavior (Q-T1)")]
     public async Task MoveDeleteQueue_RapidActionsWhileBusy_AllExecutedInOrder()
     {
         // Verify Q-T1 decision: when user presses Move/Delete rapidly while one action is running,
@@ -507,7 +507,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
 
     private sealed class StubPresentationSink : IPresentationSink
     {
-        public void SetCurrentImage(object? image) { }
+        public void SetCurrentImage(object? image, bool isFileChange = false) { }
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }
@@ -519,7 +519,7 @@ public sealed class WarmNavigationReadBoundsTests : IAsyncLifetime
     {
         private readonly object _gate = new();
 
-        public void SetCurrentImage(object? image) { }
+        public void SetCurrentImage(object? image, bool isFileChange = false) { }
         public void SetStatusText(string status) { }
         public void ApplyInitialViewMode() { }
 

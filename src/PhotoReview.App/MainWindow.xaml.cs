@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using PhotoReview.App.Coordinators;
@@ -17,6 +18,7 @@ using PhotoReview.App.Services;
 using PhotoReview.App.ViewModels;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 using DragEventArgs = System.Windows.DragEventArgs;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -88,7 +90,7 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         InitializeComponent();
         // Items exist before the first open: a MenuItem with no children shows no submenu arrow and never opens.
-        BuildClickZoomMenu();
+        BuildZoomMenu();
         DarkTitleBarChrome.Apply(this);
         _surface = new WpfImageSurface(ImageScroll, MainImage, _viewModel.Viewer, () => IsLoaded, UpdateFitSize, displayClock);
         _pointer = new PointerInputController(_surface, _viewModel.Viewer, () => _settings, _viewportVersion,
@@ -112,6 +114,7 @@ public partial class MainWindow : Window
         WireViewModelEvents();
         InitToolbarAutoHide();
         InitInfoOverlayAutoHide();
+        InitImageTransition();
     }
 
     public void InitializeWithInitialPath(string? initialPath)
@@ -341,6 +344,77 @@ public partial class MainWindow : Window
         var outcome = InfoOverlayAutoHidePolicy.Evaluate(
             _settings.InfoOverlayAutoHide, _viewModel.HasImages, _viewModel.StatusNeedsAttention, _viewModel.Compare.IsVisible, IsActive, _infoIdleElapsed);
         FadeTo(InfoOverlayHost, _infoFadeGate, outcome.Opacity > 0);
+    }
+
+    // ---- feat/image-crossfade: optional fade when the CURRENT PHOTO CHANGES (navigation to another file).
+    // Never fires for the progressive upgrades of the same image (ImagePresenter/MainViewModel guarantee
+    // ImageChanging.IsFileChange is true only for the first bitmap of a navigation to a different file). Zero
+    // cost when Settings.ImageTransition is None: the handler below returns before touching OutgoingImage,
+    // which stays Collapsed (no layout/render, no animation clock). ----
+
+    private readonly TranslateTransform _outgoingImageTransform = new();
+
+    private void InitImageTransition()
+    {
+        OutgoingImage.RenderTransform = _outgoingImageTransform;
+        _viewModel.ImageChanging += OnImageChanging;
+    }
+
+    private void OnImageChanging(object? sender, ImageChangingEventArgs e)
+    {
+        if (!e.IsFileChange) return;
+        if (_settings.ImageTransition != ImageTransition.None) StartImageFade();
+    }
+
+    /// <summary>
+    /// Called synchronously while <c>MainImage.Source</c> still holds the OUTGOING bitmap (the file being
+    /// navigated away from) and <c>ImageScroll</c> still has its OLD size/scroll offsets -- the new image and
+    /// layout are applied to MainImage/ImageScroll right after this returns (unchanged, seamless as today).
+    /// Freezes the outgoing frame's geometry into OutgoingImage (a sibling OUTSIDE ImageScroll) and fades only
+    /// that layer's opacity 1 -> 0; the incoming image underneath is already fully opaque, so there is no dark
+    /// dip and only one animation runs at a time. If a new navigation starts before the fade ends, this method
+    /// runs again and BeginAnimation's SnapshotAndReplace cancels the running clock instantly and restarts from
+    /// whatever is on screen right now -- fades are never queued and the new image is never delayed by this.
+    /// </summary>
+    private void StartImageFade()
+    {
+        // First image after opening a folder (or after an error/empty state): nothing to fade from.
+        if (MainImage.Source is not { } outgoingSource) return;
+        var width = MainImage.ActualWidth;
+        var height = MainImage.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+
+        // The element's top-left in ImageScroll coordinates already includes both the scroll offsets and the
+        // letterbox centring at Fit (a zoomed image starts at -offset; a Fit image at (viewport - image) / 2).
+        var origin = MainImage.TranslatePoint(new Point(0, 0), ImageScroll);
+        if (!double.IsFinite(origin.X) || !double.IsFinite(origin.Y)) return;
+
+        OutgoingImage.Source = outgoingSource;
+        OutgoingImage.Width = width;
+        OutgoingImage.Height = height;
+        _outgoingImageTransform.X = origin.X;
+        _outgoingImageTransform.Y = origin.Y;
+        OutgoingImage.Visibility = Visibility.Visible;
+        OutgoingImage.Opacity = 1.0;
+
+        var durationMs = Math.Clamp(_settings.ImageTransitionMs, AppSettings.MinImageTransitionMs, AppSettings.MaxImageTransitionMs);
+        var animation = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(durationMs))
+        {
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+        };
+        animation.Completed += OnImageFadeCompleted;
+        // SnapshotAndReplace: if a fade is already running, this instantly replaces its clock (no queueing);
+        // the new one starts from the outgoing bitmap captured just above (whatever is on screen right now).
+        OutgoingImage.BeginAnimation(OpacityProperty, animation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private void OnImageFadeCompleted(object? sender, EventArgs e)
+    {
+        // Stop the clock and release the bitmap reference (cache eviction is unaffected either way, but
+        // this avoids an extra live reference to a possibly-evicted preview sitting in the visual tree).
+        OutgoingImage.BeginAnimation(OpacityProperty, null);
+        OutgoingImage.Source = null;
+        OutgoingImage.Visibility = Visibility.Collapsed;
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
@@ -595,16 +669,28 @@ public partial class MainWindow : Window
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
 
-    // ---- Context menu: "Click zoom level" submenu (presets + Custom…). Built once; refreshed (text + IsChecked) ----
-    // ---- on every open so a live language switch and a setting changed elsewhere both show correctly. ----
+    // ---- Context menu: "Zoom" submenu (Fit width/height, presets + Custom…, "also set" toggle, "set current as ----
+    // ---- click level"). Built once; refreshed (text + IsChecked/IsEnabled) on every open so a live language ----
+    // ---- switch and a setting changed elsewhere both show correctly (PR-C feat/context-menu-redesign). ----
 
-    private static readonly int[] ClickZoomPresets = [30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 200, 300, 400];
+    private static readonly int[] ZoomPresets = [50, 70, 100, 150, 200, 300, 400];
     private List<System.Windows.Controls.MenuItem>? _clickZoomPresetItems;
     private System.Windows.Controls.MenuItem? _clickZoomCustomItem;
+    private System.Windows.Controls.MenuItem? _zoomFitWidthItem;
+    private System.Windows.Controls.MenuItem? _zoomFitHeightItem;
+    private System.Windows.Controls.MenuItem? _alsoSetClickLevelItem;
+    private System.Windows.Controls.MenuItem? _setCurrentZoomAsClickLevelItem;
 
-    private void ClickZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
+    private void ZoomMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
-        // Headers are re-read on every open so a language switch shows without a restart.
+        // Headers/gestures are re-read on every open so a language switch or a shortcut change shows without a restart.
+        _zoomFitWidthItem!.Header = Tr.MainMenuZoomFitWidth;
+        AutomationProperties.SetName(_zoomFitWidthItem, Tr.MainMenuZoomFitWidthAutomationName);
+        _zoomFitWidthItem.InputGestureText = _settings.Shortcuts.FitWidth;
+        _zoomFitHeightItem!.Header = Tr.MainMenuZoomFitHeight;
+        AutomationProperties.SetName(_zoomFitHeightItem, Tr.MainMenuZoomFitHeightAutomationName);
+        _zoomFitHeightItem.InputGestureText = _settings.Shortcuts.FitHeight;
+
         _clickZoomCustomItem!.Header = Tr.MainMenuClickZoomLevelCustom;
         AutomationProperties.SetName(_clickZoomCustomItem, Tr.MainMenuClickZoomLevelCustomAutomationName);
         var current = _settings.ClickZoomPercent;
@@ -615,24 +701,55 @@ public partial class MainWindow : Window
             AutomationProperties.SetName(item, Tr.MainMenuClickZoomLevelPresetAutomationName(percent));
             item.IsChecked = percent == current;
         }
+
+        _alsoSetClickLevelItem!.Header = Tr.MainMenuZoomAlsoSetClickLevel;
+        AutomationProperties.SetName(_alsoSetClickLevelItem, Tr.MainMenuZoomAlsoSetClickLevelAutomationName);
+        _alsoSetClickLevelItem.IsChecked = _settings.SetZoomAlsoSetsClickLevel;
+
+        _setCurrentZoomAsClickLevelItem!.Header = Tr.MainMenuZoomSetCurrentAsClickLevel;
+        AutomationProperties.SetName(_setCurrentZoomAsClickLevelItem, Tr.MainMenuZoomSetCurrentAsClickLevelAutomationName);
+        _setCurrentZoomAsClickLevelItem.IsEnabled = MainWindowHelpers.CalculateClickLevelFromEffectiveZoom(_viewModel.Viewer.EffectiveZoom) is not null;
     }
 
-    private void BuildClickZoomMenu()
+    private void BuildZoomMenu()
     {
+        var fitWidth = _zoomFitWidthItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuZoomFitWidth };
+        AutomationProperties.SetName(fitWidth, Tr.MainMenuZoomFitWidthAutomationName);
+        fitWidth.Click += ZoomFitWidth_Click;
+        ZoomMenu.Items.Add(fitWidth);
+
+        var fitHeight = _zoomFitHeightItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuZoomFitHeight };
+        AutomationProperties.SetName(fitHeight, Tr.MainMenuZoomFitHeightAutomationName);
+        fitHeight.Click += ZoomFitHeight_Click;
+        ZoomMenu.Items.Add(fitHeight);
+
+        ZoomMenu.Items.Add(new System.Windows.Controls.Separator());
+
         _clickZoomPresetItems = [];
-        foreach (var percent in ClickZoomPresets)
+        foreach (var percent in ZoomPresets)
         {
             var item = new System.Windows.Controls.MenuItem { IsCheckable = true, Tag = percent };
             item.Header = Tr.MainMenuClickZoomLevelPreset(percent);
             item.Click += ClickZoomPreset_Click;
             _clickZoomPresetItems.Add(item);
-            ClickZoomMenu.Items.Add(item);
+            ZoomMenu.Items.Add(item);
         }
-        ClickZoomMenu.Items.Add(new System.Windows.Controls.Separator());
         var custom = _clickZoomCustomItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuClickZoomLevelCustom };
         AutomationProperties.SetName(custom, Tr.MainMenuClickZoomLevelCustomAutomationName);
         custom.Click += ClickZoomCustom_Click;
-        ClickZoomMenu.Items.Add(custom);
+        ZoomMenu.Items.Add(custom);
+
+        ZoomMenu.Items.Add(new System.Windows.Controls.Separator());
+
+        var alsoSet = _alsoSetClickLevelItem = new System.Windows.Controls.MenuItem { IsCheckable = true, Header = Tr.MainMenuZoomAlsoSetClickLevel };
+        AutomationProperties.SetName(alsoSet, Tr.MainMenuZoomAlsoSetClickLevelAutomationName);
+        alsoSet.Click += AlsoSetClickLevel_Click;
+        ZoomMenu.Items.Add(alsoSet);
+
+        var setCurrent = _setCurrentZoomAsClickLevelItem = new System.Windows.Controls.MenuItem { Header = Tr.MainMenuZoomSetCurrentAsClickLevel };
+        AutomationProperties.SetName(setCurrent, Tr.MainMenuZoomSetCurrentAsClickLevelAutomationName);
+        setCurrent.Click += SetCurrentZoomAsClickLevel_Click;
+        ZoomMenu.Items.Add(setCurrent);
     }
 
     private void ClickZoomFit_Click(object sender, RoutedEventArgs e) => _ = ApplyFitViewAsync();
@@ -640,9 +757,23 @@ public partial class MainWindow : Window
     /// <summary>"Zoom to N%": zooms to the configured level (does not change it; the presets below do).</summary>
     private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent);
 
+    /// <summary>"Zoom" submenu: Fit width, anchored at the mouse when it is over the viewport (same rule as the shortcut).</summary>
+    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await _pointer.FitWidthAsync(MouseOverImageViewport());
+
+    /// <summary>"Zoom" submenu: Fit height (always centred).</summary>
+    private async void ZoomFitHeight_Click(object sender, RoutedEventArgs e) => await _pointer.FitHeightAsync();
+
+    /// <summary>Folder group: NavigateSiblingFolderAsync(+1), the same command PageDown runs.</summary>
+    private async void NextFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateSiblingFolderAsync(1);
+
+    /// <summary>Folder group: NavigateSiblingFolderAsync(-1), the same command PageUp runs.</summary>
+    private async void PreviousFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateSiblingFolderAsync(-1);
+
     /// <summary>
-    /// Refreshes the two top-level zoom items on every open: the level in "Zoom to N%" and each item's shortcut
-    /// (as configured, shown right-aligned like an accelerator; empty when the shortcut is cleared).
+    /// Refreshes the top-level items on every open: the level in "Zoom to N%", each item's shortcut (as configured,
+    /// shown right-aligned like an accelerator; empty when the shortcut is cleared), and the folder group's visibility
+    /// (<see cref="AppSettings.ShowFolderMenuItems"/>, PR-C) -- Open folder/Next folder/Previous folder and the
+    /// separator right above them are hidden together as one unit.
     /// </summary>
     private void ImageContextMenu_Opened(object sender, RoutedEventArgs e)
     {
@@ -651,12 +782,20 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ZoomToLevelMenuItem, Tr.MainMenuZoomToLevelAutomationName(percent));
         ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
+
+        var folderGroupVisibility = _settings.ShowFolderMenuItems ? Visibility.Visible : Visibility.Collapsed;
+        FolderGroupSeparator.Visibility = folderGroupVisibility;
+        OpenFolderMenuItem.Visibility = folderGroupVisibility;
+        NextFolderMenuItem.Visibility = folderGroupVisibility;
+        PreviousFolderMenuItem.Visibility = folderGroupVisibility;
+        NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
+        PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
     }
 
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.MenuItem { Tag: int percent }) return;
-        await ApplyClickZoomLevelAsync(percent);
+        await ApplyZoomMenuSelectionAsync(percent);
     }
 
     private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e)
@@ -664,7 +803,25 @@ public partial class MainWindow : Window
         var dialog = new ClickZoomCustomDialog(_settings.ClickZoomPercent) { Owner = this };
         if (dialog.ShowDialog() == true)
         {
-            await ApplyClickZoomLevelAsync(dialog.Value);
+            await ApplyZoomMenuSelectionAsync(dialog.Value);
+        }
+    }
+
+    /// <summary>
+    /// "Zoom" submenu preset/Custom selection (PR-C): always zooms to <paramref name="percent"/> now; additionally
+    /// persists it as <see cref="AppSettings.ClickZoomPercent"/> when <see cref="AppSettings.SetZoomAlsoSetsClickLevel"/>
+    /// is on (default, matches the behaviour before that setting existed). When off, this is a one-off zoom that
+    /// leaves the saved click zoom level untouched.
+    /// </summary>
+    private async Task ApplyZoomMenuSelectionAsync(int percent)
+    {
+        if (_settings.SetZoomAlsoSetsClickLevel)
+        {
+            await ApplyClickZoomLevelAsync(percent);
+        }
+        else
+        {
+            await _pointer.SetClickZoomLevelAsync(percent);
         }
     }
 
@@ -683,5 +840,42 @@ public partial class MainWindow : Window
             AppLog.Error("Could not save the click zoom level setting", ex);
         }
         await _pointer.SetClickZoomLevelAsync(percent);
+    }
+
+    /// <summary>"Also set as click zoom level" toggle (PR-C): persists immediately, same pattern as <c>ToggleKeepZoomAcrossImages</c>.</summary>
+    private void AlsoSetClickLevel_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = _settings;
+        settings.SetZoomAlsoSetsClickLevel = _alsoSetClickLevelItem!.IsChecked;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Error("Could not save the 'also set as click zoom level' setting", ex);
+        }
+    }
+
+    /// <summary>
+    /// "Set current zoom as click level" (PR-C): captures the current effective zoom as the new <see cref="AppSettings.ClickZoomPercent"/>
+    /// (round + clamp, <see cref="MainWindowHelpers.CalculateClickLevelFromEffectiveZoom"/>) and saves it -- the image is
+    /// already at that zoom, so no re-zoom is needed. Disabled in Fit (see <see cref="ZoomMenu_SubmenuOpened"/>); the
+    /// null check here is a defensive fallback, not the primary guard.
+    /// </summary>
+    private void SetCurrentZoomAsClickLevel_Click(object sender, RoutedEventArgs e)
+    {
+        var percent = MainWindowHelpers.CalculateClickLevelFromEffectiveZoom(_viewModel.Viewer.EffectiveZoom);
+        if (percent is null) return;
+        var settings = _settings;
+        settings.ClickZoomPercent = percent.Value;
+        try
+        {
+            _settingsStore.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Error("Could not save the click zoom level setting", ex);
+        }
     }
 }

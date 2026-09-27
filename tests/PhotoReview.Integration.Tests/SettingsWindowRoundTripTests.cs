@@ -103,6 +103,11 @@ public sealed class SettingsWindowRoundTripTests
             w.TitleBarFieldFocalLengthCheck.IsChecked = true; w.TitleBarFieldApertureCheck.IsChecked = true;
             w.TitleBarFieldShutterSpeedCheck.IsChecked = true;
         },
+        // PR-A (feat/zoom-key-anchor-kinetic-arrows)
+        [nameof(AppSettings.KeyboardZoomAnchor)] = w => w.KeyboardZoomAnchorCombo.SelectedIndex = 1, // Pointer -> ViewportCentre
+        // PR-D (feat/image-crossfade)
+        [nameof(AppSettings.ImageTransition)] = w => w.ImageTransitionCombo.SelectedIndex = 1, // None -> Fade
+        [nameof(AppSettings.ImageTransitionMs)] = w => w.ImageTransitionMsBox.Text = "200", // 120 -> 200
     };
 
     /// <summary>What <see cref="ControlMutations"/> above is expected to produce on <see cref="AppSettings"/>.</summary>
@@ -146,6 +151,9 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.InfoOverlayAutoHideDelayMs)] = 4500,
         [nameof(AppSettings.ToolbarOpacityPercent)] = 60,
         [nameof(AppSettings.TitleBarFields)] = TitleBarFields.All,
+        [nameof(AppSettings.KeyboardZoomAnchor)] = KeyboardZoomAnchor.ViewportCentre,
+        [nameof(AppSettings.ImageTransition)] = ImageTransition.Fade,
+        [nameof(AppSettings.ImageTransitionMs)] = 200,
     };
 
     [Fact(DisplayName = "Tripwire: every UI-controlled property has a round-trip mutation and expected value above")]

@@ -377,8 +377,12 @@ public partial class SettingsWindow : Window
         KineticPanCheck.IsChecked = Settings.KineticPanEnabled;
         KineticGlideSmoothingCombo.SelectedIndex = Settings.KineticGlideSmoothing == KineticGlideSmoothing.Predict ? 1 : 0;
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
+        ShowFolderMenuItemsCheck.IsChecked = Settings.ShowFolderMenuItems;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
+        ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
+        ImageTransitionMsBox.Text = Settings.ImageTransitionMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        UpdateImageTransitionMsEnabled();
         MoveCopyReuseLastFolderCheck.IsChecked = Settings.MoveCopyReuseLastFolder;
         ShowExifInfoCheck.IsChecked = Settings.ShowExifInfo;
         ExifFieldFileNameCheck.IsChecked = Settings.ExifInfoFields.HasFlag(ExifInfoFields.FileName);
@@ -439,6 +443,14 @@ public partial class SettingsWindow : Window
     private void InfoOverlayAutoHideCheck_CheckedChanged(object sender, RoutedEventArgs e) => UpdateInfoOverlayAutoHideEnabled();
 
     private void UpdateInfoOverlayAutoHideEnabled() => InfoOverlayAutoHideDelayBox.IsEnabled = InfoOverlayAutoHideCheck.IsChecked == true;
+
+    private void ImageTransitionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateImageTransitionMsEnabled();
+
+    private void UpdateImageTransitionMsEnabled()
+    {
+        if (ImageTransitionMsBox is null) return; // SelectionChanged can fire while InitializeComponent is still building the tree
+        ImageTransitionMsBox.IsEnabled = ImageTransitionCombo.SelectedIndex == 1;
+    }
 
     private void ToolbarOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateToolbarOpacityValueText();
 
@@ -618,6 +630,7 @@ public partial class SettingsWindow : Window
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
+        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
@@ -681,6 +694,7 @@ public partial class SettingsWindow : Window
         Settings.KineticPanEnabled = KineticPanCheck.IsChecked == true;
         Settings.KineticGlideSmoothing = KineticGlideSmoothingCombo.SelectedIndex == 1 ? KineticGlideSmoothing.Predict : KineticGlideSmoothing.Off;
         Settings.ArrowKeyNavigatesAtZoomEdge = ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked == true;
+        Settings.ShowFolderMenuItems = ShowFolderMenuItemsCheck.IsChecked == true;
         Settings.KeyboardZoomAnchor = KeyboardZoomAnchorCombo.SelectedIndex == 1 ? KeyboardZoomAnchor.ViewportCentre : KeyboardZoomAnchor.Pointer;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;
@@ -725,6 +739,15 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ArrowPanStepPercent = arrowPanStep;
+        Settings.ImageTransition = ImageTransitionCombo.SelectedIndex == 1 ? ImageTransition.Fade : ImageTransition.None;
+        if (!int.TryParse(ImageTransitionMsBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var imageTransitionMs)
+            || imageTransitionMs < AppSettings.MinImageTransitionMs || imageTransitionMs > AppSettings.MaxImageTransitionMs)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidImageTransitionMs(AppSettings.MinImageTransitionMs, AppSettings.MaxImageTransitionMs));
+            ImageTransitionMsBox.Focus();
+            return;
+        }
+        Settings.ImageTransitionMs = imageTransitionMs;
         // feat/preload-window-setting: same pattern as ClickZoomPercent above -- an unparsable or out-of-range
         // value keeps the dialog open and saves nothing (a hand-edited config.json is still clamped by
         // SettingsNormalizer, that path is unaffected).

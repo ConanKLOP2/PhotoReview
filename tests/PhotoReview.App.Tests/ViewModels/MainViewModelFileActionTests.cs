@@ -264,7 +264,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
     }
 
     [Fact]
-    public async Task RunActionAsync_ConcurrentAction_IsRejectedByGate_PreservingInv4()
+    public async Task RunActionAsync_ConcurrentAction_IsQueued_PreservingInv4()
     {
         var folder = Path.Combine(_tempDir, "inv4_album");
         Directory.CreateDirectory(folder);
@@ -280,12 +280,16 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         var firstAction = vm.RunActionAsync(0);
         Assert.True(fileActions.IsBusy);
 
-        // Thao tác thứ hai đồng thời bị từ chối
+        // Q-T1: a second Move press while the first is still running is QUEUED, not dropped -- it
+        // cannot have completed yet, since it can only run after the first (still blocked on
+        // moveGate) finishes. INV-4 (only one file action running at a time) still holds: the second
+        // has not started, it is only waiting for its turn.
         var secondAction = vm.RunActionAsync(0);
-        await secondAction;
+        Assert.False(secondAction.IsCompleted);
+        Assert.True(fileActions.IsBusy);
 
         moveGate.SetResult();
-        await firstAction;
+        await Task.WhenAll(firstAction, secondAction);
 
         Assert.False(fileActions.IsBusy);
     }
@@ -979,7 +983,7 @@ public sealed partial class MainViewModelFileActionTests : IDisposable
         private TaskCompletionSource<bool>? _countBarrier;
         private int _targetCount;
 
-        public void SetCurrentImage(object? image) => Images.Add(image);
+        public void SetCurrentImage(object? image, bool isFileChange = false) => Images.Add(image);
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path)

@@ -1,12 +1,12 @@
 # Current Work — PhotoReview
 
-**Updated:** 2026-09-27 | **Base:** master `1de561c` (#134, tag `v2.0.137`) | **Open PRs:** none (last merged: #128-#134)
+**Updated:** 2026-09-27 | **Base:** origin/master `3ef2bb5` | **Open PRs:** #185 (whole-project review)
 
 ## Now
-
-- **Nothing in progress.** Everything up to #134 is merged; the 2026-09-27 docs cleanup removed finished plans/evidence (see [HISTORY](docs/refactoring/HISTORY.md)).
-- **GUI check pending (user):** context-menu Zoom (Fit, 200/300/400 %, Zoom levels submenu arrow), "Taken:"/"Modified:" labels (info line + title bar), info-overlay auto-hide (Q-R34), Zoom card in Settings (level, click-to-zoom, arrow step %, shortcuts), sort modes Default / Name A→Z / Z→A (Q-R33), preload window setting (Q-R31). Earlier GUI checks (AR13, AR16, T89 Fit, Q-R30 UI feedback, #109) were reported OK by the user on 2026-09-26.
-- **Open PR (2026-09-27):** `feat/fit-width-height-keep-zoom` (PR-B, #178, Q-R36): Fit width/Fit height/Click zoom level initial-view presets, `FitWidthAnchor` (default Centre) setting, `KeepZoomAcrossImages` setting, shortcuts W/H/K. Awaiting review; not merged.
+- **Review PR #185 open:** 18 static findings and per-body ledger (8,586 callable bodies, including test helpers/lambdas) on `codex/full-code-review-20260927`; see [WORK-FULL-CODE-REVIEW-2026-09-27](docs/refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md) and [FUNCTION-BODY-AUDIT-2026-09-27.tsv](docs/refactoring/FUNCTION-BODY-AUDIT-2026-09-27.tsv). 8,096 rows are static screening only; 289 require deeper review. No production code changed. Next: semantic review, mutation-sensitive test checks, runtime performance measurements.
+- **Validation:** Release build on rebased `3ef2bb5` tree passed with 0 warnings; #188's `PerfTraceTests` passed 9/9. The complete filtered suite passed earlier on `f82084d` (Architecture 63, Imaging 576, Core 1593, App 1132 + 1 skipped, Integration 587) but was not rerun after #188. Runtime NAS/GUI measurements are still needed for optimization claims.
+- **GUI check pending (user):** context-menu Zoom and new #183 layout/dark style, "Taken:"/"Modified:" labels, info-overlay auto-hide, Zoom card, sort modes, preload-window setting, #181 fade and #177/#178 zoom behavior. Earlier GUI checks (AR13, AR16, T89 Fit, Q-R30 UI feedback, #109) were reported OK by the user on 2026-09-26.
+- **Merged (2026-09-27):** #177, #178, #181, #182, #183 and #188 are on fetched master. #188 strengthens two PerfTraceTests fixtures; #183 adds the redesigned right-click menu and Q-R38 settings. #189 updates AGENTS.md.
 - **Open decision:** Q-R29 (NAS: UI-thread stat in `ThumbnailCache.BuildKey`; no I/O cap on whole-folder preload) — awaiting user, see [OPEN-DECISIONS](docs/refactoring/OPEN-DECISIONS.md).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Releases are manual (Q-R24):** CI only tags `v2.0.N`; a human runs Actions > Release > Run workflow (tag input). Updates in the app: manual "Check for updates" only (Q-R23).

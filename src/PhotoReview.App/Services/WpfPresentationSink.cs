@@ -14,7 +14,7 @@ namespace PhotoReview.App.Services;
 /// </summary>
 public sealed class WpfPresentationSink : IPresentationSink
 {
-    private readonly Action<object?>? _onSetCurrentImage;
+    private readonly Action<object?, bool>? _onSetCurrentImage;
     private readonly Action<string>? _onSetStatusText;
     private readonly Action? _onApplyInitialViewMode;
     private readonly Action<string>? _onPresented;
@@ -24,7 +24,7 @@ public sealed class WpfPresentationSink : IPresentationSink
     private int _crossThreadLogged;
 
     public WpfPresentationSink(
-        Action<object?>? onSetCurrentImage = null,
+        Action<object?, bool>? onSetCurrentImage = null,
         Action<string>? onSetStatusText = null,
         Action? onApplyInitialViewMode = null,
         Action<string>? onPresented = null,
@@ -60,7 +60,7 @@ public sealed class WpfPresentationSink : IPresentationSink
         }
     }
 
-    public void SetCurrentImage(object? image) => InvokeUi(() => _onSetCurrentImage?.Invoke(image));
+    public void SetCurrentImage(object? image, bool isFileChange = false) => InvokeUi(() => _onSetCurrentImage?.Invoke(image, isFileChange));
 
     public void SetStatusText(string status) => InvokeUi(() => _onSetStatusText?.Invoke(status));
 

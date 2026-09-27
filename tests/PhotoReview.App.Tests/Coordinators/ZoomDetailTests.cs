@@ -514,7 +514,7 @@ public sealed class ZoomDetailTests : IDisposable
         public Action? OnImageChanged { get; set; }
         public Action? OnApplyInitialViewMode { get; set; }
 
-        public void SetCurrentImage(object? image)
+        public void SetCurrentImage(object? image, bool isFileChange = false)
         {
             Current = image;
             OnImageChanged?.Invoke();

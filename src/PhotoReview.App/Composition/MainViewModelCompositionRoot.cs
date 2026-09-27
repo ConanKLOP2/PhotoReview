@@ -69,7 +69,7 @@ internal static class MainViewModelCompositionRoot
 
         MainViewModel? vm = null;
         var sink = new WpfPresentationSink(
-            onSetCurrentImage: _ => vm?.NotifyCurrentImageChanged(),
+            onSetCurrentImage: (_, isFileChange) => vm?.NotifyCurrentImageChanged(isFileChange),
             onSetStatusText: _ => vm?.NotifyPresentationChanged(),
             // PR-B: default (no scroll placement) used until MainWindow wires WpfPresentationSink.ApplyInitialViewModeOverride
             // to PointerInputController.ApplyInitialViewAsync (which does Fit width/Fit height placement -- the pointer

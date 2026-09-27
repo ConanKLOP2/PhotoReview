@@ -14,6 +14,7 @@
         <ResourceDictionary.MergedDictionaries>
             <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkPalette.xaml"/>
             <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkScrollBars.xaml"/>
+            <ResourceDictionary Source="/PhotoReview.App;component/Themes/DarkMenus.xaml"/>
         </ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <converters:ViewerStretchModeConverter x:Key="StretchConverter" />
@@ -41,14 +42,19 @@
     <Grid Background="{DynamicResource Dark.Canvas}" ClipToBounds="True">
         <Grid.ContextMenu>
             <ContextMenu x:Name="ImageContextMenu" Opened="ImageContextMenu_Opened">
-                <MenuItem Header="{loc:Tr main.menu.openFolder}" AutomationProperties.Name="{loc:Tr main.menu.openFolder.automationName}" Click="OpenFolder_Click" />
-                <MenuItem Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
-                <Separator />
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
                 <Separator />
                 <MenuItem x:Name="FitMenuItem" Header="{loc:Tr main.menu.clickZoomLevel.fit}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.fit.automationName}" Click="ClickZoomFit_Click" />
                 <MenuItem x:Name="ZoomToLevelMenuItem" Click="ZoomToLevel_Click" />
-                <MenuItem x:Name="ClickZoomMenu" Header="{loc:Tr main.menu.clickZoomLevel}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.automationName}" SubmenuOpened="ClickZoomMenu_SubmenuOpened" />
+                <!-- PR-C: presets/Custom/toggle/"set current" are built in code (BuildZoomMenu) so their headers can be -->
+                <!-- re-translated on a live language switch, same pattern the old "Click zoom level" submenu used. -->
+                <MenuItem x:Name="ZoomMenu" Header="{loc:Tr main.menu.zoom}" AutomationProperties.Name="{loc:Tr main.menu.zoom.automationName}" SubmenuOpened="ZoomMenu_SubmenuOpened" />
+                <Separator x:Name="FolderGroupSeparator" />
+                <MenuItem x:Name="OpenFolderMenuItem" Header="{loc:Tr main.menu.openFolder}" AutomationProperties.Name="{loc:Tr main.menu.openFolder.automationName}" Click="OpenFolder_Click" />
+                <MenuItem x:Name="NextFolderMenuItem" Header="{loc:Tr main.menu.nextFolder}" AutomationProperties.Name="{loc:Tr main.menu.nextFolder.automationName}" Click="NextFolder_Click" />
+                <MenuItem x:Name="PreviousFolderMenuItem" Header="{loc:Tr main.menu.previousFolder}" AutomationProperties.Name="{loc:Tr main.menu.previousFolder.automationName}" Click="PreviousFolder_Click" />
+                <Separator />
+                <MenuItem Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
             </ContextMenu>
         </Grid.ContextMenu>
         <Border Background="{DynamicResource Dark.Canvas}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -69,6 +75,19 @@
                        LostMouseCapture="MainImage_LostMouseCapture" />
             </ScrollViewer>
         </Border>
+        <!-- feat/image-crossfade: outgoing-frame layer for the optional fade when the CURRENT PHOTO CHANGES.
+             Lives OUTSIDE ImageScroll (a sibling here, clipped to the viewport by the root Grid's
+             ClipToBounds) so it can keep the previous framing (size + scroll offset, frozen via a
+             TranslateTransform set in code-behind) while ImageScroll switches to the new image's size/offsets
+             underneath. Collapsed by default: zero extra render cost when ImageTransition=None (see MainWindow.xaml.cs). -->
+        <Image x:Name="OutgoingImage"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"
+               Focusable="False"
+               Stretch="Fill"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               RenderTransformOrigin="0,0" />
         <Border x:Name="ComparePanel"
                 Visibility="{Binding Compare.IsVisible, Converter={StaticResource BoolToVis}}"
                 Background="{DynamicResource Dark.Canvas}"

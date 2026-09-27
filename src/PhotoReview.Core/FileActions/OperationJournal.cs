@@ -32,6 +32,14 @@ public sealed record JournalEntry(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Permanent = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Undo = null);
 
+/// <summary>
+/// Result of <see cref="OperationJournal.Dismiss"/>: <see cref="Dismissed"/> are the entries actually appended as
+/// Dismissed; <see cref="Skipped"/> are entries the caller asked to dismiss whose current latest journal state no
+/// longer matches the snapshot it held (R09) -- a concurrent retry or another process already resolved them, so
+/// nothing was appended for them and the caller should refresh instead of treating them as cleared.
+/// </summary>
+public sealed record DismissOutcome(IReadOnlyList<JournalEntry> Dismissed, IReadOnlyList<JournalEntry> Skipped);
+
 public sealed class OperationJournal
 {
     private const long FullScanThresholdBytes = 1 * 1024 * 1024;
@@ -92,13 +100,34 @@ public sealed class OperationJournal
 
     // Clearing a Recovery item appends a Dismissed entry under the same Id (the journal is
     // append-only); latest-entry resolution then drops it from pending/failed. No file is touched.
-    public IReadOnlyList<JournalEntry> Dismiss(IEnumerable<JournalEntry> entries)
+    //
+    // R09: the Recovery window snapshots a JournalEntry when it opens/re-checks, but the user may click Dismiss
+    // later -- meanwhile another process sharing this journal (InstanceMode.PerFolder), or a retry in this same
+    // process, may have appended a newer entry for the same Id (e.g. a successful retry). Blindly appending a
+    // Dismissed record built from the stale snapshot would then win under latest-entry resolution and hide that
+    // newer entry. So each entry is re-checked against the CURRENT latest entry for its Id (same
+    // read-latest/compare/act-only-if-still-current pattern as <see cref="AppendIfStillPending"/>) and only
+    // dismissed when the latest entry is still byte-for-byte the one the caller snapshotted; anything else is
+    // reported back as skipped instead of silently dismissed.
+    public DismissOutcome Dismiss(IEnumerable<JournalEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);
         var now = _clock.UtcNow;
-        var dismissed = entries.Select(entry => entry with { State = JournalState.Dismissed, TimestampUtc = now, Error = null, ErrorCode = null }).ToList();
-        if (dismissed.Count > 0) AppendLines(dismissed);
-        return dismissed;
+        var toDismiss = new List<JournalEntry>();
+        var skipped = new List<JournalEntry>();
+        lock (_gate)
+        {
+            var latest = ComputeLatestEntries();
+            foreach (var entry in entries)
+            {
+                if (latest.TryGetValue(entry.Id, out var current) && current == entry)
+                    toDismiss.Add(entry with { State = JournalState.Dismissed, TimestampUtc = now, Error = null, ErrorCode = null });
+                else
+                    skipped.Add(entry);
+            }
+            if (toDismiss.Count > 0) AppendLines(toDismiss);
+        }
+        return new DismissOutcome(toDismiss, skipped);
     }
 
     private bool _tailChecked; // every append ends with a newline, so the file tail only needs checking before this process's first append
