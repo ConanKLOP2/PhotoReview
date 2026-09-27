@@ -18,6 +18,7 @@ namespace PhotoReview.Integration.Tests;
 /// had changed it), invokes Save without touching anything else, and asserts the saved settings show the new
 /// value -- so a missing (or wrong) assignment in <c>Save_Click</c> fails exactly that property's case.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsWindowRoundTripTests
 {

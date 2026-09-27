@@ -16,6 +16,7 @@ using PhotoReview.Integration.Tests.Infrastructure;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>Review round 7 (2026-09-25), window-level fixes: R7-6, R7-7, R7-8, R7-9, R7-11.</summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class ReviewRound7WindowTests
 {

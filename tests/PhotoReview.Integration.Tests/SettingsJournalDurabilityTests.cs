@@ -20,6 +20,7 @@ namespace PhotoReview.Integration.Tests;
 /// composition graph (<see cref="AppHost.BuildServices"/>) with a temp data root; only <see cref="IFileSystem"/> is
 /// replaced by a recording pass-through.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsJournalDurabilityTests
 {

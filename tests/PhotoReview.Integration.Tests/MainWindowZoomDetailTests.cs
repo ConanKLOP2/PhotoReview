@@ -19,6 +19,7 @@ namespace PhotoReview.Integration.Tests;
 /// then swaps in the on-demand full-resolution decode without changing the element size, the
 /// scroll extent or the scroll position.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
 public sealed class MainWindowZoomDetailTests(ITestOutputHelper output)

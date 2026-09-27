@@ -12,6 +12,7 @@ namespace PhotoReview.Integration.Tests;
 /// Settings redesign (feat/settings-redesign): the structural bug fix (Save no longer silently resets a property
 /// the window has no control for), the new left-nav paging, and the new controls this redesign adds.
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class SettingsWindowRedesignTests
 {

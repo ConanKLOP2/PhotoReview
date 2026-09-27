@@ -13,6 +13,7 @@ namespace PhotoReview.Integration.Tests;
 /// The right-click zoom items of the real MainWindow ("Fit", "Zoom to N%", the "Zoom levels" submenu) and the
 /// Settings zoom card's shortcut summary. Vietnamese is the ambient language (LocalizationModuleInit).
 /// </summary>
+[Trait("Category", "UI")]
 [Collection("GlobalState")]
 public sealed class ZoomContextMenuTests
 {
