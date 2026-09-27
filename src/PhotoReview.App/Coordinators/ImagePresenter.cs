@@ -299,11 +299,19 @@ public sealed class ImagePresenter
 
                 if (ReferenceEquals(firstDone, thumbnailTask))
                 {
-                    // The thumbnail task itself never throws (ThumbnailCache/EmbeddedThumbnailReader
-                    // treat every read/decode failure as "no thumbnail"), so no try/catch is needed
-                    // here; a genuine fault would still be handled the same way as before by
-                    // PresentAsync's own catch clauses below.
-                    var thumbnail = await thumbnailTask;
+                    // The thumbnail is only a placeholder for the preview that is already decoding: whatever the
+                    // thumbnail read/decode does wrong (a damaged cache file, an unexpected WIC/COM failure) must not fail
+                    // an image whose preview is fine. Treat a fault as "no thumbnail" and carry on to step 5.
+                    IDecodedImage? thumbnail;
+                    try
+                    {
+                        thumbnail = await thumbnailTask;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        AppLog.Error($"ShowImage thumbnail failed token={token} path={path}", ex);
+                        thumbnail = null;
+                    }
 
                     if (perf) PhotoReviewPerf.Log.ThumbEnd(token, perfPathId, "unknown", PhotoReviewPerf.Ms(perfThumb));
 

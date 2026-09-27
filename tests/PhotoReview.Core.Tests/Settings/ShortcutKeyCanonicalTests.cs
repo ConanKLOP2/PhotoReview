@@ -75,13 +75,16 @@ public sealed class ShortcutKeyCanonicalTests
     }
 
     [Theory(DisplayName = "Action aliases Prior/Next conflict with the default PageUp/PageDown folder shortcuts")]
-    [InlineData("Prior")]
-    [InlineData("prior")]
-    [InlineData("Next")]
-    public void Validator_PagingAliasAction_Conflicts(string actionKey)
+    [InlineData("Prior", "PageUp")]
+    [InlineData("prior", "PageUp")]
+    [InlineData("Next", "PageDown")]
+    public void Validator_PagingAliasAction_Conflicts(string actionKey, string canonicalKey)
     {
         var settings = new AppSettings { Actions = [new ReviewAction { Name = "A", Shortcut = actionKey, Destination = "x" }] };
-        Assert.NotNull(new SettingsValidator(new AnyKeys()).ValidateShortcuts(settings));
+        var error = new SettingsValidator(new AnyKeys()).ValidateShortcuts(settings);
+        // The duplicate message (not just any validation failure) names the canonical key both bindings collapse to.
+        Assert.NotNull(error);
+        Assert.Contains(canonicalKey, error, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "An optional shortcut aliasing an action key is disabled on load")]

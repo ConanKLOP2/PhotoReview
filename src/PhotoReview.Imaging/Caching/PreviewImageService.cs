@@ -139,7 +139,10 @@ public sealed class PreviewImageService : IPreloadTarget
         _log = log ?? NullLog.Instance;
         // perf(cache) v4: single-file entries (see PreviewCacheFile), no ".meta" companion.
         _diskStore = new DiskCacheStore(_diskCacheDirectory, "*.pv4", _diskCacheCapacityBytes, _log, companionSuffix: null);
-        _disableDiskCache = disableDiskCacheOverride ?? (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
+        // F-IMG-4: a capacity of 0 (or less) means "preview disk cache off": no reads, writes or prunes (a 0-byte quota
+        // would otherwise write every entry and immediately prune it). An explicit override still wins.
+        _disableDiskCache = disableDiskCacheOverride
+            ?? (diskCacheCapacityBytes <= 0 || Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_DISABLE_DISKCACHE") == "1");
         _decoderFactory = decoderFactory;
         _sourceBytesCache = sourceBytesCache;
         _decoder = decoder ?? (_decoderFactory?.Create(_currentBackend()) ?? new WpfBitmapImageDecoder());
@@ -474,6 +477,7 @@ public sealed class PreviewImageService : IPreloadTarget
                 decodedImage = new WpfDecodedImage(cacheEntry.Bitmap, downscaled: true, orientation: cacheEntry.Orientation, actualBackend: cacheEntry.ActualBackend,
                     originalWidth: cacheEntry.OriginalWidth, originalHeight: cacheEntry.OriginalHeight, exif: cacheEntry.Exif);
                 _metrics.RecordDiskCacheHit();
+                _diskStore.NoteAccessed(cachePath);
                 if (perf) PhotoReviewPerf.Log.DiskCacheRead(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), cacheEntry.FileBytes);
             }
             // A background prune can delete cachePath between the Exists check above and
@@ -485,9 +489,12 @@ public sealed class PreviewImageService : IPreloadTarget
             // magic, a version other than PreviewCacheFile.CurrentVersion, or any other
             // structurally invalid header) -- a version bump makes every older entry take this
             // same "corrupt: delete and re-decode" path instead of needing a migration.
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException)
+            // A well-framed entry with damaged metadata also fails inside WPF with ArgumentException / InvalidOperationException /
+            // COMException etc. (DiskCacheStore.IsCacheEntryFailure), and must be a miss too, not an unopenable image.
+            catch (Exception ex) when (DiskCacheStore.IsCacheEntryFailure(ex))
             {
-                try { File.Delete(cachePath); } catch { /* best-effort: entry is re-decoded from source below */ }
+                // Best-effort: TryDelete logs and swallows only IO/access failures; the entry is re-decoded from source below.
+                DiskCacheStore.TryDelete(cachePath, _log);
                 sourceRead = true;
                 decodedImage = DecodeFromSource(path, key.Length, key.Backend, targetBox, perf, perfNav, perfPathId);
             }

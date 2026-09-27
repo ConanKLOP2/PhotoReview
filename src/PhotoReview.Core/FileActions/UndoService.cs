@@ -185,9 +185,18 @@ public sealed class UndoService
             }
 
             var move = _moveHistory.Pop();
+            // The destination is gone (deleted/renamed outside the app): this entry can never be undone. Report it
+            // once and drop it, otherwise it is pushed back and every later Ctrl+Z hits the same dead entry.
+            var permanentlyBroken = false;
             try
             {
-                if (!_fileSystem.FileExists(move.Destination) || _fileSystem.FileExists(move.Source))
+                if (!_fileSystem.FileExists(move.Destination))
+                {
+                    permanentlyBroken = true;
+                    throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
+                }
+
+                if (_fileSystem.FileExists(move.Source))
                 {
                     throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
                 }
@@ -250,7 +259,20 @@ public sealed class UndoService
             }
             catch (Exception ex)
             {
-                _moveHistory.Push(move);
+                if (permanentlyBroken)
+                {
+                    _moveFingerprints.Remove(move.Destination);
+                    if (_lastUndoAction is { Operation: FileOperationType.Move } last
+                        && string.Equals(last.Destination, move.Destination, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _lastUndoAction = null;
+                    }
+                }
+                else
+                {
+                    _moveHistory.Push(move);
+                }
+
                 return new UndoResult(false, FileOperationType.Move, move.Source, move.Destination, Tr.CoreUndoFailed(ex.Message));
             }
         }

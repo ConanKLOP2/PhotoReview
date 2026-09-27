@@ -46,7 +46,7 @@ public partial class ActionProfilesWindow : Window
         _loaded.Operation = OperationCombo.SelectedIndex switch
         {
             1 => FileOperationType.Copy,
-            2 or 3 => FileOperationType.Recycle,
+            2 => FileOperationType.Recycle,
             _ => FileOperationType.Move
         };
         ActionList.Items.Refresh();

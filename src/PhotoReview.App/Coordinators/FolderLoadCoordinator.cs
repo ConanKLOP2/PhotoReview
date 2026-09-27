@@ -26,6 +26,7 @@ public sealed class FolderLoadCoordinator : IDisposable
     private readonly SessionWriter? _sessionWriter;
     private readonly SettingsStore _settingsStore;
     private readonly IFolderLoadSink _sink;
+    private readonly LatestExplorerSnapshot? _latestExplorer;
 
     private CancellationTokenSource? _loadCts;
     private TaskCompletionSource? _pendingOrder;
@@ -40,7 +41,8 @@ public sealed class FolderLoadCoordinator : IDisposable
         SessionStore sessionStore,
         SettingsStore settingsStore,
         IFolderLoadSink sink,
-        SessionWriter? sessionWriter = null)
+        SessionWriter? sessionWriter = null,
+        LatestExplorerSnapshot? latestExplorer = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -50,6 +52,7 @@ public sealed class FolderLoadCoordinator : IDisposable
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _sink = sink ?? throw new ArgumentNullException(nameof(sink));
         _sessionWriter = sessionWriter;
+        _latestExplorer = latestExplorer;
     }
 
     /// <summary>
@@ -103,6 +106,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                     16,
                     loadToken);
                 perf.TraceExplorer(explorerTask);
+                _latestExplorer?.Set(explorerTask);
             }
             else
             {
@@ -113,6 +117,7 @@ public sealed class FolderLoadCoordinator : IDisposable
                     folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable,
                     "Explorer order not used by this sort mode", DateTime.UtcNow));
                 perf.Mark("explorerSkipped");
+                _latestExplorer?.Set(null); // Diagnostics shows "not queried" rather than the placeholder result above
             }
 
             // perf(startup): scan and sort in ONE background task. Two separate Task.Run hops made the
@@ -301,8 +306,8 @@ public sealed class FolderLoadCoordinator : IDisposable
             pendingOrder?.TrySetResult();
             if (probe is not null)
             {
-                // Runs on this (UI) context; it re-checks the generation when the probe completes.
-                _readabilityProbe = ApplyReadabilityProbeAsync(probe, folder, loadGeneration, skipped, perf, loadToken);
+                // Runs on this (UI) context; it re-checks the load token when the probe completes.
+                _readabilityProbe = ApplyReadabilityProbeAsync(probe, folder, skipped, perf, loadToken);
             }
         }
     }
@@ -351,7 +356,8 @@ public sealed class FolderLoadCoordinator : IDisposable
     }
 
     /// <summary>
-    /// AR16, on the UI thread (ADR 0005): drops the result of a superseded load; otherwise removes the
+    /// AR16, on the UI thread (ADR 0005): drops the result of a superseded or disposed load (load token; a file
+    /// action's StopForAction does not drop it: the folder is unchanged and RemovePaths only touches paths still listed); otherwise removes the
     /// unreadable files from the catalog (current kept, or advanced like a Delete when it is one of
     /// them), reports them exactly like the old scan-time skip (ADR 0007 s3: never silently) and lets
     /// the sink drop their preload/cache and present the new current if needed.
@@ -359,7 +365,6 @@ public sealed class FolderLoadCoordinator : IDisposable
     private async Task ApplyReadabilityProbeAsync(
         Task<List<SkippedEntry>> probe,
         string folder,
-        long loadGeneration,
         IReadOnlyList<SkippedEntry> listingSkipped,
         FolderPerf perf,
         CancellationToken loadToken)
@@ -380,7 +385,12 @@ public sealed class FolderLoadCoordinator : IDisposable
             return;
         }
 
-        if (loadToken.IsCancellationRequested || !_clock.IsFolderCurrent(loadGeneration))
+        // Gated by the load's own token only, NOT by the folder generation: StopForAction (any file action
+        // or duplicate cleanup) bumps that generation while the folder stays the same, and dropping the result
+        // then would leave unreadable files in the catalog unreported (ADR 0007 s3). A folder switch or Dispose
+        // cancels this token on the UI thread (LoadAsync / Dispose), and this method also runs on the UI thread,
+        // so no switch can slip in between this check and the catalog changes below.
+        if (loadToken.IsCancellationRequested)
         {
             perf.Mark("probeDropped");
             return;
@@ -405,7 +415,7 @@ public sealed class FolderLoadCoordinator : IDisposable
         {
             await _sink.OnUnreadableRemovedAsync(removed, currentRemoved);
         }
-        catch (Exception ex) when (!loadToken.IsCancellationRequested && _clock.IsFolderCurrent(loadGeneration))
+        catch (Exception ex) when (!loadToken.IsCancellationRequested)
         {
             _sink.OnFailed(folder, ex);
         }

@@ -477,11 +477,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         return files;
     }
 
+    // Target width 32 < the 64px fixture so the decode is "downscaled": PreviewImageService only persists downscaled previews (full-size ones are cheap to re-read from source).
     [Fact(DisplayName = "A downscaled preview decoded from source is persisted to the disk cache")]
     public async Task DownscaledPreviewIsPersistedToDiskCache()
     {
         var diskDir = _root.Dir("write");
-        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var service = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
 
         await service.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
@@ -586,12 +587,12 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task DiskCacheHitAvoidsSourceRead()
     {
         var diskDir = _root.Dir("hit");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         await WaitForCacheFilesAsync(diskDir);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -602,13 +603,13 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
     public async Task CorruptDiskCacheEntryFallsBackToSource()
     {
         var diskDir = _root.Dir("corrupt");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
         File.WriteAllBytes(files[0], [1, 2, 3, 4]);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
@@ -622,19 +623,55 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         // key/file version (e.g. a future v5) never needs to parse or migrate an older layout --
         // every entry stamped with a different version is simply ignored as if it didn't exist.
         var diskDir = _root.Dir("cache-version");
-        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
         await writer.GetPreviewAsync(_previewPath);
         var files = await WaitForCacheFilesAsync(diskDir);
         var bytes = File.ReadAllBytes(files[0]);
-        bytes[4] = unchecked((byte)(PreviewCacheFile.CurrentVersion + 1)); // offset 4 = version byte
-        File.WriteAllBytes(files[0], bytes);
+        // Rewrite the entry in the previous (no-EXIF) layout -- drop the 2-byte EXIF-length block that
+        // follows the 24-byte header (0 for a PNG source) -- and stamp it with an unknown future version.
+        // A reader that ignored the version byte would parse this as a valid legacy entry and hit; only
+        // the version check makes it a miss (a plain garbled-payload entry would be a miss either way).
+        const int headerSize = 24;
+        Assert.True(bytes[headerSize] == 0 && bytes[headerSize + 1] == 0, "fixture PNG has no EXIF block");
+        var legacyLayout = bytes.Take(headerSize).Concat(bytes.Skip(headerSize + 2)).ToArray();
+        legacyLayout[4] = unchecked((byte)(PreviewCacheFile.CurrentVersion + 1)); // offset 4 = version byte
+        File.WriteAllBytes(files[0], legacyLayout);
 
         var readerMetrics = new ReviewMetrics();
-        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 256, diskCacheDirectory: diskDir), diskDir);
+        var reader = Track(new PreviewImageService(readerMetrics, () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
         var image = await reader.GetPreviewAsync(_previewPath);
         var snapshot = readerMetrics.Snapshot();
 
         Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
+    }
+
+    [Fact(DisplayName = "A preview disk cache capacity of 0 turns the disk cache off: nothing is read, written or pruned")]
+    public async Task ZeroDiskCacheCapacityDisablesDiskCache()
+    {
+        var diskDir = _root.Dir("cap-zero");
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        await writer.GetPreviewAsync(_previewPath);
+        var existing = await WaitForCacheFilesAsync(diskDir);
+
+        var metrics = new ReviewMetrics();
+        var off = Track(new PreviewImageService(metrics, () => false, () => 32, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
+        var image = await off.GetPreviewAsync(_previewPath);
+        await off.ShutdownPersistWorkersAsync();
+        var snapshot = metrics.Snapshot();
+
+        Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0, "the existing entry must not be read");
+        Assert.True(File.Exists(existing[0]), "a disabled cache must not prune existing entries");
+    }
+
+    [Fact(DisplayName = "A preview disk cache capacity of 0 never writes a new entry")]
+    public async Task ZeroDiskCacheCapacityDoesNotWrite()
+    {
+        var diskDir = _root.Dir("cap-zero-write");
+        var off = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
+        await off.GetPreviewAsync(_previewPath);
+        await off.ShutdownPersistWorkersAsync();
+
+        Assert.Empty(Directory.GetFiles(diskDir, "*.pv4"));
     }
 
     [Fact(DisplayName = "The disk cache directory is pruned instead of growing unbounded")]

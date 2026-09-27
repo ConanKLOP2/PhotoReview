@@ -43,6 +43,31 @@ public sealed class SettingsStoreTests
         Assert.Contains("\"ConfigVersion\": 3", savedJson);
     }
 
+    [Fact(DisplayName = "An action saved with the legacy operation \"Delete\" loads as Recycle with the rest of the config kept")]
+    public void Load_WhenActionUsesLegacyDeleteOperation_KeepsItAsRecycle()
+    {
+        var json = """
+        {
+            "ConfigVersion": 3,
+            "Actions": [
+                { "Name": "Trash it", "Shortcut": "F7", "Operation": "Delete", "Destination": "", "Confirm": true },
+                { "Name": "Keep", "Shortcut": "F8", "Operation": "Move", "Destination": "Keepers" }
+            ]
+        }
+        """;
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, json);
+
+        var loaded = _store.Load();
+
+        Assert.Equal(2, loaded.Actions.Count);
+        Assert.Equal(FileOperationType.Recycle, loaded.Actions[0].Operation);
+        Assert.Equal("Trash it", loaded.Actions[0].Name);
+        Assert.Equal("F7", loaded.Actions[0].Shortcut);
+        Assert.True(loaded.Actions[0].Confirm);
+        Assert.Equal(FileOperationType.Move, loaded.Actions[1].Operation);
+        Assert.Empty(_store.LastLoadRepairs);
+    }
+
     [Fact(DisplayName = "Load ignores the retired Folder2Name property from an old config")]
     public void Load_WhenLegacyFolder2NameIsPresent_IgnoresItAndKeepsOtherValues()
     {

@@ -11,6 +11,7 @@ using PhotoReview.Core.Model;
 namespace PhotoReview.App.Tests.Coordinators;
 
 /// <summary>Q-R25 (option A): Esc cancels the duplicate-check HASHING phase; nothing is applied and nothing is recycled.</summary>
+[Collection("GlobalState")]
 public sealed class DuplicateCheckCancelTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "PhotoReview_DupCancel_" + Guid.NewGuid().ToString("N"));
@@ -191,26 +192,19 @@ public sealed class DuplicateCheckCancelTests : IDisposable
         Assert.Equal(2, _bin.Recycled.Count);
     }
 
-    [Fact(DisplayName = "Status texts for the cancel gesture exist in English and Vietnamese")]
+    [Fact(DisplayName = "Status texts for the cancel gesture resolve to the shipped English and Vietnamese catalog text")]
     public void CancelStatusTexts_AreLocalized()
     {
-        Assert.Contains("Esc", Tr.StatusDuplicateCheckRunning);
-        Assert.False(string.IsNullOrWhiteSpace(Tr.StatusDuplicateCheckCanceled));
-        var vi = File.ReadAllText(FindLanguageFile("vi.json"));
-        Assert.Contains("\"status.duplicateCheckRunning\": \"Đang kiểm tra bản trùng lặp... nhấn Esc để hủy.\"", vi);
-        Assert.Contains("\"status.duplicateCheckCanceled\": \"Đã hủy kiểm tra bản trùng lặp. Không có tệp nào bị xóa.\"", vi);
-    }
-
-    private static string FindLanguageFile(string name)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
+        using (TestLocalization.Use(TestLocalization.Vietnamese))
         {
-            var candidate = Path.Combine(dir.FullName, "src", "PhotoReview.Core", "Localization", "Languages", name);
-            if (File.Exists(candidate)) return candidate;
-            dir = dir.Parent;
+            Assert.Equal("Đang kiểm tra bản trùng lặp... nhấn Esc để hủy.", Tr.StatusDuplicateCheckRunning);
+            Assert.Equal("Đã hủy kiểm tra bản trùng lặp. Không có tệp nào bị xóa.", Tr.StatusDuplicateCheckCanceled);
         }
-        throw new FileNotFoundException(name);
+        using (TestLocalization.Use(TestLocalization.English))
+        {
+            Assert.Equal("Checking for duplicates... press Esc to cancel.", Tr.StatusDuplicateCheckRunning);
+            Assert.Equal("Duplicate check canceled. Nothing was removed.", Tr.StatusDuplicateCheckCanceled);
+        }
     }
 
     private sealed class RecordingRecycleBin : IRecycleBin

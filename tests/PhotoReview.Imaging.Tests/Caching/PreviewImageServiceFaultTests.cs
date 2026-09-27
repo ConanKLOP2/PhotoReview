@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Imaging.Tests.Fixtures;
 
 namespace PhotoReview.Imaging.Tests.Caching;
 
@@ -49,6 +50,14 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
         "width-negative",
         "exif-length-past-eof",
         "garbage-payload",
+        // Header, EXIF block and end-of-image marker are all valid, so PreviewCacheFile.Read reaches the WPF decoder,
+        // which then rejects the payload with whatever exception type it picks (not only IO/NotSupported/FileFormat).
+        "garbage-with-eoi",
+        "jpeg-soi-garbage-eoi",
+        "jpeg-header-mangled-eoi",
+        // A damaged EXIF segment inside an otherwise well-formed entry makes WPF fail in EndInit with
+        // ArgumentException (see WpfBitmapImageDecoder.DecodeWithoutProfileFallback), which the read catch must treat as a miss.
+        "damaged-exif-segment",
     ];
 
     private static byte[] Break(string kind, byte[] valid)
@@ -67,6 +76,20 @@ public sealed class PreviewImageServiceFaultTests : IDisposable
             case "width-negative": bytes[11] = 0x80; break;
             case "exif-length-past-eof": bytes[24] = 0xFF; bytes[25] = 0x03; break; // 1023: within the codec maximum, beyond the file
             case "garbage-payload": for (var i = 26; i < bytes.Length; i++) bytes[i] = (byte)(i * 31); break;
+            case "garbage-with-eoi":
+                for (var i = 26; i < bytes.Length; i++) bytes[i] = (byte)(i * 31 | 1);
+                bytes[^2] = 0xFF; bytes[^1] = 0xD9;
+                break;
+            case "jpeg-soi-garbage-eoi":
+                for (var i = 26; i < bytes.Length; i++) bytes[i] = (byte)(i * 31 | 1);
+                bytes[26] = 0xFF; bytes[27] = 0xD8; bytes[28] = 0xFF; bytes[29] = 0xE0;
+                bytes[^2] = 0xFF; bytes[^1] = 0xD9;
+                break;
+            case "jpeg-header-mangled-eoi":
+                // Keep the payload's SOI and tail, zero the middle (frame header/tables/scan data).
+                for (var i = 40; i < bytes.Length - 2; i++) bytes[i] = 0;
+                break;
+            case "damaged-exif-segment": return DamagedJpegFixture.WithBrokenExifSegment(valid, soiOffset: 26); // v7: 24-byte header + 2-byte EXIF length (0 here)
             default: throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
 

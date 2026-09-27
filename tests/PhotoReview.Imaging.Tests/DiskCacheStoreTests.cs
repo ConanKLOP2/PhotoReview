@@ -176,6 +176,56 @@ public sealed class DiskCacheStoreTests : IDisposable
         Assert.True(!File.Exists(a) && !File.Exists(b));
     }
 
+    [Fact(DisplayName = "NoteAccessed makes a read entry survive the next prune (LRU, not FIFO)")]
+    public void NoteAccessedProtectsRecentlyReadEntryFromPrune()
+    {
+        var dir = _root.Dir("lru-touch");
+        var clock = DateTime.UtcNow;
+        var oldest = WriteFile(dir, "oldest.png", 100, accessedAgo: TimeSpan.FromMinutes(30));
+        var middle = WriteFile(dir, "middle.png", 100, accessedAgo: TimeSpan.FromMinutes(20));
+        var newest = WriteFile(dir, "newest.png", 100, accessedAgo: TimeSpan.FromMinutes(10));
+        var store = new DiskCacheStore(dir, "*.png", maxBytes: 200, utcNow: () => clock);
+
+        store.NoteAccessed(oldest); // a cache hit on the oldest entry
+        DiskCacheStore.PruneDirectory(dir, "*.png", maxBytes: 200, log: null);
+
+        Assert.True(File.Exists(oldest) && !File.Exists(middle) && File.Exists(newest));
+    }
+
+    [Fact(DisplayName = "NoteAccessed touches an entry at most once per interval")]
+    public void NoteAccessedIsThrottledPerEntry()
+    {
+        var dir = _root.Dir("lru-throttle");
+        var clock = DateTime.UtcNow;
+        var path = WriteFile(dir, "a.png", 10, accessedAgo: TimeSpan.FromHours(1));
+        var store = new DiskCacheStore(dir, "*.png", maxBytes: 1_000, utcNow: () => clock);
+
+        store.NoteAccessed(path);
+        var stamped = File.GetLastAccessTimeUtc(path);
+        var backdated = clock - TimeSpan.FromHours(2);
+        File.SetLastAccessTimeUtc(path, backdated);
+
+        clock += DiskCacheStore.AccessTouchInterval - TimeSpan.FromSeconds(1);
+        store.NoteAccessed(path); // still inside the interval: no write
+        var withinInterval = File.GetLastAccessTimeUtc(path);
+
+        clock += TimeSpan.FromSeconds(2);
+        store.NoteAccessed(path); // interval elapsed: touched again
+        var afterInterval = File.GetLastAccessTimeUtc(path);
+
+        Assert.True(Math.Abs((stamped - (clock - DiskCacheStore.AccessTouchInterval - TimeSpan.FromSeconds(1))).TotalSeconds) < 5, "first hit stamps the clock time");
+        Assert.Equal(backdated, withinInterval);
+        Assert.True(Math.Abs((afterInterval - clock).TotalSeconds) < 5);
+    }
+
+    [Fact(DisplayName = "NoteAccessed on a missing file does not throw")]
+    public void NoteAccessedToleratesMissingFile()
+    {
+        var store = new DiskCacheStore(_root.Dir("lru-missing"), "*.png", maxBytes: 10);
+
+        Assert.Null(Record.Exception(() => store.NoteAccessed(_root.Combine("lru-missing", "gone.png"))));
+    }
+
     private static string WriteFile(string dir, string name, int bytes, TimeSpan accessedAgo)
     {
         var path = Path.Combine(dir, name);

@@ -128,6 +128,27 @@ public sealed class BenchmarkTrustTests : IDisposable
         Assert.True(enabled);
     }
 
+    [Fact(DisplayName = "DetailedLogging scope does not overwrite a logging change made by someone else during the run")]
+    public void ProfileScope_LoggingChangedDuringRun_IsNotOverwritten()
+    {
+        var enabled = true;
+        var writes = 0;
+        var off = BenchmarkProfiles.Find("logging-off")!;
+        void Set(bool value) { enabled = value; writes++; }
+
+        using (BenchmarkProfileScope.ApplyLogging(off, () => enabled, Set, () => writes))
+        {
+            Assert.False(enabled);
+            Set(false); // the user switches logging off in Settings while the profile runs
+        }
+        Assert.False(enabled); // not restored to the stale "on"
+
+        enabled = true;
+        using (BenchmarkProfileScope.ApplyLogging(off, () => enabled, Set, () => writes))
+            Assert.False(enabled);
+        Assert.True(enabled); // untouched during the run: previous state restored as before
+    }
+
     // ---- PERF-02 ---------------------------------------------------------------------------------
 
     private static Task<(bool Idle, string How)> WaitIdle(Func<bool> preloadIdle, TimeSpan timeout) =>

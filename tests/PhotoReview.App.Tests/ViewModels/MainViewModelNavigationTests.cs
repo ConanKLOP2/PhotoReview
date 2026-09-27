@@ -651,6 +651,51 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         Assert.Equal(1, vm.TotalFiles);
     }
 
+    [Fact]
+    public async Task OpenFolderAsync_WindowClosedWhileOwnershipPending_DropsTheOpenAndReportsAfterOpen()
+    {
+        var a = Path.Combine(_tempDir, "a");
+        Directory.CreateDirectory(a);
+        CreateImageFile(a, "a1.jpg");
+        var (vm, _, _) = CreateViewModel();
+        var ownership = new GatedOwnership();
+        vm.FolderOwnership = ownership;
+
+        var open = vm.OpenFolderAsync(a);
+        vm.CloseSession(); // disposes the load coordinator while BeforeOpenAsync is still pending
+        ownership.Gate.SetResult(PhotoReview.Core.Instance.FolderOpenDecision.Proceed);
+        await open; // must not throw ObjectDisposedException
+
+        Assert.Equal(0, vm.TotalFiles);
+        Assert.Equal([(a, (string?)null)], ownership.AfterOpens);
+    }
+
+    [Fact]
+    public void OnFailed_UsesTheLocalizedSentenceOfTheException()
+    {
+        var (vm, _, _) = CreateViewModel();
+        var error = PhotoReview.Core.Localization.UserFacingError.Localized(
+            new IOException("raw english message"), () => "localized sentence");
+
+        ((PhotoReview.App.Coordinators.IFolderLoadSink)vm).OnFailed(_tempDir, error);
+
+        Assert.Contains("localized sentence", vm.StatusText);
+        Assert.DoesNotContain("raw english message", vm.StatusText);
+    }
+
+    private sealed class GatedOwnership : PhotoReview.Core.Instance.IFolderOwnership
+    {
+        public TaskCompletionSource<PhotoReview.Core.Instance.FolderOpenDecision> Gate { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public List<(string Folder, string? Shown)> AfterOpens { get; } = [];
+
+        public Task<PhotoReview.Core.Instance.FolderOpenDecision> BeforeOpenAsync(string folder, string? initialPath, CancellationToken cancellationToken = default) => Gate.Task;
+
+        public void OnFolderShown(string folder) { }
+
+        public void AfterOpen(string folder, string? shownFolder) => AfterOpens.Add((folder, shownFolder));
+    }
+
     private sealed class RecordingOwnership : PhotoReview.Core.Instance.IFolderOwnership
     {
         public PhotoReview.Core.Instance.FolderOpenDecision Decision { get; init; } = PhotoReview.Core.Instance.FolderOpenDecision.Proceed;

@@ -207,16 +207,16 @@ public sealed class DecoderErrorLocalizationTests : IDisposable
     }
 
     [Fact(DisplayName = "SourceBytesCache: a file modified while it is read throws a localized IOException")]
-    public async Task SourceBytesCache_FileChangedWhileReading_IsLocalized()
+    public void SourceBytesCache_FileChangedWhileReading_IsLocalized()
     {
-        var path = _root.File("big.bin", new byte[32 * 1024 * 1024]);
-        var cache = new SourceBytesCache(256L * 1024 * 1024);
-
-        IOException ex;
-        using (var toucher = new FileToucher(path))
+        var path = _root.File("big.bin", new byte[1024]);
+        // Deterministic: the file is touched exactly between the end of the read and the stat re-check.
+        var cache = new SourceBytesCache(256L * 1024 * 1024)
         {
-            ex = await Assert.ThrowsAsync<IOException>(() => Task.Run(() => cache.GetOrRead(path)));
-        }
+            AfterReadForTests = () => File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(1)),
+        };
+
+        var ex = Assert.Throws<IOException>(() => cache.GetOrRead(path));
 
         Assert.Equal($"The file changed while it was being read: {path}", InEnglish(ex));
         Assert.Equal($"Tệp đã thay đổi trong lúc đang đọc: {path}", InVietnamese(ex));

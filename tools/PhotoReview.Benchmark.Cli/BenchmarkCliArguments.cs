@@ -34,7 +34,7 @@ internal static class BenchmarkCliArguments
     public static string? ResolveOutput(string mode, IReadOnlyList<string> args) =>
         args.Count >= 3 && mode != "--benchmark" && !string.IsNullOrWhiteSpace(args[2]) ? args[2] : null;
 
-    /// <summary>Parses a comma-separated width list such as <c>0,1920,2560</c> (0 = full size) using the invariant culture.</summary>
+    /// <summary>Parses a comma-separated width list such as <c>0,1920,2560</c> (0 = full size) using the invariant culture. Duplicates are dropped (first occurrence kept): a repeated width would be measured and reported twice.</summary>
     public static int[] ParseWidths(string text)
     {
         var parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -42,7 +42,7 @@ internal static class BenchmarkCliArguments
         return [.. parts.Select(part =>
             int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var width)
                 ? width
-                : throw new ArgumentException($"Invalid width '{part}' (expected a non-negative whole number)"))];
+                : throw new ArgumentException($"Invalid width '{part}' (expected a non-negative whole number)")).Distinct()];
     }
 
     /// <summary>

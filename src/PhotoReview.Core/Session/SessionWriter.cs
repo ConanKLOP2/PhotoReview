@@ -26,6 +26,7 @@ public sealed class SessionWriter : IDisposable
     private CancellationTokenSource? _timerCts;
     private Task _lastRun = Task.CompletedTask;
     private bool _disposed;
+    private int _inFlight; // batches drained by a writer (timer thread included) that are not yet written; guarded by _gate
 
     /// <param name="delay">Injectable timer; defaults to <see cref="Task.Delay(TimeSpan, CancellationToken)"/>.</param>
     public SessionWriter(SessionStore store, ILog? log = null, TimeSpan? debounce = null,
@@ -100,10 +101,36 @@ public sealed class SessionWriter : IDisposable
             if (_disposed) return;
             _disposed = true;
         }
+        var started = System.Diagnostics.Stopwatch.StartNew();
         Flush(bounded: true);
+        WaitForInFlightWrites(ShutdownWait - started.Elapsed);
         // _writeLock is intentionally NOT disposed: SemaphoreSlim holds no unmanaged resources unless
         // AvailableWaitHandle is used, and a timer thread may have drained its batch but not yet reached Wait();
         // disposing here made that Wait() throw ObjectDisposedException and lose the last write (R2-A-04).
+    }
+
+    /// <summary>
+    /// The timer thread may have drained the pending states and not written them yet, so <see cref="Flush"/> sees an empty
+    /// batch; wait (bounded) for it so the process does not exit under the last write.
+    /// </summary>
+    private void WaitForInFlightWrites(TimeSpan timeout)
+    {
+        lock (_gate)
+        {
+            if (_inFlight == 0) return;
+            BeforeShutdownWaitForTests?.Invoke();
+            var deadline = DateTime.UtcNow + timeout;
+            while (_inFlight > 0)
+            {
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    _log?.Error("Session write may be lost at shutdown: a write was still in flight", null);
+                    return;
+                }
+                Monitor.Wait(_gate, remaining);
+            }
+        }
     }
 
     private async Task RunTimerAsync(CancellationTokenSource cts)
@@ -122,6 +149,9 @@ public sealed class SessionWriter : IDisposable
     /// <summary>Test seam: runs after a non-empty batch was drained and before the write lock is taken.</summary>
     internal Action? AfterDrainForTests { get; set; }
 
+    /// <summary>Test seam: runs in <see cref="Dispose"/> (under the gate) when it is about to wait for an in-flight write.</summary>
+    internal Action? BeforeShutdownWaitForTests { get; set; }
+
     private void WritePending(bool bounded)
     {
         List<(SessionState State, long Version)> batch;
@@ -133,9 +163,22 @@ public sealed class SessionWriter : IDisposable
                 return (pair.Value, version);
             }).ToList();
             _pending.Clear();
+            if (batch.Count > 0) _inFlight++;
         }
-        if (batch.Count > 0) AfterDrainForTests?.Invoke();
-        WriteBatch(batch, bounded);
+        if (batch.Count == 0) return;
+        try
+        {
+            AfterDrainForTests?.Invoke();
+            WriteBatch(batch, bounded);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _inFlight--;
+                Monitor.PulseAll(_gate);
+            }
+        }
     }
 
     private void WriteBatch(List<(SessionState State, long Version)> batch, bool bounded)

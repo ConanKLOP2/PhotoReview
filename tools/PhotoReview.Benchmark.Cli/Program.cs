@@ -93,7 +93,12 @@ if (args.Length >= 2 && (args[0] == "--benchmark" || args[0] == "--benchmark-all
         return;
     }
     var output = BenchmarkCliArguments.ResolveOutput(args[0], args);
-    await RunCliBenchmarksAsync(benchmarkFolder, requested, output);
+    try { await RunCliBenchmarksAsync(benchmarkFolder, requested, output); }
+    catch (Exception ex) when (ex is DirectoryNotFoundException or InvalidOperationException)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
     return;
 }
 if (args.Length is 2 or 4 && args[0] == "--ui-next-probe" && (args.Length == 2 || args[2] == "--cache-dir"))
@@ -157,13 +162,23 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
         Environment.ExitCode = 2;
         return;
     }
-    await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax);
+    try { await IoDecodeSplit.RunAsync(args[1], args[2], ioWidths, ioMax); }
+    catch (Exception ex) when (ex is DirectoryNotFoundException or InvalidOperationException)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
     return;
 }
 
 if (args.Length is >= 3 and <= 6 && args[0] == "--decoder-bench")
 {
-    Environment.ExitCode = await DecoderBenchmark.RunAsync(args);
+    try { Environment.ExitCode = await DecoderBenchmark.RunAsync(args); }
+    catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or InvalidOperationException)
+    {
+        Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
+        Environment.ExitCode = 2;
+    }
     return;
 }
 

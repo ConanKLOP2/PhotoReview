@@ -76,6 +76,34 @@ public static class DecoderBenchmark
         public List<GroupStatistics> Groups { get; set; } = new();
     }
 
+    /// <summary>Backends, widths and iterations from args[3..5], with the defaults. Bad numbers throw <see cref="ArgumentException"/> (exit code 2 in Program), like the other modes.</summary>
+    internal static (string[] Backends, int[] Widths, int Iterations) ParseOptions(string[] args)
+    {
+        var backends = args.Length >= 4
+            ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : ["Wpf", "WicDirect", "TurboJpeg"];
+        var widths = args.Length >= 5 ? BenchmarkCliArguments.ParseWidths(args[4]) : [0, 1920, 2560, 3840];
+        var iterations = args.Length >= 6 ? BenchmarkCliArguments.ParsePositiveInt(args[5], "iterations") : 5;
+        return (backends, widths, iterations);
+    }
+
+    /// <summary>
+    /// Sets <see cref="GroupStatistics.SpeedupVsWpf"/> per width from the Wpf P50. Groups without a success (P50 = 0, e.g. a missing
+    /// native dll) are skipped: dividing by their zero P50 gave +Infinity, which made JSON serialization throw after the whole run.
+    /// </summary>
+    internal static void ApplySpeedups(IReadOnlyList<GroupStatistics> groupStats, IEnumerable<int> widths)
+    {
+        foreach (var width in widths)
+        {
+            var wpfStat = groupStats.FirstOrDefault(s => s.Backend == "Wpf" && s.TargetWidth == width);
+            if (wpfStat is not { P50Ms: > 0 }) continue;
+            foreach (var stat in groupStats.Where(s => s.TargetWidth == width && s.SuccessCount > 0 && s.P50Ms > 0))
+            {
+                stat.SpeedupVsWpf = wpfStat.P50Ms / stat.P50Ms;
+            }
+        }
+    }
+
     /// <returns>0 on success; 1 when usage is wrong or no decode succeeded at all (so a folder of undecodable files never looks like a pass).</returns>
     public static async Task<int> RunAsync(string[] args)
     {
@@ -95,18 +123,7 @@ public static class DecoderBenchmark
 
         Directory.CreateDirectory(outDir);
 
-        // Parse backends (defaults to Wpf,WicDirect,TurboJpeg)
-        var requestedBackendNames = args.Length >= 4
-            ? args[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : new[] { "Wpf", "WicDirect", "TurboJpeg" };
-
-        // Parse widths (defaults to 0, 1920, 2560, 3840)
-        var widths = args.Length >= 5
-            ? args[4].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(s => int.Parse(s, CultureInfo.InvariantCulture)).ToArray()
-            : new[] { 0, 1920, 2560, 3840 };
-
-        // Parse iterations (defaults to 5)
-        var iterations = args.Length >= 6 ? Math.Max(1, int.Parse(args[5], CultureInfo.InvariantCulture)) : 5;
+        var (requestedBackendNames, widths, iterations) = ParseOptions(args);
 
         // Resolve available decoders
         var activeDecoders = new List<(DecoderBackend Backend, IImageDecoder Decoder)>();
@@ -313,18 +330,7 @@ public static class DecoderBenchmark
             });
         }
 
-        // Calculate speedup vs Wpf
-        foreach (var width in widths)
-        {
-            var wpfStat = groupStats.FirstOrDefault(s => s.Backend == "Wpf" && s.TargetWidth == width);
-            if (wpfStat is { P50Ms: > 0 })
-            {
-                foreach (var stat in groupStats.Where(s => s.TargetWidth == width))
-                {
-                    stat.SpeedupVsWpf = wpfStat.P50Ms / stat.P50Ms;
-                }
-            }
-        }
+        ApplySpeedups(groupStats, widths);
 
         // Prepare Summary
         var summary = new BenchmarkSummary
@@ -389,7 +395,7 @@ public static class DecoderBenchmark
     internal static string GenerateMarkdownReport(BenchmarkSummary summary)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# PhotoReview — Decoder Benchmark Report");
+        sb.AppendLine("# PhotoReview â€” Decoder Benchmark Report");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Timestamp:** {summary.TimestampUtc:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Machine:** {summary.MachineName} ({summary.ProcessorCount} cores, {summary.OsVersion})");

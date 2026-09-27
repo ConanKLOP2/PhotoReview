@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
@@ -103,8 +104,8 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.Equal(b, Assert.Single(Assert.Single(_sink.SkippedCalls).Skipped).Path);
     }
 
-    [Fact(DisplayName = "AR16: a probe result that arrives after the folder generation moved on is dropped")]
-    public async Task Probe_FolderGenerationBumpedBeforeResult_IsDropped()
+    [Fact(DisplayName = "ADR 0007 s3: a file action (StopForAction) while the probe runs does not drop the result; the unreadable file is removed and reported once")]
+    public async Task Probe_StopForActionWhileProbing_StillRemovesAndReportsOnce()
     {
         var (a, b, c) = CreateThreeImages(@"C:\photos");
         _fs.Unreadable[b] = "locked";
@@ -118,7 +119,70 @@ public sealed partial class FolderLoadCoordinatorTests
         {
             load = coordinator.LoadAsync(@"C:\photos");
             await entered.Task.WithTimeout(Wait.DefaultTimeout, "probe of the unreadable file");
-            _genClock.NextFolder(); // superseded without cancelling this load's token
+            _genClock.StopForAction(); // what FileActionController / DuplicateCleanupController do; same folder
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        await load.WithTimeout(Wait.DefaultTimeout, "load");
+        await coordinator.ReadabilityProbe.WithTimeout(Wait.DefaultTimeout, "readability probe");
+
+        Assert.Equal([a, c], _catalog.Paths);
+        var call = Assert.Single(_sink.SkippedCalls);
+        Assert.Equal(b, Assert.Single(call.Skipped).Path);
+        Assert.Equal([b], Assert.Single(_sink.Removals).Paths);
+        Assert.Empty(_sink.Failures);
+    }
+
+    [Fact(DisplayName = "ADR 0007 s3: an unreadable file that the user's action already removed during the probe is not reported")]
+    public async Task Probe_StopForActionAndFileAlreadyRemoved_ReportsNothing()
+    {
+        var (a, b, c) = CreateThreeImages(@"C:\photos");
+        _fs.Unreadable[b] = "locked";
+        using var release = new ManualResetEventSlim(false);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        HoldProbeOf(b, release, entered);
+        using var coordinator = CreateCoordinator();
+
+        Task load;
+        try
+        {
+            load = coordinator.LoadAsync(@"C:\photos");
+            await entered.Task.WithTimeout(Wait.DefaultTimeout, "probe of the unreadable file");
+            _genClock.StopForAction();
+            _catalog.Remove(b); // the action moved/recycled it first
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        await load.WithTimeout(Wait.DefaultTimeout, "load");
+        await coordinator.ReadabilityProbe.WithTimeout(Wait.DefaultTimeout, "readability probe");
+
+        Assert.Equal([a, c], _catalog.Paths);
+        Assert.Empty(_sink.SkippedCalls);
+        Assert.Empty(_sink.Removals);
+    }
+
+    [Fact(DisplayName = "AR16: a probe result that arrives after the coordinator was disposed is dropped")]
+    public async Task Probe_DisposedBeforeResult_IsDropped()
+    {
+        var (a, b, c) = CreateThreeImages(@"C:\photos");
+        _fs.Unreadable[b] = "locked";
+        using var release = new ManualResetEventSlim(false);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        HoldProbeOf(b, release, entered);
+        var coordinator = CreateCoordinator();
+
+        Task load;
+        try
+        {
+            load = coordinator.LoadAsync(@"C:\photos");
+            await entered.Task.WithTimeout(Wait.DefaultTimeout, "probe of the unreadable file");
+            coordinator.Dispose(); // cancels the load token
         }
         finally
         {
@@ -231,5 +295,84 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.Equal(3, _fs.ProbeCount);
         Assert.Empty(_sink.SkippedCalls);
         Assert.Empty(_sink.Removals);
+    }
+
+    /// <summary>Minimal single-thread "UI" context: continuations queue up until the pump loop runs them.</summary>
+    private sealed class QueueContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _queue = new();
+        private readonly object _gate = new();
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            lock (_gate)
+            {
+                _queue.Enqueue((d, state));
+                Monitor.PulseAll(_gate);
+            }
+        }
+
+        /// <summary>Blocks (no polling) until at least one continuation is queued.</summary>
+        public bool WaitForQueued(TimeSpan timeout)
+        {
+            lock (_gate)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+                while (_queue.Count == 0)
+                {
+                    var left = deadline - DateTime.UtcNow;
+                    if (left <= TimeSpan.Zero || !Monitor.Wait(_gate, left)) return _queue.Count > 0;
+                }
+                return true;
+            }
+        }
+
+        public void Pump(Task until)
+        {
+            while (!until.IsCompleted)
+            {
+                (SendOrPostCallback Callback, object? State) item;
+                lock (_gate)
+                {
+                    while (_queue.Count == 0 && !until.IsCompleted) Monitor.Wait(_gate, 50);
+                    if (_queue.Count == 0) continue;
+                    item = _queue.Dequeue();
+                }
+                item.Callback(item.State);
+            }
+        }
+    }
+
+    [Fact(DisplayName = "AR16: a probe that finished before Dispose but whose apply step had not run yet is still dropped (load token gate)")]
+    public void Probe_DoneButNotYetApplied_ThenDisposed_IsDropped()
+    {
+        var (a, b, c) = CreateThreeImages(@"C:\photos");
+        _fs.Unreadable[b] = "locked";
+        var coordinator = CreateCoordinator();
+        var context = new QueueContext();
+
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            var body = BodyAsync();
+            context.Pump(body);
+            body.GetAwaiter().GetResult();
+        });
+        thread.Start();
+        Assert.True(thread.Join(Wait.DefaultTimeout), "test body finished");
+
+        Assert.Equal([a, b, c], _catalog.Paths);
+        Assert.Empty(_sink.SkippedCalls);
+        Assert.Empty(_sink.Removals);
+
+        async Task BodyAsync()
+        {
+            await coordinator.LoadAsync(@"C:\photos");
+            // LoadAsync is done, so only the probe's apply continuation can be queued: wait until the probe has
+            // completed and posted it, then cancel the load BEFORE the "UI thread" gets to run it.
+            Assert.True(context.WaitForQueued(Wait.DefaultTimeout), "the probe completed and queued its apply step");
+            coordinator.Dispose();
+            await coordinator.ReadabilityProbe;
+        }
     }
 }

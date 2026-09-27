@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
@@ -18,6 +20,14 @@ public sealed class DiskCacheStore
     private readonly long _maxBytes;
     private readonly ILog _log;
     private readonly string? _companionSuffix;
+    private readonly Func<DateTime> _utcNow;
+
+    // F-IMG-3: prune orders by LastAccessTimeUtc, but NTFS does not update it on reads by default and nothing else did,
+    // so the "LRU" was really FIFO. A cache hit reports NoteAccessed, which stamps the file at most once per
+    // AccessTouchInterval per entry (a metadata write, no file read) so a hot entry is not touched on every navigation.
+    public static readonly TimeSpan AccessTouchInterval = TimeSpan.FromMinutes(10);
+    private const int MaxTouchEntries = 8192;
+    private readonly ConcurrentDictionary<string, DateTime> _lastTouched = new(StringComparer.OrdinalIgnoreCase);
 
     // Prune coalescing state per store instance
     private int _pruneScheduled;
@@ -44,7 +54,7 @@ public sealed class DiskCacheStore
     public long MaxBytes => _maxBytes;
     public ILog Log => _log;
 
-    public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, string? companionSuffix = null)
+    public DiskCacheStore(string directory, string searchPattern = "*.png", long maxBytes = 0, ILog? log = null, string? companionSuffix = null, Func<DateTime>? utcNow = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
@@ -53,6 +63,22 @@ public sealed class DiskCacheStore
         _maxBytes = Math.Max(0, maxBytes);
         _log = log ?? NullLog.Instance;
         _companionSuffix = companionSuffix;
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Records that <paramref name="path"/> was just read (cache hit) by stamping its last-access time so the quota
+    /// prune evicts truly least-recently-used entries. Throttled per entry; best effort, never throws.
+    /// </summary>
+    public void NoteAccessed(string path)
+    {
+        var now = _utcNow();
+        if (_lastTouched.TryGetValue(path, out var last) && now - last < AccessTouchInterval) return;
+        if (_lastTouched.Count >= MaxTouchEntries) _lastTouched.Clear();
+        _lastTouched[path] = now;
+        try { File.SetLastAccessTimeUtc(path, now); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     /// <summary>
@@ -292,6 +318,18 @@ public sealed class DiskCacheStore
             TryDelete(path, log);
         }
     }
+
+    /// <summary>
+    /// True for the failures that reading or decoding a disk-cache entry can raise for a damaged, unreadable or foreign
+    /// file: I/O and access errors, our own header validation (<see cref="InvalidDataException"/>), and whatever WPF/WIC
+    /// throws for a well-framed but broken image (<see cref="FileFormatException"/>, and <see cref="ArgumentException"/>,
+    /// <see cref="InvalidOperationException"/>, <see cref="OverflowException"/>, <see cref="InvalidCastException"/> or
+    /// <see cref="COMException"/> for damaged metadata). Such an entry is a cache miss (delete it, decode from source);
+    /// anything else (cancellation, out-of-memory, programming errors) must still propagate.
+    /// </summary>
+    internal static bool IsCacheEntryFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or InvalidDataException
+            or ArgumentException or InvalidOperationException or OverflowException or InvalidCastException or COMException;
 
     /// <summary>
     /// Safely deletes a file, catching IOException and UnauthorizedAccessException.
