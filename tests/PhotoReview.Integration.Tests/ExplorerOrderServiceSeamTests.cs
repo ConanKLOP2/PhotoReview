@@ -94,6 +94,69 @@ public sealed class ExplorerOrderServiceSeamTests
         Assert.Equal(ExplorerOrderStatus.Available, next.Status);
     }
 
+    [Fact(DisplayName = "A query that reports Canceled because the timeout fired is TimedOut, whether it throws or returns the snapshot")]
+    public async Task TimeoutIsTimedOutWhetherTheQueryThrowsOrReturnsCanceled()
+    {
+        foreach (var throwing in new[] { true, false })
+        {
+            using var service = Create((folder, _, _, token) =>
+            {
+                Block(token);
+                if (throwing) token.ThrowIfCancellationRequested();
+                return ExplorerOrderService.Unavailable(folder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
+            });
+
+            var snapshot = await service.TryGetSnapshotAsync(Folder("tt"), TimeSpan.Zero, CancellationToken.None).WaitAsync(HangGuard);
+
+            Assert.Equal(ExplorerOrderStatus.TimedOut, snapshot.Status);
+            Assert.Equal(ExplorerReason.Timeout, snapshot.Reason);
+            Assert.Empty(snapshot.OrderedPaths);
+        }
+    }
+
+    [Fact(DisplayName = "Caller cancellation together with an expired timeout is Canceled (the caller wins)")]
+    public async Task CallerCancellationBeatsExpiredTimeout()
+    {
+        using var service = Create(Quick);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var snapshot = await service.TryGetSnapshotAsync(Folder("both"), TimeSpan.Zero, cts.Token);
+
+        Assert.Equal(ExplorerOrderStatus.Canceled, snapshot.Status);
+        Assert.Equal(ExplorerReason.Canceled, snapshot.Reason);
+    }
+
+    [Theory(DisplayName = "ResolveCancellation: caller and disposal win over the timeout; only a timeout-only Canceled becomes TimedOut")]
+    [InlineData(false, true, false, ExplorerOrderStatus.TimedOut)]   // timeout only
+    [InlineData(true, true, false, ExplorerOrderStatus.Canceled)]    // caller and timeout together
+    [InlineData(true, false, false, ExplorerOrderStatus.Canceled)]   // caller only
+    [InlineData(false, false, false, ExplorerOrderStatus.Canceled)]  // query cancelled itself
+    [InlineData(false, true, true, ExplorerOrderStatus.Canceled)]    // disposed
+    public void ResolveCancellationPicksTheRightStatus(bool callerCancelled, bool timeoutFired, bool disposed, ExplorerOrderStatus expected)
+    {
+        using var caller = new CancellationTokenSource();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(caller.Token);
+        if (callerCancelled) caller.Cancel();
+        else if (timeoutFired) linked.Cancel();
+        var canceled = ExplorerOrderService.Unavailable(Folder("r"), ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
+
+        var resolved = ExplorerOrderService.ResolveCancellation(canceled, disposed, caller.Token, linked.Token);
+
+        Assert.Equal(expected, resolved.Status);
+        Assert.Equal(expected == ExplorerOrderStatus.TimedOut ? ExplorerReason.Timeout : ExplorerReason.Canceled, resolved.Reason);
+    }
+
+    [Fact(DisplayName = "ResolveCancellation leaves non-Canceled results alone")]
+    public void ResolveCancellationKeepsOtherStatuses()
+    {
+        using var linked = new CancellationTokenSource();
+        linked.Cancel();
+        var available = Available(Folder("k"), "a.jpg");
+
+        Assert.Same(available, ExplorerOrderService.ResolveCancellation(available, false, CancellationToken.None, linked.Token));
+    }
+
     [Fact]
     public async Task NegativeTimeoutMeansExpiredNotException()
     {

@@ -221,12 +221,14 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
         var workTask = _pump.Enqueue(() =>
         {
             try { return _query(canonicalFolder, progress, batchSize, linkedToken); }
-            catch (OperationCanceledException) { return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled); }
+            catch (OperationCanceledException) { return ResolveCancellation(Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled), Volatile.Read(ref _disposed) != 0, cancellationToken, linkedToken); }
             catch (Exception ex) { _log.Error("Explorer native view query failed", ex); return Unavailable(canonicalFolder, ExplorerOrderStatus.Failed, ExplorerReason.Format(ExplorerReason.QueryFailed, ex.GetType().Name)); }
         });
         try
         {
-            return await workTask.WaitAsync(linkedToken).ConfigureAwait(false);
+            // A snapshot that finished as Canceled only because the timeout fired is a timeout, whichever side observed it first.
+            var snapshot = await workTask.WaitAsync(linkedToken).ConfigureAwait(false);
+            return ResolveCancellation(snapshot, Volatile.Read(ref _disposed) != 0, cancellationToken, linkedToken);
         }
         catch (OperationCanceledException)
         {
@@ -239,6 +241,15 @@ public sealed class ExplorerOrderService : IExplorerOrderProvider, IDisposable
             return Unavailable(canonicalFolder, ExplorerOrderStatus.Canceled, ExplorerReason.Canceled);
         }
     }
+
+    /// <summary>
+    /// Decides what a Canceled result really means: the caller's own cancellation (and disposal) win; otherwise, if the
+    /// linked timeout token fired, it was a timeout. Non-Canceled results and self-cancelled queries are returned untouched.
+    /// </summary>
+    internal static ExplorerViewSnapshot ResolveCancellation(ExplorerViewSnapshot snapshot, bool disposed, CancellationToken callerToken, CancellationToken linkedToken)
+        => snapshot.Status == ExplorerOrderStatus.Canceled && !callerToken.IsCancellationRequested && !disposed && linkedToken.IsCancellationRequested
+            ? Unavailable(snapshot.Folder, ExplorerOrderStatus.TimedOut, ExplorerReason.Timeout)
+            : snapshot;
 
     /// <summary>A negative timeout other than <see cref="Timeout.InfiniteTimeSpan"/> means "already expired", not an exception.</summary>
     private static TimeSpan NormalizeTimeout(TimeSpan timeout)
