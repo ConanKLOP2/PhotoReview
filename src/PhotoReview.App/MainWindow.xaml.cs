@@ -271,12 +271,20 @@ public partial class MainWindow : Window
     }
 
     // The visible toolbar sits at the user's opacity (never below the minimum); hidden is always 0.
-    private void SetToolbarOpacity(bool visible) => FadeTo(ToolbarPanel, visible, ToolbarAutoHidePolicy.TargetOpacity(_settings.ToolbarOpacityPercent));
+    private void SetToolbarOpacity(bool visible) => FadeTo(ToolbarPanel, _toolbarFadeGate, visible, ToolbarAutoHidePolicy.TargetOpacity(_settings.ToolbarOpacityPercent));
 
-    /// <summary>Shared fade for the toolbar and the info overlays; faded out = click-through so clicks/wheel/pan reach the image.</summary>
-    private static void FadeTo(UIElement element, bool visible, double visibleOpacity = 1.0)
+    private readonly FadeTargetGate _toolbarFadeGate = new();
+    private readonly FadeTargetGate _infoFadeGate = new();
+
+    /// <summary>
+    /// Shared fade for the toolbar and the info overlays; faded out = click-through so clicks/wheel/pan reach the image.
+    /// Callers re-evaluate on every mouse move, so nothing is started while the target is unchanged.
+    /// </summary>
+    private static void FadeTo(UIElement element, FadeTargetGate gate, bool visible, double visibleOpacity = 1.0)
     {
-        var animation = new DoubleAnimation(visible ? visibleOpacity : 0.0, TimeSpan.FromMilliseconds(visible ? ToolbarFadeInMs : ToolbarFadeOutMs));
+        var target = visible ? visibleOpacity : 0.0;
+        if (!gate.TryChange(target)) return;
+        var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(visible ? ToolbarFadeInMs : ToolbarFadeOutMs));
         element.BeginAnimation(OpacityProperty, animation);
         element.IsHitTestVisible = visible;
     }
@@ -324,7 +332,7 @@ public partial class MainWindow : Window
         if (wasKept && !keepVisible) { NoteInfoActivity(); return; }
         var outcome = InfoOverlayAutoHidePolicy.Evaluate(
             _settings.InfoOverlayAutoHide, _viewModel.HasImages, _viewModel.StatusNeedsAttention, _viewModel.Compare.IsVisible, IsActive, _infoIdleElapsed);
-        FadeTo(InfoOverlayHost, outcome.Opacity > 0);
+        FadeTo(InfoOverlayHost, _infoFadeGate, outcome.Opacity > 0);
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateFitSize();
@@ -362,7 +370,7 @@ public partial class MainWindow : Window
     /// </summary>
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (_viewModel.IsFileActionInProgress)
+        if (_viewModel.DeferCloseForFileAction())
         {
             e.Cancel = true;
             if (!_closeWhenFileActionDone)

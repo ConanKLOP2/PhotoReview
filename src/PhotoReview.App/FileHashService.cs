@@ -92,7 +92,9 @@ public sealed class FileHashService : IFileHasher
 
     private async Task<string> ComputeAndCacheAsync(string path, long length, DateTime lastWriteUtc, int generation, CancellationToken cancellationToken)
     {
-        if (_sourceBytesCache is not null)
+        // A file the cache could never keep (over its capacity or 2 GB) is streamed: reading it whole would spike RAM on the LOH,
+        // throw OverflowException past 2 GB and evict the viewer's bytes for nothing.
+        if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(length))
         {
             var bytes = _sourceBytesCache.GetOrRead(path);
             return CompleteIfUnchanged(path, length, lastWriteUtc, generation, Convert.ToHexString(SHA256.HashData(bytes)));
