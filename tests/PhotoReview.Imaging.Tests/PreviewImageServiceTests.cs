@@ -645,6 +645,35 @@ public sealed class PreviewImageServiceDiskCacheTests : IAsyncLifetime
         Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0);
     }
 
+    [Fact(DisplayName = "A preview disk cache capacity of 0 turns the disk cache off: nothing is read, written or pruned")]
+    public async Task ZeroDiskCacheCapacityDisablesDiskCache()
+    {
+        var diskDir = _root.Dir("cap-zero");
+        var writer = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir), diskDir);
+        await writer.GetPreviewAsync(_previewPath);
+        var existing = await WaitForCacheFilesAsync(diskDir);
+
+        var metrics = new ReviewMetrics();
+        var off = Track(new PreviewImageService(metrics, () => false, () => 32, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
+        var image = await off.GetPreviewAsync(_previewPath);
+        await off.ShutdownPersistWorkersAsync();
+        var snapshot = metrics.Snapshot();
+
+        Assert.True(image.PixelWidth > 0 && snapshot.SourceReads == 1 && snapshot.DiskCacheHits == 0, "the existing entry must not be read");
+        Assert.True(File.Exists(existing[0]), "a disabled cache must not prune existing entries");
+    }
+
+    [Fact(DisplayName = "A preview disk cache capacity of 0 never writes a new entry")]
+    public async Task ZeroDiskCacheCapacityDoesNotWrite()
+    {
+        var diskDir = _root.Dir("cap-zero-write");
+        var off = Track(new PreviewImageService(new ReviewMetrics(), () => false, () => 32, diskCacheDirectory: diskDir, diskCacheCapacityBytes: 0), diskDir);
+        await off.GetPreviewAsync(_previewPath);
+        await off.ShutdownPersistWorkersAsync();
+
+        Assert.Empty(Directory.GetFiles(diskDir, "*.pv4"));
+    }
+
     [Fact(DisplayName = "The disk cache directory is pruned instead of growing unbounded")]
     public async Task DiskCacheIsPrunedToConfiguredQuota()
     {

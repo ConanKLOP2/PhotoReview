@@ -157,6 +157,7 @@ public sealed class ThumbnailCache : IDisposable
             try
             {
                 var fromDisk = await DecodeAsync(cachePath, cancellationToken).ConfigureAwait(false);
+                _diskStore.NoteAccessed(cachePath);
                 if (perf) PhotoReviewPerf.Log.ThumbEnd(perfNav, perfPathId, "disk", PhotoReviewPerf.Ms(perfT0));
                 return fromDisk;
             }
