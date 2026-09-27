@@ -1,3 +1,10 @@
+---
+id: L01/L02
+order: 9
+summary: |-
+  Deep review of the 289 `needs-deep-review` Imaging ledger rows: 287 no issue, 2 low-severity fixes (weak WicDirect memory-buffer test oracle; wasted disk-cache-path hash when the disk cache is disabled).
+---
+
 # Deep review of the 289 `needs-deep-review` ledger rows (2026-09-27)
 
 Scope: every row in [`FUNCTION-BODY-AUDIT-2026-09-27.tsv`](../FUNCTION-BODY-AUDIT-2026-09-27.tsv) with

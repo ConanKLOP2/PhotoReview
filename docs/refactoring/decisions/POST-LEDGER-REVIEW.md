@@ -1,3 +1,10 @@
+---
+id: P01-P03
+order: 12
+summary: |-
+  Post-ledger review of master changes since 3ef2bb5 (#186-#198+) plus screened-static hot-path rows outside Imaging: no defects in the reviewed diff; two document-only journal/undo races found (concurrent-retry misreport, cross-folder Undo contamination).
+---
+
 # Post-ledger review: master changes since the 3ef2bb5 audit snapshot + screened-static hot path (2026-09-27)
 
 Scope: (A) every production/test function body added or changed on `origin/master` since the

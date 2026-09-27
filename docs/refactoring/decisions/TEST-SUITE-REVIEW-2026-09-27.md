@@ -1,3 +1,10 @@
+---
+id: TEST-SUITE-REVIEW-2026-09-27
+order: 21
+summary: |-
+  External test-suite review's 9 findings independently re-verified: 6 confirmed and fixed (test-only, no `src/` changes), 2 rejected as false positives/already-sanctioned, 1 left as a documented coverage gap.
+---
+
 # TEST-SUITE-REVIEW-2026-09-27 — external multi-agent test-suite review
 
 External static, read-only multi-agent review of the whole test suite surfaced 9 findings. Each was
