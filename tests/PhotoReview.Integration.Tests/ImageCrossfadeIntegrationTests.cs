@@ -2,12 +2,14 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using PhotoReview.App;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Settings;
 using PhotoReview.Integration.Tests.Infrastructure;
 using PhotoReview.TestSupport;
+using Xunit.Abstractions;
 
 namespace PhotoReview.Integration.Tests;
 
@@ -27,6 +29,12 @@ public sealed class ImageCrossfadeIntegrationTests
     private static readonly TimeSpan PresentTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan FadeTimeout = TimeSpan.FromSeconds(3);
     private static readonly Size WindowContent = new(400, 300);
+
+    // TEMP DIAGNOSTIC (CI-CROSSFADE-ANIMATION-FLAKE investigation, remove before merge): capture whether the
+    // WPF composition/render thread ticks at all on the GitHub-hosted windows-latest runner.
+    private readonly ITestOutputHelper _output;
+
+    public ImageCrossfadeIntegrationTests(ITestOutputHelper output) => _output = output;
 
     /// <summary>A two-image folder, real MainWindow, <paramref name="transition"/> applied before the first present.
     /// Laid out at <see cref="WindowContent"/> so <c>MainImage.ActualWidth/Height</c> are non-zero -- StartImageFade
@@ -72,17 +80,43 @@ public sealed class ImageCrossfadeIntegrationTests
 
             var outgoingBitmap = window.MainImage.Source;
             Assert.NotNull(outgoingBitmap);
-            // Fire-and-forget, then poll with a bound: never await the navigation task directly -- if it were
-            // ever to hang (a real bug, or extreme contention from other processes on a shared machine), an
-            // unbounded await would block this test (and the whole run) forever instead of failing cleanly.
-            _ = window.ViewModel.NextAsync();
-            Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 1, PresentTimeout), "Second image never presented");
 
-            Assert.Equal(Visibility.Visible, window.OutgoingImage.Visibility);
-            Assert.Same(outgoingBitmap, window.OutgoingImage.Source); // froze the OUTGOING frame, not the new one
-            Assert.True(await StaTestHost.WaitForAsync(() => window.OutgoingImage.Opacity < 1.0, FadeTimeout), "The fade animation never started.");
-            Assert.True(await StaTestHost.WaitForAsync(() => window.OutgoingImage.Visibility == Visibility.Collapsed, FadeTimeout), "The fade never completed (OnImageFadeCompleted).");
-            Assert.Null(window.OutgoingImage.Source); // released once the fade completes
+            // TEMP DIAGNOSTIC (CI-CROSSFADE-ANIMATION-FLAKE, remove before merge): does the composition/render
+            // thread ever tick in-process on this runner at all?
+            _output.WriteLine($"RenderCapability.Tier=0x{RenderCapability.Tier:X8} (hi word = tier)");
+            var renderingTicks = 0;
+            EventHandler onRendering = (_, _) => renderingTicks++;
+            System.Windows.Media.CompositionTarget.Rendering += onRendering;
+            try
+            {
+                // Fire-and-forget, then poll with a bound: never await the navigation task directly -- if it were
+                // ever to hang (a real bug, or extreme contention from other processes on a shared machine), an
+                // unbounded await would block this test (and the whole run) forever instead of failing cleanly.
+                _ = window.ViewModel.NextAsync();
+                Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 1, PresentTimeout), "Second image never presented");
+
+                Assert.Equal(Visibility.Visible, window.OutgoingImage.Visibility);
+                Assert.Same(outgoingBitmap, window.OutgoingImage.Source); // froze the OUTGOING frame, not the new one
+                _output.WriteLine($"Immediately after fade start: Opacity={window.OutgoingImage.Opacity}, " +
+                    $"HasAnimatedProperties={window.OutgoingImage.HasAnimatedProperties}, RenderingTicksSoFar={renderingTicks}");
+
+                var fadeStarted = await StaTestHost.WaitForAsync(() => window.OutgoingImage.Opacity < 1.0, FadeTimeout);
+                _output.WriteLine($"After fade-start wait ({FadeTimeout}): fadeStarted={fadeStarted}, " +
+                    $"Opacity={window.OutgoingImage.Opacity}, HasAnimatedProperties={window.OutgoingImage.HasAnimatedProperties}, " +
+                    $"RenderingTicksSoFar={renderingTicks}, Visibility={window.OutgoingImage.Visibility}");
+                Assert.True(fadeStarted, "The fade animation never started.");
+
+                var fadeCompleted = await StaTestHost.WaitForAsync(() => window.OutgoingImage.Visibility == Visibility.Collapsed, FadeTimeout);
+                _output.WriteLine($"After fade-complete wait ({FadeTimeout}): fadeCompleted={fadeCompleted}, " +
+                    $"Opacity={window.OutgoingImage.Opacity}, RenderingTicksSoFar={renderingTicks}");
+                Assert.True(fadeCompleted, "The fade never completed (OnImageFadeCompleted).");
+                Assert.Null(window.OutgoingImage.Source); // released once the fade completes
+            }
+            finally
+            {
+                System.Windows.Media.CompositionTarget.Rendering -= onRendering;
+                _output.WriteLine($"Final RenderingTicksSoFar={renderingTicks}");
+            }
         });
     }
 
