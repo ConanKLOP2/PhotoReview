@@ -28,6 +28,12 @@ public sealed class ImageCrossfadeIntegrationTests
     private static readonly TimeSpan FadeTimeout = TimeSpan.FromSeconds(3);
     private static readonly Size WindowContent = new(400, 300);
 
+    /// <summary>Used only by the test that polls for an in-flight (not just completed) fade -- see the
+    /// CI-CROSSFADE-ANIMATION-FLAKE comment at its call site for why <see cref="AppSettings.MinImageTransitionMs"/>
+    /// is not reliable there. Still well under <see cref="FadeTimeout"/> and the other two crossfade tests keep
+    /// the fast default since they never assert on an in-flight Opacity value.</summary>
+    private const int FadeDurationForCompletionAssertionMs = 200;
+
     /// <summary>A two-image folder, real MainWindow, <paramref name="transition"/> applied before the first present.
     /// Laid out at <see cref="WindowContent"/> so <c>MainImage.ActualWidth/Height</c> are non-zero -- StartImageFade
     /// (MainWindow.xaml.cs) returns early otherwise, same requirement as MainWindowZoomDetailTests.</summary>
@@ -72,6 +78,23 @@ public sealed class ImageCrossfadeIntegrationTests
 
             var outgoingBitmap = window.MainImage.Source;
             Assert.NotNull(outgoingBitmap);
+
+            // CI-CROSSFADE-ANIMATION-FLAKE (see docs/refactoring/decisions/): the shared helper's
+            // AppSettings.MinImageTransitionMs (40ms) is too short for THIS assertion, which needs to
+            // observe an in-flight Opacity value. On a loaded GitHub Actions windows-latest runner, the
+            // whole 40ms animation (start -> Completed, which reverts Opacity to its pre-fade base value
+            // of 1.0 -- see OnImageFadeCompleted) can finish inside a single gap of this test's
+            // Background-priority poll (StaTestHost.WaitForAsync: 10ms Task.Delay + a Background dispatch),
+            // so the poll never samples an intermediate frame. Confirmed by CI-only diagnostics (real
+            // GitHub Actions run, not local): CompositionTarget.Rendering ticked ~67 Hz and
+            // RenderCapability.Tier reported full hardware acceleration (0x00020000) -- the compositor was
+            // never idle -- yet HasAnimatedProperties had already flipped back to false (fade fully
+            // completed) between two consecutive polls. Widening the animation to
+            // FadeDurationForCompletionAssertionMs below leaves multiple render frames inside the fade
+            // window regardless of runner load, without weakening what this test proves (the wiring still
+            // starts a real WPF animation and still must reach Collapsed on completion).
+            window.Settings.ImageTransitionMs = FadeDurationForCompletionAssertionMs;
+
             // Fire-and-forget, then poll with a bound: never await the navigation task directly -- if it were
             // ever to hang (a real bug, or extreme contention from other processes on a shared machine), an
             // unbounded await would block this test (and the whole run) forever instead of failing cleanly.
