@@ -6,6 +6,7 @@ namespace PhotoReview.Imaging.Tests.Caching;
 [Trait("Category", "HotPath")]
 public sealed class SourceBytesCacheRobustnessTests : IDisposable
 {
+    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(10);
     private readonly TempRoot _root = new("SourceBytesRobust");
 
     public void Dispose() => _root.Dispose();
@@ -49,17 +50,33 @@ public sealed class SourceBytesCacheRobustnessTests : IDisposable
 
         var reader = new Thread(() => cache.GetOrRead(path));
         reader.Start();
-        paused.Wait();
-        cache.BeforePublishForTests = null;
-        var evictor = new Thread(() => { if (clear) cache.Clear(); else cache.Evict(path); });
-        evictor.Start();
-        // Either the eviction already finished (unguarded: nothing to remove yet) or it is blocked on the gate.
-        SpinWait.SpinUntil(() => !evictor.IsAlive || (evictor.ThreadState & ThreadState.WaitSleepJoin) != 0);
-        release.Set();
-        reader.Join();
-        evictor.Join();
+        try
+        {
+            Assert.True(paused.Wait(RaceTimeout), "Reader thread never reached the publish gate (paused.Wait timed out).");
+            cache.BeforePublishForTests = null;
+            var evictor = new Thread(() => { if (clear) cache.Clear(); else cache.Evict(path); });
+            evictor.Start();
+            try
+            {
+                // Either the eviction already finished (unguarded: nothing to remove yet) or it is blocked on the gate.
+                var synchronized = SpinWait.SpinUntil(
+                    () => !evictor.IsAlive || (evictor.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                    RaceTimeout);
+                Assert.True(synchronized, "Evictor thread neither finished nor reached the publish gate within the timeout.");
+            }
+            finally
+            {
+                release.Set();
+            }
+            Assert.True(reader.Join(RaceTimeout), "Reader thread did not finish after release.Set() (reader.Join timed out).");
+            Assert.True(evictor.Join(RaceTimeout), "Evictor thread did not finish after release.Set() (evictor.Join timed out).");
 
-        Assert.Equal(0, cache.Count);
+            Assert.Equal(0, cache.Count);
+        }
+        finally
+        {
+            release.Set();
+        }
     }
 
     [Fact(DisplayName = "A file larger than the whole capacity is returned but never cached, and does not push out smaller entries")]
