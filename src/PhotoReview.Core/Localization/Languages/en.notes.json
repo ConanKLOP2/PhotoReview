@@ -283,6 +283,8 @@
   "recovery.dismiss.confirm.message": "Confirmation dialog text; {count} = number of entries. Keep the blank line.",
   "recovery.dismiss.confirm.title": "Confirmation dialog caption.",
   "recovery.dismiss.failed.title": "Error dialog caption; the message is the OS/journal error text.",
+  "recovery.dismiss.stale.message": "Info dialog text shown when a Dismiss race was detected: {count} = entries the journal already changed underneath the Recovery window (e.g. a concurrent retry), so they were left alone instead of being cleared.",
+  "recovery.dismiss.stale.title": "Info dialog caption for the Dismiss-race message above.",
   "recovery.header": "Heading.",
   "recovery.retry": "Button.Content. SourcePresenceTests looks for the literal 'Retry Move/Copy' in XAML attributes.",
   "recovery.retry.automationName": "AutomationProperties.Name.",

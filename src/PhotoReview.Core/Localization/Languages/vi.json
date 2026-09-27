@@ -300,6 +300,8 @@
   "recovery.dismiss.confirm.message": "Xóa {count} mục khỏi danh sách phục hồi?\n\nChỉ xóa khỏi danh sách, không di chuyển hay xóa tệp nào. Sau khi xóa sẽ không thể thử lại các mục này.",
   "recovery.dismiss.confirm.title": "Xác nhận xóa",
   "recovery.dismiss.failed.title": "Không thể xóa",
+  "recovery.dismiss.stale.message": "{count} mục đã được xử lý ở nơi khác (ví dụ: một lần thử lại đã hoàn tất) nên không bị xóa. Danh sách đã được làm mới.",
+  "recovery.dismiss.stale.title": "Một số mục không bị xóa",
   "recovery.detail.action": "Đề xuất xử lý",
   "recovery.detail.bytes": "{size} byte",
   "recovery.detail.checking": "Đang kiểm tra mục này...",
