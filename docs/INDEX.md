@@ -13,6 +13,7 @@ Find a document by purpose. Read tiers: **T0** (every session, â‰¤16 KB total) Â
 | [`TRANSLATING.md`](TRANSLATING.md) | Add/fix a language (JSON catalogs) | T1, translations |
 | [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) | Q-* decisions: one open row + one line per decided | T1, decision lookup |
 | [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) | Perf baselines and measured conclusions | T1, perf work |
+| [`refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md`](refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md) | Current whole-project review, function-level candidates and coverage | T1, review work |
 | [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
 | [`refactoring/I18N-PLAN.md`](refactoring/I18N-PLAN.md) | Multi-language design (L00-L12, done) | T1, UI text |
 | `refactoring/arch-review/AR02, AR04, AR11` | Kept plans referenced by ADR 0005 and code comments | T2 |
