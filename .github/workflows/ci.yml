@@ -215,4 +215,43 @@ jobs:
             created+=("${tag}")
             echo "Tagged ${tag} at ${c}${note}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
           done
-          if [ ${#created[@]} -gt 0 ]; then git push origin "${created[@]}"; else echo "No missing tags"; fi
+          if [ ${#created[@]} -eq 0 ]; then
+            echo "No missing tags"
+            exit 0
+          fi
+          # Push each tag individually: GitHub's default GITHUB_TOKEN is permanently, platform-level
+          # blocked from creating/updating any ref whose target commit touches .github/workflows/ (anti
+          # workflow-permission-escalation; not something `permissions:` can grant). A historical tag such
+          # as v2.0.179 sits on such a commit and will NEVER push. A single batched
+          # `git push origin "${created[@]}"` fails atomically on that one ref and was reporting this job
+          # red on every run even when THIS run's own tag pushed fine. Looping means one permanently-stuck
+          # tag can no longer block the rest.
+          failures=0
+          for tag in "${created[@]}"; do
+            if push_err=$(git push origin "${tag}" 2>&1); then
+              echo "Pushed ${tag}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+              continue
+            fi
+            echo "${push_err}" >&2
+            target=$(git rev-list -n 1 "${tag}")
+            workflow_commit=0
+            if [ -n "$(git diff-tree --no-commit-id --name-only -r "${target}" -- .github/workflows 2>/dev/null)" ]; then
+              workflow_commit=1
+            fi
+            # Primary signal: GitHub's actual rejection text for this restriction. Backstop: even if the
+            # wording changes, a push failure for a tag whose target commit touches .github/workflows/ is
+            # this same known-impossible case, not a new problem.
+            if printf '%s' "${push_err}" | grep -qiE "workflow|refusing to allow" || [ "${workflow_commit}" -eq 1 ]; then
+              {
+                echo "::warning::Skipped push of ${tag} (target ${target} modifies .github/workflows/): GitHub's GITHUB_TOKEN is permanently blocked from creating/updating a ref pointing at a workflow-file change (anti-escalation, not a grantable permission). Expected and cannot be fixed; harmless, will be retried (and skipped again) on future runs."
+                echo "- Skipped pushing \`${tag}\` (target \`${target}\` touches \`.github/workflows/\`): permanently blocked by GitHub's workflow-permission restriction on \`GITHUB_TOKEN\`. Expected, not a real failure." >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+              }
+            else
+              echo "::error::Failed to push ${tag} for a reason other than the known workflow-permission restriction."
+              failures=$((failures + 1))
+            fi
+          done
+          if [ "${failures}" -gt 0 ]; then
+            echo "${failures} tag push(es) failed for an unexpected reason; see the errors above." >&2
+            exit 1
+          fi
