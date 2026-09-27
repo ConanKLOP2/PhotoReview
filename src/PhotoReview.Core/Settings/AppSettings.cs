@@ -262,5 +262,26 @@ public class AppSettings
     /// the viewport centre otherwise. Absent in older configs = <see cref="KeyboardZoomAnchor.Pointer"/>.
     /// </summary>
     public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.Pointer;
+
+    // ---- Image change transition (PR-D feat/image-crossfade). Absent in older configs = these defaults; no migration step. ----
+
+    /// <summary>Smallest accepted <see cref="ImageTransitionMs"/>.</summary>
+    public const int MinImageTransitionMs = 40;
+
+    /// <summary>Largest accepted <see cref="ImageTransitionMs"/>.</summary>
+    public const int MaxImageTransitionMs = 400;
+
+    /// <summary>Default <see cref="ImageTransitionMs"/>.</summary>
+    public const int DefaultImageTransitionMs = 120;
+
+    /// <summary>
+    /// Optional transition when the CURRENT PHOTO CHANGES (navigation to another file). Never applied to the
+    /// progressive upgrades of the same image (thumbnail -> preview -> original); those stay an instant swap.
+    /// Default <see cref="ImageTransition.None"/> (zero extra cost: no elements rendered, no animation created).
+    /// </summary>
+    public ImageTransition ImageTransition { get; set; } = ImageTransition.None;
+
+    /// <summary>Duration of the <see cref="ImageTransition.Fade"/> transition, in milliseconds; [<see cref="MinImageTransitionMs"/>, <see cref="MaxImageTransitionMs"/>], default <see cref="DefaultImageTransitionMs"/>.</summary>
+    public int ImageTransitionMs { get; set; } = DefaultImageTransitionMs;
 }
 

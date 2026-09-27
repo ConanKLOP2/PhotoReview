@@ -739,5 +739,13 @@
   "settings.keyboardZoomAnchor.automationName": "Điểm neo khi thu phóng bằng bàn phím",
   "settings.keyboardZoomAnchor.hint": "Nơi giữ nguyên vị trí ảnh khi thu phóng +/- bằng bàn phím, 100% và phím tắt thu phóng nhanh. Con lăn chuột và nhấn để thu phóng luôn neo tại vị trí con trỏ.",
   "enum.keyboardZoomAnchor.pointer": "Vị trí con trỏ chuột",
-  "enum.keyboardZoomAnchor.viewportCentre": "Giữa khung nhìn"
+  "enum.keyboardZoomAnchor.viewportCentre": "Giữa khung nhìn",
+  "settings.imageTransition.label": "Hiệu ứng khi đổi ảnh",
+  "settings.imageTransition.automationName": "Hiệu ứng khi đổi ảnh",
+  "settings.imageTransition.hint": "Chỉ áp dụng khi chuyển sang ảnh khác; việc nâng chất lượng của cùng một ảnh (thumbnail lên bản đầy đủ) luôn tức thời.",
+  "enum.imageTransition.none": "Không hiệu ứng",
+  "enum.imageTransition.fade": "Mờ dần (Fade)",
+  "settings.imageTransitionMs.label": "Thời lượng mờ dần (ms)",
+  "settings.imageTransitionMs.automationName": "Thời lượng mờ dần, tính bằng mili giây",
+  "dialog.settingsInvalid.imageTransitionMs": "Thời lượng mờ dần phải là số nguyên từ {min} đến {max} mili giây."
 }

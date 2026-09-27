@@ -747,5 +747,13 @@
   "settings.keyboardZoomAnchor.automationName": "Keyboard zoom anchor point",
   "settings.keyboardZoomAnchor.hint": "Where +/- keyboard zoom, 100 % and the click-zoom shortcut keep the image in place. Mouse wheel and click-to-zoom always anchor at the cursor.",
   "enum.keyboardZoomAnchor.pointer": "Mouse position",
-  "enum.keyboardZoomAnchor.viewportCentre": "Centre of the view"
+  "enum.keyboardZoomAnchor.viewportCentre": "Centre of the view",
+  "settings.imageTransition.label": "Transition when changing photo",
+  "settings.imageTransition.automationName": "Transition when changing photo",
+  "settings.imageTransition.hint": "Only when navigating to a different photo; the thumbnail-to-full-quality upgrade of the same photo always stays instant.",
+  "enum.imageTransition.none": "None",
+  "enum.imageTransition.fade": "Fade",
+  "settings.imageTransitionMs.label": "Fade duration (ms)",
+  "settings.imageTransitionMs.automationName": "Fade duration, in milliseconds",
+  "dialog.settingsInvalid.imageTransitionMs": "Fade duration must be a whole number between {min} and {max} milliseconds."
 }

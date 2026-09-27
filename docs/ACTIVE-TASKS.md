@@ -15,6 +15,7 @@ This file is the only place for open work (`task_on_progress.md` links here, do 
 | **Flaky test** | `InfoOverlayFaultTests.SiblingSearchFault_*` under heavy CPU (race on the pending placeholder). | Fix if it recurs in CI. |
 | **Caution** | `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation. | - |
 | **GUI checks (user)** | Merged: PR-A `feat/zoom-key-anchor-kinetic-arrows` (#177, v2.0.181) — +/- zoom stays under the mouse, arrow keys glide; PR-B `feat/fit-width-height-keep-zoom` (#178, v2.0.184) — W/H, Initial zoom presets, K keeps zoom. | User confirms or reports. |
+| **PR-D** `feat/image-crossfade` | Open PR, awaiting review; GUI check: Settings > transition Fade, browse fast with auto-repeat. | User reviews/merges. |
 
 ## Closed on purpose (do not reopen without a new measurement)
 

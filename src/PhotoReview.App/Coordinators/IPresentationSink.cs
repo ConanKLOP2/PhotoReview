@@ -6,8 +6,13 @@
 /// </summary>
 public interface IPresentationSink
 {
-    /// <summary>Cập nhật ảnh hiển thị chính (hoặc null khi ở chế độ Compare hoặc rỗng).</summary>
-    void SetCurrentImage(object? image);
+    /// <summary>
+    /// Cập nhật ảnh hiển thị chính (hoặc null khi ở chế độ Compare hoặc rỗng).
+    /// <paramref name="isFileChange"/>: true chỉ khi đây là lần trình diễn ĐẦU TIÊN của một điều hướng sang file
+    /// khác (feat/image-crossfade) -- false cho các lần nâng cấp cùng ảnh (thumbnail -> preview -> gốc), cho ảnh
+    /// đầu tiên sau khi mở folder, và khi image là null.
+    /// </summary>
+    void SetCurrentImage(object? image, bool isFileChange = false);
 
     /// <summary>Cập nhật nội dung thanh trạng thái.</summary>
     void SetStatusText(string status);

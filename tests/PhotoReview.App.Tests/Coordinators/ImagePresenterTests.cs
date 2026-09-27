@@ -505,7 +505,7 @@ public sealed partial class ImagePresenterTests : IDisposable
             embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
 
         var thumbnailShown = new TaskCompletionSource<bool>();
-        _sink.OnSetCurrentImage = img =>
+        _sink.OnSetCurrentImage = (img, _) =>
         {
             if (ReferenceEquals(img, thumbnailImage.PlatformImage)) thumbnailShown.TrySetResult(true);
         };
@@ -522,6 +522,64 @@ public sealed partial class ImagePresenterTests : IDisposable
         await presentTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Same(previewImage.PlatformImage, presenter.CurrentImage);
+    }
+
+    [Fact(DisplayName = "feat/image-crossfade: thumbnail-then-preview of the SAME navigation never requests a transition on the upgrade, only (if at all) on the first bitmap")]
+    public async Task PresentAsync_ThumbnailReplacedByPreview_SinkNeverRequestsTransitionForTheUpgrade()
+    {
+        var f1 = CreateFakeImageFile("crossfade-same-file.jpg");
+        _catalog.Reset([f1]);
+
+        var thumbnailImage = new FakeDecodedImage { PixelWidth = 160 };
+        var previewImage = new FakeDecodedImage { PixelWidth = 1920 };
+
+        // Gated like the sibling test above: the thumbnail (resolved immediately) is guaranteed to win the race,
+        // so both SetCurrentImage calls below belong to the SAME navigation/file.
+        using var gatedDecoder = new GatedDecoder(previewImage);
+        var previewService = CreatePreviewService(gatedDecoder);
+
+        using var thumbnailCache = new ThumbnailCache(
+            diskDirectory: Path.Combine(_tempDir, "fast-thumbs-crossfade"),
+            persistNewThumbnails: false,
+            embeddedThumbnailReader: (_, _) => Task.FromResult<IDecodedImage?>(thumbnailImage));
+
+        var thumbnailShown = new TaskCompletionSource<bool>();
+        _sink.OnSetCurrentImage = (img, _) =>
+        {
+            if (ReferenceEquals(img, thumbnailImage.PlatformImage)) thumbnailShown.TrySetResult(true);
+        };
+
+        var presenter = CreatePresenterWithServices(previewService, thumbnailCache);
+
+        var presentTask = presenter.PresentAsync(0);
+        await thumbnailShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        gatedDecoder.Release();
+        await presentTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal([thumbnailImage.PlatformImage, previewImage.PlatformImage], _sink.Images);
+        // The SECOND call (the preview replacing the thumbnail for the SAME file) must never request a
+        // transition -- only the first bitmap of a navigation can (and even then only when there was a
+        // previous file to fade from, which there is not here: this is the folder's first image).
+        Assert.False(_sink.FileChangeFlags[1]);
+    }
+
+    [Fact(DisplayName = "feat/image-crossfade: navigating to a different file after one is already shown requests a transition once, on the first bitmap only")]
+    public async Task PresentAsync_NavigatingToADifferentFile_RequestsTransitionOnlyOnceForTheFirstBitmap()
+    {
+        var f1 = CreateFakeImageFile("crossfade-first.jpg");
+        var f2 = CreateFakeImageFile("crossfade-second.jpg");
+        _catalog.Reset([f1, f2]);
+        var presenter = CreatePresenterWithServices(_previewService, _thumbnailCache);
+
+        // LoadingMode.Preview + ramReady=false + no embedded thumbnail (PNG fixture): a single
+        // SetCurrentImage call per navigation, straight to the preview.
+        await presenter.PresentAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Single(_sink.Images);
+        Assert.False(_sink.FileChangeFlags[0]); // first image after opening the folder: nothing to fade from
+
+        await presenter.PresentAsync(1).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(2, _sink.Images.Count);
+        Assert.True(_sink.FileChangeFlags[1]); // a real navigation to a different file
     }
 
     [Fact(DisplayName = "A thumbnail read that faults (unexpected WIC failure) is treated as no thumbnail: the preview is still presented and the image is not reported as broken")]
@@ -746,13 +804,15 @@ public sealed partial class ImagePresenterTests : IDisposable
         public int InitialViewModeAppliedCount { get; private set; }
         public List<string> PresentedPaths { get; } = [];
         public List<string> TracedKinds { get; } = [];
-        public Action<object?>? OnSetCurrentImage { get; set; }
+        public List<bool> FileChangeFlags { get; } = [];
+        public Action<object?, bool>? OnSetCurrentImage { get; set; }
 
-        public void SetCurrentImage(object? image)
+        public void SetCurrentImage(object? image, bool isFileChange = false)
         {
             CurrentImage = image;
             Images.Add(image);
-            OnSetCurrentImage?.Invoke(image);
+            FileChangeFlags.Add(isFileChange);
+            OnSetCurrentImage?.Invoke(image, isFileChange);
         }
         public void SetStatusText(string status) => Statuses.Add(status);
         public void ApplyInitialViewMode() => InitialViewModeAppliedCount++;
