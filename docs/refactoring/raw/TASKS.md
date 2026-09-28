@@ -158,7 +158,8 @@ PERF-STATUS bullet.
 ### RAW-50 — Settings, UI, i18n · sonnet · Dep: RAW-21
 Owns: `AppSettings.cs` (append), `SettingsNormalizer.cs`, `SettingsValidator.cs`, `SettingsWindow.xaml(.cs)`,
 `Languages/vi.json` + `en.json` (append keys), info-overlay RAW badge, tests.
-Steps: 1. settings + normalizer/validator · 2. Settings window controls (the field-map guard test from PR
+Steps: 1. settings + normalizer/validator · 2. Settings window controls — including a visible
+"JPG+RAW pairs" choice for `RawPairMode` (Q-RAW-04: user-facing option, three values) (the field-map guard test from PR
 #232 must pass — it will fail until the window handles the new properties) · 3. i18n keys vi/en
 (`settings.raw.*`, `image.error.raw*`, `overlay.rawPreview`) + `tools/i18n-check.ps1` · 4. info overlay
 "RAW · preview W×H" when shown from an embedded preview smaller than the sensor.

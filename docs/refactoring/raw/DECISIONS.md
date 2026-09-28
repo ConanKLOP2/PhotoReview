@@ -52,7 +52,10 @@ visible area); the info overlay shows the preview size separately ("RAW · previ
 
 **Recommendation: B, delivered as setting `RawPairMode`** with default `Separate` until RAW-41 has passed
 its crash/undo tests and the real-machine check, then default `PreferJpeg` in RAW-70. A key toggles which
-member of the pair is shown. **Decided:** _pending_
+member of the pair is shown. **Decided (2026-09-28, user):** pair handling is a user-facing option in the
+Settings window (`RawPairMode`: Separate / Group–show JPG / Group–show RAW), not a fixed behaviour; default
+per the recommendation above. Still open: pairing rule details (same folder + same base name), whether `.xmp`
+follows the pair.
 
 ## Q-RAW-05 — Which formats in the first release?
 
