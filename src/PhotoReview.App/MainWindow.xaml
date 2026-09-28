@@ -138,7 +138,6 @@
                     <TextBlock Text="{Binding SkippedWarningText}" Foreground="{DynamicResource Dark.Warning}" FontSize="13" VerticalAlignment="Center" />
                     <Button Content="{loc:Tr main.skipped.viewList}" AutomationProperties.Name="{loc:Tr main.skipped.viewList.automationName}" Padding="8,2" Margin="8,0,0,0" Click="SkippedFiles_Click" />
                 </StackPanel>
-                <TextBlock Foreground="{DynamicResource Dark.TextSecondary}" FontSize="11" Margin="0,2,0,0" Text="{loc:Tr main.shortcutHint}" Visibility="{Binding InfoOverlay.IsFileInfoVisible, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
         </Border>
         <Border x:Name="FolderInfoPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" MaxWidth="640" AutomationProperties.Name="{loc:Tr main.folderInfo.automationName}" Visibility="{Binding InfoOverlay.IsFolderInfoVisible, Converter={StaticResource BoolToVis}}">

@@ -6,8 +6,8 @@ namespace PhotoReview.Core.Tests.Settings;
 
 /// <summary>
 /// PR-C (feat/context-menu-redesign): <see cref="AppSettings.SetZoomAlsoSetsClickLevel"/>,
-/// <see cref="AppSettings.ShowFolderMenuItems"/> and <see cref="AppSettings.ShowZoomMenuItems"/> -- defaults, load
-/// of an old config missing them, and round-trip.
+/// <see cref="AppSettings.ShowFolderMenuItems"/>, <see cref="AppSettings.ShowZoomMenuItems"/> and
+/// <see cref="AppSettings.ShowDeleteMenuItem"/> -- defaults, load of an old config missing them, and round-trip.
 /// </summary>
 [Trait("Category", "HotPath")]
 public sealed class ContextMenuRedesignSettingsTests
@@ -39,6 +39,14 @@ public sealed class ContextMenuRedesignSettingsTests
     }
 
     [Fact]
+    public void Defaults_ShowDeleteMenuItemIsOff()
+    {
+        var settings = new AppSettings();
+
+        Assert.False(settings.ShowDeleteMenuItem);
+    }
+
+    [Fact]
     public void Load_OldConfigWithoutNewSettings_UsesDefaultsAndReportsNoRepair()
     {
         _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, """{ "ConfigVersion": 3, "PreloadWorkerCount": 8 }""");
@@ -48,6 +56,7 @@ public sealed class ContextMenuRedesignSettingsTests
         Assert.True(loaded.SetZoomAlsoSetsClickLevel);
         Assert.True(loaded.ShowFolderMenuItems);
         Assert.False(loaded.ShowZoomMenuItems);
+        Assert.False(loaded.ShowDeleteMenuItem);
         Assert.Empty(_store.LastLoadRepairs);
     }
 
@@ -84,18 +93,33 @@ public sealed class ContextMenuRedesignSettingsTests
         Assert.Equal(showZoomMenuItems, reloaded.ShowZoomMenuItems);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SaveThenLoad_RoundTripsShowDeleteMenuItem(bool showDeleteMenuItem)
+    {
+        var settings = new AppSettings { ShowDeleteMenuItem = showDeleteMenuItem };
+
+        _store.Save(settings);
+        var reloaded = new SettingsStore(_appPaths, _fileSystem, NullLog.Instance, (_, _) => { }).Load();
+
+        Assert.Equal(showDeleteMenuItem, reloaded.ShowDeleteMenuItem);
+    }
+
     [Fact]
     public void Normalize_DoesNotTouchEitherFlag()
     {
-        var settings = new AppSettings { SetZoomAlsoSetsClickLevel = false, ShowFolderMenuItems = false, ShowZoomMenuItems = true };
+        var settings = new AppSettings { SetZoomAlsoSetsClickLevel = false, ShowFolderMenuItems = false, ShowZoomMenuItems = true, ShowDeleteMenuItem = true };
 
         var repairs = SettingsNormalizer.Normalize(settings);
 
         Assert.False(settings.SetZoomAlsoSetsClickLevel);
         Assert.False(settings.ShowFolderMenuItems);
         Assert.True(settings.ShowZoomMenuItems);
+        Assert.True(settings.ShowDeleteMenuItem);
         Assert.DoesNotContain(nameof(AppSettings.SetZoomAlsoSetsClickLevel), repairs);
         Assert.DoesNotContain(nameof(AppSettings.ShowFolderMenuItems), repairs);
         Assert.DoesNotContain(nameof(AppSettings.ShowZoomMenuItems), repairs);
+        Assert.DoesNotContain(nameof(AppSettings.ShowDeleteMenuItem), repairs);
     }
 }

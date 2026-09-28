@@ -776,7 +776,8 @@ public partial class MainWindow : Window
     /// (<see cref="AppSettings.ShowZoomMenuItems"/>) -- Fit to window/Zoom to N%/the Zoom submenu and the separator
     /// right above them are hidden together as one unit -- and the folder group's visibility
     /// (<see cref="AppSettings.ShowFolderMenuItems"/>, PR-C) -- Open folder/Next folder/Previous folder and the
-    /// separator right above them are hidden together as one unit.
+    /// separator right above them are hidden together as one unit -- and the Delete item's visibility
+    /// (<see cref="AppSettings.ShowDeleteMenuItem"/>) -- a single item, hidden by default, no separator of its own.
     /// </summary>
     private void ImageContextMenu_Opened(object sender, RoutedEventArgs e)
     {
@@ -785,6 +786,8 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ZoomToLevelMenuItem, Tr.MainMenuZoomToLevelAutomationName(percent));
         ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
+
+        DeleteMenuItem.Visibility = _settings.ShowDeleteMenuItem ? Visibility.Visible : Visibility.Collapsed;
 
         var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
         ZoomGroupSeparator.Visibility = zoomClusterVisibility;

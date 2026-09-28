@@ -258,7 +258,6 @@
   "main.menu.undo.automationName": "Hoàn tác thao tác vừa thực hiện",
   "main.menu.delete": "Đưa vào Thùng rác",
   "main.menu.delete.automationName": "Đưa ảnh hiện tại vào Thùng rác",
-  "main.shortcutHint": "↑ ← → ↓ duyệt   Home ảnh đầu   PgUp/PgDown thư mục   Enter mở bộ chọn   Delete Đưa vào Thùng rác   Space bỏ qua   F11 toàn màn hình",
   "main.title.withFolder": "Photo Review — {folder}",
   "main.title.withFolderLogging": "Photo Review — {folder} · LOG",
   "main.toolbar.fit": "Vừa khung",
@@ -771,6 +770,9 @@
   "settings.showZoomMenuItems.label": "Hiện mục thu phóng (Vừa khung, Thu phóng N%, Thu phóng)",
   "settings.showZoomMenuItems.automationName": "Hiện mục thu phóng trong menu chuột phải",
   "settings.showZoomMenuItems.hint": "Tắt (mặc định) sẽ ẩn Vừa khung, Thu phóng N% và menu con Thu phóng khỏi menu chuột phải. Phím tắt của chúng vẫn hoạt động.",
+  "settings.showDeleteMenuItem.label": "Hiện mục Xóa",
+  "settings.showDeleteMenuItem.automationName": "Hiện mục Xóa trong menu chuột phải",
+  "settings.showDeleteMenuItem.hint": "Tắt (mặc định) sẽ ẩn Đưa vào Thùng rác khỏi menu chuột phải. Phím tắt Xóa vẫn hoạt động.",
   "core.recovery.alreadyHandled": "Mục này đã được một cửa sổ PhotoReview khác xử lý, hoặc đang được thử lại ở đó. Không có gì bị thay đổi; mục đã được gỡ khỏi danh sách này.",
   "recovery.retry.stale.title": "Đã được xử lý ở nơi khác"
 }

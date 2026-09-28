@@ -379,6 +379,7 @@ public partial class SettingsWindow : Window
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
         ShowFolderMenuItemsCheck.IsChecked = Settings.ShowFolderMenuItems;
         ShowZoomMenuItemsCheck.IsChecked = Settings.ShowZoomMenuItems;
+        ShowDeleteMenuItemCheck.IsChecked = Settings.ShowDeleteMenuItem;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
         ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
@@ -697,6 +698,7 @@ public partial class SettingsWindow : Window
         Settings.ArrowKeyNavigatesAtZoomEdge = ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked == true;
         Settings.ShowFolderMenuItems = ShowFolderMenuItemsCheck.IsChecked == true;
         Settings.ShowZoomMenuItems = ShowZoomMenuItemsCheck.IsChecked == true;
+        Settings.ShowDeleteMenuItem = ShowDeleteMenuItemCheck.IsChecked == true;
         Settings.KeyboardZoomAnchor = KeyboardZoomAnchorCombo.SelectedIndex == 1 ? KeyboardZoomAnchor.ViewportCentre : KeyboardZoomAnchor.Pointer;
         Settings.MoveCopyReuseLastFolder = MoveCopyReuseLastFolderCheck.IsChecked == true;
         Settings.ShowExifInfo = ShowExifInfoCheck.IsChecked == true;

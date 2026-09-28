@@ -309,5 +309,14 @@ public class AppSettings
     /// the underlying zoom actions still work via their own shortcuts when the menu items are hidden.
     /// </summary>
     public bool ShowZoomMenuItems { get; set; }
+
+    /// <summary>
+    /// Shows the "Move to Recycle Bin" item in the right-click context menu. Default false (starts hidden, like
+    /// <see cref="ShowZoomMenuItems"/>): the Delete/Recycle shortcut still works either way, so an accidental click
+    /// on a destructive menu item isn't a risk for users who never opt in. Unlike <see cref="ShowFolderMenuItems"/>
+    /// and <see cref="ShowZoomMenuItems"/>, it does not gate a whole cluster or its own separator -- it toggles a
+    /// single item right after Undo (see Q-R38 ordering).
+    /// </summary>
+    public bool ShowDeleteMenuItem { get; set; }
 }
 

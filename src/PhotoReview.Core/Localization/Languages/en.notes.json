@@ -252,7 +252,6 @@
   "main.folderText.imageCountExplorer.other": "Plural pair; see .one.",
   "main.menu.undo": "Context-menu MenuItem.Header on the image.",
   "main.menu.undo.automationName": "AutomationProperties.Name of the menu item. SourcePresenceTests reads literal AutomationProperties.Name values -> L05 must assert keys instead.",
-  "main.shortcutHint": "TextBlock with Visibility=Collapsed (never shown) and hard-coded default keys (stale vs configurable shortcuts). Recommend deleting it instead of extracting; if kept, the key names stay untranslated, three spaces separate groups.",
   "main.title.withFolder": "FolderTitle -> native window title. CONCATENATION: ' · LOG' is appended when LoggingEnabled; restructure as two keys (this and main.title.withFolderLogging).",
   "main.title.withFolderLogging": "Variant when Settings.LoggingEnabled (was the \" · LOG\" fragment).",
   "main.toolbar.fit": "Button.Content (short toolbar button).",
