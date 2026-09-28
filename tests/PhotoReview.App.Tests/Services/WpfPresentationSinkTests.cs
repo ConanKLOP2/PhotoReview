@@ -3,6 +3,7 @@ using System.Threading;
 using System.Windows.Threading;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.TestSupport.Windows;
 using Xunit;
 
 namespace PhotoReview.App.Tests.Services;
@@ -53,6 +54,7 @@ public sealed class WpfPresentationSinkTests
     private sealed class DispatcherThread : IDisposable
     {
         private readonly Thread _thread;
+        private Win32DialogGuard? _guard;
 
         public DispatcherThread()
         {
@@ -61,8 +63,13 @@ public sealed class WpfPresentationSinkTests
             _thread = new Thread(() =>
             {
                 dispatcher = Dispatcher.CurrentDispatcher;
+                // Installed once for this thread's whole lifetime (it runs a real Dispatcher loop);
+                // disposed on this same thread right after Run() returns so the unhook happens on the
+                // thread that owns the hook.
+                _guard = Win32DialogGuard.InstallOnCurrentThread();
                 ready.Set();
                 Dispatcher.Run();
+                _guard.Dispose();
             })
             { IsBackground = true };
             _thread.SetApartmentState(ApartmentState.STA);
@@ -79,6 +86,10 @@ public sealed class WpfPresentationSinkTests
         {
             Dispatcher.InvokeShutdown();
             _thread.Join(TimeSpan.FromSeconds(5));
+            // A real dialog forced this thread's work to misbehave; report that ahead of whatever the
+            // test body itself asserted, same precedence as StaTestHost.
+            var exception = _guard?.CreateException();
+            if (exception is not null) throw exception;
         }
     }
 }
