@@ -29,3 +29,7 @@ src/PhotoReview.Core/Catalog/SiblingFolderService.cs|2
 # Already takes an optional IFileSystem; the File.Exists/FileInfo call is only the fallback branch used
 # when a caller passes none.
 src/PhotoReview.Core/FileActions/DuplicateFinder.cs|1
+
+# The designated Windows implementation of IJournalCompactionFiles (journal compaction), the sibling of
+# PhysicalFileSystem: File.Delete of its own unreplaced temp file on Dispose.
+src/PhotoReview.Core/IO/PhysicalJournalCompactionFiles.cs|1

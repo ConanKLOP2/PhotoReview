@@ -23,8 +23,12 @@ public static class JournalStartupRecovery
         var startedUtc = clock.UtcNow;
         try
         {
-            var reconciled = await Task.Run(
-                () => journal.ReconcilePendingOperations(preparedBeforeUtc: startedUtc)).ConfigureAwait(false);
+            var reconciled = await Task.Run(() =>
+            {
+                var result = journal.ReconcilePendingOperations(preparedBeforeUtc: startedUtc);
+                Compact(journal, log); // the quiet moment: after reconcile appended its outcomes, still off the UI thread
+                return result;
+            }).ConfigureAwait(false);
 
             var failed = reconciled.Where(entry => entry.State == JournalState.Failed).ToList();
             if (reconciled.Count > 0)
@@ -38,6 +42,34 @@ public static class JournalStartupRecovery
             // A locked/unreadable journal must not take the viewer down; the Recovery window can still be opened.
             log?.Error("Startup journal reconcile failed", ex);
             return [];
+        }
+    }
+
+    // A compaction problem never affects startup: the journal is left as it was and the next start tries again.
+    private static void Compact(OperationJournal journal, ILog? log)
+    {
+        JournalCompactionResult result;
+        try
+        {
+            result = journal.TryCompact();
+        }
+        catch (Exception ex) // startup must not lose the reconcile result over an unexpected compaction bug
+        {
+            log?.Error("Journal compaction failed", ex);
+            return;
+        }
+        switch (result.Outcome)
+        {
+            case JournalCompactionOutcome.Compacted:
+                log?.Info(string.Format(CultureInfo.InvariantCulture,
+                    "Journal compacted: {0} -> {1} bytes.", result.BytesBefore, result.BytesAfter));
+                break;
+            case JournalCompactionOutcome.Failed:
+                log?.Warn("Journal compaction failed (journal unchanged): " + result.Error);
+                break;
+            case JournalCompactionOutcome.Busy or JournalCompactionOutcome.Changed:
+                log?.Info("Journal compaction skipped (" + result.Outcome.ToString() + "); journal unchanged.");
+                break;
         }
     }
 }
