@@ -176,38 +176,29 @@ internal sealed class PointerInputController
     private Point ViewportCentre => new(_surface.ViewportWidth / 2, _surface.ViewportHeight / 2);
 
     /// <summary>
-    /// FitWidth shortcut (PR-B): fills the viewport width. When <paramref name="mouseOverViewport"/> is given (the
-    /// mouse is over the image viewport -- the caller decides that from real hit-testing), the image point under the
-    /// mouse becomes the vertical anchor, shown at the viewport centre; otherwise the anchor follows
-    /// <see cref="AppSettings.FitWidthAnchor"/> (top third by default). The initial view (image change) always uses
-    /// the setting -- see <see cref="ApplyInitialViewAsync"/>.
+    /// FitWidth shortcut (PR-B): fills the viewport width. The vertical anchor always follows
+    /// <see cref="AppSettings.FitWidthAnchor"/> (top third by default), regardless of mouse position -- same as the
+    /// initial view (image change), see <see cref="ApplyInitialViewAsync"/>.
     /// </summary>
-    public Task FitWidthAsync(Point? mouseOverViewport)
+    public async Task FitWidthAsync()
     {
-        if (!_commands.HasImages()) return Task.CompletedTask;
+        if (!_commands.HasImages()) return;
         CancelPan();
         StopKinetic();
-        var anchor = mouseOverViewport is { } mouse
-            ? new MainWindowHelpers.ZoomImagePoint(0.5, CaptureZoomAnchor(mouse).Y)
-            : MainWindowHelpers.CalculateFitWidthAnchorPoint(_settings().FitWidthAnchor);
-        return ZoomToImagePointAsync(anchor, ViewportCentre, () =>
-        {
-            _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
-            _viewer.ZoomToFitWidth();
-        });
+        var anchor = MainWindowHelpers.CalculateFitWidthAnchorPoint(_settings().FitWidthAnchor);
+        await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitWidth);
+        await CorrectForSideScrollbarAsync(anchor, ApplyFitWidth, widthOnly: true);
     }
 
     /// <summary>FitHeight shortcut (PR-B): fills the viewport height, always centred (image point (0.5, 0.5)).</summary>
-    public Task FitHeightAsync()
+    public async Task FitHeightAsync()
     {
-        if (!_commands.HasImages()) return Task.CompletedTask;
+        if (!_commands.HasImages()) return;
         CancelPan();
         StopKinetic();
-        return ZoomToImagePointAsync(new MainWindowHelpers.ZoomImagePoint(0.5, 0.5), ViewportCentre, () =>
-        {
-            _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
-            _viewer.ZoomToFitHeight();
-        });
+        var anchor = new MainWindowHelpers.ZoomImagePoint(0.5, 0.5);
+        await ZoomToImagePointAsync(anchor, ViewportCentre, ApplyFitHeight);
+        await CorrectForSideScrollbarAsync(anchor, ApplyFitHeight, widthOnly: false);
     }
 
     /// <summary>
@@ -217,18 +208,47 @@ internal sealed class PointerInputController
     /// width/Fit height then get their scroll placement here (top-third/centre per <see cref="AppSettings.FitWidthAnchor"/>,
     /// or always centre for Fit height) because the pointer controller owns the surface.
     /// </summary>
-    public Task ApplyInitialViewAsync(InitialViewMode mode, int clickZoomPercent)
+    public async Task ApplyInitialViewAsync(InitialViewMode mode, int clickZoomPercent)
     {
-        if (!_commands.HasImages()) return Task.CompletedTask;
+        if (!_commands.HasImages()) return;
         var settings = _settings();
         var applied = _viewer.ApplyInitialViewMode(mode, _surface.ViewportWidth, _surface.ViewportHeight, clickZoomPercent, settings.KeepZoomAcrossImages);
-        if (!applied || mode is not (InitialViewMode.FitWidth or InitialViewMode.FitHeight)) return Task.CompletedTask;
+        if (!applied || mode is not (InitialViewMode.FitWidth or InitialViewMode.FitHeight)) return;
 
-        var anchor = mode == InitialViewMode.FitWidth
+        var isFitWidth = mode == InitialViewMode.FitWidth;
+        var anchor = isFitWidth
             ? MainWindowHelpers.CalculateFitWidthAnchorPoint(settings.FitWidthAnchor)
             : new MainWindowHelpers.ZoomImagePoint(0.5, 0.5);
         // The zoom was already applied by ViewerState above; this pass only places the scroll offsets.
-        return ZoomToImagePointAsync(anchor, ViewportCentre, static () => { });
+        await ZoomToImagePointAsync(anchor, ViewportCentre, static () => { });
+        await CorrectForSideScrollbarAsync(anchor, isFitWidth ? ApplyFitWidth : ApplyFitHeight, widthOnly: isFitWidth);
+    }
+
+    private void ApplyFitWidth()
+    {
+        _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
+        _viewer.ZoomToFitWidth();
+    }
+
+    private void ApplyFitHeight()
+    {
+        _viewer.UpdateViewport(_surface.ViewportWidth, _surface.ViewportHeight, force: true);
+        _viewer.ZoomToFitHeight();
+    }
+
+    /// <summary>
+    /// Fit width/height computes its zoom from the viewport size measured before the zoom is applied. Filling that
+    /// dimension exactly can make the image overflow the OTHER dimension, and WPF then shows the scrollbar for it
+    /// (by design -- that is how you reach the rest of the image); but that scrollbar eats into the viewport size
+    /// the fit was computed against, so the fitted dimension no longer exactly fills it either, leaving a thin,
+    /// unwanted scrollbar there too. Re-applying once against the now-current (narrower) viewport settles it.
+    /// </summary>
+    private async Task CorrectForSideScrollbarAsync(MainWindowHelpers.ZoomImagePoint anchor, Action reapply, bool widthOnly)
+    {
+        var overflowed = widthOnly
+            ? _surface.ExtentWidth > _surface.ViewportWidth + 0.5
+            : _surface.ExtentHeight > _surface.ViewportHeight + 0.5;
+        if (overflowed) await ZoomToImagePointAsync(anchor, ViewportCentre, reapply);
     }
 
     /// <summary>The image point under <paramref name="mouse"/> as a fraction of the displayed image.</summary>

@@ -104,12 +104,12 @@ public sealed class PointerInputControllerTests
     // ---- PR-B: Fit width / Fit height / keep zoom across images ----
 
     [Fact]
-    public async Task FitWidthAsync_NoMouse_UsesTheConfiguredAnchor_DefaultCentre()
+    public async Task FitWidthAsync_UsesTheConfiguredAnchor_DefaultCentre()
     {
         _viewer.SetSourceSize(2000, 4000);
         _viewer.DpiScale = 1.0;
 
-        await _controller.FitWidthAsync(mouseOverViewport: null);
+        await _controller.FitWidthAsync();
 
         Assert.False(_viewer.IsFit);
         // SetZoom (inside ZoomToFitWidth) resets MaxImageWidth to Infinity, so FitWidthZoom reads back 0 afterwards --
@@ -119,7 +119,7 @@ public sealed class PointerInputControllerTests
     }
 
     [Fact]
-    public async Task FitWidthAsync_NoMouse_TopThirdAnchor_ScrollsLessFarThanCentre()
+    public async Task FitWidthAsync_TopThirdAnchor_ScrollsLessFarThanCentre()
     {
         // A scrollable range is needed for the two anchors to land on different offsets (with none, both clamp to 0).
         _surface.ExtentHeight = 1200;
@@ -127,7 +127,7 @@ public sealed class PointerInputControllerTests
         _viewer.DpiScale = 1.0;
         _settings.FitWidthAnchor = FitWidthAnchor.Centre;
 
-        await _controller.FitWidthAsync(null);
+        await _controller.FitWidthAsync();
         var centreVertical = _surface.Scrolls[^1].V;
 
         _surface.Scrolls.Clear();
@@ -135,23 +135,11 @@ public sealed class PointerInputControllerTests
         _viewer.SetZoom(1.0); // undo the previous FitWidth so the second call starts from the same place
         _settings.FitWidthAnchor = FitWidthAnchor.TopThird;
 
-        await _controller.FitWidthAsync(null);
+        await _controller.FitWidthAsync();
         var topThirdVertical = _surface.Scrolls[^1].V;
 
         // Top-third keeps a point further UP the image at the viewport centre, so it needs LESS downward scroll.
         Assert.True(topThirdVertical < centreVertical);
-    }
-
-    [Fact]
-    public async Task FitWidthAsync_MouseOverViewport_AnchorsAtTheMousePointInstead()
-    {
-        _viewer.SetSourceSize(2000, 4000);
-        _viewer.DpiScale = 1.0;
-
-        await _controller.FitWidthAsync(new Point(400, 100)); // near the top of the (pre-zoom Fit) viewport
-
-        Assert.False(_viewer.IsFit);
-        Assert.Single(_surface.Scrolls);
     }
 
     [Fact]
@@ -170,11 +158,70 @@ public sealed class PointerInputControllerTests
     }
 
     [Fact]
+    public async Task FitWidthAsync_VerticalScrollbarAppearsAsSideEffect_ReappliesOnceMore()
+    {
+        // Simulates the tall-image case: fitting the width makes the image taller than the viewport, so WPF shows a
+        // vertical scrollbar that eats into the viewport width the fit was computed against, leaving a thin
+        // horizontal scrollbar too. The extent (800, matching the pre-scrollbar viewport) is set up front; the
+        // scrollbar's appearance is simulated by shrinking ViewportWidth right after the first pass's render yield.
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _surface.ExtentWidth = 800;
+        _surface.OnYieldOnce = () => _surface.ViewportWidth = 780;
+
+        await _controller.FitWidthAsync();
+
+        Assert.Equal(2, _surface.YieldCount);
+        Assert.Equal(2, _surface.Scrolls.Count);
+    }
+
+    [Fact]
+    public async Task FitWidthAsync_NoScrollbarSideEffect_DoesNotReapply()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _surface.ExtentWidth = 800; // matches ViewportWidth: no overflow, no scrollbar
+
+        await _controller.FitWidthAsync();
+
+        Assert.Equal(1, _surface.YieldCount);
+        Assert.Single(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task FitHeightAsync_HorizontalScrollbarAppearsAsSideEffect_ReappliesOnceMore()
+    {
+        _viewer.SetSourceSize(4000, 2000);
+        _viewer.DpiScale = 1.0;
+        _surface.ExtentHeight = 600;
+        _surface.OnYieldOnce = () => _surface.ViewportHeight = 580;
+
+        await _controller.FitHeightAsync();
+
+        Assert.Equal(2, _surface.YieldCount);
+        Assert.Equal(2, _surface.Scrolls.Count);
+    }
+
+    [Fact]
+    public async Task ApplyInitialViewAsync_FitWidth_VerticalScrollbarAppearsAsSideEffect_ReappliesOnceMore()
+    {
+        _viewer.SetSourceSize(2000, 4000);
+        _viewer.DpiScale = 1.0;
+        _surface.ExtentWidth = 800;
+        _surface.OnYieldOnce = () => _surface.ViewportWidth = 780;
+
+        await _controller.ApplyInitialViewAsync(InitialViewMode.FitWidth, AppSettings.DefaultClickZoomPercent);
+
+        Assert.Equal(2, _surface.YieldCount);
+        Assert.Equal(2, _surface.Scrolls.Count);
+    }
+
+    [Fact]
     public async Task FitWidthAsync_WithoutImages_DoesNothing()
     {
         _hasImages = false;
 
-        await _controller.FitWidthAsync(null);
+        await _controller.FitWidthAsync();
 
         Assert.True(_viewer.IsFit);
         Assert.Empty(_surface.Scrolls);
@@ -946,9 +993,16 @@ public sealed class PointerInputControllerTests
 
         public void UpdateLayout() { }
 
+        /// <summary>Fires once on the next <see cref="YieldToRenderAsync"/> call, then clears -- lets a test simulate a
+        /// layout side effect (e.g. a scrollbar appearing and shrinking the viewport) between a fit's zoom pass and
+        /// its scrollbar-overflow check.</summary>
+        public Action? OnYieldOnce { get; set; }
+
         public Task YieldToRenderAsync()
         {
             YieldCount++;
+            OnYieldOnce?.Invoke();
+            OnYieldOnce = null;
             if (!HoldYields) return Task.CompletedTask;
             var pending = new TaskCompletionSource();
             _heldYields.Add(pending);

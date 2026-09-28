@@ -596,21 +596,10 @@ public partial class MainWindow : Window
             case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
-            case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(MouseOverImageViewport()); break;
+            case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(); break;
             case ReviewCommandType.FitHeight: await _pointer.FitHeightAsync(); break;
             case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
         }
-    }
-
-    /// <summary>
-    /// PR-B: the FitWidth shortcut anchors at the mouse when it is over the image viewport (ImageScroll), otherwise
-    /// falls back to <see cref="AppSettings.FitWidthAnchor"/> (see <see cref="PointerInputController.FitWidthAsync"/>).
-    /// </summary>
-    private Point? MouseOverImageViewport()
-    {
-        var position = Mouse.GetPosition(ImageScroll);
-        var overViewport = position.X >= 0 && position.Y >= 0 && position.X <= ImageScroll.ActualWidth && position.Y <= ImageScroll.ActualHeight;
-        return overViewport ? position : null;
     }
 
     /// <summary>
@@ -758,7 +747,7 @@ public partial class MainWindow : Window
     private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent);
 
     /// <summary>"Zoom" submenu: Fit width, anchored at the mouse when it is over the viewport (same rule as the shortcut).</summary>
-    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await _pointer.FitWidthAsync(MouseOverImageViewport());
+    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await _pointer.FitWidthAsync();
 
     /// <summary>"Zoom" submenu: Fit height (always centred).</summary>
     private async void ZoomFitHeight_Click(object sender, RoutedEventArgs e) => await _pointer.FitHeightAsync();
