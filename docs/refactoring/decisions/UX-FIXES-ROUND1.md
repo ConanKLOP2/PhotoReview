@@ -1,6 +1,6 @@
 ---
 id: UX-FIXES-ROUND1
-order: 31
+order: 32
 summary: |-
   Four UX findings addressed: Delete/Recycle added to context menu (high), shortcut hint visibility fixed (high), terminology standardized (medium), and shortcut hint clarified (medium).
 ---
