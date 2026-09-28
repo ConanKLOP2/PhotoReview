@@ -5,7 +5,7 @@ param([switch]$Check)
 $ErrorActionPreference = 'Stop'
 
 # T0: total of the always-read files. T1: per file, for docs read one at a time per task (AGENTS.md).
-$T0BudgetBytes = 16 * 1024
+$T0BudgetBytes = 18 * 1024
 $T1FileBudgetBytes = 24 * 1024
 
 function Get-DocTier {

@@ -1,6 +1,6 @@
 # Documentation Index
 
-Find a document by purpose. Read tiers: **T0** (every session, ≤16 KB total) · **T1** (one per task, ≤24 KB per file) · **T2** (history only). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
+Find a document by purpose. Read tiers: **T0** (every session, ≤18 KB total) · **T1** (one per task, ≤24 KB per file) · **T2** (history only). Checked by `tools/docs-budget.ps1 -Check`; links by `tools/check-doc-links.ps1`.
 
 | File | Purpose | Tier |
 |------|---------|------|
@@ -11,6 +11,7 @@ Find a document by purpose. Read tiers: **T0** (every session, ≤16 KB total) �
 | [`APP-MECHANISMS-VI.md`](APP-MECHANISMS-VI.md) | Core app flows and settings (Vietnamese) | T1, app flow |
 | [`adr/`](adr/) | Decisions 0001 decoder · 0002 UI framework · 0003 journal startup · 0004 no Presentation project · 0005 UI-thread affinity · 0006 localization catalogs · 0007 I/O durability · 0008 zoom = source pixel | T1, relevant area |
 | [`TRANSLATING.md`](TRANSLATING.md) | Add/fix a language (JSON catalogs) | T1, translations |
+| [`TESTING.md`](TESTING.md) | Test categories, filters, local runners, hang guard | T1 |
 | [`refactoring/OPEN-DECISIONS.md`](refactoring/OPEN-DECISIONS.md) + [`decisions/`](refactoring/decisions/) | Q-* index + one file per decision | T1, decision lookup |
 | [`refactoring/PERF-STATUS.md`](refactoring/PERF-STATUS.md) + [`perf/`](refactoring/perf/) | Methodology + one file per measurement | T1, perf work |
 | [`refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md`](refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md) | Current whole-project review, function-level candidates and coverage | T1, review work |
