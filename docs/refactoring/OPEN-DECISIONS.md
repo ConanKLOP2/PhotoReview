@@ -3,16 +3,20 @@
 Status of work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) · finished groups: [`HISTORY.md`](HISTORY.md).
 Full rationale of older rows: `git show 1de561c:docs/refactoring/OPEN-DECISIONS.md` and `...:docs/refactoring/archive/OPEN-DECISIONS-detail.md`.
 
-**Adding a decision (avoid merge conflicts across parallel PRs):** put ALL detail (method names, file:line, measurements) in a new
-file under [`decisions/`](decisions/) named after the ID, never inline here. Add exactly ONE new row below in the Decided table
-with a true one-sentence summary and a Markdown link to that new file -- a long inline row is exactly what caused repeated
-multi-round merge conflicts on 2026-09-27 (a growing shared file that most concurrent PRs all append to).
+**Adding a decision (reduce, not eliminate, merge conflicts across parallel PRs):** put ALL detail (method names, file:line,
+measurements) in a new file under [`decisions/`](decisions/) named after the ID, never inline here. Add exactly ONE new row
+to the appropriate table (Open or Decided) with a true one-sentence summary, a `(YYYY-MM-DD HH:MM)` timestamp next to the ID,
+and a Markdown link to that new file. **Insert the row at a non-predictable position** (near a row on a similar topic, or
+just not always the very last line) instead of always appending at the end -- this lowers the odds that two parallel PRs
+both insert next to the same existing line and collide, but it is probabilistic, not a guarantee: a real conflict will still
+happen sometimes and is resolved by hand as always (trivially -- keep both new rows). No merge driver, no CI automation, no
+frontmatter: table rows are plain static Markdown, edited by hand.
 
 ## Open
 
 | ID | Question | State |
 |---|---|---|
-| **Q-R29** | NAS (500 x 3-7 MB JPEG over wifi): (1) `ThumbnailCache.BuildKey` UI-thread stat per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap. Both parts narrowed to negligible/no-sync-gap on local disk (see [R01-R13](decisions/R01-R02-R03-R13.md), [R04-R14](decisions/R04-R14.md)); the NAS/slow-link case itself is still untested and open. | OPEN 2026-09-26 - awaiting user. Present options with pros/cons (see AGENTS.md) before deciding. |
+| **Q-R29** | NAS (500 x 3-7 MB JPEG over wifi): (1) `ThumbnailCache.BuildKey` UI-thread stat per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap. Both parts narrowed to negligible/no-sync-gap on local disk (see [R01-R13](decisions/R01-R02-R03-R13.md), [R04-R14](decisions/R04-R14.md)); the NAS/slow-link case itself is still untested and open. [Detail](decisions/Q-R29.md) | OPEN 2026-09-26 - awaiting user. Present options with pros/cons (see AGENTS.md) before deciding. |
 
 ## Decided (one line each)
 
@@ -52,3 +56,4 @@ multi-round merge conflicts on 2026-09-27 (a growing shared file that most concu
 | R09/R10 | Recovery-dismiss race fixed; stale glide-stop flag traced as a non-issue (#192). [Detail](decisions/R09-R10.md) |
 | R04/Q-R29 (partial) / R14 | Preload contention: no sync gap found locally (NAS still open); startup temp-file sweep moved to background (#195). [Detail](decisions/R04-R14.md) |
 | R06/R07/R08/R11 | Benchmark/cache misc fixes; instance-forward ambiguity reclassified to `Unknown` (#194). [Detail](decisions/R06-R07-R11-R08.md) |
+| Q-R40..Q-R51 | v2.0.203 user feedback triage: configurable zoom step, Open Folder/Custom Zoom shortcuts, confirm-before-delete, zoom-% HUD, empty-folder notice and settings export/import approved (default off/unconfigured where applicable); Refresh, in-viewer rename, trackpad gesture tuning and new format/RAW support declined. [Detail](decisions/Q-R40-Q-R51-user-feedback.md) |
