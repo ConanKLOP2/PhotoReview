@@ -31,12 +31,22 @@ public static class ExifParser
     private const int MaxAsciiBytes = 256;
 
     /// <summary>Reads the EXIF summary of a JPEG; null for a non-JPEG, no/corrupt EXIF, or no usable field.</summary>
-    public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg)
+    public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg) => TryParseTiffBlock(FindExifTiffBlock(jpeg));
+
+    /// <summary>
+    /// Reads the EXIF summary from an already-located Exif TIFF block (the bytes after "Exif\0\0" in the first
+    /// Exif-headed APP1 segment, as <see cref="FindExifTiffBlock"/> or a caller's own marker walk -- e.g.
+    /// TurboJpegDecoder's combined header scan (IMG-07) -- would return). Null for an empty span, no/corrupt
+    /// EXIF, or no usable field; never throws. Lets a caller that already walked the JPEG markers itself (to
+    /// avoid a second walk over the same header bytes) reuse this parser without going through
+    /// <see cref="TryParseJpeg"/>'s own <see cref="FindExifTiffBlock"/> walk.
+    /// </summary>
+    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock)
     {
+        if (tiffBlock.IsEmpty) return null;
         try
         {
-            var tiff = FindExifTiffBlock(jpeg);
-            return tiff.IsEmpty ? null : TryParseTiff(tiff);
+            return TryParseTiff(tiffBlock);
         }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or OverflowException or DecoderFallbackException)
         {

@@ -63,17 +63,21 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 () => Tr.ErrDecoderNotJpeg(source ?? Tr.ErrDecoderMemoryBuffer));
         }
 
+        // IMG-07: ICC presence, the EXIF APP1 span and (from it) orientation all come from ONE marker
+        // walk over the header bytes this decode already holds, instead of three independent walks.
+        ScanHeader(bytes, wantIcc: true, wantExif: true, out bool hasIcc, out ReadOnlySpan<byte> exifTiff);
+
         // ICC Profile check: if image contains embedded ICC profile, fallback to preserve color accuracy
-        if (HasEmbeddedIccProfile(bytes))
+        if (hasIcc)
         {
             throw UserFacingError.Localized(new NotSupportedException("Embedded ICC profile detected in JPEG; falling back to WIC/WPF."),
                 () => Tr.ErrDecoderIccFallback);
         }
 
-        int orientation = request.ApplyOrientation ? ReadExifOrientation(bytes) : 1;
+        int orientation = request.ApplyOrientation && !exifTiff.IsEmpty ? ParseTiffOrientation(exifTiff) : 1;
         // Photo information line: parsed from the APP1 segment of the buffer this decode already holds (bounded,
-        // never throws) -- no extra file read.
-        var exif = ExifParser.TryParseJpeg(bytes);
+        // never throws) -- no extra file read, and no second marker walk (reuses exifTiff from ScanHeader above).
+        var exif = ExifParser.TryParseTiffBlock(exifTiff);
         bool isTransposed = request.ApplyOrientation && ExifOrientation.IsTransposed(orientation);
 
         using var decompressor = TurboJpegNative.CreateDecompressor();
@@ -255,15 +259,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         var length = fs.Length;
         var buffer = new byte[(int)Math.Min(length, HeaderReadChunk)];
         fs.ReadExactly(buffer);
-        while (buffer.Length < length && buffer.Length < HeaderReadCap && HeaderNeedsMoreData(buffer))
-        {
-            var grown = new byte[(int)Math.Min(Math.Min(length, HeaderReadCap), (long)buffer.Length * 2)];
-            buffer.CopyTo(grown, 0);
-            fs.ReadExactly(grown.AsSpan(buffer.Length));
-            buffer = grown;
-        }
-
-        return buffer;
+        return GrowHeaderArea(fs, length, buffer, HeaderReadCap);
     }
 
     /// <summary>
@@ -285,13 +281,24 @@ public sealed class TurboJpegDecoder : IImageDecoder
         // Skip to where the initial read ended
         fs.Seek(initialBuffer.Length, SeekOrigin.Begin);
 
-        byte[] buffer = initialBuffer;
-        // Continue doubling without the HeaderReadCap limit, until we either:
+        // Continue doubling without the HeaderReadCap limit (cap: null), until we either:
         // - reach the end of the file
         // - the header marker walk says we have the full header
-        while (buffer.Length < length && HeaderNeedsMoreData(buffer))
+        return GrowHeaderArea(fs, length, initialBuffer, cap: null);
+    }
+
+    /// <summary>
+    /// Shared exponential-growth loop behind <see cref="ReadHeaderArea"/> and <see cref="ExtendHeaderArea"/>:
+    /// doubles <paramref name="buffer"/> (reading the new bytes from <paramref name="fs"/>, which must already be
+    /// positioned right after it) while the marker walk says the header is not finished, up to <paramref name="length"/>
+    /// or, when given, <paramref name="cap"/> (null = uncapped, matching <see cref="ExtendHeaderArea"/>'s behavior).
+    /// </summary>
+    private static byte[] GrowHeaderArea(FileStream fs, long length, byte[] buffer, long? cap)
+    {
+        var limit = cap.HasValue ? Math.Min(length, cap.Value) : length;
+        while (buffer.Length < length && buffer.Length < limit && HeaderNeedsMoreData(buffer))
         {
-            var grown = new byte[(int)Math.Min(length, (long)buffer.Length * 2)];
+            var grown = new byte[(int)Math.Min(limit, (long)buffer.Length * 2)];
             buffer.CopyTo(grown, 0);
             fs.ReadExactly(grown.AsSpan(buffer.Length));
             buffer = grown;
@@ -477,46 +484,68 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
     public static bool HasEmbeddedIccProfile(ReadOnlySpan<byte> jpeg)
     {
-        if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return false;
+        ScanHeader(jpeg, wantIcc: true, wantExif: false, out bool hasIcc, out _);
+        return hasIcc;
+    }
 
+    public static int ReadExifOrientation(ReadOnlySpan<byte> jpeg)
+    {
+        ScanHeader(jpeg, wantIcc: false, wantExif: true, out _, out var exifTiff);
+        return exifTiff.IsEmpty ? 1 : ParseTiffOrientation(exifTiff);
+    }
+
+    /// <summary>
+    /// IMG-07: one marker walk that yields both ICC presence (APP2 "ICC_PROFILE\0") and the first Exif-headed
+    /// APP1's TIFF span, so <see cref="Decode"/> never re-walks the same header bytes per consumer. Each want
+    /// flag is independently optional so a standalone caller (<see cref="HasEmbeddedIccProfile"/>,
+    /// <see cref="ReadExifOrientation"/>) still stops as soon as its own answer is known, exactly as the
+    /// single-purpose walks did before this was unified.
+    /// </summary>
+    /// <param name="exifTiff">
+    /// The bytes after "Exif\0\0" in the first Exif-headed APP1 segment, or empty when <paramref name="wantExif"/>
+    /// is false, none was found, or the segment's TIFF part is empty (still "found": no later APP1 is considered,
+    /// matching <see cref="ExifParser.FindExifTiffBlock"/>).
+    /// </param>
+    internal static void ScanHeader(
+        ReadOnlySpan<byte> jpeg, bool wantIcc, bool wantExif, out bool hasIcc, out ReadOnlySpan<byte> exifTiff)
+    {
+        hasIcc = false;
+        exifTiff = default;
+        if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return;
+
+        bool foundExif = false;
         int offset = 2;
         while (TryReadSegment(jpeg, ref offset, out byte marker, out var payload))
         {
-            // Marker APP2 (0xE2)
-            if (marker == 0xE2 &&
+            // Marker APP2 (0xE2), signature "ICC_PROFILE\0"
+            if (wantIcc && !hasIcc && marker == 0xE2 &&
                 payload.Length >= 12 &&
                 payload[0] == (byte)'I' && payload[1] == (byte)'C' && payload[2] == (byte)'C' &&
                 payload[3] == (byte)'_' && payload[4] == (byte)'P' && payload[5] == (byte)'R' &&
                 payload[6] == (byte)'O' && payload[7] == (byte)'F' && payload[8] == (byte)'I' &&
                 payload[9] == (byte)'L' && payload[10] == (byte)'E' && payload[11] == 0)
             {
-                return true;
+                hasIcc = true;
             }
-        }
-
-        return false;
-    }
-
-    public static int ReadExifOrientation(ReadOnlySpan<byte> jpeg)
-    {
-        if (jpeg.Length < 4 || jpeg[0] != 0xFF || jpeg[1] != 0xD8) return 1;
-
-        int offset = 2;
-        while (TryReadSegment(jpeg, ref offset, out byte marker, out var payload))
-        {
-            // Marker APP1 (0xE1)
-            // The first Exif-headed APP1 is the one that counts (same rule as ExifParser); a short or garbage TIFF in it
-            // means "no orientation", never a search for a later APP1.
-            if (marker == 0xE1 &&
+            // Marker APP1 (0xE1), signature "Exif\0\0". The first Exif-headed APP1 is the one that counts (same
+            // rule as ExifParser); a short or garbage TIFF in it means "no orientation"/"no EXIF", never a search
+            // for a later APP1.
+            else if (wantExif && !foundExif && marker == 0xE1 &&
                 payload.Length >= 6 &&
                 payload[0] == (byte)'E' && payload[1] == (byte)'x' && payload[2] == (byte)'i' &&
                 payload[3] == (byte)'f' && payload[4] == 0 && payload[5] == 0)
             {
-                return ParseTiffOrientation(payload.Slice(6));
+                // Re-sliced from `jpeg` (not `payload`) by absolute position: a span assigned to an out
+                // parameter must not derive from a narrower-scoped local (CS8352). `offset` already sits
+                // just past this segment, so payload's own start is offset - payload.Length.
+                int exifStart = offset - payload.Length + 6;
+                int exifLength = payload.Length - 6;
+                exifTiff = jpeg.Slice(exifStart, exifLength);
+                foundExif = true;
             }
-        }
 
-        return 1;
+            if ((!wantIcc || hasIcc) && (!wantExif || foundExif)) break;
+        }
     }
 
     private static int ParseTiffOrientation(ReadOnlySpan<byte> tiff)
