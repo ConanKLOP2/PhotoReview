@@ -515,7 +515,9 @@ public sealed class JournalCompactionTests : IDisposable
     [Fact(DisplayName = "Startup recovery still returns the reconcile's failed list even when compaction throws")]
     public async Task RunAsync_CompactionThrows_StillReturnsFailed()
     {
-        WriteJournal(BuildCompactibleJournal(50));
+        // Must actually cross CompactionThresholdBytes / CompactionMinGain so TryCompact reaches the compaction-files
+        // primitives (and thus the throw) instead of bailing out early via BelowThreshold.
+        WriteJournal(BuildCompactibleJournal(CompactibleCount));
         var throwing = new ThrowingCompactionFiles();
         var pendingRecycleSource = Path.Combine(_root.Path, "still-there2.jpg");
         File.WriteAllText(pendingRecycleSource, "x");
