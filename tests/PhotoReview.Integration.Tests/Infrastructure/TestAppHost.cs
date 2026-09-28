@@ -73,7 +73,7 @@ internal static class TestAppHost
         if (hooks?.SortMode is { } sortMode)
         {
             // Before the load starts: FolderLoadCoordinator reads the sort mode once per load. Through
-            // SettingsStore.Save (into the DataRootFixture's temp config), as the Settings window does.
+            // SettingsStore.Save (into the test's redirected temp data root), as the Settings window does.
             var store = sp.GetRequiredService<SettingsStore>();
             var settings = store.Current;
             settings.ImageSortMode = sortMode;
