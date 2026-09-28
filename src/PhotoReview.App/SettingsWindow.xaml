@@ -267,11 +267,13 @@
                         <!-- PR-C feat/context-menu-redesign -->
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.contextMenu}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <CheckBox x:Name="ShowFolderMenuItemsCheck" Grid.Row="0" Grid.Column="1" Content="{loc:Tr settings.showFolderMenuItems.label}" AutomationProperties.Name="{loc:Tr settings.showFolderMenuItems.automationName}"/>
                             <TextBlock Text="{loc:Tr settings.showFolderMenuItems.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
                             <CheckBox x:Name="ShowZoomMenuItemsCheck" Grid.Row="2" Grid.Column="1" Content="{loc:Tr settings.showZoomMenuItems.label}" AutomationProperties.Name="{loc:Tr settings.showZoomMenuItems.automationName}"/>
                             <TextBlock Text="{loc:Tr settings.showZoomMenuItems.hint}" Grid.Row="3" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <CheckBox x:Name="ShowRecycleMenuItemCheck" Grid.Row="4" Grid.Column="1" Content="{loc:Tr settings.showRecycleMenuItem.label}" AutomationProperties.Name="{loc:Tr settings.showRecycleMenuItem.automationName}"/>
+                            <TextBlock Text="{loc:Tr settings.showRecycleMenuItem.hint}" Grid.Row="5" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
                     </StackPanel>
                 </ScrollViewer>

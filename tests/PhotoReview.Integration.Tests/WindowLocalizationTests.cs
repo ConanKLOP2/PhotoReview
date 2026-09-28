@@ -114,23 +114,26 @@ public sealed class WindowLocalizationTests
             {
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
-                // PR-C feat/context-menu-redesign: Undo, a Separator, Fit, Zoom-to-level (header filled on open), the
-                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Q-R48's
-                // "Open in External Editor" (hidden unless configured, but still present in the item list), a
-                // Separator, Settings.
+                // UX-FIXES-ROUND1 + Q-R48: Undo, Delete (primary destructive action), a Separator, Fit,
+                // Zoom-to-level (header filled on open), the Zoom submenu, a Separator, the folder group
+                // (Open/Next/Previous folder), a Separator, Q-R48's "Open in External Editor" (hidden unless
+                // configured, but still present in the item list), a Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(9, menuItems.Count);
+                Assert.Equal(10, menuItems.Count);
                 var undo = menuItems[0];
-                var fit = menuItems[1];
-                var zoomToLevel = menuItems[2];
-                var zoomMenu = menuItems[3];
-                var openFolder = menuItems[4];
-                var nextFolder = menuItems[5];
-                var previousFolder = menuItems[6];
-                var openInExternalEditor = menuItems[7];
-                var settings = menuItems[8];
+                var delete = menuItems[1];
+                var fit = menuItems[2];
+                var zoomToLevel = menuItems[3];
+                var zoomMenu = menuItems[4];
+                var openFolder = menuItems[5];
+                var nextFolder = menuItems[6];
+                var previousFolder = menuItems[7];
+                var openInExternalEditor = menuItems[8];
+                var settings = menuItems[9];
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
+                Assert.Equal("Đưa vào Thùng rác", delete.Header);
+                Assert.Equal("Đưa ảnh hiện tại vào Thùng rác", AutomationProperties.GetName(delete));
                 Assert.Equal("Vừa khung hình", fit.Header);
                 Assert.Equal("Đưa ảnh vừa khung cửa sổ", AutomationProperties.GetName(fit));
                 Assert.NotNull(zoomToLevel);

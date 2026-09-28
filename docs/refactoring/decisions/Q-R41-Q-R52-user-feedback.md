@@ -1,6 +1,6 @@
 ---
 id: Q-R41..Q-R52
-order: 32
+order: 33
 summary: |-
   v2.0.203 user feedback triage: configurable zoom step, Open Folder/Custom Zoom shortcuts, confirm-before-delete, zoom-% HUD, empty-folder notice and settings export/import approved (default off/unconfigured where applicable); Refresh, in-viewer rename, trackpad gesture tuning and new format/RAW support declined.
 ---
