@@ -87,6 +87,27 @@ public sealed class UndoServiceTests
         Assert.False(_service.CanUndoMove);
     }
 
+    [Fact(DisplayName = "Q-R small-findings #2: _moveFingerprints does not grow across register+undo cycles (successful undo drops its entry)")]
+    public async Task UndoMoveAsync_RepeatedRegisterAndUndo_DoesNotLeakFingerprints()
+    {
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var source = $@"C:\photos\cycle-{i}.jpg";
+            var destination = $@"C:\photos\sorted\cycle-{i}.jpg";
+            _fs.AddFile(destination, "image-content", writeTime);
+            _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+
+            // A successfully undone move's fingerprint must not linger: nothing in the map still
+            // describes it (the file is back at Source, not at Destination).
+            var result = await _service.UndoMoveAsync();
+            Assert.True(result.Succeeded);
+
+            Assert.Equal(0, _service.MoveFingerprintCount);
+        }
+    }
+
     [Fact(DisplayName = "Undo of a Move is journaled Prepared before the move and Committed after it")]
     public async Task UndoMoveAsync_JournalsReverseMove_PreparedBeforeMutationThenCommitted()
     {

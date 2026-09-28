@@ -49,6 +49,10 @@ public sealed class UndoService
     /// <summary>Số lượng thao tác Move hiện có trong lịch sử hoàn tác.</summary>
     public int MoveHistoryCount => _moveHistory.Count;
 
+    /// <summary>Test seam (Q-R small-findings #2): number of cached move fingerprints, to assert this map
+    /// does not grow unbounded across register+undo cycles.</summary>
+    internal int MoveFingerprintCount => _moveFingerprints.Count;
+
     /// <summary>Truy cập ngăn xếp lịch sử thao tác Move.</summary>
     public Stack<(string Source, string Destination)> MoveHistory => _moveHistory;
 
@@ -199,6 +203,10 @@ public sealed class UndoService
                 }
                 // A failed Committed append does not undo the completed move (same contract as FileActionService).
                 _ = tx.Commit(out _);
+                // The move is undone; its fingerprint no longer describes anything at Destination (the file is
+                // back at Source, or gone from Destination entirely). Drop it so the map does not grow unbounded
+                // across register+undo cycles.
+                _moveFingerprints.Remove(move.Destination);
                 _lastUndoAction = null;
                 return new UndoResult(true, FileOperationType.Move, move.Source, move.Destination, null);
             }
