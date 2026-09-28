@@ -149,6 +149,56 @@ public sealed partial class ImagePresenterTests
         Assert.Contains("photo (1).png", presenter.StatusText, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "Q-R small-findings #1: after a compare-partner failure, zooming into the (downscaled) current image still triggers the full-resolution decode")]
+    public async Task PresentAsync_ComparePartnerMissing_StillArmsZoomDetailForCurrentImage()
+    {
+        var current = CreateFakeImageFile("zoomed.png");
+        var partner = Path.Combine(_tempDir, "zoomed (1).png"); // listed in the catalog but gone from disk
+        _catalog.Reset([current, partner]);
+
+        // A downscaled preview (a real preview would be, for anything bigger than the decode box): the preview's
+        // own pixels cannot satisfy a 2x zoom, so ZoomDetailLoader must have a target armed to decode the original.
+        var downscaled = new DownscaledFakeDecodedImage(pixelWidth: 100, pixelHeight: 100, originalWidth: 2000, originalHeight: 2000);
+        using var decoder = new GatedDecoder(downscaled);
+        var previewService = CreatePreviewService(decoder);
+        var presenter = CreatePresenterWithServices(previewService, _thumbnailCache);
+
+        var present = presenter.PresentAsync(0);
+        decoder.Release(); // let the current image's own decode finish
+        await present.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // Sanity: this really is the compare-partner-failure path (same outcome as the sibling test above).
+        Assert.False(_compareViewModel.IsVisible);
+        Assert.Contains("zoomed (1).png", presenter.StatusText, StringComparison.Ordinal);
+
+        presenter.SetViewerZoom(2.0); // zoom in well past what the 100px preview can show
+
+        // Without the fix, ZoomDetailLoader.OnPreviewPresented was never called on this path, so _target
+        // stayed null and this zoom is a silent no-op: PendingLoad would stay null forever.
+        Assert.NotNull(presenter.ZoomDetail.PendingLoad);
+
+        decoder.Release(); // let the full-resolution decode finish
+        await presenter.ZoomDetail.PendingLoad!.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotNull(presenter.ZoomDetail.HeldOriginal);
+        Assert.Same(downscaled.PlatformImage, presenter.ZoomDetail.HeldOriginal!.PlatformImage);
+    }
+
+    /// <summary>Fake decoded image whose <see cref="OriginalWidth"/>/<see cref="OriginalHeight"/> differ from
+    /// <see cref="PixelWidth"/>/<see cref="PixelHeight"/> (a real downscaled preview), unlike the sibling
+    /// <c>FakeDecodedImage</c> in the main test file, which defaults both to the same value.</summary>
+    private sealed class DownscaledFakeDecodedImage(int pixelWidth, int pixelHeight, int originalWidth, int originalHeight) : IDecodedImage
+    {
+        public int PixelWidth { get; } = pixelWidth;
+        public int PixelHeight { get; } = pixelHeight;
+        public bool Downscaled => true;
+        public int Orientation => 1;
+        public long EstimatedBytes => 1;
+        public object PlatformImage { get; } = new();
+        public int OriginalWidth { get; } = originalWidth;
+        public int OriginalHeight { get; } = originalHeight;
+    }
+
     [Fact(DisplayName = "A stale token can never remove a catalog entry")]
     public async Task RemoveMissingCatalogItemAsync_StaleToken_LeavesCatalogUntouched()
     {

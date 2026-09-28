@@ -66,4 +66,5 @@ The application must prioritize the following principles when processing and rev
 
 - Must fail when the guarded code is broken (mutate to check). No source-text tests, fixed-delay asserts or `Task.Yield()` polling; real-OS tests are `Native`/`Slow` and self-cleaning. Local filter: `Category!=Manual&Category!=Native&Category!=Slow`.
 - **Hang guard:** always bound test runs (`test.runsettings`/`verify-all.ps1`); never run `dotnet test` unbounded.
+- **Local runs:** never exclude `Category=UI`; prefer `tools/run-tests-hidden.ps1` / `verify-all.ps1 -Hidden` (UI windows stay off the desktop).
 - Details: [docs/TESTING.md](docs/TESTING.md)

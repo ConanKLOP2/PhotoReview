@@ -8,7 +8,11 @@ Detail behind [`AGENTS.md` > Tests](../AGENTS.md#tests): categories, parallel lo
 
 ## Parallel local runs
 
-`tools/verify-all.ps1 -Parallel` runs the 5 test projects concurrently (one `dotnet test` process each) — ~2.1x speedup (170s -> 81s, default filter); doesn't change xUnit's in-assembly `[Collection("GlobalState")]` serialization. Caveat: `Category=UI` tests spin real WPF windows, so avoid `-Parallel` if another session is mid its own Integration-test run (can pop a visible `MessageBox` on the shared desktop — harmless, just click it).
+`tools/verify-all.ps1 -Parallel` runs the 5 test projects concurrently (one `dotnet test` process each) — ~2.1x speedup (170s -> 81s, default filter); doesn't change xUnit's in-assembly `[Collection("GlobalState")]` serialization. Add `-Hidden` to keep UI-test windows off the shared desktop.
+
+## Hidden desktop (local only)
+
+`tools/run-tests-hidden.ps1 [dotnet-test-args]` (or `verify-all.ps1 -Hidden`) runs `dotnet test` on a private, non-interactive Win32 desktop (`CreateDesktop`): `Category=UI` real-WPF windows and `MessageBox`es never appear on your desktop or steal focus. Defaults to the CI filter and hang flags; exit code, output (also logged under `TestResults\hidden-desktop-runner\`) and the hang guard behave exactly like a normal run. CI is unchanged.
 
 ## Hang guard
 

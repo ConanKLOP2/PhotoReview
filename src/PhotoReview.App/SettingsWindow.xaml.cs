@@ -526,26 +526,74 @@ public partial class SettingsWindow : Window
         ShortcutDuplicateWarningText.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    /// <summary>Cache for <see cref="GetParsedActionsForProbe"/>: the ActionsText the cached parse came from.</summary>
+    private string? _cachedProbeActionsJson;
+
+    /// <summary>Cache for <see cref="GetParsedActionsForProbe"/>: the parse result for <see cref="_cachedProbeActionsJson"/>.</summary>
+    private List<ReviewAction> _cachedProbeActions = [];
+
+    /// <summary>
+    /// Shortcut_TextChanged fires <see cref="BuildProbeSettings"/> on every keystroke in any of the 24 shortcut
+    /// boxes, which used to re-parse the (unrelated, unchanged) Actions JSON every time too. ActionsText only
+    /// actually changes when the user types there or the Action Profiles editor rewrites it, so cache the parse
+    /// keyed on the exact text and skip re-parsing while it's unchanged.
+    /// </summary>
+    private List<ReviewAction> GetParsedActionsForProbe()
+    {
+        var text = ActionsText.Text;
+        if (_cachedProbeActionsJson == text) return _cachedProbeActions;
+        try { _cachedProbeActions = JsonSerializer.Deserialize<List<ReviewAction>>(text) ?? []; }
+        catch (JsonException) { _cachedProbeActions = []; } // invalid JSON while typing: Save's own check reports that separately
+        _cachedProbeActionsJson = text;
+        return _cachedProbeActions;
+    }
+
+    /// <summary>
+    /// Reads all 24 shortcut text boxes into a <see cref="ShortcutMappings"/>, exactly as typed (not canonicalized).
+    /// The single place both <see cref="Save_Click"/> and <see cref="BuildProbeSettings"/> read the shortcut
+    /// controls from, so the field list only has to be kept in sync with the XAML controls once, not twice.
+    /// </summary>
+    private ShortcutMappings ReadShortcutsFromUi() => new()
+    {
+        Next = NextText.Text, Previous = PreviousText.Text, FirstImage = FirstImageText.Text, LastImage = LastImageText.Text,
+        NextFolder = NextFolderText.Text, PreviousFolder = PreviousFolderText.Text,
+        ZoomIn = ZoomInText.Text, ZoomOut = ZoomOutText.Text, ZoomActualSize = ZoomActualSizeText.Text, ToggleFit = ToggleFitText.Text,
+        Fullscreen = FullscreenText.Text, ToggleInfoOverlay = ToggleInfoOverlayText.Text,
+        Skip = SkipText.Text, Undo = UndoText.Text, Compare = CompareText.Text,
+        MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
+        ClickZoom = ClickZoomText.Text,
+        FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
+        OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text,
+    };
+
+    /// <summary>
+    /// Same field list as <see cref="ReadShortcutsFromUi"/>, with every value run through <see cref="ShortcutKeyCanonical.Canonicalize"/>
+    /// (what Save persists). <paramref name="existing"/> is the settings' current <see cref="ShortcutMappings"/>
+    /// (before this Save): <see cref="ShortcutMappings.MoveToFolder2"/> is a legacy alias with no UI control (owned
+    /// by <c>ReviewAction</c> instead -- see <see cref="SettingsValidator.ValidateShortcuts"/>), so it must be
+    /// carried over from there rather than silently reset to <see cref="ShortcutMappings"/>'s own default "Enter".
+    /// </summary>
+    private static ShortcutMappings CanonicalizeShortcuts(ShortcutMappings raw, ShortcutMappings existing) => new()
+    {
+        Next = ShortcutKeyCanonical.Canonicalize(raw.Next), Previous = ShortcutKeyCanonical.Canonicalize(raw.Previous),
+        FirstImage = ShortcutKeyCanonical.Canonicalize(raw.FirstImage), LastImage = ShortcutKeyCanonical.Canonicalize(raw.LastImage),
+        NextFolder = ShortcutKeyCanonical.Canonicalize(raw.NextFolder), PreviousFolder = ShortcutKeyCanonical.Canonicalize(raw.PreviousFolder),
+        ZoomIn = ShortcutKeyCanonical.Canonicalize(raw.ZoomIn), ZoomOut = ShortcutKeyCanonical.Canonicalize(raw.ZoomOut),
+        ZoomActualSize = ShortcutKeyCanonical.Canonicalize(raw.ZoomActualSize), ToggleFit = ShortcutKeyCanonical.Canonicalize(raw.ToggleFit),
+        Fullscreen = ShortcutKeyCanonical.Canonicalize(raw.Fullscreen), ToggleInfoOverlay = ShortcutKeyCanonical.Canonicalize(raw.ToggleInfoOverlay),
+        Skip = ShortcutKeyCanonical.Canonicalize(raw.Skip), Undo = ShortcutKeyCanonical.Canonicalize(raw.Undo), Compare = ShortcutKeyCanonical.Canonicalize(raw.Compare),
+        MoveToFolder = ShortcutKeyCanonical.Canonicalize(raw.MoveToFolder), CopyToFolder = ShortcutKeyCanonical.Canonicalize(raw.CopyToFolder),
+        SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(raw.SendToRecycleBin), ClickZoom = ShortcutKeyCanonical.Canonicalize(raw.ClickZoom),
+        FitWidth = ShortcutKeyCanonical.Canonicalize(raw.FitWidth), FitHeight = ShortcutKeyCanonical.Canonicalize(raw.FitHeight),
+        ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(raw.ToggleKeepZoom), OpenFolder = ShortcutKeyCanonical.Canonicalize(raw.OpenFolder),
+        CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom),
+        MoveToFolder2 = existing.MoveToFolder2,
+    };
+
     /// <summary>A throwaway settings snapshot from the current text boxes, used only to preview validation live.</summary>
     private AppSettings BuildProbeSettings()
     {
-        var probe = new AppSettings
-        {
-            Shortcuts = new ShortcutMappings
-            {
-                Next = NextText.Text, Previous = PreviousText.Text, FirstImage = FirstImageText.Text, LastImage = LastImageText.Text,
-                NextFolder = NextFolderText.Text, PreviousFolder = PreviousFolderText.Text,
-                ZoomIn = ZoomInText.Text, ZoomOut = ZoomOutText.Text, ZoomActualSize = ZoomActualSizeText.Text, ToggleFit = ToggleFitText.Text,
-                Fullscreen = FullscreenText.Text, ToggleInfoOverlay = ToggleInfoOverlayText.Text,
-                Skip = SkipText.Text, Undo = UndoText.Text, Compare = CompareText.Text,
-                MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
-                ClickZoom = ClickZoomText.Text,
-                FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
-                OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text,
-            },
-        };
-        try { probe.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? []; }
-        catch (JsonException) { probe.Actions = []; } // invalid JSON while typing: Save's own check reports that separately
+        var probe = new AppSettings { Shortcuts = ReadShortcutsFromUi(), Actions = GetParsedActionsForProbe() };
         return probe;
     }
 
@@ -821,18 +869,7 @@ public partial class SettingsWindow : Window
         Settings.ToolbarOpacityPercent = Math.Clamp((int)Math.Round(ToolbarOpacitySlider.Value), AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
         Settings.InfoOverlayFontSize = infoOverlayFontSize;
         Settings.ShowZoomIndicator = ShowZoomIndicatorCheck.IsChecked == true;
-        Settings.Shortcuts.Next = ShortcutKeyCanonical.Canonicalize(NextText.Text); Settings.Shortcuts.Previous = ShortcutKeyCanonical.Canonicalize(PreviousText.Text);
-        Settings.Shortcuts.SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(RecycleText.Text);
-        Settings.Shortcuts.Compare = ShortcutKeyCanonical.Canonicalize(CompareText.Text); Settings.Shortcuts.NextFolder = ShortcutKeyCanonical.Canonicalize(NextFolderText.Text); Settings.Shortcuts.PreviousFolder = ShortcutKeyCanonical.Canonicalize(PreviousFolderText.Text);
-        Settings.Shortcuts.FirstImage = ShortcutKeyCanonical.Canonicalize(FirstImageText.Text); Settings.Shortcuts.ZoomIn = ShortcutKeyCanonical.Canonicalize(ZoomInText.Text); Settings.Shortcuts.ZoomOut = ShortcutKeyCanonical.Canonicalize(ZoomOutText.Text); Settings.Shortcuts.ToggleFit = ShortcutKeyCanonical.Canonicalize(ToggleFitText.Text); Settings.Shortcuts.Skip = ShortcutKeyCanonical.Canonicalize(SkipText.Text); Settings.Shortcuts.Undo = ShortcutKeyCanonical.Canonicalize(UndoText.Text); Settings.Shortcuts.Fullscreen = ShortcutKeyCanonical.Canonicalize(FullscreenText.Text);
-        Settings.Shortcuts.LastImage = ShortcutKeyCanonical.Canonicalize(LastImageText.Text); Settings.Shortcuts.ZoomActualSize = ShortcutKeyCanonical.Canonicalize(ZoomActualSizeText.Text); Settings.Shortcuts.ToggleInfoOverlay = ShortcutKeyCanonical.Canonicalize(ToggleInfoOverlayText.Text);
-        Settings.Shortcuts.MoveToFolder = ShortcutKeyCanonical.Canonicalize(MoveToFolderText.Text); Settings.Shortcuts.CopyToFolder = ShortcutKeyCanonical.Canonicalize(CopyToFolderText.Text);
-        Settings.Shortcuts.ClickZoom = ShortcutKeyCanonical.Canonicalize(ClickZoomText.Text);
-        Settings.Shortcuts.FitWidth = ShortcutKeyCanonical.Canonicalize(FitWidthText.Text);
-        Settings.Shortcuts.FitHeight = ShortcutKeyCanonical.Canonicalize(FitHeightText.Text);
-        Settings.Shortcuts.ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(ToggleKeepZoomText.Text);
-        Settings.Shortcuts.OpenFolder = ShortcutKeyCanonical.Canonicalize(OpenFolderText.Text);
-        Settings.Shortcuts.CustomZoom = ShortcutKeyCanonical.Canonicalize(CustomZoomText.Text);
+        Settings.Shortcuts = CanonicalizeShortcuts(ReadShortcutsFromUi(), Settings.Shortcuts);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
