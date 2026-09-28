@@ -9,7 +9,7 @@
     ],
     "formatVersion": 1
   },
-  "action.recycle.name": "Recycle",
+  "action.recycle.name": "Move to Recycle Bin",
   "actionProfiles.add": "+ Add",
   "actionProfiles.confirm.label": "Always ask for confirmation before running",
   "actionProfiles.destination.label": "Destination folder (relative or absolute)",
@@ -245,7 +245,7 @@
   "enum.explorerOrderStatus.timedOut": "TimedOut",
   "enum.fileOperation.copy": "Copy",
   "enum.fileOperation.move": "Move",
-  "enum.fileOperation.recycle": "Recycle",
+  "enum.fileOperation.recycle": "Move to Recycle Bin",
   "enum.imageSortMode.name": "Name (follows Explorer when it is open)",
   "enum.imageSortMode.sizeAscending": "By size, smallest first",
   "enum.imageSortMode.sizeDescending": "By size, largest first",
