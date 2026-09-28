@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using PhotoReview.App;
@@ -21,8 +22,11 @@ public static class StaTestHost
 
     private static readonly object Gate = new();
     private static readonly BlockingCollection<Action> Work = new();
+    private static readonly ConcurrentQueue<string> UnexpectedDialogs = new();
     private static Thread? _thread;
     private static Dispatcher? _dispatcher;
+    private static HookProc? _cbtHookProc; // held so the GC never collects the delegate the native hook calls
+    private static IntPtr _cbtHook;
 
     /// <summary>The STA thread's dispatcher. Only valid inside a <see cref="RunAsync(Func{Task})"/> body.</summary>
     public static Dispatcher Dispatcher => _dispatcher ?? throw new InvalidOperationException("STA host not started.");
@@ -54,6 +58,8 @@ public static class StaTestHost
                 WpfResourceLookup.RedirectToApplicationAssembly();
                 if (Application.Current is null)
                     _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                _cbtHookProc = OnCbt;
+                _cbtHook = SetWindowsHookEx(WhCbt, _cbtHookProc, IntPtr.Zero, GetCurrentThreadId());
                 ready.Set();
                 foreach (var action in Work.GetConsumingEnumerable()) action();
             })
@@ -77,6 +83,7 @@ public static class StaTestHost
 
         var timer = new DispatcherTimer(DispatcherPriority.Send, dispatcher) { Interval = timeout };
         timer.Tick += (_, _) => { timedOut = true; frame.Continue = false; };
+        UnexpectedDialogs.Clear();
 
         try
         {
@@ -94,10 +101,12 @@ public static class StaTestHost
         catch (Exception ex)
         {
             timer.Stop();
-            outer.TrySetException(ex);
+            if (!FailOnUnexpectedDialogs(outer)) outer.TrySetException(ex);
             return;
         }
         timer.Stop();
+
+        if (FailOnUnexpectedDialogs(outer)) return;
 
         if (!inner.IsCompleted)
         {
@@ -108,6 +117,21 @@ public static class StaTestHost
         if (inner.IsFaulted) outer.TrySetException(inner.Exception!.InnerExceptions);
         else if (inner.IsCanceled) outer.TrySetCanceled();
         else outer.TrySetResult(null);
+    }
+
+    /// <summary>
+    /// Reported ahead of whatever the body did afterwards: an assertion failing because its modal window was
+    /// force-closed (see <see cref="OnCbt"/>) is only a symptom of the dialog.
+    /// </summary>
+    private static bool FailOnUnexpectedDialogs(TaskCompletionSource<object?> outer)
+    {
+        if (UnexpectedDialogs.IsEmpty) return false;
+        outer.TrySetException(new InvalidOperationException(
+            "A real Win32 dialog opened on the STA test host (auto-dismissed so the run does not hang): "
+            + string.Join(" | ", UnexpectedDialogs)
+            + " -- route it through the code's test seam (e.g. SettingsWindow.InvalidSettingsWarning, IDialogService) "
+            + "or change the inputs so it never opens."));
+        return true;
     }
 
     /// <summary>
@@ -146,6 +170,73 @@ public static class StaTestHost
             await fired.Task;
         }
     }
+
+    /// <summary>
+    /// A real MessageBox (or common file dialog) on this thread runs a nested Win32 modal loop that nobody clicks in a
+    /// headless run: the body never finishes, <see cref="DefaultTimeout"/> cannot unwind a nested loop, and the only exit
+    /// is the blame collector killing testhost after 120 s -- reported as a mysterious "crash". It also pops up on the
+    /// developer's desktop. This CBT hook sees the dialog before it is painted, records its text, moves it off-screen,
+    /// answers it with the least destructive button (Cancel, else No, else OK) and closes any WPF window still modal,
+    /// so the test fails at once with the dialog's text instead.
+    /// </summary>
+    private static IntPtr OnCbt(int code, IntPtr wParam, IntPtr lParam)
+    {
+        if (code == HcbtActivate && ClassName(wParam) == "#32770")
+        {
+            UnexpectedDialogs.Enqueue($"\"{WindowText(wParam)}\": {WindowText(GetDlgItem(wParam, MessageBoxTextId))}");
+            SetWindowPos(wParam, IntPtr.Zero, -32000, -32000, 0, 0, SwpNoSize | SwpNoZOrder | SwpNoActivate);
+            foreach (var id in new[] { IdCancel, IdNo, IdOk })
+            {
+                var button = GetDlgItem(wParam, id);
+                if (button == IntPtr.Zero) continue;
+                PostMessage(wParam, WmCommand, (IntPtr)id, button);
+                break;
+            }
+            _dispatcher?.BeginInvoke(DispatcherPriority.Background, () =>
+            {
+                foreach (var window in Application.Current.Windows.OfType<Window>().Where(w => w.IsVisible).ToList())
+                    try { window.Close(); } catch (InvalidOperationException) { }
+            });
+        }
+        return CallNextHookEx(_cbtHook, code, wParam, lParam);
+    }
+
+    private static string ClassName(IntPtr hwnd)
+    {
+        var buffer = new char[64];
+        var length = GetClassName(hwnd, buffer, buffer.Length);
+        return new string(buffer, 0, Math.Max(length, 0));
+    }
+
+    private static string WindowText(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return "";
+        var buffer = new char[1024];
+        var length = GetWindowText(hwnd, buffer, buffer.Length);
+        return new string(buffer, 0, Math.Max(length, 0));
+    }
+
+    private const int WhCbt = 5;
+    private const int HcbtActivate = 5;
+    private const int MessageBoxTextId = 0xFFFF;
+    private const int IdOk = 1;
+    private const int IdCancel = 2;
+    private const int IdNo = 7;
+    private const uint WmCommand = 0x0111;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+
+    private delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+    [DllImport("user32.dll")] private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, [Out] char[] lpClassName, int nMaxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, [Out] char[] lpString, int nMaxCount);
+    [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr hDlg, int nIDDlgItem);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 }
 
 /// <summary>
@@ -257,6 +348,40 @@ public sealed class StaTestHostSmokeTests
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await StaTestHost.RunAsync(() => StaTestHost.DrainAsync(duration));
         Assert.True(sw.Elapsed >= duration, $"DrainAsync returned after {sw.Elapsed.TotalMilliseconds:F0} ms, before {duration.TotalMilliseconds:F0} ms.");
+    }
+
+    [Fact]
+    public async Task RealMessageBox_FailsFastWithItsText_InsteadOfHanging()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StaTestHost.RunAsync(() =>
+        {
+            MessageBox.Show("sta-host-probe-body", "probe", MessageBoxButton.YesNo);
+            return Task.CompletedTask;
+        }));
+
+        Assert.Contains("sta-host-probe-body", ex.Message, StringComparison.Ordinal);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
+    }
+
+    [Fact]
+    public async Task RealMessageBox_InsideAModalWindow_FailsFastInsteadOfHanging()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StaTestHost.RunAsync(() =>
+        {
+            var window = new Window { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            window.Loaded += (_, _) => MessageBox.Show(window, "sta-host-probe-modal", "probe");
+            // Same shape as the Settings tests: the force-closed window makes this assert throw synchronously, and the
+            // dialog's text must still be what gets reported.
+            Assert.True(window.ShowDialog());
+            return Task.CompletedTask;
+        }));
+
+        Assert.Contains("sta-host-probe-modal", ex.Message, StringComparison.Ordinal);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
     }
 
     [Fact]
