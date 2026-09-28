@@ -22,7 +22,7 @@ The application must prioritize the following principles when processing and rev
 
 **Goal:** Reduce token overhead by tiering documentation. Read only what's needed.
 
-1. **Every session (T0, ≤16 KB total):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
+1. **Every session (T0, ≤18 KB total):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
 2. **Per task (T1, ≤24 KB per file):** Use `INDEX.md` to find which single plan/architecture doc relates to the work. Read that file + relevant ADR. Do not pre-read all plans. `docs/refactoring/decisions/` and `docs/refactoring/perf/`: read only the one fragment file a link in `OPEN-DECISIONS.md`/`PERF-STATUS.md` points you to, never the whole directory.
 3. **Archive (T2, unlimited):** `docs/archive/` (ADR evidence only) is historical. Do not read unless referenced or verifying decisions. Use `git log --follow` for change rationale.
 4. **Task completion:** When a task is done and reaches status DONE, compress it to one line in `docs/refactoring/HISTORY.md` and delete the plan/evidence files (git history keeps them); keep `task_on_progress.md` and `docs/ACTIVE-TASKS.md` to open work only — see the "Avoid append-conflicts" rule below for how these two get updated.
@@ -65,6 +65,5 @@ The application must prioritize the following principles when processing and rev
 ## Tests
 
 - Must fail when the guarded code is broken (mutate to check). No source-text tests, fixed-delay asserts or `Task.Yield()` polling; real-OS tests are `Native`/`Slow` and self-cleaning. Local filter: `Category!=Manual&Category!=Native&Category!=Slow`.
-- **Categories:** `HotPath` (fast unit tests), `Slow`, `Architecture`, `Integration`, `Manual`, `Native`, and `UI` (real WPF `Application`/STA-dispatcher tests — mostly `PhotoReview.Integration.Tests`, plus a couple in `PhotoReview.App.Tests`; always paired with `[Collection("GlobalState")]`). Filter on any of these with `dotnet test --filter "Category=X"`.
-- **Parallel local runs:** `tools/verify-all.ps1 -Parallel` runs the 5 test projects concurrently (one `dotnet test` process each) — ~2.1x speedup (170s -> 81s, default filter); doesn't change xUnit's in-assembly `[Collection("GlobalState")]` serialization. Caveat: `Category=UI` tests spin real WPF windows, so avoid `-Parallel` if another session is mid its own Integration-test run (can pop a visible `MessageBox` on the shared desktop — harmless, just click it).
-- **Hang guard:** `tests/test.runsettings` caps `dotnet test` at 120s/test, 20min/session, no flags needed; prefer `verify-all.ps1` ([detail](docs/refactoring/decisions/TEST-HANG-GUARD.md)).
+- **Hang guard:** always bound test runs (`test.runsettings`/`verify-all.ps1`); never run `dotnet test` unbounded.
+- Details: [docs/TESTING.md](docs/TESTING.md)
