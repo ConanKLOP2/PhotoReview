@@ -13,6 +13,6 @@ namespace PhotoReview.Core.Settings;
 [JsonSourceGenerationOptions(WriteIndented = true, NumberHandling = JsonNumberHandling.AllowReadingFromString,
     ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]
 [JsonSerializable(typeof(AppSettings))]
-internal sealed partial class AppSettingsJsonContext : JsonSerializerContext
+public sealed partial class AppSettingsJsonContext : JsonSerializerContext
 {
 }

@@ -26,7 +26,7 @@ public partial class SettingsWindow : Window
     private readonly IUpdateChecker? _updateChecker;
     private Action? _cancelUpdateCheck;
     private string? _updateUrl;
-    public AppSettings Settings { get; }
+    public AppSettings Settings { get; private set; }
 
     /// <summary>Test seam: receives the invalid-destination warning of Save instead of a MessageBox.</summary>
     internal Action<string>? InvalidSettingsWarning { get; set; }
@@ -61,7 +61,7 @@ public partial class SettingsWindow : Window
             NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
             ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
             SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText, ClickZoomText,
-            FitWidthText, FitHeightText, ToggleKeepZoomText,
+            FitWidthText, FitHeightText, ToggleKeepZoomText, OpenFolderText, CustomZoomText,
         };
         foreach (var textBox in allShortcutBoxes)
         {
@@ -124,6 +124,7 @@ public partial class SettingsWindow : Window
     {
         UpdatePageTitle();
         ToolbarOpacityHint.Text = Tr.SettingsToolbarOpacityHint(AppSettings.MinToolbarOpacityPercent);
+        KeyboardZoomStepPercentHint.Text = Tr.SettingsKeyboardZoomStepPercentHint(AppSettings.MinKeyboardZoomStepPercent, AppSettings.MaxKeyboardZoomStepPercent);
         UpdateToolbarOpacityValueText();
         UpdateRamCacheRange();
         UpdateRamCacheValueText();
@@ -330,6 +331,7 @@ public partial class SettingsWindow : Window
         MoveToFolderText.Text = Settings.Shortcuts.MoveToFolder; CopyToFolderText.Text = Settings.Shortcuts.CopyToFolder;
         ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
         FitWidthText.Text = Settings.Shortcuts.FitWidth; FitHeightText.Text = Settings.Shortcuts.FitHeight; ToggleKeepZoomText.Text = Settings.Shortcuts.ToggleKeepZoom;
+        OpenFolderText.Text = Settings.Shortcuts.OpenFolder; CustomZoomText.Text = Settings.Shortcuts.CustomZoom;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         // PR-B: Percent400 was removed from the combo; SettingsNormalizer migrates a loaded value to Percent200 before
         // this window ever sees it, but a stray Percent400 (e.g. this window built directly on an unnormalized
@@ -354,12 +356,15 @@ public partial class SettingsWindow : Window
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
         AllowPermanentDeleteCheck.IsChecked = Settings.AllowPermanentDeleteWithoutRecycleBin;
+        ConfirmBeforeDeleteCheck.IsChecked = Settings.ConfirmBeforeDelete;
+        ExternalEditorPathText.Text = Settings.ExternalEditorPath;
         JournalSafeRadio.IsChecked = Settings.JournalDurability == JournalDurability.PowerLossSafe;
         JournalFastRadio.IsChecked = !JournalSafeRadio.IsChecked;
         ShowInfoOverlayCheck.IsChecked = Settings.ShowInfoOverlay;
         ShowFileInfoCheck.IsChecked = Settings.ShowFileInfo;
         ShowFolderInfoCheck.IsChecked = Settings.ShowFolderInfo;
         InfoOverlayFontSizeBox.Text = Settings.InfoOverlayFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ShowZoomIndicatorCheck.IsChecked = Settings.ShowZoomIndicator;
         ToolbarAutoHideCheck.IsChecked = Settings.ToolbarAutoHide;
         ToolbarAutoHideDelayBox.Text = Settings.ToolbarAutoHideDelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
         InfoOverlayAutoHideCheck.IsChecked = Settings.InfoOverlayAutoHide;
@@ -368,6 +373,7 @@ public partial class SettingsWindow : Window
         ToolbarOpacitySlider.Maximum = AppSettings.MaxToolbarOpacityPercent;
         ToolbarOpacitySlider.Value = Math.Clamp(Settings.ToolbarOpacityPercent, AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
         ToolbarOpacityHint.Text = Tr.SettingsToolbarOpacityHint(AppSettings.MinToolbarOpacityPercent);
+        KeyboardZoomStepPercentHint.Text = Tr.SettingsKeyboardZoomStepPercentHint(AppSettings.MinKeyboardZoomStepPercent, AppSettings.MaxKeyboardZoomStepPercent);
         UpdateToolbarOpacityValueText();
         MouseWheelActionCombo.SelectedIndex = Settings.MouseWheelAction == MouseWheelAction.Navigate ? 1 : 0;
         ClickToZoomCheck.IsChecked = Settings.ClickToZoomEnabled;
@@ -379,6 +385,7 @@ public partial class SettingsWindow : Window
         ArrowKeyNavigatesAtZoomEdgeCheck.IsChecked = Settings.ArrowKeyNavigatesAtZoomEdge;
         ShowFolderMenuItemsCheck.IsChecked = Settings.ShowFolderMenuItems;
         ArrowPanStepBox.Text = Settings.ArrowPanStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        KeyboardZoomStepPercentBox.Text = Settings.KeyboardZoomStepPercent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         KeyboardZoomAnchorCombo.SelectedIndex = Settings.KeyboardZoomAnchor == KeyboardZoomAnchor.ViewportCentre ? 1 : 0;
         ImageTransitionCombo.SelectedIndex = Settings.ImageTransition == ImageTransition.Fade ? 1 : 0;
         ImageTransitionMsBox.Text = Settings.ImageTransitionMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -495,6 +502,8 @@ public partial class SettingsWindow : Window
     private void ClearFitWidth_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitWidthText);
     private void ClearFitHeight_Click(object sender, RoutedEventArgs e) => ClearShortcut(FitHeightText);
     private void ClearToggleKeepZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleKeepZoomText);
+    private void ClearOpenFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(OpenFolderText);
+    private void ClearCustomZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(CustomZoomText);
 
     private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
 
@@ -530,6 +539,7 @@ public partial class SettingsWindow : Window
                 MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
                 ClickZoom = ClickZoomText.Text,
                 FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
+                OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text,
             },
         };
         try { probe.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? []; }
@@ -615,6 +625,9 @@ public partial class SettingsWindow : Window
         Settings.LoggingEnabled = false;
         Settings.JournalDurability = JournalDurability.Fast;
         Settings.AllowPermanentDeleteWithoutRecycleBin = false;
+        Settings.ConfirmBeforeDelete = false;
+        Settings.ShowZoomIndicator = false;
+        Settings.ExternalEditorPath = string.Empty;
         Settings.ImageCacheCapacityBytes = PerformanceOptions.ImageCacheCapacityBytes;
         Settings.ImageCacheRamPercent = PerformanceOptions.ImageCacheRamPercent;
         Settings.MemoryReserveBytes = PerformanceOptions.MemoryReserveBytes;
@@ -629,7 +642,7 @@ public partial class SettingsWindow : Window
         Settings.FitWidthAnchor = FitWidthAnchor.Centre; Settings.KeepZoomAcrossImages = false;
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
-        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
+        Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomStepPercent = AppSettings.DefaultKeyboardZoomStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
         Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems;
         Settings.MoveCopyReuseLastFolder = false;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
@@ -659,7 +672,7 @@ public partial class SettingsWindow : Window
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
-        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text, FitWidthText.Text, FitHeightText.Text, ToggleKeepZoomText.Text };
+        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text, FitWidthText.Text, FitHeightText.Text, ToggleKeepZoomText.Text, OpenFolderText.Text, CustomZoomText.Text };
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
@@ -684,6 +697,8 @@ public partial class SettingsWindow : Window
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
         Settings.AllowPermanentDeleteWithoutRecycleBin = AllowPermanentDeleteCheck.IsChecked == true;
+        Settings.ConfirmBeforeDelete = ConfirmBeforeDeleteCheck.IsChecked == true;
+        Settings.ExternalEditorPath = ExternalEditorPathText.Text.Trim();
         Settings.JournalDurability = JournalSafeRadio.IsChecked == true ? JournalDurability.PowerLossSafe : JournalDurability.Fast;
         Settings.ImageCacheRamPercent = SelectedRamCachePercent;
         Settings.ShowInfoOverlay = ShowInfoOverlayCheck.IsChecked == true;
@@ -739,6 +754,14 @@ public partial class SettingsWindow : Window
             return;
         }
         Settings.ArrowPanStepPercent = arrowPanStep;
+        if (!int.TryParse(KeyboardZoomStepPercentBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var keyboardZoomStepPercent)
+            || keyboardZoomStepPercent < AppSettings.MinKeyboardZoomStepPercent || keyboardZoomStepPercent > AppSettings.MaxKeyboardZoomStepPercent)
+        {
+            ShowInvalid(Tr.DialogSettingsInvalidKeyboardZoomStepPercent(AppSettings.MinKeyboardZoomStepPercent, AppSettings.MaxKeyboardZoomStepPercent));
+            KeyboardZoomStepPercentBox.Focus();
+            return;
+        }
+        Settings.KeyboardZoomStepPercent = keyboardZoomStepPercent;
         Settings.ImageTransition = ImageTransitionCombo.SelectedIndex == 1 ? ImageTransition.Fade : ImageTransition.None;
         if (!int.TryParse(ImageTransitionMsBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var imageTransitionMs)
             || imageTransitionMs < AppSettings.MinImageTransitionMs || imageTransitionMs > AppSettings.MaxImageTransitionMs)
@@ -792,6 +815,7 @@ public partial class SettingsWindow : Window
         Settings.InfoOverlayAutoHideDelayMs = infoOverlayAutoHideDelayMs;
         Settings.ToolbarOpacityPercent = Math.Clamp((int)Math.Round(ToolbarOpacitySlider.Value), AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
         Settings.InfoOverlayFontSize = infoOverlayFontSize;
+        Settings.ShowZoomIndicator = ShowZoomIndicatorCheck.IsChecked == true;
         Settings.Shortcuts.Next = ShortcutKeyCanonical.Canonicalize(NextText.Text); Settings.Shortcuts.Previous = ShortcutKeyCanonical.Canonicalize(PreviousText.Text);
         Settings.Shortcuts.SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(RecycleText.Text);
         Settings.Shortcuts.Compare = ShortcutKeyCanonical.Canonicalize(CompareText.Text); Settings.Shortcuts.NextFolder = ShortcutKeyCanonical.Canonicalize(NextFolderText.Text); Settings.Shortcuts.PreviousFolder = ShortcutKeyCanonical.Canonicalize(PreviousFolderText.Text);
@@ -802,6 +826,8 @@ public partial class SettingsWindow : Window
         Settings.Shortcuts.FitWidth = ShortcutKeyCanonical.Canonicalize(FitWidthText.Text);
         Settings.Shortcuts.FitHeight = ShortcutKeyCanonical.Canonicalize(FitHeightText.Text);
         Settings.Shortcuts.ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(ToggleKeepZoomText.Text);
+        Settings.Shortcuts.OpenFolder = ShortcutKeyCanonical.Canonicalize(OpenFolderText.Text);
+        Settings.Shortcuts.CustomZoom = ShortcutKeyCanonical.Canonicalize(CustomZoomText.Text);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];
@@ -869,5 +895,62 @@ public partial class SettingsWindow : Window
             if (editor.ShowDialog() == true) ActionsText.Text = JsonSerializer.Serialize(editor.Actions, JsonOptions);
         }
         catch { System.Windows.MessageBox.Show(this, Tr.DialogOpenEditorFailedMessage, Tr.DialogOpenEditorFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
+    // ---- Q-R47: external editor executable path ----
+
+    private void BrowseExternalEditor_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = Tr.SettingsExternalEditorPathLabel, Filter = Tr.DialogFileFilterExecutable };
+        if (!string.IsNullOrWhiteSpace(ExternalEditorPathText.Text) && File.Exists(ExternalEditorPathText.Text))
+            dialog.InitialDirectory = Path.GetDirectoryName(ExternalEditorPathText.Text);
+        if (dialog.ShowDialog(this) == true) ExternalEditorPathText.Text = dialog.FileName;
+    }
+
+    // ---- Q-R49: export/import the whole settings file, through the same JSON contract config.json uses ----
+
+    private void ExportSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = Tr.DialogExportSettingsTitle, Filter = Tr.DialogFileFilterJson,
+            InitialDirectory = AppContext.BaseDirectory, FileName = "PhotoReview-settings.json",
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var json = JsonSerializer.Serialize(Settings, AppSettingsJsonContext.Default.AppSettings);
+            File.WriteAllText(dialog.FileName, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowInvalid(Tr.DialogExportSettingsFailed(ex.Message));
+        }
+    }
+
+    private void ImportSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = Tr.DialogImportSettingsTitle, Filter = Tr.DialogFileFilterJson, InitialDirectory = AppContext.BaseDirectory };
+        if (dialog.ShowDialog(this) != true) return;
+        AppSettings? imported;
+        try
+        {
+            var json = File.ReadAllText(dialog.FileName);
+            imported = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            ShowInvalid(Tr.DialogImportSettingsFailed(ex.Message));
+            return;
+        }
+        if (imported is null)
+        {
+            ShowInvalid(Tr.DialogImportSettingsFailed(string.Empty));
+            return;
+        }
+        var cloned = AppSettings.Clone(imported);
+        SettingsNormalizer.Normalize(cloned);
+        Settings = cloned;
+        LoadFields();
     }
 }

@@ -90,5 +90,58 @@ public sealed class AppSettingsTests
     public void ConfigCarriesExplicitVersionThatRoundTrips() =>
         Assert.True(new AppSettings().ConfigVersion == AppSettings.CurrentConfigVersion
             && JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":1}")!.ConfigVersion == 1);
+
+    // ---- Q-R40..Q-R49 user feedback: new settings default off/unconfigured, absent-in-old-config = defaults ----
+
+    [Fact(DisplayName = "Q-R40: KeyboardZoomStepPercent defaults to 10 and round-trips; absent config = default")]
+    public void KeyboardZoomStepPercentDefaultsTo10()
+    {
+        Assert.Equal(10, AppSettings.DefaultKeyboardZoomStepPercent);
+        Assert.Equal(10, new AppSettings().KeyboardZoomStepPercent);
+        Assert.Equal(10, JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":1}")!.KeyboardZoomStepPercent);
+        Assert.Equal(25, JsonSerializer.Deserialize<AppSettings>("{\"KeyboardZoomStepPercent\":25}")!.KeyboardZoomStepPercent);
+    }
+
+    [Fact(DisplayName = "Q-R43: ConfirmBeforeDelete defaults to false")]
+    public void ConfirmBeforeDeleteDefaultsToFalse() => Assert.False(new AppSettings().ConfirmBeforeDelete);
+
+    [Fact(DisplayName = "Q-R44: ShowZoomIndicator defaults to false (HUD off, not shown)")]
+    public void ShowZoomIndicatorDefaultsToFalse() => Assert.False(new AppSettings().ShowZoomIndicator);
+
+    [Fact(DisplayName = "Q-R47: ExternalEditorPath defaults to empty (not configured)")]
+    public void ExternalEditorPathDefaultsToEmpty() => Assert.Equal(string.Empty, new AppSettings().ExternalEditorPath);
+
+    [Fact(DisplayName = "Q-R41/Q-R42: OpenFolder and CustomZoom shortcuts have distinct, non-empty defaults")]
+    public void OpenFolderAndCustomZoomShortcuts_HaveDistinctDefaults()
+    {
+        var shortcuts = new ShortcutMappings();
+        Assert.Equal("O", shortcuts.OpenFolder);
+        Assert.Equal("D3", shortcuts.CustomZoom);
+        Assert.True(ShortcutMappings.IsOptional(nameof(ShortcutMappings.OpenFolder)));
+        Assert.True(ShortcutMappings.IsOptional(nameof(ShortcutMappings.CustomZoom)));
+    }
+
+    [Fact(DisplayName = "AppSettings.Clone round-trips the new Q-R40..Q-R49 settings")]
+    public void Clone_RoundTripsNewSettings()
+    {
+        var source = new AppSettings
+        {
+            KeyboardZoomStepPercent = 20,
+            ConfirmBeforeDelete = true,
+            ShowZoomIndicator = true,
+            ExternalEditorPath = @"C:\Tools\editor.exe",
+        };
+        source.Shortcuts.OpenFolder = "F2";
+        source.Shortcuts.CustomZoom = "F3";
+
+        var clone = AppSettings.Clone(source);
+
+        Assert.Equal(20, clone.KeyboardZoomStepPercent);
+        Assert.True(clone.ConfirmBeforeDelete);
+        Assert.True(clone.ShowZoomIndicator);
+        Assert.Equal(@"C:\Tools\editor.exe", clone.ExternalEditorPath);
+        Assert.Equal("F2", clone.Shortcuts.OpenFolder);
+        Assert.Equal("F3", clone.Shortcuts.CustomZoom);
+    }
 }
 

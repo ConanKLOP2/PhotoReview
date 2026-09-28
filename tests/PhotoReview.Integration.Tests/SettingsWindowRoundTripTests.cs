@@ -108,6 +108,11 @@ public sealed class SettingsWindowRoundTripTests
         // PR-D (feat/image-crossfade)
         [nameof(AppSettings.ImageTransition)] = w => w.ImageTransitionCombo.SelectedIndex = 1, // None -> Fade
         [nameof(AppSettings.ImageTransitionMs)] = w => w.ImageTransitionMsBox.Text = "200", // 120 -> 200
+        // Q-R40/Q-R43/Q-R44/Q-R47 user feedback batch
+        [nameof(AppSettings.KeyboardZoomStepPercent)] = w => w.KeyboardZoomStepPercentBox.Text = "25", // 10 -> 25
+        [nameof(AppSettings.ConfirmBeforeDelete)] = w => w.ConfirmBeforeDeleteCheck.IsChecked = true, // false -> true
+        [nameof(AppSettings.ShowZoomIndicator)] = w => w.ShowZoomIndicatorCheck.IsChecked = true, // false -> true
+        [nameof(AppSettings.ExternalEditorPath)] = w => w.ExternalEditorPathText.Text = @"C:\Tools\editor.exe", // "" -> a path
     };
 
     /// <summary>What <see cref="ControlMutations"/> above is expected to produce on <see cref="AppSettings"/>.</summary>
@@ -154,6 +159,10 @@ public sealed class SettingsWindowRoundTripTests
         [nameof(AppSettings.KeyboardZoomAnchor)] = KeyboardZoomAnchor.ViewportCentre,
         [nameof(AppSettings.ImageTransition)] = ImageTransition.Fade,
         [nameof(AppSettings.ImageTransitionMs)] = 200,
+        [nameof(AppSettings.KeyboardZoomStepPercent)] = 25,
+        [nameof(AppSettings.ConfirmBeforeDelete)] = true,
+        [nameof(AppSettings.ShowZoomIndicator)] = true,
+        [nameof(AppSettings.ExternalEditorPath)] = @"C:\Tools\editor.exe",
     };
 
     [Fact(DisplayName = "Tripwire: every UI-controlled property has a round-trip mutation and expected value above")]

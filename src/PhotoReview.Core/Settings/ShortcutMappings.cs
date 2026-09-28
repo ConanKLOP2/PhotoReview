@@ -49,12 +49,26 @@ public class ShortcutMappings
     public string ToggleKeepZoom { get; set; } = "K";
 
     /// <summary>
+    /// Q-R41: opens the folder picker (same action as the "Open folder…" menu item). Held together with Ctrl (the
+    /// router requires the Control modifier, like <see cref="Undo"/> does for its own key) so a bare "O" keeps
+    /// working for anything else. Empty = disabled. Default <c>Ctrl+O</c>.
+    /// </summary>
+    public string OpenFolder { get; set; } = "O";
+
+    /// <summary>
+    /// Q-R42: opens the "Custom zoom…" dialog (same action as the Zoom submenu's Custom… item). <c>Z</c> (the key the
+    /// user suggested) is already <see cref="Undo"/>'s Ctrl+Z, so this uses <c>D3</c> ("3") instead, next to
+    /// <see cref="ZoomActualSize"/> (<c>D1</c>) and <see cref="ClickZoom"/> (<c>D2</c>). Empty = disabled.
+    /// </summary>
+    public string CustomZoom { get; set; } = "D3";
+
+    /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
     public static readonly IReadOnlyList<string> OptionalNames =
         [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom),
-         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom)];
+         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 

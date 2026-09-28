@@ -115,9 +115,11 @@ public sealed class WindowLocalizationTests
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
                 // PR-C feat/context-menu-redesign: Undo, a Separator, Fit, Zoom-to-level (header filled on open), the
-                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Settings.
+                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Q-R47's
+                // "Open in External Editor" (hidden unless configured, but still present in the item list), a
+                // Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(8, menuItems.Count);
+                Assert.Equal(9, menuItems.Count);
                 var undo = menuItems[0];
                 var fit = menuItems[1];
                 var zoomToLevel = menuItems[2];
@@ -125,7 +127,8 @@ public sealed class WindowLocalizationTests
                 var openFolder = menuItems[4];
                 var nextFolder = menuItems[5];
                 var previousFolder = menuItems[6];
-                var settings = menuItems[7];
+                var openInExternalEditor = menuItems[7];
+                var settings = menuItems[8];
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
                 Assert.Equal("Vừa khung hình", fit.Header);
@@ -139,6 +142,8 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Mở thư mục ảnh", AutomationProperties.GetName(openFolder));
                 Assert.Equal("Thư mục kế tiếp", nextFolder.Header);
                 Assert.Equal("Thư mục trước", previousFolder.Header);
+                Assert.Equal("Mở bằng trình chỉnh sửa ngoài", openInExternalEditor.Header);
+                Assert.Equal("Mở ảnh hiện tại bằng trình chỉnh sửa ngoài", AutomationProperties.GetName(openInExternalEditor));
                 Assert.Equal("Cài đặt…", settings.Header);
                 Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));

@@ -36,6 +36,8 @@ public sealed class InfoOverlayViewModel : ObservableObject
 
     private readonly Func<AppSettings> _settings;
     private readonly Func<string, CancellationToken, SiblingImageFolders> _findSiblings;
+    private readonly Func<bool> _hasImage;
+    private readonly Func<int> _getZoomPercent;
     private string? _folder;          // folder currently open (null = none)
     private string? _siblingsFolder;  // folder _siblings belong to (null = not computed)
     private SiblingImageFolders _siblings;
@@ -46,11 +48,22 @@ public sealed class InfoOverlayViewModel : ObservableObject
 
     /// <param name="settings">Current settings (read on every refresh, never cached).</param>
     /// <param name="findSiblings">Blocking sibling search; always invoked on the thread pool.</param>
-    public InfoOverlayViewModel(Func<AppSettings> settings, Func<string, CancellationToken, SiblingImageFolders> findSiblings)
+    /// <param name="hasImage">Q-R44: whether an image is currently shown (the zoom HUD has nothing to show otherwise); defaults to always true (test/legacy callers).</param>
+    /// <param name="getZoomPercent">Q-R44: current zoom, in whole percent (see <see cref="ViewerState.DisplayZoomPercent"/>); defaults to 100.</param>
+    public InfoOverlayViewModel(Func<AppSettings> settings, Func<string, CancellationToken, SiblingImageFolders> findSiblings,
+        Func<bool>? hasImage = null, Func<int>? getZoomPercent = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _findSiblings = findSiblings ?? throw new ArgumentNullException(nameof(findSiblings));
+        _hasImage = hasImage ?? (static () => true);
+        _getZoomPercent = getZoomPercent ?? (static () => 100);
     }
+
+    /// <summary>Q-R44: the current-zoom-percentage HUD is shown (setting on, and an image is displayed).</summary>
+    public bool IsZoomIndicatorVisible => _settings().ShowZoomIndicator && _hasImage();
+
+    /// <summary>Q-R44: HUD text, e.g. "100%". Culture-invariant: a plain integer, no thousands separators to localize.</summary>
+    public string ZoomIndicatorText => _getZoomPercent().ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
 
     /// <summary>Bottom-left file block (position/count, size, name, dimensions) is shown.</summary>
     public bool IsFileInfoVisible => _settings() is { ShowInfoOverlay: true, ShowFileInfo: true };
@@ -96,6 +109,8 @@ public sealed class InfoOverlayViewModel : ObservableObject
         OnPropertyChanged(nameof(IsFolderInfoVisible));
         OnPropertyChanged(nameof(FontSize));
         OnPropertyChanged(nameof(ExifFontSize));
+        OnPropertyChanged(nameof(IsZoomIndicatorVisible));
+        OnPropertyChanged(nameof(ZoomIndicatorText));
         if (_folder is not { } folder || !IsFolderInfoEnabled)
         {
             CancelPending(); // hidden: never touch the disk for it

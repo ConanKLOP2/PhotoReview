@@ -54,6 +54,8 @@
                 <MenuItem x:Name="NextFolderMenuItem" Header="{loc:Tr main.menu.nextFolder}" AutomationProperties.Name="{loc:Tr main.menu.nextFolder.automationName}" Click="NextFolder_Click" />
                 <MenuItem x:Name="PreviousFolderMenuItem" Header="{loc:Tr main.menu.previousFolder}" AutomationProperties.Name="{loc:Tr main.menu.previousFolder.automationName}" Click="PreviousFolder_Click" />
                 <Separator />
+                <MenuItem x:Name="OpenInExternalEditorMenuItem" Header="{loc:Tr main.menu.openInExternalEditor}" AutomationProperties.Name="{loc:Tr main.menu.openInExternalEditor.automationName}" Click="OpenInExternalEditor_Click" />
+                <Separator />
                 <MenuItem Header="{loc:Tr main.menu.settings}" AutomationProperties.Name="{loc:Tr main.menu.settings.automationName}" Click="Settings_Click" />
             </ContextMenu>
         </Grid.ContextMenu>
@@ -142,6 +144,9 @@
         </Border>
         <Border x:Name="FolderInfoPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" MaxWidth="640" AutomationProperties.Name="{loc:Tr main.folderInfo.automationName}" Visibility="{Binding InfoOverlay.IsFolderInfoVisible, Converter={StaticResource BoolToVis}}">
             <TextBlock x:Name="FolderInfoText" Text="{Binding InfoOverlay.FolderInfoText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="{Binding InfoOverlay.FontSize}" TextTrimming="CharacterEllipsis" />
+        </Border>
+        <Border x:Name="ZoomIndicatorPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Padding="6,4" CornerRadius="4" AutomationProperties.Name="{loc:Tr main.zoomIndicator.automationName}" Visibility="{Binding InfoOverlay.IsZoomIndicatorVisible, Converter={StaticResource BoolToVis}}">
+            <TextBlock x:Name="ZoomIndicatorText" Text="{Binding InfoOverlay.ZoomIndicatorText}" Foreground="{DynamicResource Dark.TextBright}" FontSize="{Binding InfoOverlay.FontSize}"/>
         </Border>
         </Grid>
     </Grid>
