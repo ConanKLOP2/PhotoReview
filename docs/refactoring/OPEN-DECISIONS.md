@@ -18,6 +18,7 @@ added without frontmatter or without re-running the generator.
 
 | ID | Question | State |
 |---|---|---|
+| Q-RAW-01..07 | Camera RAW support: what to show, full decoder, 100 % zoom meaning, JPG+RAW pairs, formats, Adobe RGB, test corpus ([options](raw/DECISIONS.md), [plan](WORK-RAW-SUPPORT.md)) | Waiting for the user |
 
 ## Decided (one line each)
 
