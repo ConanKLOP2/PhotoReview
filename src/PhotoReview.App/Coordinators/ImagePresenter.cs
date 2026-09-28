@@ -464,6 +464,9 @@ public sealed class ImagePresenter
                     CurrentPhotoInfo = PhotoInfo.From(path, image);
                     UpdateCurrentImage(image.PlatformImage, image.OriginalWidth, image.OriginalHeight, path);
                     _sink.ApplyInitialViewMode();
+                    // feat(zoom): match the normal (non-compare) branch below — arm the full-resolution
+                    // decode target so zooming into this image after a failed compare works immediately.
+                    _zoomDetail.OnPreviewPresented(token, path, currentKey, image);
                     UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(partner), UserFacingError.Describe(ex)), needsAttention: true);
                     return;
                 }
