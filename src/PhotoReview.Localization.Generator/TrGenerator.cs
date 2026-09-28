@@ -304,7 +304,7 @@ public sealed class TrGenerator : IIncrementalGenerator
         return true;
     }
 
-    /// <summary>"status.batchDone" → "StatusBatchDone": split on '.', upper-case each segment's first letter.</summary>
+    /// <summary>"status.batchDone" â†’ "StatusBatchDone": split on '.', upper-case each segment's first letter.</summary>
     internal static string ToIdentifier(string key)
     {
         var sb = new StringBuilder(key.Length);
@@ -321,6 +321,7 @@ public sealed class TrGenerator : IIncrementalGenerator
     internal static List<string>? TryGetPlaceholders(string text)
     {
         var names = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < text.Length; i++)
         {
             var c = text[i];
@@ -335,7 +336,7 @@ public sealed class TrGenerator : IIncrementalGenerator
                 if (end < 0) return null;
                 var name = text.Substring(i + 1, end - i - 1);
                 if (!IsValidPlaceholderName(name)) return null;
-                if (!names.Contains(name)) names.Add(name);
+                if (seen.Add(name)) names.Add(name);
                 i = end;
             }
             else if (c == '}')

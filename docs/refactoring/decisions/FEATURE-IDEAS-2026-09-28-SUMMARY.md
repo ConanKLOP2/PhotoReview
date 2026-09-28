@@ -1,6 +1,6 @@
 ---
 id: FEATURE-IDEAS-2026-09-28-SUMMARY
-order: 31
+order: 33
 summary: |-
   Consolidated index of 6 independent brainstorm passes (compare/decide, safety/trust,
   workflow/speed, large-library/NAS, organization/discovery, power-user/customization)
