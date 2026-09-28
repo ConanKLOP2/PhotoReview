@@ -9,6 +9,13 @@ public sealed class RawContainerReaderRegistry
 
     public RawContainerReaderRegistry()
     {
+        // Standard TIFF-family readers
+        Register(new Tiff.Cr2ContainerReader());
+        Register(new Tiff.NefContainerReader());
+        Register(new Tiff.ArwContainerReader());
+        Register(new Tiff.DngContainerReader());
+        Register(new Tiff.OrfContainerReader());
+        Register(new Tiff.Rw2ContainerReader());
     }
 
     public RawContainerReaderRegistry(IEnumerable<IRawContainerReader> readers)
