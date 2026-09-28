@@ -20,6 +20,7 @@ public sealed class LayerDependencyTests
                 "WindowsBase",
                 "Microsoft.VisualBasic",
                 "PhotoReview.Imaging",
+                "PhotoReview.Imaging.Raw",
                 "PhotoReview.Platform.Windows",
                 "PhotoReview.App")
             .GetResult();
@@ -38,6 +39,7 @@ public sealed class LayerDependencyTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "PhotoReview.App",
+                "PhotoReview.Imaging.Raw",
                 "PhotoReview.Platform.Windows",
                 "PresentationFramework",
                 "System.Windows.Forms")
@@ -57,12 +59,33 @@ public sealed class LayerDependencyTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "PhotoReview.Imaging",
+                "PhotoReview.Imaging.Raw",
                 "PhotoReview.App")
             .GetResult();
 
         Assert.True(
             result.IsSuccessful,
             $"Platform has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
+    }
+
+    [Fact(DisplayName = "Rule 9: Imaging.Raw depends only on Imaging and Core")]
+    public void ImagingRaw_DoesNotDependOn_ForbiddenLayers()
+    {
+        var rawTypes = Types.InAssembly(typeof(PhotoReview.Imaging.Raw.RawFormat).Assembly);
+
+        var result = rawTypes
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "PhotoReview.App",
+                "PhotoReview.Platform.Windows",
+                "PhotoReview.Benchmarking",
+                "PresentationFramework",
+                "System.Windows.Forms")
+            .GetResult();
+
+        Assert.True(
+            result.IsSuccessful,
+            $"Imaging.Raw has forbidden dependencies: {string.Join(", ", result.FailingTypeNames ?? Enumerable.Empty<string>())}");
     }
 
     [Fact(DisplayName = "Rule 8: Platform.Windows does not reference WPF presentation assemblies (AR03b: builds without UseWPF)")]
