@@ -22,11 +22,12 @@ public readonly record struct ImageCacheKey
     public int TargetHeight { get; }
     public bool OrientationApplied { get; }
     public DecoderBackend Backend { get; }
+    public byte SourceKind { get; }
 
     /// <summary>The decode box this key was built for (<see cref="DecodeBox.Unbounded"/> for Original).</summary>
     public DecodeBox TargetBox => new(TargetWidth, TargetHeight);
 
-    private ImageCacheKey(string path, long length, long lastWriteUtcTicks, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf)
+    private ImageCacheKey(string path, long length, long lastWriteUtcTicks, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0)
     {
         Path = path;
         Length = length;
@@ -37,21 +38,22 @@ public readonly record struct ImageCacheKey
         TargetHeight = isOriginal ? 0 : box.Height;
         OrientationApplied = orientationApplied;
         Backend = backend;
+        SourceKind = sourceKind;
     }
 
     /// <summary>Width-only key (height unconstrained); kept for thumbnails-style/legacy callers and tests.</summary>
-    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf) =>
-        Create(new FileInfo(path), isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend);
+    public static ImageCacheKey Create(string path, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0) =>
+        Create(new FileInfo(path), isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend, sourceKind);
 
-    public static ImageCacheKey Create(string path, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf) =>
-        Create(new FileInfo(path), isOriginal, box, orientationApplied, backend);
-
-    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf) =>
-        Create(info, isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend);
+    public static ImageCacheKey Create(string path, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0) =>
+        Create(new FileInfo(path), isOriginal, box, orientationApplied, backend, sourceKind);
 
     /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
-    public static ImageCacheKey Create(FileInfo info, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf)
+    public static ImageCacheKey Create(FileInfo info, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0) =>
+        Create(info, isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend, sourceKind);
+
+    /// <summary>Reuses a FileInfo the caller already fetched instead of stat-ing the path again.</summary>
+    public static ImageCacheKey Create(FileInfo info, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0)
     {
         ArgumentNullException.ThrowIfNull(info);
         if (!info.Exists)
@@ -60,19 +62,19 @@ public readonly record struct ImageCacheKey
             throw UserFacingError.Localized(new FileNotFoundException("Image source no longer exists", fullName), () => Tr.ErrIoSourceNoLongerExists(fullName));
         }
         var fullPath = System.IO.Path.GetFullPath(info.FullName).ToUpperInvariant();
-        return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, box, orientationApplied, backend);
+        return new ImageCacheKey(fullPath, info.Length, info.LastWriteTimeUtc.Ticks, isOriginal, box, orientationApplied, backend, sourceKind);
     }
 
-    public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf) =>
-        Create(entry, isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend);
+    public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, int targetWidth, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0) =>
+        Create(entry, isOriginal, new DecodeBox(targetWidth, 0), orientationApplied, backend, sourceKind);
 
-    public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf)
+    public static ImageCacheKey Create(CatalogEntry entry, bool isOriginal, DecodeBox box, bool orientationApplied = true, DecoderBackend backend = DecoderBackend.Wpf, byte sourceKind = 0)
     {
         ArgumentNullException.ThrowIfNull(entry);
         if (entry.Length is null || entry.LastWriteUtc is null)
-            return Create(entry.Path, isOriginal, box, orientationApplied, backend);
+            return Create(entry.Path, isOriginal, box, orientationApplied, backend, sourceKind);
         var fullPath = System.IO.Path.GetFullPath(entry.Path).ToUpperInvariant();
-        return new ImageCacheKey(fullPath, entry.Length.Value, entry.LastWriteUtc.Value.Ticks, isOriginal, box, orientationApplied, backend);
+        return new ImageCacheKey(fullPath, entry.Length.Value, entry.LastWriteUtc.Value.Ticks, isOriginal, box, orientationApplied, backend, sourceKind);
     }
 
     /// <summary>
@@ -81,7 +83,7 @@ public readonly record struct ImageCacheKey
     /// the current navigation) and only needs the full-resolution dimensions cache entry.
     /// </summary>
     public static ImageCacheKey CreateOriginal(ImageCacheKey source) =>
-        new(source.Path, source.Length, source.LastWriteUtcTicks, isOriginal: true, DecodeBox.Unbounded, source.OrientationApplied, source.Backend);
+        new(source.Path, source.Length, source.LastWriteUtcTicks, isOriginal: true, DecodeBox.Unbounded, source.OrientationApplied, source.Backend, source.SourceKind);
 
     public bool MatchesCurrentSource()
     {

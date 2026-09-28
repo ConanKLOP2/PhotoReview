@@ -74,7 +74,11 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 () => Tr.ErrDecoderIccFallback);
         }
 
-        int orientation = request.ApplyOrientation && !exifTiff.IsEmpty ? ParseTiffOrientation(exifTiff) : 1;
+        int orientation = 1;
+        if (request.ApplyOrientation)
+        {
+            orientation = request.SourceOrientation ?? (!exifTiff.IsEmpty ? ParseTiffOrientation(exifTiff) : 1);
+        }
         // Photo information line: parsed from the APP1 segment of the buffer this decode already holds (bounded,
         // never throws) -- no extra file read, and no second marker walk (reuses exifTiff from ScanHeader above).
         var exif = ExifParser.TryParseTiffBlock(exifTiff);

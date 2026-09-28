@@ -113,7 +113,10 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                 {
                     var frame = headerDecoder.Frames[0];
                     var metadata = frame.Metadata as BitmapMetadata;
-                    if (request.ApplyOrientation) orientation = ExifOrientation.Read(metadata);
+                    if (request.ApplyOrientation)
+                    {
+                        orientation = request.SourceOrientation ?? ExifOrientation.Read(metadata);
+                    }
                     // Photo information line: same header frame, same metadata block -- no extra read.
                     exif = WpfExifReader.Read(metadata);
                     rawWidth = frame.PixelWidth;
@@ -124,11 +127,15 @@ public sealed class WpfBitmapImageDecoder : IImageDecoder
                 or ArgumentException or OverflowException or InvalidCastException or System.Runtime.InteropServices.COMException)
             {
                 // Header/metadata pre-read only: whatever WIC says about corrupt metadata, the pixel decode below decides.
-                orientation = 1;
+                orientation = request.ApplyOrientation && request.SourceOrientation.HasValue ? request.SourceOrientation.Value : 1;
                 exif = null;
                 rawWidth = rawHeight = 0;
             }
             stream.Position = 0;
+        }
+        else if (request.ApplyOrientation && request.SourceOrientation.HasValue)
+        {
+            orientation = request.SourceOrientation.Value;
         }
 
         // For transposed orientations (5 to 8), decoded height becomes the final visual width after rotation.

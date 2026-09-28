@@ -30,12 +30,13 @@ public readonly record struct DecodeRequest(
     bool ApplyOrientation = true,
     ReadOnlyMemory<byte>? Bytes = null,
     int TargetHeight = 0,
-    SourceReadPriority Priority = SourceReadPriority.Viewer)
+    SourceReadPriority Priority = SourceReadPriority.Viewer,
+    int? SourceOrientation = null)
 {
     /// <summary>Builds a request that decodes into <paramref name="box"/>.</summary>
     public DecodeRequest(string path, DecodeBox box, bool applyOrientation = true, ReadOnlyMemory<byte>? bytes = null,
-        SourceReadPriority priority = SourceReadPriority.Viewer)
-        : this(path, box.Width, applyOrientation, bytes, box.Height, priority) { }
+        SourceReadPriority priority = SourceReadPriority.Viewer, int? sourceOrientation = null)
+        : this(path, box.Width, applyOrientation, bytes, box.Height, priority, sourceOrientation) { }
 
     public DecodeBox Box => new(TargetWidth, TargetHeight);
 
