@@ -192,12 +192,18 @@ if (args.Length == 2 && args[0] == "--explorer-probe")
     return;
 }
 
+if (args.Length >= 2 && args[0] == "--raw-survey")
+{
+    Environment.ExitCode = await RawSurvey.RunAsync(args);
+    return;
+}
+
 Console.Error.WriteLine("PhotoReview.Benchmark.Cli: unknown or missing mode. Supported modes:");
 foreach (var mode in new[]
 {
     "--benchmark-list-profiles", "--benchmark <folder> <profile,...>", "--benchmark-all <folder> [output]", "--benchmark-actions <folder> [output]",
     "--ui-next-probe <folder> [--cache-dir DIR]", "--perf-session ...", "--preload-bench <folder> [n]", "--perf-analyze <dir> [--rules <file>]",
-    "--io-decode-split ...", "--decoder-bench ...", "--explorer-probe <folder>",
+    "--io-decode-split ...", "--decoder-bench ...", "--explorer-probe <folder>", "--raw-survey <dir> [--markdown <out.md>]",
 })
     Console.Error.WriteLine("  " + mode);
 Environment.ExitCode = 2;
