@@ -16,6 +16,8 @@ public sealed class RawContainerReaderRegistry
         Register(new Tiff.DngContainerReader());
         Register(new Tiff.OrfContainerReader());
         Register(new Tiff.Rw2ContainerReader());
+        Register(new Bmff.Cr3ContainerReader());
+        Register(new Raf.RafContainerReader());
     }
 
     public RawContainerReaderRegistry(IEnumerable<IRawContainerReader> readers)
