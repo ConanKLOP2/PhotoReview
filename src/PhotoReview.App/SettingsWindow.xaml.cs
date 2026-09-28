@@ -645,8 +645,9 @@ public partial class SettingsWindow : Window
         Settings.InstanceMode = InstanceMode.SingleWindow;
         Settings.ShowInfoOverlay = true; Settings.ShowFileInfo = true; Settings.ShowFolderInfo = false;
         Settings.MouseWheelAction = MouseWheelAction.Zoom; Settings.ClickToZoomEnabled = false; Settings.ClickZoomPercent = AppSettings.DefaultClickZoomPercent; Settings.KineticPanEnabled = new AppSettings().KineticPanEnabled; Settings.KineticGlideSmoothing = new AppSettings().KineticGlideSmoothing; Settings.ArrowKeyNavigatesAtZoomEdge = new AppSettings().ArrowKeyNavigatesAtZoomEdge; Settings.ArrowPanStepPercent = AppSettings.DefaultArrowPanStepPercent; Settings.KeyboardZoomStepPercent = AppSettings.DefaultKeyboardZoomStepPercent; Settings.KeyboardZoomAnchor = new AppSettings().KeyboardZoomAnchor;
-        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems;
+        Settings.SetZoomAlsoSetsClickLevel = new AppSettings().SetZoomAlsoSetsClickLevel; Settings.ShowFolderMenuItems = new AppSettings().ShowFolderMenuItems; Settings.ShowZoomMenuItems = new AppSettings().ShowZoomMenuItems; Settings.ShowRecycleMenuItem = new AppSettings().ShowRecycleMenuItem;
         Settings.MoveCopyReuseLastFolder = false;
+        Settings.ImageTransition = new AppSettings().ImageTransition; Settings.ImageTransitionMs = AppSettings.DefaultImageTransitionMs;
         Settings.ShowExifInfo = new AppSettings().ShowExifInfo; Settings.ExifInfoFields = ExifInfoFields.Default;
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
         Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;

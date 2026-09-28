@@ -780,6 +780,7 @@ public partial class MainWindow : Window
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
 
         RecycleMenuItem.Visibility = _settings.ShowRecycleMenuItem ? Visibility.Visible : Visibility.Collapsed;
+        RecycleMenuItem.InputGestureText = _settings.Shortcuts.SendToRecycleBin;
 
         var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
         ZoomGroupSeparator.Visibility = zoomClusterVisibility;

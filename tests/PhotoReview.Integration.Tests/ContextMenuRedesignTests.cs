@@ -157,6 +157,23 @@ public sealed class ContextMenuRedesignTests
     }
 
     [Fact]
+    public async Task RecycleMenuItem_ShowsConfiguredShortcut()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            OpenMenu(window);
+            Assert.Equal(window.Settings.Shortcuts.SendToRecycleBin, window.RecycleMenuItem.InputGestureText);
+
+            // "X" is not the default of any other shortcut (see ShortcutMappings), so this proves the item tracks the
+            // configured value rather than showing a stale/hardcoded one.
+            window.Settings.Shortcuts.SendToRecycleBin = "X";
+            OpenMenu(window);
+            Assert.Equal("X", window.RecycleMenuItem.InputGestureText);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task ContextMenuOpen_FolderGroupVisible_WhenSettingOn()
     {
         await WithWindowAsync(null, window =>
