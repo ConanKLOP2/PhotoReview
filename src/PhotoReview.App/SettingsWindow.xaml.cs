@@ -566,8 +566,14 @@ public partial class SettingsWindow : Window
         OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text,
     };
 
-    /// <summary>Same field list as <see cref="ReadShortcutsFromUi"/>, with every value run through <see cref="ShortcutKeyCanonical.Canonicalize"/> (what Save persists).</summary>
-    private static ShortcutMappings CanonicalizeShortcuts(ShortcutMappings raw) => new()
+    /// <summary>
+    /// Same field list as <see cref="ReadShortcutsFromUi"/>, with every value run through <see cref="ShortcutKeyCanonical.Canonicalize"/>
+    /// (what Save persists). <paramref name="existing"/> is the settings' current <see cref="ShortcutMappings"/>
+    /// (before this Save): <see cref="ShortcutMappings.MoveToFolder2"/> is a legacy alias with no UI control (owned
+    /// by <c>ReviewAction</c> instead -- see <see cref="SettingsValidator.ValidateShortcuts"/>), so it must be
+    /// carried over from there rather than silently reset to <see cref="ShortcutMappings"/>'s own default "Enter".
+    /// </summary>
+    private static ShortcutMappings CanonicalizeShortcuts(ShortcutMappings raw, ShortcutMappings existing) => new()
     {
         Next = ShortcutKeyCanonical.Canonicalize(raw.Next), Previous = ShortcutKeyCanonical.Canonicalize(raw.Previous),
         FirstImage = ShortcutKeyCanonical.Canonicalize(raw.FirstImage), LastImage = ShortcutKeyCanonical.Canonicalize(raw.LastImage),
@@ -581,6 +587,7 @@ public partial class SettingsWindow : Window
         FitWidth = ShortcutKeyCanonical.Canonicalize(raw.FitWidth), FitHeight = ShortcutKeyCanonical.Canonicalize(raw.FitHeight),
         ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(raw.ToggleKeepZoom), OpenFolder = ShortcutKeyCanonical.Canonicalize(raw.OpenFolder),
         CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom),
+        MoveToFolder2 = existing.MoveToFolder2,
     };
 
     /// <summary>A throwaway settings snapshot from the current text boxes, used only to preview validation live.</summary>
@@ -862,7 +869,7 @@ public partial class SettingsWindow : Window
         Settings.ToolbarOpacityPercent = Math.Clamp((int)Math.Round(ToolbarOpacitySlider.Value), AppSettings.MinToolbarOpacityPercent, AppSettings.MaxToolbarOpacityPercent);
         Settings.InfoOverlayFontSize = infoOverlayFontSize;
         Settings.ShowZoomIndicator = ShowZoomIndicatorCheck.IsChecked == true;
-        Settings.Shortcuts = CanonicalizeShortcuts(ReadShortcutsFromUi());
+        Settings.Shortcuts = CanonicalizeShortcuts(ReadShortcutsFromUi(), Settings.Shortcuts);
         try
         {
             Settings.Actions = JsonSerializer.Deserialize<List<ReviewAction>>(ActionsText.Text) ?? [];

@@ -183,4 +183,71 @@ public sealed class SettingsWindowFieldMapTests
         });
         Assert.True(failures.Count == 0, "LoadFields/Save_Click field mapping is broken for:\n" + string.Join('\n', failures));
     }
+
+    // ---- ShortcutMappings itself: Save_Click replaces the whole Settings.Shortcuts object (CanonicalizeShortcuts(
+    // ReadShortcutsFromUi(), Settings.Shortcuts)) rather than assigning field-by-field, which is exactly the shape
+    // that silently reset MoveToFolder2 (a legacy alias with no UI control, owned by ReviewAction instead -- see
+    // SettingsValidator.ValidateShortcuts) to ShortcutMappings' own default "Enter" instead of carrying over the
+    // user's persisted value. The two guards below catch that class of regression: one for the concrete property,
+    // one generic so a *future* ShortcutMappings property gets the same protection automatically. ----
+
+    /// <summary>The 24 ShortcutMappings properties ReadShortcutsFromUi reads from a shortcut text box.</summary>
+    private static readonly HashSet<string> ShortcutPropertiesReadFromUi = new(StringComparer.Ordinal)
+    {
+        nameof(ShortcutMappings.Next), nameof(ShortcutMappings.Previous), nameof(ShortcutMappings.FirstImage), nameof(ShortcutMappings.LastImage),
+        nameof(ShortcutMappings.NextFolder), nameof(ShortcutMappings.PreviousFolder),
+        nameof(ShortcutMappings.ZoomIn), nameof(ShortcutMappings.ZoomOut), nameof(ShortcutMappings.ZoomActualSize), nameof(ShortcutMappings.ToggleFit),
+        nameof(ShortcutMappings.Fullscreen), nameof(ShortcutMappings.ToggleInfoOverlay),
+        nameof(ShortcutMappings.Skip), nameof(ShortcutMappings.Undo), nameof(ShortcutMappings.Compare),
+        nameof(ShortcutMappings.MoveToFolder), nameof(ShortcutMappings.CopyToFolder), nameof(ShortcutMappings.SendToRecycleBin),
+        nameof(ShortcutMappings.ClickZoom),
+        nameof(ShortcutMappings.FitWidth), nameof(ShortcutMappings.FitHeight), nameof(ShortcutMappings.ToggleKeepZoom),
+        nameof(ShortcutMappings.OpenFolder), nameof(ShortcutMappings.CustomZoom),
+    };
+
+    /// <summary>ShortcutMappings properties with no UI control, that CanonicalizeShortcuts must carry over from the pre-Save value instead of dropping.</summary>
+    private static readonly HashSet<string> ShortcutPropertiesCarriedOver = new(StringComparer.Ordinal)
+    {
+        nameof(ShortcutMappings.MoveToFolder2),
+    };
+
+    [Fact(DisplayName = "Tripwire: every ShortcutMappings property is either read from a shortcut text box or explicitly carried over on Save (catches the MoveToFolder2 regression)")]
+    public void EveryShortcutMappingsProperty_IsReadOrCarriedOver()
+    {
+        var all = typeof(ShortcutMappings).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead && p.CanWrite).Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+        var covered = ShortcutPropertiesReadFromUi.Union(ShortcutPropertiesCarriedOver).ToHashSet(StringComparer.Ordinal);
+        var missing = all.Except(covered).ToList();
+        var stale = covered.Except(all).ToList();
+        Assert.True(missing.Count == 0,
+            "A new ShortcutMappings property must be read in ReadShortcutsFromUi (and added to ShortcutPropertiesReadFromUi here) " +
+            "or explicitly carried over in CanonicalizeShortcuts (and added to ShortcutPropertiesCarriedOver here): " + string.Join(", ", missing));
+        Assert.True(stale.Count == 0, "Remove these stale entries (property no longer exists): " + string.Join(", ", stale));
+    }
+
+    [Fact(DisplayName = "MoveToFolder2 (legacy alias, no UI control) survives Save unchanged -- the CanonicalizeShortcuts regression this guards against")]
+    public async Task MoveToFolder2_SurvivesSave()
+    {
+        const string mutated = "F9"; // distinct from ShortcutMappings' own default "Enter"; never validated (SettingsValidator skips this property)
+        var failures = new List<string>();
+        await StaTestHost.RunAsync(() =>
+        {
+            var source = new AppSettings();
+            source.Shortcuts.MoveToFolder2 = mutated;
+            var window = new SettingsWindow(source)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false,
+            };
+            try
+            {
+                window.Loaded += (_, _) => InvokeSave(window);
+                if (window.ShowDialog() != true) { failures.Add("Save was rejected"); return Task.CompletedTask; }
+                if (!string.Equals(window.Settings.Shortcuts.MoveToFolder2, mutated, StringComparison.Ordinal))
+                    failures.Add($"expected {mutated}, got {window.Settings.Shortcuts.MoveToFolder2}");
+            }
+            finally { if (window.IsLoaded) window.Close(); }
+            return Task.CompletedTask;
+        });
+        Assert.True(failures.Count == 0, string.Join('\n', failures));
+    }
 }
