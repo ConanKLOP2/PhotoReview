@@ -68,3 +68,15 @@ in the current process. `UndoService.LoadFromJournal`, `ReadStartupHistory` and
 (and its reverse-tail reading, still described above) stays: it is still used
 by `UndoService`'s in-session fingerprint fallback and directly by tests that
 assert journal consistency.
+
+## Amendment: single-parse reader and compaction (2026-09-28)
+
+- Every full read parses each line once (`JournalLineParser`: options-level enum converters record whether
+  Type/State were recognized) instead of `JsonDocument` + `JsonSerializer`; the skip rules are unchanged.
+- The journal is no longer strictly append-only: after the startup reconcile (same pool thread),
+  `OperationJournal.TryCompact` rewrites a journal of at least 1 MiB when at least 25 % of it can go. Dropped
+  are only entries that precede a Committed/Dismissed entry of the same Id and lie outside the last 200
+  committed Moves (`JournalCompactionPlan` documents why no read API can observe the difference). Appends of
+  other processes are excluded with the existing share-mode contract (a deny-writers handle; appenders retry),
+  lines appended after the snapshot are carried over, and the new file replaces the old one with one atomic
+  POSIX-semantics rename (`PhysicalJournalCompactionFiles`); a crash before the rename leaves the journal as it was.

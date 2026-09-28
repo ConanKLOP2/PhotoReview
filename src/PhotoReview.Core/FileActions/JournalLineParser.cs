@@ -1,0 +1,95 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using PhotoReview.Core.Model;
+
+namespace PhotoReview.Core.FileActions;
+
+/// <summary>
+/// Parses one journal line with ONE JSON pass (perf: the journal is re-read in full by startup reconcile, the Recovery
+/// window, Dismiss and every conditional append). Earlier each line was parsed twice: a <see cref="JsonDocument"/> to check
+/// the enums, then <see cref="JsonSerializer"/> again for the record.
+/// <para>Semantics are exactly those of that two-pass reader: a line is accepted only when it is a JSON object whose
+/// <c>Type</c> and <c>State</c> are present and recognized (a string that <see cref="Enum.TryParse{TEnum}(string?, bool, out TEnum)"/>
+/// accepts as a defined member, the "Delete" alias for Type, or a defined number), whose <c>Id</c> is non-empty and whose
+/// <c>Source</c> is not null. Malformed JSON is rejected. The lenient enum converters would otherwise map an unknown or missing
+/// Type/State to the first member (Move/Prepared) and invent a pending move.</para>
+/// <para>How: options-level converters (which take precedence over the enums' <c>[JsonConverter]</c> attribute) record, per
+/// thread, whether the last Type/State token they read was recognized, and delegate the value itself to
+/// <see cref="LenientEnumConverter{T}"/>. A missing member never reaches its converter, so it stays "not seen". Duplicate
+/// members: the last occurrence wins for both the check and the value, as it did for <see cref="JsonElement.TryGetProperty(string, out JsonElement)"/>
+/// and the deserializer.</para>
+/// </summary>
+internal static class JournalLineParser
+{
+    // Tri-state per thread: 0 = member not read (missing), 1 = recognized, 2 = present but not recognized.
+    [ThreadStatic] private static int t_type;
+    [ThreadStatic] private static int t_state;
+
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        Converters = { new RecordingConverter<FileOperationType>(isType: true), new RecordingConverter<JournalState>(isType: false) },
+    };
+
+    public static JournalEntry? TryParse(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        t_type = 0;
+        t_state = 0;
+        try
+        {
+            return Accept(JsonSerializer.Deserialize<JournalEntry>(line, Options));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Same as <see cref="TryParse(string)"/> for a UTF-8 line (no terminator). Invalid UTF-8 is rejected.</summary>
+    public static JournalEntry? TryParse(ReadOnlySpan<byte> utf8Line)
+    {
+        t_type = 0;
+        t_state = 0;
+        try
+        {
+            return Accept(JsonSerializer.Deserialize<JournalEntry>(utf8Line, Options));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static JournalEntry? Accept(JournalEntry? entry) =>
+        entry is not null && t_type == 1 && t_state == 1 && !string.IsNullOrEmpty(entry.Id) && entry.Source is not null
+            ? entry
+            : null;
+
+    private static bool IsKnown<T>(ref Utf8JsonReader reader, string? alias) where T : struct, Enum => reader.TokenType switch
+    {
+        JsonTokenType.String => reader.GetString() is { } text
+            && (Enum.TryParse<T>(text.Trim(), ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
+                || (alias is not null && string.Equals(text.Trim(), alias, StringComparison.OrdinalIgnoreCase))),
+        JsonTokenType.Number => reader.TryGetInt32(out var number) && Enum.IsDefined(typeof(T), number),
+        _ => false,
+    };
+
+    private sealed class RecordingConverter<T>(bool isType) : JsonConverter<T> where T : struct, Enum
+    {
+        private readonly LenientEnumConverter<T> _inner = new();
+
+        // A null token must reach Read (recorded as not recognized), exactly like JsonValueKind.Null failed the old check.
+        public override bool HandleNull => true;
+
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var known = IsKnown<T>(ref reader, isType ? "Delete" : null) ? 1 : 2;
+            if (isType) t_type = known;
+            else t_state = known;
+            return _inner.Read(ref reader, typeToConvert, options);
+        }
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+            _inner.Write(writer, value, options);
+    }
+}

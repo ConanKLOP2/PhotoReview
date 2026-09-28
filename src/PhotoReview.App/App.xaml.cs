@@ -69,7 +69,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>(),
             () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability,
-            liveOperations: sp.GetRequiredService<ILiveOperationRegistry>()));
+            liveOperations: sp.GetRequiredService<ILiveOperationRegistry>(),
+            compactionFiles: new PhysicalJournalCompactionFiles()));
         services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),

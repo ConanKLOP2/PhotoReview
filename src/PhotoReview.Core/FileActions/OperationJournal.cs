@@ -40,10 +40,32 @@ public sealed record JournalEntry(
 /// </summary>
 public sealed record DismissOutcome(IReadOnlyList<JournalEntry> Dismissed, IReadOnlyList<JournalEntry> Skipped);
 
+/// <summary>What <see cref="OperationJournal.TryCompact"/> did. Every outcome but <see cref="Compacted"/> left the journal untouched.</summary>
+public enum JournalCompactionOutcome
+{
+    /// <summary>The journal was replaced by its compacted copy (plus every line appended meanwhile).</summary>
+    Compacted,
+    /// <summary>No compaction primitives were given to this journal (tests, tools).</summary>
+    NotSupported,
+    /// <summary>Missing, or smaller than <c>OperationJournal.CompactionThresholdBytes</c>.</summary>
+    BelowThreshold,
+    /// <summary>Less than <c>OperationJournal.CompactionMinGain</c> of the file could be dropped.</summary>
+    NotWorthIt,
+    /// <summary>A writer held the journal when compaction tried to lock it; try again later.</summary>
+    Busy,
+    /// <summary>The journal's start no longer matches the snapshot (another process compacted it meanwhile).</summary>
+    Changed,
+    /// <summary>An I/O error; see <see cref="JournalCompactionResult.Error"/>.</summary>
+    Failed,
+}
+
+/// <summary>Result of <see cref="OperationJournal.TryCompact"/>; sizes in bytes (0 when unknown).</summary>
+public sealed record JournalCompactionResult(JournalCompactionOutcome Outcome, long BytesBefore, long BytesAfter, string? Error = null);
+
 public sealed class OperationJournal
 {
     private const long FullScanThresholdBytes = 1 * 1024 * 1024;
-    private const int StartupCommittedMoveLimit = 200;
+    internal const int StartupCommittedMoveLimit = 200;
     private readonly string _path;
     private readonly IFileSystem _fileSystem;
     private readonly IClock _clock;
@@ -51,6 +73,7 @@ public sealed class OperationJournal
     private readonly Func<JournalDurability> _durability;
     private readonly Action<TimeSpan> _appendRetryDelay;
     private readonly ILiveOperationRegistry _liveOperations;
+    private readonly IJournalCompactionFiles? _compactionFiles;
 
     /// <summary>
     /// Review r7: two PhotoReview processes (one per folder) share operations.jsonl, and an append holds the file with
@@ -74,9 +97,15 @@ public sealed class OperationJournal
     /// written under a marker (<see cref="JournalTransaction"/>) and reconcile skips live ones. Default: a process-local
     /// registry (tests, tools); the app injects the Windows named-object registry.
     /// </param>
+    /// <param name="compactionFiles">
+    /// The file primitives <see cref="TryCompact"/> needs (<see cref="PhotoReview.Core.IO.PhysicalJournalCompactionFiles"/>
+    /// in the app). Null (default): the journal never compacts.
+    /// </param>
     public OperationJournal(IAppPaths paths, IFileSystem fileSystem, IClock clock, Func<JournalDurability>? durability = null,
-        Action<TimeSpan>? appendRetryDelay = null, ILiveOperationRegistry? liveOperations = null)
+        Action<TimeSpan>? appendRetryDelay = null, ILiveOperationRegistry? liveOperations = null,
+        IJournalCompactionFiles? compactionFiles = null)
     {
+        _compactionFiles = compactionFiles;
         _liveOperations = liveOperations ?? new InProcessLiveOperationRegistry();
         _durability = durability ?? (() => JournalDurability.Fast);
         _appendRetryDelay = appendRetryDelay ?? Thread.Sleep;
@@ -273,18 +302,29 @@ public sealed class OperationJournal
             var line = newline < 0 ? remaining : remaining[..newline];
             remaining = newline < 0 ? default : remaining[(newline + 1)..];
             if (!line.IsEmpty && line[^1] == '\r') line = line[..^1];
-            // Perf (CORE-08): a compact-written Recycle/Copy line cannot be a Move, so skip its JSON parse. The exact
-            // token never occurs inside a string value (there quotes are escaped as \"), so a Move line is never skipped.
-            if (line.IsEmpty || IsRecycleOrCopyLine(line)) continue;
-            try
-            {
-                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                if (entry is { Type: FileOperationType.Move, State: JournalState.Committed })
-                    entries.Add(entry);
-            }
-            catch (JsonException) { }
+            if (TryParseTailCommittedMove(line) is { } entry) entries.Add(entry);
         }
         return entries;
+    }
+
+    /// <summary>
+    /// The tail reader's line predicate (CORE-08): the line's committed Move, or null. Shared with
+    /// <see cref="JournalCompactionPlan"/>, which must keep exactly the lines this reader returns.
+    /// </summary>
+    internal static JournalEntry? TryParseTailCommittedMove(ReadOnlySpan<byte> line)
+    {
+        // Perf (CORE-08): a compact-written Recycle/Copy line cannot be a Move, so skip its JSON parse. The exact
+        // token never occurs inside a string value (there quotes are escaped as \"), so a Move line is never skipped.
+        if (line.IsEmpty || IsRecycleOrCopyLine(line)) return null;
+        try
+        {
+            var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+            return entry is { Type: FileOperationType.Move, State: JournalState.Committed } ? entry : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static bool IsRecycleOrCopyLine(ReadOnlySpan<byte> line) =>
@@ -329,7 +369,7 @@ public sealed class OperationJournal
         return latest;
     }
 
-    private static bool IsReconcileCode(string? code) =>
+    internal static bool IsReconcileCode(string? code) =>
         code is JournalErrors.PendingUnconfirmed or JournalErrors.SourceStillExistsAfterRecovery;
 
     private void ReadEntries(Action<JournalEntry> handle)
@@ -341,40 +381,12 @@ public sealed class OperationJournal
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
             while (reader.ReadLine() is { } line)
             {
-                try
-                {
-                    // The lenient enum converters map an unknown/missing Type or State to the first member (Move/Prepared);
-                    // for a journal that would invent a pending move, so such lines are skipped instead.
-                    if (!HasRecognizedEnums(line)) continue;
-                    var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                    // Valid JSON can still lack required members (records do not enforce them); skip such lines.
-                    if (entry is not null && !string.IsNullOrEmpty(entry.Id) && entry.Source is not null) handle(entry);
-                }
-                catch (JsonException) { }
+                // One JSON pass per line (JournalLineParser). Skipped, as before: malformed JSON, an unknown/missing Type
+                // or State (the lenient enum converters would map it to Move/Prepared and invent a pending move), and
+                // valid JSON lacking Id or Source (records do not enforce required members).
+                if (JournalLineParser.TryParse(line) is { } entry) handle(entry);
             }
         }
-    }
-
-    private static bool HasRecognizedEnums(string line)
-    {
-        using var doc = JsonDocument.Parse(line);
-        var root = doc.RootElement;
-        return root.ValueKind == JsonValueKind.Object
-            && IsKnown<FileOperationType>(root, nameof(JournalEntry.Type), "Delete")
-            && IsKnown<JournalState>(root, nameof(JournalEntry.State), alias: null);
-    }
-
-    private static bool IsKnown<T>(JsonElement root, string property, string? alias) where T : struct, Enum
-    {
-        if (!root.TryGetProperty(property, out var value)) return false;
-        return value.ValueKind switch
-        {
-            JsonValueKind.String => value.GetString() is { } text
-                && (Enum.TryParse<T>(text.Trim(), ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
-                    || (alias is not null && string.Equals(text.Trim(), alias, StringComparison.OrdinalIgnoreCase))),
-            JsonValueKind.Number => value.TryGetInt32(out var number) && Enum.IsDefined(typeof(T), number),
-            _ => false,
-        };
     }
 
     /// <param name="preparedBeforeUtc">
@@ -467,6 +479,135 @@ public sealed class OperationJournal
             }
             Append(entry);
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Compaction runs only on a journal of at least this size. It must not be below <see cref="FullScanThresholdBytes"/>:
+    /// the <see cref="JournalCompactionPlan"/> argument for <see cref="ReadCommittedMoves"/> assumes the tail reader served the
+    /// uncompacted file.
+    /// </summary>
+    internal const long CompactionThresholdBytes = FullScanThresholdBytes;
+
+    /// <summary>Compaction rewrites the journal only when it drops at least this share of its bytes (no rewrite per start for a few lines).</summary>
+    internal const double CompactionMinGain = 0.25;
+
+    /// <summary>A replacement file left by a compaction that crashed is removed once it is this old (a younger one may be another process's, in progress).</summary>
+    internal static readonly TimeSpan StaleCompactionFileAge = TimeSpan.FromHours(1);
+
+    internal const string CompactionFileSuffix = ".compact.tmp";
+
+    /// <summary>
+    /// Rewrites the append-only journal without the lines no reader can observe any more (<see cref="JournalCompactionPlan"/>:
+    /// entries superseded by a later Committed/Dismissed entry of the same Id). Never throws for I/O; the result says what
+    /// happened. Call it off the UI thread (startup runs it after reconcile, <see cref="JournalStartupRecovery"/>).
+    /// <para><b>Concurrency and crash safety.</b> Other PhotoReview processes may append at any moment; there is no
+    /// cross-process lock besides the file's share modes, and this uses exactly those:</para>
+    /// <list type="number">
+    /// <item>Snapshot the file (shared read, nobody blocked), cut after its last '\n', plan, write the kept lines to a new
+    /// replacement file and fsync it. The journal is not touched.</item>
+    /// <item>Under this instance's lock, open the journal DENYING writers. Appends in every process now get a sharing
+    /// violation and retry (<see cref="AppendAttempts"/>, ~100 ms budget); an append in progress makes this open fail and
+    /// compaction gives up (<see cref="JournalCompactionOutcome.Busy"/>).</item>
+    /// <item>Re-read the file through that handle. Its first bytes must equal the snapshot (append-only: anything else means
+    /// another compaction replaced it, so give up); the bytes after it are the lines appended since the snapshot and are
+    /// copied verbatim to the replacement (a torn last line gets a newline, like the append tail repair).</item>
+    /// <item>fsync, then ONE atomic rename of the replacement over the journal while the deny-writers handle is still open
+    /// (<see cref="IStagedReplacement.ReplaceAtomically"/>). No write can land in the old file between the re-read and the
+    /// rename, so no entry is lost; the next append in any process opens the new file.</item>
+    /// </list>
+    /// <para>A crash before the rename leaves the journal untouched (plus a stale replacement file, removed by a later
+    /// compaction); after it, the new file is complete and fsynced. The critical section of step 2-4 is a read of a file
+    /// the snapshot just cached plus one rename: milliseconds, well inside the appenders' retry budget.</para>
+    /// </summary>
+    public JournalCompactionResult TryCompact()
+    {
+        if (_compactionFiles is null) return new JournalCompactionResult(JournalCompactionOutcome.NotSupported, 0, 0);
+        try
+        {
+            RemoveStaleCompactionFiles();
+            if (!_fileSystem.FileExists(_path)) return new JournalCompactionResult(JournalCompactionOutcome.BelowThreshold, 0, 0);
+
+            byte[] snapshot;
+            using (var stream = _fileSystem.OpenReadShared(_path, 64 * 1024))
+                snapshot = ReadToEnd(stream);
+            var snapshotLength = snapshot.AsSpan().LastIndexOf((byte)'\n') + 1; // a partial last line belongs to the delta
+            if (snapshotLength < CompactionThresholdBytes)
+                return new JournalCompactionResult(JournalCompactionOutcome.BelowThreshold, snapshot.Length, snapshot.Length);
+
+            var plan = JournalCompactionPlan.Build(snapshot.AsSpan(0, snapshotLength));
+            if (snapshotLength - plan.Kept.Length < snapshotLength * CompactionMinGain)
+                return new JournalCompactionResult(JournalCompactionOutcome.NotWorthIt, snapshot.Length, snapshot.Length);
+
+            var tempPath = _path + "." + Guid.NewGuid().ToString("N") + CompactionFileSuffix;
+            using var replacement = _compactionFiles.CreateStagedReplacement(tempPath);
+            replacement.Write(plan.Kept);
+            replacement.FlushToDisk();
+
+            lock (_gate)
+            {
+                Stream locked;
+                try
+                {
+                    locked = _compactionFiles.OpenReadDenyWriters(_path);
+                }
+                catch (IOException ex) when (IsSharingOrLockViolation(ex))
+                {
+                    return new JournalCompactionResult(JournalCompactionOutcome.Busy, snapshot.Length, snapshot.Length);
+                }
+                using (locked)
+                {
+                    var current = ReadToEnd(locked);
+                    if (current.Length < snapshotLength || !current.AsSpan(0, snapshotLength).SequenceEqual(snapshot.AsSpan(0, snapshotLength)))
+                        return new JournalCompactionResult(JournalCompactionOutcome.Changed, current.Length, current.Length);
+                    var delta = current.AsSpan(snapshotLength);
+                    var newLength = (long)plan.Kept.Length + delta.Length;
+                    if (!delta.IsEmpty)
+                    {
+                        replacement.Write(delta);
+                        if (delta[^1] != (byte)'\n')
+                        {
+                            var newline = Encoding.UTF8.GetBytes(Environment.NewLine);
+                            replacement.Write(newline);
+                            newLength += newline.Length;
+                        }
+                        replacement.FlushToDisk();
+                    }
+                    replacement.ReplaceAtomically(_path);
+                    return new JournalCompactionResult(JournalCompactionOutcome.Compacted, current.Length, newLength);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            // Nothing was renamed (the rename is the last step and atomic): the journal is as it was.
+            return new JournalCompactionResult(JournalCompactionOutcome.Failed, 0, 0, ex.Message);
+        }
+    }
+
+    private static byte[] ReadToEnd(Stream stream)
+    {
+        using var buffer = new MemoryStream(stream.CanSeek ? (int)Math.Min(stream.Length, int.MaxValue) : 0);
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    private void RemoveStaleCompactionFiles()
+    {
+        var dir = Path.GetDirectoryName(_path);
+        if (string.IsNullOrEmpty(dir) || !_fileSystem.DirectoryExists(dir)) return;
+        foreach (var file in _fileSystem.EnumerateFiles(dir, Path.GetFileName(_path) + ".*" + CompactionFileSuffix).ToList())
+        {
+            if (!file.EndsWith(CompactionFileSuffix, StringComparison.OrdinalIgnoreCase)) continue; // 8.3 pattern quirks
+            if (_fileSystem.GetFileStat(file) is not { } stat || _clock.UtcNow - stat.LastWriteUtc < StaleCompactionFileAge) continue;
+            try
+            {
+                _fileSystem.Delete(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Still open (a compaction in progress after all) or not ours: leave it.
+            }
         }
     }
 
