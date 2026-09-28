@@ -43,6 +43,7 @@
         <Grid.ContextMenu>
             <ContextMenu x:Name="ImageContextMenu" Opened="ImageContextMenu_Opened">
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
+                <MenuItem x:Name="RecycleMenuItem" Header="{loc:Tr main.menu.recycle}" AutomationProperties.Name="{loc:Tr main.menu.recycle.automationName}" Click="Recycle_Click" />
                 <Separator x:Name="ZoomGroupSeparator" />
                 <MenuItem x:Name="FitMenuItem" Header="{loc:Tr main.menu.clickZoomLevel.fit}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.fit.automationName}" Click="ClickZoomFit_Click" />
                 <MenuItem x:Name="ZoomToLevelMenuItem" Click="ZoomToLevel_Click" />
@@ -137,7 +138,6 @@
                     <TextBlock Text="{Binding SkippedWarningText}" Foreground="{DynamicResource Dark.Warning}" FontSize="13" VerticalAlignment="Center" />
                     <Button Content="{loc:Tr main.skipped.viewList}" AutomationProperties.Name="{loc:Tr main.skipped.viewList.automationName}" Padding="8,2" Margin="8,0,0,0" Click="SkippedFiles_Click" />
                 </StackPanel>
-                <TextBlock Foreground="{DynamicResource Dark.TextSecondary}" FontSize="11" Margin="0,2,0,0" Text="{loc:Tr main.shortcutHint}" Visibility="Collapsed" />
             </StackPanel>
         </Border>
         <Border x:Name="FolderInfoPanel" Background="{DynamicResource Dark.Overlay}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8" Padding="6,4" CornerRadius="4" MaxWidth="640" AutomationProperties.Name="{loc:Tr main.folderInfo.automationName}" Visibility="{Binding InfoOverlay.IsFolderInfoVisible, Converter={StaticResource BoolToVis}}">
