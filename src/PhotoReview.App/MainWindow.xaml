@@ -43,7 +43,7 @@
         <Grid.ContextMenu>
             <ContextMenu x:Name="ImageContextMenu" Opened="ImageContextMenu_Opened">
                 <MenuItem Header="{loc:Tr main.menu.undo}" AutomationProperties.Name="{loc:Tr main.menu.undo.automationName}" Click="UndoLastAction_Click" />
-                <MenuItem x:Name="DeleteMenuItem" Header="{loc:Tr main.menu.delete}" AutomationProperties.Name="{loc:Tr main.menu.delete.automationName}" Click="Delete_Click" />
+                <MenuItem x:Name="RecycleMenuItem" Header="{loc:Tr main.menu.recycle}" AutomationProperties.Name="{loc:Tr main.menu.recycle.automationName}" Click="Recycle_Click" />
                 <Separator x:Name="ZoomGroupSeparator" />
                 <MenuItem x:Name="FitMenuItem" Header="{loc:Tr main.menu.clickZoomLevel.fit}" AutomationProperties.Name="{loc:Tr main.menu.clickZoomLevel.fit.automationName}" Click="ClickZoomFit_Click" />
                 <MenuItem x:Name="ZoomToLevelMenuItem" Click="ZoomToLevel_Click" />

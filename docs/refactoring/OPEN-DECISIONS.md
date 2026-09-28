@@ -82,5 +82,5 @@ added without frontmatter or without re-running the generator.
 | OPT-IMAGING-FIXES | OPT-1: Eliminate double disk I/O for large JPEG headers (>8 MB) by extending exponential-growth pattern instead of re-reading entire file.
 OPT-2: Add SourceBytesCache.CreateKey overloads accepting pre-computed stats to avoid redundant FileInfo allocation (Q-R29 pattern). [Detail](decisions/OPT-IMAGING-FIXES.md) |
 | OPT-TOOLING-TRGENERATOR-HASHSET | TrGenerator.TryGetPlaceholders now dedups placeholder names with a HashSet instead of List.Contains, removing the O(n^2) scan (perf/trgenerator-hashset-placeholders). [Detail](decisions/OPT-TOOLING-TRGENERATOR-HASHSET.md) |
-| UX-FIXES-ROUND1 | Four UX findings addressed: Delete/Recycle added to context menu (high), shortcut hint visibility fixed (high), terminology standardized (medium), and shortcut hint clarified (medium). [Detail](decisions/UX-FIXES-ROUND1.md) |
+| UX-FIXES-ROUND1 | Four UX findings addressed: Move to Recycle Bin added to context menu, gated behind an off-by-default setting (high); the dead, hardcoded-hidden shortcut hint line removed outright instead of un-hiding it (high); Recycle Bin terminology standardized (medium); the hint-wording fix (medium) is moot now that the hint itself is gone. [Detail](decisions/UX-FIXES-ROUND1.md) |
 <!-- END GENERATED DECIDED TABLE -->

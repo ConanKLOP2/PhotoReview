@@ -312,11 +312,11 @@ public class AppSettings
 
     /// <summary>
     /// Shows the "Move to Recycle Bin" item in the right-click context menu. Default false (starts hidden, like
-    /// <see cref="ShowZoomMenuItems"/>): the Delete/Recycle shortcut still works either way, so an accidental click
-    /// on a destructive menu item isn't a risk for users who never opt in. Unlike <see cref="ShowFolderMenuItems"/>
+    /// <see cref="ShowZoomMenuItems"/>): the Move to Recycle Bin shortcut still works either way, so an accidental
+    /// click on a destructive menu item isn't a risk for users who never opt in. Unlike <see cref="ShowFolderMenuItems"/>
     /// and <see cref="ShowZoomMenuItems"/>, it does not gate a whole cluster or its own separator -- it toggles a
     /// single item right after Undo (see Q-R38 ordering).
     /// </summary>
-    public bool ShowDeleteMenuItem { get; set; }
+    public bool ShowRecycleMenuItem { get; set; }
 }
 

@@ -668,7 +668,7 @@ public partial class MainWindow : Window
     private async void RemoveNumberedDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(true);
     private async void RemoveOriginalDuplicates_Click(object sender, RoutedEventArgs e) => await _viewModel.RemoveDuplicatesAsync(false);
     private async void UndoLastAction_Click(object sender, RoutedEventArgs e) => await _viewModel.UndoAsync();
-    private async void Delete_Click(object sender, RoutedEventArgs e) => await _viewModel.RecycleAsync();
+    private async void Recycle_Click(object sender, RoutedEventArgs e) => await _viewModel.RecycleAsync();
 
     // ---- Context menu: "Zoom" submenu (Fit width/height, presets + Custom…, "also set" toggle, "set current as ----
     // ---- click level"). Built once; refreshed (text + IsChecked/IsEnabled) on every open so a live language ----
@@ -776,8 +776,8 @@ public partial class MainWindow : Window
     /// (<see cref="AppSettings.ShowZoomMenuItems"/>) -- Fit to window/Zoom to N%/the Zoom submenu and the separator
     /// right above them are hidden together as one unit -- and the folder group's visibility
     /// (<see cref="AppSettings.ShowFolderMenuItems"/>, PR-C) -- Open folder/Next folder/Previous folder and the
-    /// separator right above them are hidden together as one unit -- and the Delete item's visibility
-    /// (<see cref="AppSettings.ShowDeleteMenuItem"/>) -- a single item, hidden by default, no separator of its own.
+    /// separator right above them are hidden together as one unit -- and the Move to Recycle Bin item's visibility
+    /// (<see cref="AppSettings.ShowRecycleMenuItem"/>) -- a single item, hidden by default, no separator of its own.
     /// </summary>
     private void ImageContextMenu_Opened(object sender, RoutedEventArgs e)
     {
@@ -787,7 +787,7 @@ public partial class MainWindow : Window
         ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
 
-        DeleteMenuItem.Visibility = _settings.ShowDeleteMenuItem ? Visibility.Visible : Visibility.Collapsed;
+        RecycleMenuItem.Visibility = _settings.ShowRecycleMenuItem ? Visibility.Visible : Visibility.Collapsed;
 
         var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
         ZoomGroupSeparator.Visibility = zoomClusterVisibility;

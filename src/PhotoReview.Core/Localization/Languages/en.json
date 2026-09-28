@@ -259,8 +259,8 @@
   "main.folderText.imageCountExplorer.other": "{folder}  ({count} images) · Explorer",
   "main.menu.undo": "Undo last action",
   "main.menu.undo.automationName": "Undo the last action",
-  "main.menu.delete": "Move to Recycle Bin",
-  "main.menu.delete.automationName": "Move the current image to the Recycle Bin",
+  "main.menu.recycle": "Move to Recycle Bin",
+  "main.menu.recycle.automationName": "Move the current image to the Recycle Bin",
   "main.title.withFolder": "Photo Review — {folder}",
   "main.title.withFolderLogging": "Photo Review — {folder} · LOG",
   "main.toolbar.fit": "Fit",
@@ -778,9 +778,9 @@
   "settings.showZoomMenuItems.label": "Show zoom items (Fit, Zoom to N%, Zoom)",
   "settings.showZoomMenuItems.automationName": "Show zoom items in the right-click menu",
   "settings.showZoomMenuItems.hint": "Off (default) hides Fit to window, Zoom to N% and the Zoom submenu from the right-click menu. Their shortcuts keep working either way.",
-  "settings.showDeleteMenuItem.label": "Show Delete item",
-  "settings.showDeleteMenuItem.automationName": "Show the Delete item in the right-click menu",
-  "settings.showDeleteMenuItem.hint": "Off (default) hides Move to Recycle Bin from the right-click menu. The Delete shortcut keeps working either way.",
+  "settings.showRecycleMenuItem.label": "Show Move to Recycle Bin item",
+  "settings.showRecycleMenuItem.automationName": "Show the Move to Recycle Bin item in the right-click menu",
+  "settings.showRecycleMenuItem.hint": "Off (default) hides Move to Recycle Bin from the right-click menu. The Move to Recycle Bin shortcut keeps working either way.",
   "core.recovery.alreadyHandled": "This entry was already handled by another PhotoReview window, or is being retried there right now. Nothing was changed; the entry has been removed from this list.",
   "recovery.retry.stale.title": "Already handled elsewhere"
 }
