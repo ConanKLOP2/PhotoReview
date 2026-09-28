@@ -80,7 +80,7 @@ public sealed class ContextMenuRedesignTests
         await WithWindowAsync(null, window =>
         {
             var items = window.ImageContextMenu.Items;
-            Assert.Equal(12, items.Count);
+            Assert.Equal(14, items.Count);
 
             var undo = Assert.IsType<MenuItem>(items[0]);
             Assert.False(string.IsNullOrEmpty(undo.Header as string));
@@ -93,9 +93,17 @@ public sealed class ContextMenuRedesignTests
             Assert.Same(window.OpenFolderMenuItem, items[7]);
             Assert.Same(window.NextFolderMenuItem, items[8]);
             Assert.Same(window.PreviousFolderMenuItem, items[9]);
-            Assert.IsType<Separator>(items[10]);
-            var settings = Assert.IsType<MenuItem>(items[11]);
+            Assert.Same(window.ExternalEditorGroupSeparator, items[10]);
+            Assert.Same(window.OpenInExternalEditorMenuItem, items[11]);
+            Assert.IsType<Separator>(items[12]);
+            var settings = Assert.IsType<MenuItem>(items[13]);
             Assert.False(string.IsNullOrEmpty(settings.Header as string));
+
+            // Q-R48: with no external editor configured (the default) its item AND its leading separator are hidden,
+            // so the menu never shows two separators in a row.
+            OpenMenu(window);
+            Assert.Equal(Visibility.Collapsed, window.OpenInExternalEditorMenuItem.Visibility);
+            Assert.Equal(Visibility.Collapsed, window.ExternalEditorGroupSeparator.Visibility);
 
             // Settings is always visible, whichever way Move to Recycle Bin, the zoom cluster and the folder group are toggled --
             // including the all-hidden case where only Undo and Settings remain (no dangling double separator).
@@ -144,6 +152,23 @@ public sealed class ContextMenuRedesignTests
             window.Settings.ShowRecycleMenuItem = true;
             OpenMenu(window);
             Assert.Equal(Visibility.Visible, window.RecycleMenuItem.Visibility);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task RecycleMenuItem_ShowsConfiguredShortcut()
+    {
+        await WithWindowAsync(null, window =>
+        {
+            OpenMenu(window);
+            Assert.Equal(window.Settings.Shortcuts.SendToRecycleBin, window.RecycleMenuItem.InputGestureText);
+
+            // "X" is not the default of any other shortcut (see ShortcutMappings), so this proves the item tracks the
+            // configured value rather than showing a stale/hardcoded one.
+            window.Settings.Shortcuts.SendToRecycleBin = "X";
+            OpenMenu(window);
+            Assert.Equal("X", window.RecycleMenuItem.InputGestureText);
             return Task.CompletedTask;
         });
     }

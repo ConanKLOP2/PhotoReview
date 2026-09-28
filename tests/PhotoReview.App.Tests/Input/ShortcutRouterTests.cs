@@ -225,14 +225,14 @@ public sealed class ShortcutRouterTests
         var router = new ShortcutRouter(settings);
         settings.Shortcuts.LastImage = "F7";
         settings.Shortcuts.ZoomActualSize = "D0";
-        settings.Shortcuts.ToggleInfoOverlay = "O";
-        settings.Shortcuts.ClickZoom = "D3";
+        settings.Shortcuts.ToggleInfoOverlay = "P";
+        settings.Shortcuts.ClickZoom = "D5";
         router.Rebuild(settings);
 
         Assert.Equal(ReviewCommandType.LastImage, router.TryResolve(Key.F7, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Equal(ReviewCommandType.ZoomActualSize, router.TryResolve(Key.D0, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.O, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(Key.D3, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.P, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(Key.D5, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, true));
         Assert.Null(router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, true)); // old ClickZoom default no longer bound
     }
@@ -289,5 +289,60 @@ public sealed class ShortcutRouterTests
         Assert.Null(router.TryResolve(Key.W, Key.None, ModifierKeys.None, false, true));
         Assert.Null(router.TryResolve(Key.H, Key.None, ModifierKeys.None, false, true));
         Assert.Null(router.TryResolve(Key.K, Key.None, ModifierKeys.None, false, true));
+    }
+
+    // ---- Q-R42 OpenFolder (default Ctrl+O) / Q-R43 CustomZoom (default D3) ----
+
+    [Fact]
+    public void OpenFolder_RequiresControlModifier_LikeUndo()
+    {
+        var router = DefaultRouter();
+        var withCtrl = router.TryResolve(Key.O, Key.None, ModifierKeys.Control, isFullscreen: false, hasImage: false);
+        var withoutCtrl = router.TryResolve(Key.O, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false);
+
+        Assert.Equal(ReviewCommandType.OpenFolder, withCtrl?.Type);
+        Assert.Null(withoutCtrl);
+    }
+
+    [Fact]
+    public void OpenFolder_ResolvesWithoutAnImage()
+    {
+        var cmd = DefaultRouter().TryResolve(Key.O, Key.None, ModifierKeys.Control, isFullscreen: false, hasImage: false);
+        Assert.Equal(ReviewCommandType.OpenFolder, cmd?.Type);
+    }
+
+    [Fact]
+    public void CustomZoom_WhenHasImage_ResolvesToCustomZoom()
+    {
+        var cmd = DefaultRouter().TryResolve(Key.D3, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: true);
+        Assert.Equal(ReviewCommandType.CustomZoom, cmd?.Type);
+    }
+
+    [Fact]
+    public void CustomZoom_WhenNoImage_ReturnsNull()
+    {
+        Assert.Null(DefaultRouter().TryResolve(Key.D3, Key.None, ModifierKeys.None, isFullscreen: false, hasImage: false));
+    }
+
+    [Fact]
+    public void OpenFolderAndCustomZoom_EmptyOrUnparseable_AreDisabled()
+    {
+        var settings = new AppSettings();
+        settings.Shortcuts.OpenFolder = "";
+        settings.Shortcuts.CustomZoom = "NotAKey";
+        var router = new ShortcutRouter(settings);
+
+        Assert.Null(router.TryResolve(Key.O, Key.None, ModifierKeys.Control, false, hasImage: true));
+        Assert.Null(router.TryResolve(Key.D3, Key.None, ModifierKeys.None, false, hasImage: true));
+    }
+
+    [Fact]
+    public void OpenFolderAndCustomZoom_DefaultsDoNotCollideWithOtherDefaults()
+    {
+        // Q-R42/Q-R43: OpenFolder's default is Ctrl+O and CustomZoom's is D3 -- distinct from every other
+        // default shortcut (in particular Undo=Z and ClickZoom=D2), so SettingsValidator sees no duplicate.
+        var validator = new PhotoReview.Core.Settings.SettingsValidator(new PhotoReview.App.Services.WpfKeyNameValidator());
+        var error = validator.ValidateShortcuts(new AppSettings());
+        Assert.Null(error);
     }
 }

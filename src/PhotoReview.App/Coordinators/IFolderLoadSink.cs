@@ -20,6 +20,15 @@ public interface IFolderLoadSink
     void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session);
 
     /// <summary>
+    /// Q-R47: same empty-folder case as <see cref="OnEmpty"/>, but the folder has no directly-supported images AND
+    /// contains <paramref name="subfolderCount"/> subfolder(s) (non-recursive: the scan never looked inside them) --
+    /// worth a different message than a plain "no images", since the user may have opened the wrong (parent) level.
+    /// Default forwards to <see cref="OnEmpty"/> so an existing sink keeps compiling and behaving as before;
+    /// override to show a more specific message.
+    /// </summary>
+    void OnEmptyWithSubfolders(string folder, PhotoReview.Core.Session.SessionState session, int subfolderCount) => OnEmpty(folder, session);
+
+    /// <summary>
     /// Thông báo thứ tự Explorer tự nhiên đã được áp dụng vào danh mục. <paramref name="currentKept"/>:
     /// the current image stays on screen at its new <paramref name="currentIndex"/> (no re-present
     /// follows), so anything positioned around the old index (preload) must re-center.

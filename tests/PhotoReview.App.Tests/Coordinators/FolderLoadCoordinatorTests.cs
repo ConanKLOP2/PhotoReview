@@ -138,7 +138,10 @@ public sealed partial class FolderLoadCoordinatorTests
                 .ToList();
         }
 
-        public IEnumerable<string> EnumerateDirectories(string directory) => Enumerable.Empty<string>();
+        /// <summary>Q-R47: immediate (non-recursive) subfolders EnumerateDirectories(folder) should report, keyed by folder (full path).</summary>
+        public Dictionary<string, string[]> SubfoldersByFolder { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public IEnumerable<string> EnumerateDirectories(string directory) =>
+            SubfoldersByFolder.TryGetValue(Path.GetFullPath(directory), out var subfolders) ? subfolders : Enumerable.Empty<string>();
     }
 
     private sealed class FakeAppPaths : IAppPaths
@@ -217,6 +220,13 @@ public sealed partial class FolderLoadCoordinatorTests
         public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session)
         {
             EmptyCount++;
+            SessionsReceived.Add(session);
+        }
+        /// <summary>Q-R47: times <see cref="IFolderLoadSink.OnEmptyWithSubfolders"/> was called, with the subfolder count passed each time.</summary>
+        public List<int> EmptyWithSubfoldersCounts { get; } = [];
+        public void OnEmptyWithSubfolders(string folder, PhotoReview.Core.Session.SessionState session, int subfolderCount)
+        {
+            EmptyWithSubfoldersCounts.Add(subfolderCount);
             SessionsReceived.Add(session);
         }
         public bool? LastOrderCurrentKept { get; private set; }
@@ -397,6 +407,35 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.Equal(1, _sink.EmptyCount);
         Assert.Empty(_sink.Presented);
         Assert.True(_genClock.CurrentNavigation > prevNav);
+    }
+
+    [Fact]
+    public async Task LoadAsync_EmptyFolderWithSubfolders_CallsOnEmptyWithSubfoldersAndCount()
+    {
+        var folder = @"C:\empty_with_subs";
+        _fs.CreateDirectory(folder);
+        _fs.SubfoldersByFolder[Path.GetFullPath(folder)] = [@"C:\empty_with_subs\sub1", @"C:\empty_with_subs\sub2"];
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(0, _catalog.Count);
+        Assert.Equal(0, _sink.EmptyCount); // the more specific overload is called instead
+        Assert.Equal([2], _sink.EmptyWithSubfoldersCounts);
+    }
+
+    [Fact]
+    public async Task LoadAsync_EmptyFolderWithoutSubfolders_StillCallsPlainOnEmpty()
+    {
+        var folder = @"C:\empty_no_subs";
+        _fs.CreateDirectory(folder);
+        // No entry in SubfoldersByFolder: EnumerateDirectories returns empty, same as a folder with no subfolders.
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+
+        Assert.Equal(1, _sink.EmptyCount);
+        Assert.Empty(_sink.EmptyWithSubfoldersCounts);
     }
 
     [Fact]

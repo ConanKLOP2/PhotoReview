@@ -18,6 +18,7 @@ using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
 using PhotoReview.TestSupport;
+using PhotoReview.TestSupport.Windows;
 using Xunit;
 
 namespace PhotoReview.App.Tests;
@@ -195,6 +196,7 @@ public class CompositionRootTests
         Exception? threadException = null;
         var thread = new Thread(() =>
         {
+            using var guard = Win32DialogGuard.InstallOnCurrentThread();
             try
             {
                 // Check-then-create is not atomic: DarkScrollBarRenderingTests (a parallel collection) creates the
@@ -242,6 +244,8 @@ public class CompositionRootTests
                 Assert.Equal(box, provider.GetRequiredService<PreviewStateContext>().TargetDecodeBox());
             }
             catch (Exception ex) { threadException = ex; }
+            var dialogError = guard.CreateException();
+            if (dialogError is not null) threadException = dialogError;
         });
 
         thread.SetApartmentState(ApartmentState.STA);
@@ -467,6 +471,7 @@ public class CompositionRootTests
         Exception? threadException = null;
         var thread = new Thread(() =>
         {
+            using var guard = Win32DialogGuard.InstallOnCurrentThread();
             try
             {
                 // Check-then-create is not atomic: DarkScrollBarRenderingTests (a parallel collection) creates the
@@ -506,6 +511,8 @@ public class CompositionRootTests
                 Assert.True(scheduler.PreloadAroundAsync(0).IsCompletedSuccessfully);
             }
             catch (Exception ex) { threadException = ex; }
+            var dialogError = guard.CreateException();
+            if (dialogError is not null) threadException = dialogError;
         });
 
         thread.SetApartmentState(ApartmentState.STA);
@@ -529,6 +536,7 @@ public class CompositionRootTests
         Exception? threadException = null;
         var thread = new Thread(() =>
         {
+            using var guard = Win32DialogGuard.InstallOnCurrentThread();
             try
             {
                 // Check-then-create is not atomic: DarkScrollBarRenderingTests (a parallel collection) creates the
@@ -560,6 +568,8 @@ public class CompositionRootTests
                 placementFile = provider.GetRequiredService<MainWindow>().PlacementFile;
             }
             catch (Exception ex) { threadException = ex; }
+            var dialogError = guard.CreateException();
+            if (dialogError is not null) threadException = dialogError;
         });
 
         thread.SetApartmentState(ApartmentState.STA);
@@ -577,6 +587,7 @@ public class CompositionRootTests
         Exception? threadException = null;
         var thread = new Thread(() =>
         {
+            using var guard = Win32DialogGuard.InstallOnCurrentThread();
             try
             {
                 if (System.Windows.Application.Current is null)
@@ -605,6 +616,8 @@ public class CompositionRootTests
             {
                 threadException = ex;
             }
+            var dialogError = guard.CreateException();
+            if (dialogError is not null) threadException = dialogError;
         });
 
         thread.SetApartmentState(ApartmentState.STA);

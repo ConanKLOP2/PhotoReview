@@ -243,7 +243,18 @@ public sealed class FolderLoadCoordinator : IDisposable
             else
             {
                 _clock.NextNavigation();
-                _sink.OnEmpty(folder, session);
+                // Q-R47: 0 supported images directly in the folder -- worth telling the user apart from "no images
+                // at all" when the folder actually holds subfolders (they may have opened the parent by mistake).
+                // Non-recursive on purpose: only this one folder's immediate subfolders are counted.
+                var subfolderCount = 0;
+                try { subfolderCount = _fileSystem.EnumerateDirectories(folder).Count(); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Listing failed (permissions, a removable drive pulled mid-listing): treat as "no subfolders
+                    // known" -- OnEmpty's plain message is still correct, just not as specific.
+                }
+                if (subfolderCount > 0) _sink.OnEmptyWithSubfolders(folder, session, subfolderCount);
+                else _sink.OnEmpty(folder, session);
             }
 
             if (orderSettled)

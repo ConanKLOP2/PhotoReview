@@ -468,8 +468,10 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
     {
         var (vm, _, _) = CreateViewModel();
 
+        // Q-R41: the keyboard zoom step is now AppSettings.KeyboardZoomStepPercent (default 10 %), applied to
+        // ViewerState.ZoomStep by the MainViewModel constructor -- no longer the old hardcoded 0.25 (25 %).
         vm.ZoomIn();
-        Assert.Equal(1.25, vm.Viewer.Zoom);
+        Assert.Equal(1.0 + AppSettings.DefaultKeyboardZoomStepPercent / 100.0, vm.Viewer.Zoom);
 
         vm.ZoomOut();
         Assert.Equal(1.0, vm.Viewer.Zoom);

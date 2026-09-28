@@ -114,10 +114,12 @@ public sealed class WindowLocalizationTests
             {
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
-                // UX-FIXES-ROUND1: Undo, Delete (primary destructive action), a Separator, Fit, Zoom-to-level (header filled on open), the
-                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Settings.
+                // UX-FIXES-ROUND1 + Q-R48: Undo, Delete (primary destructive action), a Separator, Fit,
+                // Zoom-to-level (header filled on open), the Zoom submenu, a Separator, the folder group
+                // (Open/Next/Previous folder), a Separator, Q-R48's "Open in External Editor" (hidden unless
+                // configured, but still present in the item list), a Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();
-                Assert.Equal(9, menuItems.Count);
+                Assert.Equal(10, menuItems.Count);
                 var undo = menuItems[0];
                 var delete = menuItems[1];
                 var fit = menuItems[2];
@@ -126,7 +128,8 @@ public sealed class WindowLocalizationTests
                 var openFolder = menuItems[5];
                 var nextFolder = menuItems[6];
                 var previousFolder = menuItems[7];
-                var settings = menuItems[8];
+                var openInExternalEditor = menuItems[8];
+                var settings = menuItems[9];
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", undo.Header);
                 Assert.Equal("Hoàn tác thao tác vừa thực hiện", AutomationProperties.GetName(undo));
                 Assert.Equal("Đưa vào Thùng rác", delete.Header);
@@ -142,6 +145,8 @@ public sealed class WindowLocalizationTests
                 Assert.Equal("Mở thư mục ảnh", AutomationProperties.GetName(openFolder));
                 Assert.Equal("Thư mục kế tiếp", nextFolder.Header);
                 Assert.Equal("Thư mục trước", previousFolder.Header);
+                Assert.Equal("Mở bằng trình chỉnh sửa ngoài", openInExternalEditor.Header);
+                Assert.Equal("Mở ảnh hiện tại bằng trình chỉnh sửa ngoài", AutomationProperties.GetName(openInExternalEditor));
                 Assert.Equal("Cài đặt…", settings.Header);
                 Assert.Equal("Mở cài đặt", AutomationProperties.GetName(settings));
                 Assert.Equal("Ảnh xem trước bên trái, nhấn để chọn", AutomationProperties.GetName(window.CompareLeftBorder));

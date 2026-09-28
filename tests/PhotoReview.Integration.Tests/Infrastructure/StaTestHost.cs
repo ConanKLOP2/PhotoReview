@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
 using PhotoReview.App;
+using PhotoReview.TestSupport.Windows;
 using Xunit;
 
 namespace PhotoReview.Integration.Tests.Infrastructure;
@@ -23,6 +24,7 @@ public static class StaTestHost
     private static readonly BlockingCollection<Action> Work = new();
     private static Thread? _thread;
     private static Dispatcher? _dispatcher;
+    private static Win32DialogGuard? _dialogGuard;
 
     /// <summary>The STA thread's dispatcher. Only valid inside a <see cref="RunAsync(Func{Task})"/> body.</summary>
     public static Dispatcher Dispatcher => _dispatcher ?? throw new InvalidOperationException("STA host not started.");
@@ -54,6 +56,7 @@ public static class StaTestHost
                 WpfResourceLookup.RedirectToApplicationAssembly();
                 if (Application.Current is null)
                     _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                _dialogGuard = Win32DialogGuard.InstallOnCurrentThread();
                 ready.Set();
                 foreach (var action in Work.GetConsumingEnumerable()) action();
             })
@@ -77,6 +80,7 @@ public static class StaTestHost
 
         var timer = new DispatcherTimer(DispatcherPriority.Send, dispatcher) { Interval = timeout };
         timer.Tick += (_, _) => { timedOut = true; frame.Continue = false; };
+        _dialogGuard!.Clear();
 
         try
         {
@@ -94,10 +98,12 @@ public static class StaTestHost
         catch (Exception ex)
         {
             timer.Stop();
-            outer.TrySetException(ex);
+            if (!FailOnUnexpectedDialogs(outer)) outer.TrySetException(ex);
             return;
         }
         timer.Stop();
+
+        if (FailOnUnexpectedDialogs(outer)) return;
 
         if (!inner.IsCompleted)
         {
@@ -108,6 +114,18 @@ public static class StaTestHost
         if (inner.IsFaulted) outer.TrySetException(inner.Exception!.InnerExceptions);
         else if (inner.IsCanceled) outer.TrySetCanceled();
         else outer.TrySetResult(null);
+    }
+
+    /// <summary>
+    /// Reported ahead of whatever the body did afterwards: an assertion failing because its modal window was
+    /// force-closed (see <see cref="Win32DialogGuard"/>) is only a symptom of the dialog.
+    /// </summary>
+    private static bool FailOnUnexpectedDialogs(TaskCompletionSource<object?> outer)
+    {
+        var exception = _dialogGuard!.CreateException();
+        if (exception is null) return false;
+        outer.TrySetException(exception);
+        return true;
     }
 
     /// <summary>
@@ -146,6 +164,7 @@ public static class StaTestHost
             await fired.Task;
         }
     }
+
 }
 
 /// <summary>
@@ -257,6 +276,40 @@ public sealed class StaTestHostSmokeTests
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await StaTestHost.RunAsync(() => StaTestHost.DrainAsync(duration));
         Assert.True(sw.Elapsed >= duration, $"DrainAsync returned after {sw.Elapsed.TotalMilliseconds:F0} ms, before {duration.TotalMilliseconds:F0} ms.");
+    }
+
+    [Fact]
+    public async Task RealMessageBox_FailsFastWithItsText_InsteadOfHanging()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StaTestHost.RunAsync(() =>
+        {
+            MessageBox.Show("sta-host-probe-body", "probe", MessageBoxButton.YesNo);
+            return Task.CompletedTask;
+        }));
+
+        Assert.Contains("sta-host-probe-body", ex.Message, StringComparison.Ordinal);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
+    }
+
+    [Fact]
+    public async Task RealMessageBox_InsideAModalWindow_FailsFastInsteadOfHanging()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StaTestHost.RunAsync(() =>
+        {
+            var window = new Window { WindowStartupLocation = WindowStartupLocation.Manual, Left = -32000, Top = -32000, ShowInTaskbar = false };
+            window.Loaded += (_, _) => MessageBox.Show(window, "sta-host-probe-modal", "probe");
+            // Same shape as the Settings tests: the force-closed window makes this assert throw synchronously, and the
+            // dialog's text must still be what gets reported.
+            Assert.True(window.ShowDialog());
+            return Task.CompletedTask;
+        }));
+
+        Assert.Contains("sta-host-probe-modal", ex.Message, StringComparison.Ordinal);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"Took {sw.Elapsed.TotalSeconds:F1}s.");
     }
 
     [Fact]

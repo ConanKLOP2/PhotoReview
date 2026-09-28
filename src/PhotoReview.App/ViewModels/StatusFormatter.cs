@@ -34,6 +34,9 @@ public static class StatusFormatter
 
     public static string NoSupportedImages() => Tr.StatusNoSupportedImages;
 
+    /// <summary>Q-R47: same empty-folder case, but subfolders were found (non-recursive scan never looked inside them).</summary>
+    public static string NoSupportedImagesButSubfolders(int count) => Tr.StatusNoSupportedImagesButSubfolders(count);
+
     public static string FolderOpenFailed(string message) => Tr.StatusFolderOpenFailed(message);
 
     public static string IndexOnly(int index, int count) => Tr.StatusPosition(index + 1, count);

@@ -113,7 +113,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             folderPicker: folderPicker, fileSystem: _fileSystem, rememberFolder: RememberMoveCopyFolder);
         _siblingNavigator = new SiblingFolderNavigator(
             _clock, _catalog, _fileSystem, this, () => _currentSession);
-        InfoOverlay = new InfoOverlayViewModel(() => Settings, _siblingNavigator.FindSiblingImageFolders);
+        InfoOverlay = new InfoOverlayViewModel(() => Settings, _siblingNavigator.FindSiblingImageFolders,
+            hasImage: () => HasImages, getZoomPercent: () => _viewerState.DisplayZoomPercent);
         InfoOverlay.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(InfoOverlayViewModel.IsFileInfoVisible)) OnPropertyChanged(nameof(IsStatusPanelVisible));
@@ -122,9 +123,16 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             _clock, _catalog, _fileActionService, _hashService, _fileSystem, _dialogService, _uiScheduler,
             _preloadController, _thumbnailCache, _previewService, this);
         _viewerState.ScalingQuality = Settings.ScalingQuality;
+        _viewerState.ZoomStep = Settings.KeyboardZoomStepPercent / 100.0; // Q-R41
         // feat(zoom): leaving Fit requests the current image's full-resolution decode; Fit reverts
         // to the preview.
         _viewerState.ZoomModeChanged += (_, _) => _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
+        // Q-R45: the zoom HUD text/visibility follows the zoom level and Fit/stretch changes (DisplayZoomPercent's
+        // own dependencies already notify through ImageWidth/ImageHeight, see ViewerState).
+        _viewerState.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(ViewerState.ImageWidth) or nameof(ViewerState.ImageHeight)) InfoOverlay.Refresh();
+        };
         _presenter.SetViewerZoom(_viewerState.EffectiveZoom);
     }
 
@@ -546,6 +554,41 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public void ToggleFullscreen() => _viewerState.ToggleFullscreen();
     public void ExitFullscreen() => _viewerState.ExitFullscreen();
 
+    /// <summary>Test seam: launches the external editor; default starts the real process (Q-R48).</summary>
+    internal Action<string, string> StartExternalEditor { get; set; } = static (exePath, filePath) =>
+    {
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exePath)
+        {
+            UseShellExecute = false,
+            ArgumentList = { filePath },
+        });
+    };
+
+    /// <summary>Q-R48: the "Open in External Editor" context-menu item is shown only when an editor is configured and a photo is open.</summary>
+    public bool CanOpenInExternalEditor => !string.IsNullOrWhiteSpace(Settings.ExternalEditorPath) && HasImages;
+
+    /// <summary>Q-R48: launches the configured external editor with the currently-viewed (or compare-selected) photo's path.</summary>
+    public void OpenInExternalEditor()
+    {
+        var editorPath = Settings.ExternalEditorPath;
+        if (string.IsNullOrWhiteSpace(editorPath)) return;
+        var path = _compare.SelectedPath ?? _catalog.Current?.Path;
+        if (string.IsNullOrEmpty(path)) return;
+        if (!_fileSystem.FileExists(path))
+        {
+            _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, Tr.DialogExternalEditorFileMissing(Path.GetFileName(path)));
+            return;
+        }
+        try
+        {
+            StartExternalEditor(editorPath, path);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or System.IO.FileNotFoundException)
+        {
+            _dialogService?.ShowError(Tr.DialogExternalEditorFailedTitle, ex.Message);
+        }
+    }
+
     /// <summary>
     /// Mở hộp thoại chọn thư mục và tải thư mục được chọn.
     /// </summary>
@@ -628,6 +671,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             UpdateFolderTitle();
             InfoOverlay.Refresh();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
+            _viewerState.ZoomStep = Settings.KeyboardZoomStepPercent / 100.0; // Q-R41
             NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
             var newMode = _settingsStore.Current.LoadingMode;
             var newBackend = _settingsStore.Current.DecoderBackend;
@@ -816,6 +860,20 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         UpdateFolderTitle(folder);
         InfoOverlay.SetFolder(folder);
         StatusText = StatusFormatter.NoSupportedImages();
+        _presenter.ClearPresentation();
+        CatalogChanged?.Invoke();
+        NotifyNavigationStateChanged();
+    }
+
+    void IFolderLoadSink.OnEmptyWithSubfolders(string folder, SessionState session, int subfolderCount)
+    {
+        _preloadController?.Cancel();
+        _currentSession = session; // loaded once by FolderLoadCoordinator (APP-02)
+        OnFolderShown(folder);
+        SetFolderText(folder, 0, explorerOrderApplied: false);
+        UpdateFolderTitle(folder);
+        InfoOverlay.SetFolder(folder);
+        StatusText = StatusFormatter.NoSupportedImagesButSubfolders(subfolderCount);
         _presenter.ClearPresentation();
         CatalogChanged?.Invoke();
         NotifyNavigationStateChanged();

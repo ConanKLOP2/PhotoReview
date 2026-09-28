@@ -38,6 +38,9 @@ public sealed class StatusFormatterTests
     public void FolderAndActionMessages_MatchExactOriginalStrings()
     {
         Assert.Equal("Không tìm thấy ảnh được hỗ trợ trong thư mục này.", StatusFormatter.NoSupportedImages());
+        Assert.Equal(StatusFormatter.NoSupportedImagesButSubfolders(1), StatusFormatter.NoSupportedImagesButSubfolders(1));
+        Assert.NotEqual(StatusFormatter.NoSupportedImages(), StatusFormatter.NoSupportedImagesButSubfolders(2));
+        Assert.NotEqual(StatusFormatter.NoSupportedImagesButSubfolders(1), StatusFormatter.NoSupportedImagesButSubfolders(2));
         Assert.Equal("Không mở được thư mục: Quyền truy cập bị từ chối", StatusFormatter.FolderOpenFailed("Quyền truy cập bị từ chối"));
         Assert.Equal("Không còn ảnh trong thư mục", StatusFormatter.NoImagesRemaining());
         Assert.Equal("Đã xử lý hết ảnh trong thư mục.", StatusFormatter.AllImagesProcessed());

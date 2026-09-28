@@ -32,6 +32,8 @@ public sealed class ShortcutRouter
     private Key? _fitWidthKey;
     private Key? _fitHeightKey;
     private Key? _toggleKeepZoomKey;
+    private Key? _openFolderKey;
+    private Key? _customZoomKey;
 
     public ShortcutRouter(AppSettings? settings = null)
     {
@@ -71,6 +73,8 @@ public sealed class ShortcutRouter
         _fitWidthKey = ParseKey(settings.Shortcuts.FitWidth);
         _fitHeightKey = ParseKey(settings.Shortcuts.FitHeight);
         _toggleKeepZoomKey = ParseKey(settings.Shortcuts.ToggleKeepZoom);
+        _openFolderKey = ParseKey(settings.Shortcuts.OpenFolder);
+        _customZoomKey = ParseKey(settings.Shortcuts.CustomZoom);
 
         _actionKeys.Clear();
         for (var i = 0; i < settings.Actions.Count; i++)
@@ -153,6 +157,12 @@ public sealed class ShortcutRouter
             return ReviewCommand.ToggleKeepZoom;
         }
 
+        // 5d. Q-R42: Open folder (Ctrl+<key>) -- không cần ảnh, giống Undo yêu cầu giữ Ctrl.
+        if (_openFolderKey.HasValue && key == _openFolderKey.Value && (modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            return ReviewCommand.OpenFolder;
+        }
+
         // 6. Nhóm lệnh sau if (_index < 0) return: chỉ chạy khi có ảnh hợp lệ
         if (!hasImage)
         {
@@ -225,6 +235,12 @@ public sealed class ShortcutRouter
         if (_fitHeightKey.HasValue && key == _fitHeightKey.Value)
         {
             return ReviewCommand.FitHeight;
+        }
+
+        // 12d. Q-R43: Custom zoom dialog, same group as the other zoom keys.
+        if (_customZoomKey.HasValue && key == _customZoomKey.Value)
+        {
+            return ReviewCommand.CustomZoom;
         }
 
         // 13. Next / Previous

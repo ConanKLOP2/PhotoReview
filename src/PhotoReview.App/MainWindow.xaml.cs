@@ -599,6 +599,8 @@ public partial class MainWindow : Window
             case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(); break;
             case ReviewCommandType.FitHeight: await _pointer.FitHeightAsync(); break;
             case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
+            case ReviewCommandType.OpenFolder: await _viewModel.PickAndOpenFolderAsync(); break;
+            case ReviewCommandType.CustomZoom: await OpenClickZoomCustomDialogAsync(); break;
         }
     }
 
@@ -645,6 +647,7 @@ public partial class MainWindow : Window
     private void CompareRight_KeyDown(object sender, KeyEventArgs e) { if (e.Key is Key.Enter or Key.Space) { _viewModel.Compare.SelectRight(); e.Handled = true; } }
 
     private async void OpenFolder_Click(object sender, RoutedEventArgs e) => await _viewModel.PickAndOpenFolderAsync();
+    private void OpenInExternalEditor_Click(object sender, RoutedEventArgs e) => _viewModel.OpenInExternalEditor();
     private void Settings_Click(object sender, RoutedEventArgs e) => _viewModel.ShowSettings();
     private async void FitImage_Click(object sender, RoutedEventArgs e) => await ApplyFitViewAsync();
     private Task ApplyFitViewAsync() => _fit.ApplyFitAsync(); // T89 convergence loop: Coordinators/FitViewController.cs
@@ -777,6 +780,7 @@ public partial class MainWindow : Window
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
 
         RecycleMenuItem.Visibility = _settings.ShowRecycleMenuItem ? Visibility.Visible : Visibility.Collapsed;
+        RecycleMenuItem.InputGestureText = _settings.Shortcuts.SendToRecycleBin;
 
         var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
         ZoomGroupSeparator.Visibility = zoomClusterVisibility;
@@ -791,6 +795,9 @@ public partial class MainWindow : Window
         PreviousFolderMenuItem.Visibility = folderGroupVisibility;
         NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
         PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
+        var externalEditorVisibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
+        ExternalEditorGroupSeparator.Visibility = externalEditorVisibility;
+        OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
     }
 
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)
@@ -799,7 +806,10 @@ public partial class MainWindow : Window
         await ApplyZoomMenuSelectionAsync(percent);
     }
 
-    private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e)
+    private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e) => await OpenClickZoomCustomDialogAsync();
+
+    /// <summary>Q-R43: shared by the "Custom…" menu item and the CustomZoom keyboard shortcut.</summary>
+    private async Task OpenClickZoomCustomDialogAsync()
     {
         var dialog = new ClickZoomCustomDialog(_settings.ClickZoomPercent) { Owner = this };
         if (dialog.ShowDialog() == true)

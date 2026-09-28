@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using PhotoReview.App;
+using PhotoReview.TestSupport.Windows;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -27,11 +28,13 @@ public sealed class DarkScrollBarRenderingTests
     public void ScrollViewer_WithAppDarkTheme_RendersDarkThumbAndCorner()
     {
         Exception? threadException = null;
+        InvalidOperationException? dialogException = null;
         Color thumbColor = default;
         Color cornerColor = default;
 
         var thread = new Thread(() =>
         {
+            using var guard = Win32DialogGuard.InstallOnCurrentThread();
             try
             {
                 (thumbColor, cornerColor) = RenderAndSample();
@@ -40,10 +43,17 @@ public sealed class DarkScrollBarRenderingTests
             {
                 threadException = ex;
             }
+            finally
+            {
+                dialogException = guard.CreateException();
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "ScrollViewer render timed out.");
+        // A real dialog forced this thread's body to fail; that force-close is only a symptom, so
+        // report the dialog ahead of whatever exception the body itself raised.
+        if (dialogException is not null) throw dialogException;
         Assert.Null(threadException);
 
         AssertDark(thumbColor, "scrollbar thumb");

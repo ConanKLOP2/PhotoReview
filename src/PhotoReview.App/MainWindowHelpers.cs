@@ -150,6 +150,7 @@ internal sealed class ForwardingFolderSink(Func<IFolderLoadSink> target) : IFold
     public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => target().OnCatalogReady(folder, count, session);
     public Task PresentAsync(int index, long presentationGeneration) => target().PresentAsync(index, presentationGeneration);
     public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => target().OnEmpty(folder, session);
+    public void OnEmptyWithSubfolders(string folder, PhotoReview.Core.Session.SessionState session, int subfolderCount) => target().OnEmptyWithSubfolders(folder, session, subfolderCount);
     public void OnOrderApplied(int count, int currentIndex, bool currentKept) => target().OnOrderApplied(count, currentIndex, currentKept);
     public void OnFilesSkipped(string folder, IReadOnlyList<PhotoReview.Core.Abstractions.SkippedEntry> skipped) => target().OnFilesSkipped(folder, skipped);
     public void OnFailed(string folder, Exception exception) => target().OnFailed(folder, exception);

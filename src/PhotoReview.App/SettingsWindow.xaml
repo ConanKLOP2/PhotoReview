@@ -138,6 +138,7 @@
                                 <TextBlock x:Name="InfoOverlayFontSizeLabel" Text="{loc:Tr settings.infoOverlayFontSize.label}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                 <TextBox x:Name="InfoOverlayFontSizeBox" Width="70" AutomationProperties.LabeledBy="{Binding ElementName=InfoOverlayFontSizeLabel}" AutomationProperties.Name="{loc:Tr settings.infoOverlayFontSize.automationName}" Margin="0"/>
                             </StackPanel>
+                            <CheckBox x:Name="ShowZoomIndicatorCheck" Content="{loc:Tr settings.showZoomIndicator.label}"/>
                         </StackPanel></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.toolbar}"><Grid>
@@ -219,7 +220,7 @@
                     <StackPanel x:Name="MousePage" KeyboardNavigation.TabNavigation="Local">
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.zoom}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="ClickZoomPercentLabel" Text="{loc:Tr settings.clickZoomPercent.label}" Grid.Row="0" Style="{StaticResource FormLabel}"/>
                             <TextBox x:Name="ClickZoomPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomPercentLabel}" AutomationProperties.Name="{loc:Tr settings.clickZoomPercent.automationName}" Grid.Row="0" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
                             <TextBlock Text="{loc:Tr settings.clickZoomPercent.hint}" Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}"/>
@@ -238,6 +239,9 @@
                             <TextBlock Text="{loc:Tr settings.fitWidthAnchor.hint}" Grid.Row="10" Grid.Column="1" Style="{StaticResource HelpText}"/>
                             <CheckBox x:Name="KeepZoomAcrossImagesCheck" Grid.Row="11" Grid.Column="1" Content="{loc:Tr settings.keepZoomAcrossImages.label}" AutomationProperties.Name="{loc:Tr settings.keepZoomAcrossImages.automationName}"/>
                             <TextBlock Text="{loc:Tr settings.keepZoomAcrossImages.hint}" Grid.Row="12" Grid.Column="1" Style="{StaticResource HelpText}"/>
+                            <TextBlock x:Name="KeyboardZoomStepPercentLabel" Text="{loc:Tr settings.keyboardZoomStepPercent.label}" Grid.Row="13" Style="{StaticResource FormLabel}"/>
+                            <TextBox x:Name="KeyboardZoomStepPercentBox" AutomationProperties.LabeledBy="{Binding ElementName=KeyboardZoomStepPercentLabel}" AutomationProperties.Name="{loc:Tr settings.keyboardZoomStepPercent.automationName}" Grid.Row="13" Grid.Column="1" Width="90" HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="KeyboardZoomStepPercentHint" Grid.Row="14" Grid.Column="1" Style="{StaticResource HelpText}"/>
                         </Grid></GroupBox>
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.mouseZoom}"><Grid>
@@ -308,10 +312,11 @@
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.navigation}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="NextLabel" Grid.Row="0" Grid.Column="0" Text="{loc:Tr settings.shortcut.next}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="1" x:Name="NextText" AutomationProperties.LabeledBy="{Binding ElementName=NextLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="PreviousLabel" Grid.Row="1" Grid.Column="0" Text="{loc:Tr settings.shortcut.previous}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="PreviousText" AutomationProperties.LabeledBy="{Binding ElementName=PreviousLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="FirstImageLabel" Grid.Row="2" Grid.Column="0" Text="{loc:Tr settings.shortcut.firstImage}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="1" x:Name="FirstImageText" AutomationProperties.LabeledBy="{Binding ElementName=FirstImageLabel}" Style="{StaticResource ShortcutBox}"/>
+                            <TextBlock x:Name="OpenFolderLabel" Grid.Row="3" Grid.Column="0" Text="{loc:Tr settings.shortcut.openFolder}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="1" x:Name="OpenFolderText" AutomationProperties.LabeledBy="{Binding ElementName=OpenFolderLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="3" Grid.Column="1" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.openFolder.clearAutomationName}" Click="ClearOpenFolder_Click"/>
                             <TextBlock x:Name="LastImageLabel" Grid.Row="0" Grid.Column="3" Text="{loc:Tr settings.shortcut.lastImage}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="4" x:Name="LastImageText" AutomationProperties.LabeledBy="{Binding ElementName=LastImageLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="0" Grid.Column="4" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.lastImage.clearAutomationName}" Click="ClearLastImage_Click"/>
                             <TextBlock x:Name="NextFolderLabel" Grid.Row="1" Grid.Column="3" Text="{loc:Tr settings.shortcut.nextFolder}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="4" x:Name="NextFolderText" AutomationProperties.LabeledBy="{Binding ElementName=NextFolderLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="PreviousFolderLabel" Grid.Row="2" Grid.Column="3" Text="{loc:Tr settings.shortcut.previousFolder}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="4" x:Name="PreviousFolderText" AutomationProperties.LabeledBy="{Binding ElementName=PreviousFolderLabel}" Style="{StaticResource ShortcutBox}"/>
@@ -319,12 +324,13 @@
 
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.view}"><Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock x:Name="ZoomInLabel" Grid.Row="0" Grid.Column="0" Text="{loc:Tr settings.shortcut.zoomIn}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="1" x:Name="ZoomInText" AutomationProperties.LabeledBy="{Binding ElementName=ZoomInLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="ZoomOutLabel" Grid.Row="1" Grid.Column="0" Text="{loc:Tr settings.shortcut.zoomOut}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="1" x:Name="ZoomOutText" AutomationProperties.LabeledBy="{Binding ElementName=ZoomOutLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="ToggleFitLabel" Grid.Row="2" Grid.Column="0" Text="{loc:Tr settings.shortcut.toggleFit}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="1" x:Name="ToggleFitText" AutomationProperties.LabeledBy="{Binding ElementName=ToggleFitLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="ClickZoomLabel" Grid.Row="3" Grid.Column="0" Text="{loc:Tr settings.shortcut.clickZoom}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="3" Grid.Column="1" x:Name="ClickZoomText" AutomationProperties.LabeledBy="{Binding ElementName=ClickZoomLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="3" Grid.Column="1" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.clickZoom.clearAutomationName}" Click="ClearClickZoom_Click"/>
                             <TextBlock x:Name="FitHeightLabel" Grid.Row="4" Grid.Column="0" Text="{loc:Tr settings.shortcut.fitHeight}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="4" Grid.Column="1" x:Name="FitHeightText" AutomationProperties.LabeledBy="{Binding ElementName=FitHeightLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="4" Grid.Column="1" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.fitHeight.clearAutomationName}" Click="ClearFitHeight_Click"/>
+                            <TextBlock x:Name="CustomZoomLabel" Grid.Row="5" Grid.Column="0" Text="{loc:Tr settings.shortcut.customZoom}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="5" Grid.Column="1" x:Name="CustomZoomText" AutomationProperties.LabeledBy="{Binding ElementName=CustomZoomLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="5" Grid.Column="1" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.customZoom.clearAutomationName}" Click="ClearCustomZoom_Click"/>
                             <TextBlock x:Name="ZoomActualSizeLabel" Grid.Row="0" Grid.Column="3" Text="{loc:Tr settings.shortcut.zoomActualSize}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="0" Grid.Column="4" x:Name="ZoomActualSizeText" AutomationProperties.LabeledBy="{Binding ElementName=ZoomActualSizeLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="0" Grid.Column="4" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.zoomActualSize.clearAutomationName}" Click="ClearZoomActualSize_Click"/>
                             <TextBlock x:Name="FullscreenLabel" Grid.Row="1" Grid.Column="3" Text="{loc:Tr settings.shortcut.fullscreen}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="1" Grid.Column="4" x:Name="FullscreenText" AutomationProperties.LabeledBy="{Binding ElementName=FullscreenLabel}" Style="{StaticResource ShortcutBox}"/>
                             <TextBlock x:Name="ToggleInfoOverlayLabel" Grid.Row="2" Grid.Column="3" Text="{loc:Tr settings.shortcut.toggleInfoOverlay}" Style="{StaticResource ShortcutLabel}"/><TextBox Grid.Row="2" Grid.Column="4" x:Name="ToggleInfoOverlayText" AutomationProperties.LabeledBy="{Binding ElementName=ToggleInfoOverlayLabel}" Style="{StaticResource ShortcutBox}"/><Button Grid.Row="2" Grid.Column="4" Content="✕" HorizontalAlignment="Right" Style="{StaticResource ClearShortcutButton}" AutomationProperties.Name="{loc:Tr settings.shortcut.toggleInfoOverlay.clearAutomationName}" Click="ClearToggleInfoOverlay_Click"/>
@@ -370,6 +376,21 @@
                             <TextBlock x:Name="AllowPermanentDeleteHint" Text="{loc:Tr settings.allowPermanentDelete.hint}" Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
                         </StackPanel>
 
+                        <StackPanel Margin="0,0,0,10">
+                            <CheckBox x:Name="ConfirmBeforeDeleteCheck" Content="{loc:Tr settings.confirmBeforeDelete.label}" AutomationProperties.Name="{loc:Tr settings.confirmBeforeDelete.label}"/>
+                            <TextBlock Text="{loc:Tr settings.confirmBeforeDelete.hint}" Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
+                        </StackPanel>
+
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.externalEditor}"><StackPanel>
+                            <TextBlock x:Name="ExternalEditorPathLabel" Text="{loc:Tr settings.externalEditorPath.label}" Style="{StaticResource FormLabel}"/>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBox x:Name="ExternalEditorPathText" Grid.Column="0" Margin="0,0,8,0" AutomationProperties.LabeledBy="{Binding ElementName=ExternalEditorPathLabel}" AutomationProperties.Name="{loc:Tr settings.externalEditorPath.automationName}"/>
+                                <Button Content="{loc:Tr settings.externalEditorPath.browse}" Grid.Column="1" Click="BrowseExternalEditor_Click"/>
+                            </Grid>
+                            <TextBlock Text="{loc:Tr settings.externalEditorPath.hint}" Style="{StaticResource HelpText}"/>
+                        </StackPanel></GroupBox>
+
                         <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.journalDurability}"><StackPanel AutomationProperties.Name="{loc:Tr settings.journalDurability.label}">
                             <TextBlock Text="{loc:Tr settings.journalDurability.label}" Margin="0,0,0,8"/>
                             <RadioButton x:Name="JournalFastRadio" GroupName="JournalDurability" Content="{loc:Tr settings.journalDurability.fast}" IsChecked="True"/>
@@ -395,7 +416,11 @@
         <!-- Footer -->
         <Grid Grid.Row="1" Margin="0,16,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <Button Grid.Column="0" Content="{loc:Tr settings.restoreDefaults}" Click="Defaults_Click" HorizontalAlignment="Left"/>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="{loc:Tr settings.restoreDefaults}" Click="Defaults_Click"/>
+                <Button Content="{loc:Tr settings.exportSettings}" Click="ExportSettings_Click" Margin="8,0,0,0"/>
+                <Button Content="{loc:Tr settings.importSettings}" Click="ImportSettings_Click" Margin="8,0,0,0"/>
+            </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal">
                 <Button Content="{loc:Tr common.cancel}" IsCancel="True" MinWidth="80" Margin="0,0,8,0"/>
                 <Button Content="{loc:Tr common.save}" IsDefault="True" Click="Save_Click" MinWidth="80"/>

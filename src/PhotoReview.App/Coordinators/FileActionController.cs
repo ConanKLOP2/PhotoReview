@@ -111,6 +111,19 @@ public sealed class FileActionController
 
     public async Task RecycleAsync(string? compareSelectedPath, string? currentPath)
     {
+        // Q-R44: general "confirm before delete", off by default. Skipped when the permanent-delete prompt
+        // (Q-R8, WillAskPermanentDelete) will already ask -- same "one prompt, not two" rule as RunActionAsync.
+        var source = compareSelectedPath ?? currentPath;
+        var permanentPrompt = WillAskPermanentDelete(source);
+        if (_getSettings().ConfirmBeforeDelete && _dialogService is not null && !permanentPrompt)
+        {
+            var folderBeforeDialog = _clock.CurrentFolder;
+            var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(Tr.ActionRecycleName));
+            if (!ok) return;
+            if (_clock.CurrentFolder != folderBeforeDialog || _fileActionService?.IsBusy == true
+                || (source is not null && _catalog.IndexOf(source) < 0)) return;
+        }
+
         await ExecuteFileActionCoreAsync(Tr.ActionRecycleName, FileOperationType.Recycle, null, compareSelectedPath, currentPath);
     }
 

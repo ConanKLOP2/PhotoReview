@@ -42,36 +42,49 @@ public sealed partial class ViewerState : ObservableObject
     /// </summary>
     public const double MinStepZoom = 0.25;
     public const double MaxStepZoom = 4.0;
-    public const double ZoomStep = 0.25;
+
+    /// <summary>
+    /// Q-R41: how far a single ZoomIn/ZoomOut/wheel-zoom step moves the zoom level (a fraction of original size,
+    /// e.g. 0.25 = 25 %). Was a hardcoded <c>const</c> before Q-R41; now set from
+    /// <see cref="AppSettings.KeyboardZoomStepPercent"/> by the composition root / Settings window (same pattern as
+    /// <see cref="ScalingQuality"/>). Defaults to the previous hardcoded value so a caller that never sets it keeps
+    /// the old behaviour (tests, tools).
+    /// </summary>
+    public double ZoomStep { get; set; } = 0.25;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFit))]
     [NotifyPropertyChangedFor(nameof(ImageWidth))]
     [NotifyPropertyChangedFor(nameof(ImageHeight))]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private double _zoom = 1.0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFit))]
     [NotifyPropertyChangedFor(nameof(ImageWidth))]
     [NotifyPropertyChangedFor(nameof(ImageHeight))]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private ViewerStretchMode _stretch = ViewerStretchMode.Uniform;
 
     /// <summary>Full-resolution width of the current image after EXIF orientation (0 = unknown).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ImageWidth))]
     [NotifyPropertyChangedFor(nameof(ImageHeight))]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private int _sourcePixelWidth;
 
     /// <summary>Full-resolution height of the current image after EXIF orientation (0 = unknown).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ImageWidth))]
     [NotifyPropertyChangedFor(nameof(ImageHeight))]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private int _sourcePixelHeight;
 
     /// <summary>Device pixels per device-independent pixel of the viewer's monitor (1.0 = 96 DPI).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ImageWidth))]
     [NotifyPropertyChangedFor(nameof(ImageHeight))]
+    [NotifyPropertyChangedFor(nameof(DisplayZoomPercent))]
     private double _dpiScale = 1.0;
 
     [ObservableProperty]
@@ -175,6 +188,14 @@ public sealed partial class ViewerState : ObservableObject
     // In Fit, Zoom is 1.0 by convention; the original-relative zoom actually on screen is FitZoom.
     private double StepBase => IsFit && FitZoom > 0 ? FitZoom : Zoom;
 
+    /// <summary>
+    /// Q-R45: current zoom, in whole percent, for the on-image zoom HUD (<see cref="AppSettings.ShowZoomIndicator"/>).
+    /// In Fit this is <see cref="FitZoom"/> (what is actually on screen), falling back to 100 % while the Fit zoom
+    /// is not yet known (no image, or the viewport has not been measured). Not marked <see cref="ObservableProperty"/>
+    /// itself (it is a computed read of several fields already wired to notify it, see their attributes above).
+    /// </summary>
+    public int DisplayZoomPercent => (int)Math.Round((IsFit ? (FitZoom > 0 ? FitZoom : 1.0) : Zoom) * 100);
+
     public ViewerState()
     {
     }
@@ -232,12 +253,12 @@ public sealed partial class ViewerState : ObservableObject
     }
 
     /// <summary>
-    /// Tăng mức zoom thêm 0.25 (tối đa 4.0).
+    /// Tăng mức zoom thêm <see cref="ZoomStep"/> (Q-R41: cấu hình được qua <see cref="AppSettings.KeyboardZoomStepPercent"/>).
     /// </summary>
     public void ZoomIn() => StepZoom(ZoomStep);
 
     /// <summary>
-    /// Giảm mức zoom bớt 0.25 (tối thiểu 0.25).
+    /// Giảm mức zoom bớt <see cref="ZoomStep"/> (Q-R41: cấu hình được qua <see cref="AppSettings.KeyboardZoomStepPercent"/>).
     /// </summary>
     public void ZoomOut() => StepZoom(-ZoomStep);
 

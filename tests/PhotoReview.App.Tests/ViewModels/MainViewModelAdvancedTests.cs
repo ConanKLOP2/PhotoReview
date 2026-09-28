@@ -490,6 +490,100 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         Assert.Equal($"{folder}  (0 ảnh)", vm.FolderText);
     }
 
+    [Fact]
+    public void Sink_OnEmptyWithSubfolders_SetsSubfoldersStatusText()
+    {
+        var folder = Path.Combine(_tempDir, "empty_with_subfolders");
+        var (vm, _) = CreateViewModel();
+        IFolderLoadSink sink = vm;
+
+        sink.OnEmptyWithSubfolders(folder, new SessionState { Folder = folder }, subfolderCount: 3);
+
+        Assert.Equal(StatusFormatter.NoSupportedImagesButSubfolders(3), vm.StatusText);
+        Assert.NotEqual(StatusFormatter.NoSupportedImages(), vm.StatusText);
+    }
+
+    [Fact]
+    public async Task CanOpenInExternalEditor_TrueOnlyWhenPathSetAndImageOpen()
+    {
+        var folder = Path.Combine(_tempDir, "editor_can_open2");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png");
+        var (vm, _) = CreateViewModel();
+
+        Assert.False(vm.CanOpenInExternalEditor); // no editor path, no image
+
+        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        Assert.False(vm.CanOpenInExternalEditor); // editor path set, but no image open yet
+
+        await vm.OpenFolderAsync(folder);
+        Assert.True(vm.HasImages);
+        Assert.True(vm.CanOpenInExternalEditor); // both conditions now hold
+
+        _settings.ExternalEditorPath = "   ";
+        Assert.False(vm.CanOpenInExternalEditor); // whitespace-only path counts as not configured
+    }
+
+    [Fact]
+    public async Task OpenInExternalEditor_LaunchesConfiguredEditorWithCurrentPhotoPath()
+    {
+        var folder = Path.Combine(_tempDir, "editor_launch");
+        Directory.CreateDirectory(folder);
+        var photo = CreateImageFile(folder, "photo.png");
+        var (vm, _) = CreateViewModel();
+        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        await vm.OpenFolderAsync(folder);
+
+        (string ExePath, string FilePath)? launched = null;
+        vm.StartExternalEditor = (exePath, filePath) => launched = (exePath, filePath);
+
+        vm.OpenInExternalEditor();
+
+        Assert.NotNull(launched);
+        Assert.Equal(@"C:\Tools\editor.exe", launched!.Value.ExePath);
+        Assert.Equal(photo, launched.Value.FilePath);
+        Assert.Empty(_dialogService.Errors);
+    }
+
+    [Fact]
+    public async Task OpenInExternalEditor_FileNoLongerExists_ShowsErrorAndDoesNotLaunch()
+    {
+        var folder = Path.Combine(_tempDir, "editor_missing_file");
+        Directory.CreateDirectory(folder);
+        var photo = CreateImageFile(folder, "photo.png");
+        var (vm, _) = CreateViewModel();
+        _settings.ExternalEditorPath = @"C:\Tools\editor.exe";
+        await vm.OpenFolderAsync(folder);
+        File.Delete(photo); // now missing on disk, but still the catalog's current entry
+
+        var launched = false;
+        vm.StartExternalEditor = (_, _) => launched = true;
+
+        vm.OpenInExternalEditor();
+
+        Assert.False(launched);
+        Assert.Single(_dialogService.Errors);
+    }
+
+    [Fact]
+    public async Task OpenInExternalEditor_NoEditorConfigured_DoesNothing()
+    {
+        var folder = Path.Combine(_tempDir, "editor_not_configured");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "photo.png");
+        var (vm, _) = CreateViewModel();
+        _settings.ExternalEditorPath = string.Empty;
+        await vm.OpenFolderAsync(folder);
+
+        var launched = false;
+        vm.StartExternalEditor = (_, _) => launched = true;
+
+        vm.OpenInExternalEditor();
+
+        Assert.False(launched);
+        Assert.Empty(_dialogService.Errors);
+    }
+
     // --- Test Doubles ---
 
     private sealed class ForwardingFolderSink(Func<IFolderLoadSink> targetProvider) : IFolderLoadSink
@@ -498,6 +592,7 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
         public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session) => targetProvider().OnCatalogReady(folder, count, session);
         public Task PresentAsync(int index, long presentationGeneration) => targetProvider().PresentAsync(index, presentationGeneration);
         public void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session) => targetProvider().OnEmpty(folder, session);
+        public void OnEmptyWithSubfolders(string folder, PhotoReview.Core.Session.SessionState session, int subfolderCount) => targetProvider().OnEmptyWithSubfolders(folder, session, subfolderCount);
         public void OnOrderApplied(int count, int currentIndex, bool currentKept) => targetProvider().OnOrderApplied(count, currentIndex, currentKept);
         public void OnFailed(string folder, Exception exception) => targetProvider().OnFailed(folder, exception);
         public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => targetProvider().OnUnreadableRemovedAsync(removedPaths, currentRemoved);
