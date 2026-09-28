@@ -794,7 +794,9 @@ public partial class MainWindow : Window
         PreviousFolderMenuItem.Visibility = folderGroupVisibility;
         NextFolderMenuItem.InputGestureText = _settings.Shortcuts.NextFolder;
         PreviousFolderMenuItem.InputGestureText = _settings.Shortcuts.PreviousFolder;
-        OpenInExternalEditorMenuItem.Visibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
+        var externalEditorVisibility = _viewModel.CanOpenInExternalEditor ? Visibility.Visible : Visibility.Collapsed;
+        ExternalEditorGroupSeparator.Visibility = externalEditorVisibility;
+        OpenInExternalEditorMenuItem.Visibility = externalEditorVisibility;
     }
 
     private async void ClickZoomPreset_Click(object sender, RoutedEventArgs e)

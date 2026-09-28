@@ -225,14 +225,14 @@ public sealed class ShortcutRouterTests
         var router = new ShortcutRouter(settings);
         settings.Shortcuts.LastImage = "F7";
         settings.Shortcuts.ZoomActualSize = "D0";
-        settings.Shortcuts.ToggleInfoOverlay = "O";
-        settings.Shortcuts.ClickZoom = "D3";
+        settings.Shortcuts.ToggleInfoOverlay = "P";
+        settings.Shortcuts.ClickZoom = "D5";
         router.Rebuild(settings);
 
         Assert.Equal(ReviewCommandType.LastImage, router.TryResolve(Key.F7, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Equal(ReviewCommandType.ZoomActualSize, router.TryResolve(Key.D0, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.O, Key.None, ModifierKeys.None, false, true)?.Type);
-        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(Key.D3, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleInfoOverlay, router.TryResolve(Key.P, Key.None, ModifierKeys.None, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ClickZoom, router.TryResolve(Key.D5, Key.None, ModifierKeys.None, false, true)?.Type);
         Assert.Null(router.TryResolve(Key.End, Key.None, ModifierKeys.None, false, true));
         Assert.Null(router.TryResolve(Key.D2, Key.None, ModifierKeys.None, false, true)); // old ClickZoom default no longer bound
     }

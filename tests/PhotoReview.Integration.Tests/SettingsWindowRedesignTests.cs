@@ -278,7 +278,9 @@ public sealed class SettingsWindowRedesignTests
                     window.KineticGlideSmoothingCombo.SelectedIndex = 0;
                     window.MoveCopyReuseLastFolderCheck.IsChecked = true;
                     window.LastImageText.Text = "End";
-                    window.ZoomActualSizeText.Text = "D3"; // D2 is now ClickZoom's default; pick another free key
+                    // D2 is ClickZoom's default and D3 is CustomZoom's (Q-R43): a colliding key pops SettingsValidator's
+                    // real, undismissable duplicate-key MessageBox and hangs the STA test host.
+                    window.ZoomActualSizeText.Text = "D4";
                     window.ToggleInfoOverlayText.Text = "J";
                     // PR-B: "K" is now ToggleKeepZoom's default shortcut; "N" keeps this test about MoveToFolder's
                     // own round trip instead of tripping SettingsValidator's duplicate check (which would pop a real,
@@ -311,7 +313,7 @@ public sealed class SettingsWindowRedesignTests
                 Assert.Equal(KineticGlideSmoothing.Off, window.Settings.KineticGlideSmoothing);
                 Assert.True(window.Settings.MoveCopyReuseLastFolder);
                 Assert.Equal("End", window.Settings.Shortcuts.LastImage);
-                Assert.Equal("D3", window.Settings.Shortcuts.ZoomActualSize);
+                Assert.Equal("D4", window.Settings.Shortcuts.ZoomActualSize);
                 Assert.Equal("J", window.Settings.Shortcuts.ToggleInfoOverlay);
                 Assert.Equal("N", window.Settings.Shortcuts.MoveToFolder);
                 Assert.Equal("L", window.Settings.Shortcuts.CopyToFolder);
