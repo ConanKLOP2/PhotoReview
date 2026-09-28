@@ -27,6 +27,8 @@ namespace PhotoReview.Integration.Tests;
 [Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
+// Integration too: CI's Integration+Slow step runs these (the main filter excludes Slow; they rotted unrun before).
+[Trait("Category", "Integration")]
 public sealed class MainWindowBehaviorFolderSwitchTests
 {
     private const Key ActionKey = Key.F3;

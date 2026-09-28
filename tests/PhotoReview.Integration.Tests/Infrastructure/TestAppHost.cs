@@ -6,6 +6,8 @@ using PhotoReview.App.Composition;
 using PhotoReview.App.Coordinators;
 using PhotoReview.App.Services;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 
 namespace PhotoReview.Integration.Tests.Infrastructure;
 
@@ -68,6 +70,15 @@ internal static class TestAppHost
         // R7-11: never restore or overwrite the user's real window-placement.json from a test window.
         if (placementFile is null) window.SuppressWindowPlacement();
         window.Closed += (_, _) => sp.Dispose();
+        if (hooks?.SortMode is { } sortMode)
+        {
+            // Before the load starts: FolderLoadCoordinator reads the sort mode once per load. Through
+            // SettingsStore.Save (into the DataRootFixture's temp config), as the Settings window does.
+            var store = sp.GetRequiredService<SettingsStore>();
+            var settings = store.Current;
+            settings.ImageSortMode = sortMode;
+            store.Save(settings);
+        }
         window.InitializeWithInitialPath(initialPath);
         return window;
     }
@@ -100,6 +111,13 @@ internal sealed class TestHostHooks
     /// destabilised by background preload racing those counts; explain why at the call site.
     /// </summary>
     public bool DisablePreload { get; init; }
+
+    /// <summary>
+    /// Sort mode applied before the initial load. Unset keeps the store's default, which since PR #186 is
+    /// <see cref="ImageSortMode.Default"/> -- a mode that never queries Explorer (<see cref="SortModePolicy"/>),
+    /// so a test of the Explorer order (INV-7/INV-9) must pick a mode that uses it, e.g. <see cref="ImageSortMode.Name"/>.
+    /// </summary>
+    public ImageSortMode? SortMode { get; init; }
 }
 
 internal sealed class DelegatePresentationObserver(Action<string> onPresented) : IPresentationObserver
