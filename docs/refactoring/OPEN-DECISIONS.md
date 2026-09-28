@@ -18,7 +18,6 @@ added without frontmatter or without re-running the generator.
 
 | ID | Question | State |
 |---|---|---|
-| Q-RAW-01..07 | Camera RAW support: what to show, full decoder, 100 % zoom meaning, JPG+RAW pairs, formats, Adobe RGB, test corpus ([options](raw/DECISIONS.md), [plan](WORK-RAW-SUPPORT.md)) | Waiting for the user |
 
 ## Decided (one line each)
 
@@ -86,4 +85,5 @@ OPT-2: Add SourceBytesCache.CreateKey overloads accepting pre-computed stats to 
 | UX-FIXES-ROUND1 | Four UX findings addressed: Move to Recycle Bin added to context menu, gated behind an off-by-default setting (high); the dead, hardcoded-hidden shortcut hint line removed outright instead of un-hiding it (high); Recycle Bin terminology standardized (medium); the hint-wording fix (medium) is moot now that the hint itself is gone. [Detail](decisions/UX-FIXES-ROUND1.md) |
 | Q-R41..Q-R52 | v2.0.203 user feedback triage: configurable zoom step, Open Folder/Custom Zoom shortcuts, confirm-before-delete, zoom-% HUD, empty-folder notice and settings export/import approved (default off/unconfigured where applicable); Refresh, in-viewer rename, trackpad gesture tuning and new format/RAW support declined. [Detail](decisions/Q-R41-Q-R52-user-feedback.md) |
 | UX-FIXES-ROUND1 (terminology) | User chose to finish UX-FIXES-ROUND1 finding #3: the two English labels still reading "Recycle" (`action.recycle.name`, `enum.fileOperation.recycle`) now read "Move to Recycle Bin" like every other English string; Vietnamese already said "Đưa vào Thùng rác" everywhere. [Detail](decisions/UX-FIXES-ROUND1-TERMINOLOGY.md) |
+| Q-RAW-01..07 | Camera RAW support approved (reverses Q-R52's RAW part): show the embedded JPEG preview (header + preview range reads only), LibRaw full decode on zoom, 100 % = sensor size, JPG+RAW pair handling as a Settings option, 8 formats (CR2/CR3/NEF/ARW/DNG/RAF/ORF/RW2), Adobe RGB converted, CC0 corpus fetched + synthetic tests. [Detail](decisions/Q-RAW.md) |
 <!-- END GENERATED DECIDED TABLE -->

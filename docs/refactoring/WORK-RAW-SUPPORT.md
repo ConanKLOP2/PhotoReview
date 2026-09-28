@@ -1,6 +1,6 @@
 # WORK: Camera RAW support (RAW-*)
 
-Status: **PLANNED** (2026-09-28). No code yet. Owner: lead session + multi-agent waves below.
+Status: **PLANNED** — decisions Q-RAW-01..07 taken 2026-09-28 ([decisions/Q-RAW.md](decisions/Q-RAW.md)); Wave 0 RAW-01 next. No code yet. Owner: lead session + multi-agent waves below.
 Supersedes the "RAW declined for now" part of [Q-R52](decisions/Q-R41-Q-R52-user-feedback.md), which asked for
 exactly this: a separate architecture decision (library, licensing, per-format test plan) before any code.
 

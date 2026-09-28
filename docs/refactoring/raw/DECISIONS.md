@@ -17,7 +17,7 @@ working assumption until then.
 | C. Always full decode | Demosaic every RAW | "True" RAW view everywhere | 20–100× slower than A; breaks the review-speed priority; preload would read whole files (breaks "minimize disk reads") |
 
 **Recommendation: B.** It keeps priorities 1–3 intact and only pays the full-decode cost when the user zooms
-past the preview. **Decided:** _pending_
+past the preview. **Decided (2026-09-28, user):** B.
 
 ## Q-RAW-02 — Which full decoder (only if Q-RAW-01 = B or C)? *(after RAW-01)*
 
@@ -30,7 +30,7 @@ past the preview. **Decided:** _pending_
 
 **Recommendation: A (LibRaw)**, behind `RawFullDecode = OnZoom`, with RAW-30 still probing WIC so the survey
 can show whether B is good enough on the user's own machine (if WIC decodes every format of the user's cameras
-fast enough, switching to B removes the native dependency). **Decided:** _pending_
+fast enough, switching to B removes the native dependency). **Decided (2026-09-28, user):** A (LibRaw), RAW-30 still probes WIC; revisit only if the survey shows WIC covers every format fast enough.
 
 ## Q-RAW-03 — What is "100 %" zoom for a RAW? (ADR 0008 says 100 % = 1 source pixel)
 
@@ -40,7 +40,7 @@ fast enough, switching to B removes the native dependency). **Decided:** _pendin
 | B. Embedded preview size | 100 % is always sharp from the preview | Zoom % changes meaning when the full decode arrives; dimensions shown in the info overlay would not match the camera's specs |
 
 **Recommendation: A.** `OriginalWidth/Height` = sensor visible size (DNG `DefaultCropSize`, CR3/CR2/NEF
-visible area); the info overlay shows the preview size separately ("RAW · preview 1620×1080"). **Decided:** _pending_
+visible area); the info overlay shows the preview size separately ("RAW · preview 1620×1080"). **Decided (2026-09-28, user):** A.
 
 ## Q-RAW-04 — JPG+RAW pairs shot together (`IMG_0001.JPG` + `IMG_0001.CR3`)
 
@@ -54,8 +54,9 @@ visible area); the info overlay shows the preview size separately ("RAW · previ
 its crash/undo tests and the real-machine check, then default `PreferJpeg` in RAW-70. A key toggles which
 member of the pair is shown. **Decided (2026-09-28, user):** pair handling is a user-facing option in the
 Settings window (`RawPairMode`: Separate / Group–show JPG / Group–show RAW), not a fixed behaviour; default
-per the recommendation above. Still open: pairing rule details (same folder + same base name), whether `.xmp`
-follows the pair.
+per the recommendation above. Pairing rule (as proposed, accepted): same folder + same base name
+(case-insensitive), exactly one JPEG + one RAW; a same-name `.xmp` follows the pair in every file action;
+a RAW without a JPEG is shown on its own.
 
 ## Q-RAW-05 — Which formats in the first release?
 
@@ -66,7 +67,7 @@ follows the pair.
 | C. Only the user's own cameras | Smallest | Fastest to ship | Needs the list of the user's camera bodies; others unsupported |
 
 **Recommendation: A**, with `RawFormat.Pef`/`Nrw` reserved in the enum so B is additive later.
-**Decided:** _pending_ (please also list your own camera bodies — RAW-01 adds them to the corpus first).
+**Decided (2026-09-28, user):** A (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2). No camera list given yet: RAW-01 picks old + new bodies per format and adds the user's bodies whenever they are named.
 
 ## Q-RAW-06 — Adobe RGB embedded previews
 
@@ -75,7 +76,7 @@ follows the pair.
 | **A. Detect (EXIF ColorSpace/Interop "R03") and convert with a bundled CC0 Adobe-RGB-compatible ICC through the existing WIC colour transform** | Correct colours; reuses the ICC path from ADR 0001 addendum 2026-09-24 | One more fixture/profile file; small per-decode cost (only for Adobe RGB files) |
 | B. Ignore (treat as sRGB) | Zero work | Adobe RGB shots look desaturated — misleading when culling |
 
-**Recommendation: A.** **Decided:** _pending_
+**Recommendation: A.** **Decided (2026-09-28, user):** A.
 
 ## Q-RAW-07 — Test corpus of real RAW files
 
@@ -87,4 +88,4 @@ follows the pair.
 
 **Recommendation: A for real files + C for unit tests** (synthetic TIFF/BMFF/RAF containers wrapping a
 FixtureGenerator JPEG, built in memory — these run in CI). The fetch script must verify the CC0 statement on
-the source page for each file and record it next to its hash. **Decided:** _pending_
+the source page for each file and record it next to its hash. **Decided (2026-09-28, user):** A + C.
