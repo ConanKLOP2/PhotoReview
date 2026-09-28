@@ -321,6 +321,12 @@ Invoke-Gate 'Check documentation links' {
     & (Join-Path $PSScriptRoot 'check-doc-links.ps1')
 }
 
+# Fails if docs/refactoring/OPEN-DECISIONS.md's generated Decided table doesn't match what
+# tools/generate-open-decisions.ps1 produces right now (same gate as CI's own step).
+Invoke-Gate 'Check OPEN-DECISIONS generated table' {
+    & (Join-Path $PSScriptRoot 'check-open-decisions.ps1')
+}
+
 # L10: the strict JSON validator (comments/trailing commas/duplicate keys) behaves as intended, proven
 # in-memory before it is trusted against real files (same gate as CI's "Check translation catalogs" step).
 Invoke-Gate 'Check translation catalogs (self-test)' {
@@ -330,6 +336,13 @@ Invoke-Gate 'Check translation catalogs (self-test)' {
 # L10: translation catalogs are valid (same gate as CI's "Check translation catalogs" step)
 Invoke-Gate 'Check translation catalogs' {
     & (Join-Path $PSScriptRoot 'i18n-check.ps1')
+}
+
+# SEC-03: the ownership guard in front of the destructive wipe below behaves as intended, proven
+# in-memory (adversarial fixtures under a scratch temp dir; never touches the real release output),
+# same pattern as the i18n strict-JSON-validator self-test above.
+Invoke-Gate 'Check publish-guard ownership check (self-test)' {
+    & (Join-Path $PSScriptRoot 'Publish-Guard.ps1') -SelfTest
 }
 
 # R2-F-15: the former smoke-test.ps1 / fault-injection-test.ps1 gates only exercised .NET file primitives (no

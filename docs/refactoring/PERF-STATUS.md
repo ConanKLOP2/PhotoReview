@@ -26,3 +26,7 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-09-27 -- R01/R02/R03/R13 metadata I/O](perf/2026-09-27-r01-r02-r03-r13-metadata-io.md)
 - [2026-09-27 -- R04 preload contention / R14 startup sweep](perf/2026-09-27-r04-preload-contention-r14-startup-sweep.md)
 - [2026-09-27 -- R06/R07/R11 benchmark/cache misc](perf/2026-09-27-r06-r07-r11-benchmark-cache-misc.md)
+- [2026-09-27 -- Q-R29 slow-link simulation (option B)](perf/2026-09-27-qr29-slow-link-sim.md)
+- [2026-09-27 -- R15/R16/R17/R18 hash/catalog/drag-drop/diagnostics costs](perf/2026-09-27-r15-r18.md)
+- [2026-09-27 -- Q-R29 option C: navigation stat off the UI thread](perf/2026-09-27-qr29-option-c.md)
+- [2026-09-28 -- Q-R29 option C-2: ISourceReader seam, preload/viewer bandwidth contention](perf/2026-09-28-qr29-c2-preload-throttle.md)

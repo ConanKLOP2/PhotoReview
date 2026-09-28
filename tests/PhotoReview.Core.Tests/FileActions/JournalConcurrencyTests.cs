@@ -64,7 +64,7 @@ public sealed class JournalConcurrencyTests : IDisposable
             }
         }))).ToList();
         threads.ForEach(t => t.Start());
-        threads.ForEach(t => t.Join());
+        foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(30)), "writer thread hung");
         RethrowThreadFailures();
 
         var lines = File.ReadAllLines(paths.JournalFile).Where(l => l.Length > 0).ToList();
@@ -136,8 +136,8 @@ public sealed class JournalConcurrencyTests : IDisposable
         }));
         commit.Start();
         reconcile.Start();
-        commit.Join();
-        reconcile.Join();
+        Assert.True(commit.Join(TimeSpan.FromSeconds(30)), "commit thread hung");
+        Assert.True(reconcile.Join(TimeSpan.FromSeconds(30)), "reconcile thread hung");
         RethrowThreadFailures();
 
         // Reconcile may have judged an operation Failed just before its destination appeared; whoever won each race, the

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
 using PhotoReview.Core.Localization;
 
@@ -8,6 +9,7 @@ namespace PhotoReview.Imaging.Caching;
 /// <summary>Optional byte cache keyed by normalized path and source identity.</summary>
 public sealed class SourceBytesCache
 {
+    private readonly ISourceReader _sourceReader;
     private readonly BoundedLruCache<Key, byte[]> _cache;
     private readonly ConcurrentDictionary<Key, Lazy<byte[]>> _inFlight = new();
     private int _generation;
@@ -22,8 +24,13 @@ public sealed class SourceBytesCache
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
     private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
 
-    public SourceBytesCache(long capacityBytes)
+    /// <param name="sourceReader">
+    /// Q-R29 option C-2 seam: null (every existing caller) uses <see cref="PhysicalSourceReader"/>,
+    /// byte-for-byte the direct <see cref="FileStream"/> this cache opened before the seam existed.
+    /// </param>
+    public SourceBytesCache(long capacityBytes, ISourceReader? sourceReader = null)
     {
+        _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
         // IMG-11/R2-A-06: never claim more than 20% of physical RAM (so it cannot starve the preview cache).
         CapacityBytes = PhotoReview.Imaging.Preload.RamBudgetPolicy.ClampSourceBytesToPhysicalMemory(
             capacityBytes, PhotoReview.Imaging.Preload.RamBudgetPolicy.GetPhysicalMemoryBytes());
@@ -50,7 +57,30 @@ public sealed class SourceBytesCache
     /// <c>SynchronizationContext</c>-bound thread (IMG-09): a UI-thread call would block the message
     /// pump for the duration of the disk read.
     /// </summary>
-    public byte[] GetOrRead(string path) => GetOrRead(CreateKey(path));
+    public byte[] GetOrRead(string path) => GetOrRead(path, SourceReadPriority.Viewer);
+
+    /// <summary>
+    /// Q-R29 option C-2 overload: as <see cref="GetOrRead(string)"/>, but the cache key is built from
+    /// pre-computed <paramref name="length"/> and <paramref name="lastWriteUtcTicks"/> instead of a fresh <see cref="FileInfo"/>.
+    /// Avoids redundant stat allocation when the caller already has file metadata available.
+    /// </summary>
+    public byte[] GetOrRead(string path, long length, long lastWriteUtcTicks) =>
+        GetOrRead(path, length, lastWriteUtcTicks, SourceReadPriority.Viewer);
+
+    /// <summary>
+    /// Q-R29 option C-2: <paramref name="priority"/> is metadata only (see <see cref="SourceReadPriority"/>)
+    /// for a perf-harness throttling decorator; it never changes which bytes are cached or returned, and
+    /// the default (<see cref="PhysicalSourceReader"/>) ignores it -- pure refactor, no behavior change.
+    /// </summary>
+    public byte[] GetOrRead(string path, SourceReadPriority priority) => GetOrRead(CreateKey(path), priority);
+
+    /// <summary>
+    /// Q-R29 option C-2 overload: as <see cref="GetOrRead(string, SourceReadPriority)"/>, but the cache key is built from
+    /// pre-computed <paramref name="length"/> and <paramref name="lastWriteUtcTicks"/> instead of a fresh <see cref="FileInfo"/>.
+    /// Avoids redundant stat allocation when the caller already has file metadata available.
+    /// </summary>
+    public byte[] GetOrRead(string path, long length, long lastWriteUtcTicks, SourceReadPriority priority) =>
+        GetOrRead(CreateKey(path, length, lastWriteUtcTicks), priority);
 
     /// <summary>
     /// Read-ahead entry point: caches the file's bytes unless this cache could never keep them (see <see cref="CanCache"/>),
@@ -60,11 +90,24 @@ public sealed class SourceBytesCache
     {
         var key = CreateKey(path);
         if (!CanCache(key.Length)) return false;
-        GetOrRead(key);
+        GetOrRead(key, SourceReadPriority.Preload);
         return true;
     }
 
-    private byte[] GetOrRead(Key key)
+    /// <summary>
+    /// Q-R29 option C-2 overload: as <see cref="TryPrefetch(string)"/>, but the cache key is built from
+    /// pre-computed <paramref name="length"/> and <paramref name="lastWriteUtcTicks"/> instead of a fresh <see cref="FileInfo"/>.
+    /// Avoids redundant stat allocation when the caller already has file metadata available.
+    /// </summary>
+    public bool TryPrefetch(string path, long length, long lastWriteUtcTicks)
+    {
+        if (!CanCache(length)) return false;
+        var key = CreateKey(path, length, lastWriteUtcTicks);
+        GetOrRead(key, SourceReadPriority.Preload);
+        return true;
+    }
+
+    private byte[] GetOrRead(Key key, SourceReadPriority priority)
     {
         if (_cache.TryGet(key, out var cached)) return cached;
         System.Diagnostics.Debug.Assert(SynchronizationContext.Current is null,
@@ -79,8 +122,11 @@ public sealed class SourceBytesCache
         // Lazy<T> also caches a thrown exception and replays it to every waiter of this lazy (matching the
         // old Task-based behavior); the finally below removes the entry either way, so the next GetOrRead
         // for this key (e.g. after the file reappears) starts a fresh attempt rather than replaying a stale one.
+        // Priority is captured from whichever caller wins the race to create this Lazy -- same "first caller
+        // decides" semantics the dedup itself already has; a joiner's own priority is not consulted (it is
+        // waiting for the same bytes either way, not starting its own read).
         var lazy = _inFlight.GetOrAdd(key, _ => new Lazy<byte[]>(
-            () => ReadAndCache(key, generation, pathVersion), LazyThreadSafetyMode.ExecutionAndPublication));
+            () => ReadAndCache(key, generation, pathVersion, priority), LazyThreadSafetyMode.ExecutionAndPublication));
         try { return lazy.Value; }
         finally { _inFlight.TryRemove(new KeyValuePair<Key, Lazy<byte[]>>(key, lazy)); }
     }
@@ -113,11 +159,10 @@ public sealed class SourceBytesCache
         }
     }
 
-    private byte[] ReadAndCache(Key key, int generation, int pathVersion)
+    private byte[] ReadAndCache(Key key, int generation, int pathVersion, SourceReadPriority priority)
     {
         LastReadManagedThreadId = Environment.CurrentManagedThreadId;
-        using var stream = new FileStream(key.Path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+        using var stream = _sourceReader.OpenSource(key.Path, priority);
         var bytes = GC.AllocateUninitializedArray<byte>(checked((int)stream.Length));
         var offset = 0;
         while (offset < bytes.Length)
@@ -146,6 +191,16 @@ public sealed class SourceBytesCache
         var full = Path.GetFullPath(path);
         var info = new FileInfo(full);
         return new Key(full, info.Length, info.LastWriteTimeUtc.Ticks);
+    }
+
+    /// <summary>
+    /// Q-R29 option C-2 overload: builds a cache key from pre-computed file stats.
+    /// Avoids allocating a new <see cref="FileInfo"/> when the caller already has Length and LastWriteUtcTicks.
+    /// </summary>
+    private static Key CreateKey(string path, long length, long lastWriteUtcTicks)
+    {
+        var full = Path.GetFullPath(path);
+        return new Key(full, length, lastWriteUtcTicks);
     }
 
     private readonly record struct Key(string Path, long Length, long LastWriteUtcTicks);

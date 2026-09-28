@@ -113,7 +113,9 @@ public sealed class SessionWritePolicyTests(ITestOutputHelper output) : IDisposa
         var target = Path.Combine(dir, "target");
         Directory.CreateDirectory(target); // a directory in the way: File.Move(overwrite) must fail
 
-        Assert.ThrowsAny<Exception>(() => fs.WriteAllTextAtomic(target, "x", durable: false));
+        // Windows throws UnauthorizedAccessException (access denied) when trying to move a file onto a directory
+        var ex = Assert.Throws<UnauthorizedAccessException>(() => fs.WriteAllTextAtomic(target, "x", durable: false));
+        Assert.Contains("path", ex.Message, StringComparison.OrdinalIgnoreCase);
 
         Assert.Empty(Directory.GetFiles(dir));
     }

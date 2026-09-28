@@ -243,7 +243,7 @@ public sealed class FolderLoadCoordinator : IDisposable
             else
             {
                 _clock.NextNavigation();
-                // Q-R46: 0 supported images directly in the folder -- worth telling the user apart from "no images
+                // Q-R47: 0 supported images directly in the folder -- worth telling the user apart from "no images
                 // at all" when the folder actually holds subfolders (they may have opened the parent by mistake).
                 // Non-recursive on purpose: only this one folder's immediate subfolders are counted.
                 var subfolderCount = 0;

@@ -157,7 +157,7 @@ public sealed class ShortcutRouter
             return ReviewCommand.ToggleKeepZoom;
         }
 
-        // 5d. Q-R41: Open folder (Ctrl+<key>) -- không cần ảnh, giống Undo yêu cầu giữ Ctrl.
+        // 5d. Q-R42: Open folder (Ctrl+<key>) -- không cần ảnh, giống Undo yêu cầu giữ Ctrl.
         if (_openFolderKey.HasValue && key == _openFolderKey.Value && (modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {
             return ReviewCommand.OpenFolder;
@@ -237,7 +237,7 @@ public sealed class ShortcutRouter
             return ReviewCommand.FitHeight;
         }
 
-        // 12d. Q-R42: Custom zoom dialog, same group as the other zoom keys.
+        // 12d. Q-R43: Custom zoom dialog, same group as the other zoom keys.
         if (_customZoomKey.HasValue && key == _customZoomKey.Value)
         {
             return ReviewCommand.CustomZoom;

@@ -111,7 +111,7 @@ public sealed class FileActionController
 
     public async Task RecycleAsync(string? compareSelectedPath, string? currentPath)
     {
-        // Q-R43: general "confirm before delete", off by default. Skipped when the permanent-delete prompt
+        // Q-R44: general "confirm before delete", off by default. Skipped when the permanent-delete prompt
         // (Q-R8, WillAskPermanentDelete) will already ask -- same "one prompt, not two" rule as RunActionAsync.
         var source = compareSelectedPath ?? currentPath;
         var permanentPrompt = WillAskPermanentDelete(source);

@@ -115,4 +115,17 @@ public interface IFileSystem
 
     /// <summary>Tạo thư mục (kể cả các thư mục cha nếu chưa có).</summary>
     void CreateDirectory(string path);
+
+    /// <summary>
+    /// SEC-01: trả về đường dẫn tuyệt đối của <paramref name="path"/> SAU KHI phân giải mọi reparse point
+    /// (symlink/junction) đã tồn tại trong các đoạn của đường dẫn — kể cả đoạn cuối cùng (file/thư mục đích).
+    /// <see cref="PhotoReview.Core.FileActions.ActionDestinationPolicy.Validate(string?)"/> chỉ kiểm tra dạng chuỗi (không có "..", không rooted) và
+    /// KHÔNG đủ để đảm bảo containment: một thư mục con là junction trỏ ra ngoài thư mục ảnh khiến Move/Copy
+    /// thật sự ghi ra ngoài dù chuỗi đích trông như nằm trong. Đoạn đường dẫn chưa tồn tại trên đĩa được giữ
+    /// nguyên (không có gì để phân giải — một junction "chưa có" không thể đưa đường dẫn ra ngoài). Mặc định
+    /// (fake trong bộ nhớ, không có reparse point thật) trả về <see cref="Path.GetFullPath(string)"/> không đổi;
+    /// <see cref="PhotoReview.Core.IO.PhysicalFileSystem"/> ghi đè bằng cách đi qua từng đoạn thư mục đã tồn tại
+    /// và theo <see cref="FileSystemInfo.ResolveLinkTarget"/> khi đoạn đó là reparse point.
+    /// </summary>
+    string ResolveRealPath(string path) => Path.GetFullPath(path);
 }

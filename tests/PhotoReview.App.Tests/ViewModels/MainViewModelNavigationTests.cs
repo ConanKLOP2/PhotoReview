@@ -176,6 +176,13 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
             sessionWriter,
             preloadController: _preloadController);
 
+        // Match production's WpfPresentationSink wiring (MainViewModelCompositionRoot.cs:71-73): image/status
+        // assignment feeds back into the view model exactly as it does in the real app. Without this, FolderTitle
+        // (and any other state that only NotifyNavigationStateChanged refreshes) never updates in these tests,
+        // because it is a stored field written by UpdateFolderTitle(), not something computed live off the catalog.
+        _sink.OnSetCurrentImage = (_, isFileChange) => vm!.NotifyCurrentImageChanged(isFileChange);
+        _sink.OnSetStatusText = _ => vm!.NotifyPresentationChanged();
+
         return (vm, presenter, coordinator);
     }
 
@@ -280,6 +287,36 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         Assert.Contains(Path.GetFileName(folder), vm.FolderTitle, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "InstanceLabel prefixes both the empty-folder and folder-loaded title; unset leaves today's title byte-for-byte unchanged")]
+    public async Task InstanceLabel_PrefixesTitle_UnsetLeavesTitleUnchanged()
+    {
+        var folder = Path.Combine(_tempDir, "instance_label");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        var (vm, _, _) = CreateViewModel();
+
+        // Unset (default, the normal user launch): today's exact title, before and after a folder loads.
+        var emptyTitleBefore = vm.FolderTitle;
+        Assert.Equal(Tr.AppTitle, emptyTitleBefore);
+        await vm.OpenFolderAsync(folder);
+        var loadedTitleUnset = vm.FolderTitle;
+        Assert.DoesNotContain("[", loadedTitleUnset, StringComparison.Ordinal);
+
+        // No folder open: the label still applies to the plain Tr.AppTitle text.
+        var (vmEmpty, _, _) = CreateViewModel();
+        vmEmpty.InstanceLabel = "LABEL";
+        Assert.Equal($"[LABEL] {Tr.AppTitle}", vmEmpty.FolderTitle);
+
+        // Folder loaded: same prefix, same folder content as the unset case.
+        vm.InstanceLabel = "LABEL";
+        Assert.StartsWith("[LABEL] ", vm.FolderTitle, StringComparison.Ordinal);
+        Assert.Equal($"[LABEL] {loadedTitleUnset}", vm.FolderTitle);
+
+        // Clearing it restores exactly today's behaviour again.
+        vm.InstanceLabel = null;
+        Assert.Equal(loadedTitleUnset, vm.FolderTitle);
+    }
+
     [Fact]
     public async Task OpenPathAsync_InvalidInput_SetsWarningStatus()
     {
@@ -288,6 +325,45 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
         await vm.OpenPathAsync(Path.Combine(_tempDir, "non_existent_file.xyz"));
 
         Assert.Equal("Không tìm thấy ảnh được hỗ trợ.", vm.StatusText);
+    }
+
+    /// <summary>
+    /// R05 (full code review 2026-09-27): <c>NotifyCurrentImageChanged</c> calls <c>NotifyNavigationStateChanged</c>
+    /// (MainViewModel.cs ~144-148), and each navigation method (Next/Previous/First/Last/Skip) used to call it
+    /// AGAIN once <c>PresentAsync</c> returned. Measured with production's real feedback wiring
+    /// (<see cref="TestPresentationSink.OnSetCurrentImage"/>/<see cref="TestPresentationSink.OnSetStatusText"/>,
+    /// wired by <see cref="CreateViewModel"/> to match <c>WpfPresentationSink</c> in
+    /// <c>MainViewModelCompositionRoot.cs:71-73</c>) and <see cref="LoadingMode.Original"/> to avoid the
+    /// thumbnail/preview decode race being nondeterministic in a unit test: one completed <c>NextAsync</c> drove
+    /// <c>NotifyNavigationStateChanged</c> 4 times before the fix (the initial "Loading" status, the image
+    /// assignment, the final "with dimensions" status, and the redundant explicit call) and 3 after (the explicit
+    /// call removed) -- every one of the 3 remaining calls carries state that did not exist yet at the previous
+    /// call, so none of them can be merged away without losing a distinct legitimate update. This also protects
+    /// PR-D's crossfade signal (<see cref="MainViewModel.ImageChanging"/>, <c>ImageTransitionDecision</c>), which
+    /// must keep firing before <c>CurrentImage</c>'s own PropertyChanged -- removing the redundant call does not
+    /// touch that path at all.
+    /// </summary>
+    [Fact(DisplayName = "NextAsync raises the navigation-state notification exactly 3 times per completed navigation (R05: no redundant extra call)")]
+    public async Task NextAsync_RaisesNavigationStateChanged_ExactlyThreeTimes()
+    {
+        var folder = Path.Combine(_tempDir, "album_notify_count");
+        Directory.CreateDirectory(folder);
+        CreateImageFile(folder, "a.jpg");
+        CreateImageFile(folder, "b.jpg");
+        var (vm, _, _) = CreateViewModel();
+        // Original mode: no thumbnail-vs-preview decode race, so the internal notification count is
+        // deterministic (a Preview-mode race can non-deterministically add one more "thumbnail presented" call).
+        _settings.LoadingMode = LoadingMode.Original;
+        await vm.OpenFolderAsync(folder);
+
+        var notificationCount = 0;
+        // CurrentIndex is one of the properties NotifyNavigationStateChanged always raises, so counting its
+        // PropertyChanged firings counts NotifyNavigationStateChanged invocations one-for-one.
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.CurrentIndex)) notificationCount++; };
+
+        await vm.NextAsync();
+
+        Assert.Equal(3, notificationCount);
     }
 
     [Fact]
@@ -392,7 +468,7 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
     {
         var (vm, _, _) = CreateViewModel();
 
-        // Q-R40: the keyboard zoom step is now AppSettings.KeyboardZoomStepPercent (default 10 %), applied to
+        // Q-R41: the keyboard zoom step is now AppSettings.KeyboardZoomStepPercent (default 10 %), applied to
         // ViewerState.ZoomStep by the MainViewModel constructor -- no longer the old hardcoded 0.25 (25 %).
         vm.ZoomIn();
         Assert.Equal(1.0 + AppSettings.DefaultKeyboardZoomStepPercent / 100.0, vm.Viewer.Zoom);
@@ -557,8 +633,24 @@ public sealed partial class MainViewModelNavigationTests : IDisposable
     {
         public List<object?> Images { get; } = [];
         public List<string> Statuses { get; } = [];
-        public void SetCurrentImage(object? image, bool isFileChange = false) => Images.Add(image);
-        public void SetStatusText(string status) => Statuses.Add(status);
+
+        /// <summary>Wired by tests that need the same feedback loop as production's <c>WpfPresentationSink</c>
+        /// (image/status assignment calling back into the view model), e.g. the R05 notification-count test.
+        /// Left null (no-op) everywhere else so existing tests are unaffected.</summary>
+        public Action<object?, bool>? OnSetCurrentImage { get; set; }
+        public Action<string>? OnSetStatusText { get; set; }
+
+        public void SetCurrentImage(object? image, bool isFileChange = false)
+        {
+            Images.Add(image);
+            OnSetCurrentImage?.Invoke(image, isFileChange);
+        }
+
+        public void SetStatusText(string status)
+        {
+            Statuses.Add(status);
+            OnSetStatusText?.Invoke(status);
+        }
         public void ApplyInitialViewMode() { }
         public void OnPresented(string path) { }
         public void TracePresented(long token, string kind, long assignedTimestamp) { }

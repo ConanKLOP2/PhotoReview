@@ -18,6 +18,7 @@ using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Model;
 
 /// <summary>
@@ -137,6 +138,21 @@ internal static class PerfSession
         /// original behavior (shared with the real app) for a caller that doesn't pass it.
         /// </summary>
         public string? CacheDir { get; set; }
+        /// <summary>
+        /// Q-R29 slow-link measurement (perf(harness) only -- never a production default): extra latency,
+        /// in whole milliseconds, added before every metadata-only <see cref="IFileSystem"/> call
+        /// (<c>FileExists</c>/<c>DirectoryExists</c>/<c>GetFileStat</c>/enumerate-with-stat). Null/0 = disabled
+        /// (the plain <c>PhysicalFileSystem</c> is used, byte-for-byte the production graph). See
+        /// <see cref="PhotoReview.Benchmarking.SlowLinkFileSystem"/>.
+        /// </summary>
+        public int? SlowLinkLatencyMs { get; set; }
+        /// <summary>
+        /// Q-R29 slow-link measurement: total bandwidth cap, in MB/s (1,000,000 bytes/s), shared by every
+        /// reader in this process (foreground decode + preload workers) -- models one wifi link. Null =
+        /// no cap. Only meaningful together with <see cref="SlowLinkLatencyMs"/> being non-null (both flags
+        /// are independent, but a bandwidth cap with zero added stat latency does not model Q-R29's NAS case).
+        /// </summary>
+        public double? SlowLinkBandwidthMbps { get; set; }
     }
 
     // ---- Entry point -----------------------------------------------------------------------------
@@ -159,7 +175,7 @@ internal static class PerfSession
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or IOException or InvalidOperationException)
         {
             Console.Error.WriteLine($"perf-session: {ex.Message}");
-            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--source-bytes-cache on|off]");
+            Console.Error.WriteLine("usage: --perf-session <scenario.json> <folder> <outDir> [--mode Fast|Preview|Original] [--repeat N] [--alias NAME] [--commit SHA] [--cache-dir DIR] [--source-bytes-cache on|off] [--slow-link-latency-ms N] [--slow-link-bandwidth-mbps N]");
             return 2;
         }
 
@@ -242,6 +258,12 @@ internal static class PerfSession
         var idleTimeouts = 0;
         var keySettleMs = new List<double>();
         var keySettleTimeouts = 0;
+        // perf(harness, Q-R29 option C): UI-thread cost of each key. keyDispatchMs = the synchronous part of the
+        // key handler (everything a navigation runs before its first await, e.g. a UI-thread stat); keyUiBusyMs =
+        // total dispatcher-operation time from a settle key until it settled (continuations and rendering included).
+        var keyDispatchMs = new List<double>();
+        var keyUiBusyMs = new List<double>();
+        using var uiBusy = UiBusyMeter.Attach(dispatcher);
 
         // AR02c: build the production DI graph (AppHost.BuildServices == App.ConfigureServices, no
         // test-root overrides) so --perf-session measures the shipped configuration (F2). SettingsStore
@@ -257,8 +279,38 @@ internal static class PerfSession
         // cache the real app on this machine uses -- and one run's warm cache silently changes
         // another's numbers. --cache-dir points both caches at a directory this driver owns
         // instead; a later AddSingleton<IAppPaths> registration wins over ConfigureServices' own.
-        using var services = AppHost.BuildServices(options.CacheDir is null ? null : overrides =>
-            overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(AppPaths.FromEnvironment(), options.CacheDir)));
+        // perf(harness, Q-R29): a second, independent override -- when --slow-link-* is passed, IFileSystem
+        // is replaced by SlowLinkFileSystem wrapping the same PhysicalFileSystem the production graph uses
+        // (App.ConfigureServices' own registration is a singleton too; the later AddSingleton here wins the
+        // same way the IAppPaths override above does). Every consumer of IFileSystem in this process --
+        // ImagePresenter's TryGetFileStat, folder enumeration, preload's OpenReadShared reads -- resolves the
+        // SAME instance, so the bandwidth cap is genuinely shared across the foreground read and preload
+        // workers, modelling one wifi link. Never touches config.json or any other machine's state.
+        var slowLinkEnabled = options.SlowLinkLatencyMs is not null;
+        var slowLinkBandwidth = options.SlowLinkBandwidthMbps is { } mbps
+            ? new PhotoReview.Benchmarking.SharedBandwidthLimiter((long)(mbps * 1_000_000))
+            : null;
+        using var services = AppHost.BuildServices(options.CacheDir is null && !slowLinkEnabled ? null : overrides =>
+        {
+            if (options.CacheDir is not null)
+                overrides.AddSingleton<IAppPaths>(_ => new CacheDirOverrideAppPaths(AppPaths.FromEnvironment(), options.CacheDir));
+            if (slowLinkEnabled)
+                // Wraps the same CountingFileSystem(PhysicalFileSystem) App.ConfigureServices builds (so
+                // ReviewMetrics.StatCount still counts real metadata calls) with the extra latency/bandwidth cap.
+                overrides.AddSingleton<IFileSystem>(sp => new PhotoReview.Benchmarking.SlowLinkFileSystem(
+                    new CountingFileSystem(new PhysicalFileSystem(), sp.GetRequiredService<ReviewMetrics>()),
+                    TimeSpan.FromMilliseconds(options.SlowLinkLatencyMs!.Value),
+                    slowLinkBandwidth));
+            if (slowLinkEnabled)
+                // Q-R29 option C-2: the SAME SharedBandwidthLimiter instance as above, but wired onto the
+                // ISourceReader seam SourceBytesCache/the decoders/PreviewImageService's diag pre-read
+                // actually open source bytes through (see SlowLinkSourceReader's own doc comment) --
+                // unlike IFileSystem.OpenReadShared, this one genuinely reaches the image-byte read path,
+                // so the foreground viewer decode and every preload worker really do share one capped
+                // link's bandwidth budget in this measurement. Perf-harness only; never a production default.
+                overrides.AddSingleton<ISourceReader>(_ => new PhotoReview.Benchmarking.SlowLinkSourceReader(
+                    PhysicalSourceReader.Instance, slowLinkBandwidth));
+        });
         var settingsStore = services.GetRequiredService<SettingsStore>();
         settingsStore.Load();
         // perf(harness): unlike Mode/Decoder (read live on every access below), SourceBytesCachePolicy
@@ -346,9 +398,13 @@ internal static class PerfSession
                                 {
                                     var presentedBefore = window.Metrics.Snapshot().PresentedImages;
                                     keysSent++;
+                                    var busyBefore = uiBusy?.BusyTicks ?? 0;
+                                    var dispatchStart = Stopwatch.GetTimestamp();
                                     if (SendKey(window, key)) keysHandled++;
+                                    keyDispatchMs.Add(PhotoReviewPerf.Ms(dispatchStart));
                                     var (settled, settleElapsedMs) = await WaitKeySettleAsync(
                                         dispatcher, window, presentedBefore, TimeSpan.FromMilliseconds(settleMaxMs));
+                                    if (uiBusy is not null) keyUiBusyMs.Add((uiBusy.BusyTicks - busyBefore) * 1000.0 / Stopwatch.Frequency);
                                     keySettleMs.Add(settleElapsedMs);
                                     if (!settled) { timeouts++; keySettleTimeouts++; }
                                     var remainingMs = settleMinMs - settleElapsedMs;
@@ -361,7 +417,9 @@ internal static class PerfSession
                                 for (var i = 0; i < repeat; i++)
                                 {
                                     keysSent++;
+                                    var dispatchStart = Stopwatch.GetTimestamp();
                                     if (SendKey(window, key)) keysHandled++;
+                                    keyDispatchMs.Add(PhotoReviewPerf.Ms(dispatchStart));
                                     if (step.IntervalMs is > 0) await Task.Delay(step.IntervalMs.Value);
                                     else await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
                                 }
@@ -474,11 +532,17 @@ internal static class PerfSession
             // one is comparing different starting cache states, not just different code.
             cacheIsolation = options.CacheDir is null ? "shared" : "isolated",
             cacheDir = options.CacheDir is null ? null : "<cache-dir>",
+            // Q-R29 slow-link measurement harness (perf(harness) only): null/null means the plain
+            // production PhysicalFileSystem was used unmodified.
+            slowLinkLatencyMs = options.SlowLinkLatencyMs,
+            slowLinkBandwidthMbps = options.SlowLinkBandwidthMbps,
         };
         window.Close();
         var endQpc = Stopwatch.GetTimestamp();
         var endUtc = DateTime.UtcNow;
         var sortedKeySettleMs = keySettleMs.OrderBy(v => v).ToArray();
+        var sortedKeyDispatchMs = keyDispatchMs.OrderBy(v => v).ToArray();
+        var sortedKeyUiBusyMs = keyUiBusyMs.OrderBy(v => v).ToArray();
 
         process.Refresh();
         var processInfo = new
@@ -526,6 +590,21 @@ internal static class PerfSession
                 p50Ms = Math.Round(Percentile(sortedKeySettleMs, 50), 1),
                 p95Ms = Math.Round(Percentile(sortedKeySettleMs, 95), 1),
                 timeouts = keySettleTimeouts,
+            },
+            // perf(harness, Q-R29 option C): see keyDispatchMs/keyUiBusyMs above.
+            keyDispatch = keyDispatchMs.Count == 0 ? null : new
+            {
+                count = keyDispatchMs.Count,
+                p50Ms = Math.Round(Percentile(sortedKeyDispatchMs, 50), 3),
+                p95Ms = Math.Round(Percentile(sortedKeyDispatchMs, 95), 3),
+                maxMs = Math.Round(sortedKeyDispatchMs[^1], 3),
+            },
+            keyUiBusy = keyUiBusyMs.Count == 0 ? null : new
+            {
+                count = keyUiBusyMs.Count,
+                p50Ms = Math.Round(Percentile(sortedKeyUiBusyMs, 50), 3),
+                p95Ms = Math.Round(Percentile(sortedKeyUiBusyMs, 95), 3),
+                maxMs = Math.Round(sortedKeyUiBusyMs[^1], 3),
             },
             startUtc,
             endUtc,
@@ -856,6 +935,12 @@ internal static class PerfSession
                 case "--alias": options.Alias = Next(); break;
                 case "--commit": options.Commit = Next(); break;
                 case "--cache-dir": options.CacheDir = Path.GetFullPath(Next()); break;
+                case "--slow-link-latency-ms":
+                    options.SlowLinkLatencyMs = int.TryParse(Next(), out var slm) && slm >= 0 ? slm : throw new ArgumentException("--slow-link-latency-ms must be >= 0");
+                    break;
+                case "--slow-link-bandwidth-mbps":
+                    options.SlowLinkBandwidthMbps = double.TryParse(Next(), System.Globalization.CultureInfo.InvariantCulture, out var sbw) && sbw > 0 ? sbw : throw new ArgumentException("--slow-link-bandwidth-mbps must be > 0");
+                    break;
                 case "--source-bytes-cache":
                     var sbc = Next();
                     options.SourceBytesCache = sbc.ToLowerInvariant() switch

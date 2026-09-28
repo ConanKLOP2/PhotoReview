@@ -37,4 +37,5 @@ public sealed class CountingFileSystem(IFileSystem inner, ReviewMetrics metrics)
         _inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
     public IEnumerable<string> EnumerateDirectories(string directory) => _inner.EnumerateDirectories(directory);
     public void CreateDirectory(string path) => _inner.CreateDirectory(path);
+    public string ResolveRealPath(string path) => _inner.ResolveRealPath(path);
 }

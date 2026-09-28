@@ -44,8 +44,8 @@ public sealed partial class ViewerState : ObservableObject
     public const double MaxStepZoom = 4.0;
 
     /// <summary>
-    /// Q-R40: how far a single ZoomIn/ZoomOut/wheel-zoom step moves the zoom level (a fraction of original size,
-    /// e.g. 0.25 = 25 %). Was a hardcoded <c>const</c> before Q-R40; now set from
+    /// Q-R41: how far a single ZoomIn/ZoomOut/wheel-zoom step moves the zoom level (a fraction of original size,
+    /// e.g. 0.25 = 25 %). Was a hardcoded <c>const</c> before Q-R41; now set from
     /// <see cref="AppSettings.KeyboardZoomStepPercent"/> by the composition root / Settings window (same pattern as
     /// <see cref="ScalingQuality"/>). Defaults to the previous hardcoded value so a caller that never sets it keeps
     /// the old behaviour (tests, tools).
@@ -189,7 +189,7 @@ public sealed partial class ViewerState : ObservableObject
     private double StepBase => IsFit && FitZoom > 0 ? FitZoom : Zoom;
 
     /// <summary>
-    /// Q-R44: current zoom, in whole percent, for the on-image zoom HUD (<see cref="AppSettings.ShowZoomIndicator"/>).
+    /// Q-R45: current zoom, in whole percent, for the on-image zoom HUD (<see cref="AppSettings.ShowZoomIndicator"/>).
     /// In Fit this is <see cref="FitZoom"/> (what is actually on screen), falling back to 100 % while the Fit zoom
     /// is not yet known (no image, or the viewport has not been measured). Not marked <see cref="ObservableProperty"/>
     /// itself (it is a computed read of several fields already wired to notify it, see their attributes above).
@@ -253,12 +253,12 @@ public sealed partial class ViewerState : ObservableObject
     }
 
     /// <summary>
-    /// Tăng mức zoom thêm <see cref="ZoomStep"/> (Q-R40: cấu hình được qua <see cref="AppSettings.KeyboardZoomStepPercent"/>).
+    /// Tăng mức zoom thêm <see cref="ZoomStep"/> (Q-R41: cấu hình được qua <see cref="AppSettings.KeyboardZoomStepPercent"/>).
     /// </summary>
     public void ZoomIn() => StepZoom(ZoomStep);
 
     /// <summary>
-    /// Giảm mức zoom bớt <see cref="ZoomStep"/> (Q-R40: cấu hình được qua <see cref="AppSettings.KeyboardZoomStepPercent"/>).
+    /// Giảm mức zoom bớt <see cref="ZoomStep"/> (Q-R41: cấu hình được qua <see cref="AppSettings.KeyboardZoomStepPercent"/>).
     /// </summary>
     public void ZoomOut() => StepZoom(-ZoomStep);
 

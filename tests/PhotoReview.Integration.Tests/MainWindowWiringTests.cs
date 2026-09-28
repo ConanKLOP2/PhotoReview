@@ -47,6 +47,32 @@ public sealed class MainWindowWiringTests
         });
     }
 
+    [Fact(DisplayName = "TestAppHost.CreateMainWindow always tags the title with the fixed test label, for both the empty-folder and folder-loaded cases")]
+    public async Task CreateMainWindow_AlwaysTagsTitleWithTestLabel()
+    {
+        using var dataRoot = new DataRootFixture();
+        using var folder = new TempRoot("instance-label");
+        WriteImage(Path.Combine(folder.Path, "one.png"));
+        var prefix = $"[{TestAppHost.TestInstanceLabel}] ";
+        await StaTestHost.RunAsync(async () =>
+        {
+            var window = TestAppHost.CreateMainWindow(null);
+            try
+            {
+                // Empty-folder case: no folder opened yet, title is the plain app title -- still labelled.
+                Assert.StartsWith(prefix, window.Title, StringComparison.Ordinal);
+                Assert.Equal(window.ViewModel.FolderTitle, window.Title);
+
+                await window.OpenPathAsync(folder.Path);
+
+                // Folder-loaded case: same label, now in front of the folder's own title content.
+                Assert.StartsWith(prefix, window.Title, StringComparison.Ordinal);
+                Assert.Contains(Path.GetFileName(folder.Path), window.Title, StringComparison.Ordinal);
+            }
+            finally { window.Close(); }
+        });
+    }
+
     [Fact(DisplayName = "MainWindow toolbar is an overlay: no root grid rows, the toolbar is on top with the theme's translucent overlay brush")]
     public async Task Toolbar_IsAnOverlayOnTopOfTheImage()
     {

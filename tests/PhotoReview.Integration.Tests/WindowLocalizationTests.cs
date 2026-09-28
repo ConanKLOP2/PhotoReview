@@ -115,7 +115,7 @@ public sealed class WindowLocalizationTests
                 window = TestAppHost.CreateMainWindow(null);
                 var root = (Grid)window.Content;
                 // PR-C feat/context-menu-redesign: Undo, a Separator, Fit, Zoom-to-level (header filled on open), the
-                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Q-R47's
+                // Zoom submenu, a Separator, the folder group (Open/Next/Previous folder), a Separator, Q-R48's
                 // "Open in External Editor" (hidden unless configured, but still present in the item list), a
                 // Separator, Settings.
                 var menuItems = root.ContextMenu.Items.OfType<MenuItem>().ToList();

@@ -7,7 +7,7 @@ using PhotoReview.Integration.Tests.Infrastructure;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>
-/// Q-R40/Q-R41/Q-R42/Q-R43/Q-R44/Q-R47 (docs/refactoring/decisions/Q-R40-Q-R51-user-feedback.md): the Settings
+/// Q-R41/Q-R42/Q-R43/Q-R44/Q-R45/Q-R48 (docs/refactoring/decisions/Q-R41-Q-R52-user-feedback.md): the Settings
 /// window UI for the keyboard zoom step, confirm-before-delete, show-zoom-indicator, the OpenFolder/CustomZoom
 /// shortcuts and the external editor path. <see cref="SettingsWindowRoundTripTests"/> already proves
 /// KeyboardZoomStepPercent, ConfirmBeforeDelete, ShowZoomIndicator and ExternalEditorPath round-trip through
@@ -164,7 +164,7 @@ public sealed class SettingsWindowUserFeedbackBatchTests
         });
     }
 
-    [Fact(DisplayName = "Import replaces the in-memory settings through Clone + Normalize, without touching disk (Q-R49)")]
+    [Fact(DisplayName = "Import replaces the in-memory settings through Clone + Normalize, without touching disk (Q-R50)")]
     public void ImportSettings_JsonRoundTrip_AppliesCloneAndNormalize()
     {
         // Mirrors what ImportSettings_Click does with the file it reads, minus the OpenFileDialog: serialize a

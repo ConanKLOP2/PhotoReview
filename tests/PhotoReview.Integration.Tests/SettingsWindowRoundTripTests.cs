@@ -108,7 +108,7 @@ public sealed class SettingsWindowRoundTripTests
         // PR-D (feat/image-crossfade)
         [nameof(AppSettings.ImageTransition)] = w => w.ImageTransitionCombo.SelectedIndex = 1, // None -> Fade
         [nameof(AppSettings.ImageTransitionMs)] = w => w.ImageTransitionMsBox.Text = "200", // 120 -> 200
-        // Q-R40/Q-R43/Q-R44/Q-R47 user feedback batch
+        // Q-R41/Q-R44/Q-R45/Q-R48 user feedback batch
         [nameof(AppSettings.KeyboardZoomStepPercent)] = w => w.KeyboardZoomStepPercentBox.Text = "25", // 10 -> 25
         [nameof(AppSettings.ConfirmBeforeDelete)] = w => w.ConfirmBeforeDeleteCheck.IsChecked = true, // false -> true
         [nameof(AppSettings.ShowZoomIndicator)] = w => w.ShowZoomIndicatorCheck.IsChecked = true, // false -> true

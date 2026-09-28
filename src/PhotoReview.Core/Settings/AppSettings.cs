@@ -211,7 +211,7 @@ public class AppSettings
     /// <summary>Parts shown in the main window's title bar; absent in older configs = <see cref="TitleBarFields.Default"/>.</summary>
     public TitleBarFields TitleBarFields { get; set; } = TitleBarFields.Default;
 
-    // ---- Q-R40..Q-R51 user feedback (2026-09-28): keyboard zoom step, delete confirmation, zoom HUD, ----
+    // ---- Q-R41..Q-R52 user feedback (2026-09-28): keyboard zoom step, delete confirmation, zoom HUD, ----
     // ---- external editor. Absent in older configs = these defaults; no migration step. ----
 
     /// <summary>Smallest accepted <see cref="KeyboardZoomStepPercent"/>.</summary>
@@ -221,33 +221,33 @@ public class AppSettings
     public const int MaxKeyboardZoomStepPercent = 100;
 
     /// <summary>
-    /// Default <see cref="KeyboardZoomStepPercent"/>: 10 %, the value the user suggested (Q-R40) as a finer
+    /// Default <see cref="KeyboardZoomStepPercent"/>: 10 %, the value the user suggested (Q-R41) as a finer
     /// alternative to the previous hardcoded 25 % jump.
     /// </summary>
     public const int DefaultKeyboardZoomStepPercent = 10;
 
     /// <summary>
-    /// Q-R40: how far ZoomIn/ZoomOut/wheel-zoom step the zoom level each press, in percent of the original size;
+    /// Q-R41: how far ZoomIn/ZoomOut/wheel-zoom step the zoom level each press, in percent of the original size;
     /// [<see cref="MinKeyboardZoomStepPercent"/>, <see cref="MaxKeyboardZoomStepPercent"/>]. Replaces the previous
     /// hardcoded <c>ViewerState.ZoomStep</c> constant (0.25 = 25 %).
     /// </summary>
     public int KeyboardZoomStepPercent { get; set; } = DefaultKeyboardZoomStepPercent;
 
     /// <summary>
-    /// Q-R43: when true, a confirmation dialog is shown before Recycle/Delete (the general case; an action profile's
+    /// Q-R44: when true, a confirmation dialog is shown before Recycle/Delete (the general case; an action profile's
     /// own <see cref="ReviewAction.Confirm"/> and the narrow <see cref="AllowPermanentDeleteWithoutRecycleBin"/>
     /// prompt are unaffected). Default false (off), matching the behaviour before this setting existed.
     /// </summary>
     public bool ConfirmBeforeDelete { get; set; }
 
     /// <summary>
-    /// Q-R44: shows a small current-zoom-percentage HUD in a corner of the viewer, reusing the on-image info
+    /// Q-R45: shows a small current-zoom-percentage HUD in a corner of the viewer, reusing the on-image info
     /// overlay infrastructure (<see cref="InfoOverlayFontSize"/> etc.). Default false (off, not shown).
     /// </summary>
     public bool ShowZoomIndicator { get; set; }
 
     /// <summary>
-    /// Q-R47: full path to an external image editor executable. Empty (default) = not configured, which hides the
+    /// Q-R48: full path to an external image editor executable. Empty (default) = not configured, which hides the
     /// "Open in External Editor" context-menu entry. Absent in older configs = empty.
     /// </summary>
     public string ExternalEditorPath { get; set; } = string.Empty;
@@ -342,5 +342,13 @@ public class AppSettings
     /// when the menu items are hidden.
     /// </summary>
     public bool ShowFolderMenuItems { get; set; } = true;
+
+    /// <summary>
+    /// Shows the zoom cluster ("Fit to window", "Zoom to N%" and the "Zoom" submenu) in the right-click context
+    /// menu, as one unit including the separator above it. Default false (new behaviour; unlike
+    /// <see cref="ShowFolderMenuItems"/>, this cluster starts hidden). Toggled from Settings only (no shortcut);
+    /// the underlying zoom actions still work via their own shortcuts when the menu items are hidden.
+    /// </summary>
+    public bool ShowZoomMenuItems { get; set; }
 }
 

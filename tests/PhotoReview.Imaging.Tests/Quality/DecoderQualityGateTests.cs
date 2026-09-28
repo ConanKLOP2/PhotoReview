@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Media.Imaging;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
@@ -147,6 +148,28 @@ public sealed class DecoderQualityGateTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Asserts a decoder fails a corrupt/empty input with one of the exception types this codebase already
+    /// treats as an understood, non-leaking decoder failure -- the same set as
+    /// <c>DecoderFileEdgeCaseTests.IsUnderstood</c> (tests/PhotoReview.Imaging.Tests/Robustness/DecoderFileEdgeCaseTests.cs),
+    /// established there across all three decoders for exactly this class of malformed input.
+    /// <see cref="COMException"/> matters specifically for <see cref="WicDirectDecoder"/>: its
+    /// <c>IWICImagingFactory.CreateDecoderFromStream</c>/<c>GetFrame</c> calls are declared without
+    /// <c>[PreserveSig]</c>, so a failing HRESULT (no codec found, or a codec found but the frame cannot be
+    /// read) surfaces as a raw, unwrapped <see cref="COMException"/> rather than one of the .NET-idiomatic
+    /// I/O or format exception types -- <c>Assert.ThrowsAny&lt;Exception&gt;</c> would silently accept any
+    /// leak (e.g. <see cref="NullReferenceException"/>, <see cref="IndexOutOfRangeException"/>) here too.
+    /// </summary>
+    private static void AssertTypedDecoderFailure(IImageDecoder decoder, string path, string caseLabel)
+    {
+        var ex = Record.Exception(() => decoder.Decode(new DecodeRequest(path, TargetWidth: 0)));
+        Assert.True(ex is not null, $"{caseLabel}: {decoder.GetType().Name} did not throw for a corrupt/empty input.");
+        Assert.True(
+            ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidDataException
+                or FileFormatException or COMException,
+            $"{caseLabel}: {decoder.GetType().Name} threw an unexpected/untyped {ex!.GetType().FullName}: {ex.Message}");
+    }
+
     [Fact(DisplayName = "QG-4: Truncated, empty, and invalid files fail safely without crashing")]
     public void CorruptFilesFailSafelyWithoutCrash()
     {
@@ -173,14 +196,14 @@ public sealed class DecoderQualityGateTests : IDisposable
 
         foreach (var decoder in decoders)
         {
-            // Empty file
-            Assert.ThrowsAny<Exception>(() => decoder.Decode(new DecodeRequest(zeroPath, TargetWidth: 0)));
+            // Empty file (must throw a typed, understood exception -- see AssertTypedDecoderFailure)
+            AssertTypedDecoderFailure(decoder, zeroPath, "empty file");
 
-            // Text file disguised as JPEG
-            Assert.ThrowsAny<Exception>(() => decoder.Decode(new DecodeRequest(textPath, TargetWidth: 0)));
+            // Text file disguised as JPEG (must throw a typed, understood exception)
+            AssertTypedDecoderFailure(decoder, textPath, "text file as .jpg");
 
             // Truncated file header (must throw typed exception)
-            Assert.ThrowsAny<Exception>(() => decoder.Decode(new DecodeRequest(truncatedHeaderPath, TargetWidth: 0)));
+            AssertTypedDecoderFailure(decoder, truncatedHeaderPath, "truncated header");
 
             // Half-truncated scan: must either throw typed exception or return partial frame safely, NEVER AccessViolationException or crash
             try

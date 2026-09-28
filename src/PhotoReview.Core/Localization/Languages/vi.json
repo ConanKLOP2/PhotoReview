@@ -802,5 +802,11 @@
   "settings.externalEditorPath.hint": "Nhấn chuột phải vào ảnh > Mở bằng trình chỉnh sửa ngoài sẽ chạy tệp thực thi này kèm đường dẫn ảnh. Để trống để ẩn mục menu này.",
 
   "settings.exportSettings": "Xuất cài đặt…",
-  "settings.importSettings": "Nhập cài đặt…"
+  "settings.importSettings": "Nhập cài đặt…",
+
+  "settings.showZoomMenuItems.label": "Hiện mục thu phóng (Vừa khung, Thu phóng N%, Thu phóng)",
+  "settings.showZoomMenuItems.automationName": "Hiện mục thu phóng trong menu chuột phải",
+  "settings.showZoomMenuItems.hint": "Tắt (mặc định) sẽ ẩn Vừa khung, Thu phóng N% và menu con Thu phóng khỏi menu chuột phải. Phím tắt của chúng vẫn hoạt động.",
+  "core.recovery.alreadyHandled": "Mục này đã được một cửa sổ PhotoReview khác xử lý, hoặc đang được thử lại ở đó. Không có gì bị thay đổi; mục đã được gỡ khỏi danh sách này.",
+  "recovery.retry.stale.title": "Đã được xử lý ở nơi khác"
 }

@@ -11,7 +11,7 @@ using PhotoReview.Core.Settings;
 namespace PhotoReview.App.Tests.Coordinators;
 
 /// <summary>
-/// Q-R43: <see cref="AppSettings.ConfirmBeforeDelete"/> (default off) gates a Yes/No confirmation in front of the
+/// Q-R44: <see cref="AppSettings.ConfirmBeforeDelete"/> (default off) gates a Yes/No confirmation in front of the
 /// general Recycle path (<see cref="FileActionController.RecycleAsync"/>). Off by default keeps today's behaviour
 /// (no prompt); when on, declining the prompt must leave the file and catalog untouched.
 /// </summary>

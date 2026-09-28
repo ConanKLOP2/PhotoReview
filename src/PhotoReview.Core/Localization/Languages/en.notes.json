@@ -600,7 +600,7 @@
   "main.menu.zoomToLevel": "Right-click menu item: zooms to the configured zoom level; {percent} = that level. The shortcut is shown to its right by the app.",
   "main.menu.zoomToLevel.automationName": "AutomationProperties.Name of the Zoom-to-level menu item.",
   "core.recycle.binCannotHold": "Error shown when Delete/Recycle is refused on a local drive because its Recycle Bin is turned off, too small for the file, or unreadable (the file would be deleted permanently); {name} = file name.",
-  "settings.fitWidthAnchor.label": "Settings > General/Zoom: combo next to the Initial zoom preset, only meaningful when that preset (or the FitWidth shortcut without the mouse over the image) is Fit width.",
+  "settings.fitWidthAnchor.label": "Settings > General/Zoom: combo next to the Initial zoom preset, only meaningful when that preset (or the FitWidth shortcut) is Fit width.",
   "settings.fitWidthAnchor.hint": "Help text under the Fit width anchor combo.",
   "settings.keepZoomAcrossImages.label": "Settings > Mouse & zoom: checkbox. PR-B (feat/fit-width-height-keep-zoom).",
   "settings.keepZoomAcrossImages.hint": "Help text under the Keep zoom checkbox.",
@@ -611,5 +611,7 @@
   "settings.keyboardZoomAnchor.automationName": "AutomationProperties.Name of the keyboard-zoom-anchor combo.",
   "settings.keyboardZoomAnchor.hint": "Help text under the keyboard-zoom-anchor combo.",
   "enum.keyboardZoomAnchor.pointer": "KeyboardZoomAnchor option: anchor at the mouse position when it is over the viewport.",
-  "enum.keyboardZoomAnchor.viewportCentre": "KeyboardZoomAnchor option: always anchor at the viewport centre."
+  "enum.keyboardZoomAnchor.viewportCentre": "KeyboardZoomAnchor option: always anchor at the viewport centre.",
+  "core.recovery.alreadyHandled": "RecoveryRetryResult.Message when a retry detected (P02) that another process sharing the journal already appended a newer record for the entry, or is executing it: nothing was moved/copied or journaled.",
+  "recovery.retry.stale.title": "Info dialog caption for the retry-race message above."
 }

@@ -33,6 +33,16 @@ public sealed class PreloadScheduler : IDisposable
     private readonly PreviewSizeSampler _sizes = new();
     // Concurrent preload decodes allowed to start while a viewer decode is running.
     private readonly int _viewerBusyWorkerLimit = Math.Max(2, Environment.ProcessorCount / 3);
+    // Q-R29 option C-2: above this observed source-read wall time (ms, DecodeMillisecondsEwma), the link is
+    // treated as slow enough that preload's own concurrency while the viewer's own decode is in flight drops
+    // to SlowLinkViewerBusyWorkerLimit (see the comment at its use site). Local disk stays 15-50 ms P50
+    // (R01-R04); a capped/slow link measured 1000+ ms per read (docs/refactoring/decisions/Q-R29-C2.md) --
+    // comfortably on either side of this threshold.
+    private const double SlowLinkDecodeMsThreshold = 200;
+    // At most one preload read shares the link with the viewer's own read on a slow link (not 0: the
+    // scheduler's own exit condition needs `running.Count < limit` reachable from 0 to keep making progress
+    // once the viewer decode ends without waiting for a fresh navigation -- see the use site's comment).
+    private const int SlowLinkViewerBusyWorkerLimit = 1;
 
     private readonly int _workerCount;
     private CancellationTokenSource _preloadCts = new();
@@ -340,7 +350,27 @@ public sealed class PreloadScheduler : IDisposable
                 // not-yet-decoded image). Decodes already running are left alone: they can't be interrupted
                 // and their results are kept. (Capping preload during the whole burst was measured too: it
                 // showed fewer images and did not make the stop image faster, so bursts use every worker.)
-                var limit = _target.ActiveViewerDecodes > 0 ? Math.Min(workers, _viewerBusyWorkerLimit) : workers;
+                //
+                // Q-R29 option C-2: on local disk this narrower limit was already enough (R04: no software
+                // sync gap found). On a slow/bandwidth-capped link it is not -- measured (F4/fixture500,
+                // simulated 10 ms + 20 MB/s link, see docs/refactoring/decisions/Q-R29-C2.md): even
+                // _viewerBusyWorkerLimit's few concurrent preload readers can nearly saturate a capped link,
+                // so the viewer's own read still starved (key-settle P50 1507-1511 ms / 100% of a 1500 ms cap
+                // hit, vs 893 ms / 0 timeouts with preload paused). A slow link shows up here as source reads
+                // taking far longer than any local decode does (DecodeMillisecondsEwma reuses the exact signal
+                // PreloadScheduler already tracks for burst pacing) -- past SlowLinkDecodeMsThresholdMs, the
+                // limit drops to SlowLinkViewerBusyWorkerLimit (1, not 0: `running.Count < limit` must stay
+                // reachable from 0, or the "nothing queued, nothing running" branch below reads that as this
+                // pass being entirely done and exits the scheduler task -- with limit 0 and no navigation to
+                // wake it, preload would never resume filling the rest of the folder once the viewer decode
+                // ends). A decode already running is still left alone, unchanged from before. This never
+                // changes behavior on local disk (DecodeMillisecondsEwma there stays under the threshold, per
+                // R01-R04's own measured 15-50 ms figures), so it does not touch the already-validated
+                // fast-disk case, only the slow-link one this measurement added evidence for.
+                var slowLink = _metrics.DecodeMillisecondsEwma > SlowLinkDecodeMsThreshold;
+                var limit = _target.ActiveViewerDecodes > 0
+                    ? (slowLink ? SlowLinkViewerBusyWorkerLimit : Math.Min(workers, _viewerBusyWorkerLimit))
+                    : workers;
                 while (running.Count < limit && order!.MoveNext())
                 {
                     cancellationToken.ThrowIfCancellationRequested();

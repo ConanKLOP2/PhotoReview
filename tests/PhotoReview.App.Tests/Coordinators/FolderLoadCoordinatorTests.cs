@@ -33,7 +33,15 @@ public sealed partial class FolderLoadCoordinatorTests
         public int StatCount => Volatile.Read(ref _statCount);
         /// <summary>Times a session file (under <see cref="FakeAppPaths.SessionsDir"/>) was read.</summary>
         public int SessionReadCount { get; private set; }
-        /// <summary>Runs on the scan's background thread at the start of a directory listing (used to block a scan).</summary>
+        /// <summary>
+        /// Runs on the scan's background thread at the start of the folder scan's listing
+        /// (<see cref="EnumerateFilesWithStat"/>), used to block a scan. Deliberately NOT fired by
+        /// <see cref="EnumerateFiles"/>: the fixture's <see cref="SessionStore"/> constructor starts a background
+        /// stale-temp sweep (R14, <c>SessionStore.StartupSweepTask</c>) that lists the sessions folder through
+        /// EnumerateFiles. When the thread pool was slow to start that sweep, it ran after a test installed this
+        /// hook and became its "first scan": it took the block meant for the folder scan, so the real scan ran
+        /// unblocked and the race under test never happened (FLAKY-FolderLoad, docs/refactoring/decisions).
+        /// </summary>
         public Action? OnEnumerateFiles { get; set; }
         /// <summary>AR16: files the readability probe reports as unreadable (path → reason).</summary>
         public Dictionary<string, string> Unreadable { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -103,7 +111,7 @@ public sealed partial class FolderLoadCoordinatorTests
 
         public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*")
         {
-            OnEnumerateFiles?.Invoke();
+            // No OnEnumerateFiles here: only the session store's background sweep lists files this way (see the hook's doc).
             var fullDir = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             return Files.Keys.Where(k => k.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase) &&
                                          !k.Substring(fullDir.Length).Contains(Path.DirectorySeparatorChar));
@@ -130,7 +138,7 @@ public sealed partial class FolderLoadCoordinatorTests
                 .ToList();
         }
 
-        /// <summary>Q-R46: immediate (non-recursive) subfolders EnumerateDirectories(folder) should report, keyed by folder (full path).</summary>
+        /// <summary>Q-R47: immediate (non-recursive) subfolders EnumerateDirectories(folder) should report, keyed by folder (full path).</summary>
         public Dictionary<string, string[]> SubfoldersByFolder { get; } = new(StringComparer.OrdinalIgnoreCase);
         public IEnumerable<string> EnumerateDirectories(string directory) =>
             SubfoldersByFolder.TryGetValue(Path.GetFullPath(directory), out var subfolders) ? subfolders : Enumerable.Empty<string>();
@@ -214,7 +222,7 @@ public sealed partial class FolderLoadCoordinatorTests
             EmptyCount++;
             SessionsReceived.Add(session);
         }
-        /// <summary>Q-R46: times <see cref="IFolderLoadSink.OnEmptyWithSubfolders"/> was called, with the subfolder count passed each time.</summary>
+        /// <summary>Q-R47: times <see cref="IFolderLoadSink.OnEmptyWithSubfolders"/> was called, with the subfolder count passed each time.</summary>
         public List<int> EmptyWithSubfoldersCounts { get; } = [];
         public void OnEmptyWithSubfolders(string folder, PhotoReview.Core.Session.SessionState session, int subfolderCount)
         {

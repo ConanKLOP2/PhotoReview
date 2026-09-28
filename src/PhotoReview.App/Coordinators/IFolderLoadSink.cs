@@ -20,7 +20,7 @@ public interface IFolderLoadSink
     void OnEmpty(string folder, PhotoReview.Core.Session.SessionState session);
 
     /// <summary>
-    /// Q-R46: same empty-folder case as <see cref="OnEmpty"/>, but the folder has no directly-supported images AND
+    /// Q-R47: same empty-folder case as <see cref="OnEmpty"/>, but the folder has no directly-supported images AND
     /// contains <paramref name="subfolderCount"/> subfolder(s) (non-recursive: the scan never looked inside them) --
     /// worth a different message than a plain "no images", since the user may have opened the wrong (parent) level.
     /// Default forwards to <see cref="OnEmpty"/> so an existing sink keeps compiling and behaving as before;

@@ -59,6 +59,8 @@ public sealed class DarkScrollBarRenderingTests
         // construct and losing just means someone else's Application already satisfies what this test
         // needs (an Application to exist for pack URI resolution below), so swallow the race instead of
         // failing the render.
+        // Deliberately NOT [Collection("GlobalState")]: serializing against every other GlobalState test
+        // would slow the suite for a race that's already proven harmless (2026-09-27).
         if (Application.Current is null)
         {
             try

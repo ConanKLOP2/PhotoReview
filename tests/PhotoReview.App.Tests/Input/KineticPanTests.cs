@@ -93,29 +93,73 @@ public sealed class KineticPanTests
     public void Start_ScrollVelocityIsOppositeThePointerAndCapped()
     {
         var scroller = new KineticScroller();
+        var factor = KineticScroller.PointerReleaseSpeedFactor;
 
         Assert.True(scroller.Start(2, -100));
 
-        Assert.Equal(-2, scroller.VelocityX, 6);
-        Assert.Equal(KineticScroller.MaxVelocity, scroller.VelocityY, 6);
+        Assert.Equal(-2 * factor, scroller.VelocityX, 6);
+        Assert.Equal(KineticScroller.MaxVelocity, scroller.VelocityY, 6); // -(-100)*factor still well past the cap
 
         Assert.True(scroller.Start(100, 1));
-        Assert.Equal(-KineticScroller.MaxVelocity, scroller.VelocityX, 6);
-        Assert.Equal(-1, scroller.VelocityY, 6);
+        Assert.Equal(-KineticScroller.MaxVelocity, scroller.VelocityX, 6); // -100*factor still well past the cap
+        Assert.Equal(-1 * factor, scroller.VelocityY, 6);
+    }
+
+    // ---- Q-R40: mouse-release damping (PointerReleaseSpeedFactor) ----
+
+    [Fact]
+    public void Start_DampsTheRawPointerVelocityByPointerReleaseSpeedFactor()
+    {
+        var scroller = new KineticScroller();
+        const double rawVelocity = 1.2; // realistic flick, DIP/ms, well under MaxVelocity so the factor is visible
+
+        Assert.True(scroller.Start(rawVelocity, 0));
+
+        Assert.Equal(-rawVelocity * KineticScroller.PointerReleaseSpeedFactor, scroller.VelocityX, 9);
+        Assert.InRange(KineticScroller.PointerReleaseSpeedFactor, 0.5, 0.7); // matches the documented, chosen range
+    }
+
+    [Fact]
+    public void Start_RealisticFlick_StillStartsAGlideAfterDamping()
+    {
+        var scroller = new KineticScroller();
+        // A moderate flick (well above StartVelocity even after damping) still starts gliding.
+        const double rawVelocity = 0.5;
+
+        Assert.True(scroller.Start(rawVelocity, 0));
+        Assert.True(scroller.IsActive);
+        Assert.True(Math.Abs(scroller.VelocityX) >= KineticScroller.StartVelocity);
+    }
+
+    [Fact]
+    public void AddImpulse_IsNotDampedByPointerReleaseSpeedFactor()
+    {
+        // Regression guard (Q-R40): AddImpulse (keyboard arrow-key panning) must be completely unaffected by the
+        // mouse-release damping factor -- KeyboardPan.ImpulseVelocity sizes its input to land within ~1 DIP of an
+        // exact step distance, so damping it here would make arrow-key panning systematically undershoot.
+        var scroller = new KineticScroller();
+        const double velocityX = 1.5;
+        const double velocityY = -0.5;
+
+        scroller.AddImpulse(velocityX, velocityY);
+
+        Assert.Equal(velocityX, scroller.VelocityX, 9);
+        Assert.Equal(velocityY, scroller.VelocityY, 9);
     }
 
     [Fact]
     public void Step_MovesWithVelocityAndDecaysExponentially()
     {
         var scroller = new KineticScroller();
-        scroller.Start(-1, 0); // pointer moved left -> content scrolls right at 1 DIP/ms
+        scroller.Start(-1, 0); // pointer moved left -> content scrolls right, damped by PointerReleaseSpeedFactor
+        var v0 = KineticScroller.PointerReleaseSpeedFactor; // effective scroll velocity after Start's damping
 
         var (h, v) = scroller.Step(16, 1000, 500, Large);
 
         var tau = KineticScroller.TimeConstantMs;
-        Assert.Equal(1000 + tau * (1 - Math.Exp(-16 / tau)), h, 6);
+        Assert.Equal(1000 + v0 * tau * (1 - Math.Exp(-16 / tau)), h, 6);
         Assert.Equal(500, v, 6);
-        Assert.Equal(Math.Exp(-16 / tau), scroller.VelocityX, 6);
+        Assert.Equal(v0 * Math.Exp(-16 / tau), scroller.VelocityX, 6);
     }
 
     [Fact]
@@ -154,8 +198,9 @@ public sealed class KineticPanTests
 
         Assert.False(scroller.IsActive);
         Assert.InRange(frames, 10, 200);
-        // Total distance of an unbounded exponential glide is v0 * tau; stopping at StopVelocity leaves at most StopVelocity * tau.
-        var full = 2 * KineticScroller.TimeConstantMs;
+        // Total distance of an unbounded exponential glide is v0 * tau (v0 is the effective, damped scroll velocity);
+        // stopping at StopVelocity leaves at most StopVelocity * tau.
+        var full = 2 * KineticScroller.PointerReleaseSpeedFactor * KineticScroller.TimeConstantMs;
         Assert.InRange(h - 1000, full - KineticScroller.StopVelocity * KineticScroller.TimeConstantMs - 1e-6, full);
     }
 

@@ -63,6 +63,28 @@ public sealed class CrashMatrixTests
 
     private static bool Has(InMemoryFileSystem disk, string path) => disk.FileExists(path);
 
+    /// <summary>
+    /// The recent committed Moves whose file is still at the destination and not back at the source, oldest first,
+    /// newest kept per destination (undo entries excluded). This mirrors the filter the now-removed
+    /// <c>UndoService.ReadStartupHistory</c> used, kept here only to assert the journal-vs-disk consistency
+    /// invariant this test checks; P03 (2026-09-27) means nothing in production seeds Undo from this anymore.
+    /// </summary>
+    private static List<JournalEntry> ConsistentCommittedMoves(OperationJournal journal, InMemoryFileSystem fs)
+    {
+        var history = new List<JournalEntry>();
+        foreach (var entry in journal.ReadCommittedMoves())
+        {
+            if (string.IsNullOrEmpty(entry.Destination)) continue;
+            if (entry.Undo == true) continue;
+            if (fs.FileExists(entry.Destination) && !fs.FileExists(entry.Source))
+            {
+                history.RemoveAll(older => string.Equals(older.Destination, entry.Destination, StringComparison.OrdinalIgnoreCase));
+                history.Add(entry);
+            }
+        }
+        return history;
+    }
+
     private static void AssertRestartInvariants(InMemoryFileSystem disk, FileOperationType type, string context)
     {
         // Restart: a healthy process on the surviving files.
@@ -192,7 +214,9 @@ public sealed class CrashMatrixTests
             journal.ReconcilePendingOperations();
             Assert.Empty(journal.ReadPendingOperations());
             Assert.True(Has(rig.Disk, Source) ^ Has(rig.Disk, Destination), $"undo crash #{crash}: photo must be in exactly one place");
-            var history = new UndoService(journal, rig.Disk, new DeletingBin(rig.Disk)).ReadStartupHistory();
+            // P03 removed UndoService.ReadStartupHistory (Undo is session-only); replicate its journal-consistency
+            // filter directly here (latest non-undo Committed Move per destination whose file is really there).
+            var history = ConsistentCommittedMoves(journal, rig.Disk);
             Assert.Equal(Has(rig.Disk, Destination) ? 1 : 0, history.Count);
             Assert.DoesNotContain(history, h => h.Undo == true);
         }

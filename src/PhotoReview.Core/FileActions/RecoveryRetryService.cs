@@ -6,12 +6,18 @@ using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.FileActions;
 
+/// <param name="Superseded">
+/// P02: the retried entry was already handled by another PhotoReview window (another process sharing the journal
+/// appended a newer record for its Id, or is executing it right now). Nothing was mutated or journaled by this retry;
+/// the caller's snapshot is stale and should be dropped/refreshed (like <see cref="DismissOutcome.Skipped"/>).
+/// </param>
 public sealed record RecoveryRetryResult(
     bool Succeeded,
     string Message,
     JournalEntry? Entry,
     bool JournalPersisted = true,
-    string? JournalError = null);
+    string? JournalError = null,
+    bool Superseded = false);
 
 public sealed class RecoveryRetryService
 {
@@ -62,13 +68,21 @@ public sealed class RecoveryRetryService
         return await Task.Run(() => ExecuteRetry(failed, prepared), ct).ConfigureAwait(false);
     }
 
+    private static RecoveryRetryResult AlreadyHandled() => new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
+
+    // P02: `failed` is the Recovery window's snapshot. Another process sharing the journal (InstanceMode.PerFolder) may be
+    // retrying the same Id right now or may already have resolved it; the filesystem pre-checks alone cannot tell (both
+    // processes pass them before either mutates). So: skip when the Id is live elsewhere (Q-R27 marker), append Prepared
+    // only if the snapshot is still the latest entry, and append a failure only if nothing but our own Prepared followed
+    // the snapshot -- the loser's Failed must never land after the winner's Committed.
     private RecoveryRetryResult ExecuteRetry(JournalEntry failed, JournalEntry prepared)
     {
+        if (_journal.LiveOperations.IsLive(failed.Id)) return AlreadyHandled();
         var destination = failed.Destination!; // validated non-empty by the caller
-        using var tx = new JournalTransaction(_journal, _clock, prepared, failWithoutPrepared: true);
+        using var tx = new JournalTransaction(_journal, _clock, prepared, retryOf: failed);
         try
         {
-            tx.Begin();
+            if (!tx.TryBegin()) return AlreadyHandled();
             var destDir = Path.GetDirectoryName(destination);
             if (!string.IsNullOrEmpty(destDir))
             {
@@ -95,6 +109,7 @@ public sealed class RecoveryRetryService
         catch (Exception ex)
         {
             var error = tx.Fail(ex, out var failError);
+            if (tx.Superseded) return AlreadyHandled();
             if (failError is null) return new(false, ex.Message, error);
             return new(tx.MutationCompleted, tx.MutationCompleted
                 ? Tr.CoreRecoveryCompletedFailureNotJournaled

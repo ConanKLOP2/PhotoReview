@@ -48,8 +48,8 @@ public sealed class InfoOverlayViewModel : ObservableObject
 
     /// <param name="settings">Current settings (read on every refresh, never cached).</param>
     /// <param name="findSiblings">Blocking sibling search; always invoked on the thread pool.</param>
-    /// <param name="hasImage">Q-R44: whether an image is currently shown (the zoom HUD has nothing to show otherwise); defaults to always true (test/legacy callers).</param>
-    /// <param name="getZoomPercent">Q-R44: current zoom, in whole percent (see <see cref="ViewerState.DisplayZoomPercent"/>); defaults to 100.</param>
+    /// <param name="hasImage">Q-R45: whether an image is currently shown (the zoom HUD has nothing to show otherwise); defaults to always true (test/legacy callers).</param>
+    /// <param name="getZoomPercent">Q-R45: current zoom, in whole percent (see <see cref="ViewerState.DisplayZoomPercent"/>); defaults to 100.</param>
     public InfoOverlayViewModel(Func<AppSettings> settings, Func<string, CancellationToken, SiblingImageFolders> findSiblings,
         Func<bool>? hasImage = null, Func<int>? getZoomPercent = null)
     {
@@ -59,10 +59,10 @@ public sealed class InfoOverlayViewModel : ObservableObject
         _getZoomPercent = getZoomPercent ?? (static () => 100);
     }
 
-    /// <summary>Q-R44: the current-zoom-percentage HUD is shown (setting on, and an image is displayed).</summary>
+    /// <summary>Q-R45: the current-zoom-percentage HUD is shown (setting on, and an image is displayed).</summary>
     public bool IsZoomIndicatorVisible => _settings().ShowZoomIndicator && _hasImage();
 
-    /// <summary>Q-R44: HUD text, e.g. "100%". Culture-invariant: a plain integer, no thousands separators to localize.</summary>
+    /// <summary>Q-R45: HUD text, e.g. "100%". Culture-invariant: a plain integer, no thousands separators to localize.</summary>
     public string ZoomIndicatorText => _getZoomPercent().ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
 
     /// <summary>Bottom-left file block (position/count, size, name, dimensions) is shown.</summary>

@@ -44,8 +44,8 @@ public static class ReviewCommandTypeExtensions
     /// ToggleInfoOverlay is listed too: it flips and SAVES a setting, so holding the key would flicker the overlay
     /// and rewrite config.json on every repeat. Fullscreen, ToggleCompare and ClickZoom are pure toggles: holding the key
     /// would flip them at the key-repeat rate (and re-present the image for ToggleCompare), so they act once.
-    /// ToggleKeepZoom (PR-B) is the same kind of toggle-and-save as ToggleInfoOverlay. OpenFolder (Q-R41) and
-    /// CustomZoom (Q-R42) each open a modal dialog: holding the key must not stack up several of them.
+    /// ToggleKeepZoom (PR-B) is the same kind of toggle-and-save as ToggleInfoOverlay. OpenFolder (Q-R42) and
+    /// CustomZoom (Q-R43) each open a modal dialog: holding the key must not stack up several of them.
     /// </summary>
     public static bool IgnoresAutoRepeat(this ReviewCommandType type) =>
         type is ReviewCommandType.Recycle or ReviewCommandType.RunAction or ReviewCommandType.Undo

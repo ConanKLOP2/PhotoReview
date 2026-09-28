@@ -58,7 +58,7 @@ public sealed class SettingsWindowRedesignTests
         // way outside [40, 400] -- Save then rejected it and, since this window has no InvalidSettingsWarning
         // seam wired, fell through to a REAL modal MessageBox.Show that hangs a headless CI runner forever.
         nameof(AppSettings.ImageTransition), nameof(AppSettings.ImageTransitionMs),
-        // Q-R40/Q-R43/Q-R44/Q-R47 user feedback batch
+        // Q-R41/Q-R44/Q-R45/Q-R48 user feedback batch
         nameof(AppSettings.KeyboardZoomStepPercent), nameof(AppSettings.ConfirmBeforeDelete), nameof(AppSettings.ShowZoomIndicator),
         nameof(AppSettings.ExternalEditorPath),
     };

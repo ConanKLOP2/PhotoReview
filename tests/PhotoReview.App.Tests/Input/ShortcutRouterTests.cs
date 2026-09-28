@@ -291,7 +291,7 @@ public sealed class ShortcutRouterTests
         Assert.Null(router.TryResolve(Key.K, Key.None, ModifierKeys.None, false, true));
     }
 
-    // ---- Q-R41 OpenFolder (default Ctrl+O) / Q-R42 CustomZoom (default D3) ----
+    // ---- Q-R42 OpenFolder (default Ctrl+O) / Q-R43 CustomZoom (default D3) ----
 
     [Fact]
     public void OpenFolder_RequiresControlModifier_LikeUndo()
@@ -339,7 +339,7 @@ public sealed class ShortcutRouterTests
     [Fact]
     public void OpenFolderAndCustomZoom_DefaultsDoNotCollideWithOtherDefaults()
     {
-        // Q-R41/Q-R42: OpenFolder's default is Ctrl+O and CustomZoom's is D3 -- distinct from every other
+        // Q-R42/Q-R43: OpenFolder's default is Ctrl+O and CustomZoom's is D3 -- distinct from every other
         // default shortcut (in particular Undo=Z and ClickZoom=D2), so SettingsValidator sees no duplicate.
         var validator = new PhotoReview.Core.Settings.SettingsValidator(new PhotoReview.App.Services.WpfKeyNameValidator());
         var error = validator.ValidateShortcuts(new AppSettings());

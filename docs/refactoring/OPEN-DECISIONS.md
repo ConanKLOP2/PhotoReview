@@ -1,27 +1,29 @@
 # Decisions (Q-*)
 
-Status of work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) · finished groups: [`HISTORY.md`](HISTORY.md).
+Status of work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md) Â· finished groups: [`HISTORY.md`](HISTORY.md).
 Full rationale of older rows: `git show 1de561c:docs/refactoring/OPEN-DECISIONS.md` and `...:docs/refactoring/archive/OPEN-DECISIONS-detail.md`.
 
-**Adding a decision (reduce, not eliminate, merge conflicts across parallel PRs):** put ALL detail (method names, file:line,
-measurements) in a new file under [`decisions/`](decisions/) named after the ID, never inline here. Add exactly ONE new row
-to the appropriate table (Open or Decided) with a true one-sentence summary, a `(YYYY-MM-DD HH:MM)` timestamp next to the ID,
-and a Markdown link to that new file. **Insert the row at a non-predictable position** (near a row on a similar topic, or
-just not always the very last line) instead of always appending at the end -- this lowers the odds that two parallel PRs
-both insert next to the same existing line and collide, but it is probabilistic, not a guarantee: a real conflict will still
-happen sometimes and is resolved by hand as always (trivially -- keep both new rows). No merge driver, no CI automation, no
-frontmatter: table rows are plain static Markdown, edited by hand.
+**Adding a decision (avoid merge conflicts across parallel PRs):** the Decided table below is GENERATED -- never hand-edit it.
+Put ALL detail (method names, file:line, measurements) in a new file under [`decisions/`](decisions/) named after the ID, with a
+frontmatter block at the top (`id:` = the ID(s) as they should appear in the table, `order:` = an integer placing the row, `summary:`
+= a true one-sentence prose summary, no link). Then run `tools/generate-open-decisions.ps1`, which rewrites the generated region
+from every `decisions/*.md` file's frontmatter, and commit the result. A routine PR therefore only ever adds its OWN new file under
+`decisions/` plus the regenerated table -- it can never conflict with another PR's own new file, which is what the old
+"add exactly one new row inline" convention could not guarantee (repeated multi-round merge conflicts on 2026-09-27, a shared file
+every concurrent PR appended to). `tools/check-open-decisions.ps1` (wired into CI and `tools/verify-all.ps1`) fails the build if the
+generated region doesn't match what the generator produces right now -- e.g. a hand-edited row, or a new `decisions/*.md` file
+added without frontmatter or without re-running the generator.
 
 ## Open
 
 | ID | Question | State |
 |---|---|---|
-| **Q-R29** | NAS (500 x 3-7 MB JPEG over wifi): (1) `ThumbnailCache.BuildKey` UI-thread stat per cold navigation; (2) whole-folder preload has no I/O priority/bandwidth cap. Both parts narrowed to negligible/no-sync-gap on local disk (see [R01-R13](decisions/R01-R02-R03-R13.md), [R04-R14](decisions/R04-R14.md)); the NAS/slow-link case itself is still untested and open. [Detail](decisions/Q-R29.md) | OPEN 2026-09-26 - awaiting user. Present options with pros/cons (see AGENTS.md) before deciding. |
 
 ## Decided (one line each)
 
 **Older groups** (rationale in ADRs, `HISTORY.md`, git): Q-D1..D4, Q-ST1..ST4, Q-T1..T4, Q-OC14/15, Q-S3, Q-AR1..AR5, Q-L1..L8, Q-IO1 - all decided and implemented.
 
+<!-- BEGIN GENERATED DECIDED TABLE (tools/generate-open-decisions.ps1 -- do not hand-edit below) -->
 | ID | Decision |
 |---|---|
 | Q-Z1 | Zoom 100 % = 1 source pixel, original decoded on demand (#43, #47, [ADR 0008](../adr/0008-zoom-source-pixel.md)). |
@@ -56,4 +58,29 @@ frontmatter: table rows are plain static Markdown, edited by hand.
 | R09/R10 | Recovery-dismiss race fixed; stale glide-stop flag traced as a non-issue (#192). [Detail](decisions/R09-R10.md) |
 | R04/Q-R29 (partial) / R14 | Preload contention: no sync gap found locally (NAS still open); startup temp-file sweep moved to background (#195). [Detail](decisions/R04-R14.md) |
 | R06/R07/R08/R11 | Benchmark/cache misc fixes; instance-forward ambiguity reclassified to `Unknown` (#194). [Detail](decisions/R06-R07-R11-R08.md) |
-| Q-R40..Q-R51 | v2.0.203 user feedback triage: configurable zoom step, Open Folder/Custom Zoom shortcuts, confirm-before-delete, zoom-% HUD, empty-folder notice and settings export/import approved (default off/unconfigured where applicable); Refresh, in-viewer rename, trackpad gesture tuning and new format/RAW support declined. [Detail](decisions/Q-R40-Q-R51-user-feedback.md) |
+| L01/L02 | Deep review of the 289 `needs-deep-review` Imaging ledger rows: 287 no issue, 2 low-severity fixes (weak WicDirect memory-buffer test oracle; wasted disk-cache-path hash when the disk cache is disabled). [Detail](decisions/LEDGER-DEEP-REVIEW.md) |
+| Q-R05 / Q-R12 | Navigation notification count deduped; stale doc-comment links retargeted (#193). [Detail](decisions/Q-R05-Q-R12.md) |
+| R15/R16/R17/R18 | Hash-service stat, catalog snapshot, drag-drop `Exists` checks and diagnostics-metrics sort all measured negligible; no fix. [Detail](decisions/R15-R16-R17-R18.md) |
+| P01-P03 | Post-ledger review of master changes since 3ef2bb5 (#186-#198+) plus screened-static hot-path rows outside Imaging: no defects in the reviewed diff; two document-only journal/undo races found (concurrent-retry misreport, cross-folder Undo contamination). [Detail](decisions/POST-LEDGER-REVIEW.md) |
+| P03 | Undo limited to the current session; journal history no longer seeds Ctrl+Z at startup (user, 2026-09-27). [Detail](decisions/P03.md) |
+| P02 | Recovery retry re-checks the journal's latest entry and live marker so a concurrent retry in another window can no longer journal a completed Move as Failed. [Detail](decisions/P02.md) |
+| Q-R29 | User chose B then C-if-needed (2026-09-27); C part 1 (stat off UI thread) done here, part 2 (preload/viewer bandwidth contention) done in Q-R29-C2. [Detail](decisions/Q-R29-C.md) |
+| GUI-CHECK-AUTOMATION | 5 of the 11 "GUI checks (user)" items now need no manual check; the rest reduced to one short visual/feel step each (new context-menu-structure, crossfade and KeepZoomAcrossImages UI tests). [Detail](decisions/GUI-CHECK-AUTOMATION.md) |
+| TEST-HANG-GUARD | `tests/test.runsettings` (wired in via `tests/Directory.Build.props`) bounds every `dotnet test` to a 120 s per-test hang timeout and a 20 min session timeout with no CLI flags required; CI/verify-all.ps1's own `--blame-hang*` flags coexist without a duplicate-collector error (2026-09-27). [Detail](decisions/TEST-HANG-GUARD.md) |
+| FLAKY-FolderLoad | CI flake in the folder-switch race test was a fixture bug (session sweep listing took the scan-block hook), not a production race; fake fixed (#209). [Detail](decisions/FLAKY-FolderLoad.md) |
+| Q-R39 | New `ShowZoomMenuItems` setting hides the context menu's zoom cluster (Fit/Zoom to N%/Zoom submenu) as one unit; default off, unlike `ShowFolderMenuItems` (user request). [Detail](decisions/Q-R39.md) |
+| CI-CROSSFADE-ANIMATION-FLAKE | Confirmed via real CI diagnostics the compositor ticks fine on `windows-latest`; the fixed-poll assertion could miss a fast 40ms fade under load -- replaced it with a value-changed watcher (no source change). [Detail](decisions/CI-CROSSFADE-ANIMATION-FLAKE.md) |
+| TEST-SUITE-REVIEW-2026-09-27 | External test-suite review's 9 findings independently re-verified: 6 confirmed and fixed (test-only, no `src/` changes), 2 rejected as false positives/already-sanctioned, 1 left as a documented coverage gap. [Detail](decisions/TEST-SUITE-REVIEW-2026-09-27.md) |
+| SEC-03 | Publish-guard containment made component-aware (path segments, not a raw string prefix) and resolves reparse points before checking approval, with a new `-SelfTest` gate in `verify-all.ps1`. [Detail](decisions/SEC-03-publish-guard-hardening.md) |
+| SEC-02 | External review of `InstanceForwardClient`/`ForwardedPathProtocol`: pipe `FlushAsync`-after-successful-`WriteAsync` misreport traced as unreachable (named-pipe flush is a local no-op, no source change); `Encode`/`TryDecode` validation asymmetry confirmed and fixed (`Encode` now shares `IsAcceptablePath`). [Detail](decisions/SEC-02-forward-protocol-review.md) |
+| TITLE-BAR-INSTANCE-LABEL | `MainViewModel.InstanceLabel` tags the title bar `[label] ...`: `TestAppHost.CreateMainWindow` sets it unconditionally (`[TEST]`) for every `Category=UI` window, and `PHOTOREVIEW_DIAG_INSTANCE_LABEL` opts a manually/agent-launched real exe into the same marker; unset is byte-for-byte unchanged. [Detail](decisions/TITLE-BAR-INSTANCE-LABEL.md) |
+| SEC-01 | A relative Move/Copy destination through an existing junction/symlink could resolve outside the photo folder; `ActionDestinationPolicy`/`FileActionService` now also check the resolved (reparse-point-followed) path, via a new `IFileSystem.ResolveRealPath` seam. [Detail](decisions/SEC-01-symlink-destination-escape.md) |
+| CI-TAG-VERSION-BATCH-PUSH | `tag-version`'s single batched `git push origin "${created[@]}"` failed the whole job on every run because of one permanently un-pushable historical tag (v2.0.179) -- switched to pushing each tag individually and treating that one known GitHub restriction as an expected, logged skip instead of a job failure. [Detail](decisions/CI-TAG-VERSION-BATCH-PUSH.md) |
+| Q-R40 | Mouse-release kinetic glide velocity is scaled by a new `KineticScroller.PointerReleaseSpeedFactor` (0.65) to feel calmer, without touching the already-measured `KineticGlideSmoothing.Predict` frame-timing default or the keyboard-panning impulse path. [Detail](decisions/Q-R40-kinetic-release-damping.md) |
+| Q-R29-C2 | ISourceReader seam built; preload/viewer bandwidth contention on a slow link measured material and fixed (PreloadScheduler caps to 1 concurrent preload decode instead of ~4 when the link is slow). [Detail](decisions/Q-R29-C2.md) |
+| LEDGER-REMAINING-REVIEW-2026-09-27 | Remaining 8096 `screened-static` ledger rows manually reviewed via 10 parallel cost-optimized (Haiku) batches; 7 real issues found and fixed (6 unbounded-Join/weak-assertion test fixes verified by a full Core.Tests run, 1 weak decoder-oracle fix), 1 candidate finding rejected as an already-deliberate design (see comments added at the two call sites); the rest confirmed clean. Two agent-process defects were caught and corrected before merging: one batch overwrote the whole shared ledger file instead of updating only its own rows, and one batch marked ~500 rows outside its assigned scope -- both excluded from this merge, which only applied each agent's output restricted to its own originally-assigned row IDs. [Detail](decisions/LEDGER-REMAINING-REVIEW-2026-09-27.md) |
+| OPT-IMAGING-FIXES | OPT-1: Eliminate double disk I/O for large JPEG headers (>8 MB) by extending exponential-growth pattern instead of re-reading entire file.
+OPT-2: Add SourceBytesCache.CreateKey overloads accepting pre-computed stats to avoid redundant FileInfo allocation (Q-R29 pattern). [Detail](decisions/OPT-IMAGING-FIXES.md) |
+| OPT-TOOLING-TRGENERATOR-HASHSET | TrGenerator.TryGetPlaceholders now dedups placeholder names with a HashSet instead of List.Contains, removing the O(n^2) scan (perf/trgenerator-hashset-placeholders). [Detail](decisions/OPT-TOOLING-TRGENERATOR-HASHSET.md) |
+| Q-R41..Q-R52 | v2.0.203 user feedback triage: configurable zoom step, Open Folder/Custom Zoom shortcuts, confirm-before-delete, zoom-% HUD, empty-folder notice and settings export/import approved (default off/unconfigured where applicable); Refresh, in-viewer rename, trackpad gesture tuning and new format/RAW support declined. [Detail](decisions/Q-R41-Q-R52-user-feedback.md) |
+<!-- END GENERATED DECIDED TABLE -->

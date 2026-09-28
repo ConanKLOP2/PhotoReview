@@ -596,23 +596,12 @@ public partial class MainWindow : Window
             case ReviewCommandType.MoveToFolder: await _viewModel.MoveToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.CopyToFolder: await _viewModel.CopyToFolderAsync(cmd.Value.ForcePicker); break;
             case ReviewCommandType.ClickZoom: await _pointer.ToggleClickZoomAsync(); break;
-            case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(MouseOverImageViewport()); break;
+            case ReviewCommandType.FitWidth: await _pointer.FitWidthAsync(); break;
             case ReviewCommandType.FitHeight: await _pointer.FitHeightAsync(); break;
             case ReviewCommandType.ToggleKeepZoom: ToggleKeepZoomAcrossImages(); break;
             case ReviewCommandType.OpenFolder: await _viewModel.PickAndOpenFolderAsync(); break;
             case ReviewCommandType.CustomZoom: await OpenClickZoomCustomDialogAsync(); break;
         }
-    }
-
-    /// <summary>
-    /// PR-B: the FitWidth shortcut anchors at the mouse when it is over the image viewport (ImageScroll), otherwise
-    /// falls back to <see cref="AppSettings.FitWidthAnchor"/> (see <see cref="PointerInputController.FitWidthAsync"/>).
-    /// </summary>
-    private Point? MouseOverImageViewport()
-    {
-        var position = Mouse.GetPosition(ImageScroll);
-        var overViewport = position.X >= 0 && position.Y >= 0 && position.X <= ImageScroll.ActualWidth && position.Y <= ImageScroll.ActualHeight;
-        return overViewport ? position : null;
     }
 
     /// <summary>
@@ -761,7 +750,7 @@ public partial class MainWindow : Window
     private async void ZoomToLevel_Click(object sender, RoutedEventArgs e) => await _pointer.SetClickZoomLevelAsync(_settings.ClickZoomPercent);
 
     /// <summary>"Zoom" submenu: Fit width, anchored at the mouse when it is over the viewport (same rule as the shortcut).</summary>
-    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await _pointer.FitWidthAsync(MouseOverImageViewport());
+    private async void ZoomFitWidth_Click(object sender, RoutedEventArgs e) => await _pointer.FitWidthAsync();
 
     /// <summary>"Zoom" submenu: Fit height (always centred).</summary>
     private async void ZoomFitHeight_Click(object sender, RoutedEventArgs e) => await _pointer.FitHeightAsync();
@@ -774,7 +763,9 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Refreshes the top-level items on every open: the level in "Zoom to N%", each item's shortcut (as configured,
-    /// shown right-aligned like an accelerator; empty when the shortcut is cleared), and the folder group's visibility
+    /// shown right-aligned like an accelerator; empty when the shortcut is cleared), the zoom cluster's visibility
+    /// (<see cref="AppSettings.ShowZoomMenuItems"/>) -- Fit to window/Zoom to N%/the Zoom submenu and the separator
+    /// right above them are hidden together as one unit -- and the folder group's visibility
     /// (<see cref="AppSettings.ShowFolderMenuItems"/>, PR-C) -- Open folder/Next folder/Previous folder and the
     /// separator right above them are hidden together as one unit.
     /// </summary>
@@ -785,6 +776,12 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(ZoomToLevelMenuItem, Tr.MainMenuZoomToLevelAutomationName(percent));
         ZoomToLevelMenuItem.InputGestureText = _settings.Shortcuts.ClickZoom;
         FitMenuItem.InputGestureText = _settings.Shortcuts.ToggleFit;
+
+        var zoomClusterVisibility = _settings.ShowZoomMenuItems ? Visibility.Visible : Visibility.Collapsed;
+        ZoomGroupSeparator.Visibility = zoomClusterVisibility;
+        FitMenuItem.Visibility = zoomClusterVisibility;
+        ZoomToLevelMenuItem.Visibility = zoomClusterVisibility;
+        ZoomMenu.Visibility = zoomClusterVisibility;
 
         var folderGroupVisibility = _settings.ShowFolderMenuItems ? Visibility.Visible : Visibility.Collapsed;
         FolderGroupSeparator.Visibility = folderGroupVisibility;
@@ -804,7 +801,7 @@ public partial class MainWindow : Window
 
     private async void ClickZoomCustom_Click(object sender, RoutedEventArgs e) => await OpenClickZoomCustomDialogAsync();
 
-    /// <summary>Q-R42: shared by the "Custom…" menu item and the CustomZoom keyboard shortcut.</summary>
+    /// <summary>Q-R43: shared by the "Custom…" menu item and the CustomZoom keyboard shortcut.</summary>
     private async Task OpenClickZoomCustomDialogAsync()
     {
         var dialog = new ClickZoomCustomDialog(_settings.ClickZoomPercent) { Owner = this };

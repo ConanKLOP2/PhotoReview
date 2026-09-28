@@ -7,8 +7,8 @@ using System.Text.Json;
 namespace PhotoReview.PerfAnalysis;
 
 /// <summary>Loads tools/diag/rules.json (or an override path): a nested {rule: {key: number}}
-/// document of thresholds, so R-* thresholds can be tuned without rebuilding (D11 spec item 4 /
-/// PERF-DIAGNOSIS-PLAN.md mục 8).</summary>
+/// document of thresholds, so R-* thresholds can be tuned without rebuilding (D11 spec item 4;
+/// the R-* rules are documented in docs/archive/evidence/D-diagnosis-REPORT.md).</summary>
 public sealed class RulesConfig
 {
     private readonly Dictionary<string, Dictionary<string, double>> _data;
@@ -35,8 +35,8 @@ public sealed class RulesConfig
 public sealed record RuleResult(string Rule, bool? Triggered, string Evidence, string? Note = null);
 
 /// <summary>
-/// Pure, independently-testable evaluators for the nine decision rules in
-/// docs/refactoring/PERF-DIAGNOSIS-PLAN.md mục 8. Each takes plain aggregates (not the full
+/// Pure, independently-testable evaluators for the nine decision rules documented in
+/// docs/archive/evidence/D-diagnosis-REPORT.md. Each takes plain aggregates (not the full
 /// pipeline) so PerfAnalyzeTests can build a group's numbers by hand and check both the
 /// triggered and not-triggered branch.
 /// </summary>
@@ -49,7 +49,7 @@ public static class PerfRules
     /// <summary>R-IO: in the SourceMiss group, (t_open+t_read) share of finalVisual is high
     /// (only sourceMissIoSharePct is evaluated; there is no per-image open-count check). t_open is never emitted by the current app (no
     /// call site yet) and t_read only exists under PHOTOREVIEW_DIAG_PREREAD, so this is N/A when
-    /// neither is present in the data (plan mục 8 / D11 spec item 7).</summary>
+    /// neither is present in the data (D11 spec item 7; see docs/archive/evidence/D-diagnosis-REPORT.md).</summary>
     public static RuleResult EvaluateRIo(RulesConfig cfg, IReadOnlyList<NavRecord> sourceMissNavs)
     {
         var sharePct = cfg.Get("R-IO", "sourceMissIoSharePct", 40);

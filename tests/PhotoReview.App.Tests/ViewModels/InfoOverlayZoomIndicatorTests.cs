@@ -4,7 +4,7 @@ using Xunit;
 
 namespace PhotoReview.App.Tests.ViewModels;
 
-/// <summary>Q-R44: the on-image zoom HUD (<see cref="InfoOverlayViewModel.IsZoomIndicatorVisible"/>/<see cref="InfoOverlayViewModel.ZoomIndicatorText"/>).</summary>
+/// <summary>Q-R45: the on-image zoom HUD (<see cref="InfoOverlayViewModel.IsZoomIndicatorVisible"/>/<see cref="InfoOverlayViewModel.ZoomIndicatorText"/>).</summary>
 [Trait("Category", "HotPath")]
 public sealed class InfoOverlayZoomIndicatorTests
 {
