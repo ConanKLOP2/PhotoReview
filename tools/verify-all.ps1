@@ -9,6 +9,7 @@ param(
     [switch]$All,
     [switch]$TestReport,
     [switch]$Parallel,
+    [switch]$Hidden,
     [Parameter(DontShow)]
     [scriptblock]$TestCommandInvoker
 )
@@ -19,6 +20,10 @@ param(
 # ./verify-all.ps1 -Native             # Include real-OS tests (Recycle Bin, shell)
 # ./verify-all.ps1 -All                # Everything (CI+local exhaustive)
 # ./verify-all.ps1 -TestReport         # Print test timing report (requires running tests)
+# ./verify-all.ps1 -Hidden             # Route the xUnit test step(s) through tools/run-tests-hidden.ps1
+#                                       # (a private, non-interactive desktop) so Category=UI real-WPF
+#                                       # windows/MessageBoxes never appear on your desktop. Combine with
+#                                       # -Parallel freely (each project gets its own private desktop name).
 # ./verify-all.ps1 -Parallel           # Run each test project's xUnit gate concurrently (one process
 #                                       # per project) instead of one after another. Cuts local wall-clock
 #                                       # roughly in half (measured 170s -> 81s on the default filter across
@@ -262,6 +267,20 @@ function Get-XunitTestArgs([string]$TestProject) {
     return $testArgs
 }
 
+$hiddenRunner = Join-Path $PSScriptRoot 'run-tests-hidden.ps1'
+
+# -Hidden: run `dotnet test` on a private, non-interactive desktop (tools/run-tests-hidden.ps1) instead of
+# directly, so Category=UI real-WPF windows/MessageBoxes never appear on the caller's desktop. $DesktopTag
+# gives each concurrent project (-Parallel) its own desktop name so they don't collide.
+function Invoke-XunitTestArgs([string[]]$TestArgs, [string]$DesktopTag) {
+    if ($Hidden) {
+        & $hiddenRunner @TestArgs -DesktopName "PhotoReviewTests-$DesktopTag"
+    }
+    else {
+        & dotnet test @TestArgs
+    }
+}
+
 if ($Parallel -and $null -eq $TestCommandInvoker) {
     # One `dotnet test` process per project, running concurrently. Each project is already its own
     # OS process/assembly, so this does not disturb xUnit's own [Collection("GlobalState")] serialization
@@ -270,10 +289,15 @@ if ($Parallel -and $null -eq $TestCommandInvoker) {
     $jobs = foreach ($testProject in $testProjects) {
         $testArgsForJob = Get-XunitTestArgs $testProject
         Start-Job -ScriptBlock {
-            param($TestArgs, $TestProject)
-            & dotnet test @TestArgs
+            param($TestArgs, $TestProject, $UseHidden, $HiddenRunner)
+            if ($UseHidden) {
+                & $HiddenRunner @TestArgs -DesktopName "PhotoReviewTests-$TestProject"
+            }
+            else {
+                & dotnet test @TestArgs
+            }
             [pscustomobject]@{ Project = $TestProject; ExitCode = $LASTEXITCODE }
-        } -ArgumentList $testArgsForJob, $testProject
+        } -ArgumentList $testArgsForJob, $testProject, $Hidden.IsPresent, $hiddenRunner
     }
     $results = @($jobs | Wait-Job | Receive-Job)
     $jobs | Remove-Job
@@ -289,7 +313,7 @@ if ($Parallel -and $null -eq $TestCommandInvoker) {
 else {
     foreach ($testProject in $testProjects) {
         Invoke-Gate "Run xUnit: $testProject" {
-            dotnet test @(Get-XunitTestArgs $testProject)
+            Invoke-XunitTestArgs -TestArgs (Get-XunitTestArgs $testProject) -DesktopTag $testProject
         }
     }
 }
@@ -300,9 +324,12 @@ else {
 if (-not $All -and -not $Slow) {
     foreach ($testProject in $testProjects) {
         Invoke-Gate "Run xUnit (Category=Integration&Slow): $testProject" {
-            dotnet test (Join-Path $root "tests\$testProject\$testProject.csproj") -c $Configuration --no-build --nologo `
-                --filter 'Category=Integration&Category=Slow&Category!=Manual&Category!=Native' `
-                --blame-hang --blame-hang-timeout 120s --blame-hang-dump-type none
+            $integrationSlowArgs = @(
+                (Join-Path $root "tests\$testProject\$testProject.csproj"), '-c', $Configuration, '--no-build', '--nologo',
+                '--filter', 'Category=Integration&Category=Slow&Category!=Manual&Category!=Native',
+                '--blame-hang', '--blame-hang-timeout', '120s', '--blame-hang-dump-type', 'none'
+            )
+            Invoke-XunitTestArgs -TestArgs $integrationSlowArgs -DesktopTag "$testProject-IntegrationSlow"
         }
     }
 }
