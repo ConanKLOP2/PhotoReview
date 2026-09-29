@@ -254,7 +254,7 @@ public sealed class SettingsWindowFieldMapTests
     [Fact(DisplayName = "Every ShortcutMappings property read from the UI has a shortcut box registered in SettingsWindow.ShortcutBoxes (input capture, duplicate warning and validation all derive from it)")]
     public async Task ShortcutBoxes_CoverEveryShortcutPropertyReadFromTheUi()
     {
-        IReadOnlyList<string> registered = [];
+        List<string> registered = [];
         await StaTestHost.RunAsync(() =>
         {
             var window = new SettingsWindow(new AppSettings());

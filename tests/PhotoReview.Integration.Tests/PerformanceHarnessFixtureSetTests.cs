@@ -10,6 +10,8 @@ namespace PhotoReview.Integration.Tests;
 [Collection("GlobalState")]
 public sealed class PerformanceHarnessFixtureSetTests : IDisposable
 {
+    private static readonly string[] HistoricalExtensions = [".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"];
+
     private readonly TempRoot _root = new("perf-fixture-set");
 
     public void Dispose() => _root.Dispose();
@@ -36,8 +38,6 @@ public sealed class PerformanceHarnessFixtureSetTests : IDisposable
     [Fact(DisplayName = "The harness's extension set is exactly the historical benchmark set")]
     public void SupportedExtensions_AreTheHistoricalBenchmarkSet()
     {
-        Assert.Equal(
-            new[] { ".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff" },
-            PerformanceTestHarness.MeasuredExtensions.OrderBy(e => e, StringComparer.Ordinal).ToArray());
+        Assert.Equal(HistoricalExtensions, PerformanceTestHarness.MeasuredExtensions.OrderBy(e => e, StringComparer.Ordinal).ToArray());
     }
 }
