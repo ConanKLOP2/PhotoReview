@@ -131,7 +131,8 @@ public sealed class FolderLoadCoordinator : IDisposable
                 // file (see PhysicalFileSystem), so this needs no separate GetFileStat() syscall per
                 // file. A listing interrupted part-way goes to `skipped` (this delegate runs on this
                 // one background task, so the list needs no lock).
-                var scanned = _fileSystem.EnumerateFilesWithStat(folder, ImageFileTypes.IsSupported, skipped.Add)
+                var rawEnabled = _settingsStore.Current.RawSupportEnabled;
+                var scanned = _fileSystem.EnumerateFilesWithStat(folder, path => ImageFileTypes.IsSupported(path, rawEnabled), skipped.Add)
                     .Select(f => f.Stat is null
                         ? new CatalogEntry(f.Path)
                         : new CatalogEntry(f.Path) { Length = f.Stat.Length, LastWriteUtc = f.Stat.LastWriteUtc })

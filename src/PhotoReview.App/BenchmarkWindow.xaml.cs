@@ -29,11 +29,13 @@ public partial class BenchmarkWindow : Window, IDisposable
 
     private readonly ObservableCollection<BenchmarkResultRow> _rows = [];
     private readonly List<BenchmarkProfileItem> _profileItems = [.. BenchmarkProfiles.All.Select(p => new BenchmarkProfileItem(p))];
+    private readonly bool _rawEnabled;
     private CancellationTokenSource? _cts;
     private string? _lastReport;
 
-    public BenchmarkWindow(string? initialFolder)
+    public BenchmarkWindow(string? initialFolder, bool rawEnabled = false)
     {
+        _rawEnabled = rawEnabled;
         InitializeComponent();
         DarkTitleBarChrome.Apply(this);
         FolderText.Text = initialFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
@@ -137,7 +139,7 @@ public partial class BenchmarkWindow : Window, IDisposable
     /// entries instead -- Cancel/Close can interrupt a slow scan instead of only the profile run that used to
     /// follow it. A test seam for the actual production logic.
     /// </summary>
-    internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, CancellationToken cancellationToken = default)
+    internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, bool rawEnabled = false, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         var supported = new List<string>();
@@ -145,7 +147,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         foreach (var path in Directory.EnumerateFiles(folder, "*.*", System.IO.SearchOption.TopDirectoryOnly))
         {
             if (++seen % EnumerationCancellationCheckInterval == 0) cancellationToken.ThrowIfCancellationRequested();
-            if (ImageFileTypes.IsSupported(path)) supported.Add(path);
+            if (ImageFileTypes.IsSupported(path, rawEnabled)) supported.Add(path);
         }
         cancellationToken.ThrowIfCancellationRequested();
         // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,
@@ -163,6 +165,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         // ahead of the generic IOException/UnauthorizedAccessException clause below to keep its own message.
         var folder = FolderText.Text;
         var imageLimit = ImageLimit;
+        var rawEnabled = _rawEnabled;
         // Created before the scan (not after, as before this change) so Cancel/Close can interrupt a slow
         // enumeration too, not only the profile run that used to follow it.
         _cts = new CancellationTokenSource();
@@ -179,7 +182,7 @@ public partial class BenchmarkWindow : Window, IDisposable
             long totalSourceBytes;
             try
             {
-                (files, totalSourceBytes) = await Task.Run(() => EnumerateAndStat(folder, imageLimit, runToken), runToken);
+                (files, totalSourceBytes) = await Task.Run(() => EnumerateAndStat(folder, imageLimit, rawEnabled, runToken), runToken);
             }
             catch (DirectoryNotFoundException) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

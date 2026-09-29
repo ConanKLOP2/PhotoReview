@@ -16,8 +16,7 @@ public sealed record PerformanceReport(DateTimeOffset StartedUtc, string Folder,
 
 public static class PerformanceTestHarness
 {
-    private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
-        { ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff" };
+    private static readonly IReadOnlySet<string> Supported = PhotoReview.Core.Catalog.ImageFileTypes.SupportedExtensions;
     private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
 
     // A valid, tiny PNG keeps the fixture portable while exercising WPF's real decoder; also the in-memory warm-up image.

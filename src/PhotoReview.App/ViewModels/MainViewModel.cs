@@ -112,7 +112,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             _naturalComparer, () => Settings, this,
             folderPicker: folderPicker, fileSystem: _fileSystem, rememberFolder: RememberMoveCopyFolder);
         _siblingNavigator = new SiblingFolderNavigator(
-            _clock, _catalog, _fileSystem, this, () => _currentSession);
+            _clock, _catalog, _fileSystem, this, () => _currentSession, () => Settings.RawSupportEnabled);
         InfoOverlay = new InfoOverlayViewModel(() => Settings, _siblingNavigator.FindSiblingImageFolders,
             hasImage: () => HasImages, getZoomPercent: () => _viewerState.DisplayZoomPercent);
         InfoOverlay.PropertyChanged += (_, e) =>
@@ -350,7 +350,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         if (string.IsNullOrWhiteSpace(path)) return;
 
-        var input = DragDropInputService.Parse([path]);
+        var input = DragDropInputService.Parse([path], Settings.RawSupportEnabled);
         if (!input.IsValid)
         {
             StatusText = input.Warning ?? Tr.StatusNoValidInput;

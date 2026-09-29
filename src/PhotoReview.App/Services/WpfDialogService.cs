@@ -111,7 +111,8 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
 
     public void ShowBenchmark(string? folder = null)
     {
-        var window = new BenchmarkWindow(folder)
+        var rawEnabled = serviceProvider.GetService<SettingsStore>()?.Current.RawSupportEnabled ?? false;
+        var window = new BenchmarkWindow(folder, rawEnabled)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
