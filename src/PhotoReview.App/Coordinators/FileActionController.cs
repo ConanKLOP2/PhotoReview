@@ -165,7 +165,11 @@ public sealed class FileActionController
             allowPermanent = true;
         }
 
+        // Same semantics as the single-file path (WillAskPermanentDelete): the permanent-delete prompt, and with it
+        // allowPermanent, exist only when the setting is ON and a member really lacks a Recycle Bin. With the setting
+        // OFF the request stays AllowPermanentDelete=false and the service refuses BEFORE anything is journaled.
         var permanentGroupPaths = operation == FileOperationType.Recycle && selectedGroup is not null
+            && _getSettings().AllowPermanentDeleteWithoutRecycleBin
             ? selectedGroup.Paths.Where(_fileActionService.LacksRecycleBin).ToArray()
             : [];
         if (selectedGroup is not null && operation == FileOperationType.Recycle
@@ -178,7 +182,7 @@ public sealed class FileActionController
             var title = permanentGroupPaths.Length > 0 ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
             if (_dialogService is null || !_dialogService.ShowConfirmation(title, prompt)) return false;
             if (_clock.CurrentFolder != folderBeforeGroupDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
-            allowPermanent = true;
+            allowPermanent = permanentGroupPaths.Length > 0;
         }
 
         var sourceIndex = _catalog.IndexOf(source);
@@ -259,10 +263,17 @@ public sealed class FileActionController
             {
                 if (groupResult is not null) _undoService?.RegisterGroup(groupResult);
                 else _undoService?.Register(singleResult!);
-                if (operation == FileOperationType.Move && sourceIndex >= 0) RememberMovePosition(source, previousPath);
+                if (operation == FileOperationType.Move && sourceIndex >= 0) RememberMovePosition(source, previousPath, group);
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
 
-                if (_catalog.Count == 0)
+                if (groupResult?.SkippedMissing is { Count: > 0 } skipped)
+                {
+                    // A partner file vanished outside the app: the action covered the remaining files. Say so (after the
+                    // presenter, which writes its own status when it finishes).
+                    if (presentTask is not null) await presentTask;
+                    _sink.SetStatusText(Tr.StatusGroupPartnerMissing(Path.GetFileName(source), string.Join(", ", skipped.Select(Path.GetFileName))));
+                }
+                else if (_catalog.Count == 0)
                 {
                     _sink.SetStatusText(isRemove ? StatusFormatter.AllImagesProcessed() : StatusFormatter.ActionCompleted(actionName));
                 }
@@ -291,13 +302,17 @@ public sealed class FileActionController
                 if (groupResult is null) _catalog.Restore(source, sourceIndex);
                 else
                 {
-                    var imagePaths = group is null
-                        ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                        : group.ImagePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var available = groupResult.Members.Where(member => imagePaths.Contains(member.Member.Source)
-                            && member.StateKnown && member.SourceExists)
-                        .Select(member => member.Member.Source).ToArray();
-                    _catalog.RestoreMembers(available, sourceIndex, available.Contains(source, StringComparer.OrdinalIgnoreCase) ? source : available.FirstOrDefault());
+                    // No member state at all (preflight refused it, or the gate was busy): nothing changed on disk, so the
+                    // whole capture goes back as the one grouped entry it was. Otherwise exactly the image members still on
+                    // disk return (re-forming the group when all of them are). RestoreMembers keeps CurrentIndex on the
+                    // photo the presenter is showing, like Restore does for a single file.
+                    var imagePaths = group!.ImagePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    IEnumerable<string> available = groupResult.Members.Count == 0
+                        ? group.ImagePaths
+                        : groupResult.Members.Where(member => imagePaths.Contains(member.Member.Source)
+                                && member.StateKnown && member.SourceExists)
+                            .Select(member => member.Member.Source);
+                    _catalog.RestoreMembers(available, sourceIndex, group);
                     _sink.OnCatalogChanged(null);
                 }
             }
@@ -315,39 +330,57 @@ public sealed class FileActionController
     /// <summary>Upper bound of remembered Move positions; older ones fall back to the name-ordered insert.</summary>
     private const int MaxRememberedMovePositions = 256;
 
-    // Undo of a Move: the photo before the moved one in the review order (null = it was first), by source path.
-    private readonly Dictionary<string, string?> _movePreviousPath = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Where a moved photo sat: the review-order neighbour before it (null = it was first) and, for a capture, its group.</summary>
+    private sealed record MovePosition(string? PreviousPath, CaptureGroup? Group);
 
-    private void RememberMovePosition(string source, string? previousPath)
+    // Undo of a Move: remembered by source path. A capture is remembered under EVERY member path (the undo result reports the
+    // first manifest member, which is not necessarily the catalog entry's representative).
+    private readonly Dictionary<string, MovePosition> _movePositions = new(StringComparer.OrdinalIgnoreCase);
+
+    private void RememberMovePosition(string source, string? previousPath, CaptureGroup? group)
     {
-        if (_movePreviousPath.Count >= MaxRememberedMovePositions) _movePreviousPath.Clear();
-        _movePreviousPath[source] = previousPath;
+        if (_movePositions.Count >= MaxRememberedMovePositions) _movePositions.Clear();
+        var position = new MovePosition(previousPath, group);
+        _movePositions[source] = position;
+        if (group is null) return;
+        foreach (var path in group.Paths) _movePositions[path] = position;
     }
 
     /// <summary>
     /// Puts an undone Move back where it was in the review order (after its former predecessor) instead of by file
     /// name, which is only right when the catalog is sorted by ascending name (Explorer, size, folder order, Z-A differ).
     /// Falls back to the natural name order when the position is unknown or the predecessor is no longer listed.
+    /// A capture (<paramref name="restoredPaths"/>) returns as one grouped entry at that same position; sidecars never
+    /// become entries.
     /// </summary>
-    private void InsertRestoredMove(string source)
+    private void InsertRestoredMove(string source, IReadOnlyList<string>? restoredPaths)
     {
-        if (_movePreviousPath.Remove(source, out var previousPath))
+        _movePositions.TryGetValue(source, out var position);
+        if (position is not null)
         {
-            if (previousPath is null)
-            {
-                _catalog.Restore(source, 0);
-                return;
-            }
-
-            var previousIndex = _catalog.IndexOf(previousPath);
-            if (previousIndex >= 0)
-            {
-                _catalog.Restore(source, previousIndex + 1);
-                return;
-            }
+            _movePositions.Remove(source);
+            if (position.Group is { } forgetGroup)
+                foreach (var path in forgetGroup.Paths) _movePositions.Remove(path);
         }
 
-        _catalog.InsertSorted(source, (a, b) => _naturalComparer.Compare(Path.GetFileName(a), Path.GetFileName(b)));
+        int index;
+        if (position is not null && position.PreviousPath is null) index = 0;
+        else if (position?.PreviousPath is { } previousPath && _catalog.IndexOf(previousPath) is var previousIndex and >= 0) index = previousIndex + 1;
+        else index = SortedInsertIndex(source);
+
+        if (restoredPaths is { Count: > 0 })
+            _catalog.RestoreMembers(restoredPaths, index, position?.Group);
+        else
+            _catalog.Restore(source, index);
+    }
+
+    private int SortedInsertIndex(string path)
+    {
+        var index = 0;
+        while (index < _catalog.Count
+            && _naturalComparer.Compare(Path.GetFileName(_catalog.PathAt(index)), Path.GetFileName(path)) < 0)
+            index++;
+        return index;
     }
 
     /// <summary>
@@ -387,6 +420,17 @@ public sealed class FileActionController
 
         if (!result.Succeeded)
         {
+            // A capture undo that failed half way still put some members back: show them now instead of at the next reload.
+            if (_clock.IsFolderCurrent(folderGen) && result.RestoredPaths is { Count: > 0 } partial
+                && !string.IsNullOrEmpty(result.Source) && IsInFolder(result.Source, currentFolder))
+            {
+                if (result.Operation == FileOperationType.Move) InsertRestoredMove(result.Source, partial.Where(path => IsInFolder(path, currentFolder)).ToArray());
+                else _catalog.RestoreMembers(partial.Where(path => IsInFolder(path, currentFolder)), _catalog.Count);
+                _sink.OnCatalogChanged(null);
+                _sink.UpdateSessionPath(_catalog.Current?.Path ?? result.Source);
+                _sink.NotifyNavigationStateChanged();
+            }
+
             _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.NothingToUndo());
             return result;
         }
@@ -398,12 +442,9 @@ public sealed class FileActionController
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
             && IsInFolder(result.Source, currentFolder))
         {
-            if (result.RestoredPaths is { Count: > 1 } restoredPaths)
-            {
-                var insertion = Math.Max(0, _catalog.IndexOf(result.Source));
-                _catalog.RestoreMembers(restoredPaths.Where(path => IsInFolder(path, currentFolder)), insertion, result.Source);
-            }
-            else InsertRestoredMove(result.Source);
+            InsertRestoredMove(result.Source, result.RestoredPaths is { Count: > 0 } restored
+                ? restored.Where(path => IsInFolder(path, currentFolder)).ToArray()
+                : null);
             _sink.OnCatalogChanged(null);
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
@@ -418,15 +459,15 @@ public sealed class FileActionController
         {
             // Only for the current folder: a Recycle made in another folder must not write its path into THIS
             // folder's session (the caller reopens the restored file's own folder instead).
-
-            if (result.RestoredPaths is { Count: > 0 } restoredPaths)
-                _catalog.RestoreMembers(restoredPaths.Where(path => IsInFolder(path, currentFolder)), _catalog.Count, result.Source);
+            // A successful Recycle undo always makes the caller reload the folder (RestoresOutsideFolder), which rebuilds
+            // the catalog from disk and presents the restored photo once: restoring into the catalog and presenting here
+            // as well would decode the same image twice.
             _sink.OnCatalogChanged(null);
-            var idx = _catalog.IndexOf(result.Source);
-            if (idx >= 0) await _sink.PresentAsync(idx);
             _sink.UpdateSessionPath(result.Source);
         }
 
+        // A capture that could only be restored in part succeeds with a note naming what could not come back.
+        if (!string.IsNullOrEmpty(result.ErrorMessage)) _sink.SetStatusText(result.ErrorMessage);
         _sink.NotifyNavigationStateChanged();
         return result;
     }

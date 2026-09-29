@@ -545,6 +545,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             if (!string.IsNullOrEmpty(folder))
             {
                 await OpenFolderAsync(folder, result.Source);
+                // The reload wrote its own status: put back the note of a capture that was only partly restorable.
+                if (!string.IsNullOrEmpty(result.ErrorMessage)) StatusText = result.ErrorMessage;
             }
         }
     }

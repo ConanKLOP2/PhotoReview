@@ -1,5 +1,6 @@
 ﻿using System;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Model;
 using Xunit;
 
 namespace PhotoReview.Core.Tests.Catalog;
@@ -8,15 +9,111 @@ namespace PhotoReview.Core.Tests.Catalog;
 public class ReviewCatalogTests
 {
     [Fact]
-    public void RestoreMembers_ReinsertsOnlyUniquePathsAndSelectsRepresentative()
+    public void RestoreMembers_SeparateMode_ReinsertsOnlyUniquePathsAsIndependentEntries()
     {
         var catalog = new ReviewCatalog();
         catalog.Reset([new CatalogEntry(@"C:\photos\before.jpg"), new CatalogEntry(@"C:\photos\after.jpg")]);
-        catalog.RestoreMembers([@"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\raw.cr2"], 1,
-            @"C:\photos\jpeg.jpg");
+        catalog.RestoreMembers([@"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\raw.cr2"], 1);
 
         Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\after.jpg"], catalog.Paths);
-        Assert.Equal(@"C:\photos\jpeg.jpg", catalog.Current!.Path);
+        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+    }
+
+    private static ReviewCatalog PairCatalog(RawPairMode mode)
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([new CatalogEntry(@"C:\photos\before.jpg"), new CatalogEntry(@"C:\photos\after.jpg")], mode);
+        return catalog;
+    }
+
+    [Theory]
+    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.jpg")]
+    [InlineData(RawPairMode.PreferRaw, @"C:\photos\p.cr2")]
+    public void RestoreMembers_BothImageMembers_RestoresOneGroupedEntryWithRepresentativeForTheMode(RawPairMode mode, string representative)
+    {
+        var catalog = PairCatalog(mode);
+
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1);
+
+        Assert.Equal([@"C:\photos\before.jpg", representative, @"C:\photos\after.jpg"], catalog.Paths);
+        var entry = catalog.Entries[1];
+        Assert.NotNull(entry.CaptureGroup);
+        Assert.Equal(@"C:\photos\p.jpg", entry.CaptureGroup!.JpegPath);
+        Assert.Equal(@"C:\photos\p.cr2", entry.CaptureGroup.RawPath);
+        Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.jpg"));
+        Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.cr2"));
+    }
+
+    [Fact]
+    public void RestoreMembers_SidecarInPaths_NeverBecomesAnEntryButTravelsInTheGroup()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.xmp"], 1);
+
+        Assert.Equal(3, catalog.Count);
+        Assert.DoesNotContain(catalog.Paths, path => path.EndsWith(".xmp", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(@"C:\photos\p.xmp", catalog.Entries[1].CaptureGroup!.XmpPath);
+        Assert.Equal(-1, catalog.IndexOf(@"C:\photos\p.xmp"));
+    }
+
+    [Fact]
+    public void RestoreMembers_OnlyASidecar_RestoresNothing()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        var version = catalog.StructuralVersion;
+
+        catalog.RestoreMembers([@"C:\photos\p.xmp"], 0);
+
+        Assert.Equal(2, catalog.Count);
+        Assert.Equal(version, catalog.StructuralVersion);
+    }
+
+    [Fact]
+    public void RestoreMembers_ExplicitGroup_IsPreservedIncludingItsSidecar()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferRaw);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.cr2.xmp");
+
+        catalog.RestoreMembers(group.ImagePaths, 0, group);
+
+        Assert.Equal(@"C:\photos\p.cr2", catalog.PathAt(0));
+        Assert.Same(group, catalog.Entries[0].CaptureGroup);
+    }
+
+    [Fact]
+    public void RestoreMembers_OneMemberOfAPair_RestoresAnUngroupedEntry()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+
+        catalog.RestoreMembers([@"C:\photos\p.cr2"], 1);
+
+        Assert.Equal(@"C:\photos\p.cr2", catalog.PathAt(1));
+        Assert.Null(catalog.Entries[1].CaptureGroup);
+    }
+
+    [Fact]
+    public void RestoreMembers_KeepsCurrentIndexOnTheDisplayedImage()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        catalog.SetCurrent(1); // showing "after.jpg"
+
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1);
+
+        Assert.Equal(@"C:\photos\after.jpg", catalog.Current!.Path); // not yanked to the restored capture
+        Assert.Equal(2, catalog.CurrentIndex);
+    }
+
+    [Fact]
+    public void RestoreMembers_IntoEmptyCatalog_MakesTheRestoredEntryCurrent()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([], RawPairMode.PreferJpeg);
+
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 0);
+
+        Assert.Equal(1, catalog.Count);
+        Assert.Equal(0, catalog.CurrentIndex);
     }
 
     [Fact]
