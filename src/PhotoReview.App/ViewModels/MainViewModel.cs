@@ -274,7 +274,19 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.PathAt(_catalog.CurrentIndex));
 
     public bool CurrentHasCapturePair => _catalog.Current?.CaptureGroup is not null;
-    public string CapturePairBadge => CurrentHasCapturePair ? "JPG+RAW" : string.Empty;
+
+    /// <summary>Localized badge naming the displayed member of the current JPG+RAW capture (empty without a pair).</summary>
+    public string CapturePairBadge
+    {
+        get
+        {
+            if (_catalog.Current is not { CaptureGroup: { } group }) return string.Empty;
+            var shown = _presenter.CurrentPresentedPath;
+            return shown is not null && string.Equals(shown, group.RawPath, StringComparison.OrdinalIgnoreCase)
+                ? Tr.MainCapturePairBadgeRaw
+                : Tr.MainCapturePairBadgeJpeg;
+        }
+    }
 
     public async Task ToggleCaptureGroupMemberAsync()
     {
@@ -296,10 +308,23 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _compare.IsVisible = enableCompare;
         if (_catalog.CurrentIndex >= 0)
         {
-            var pathOverride = _catalog.Current?.CaptureGroup is null ? null : _presenter.CurrentPresentedPath;
-            _ = _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare, pathOverride: pathOverride,
-                includeCaptureGroupInCompare: enableCompare);
+            // The presented path can be stale (catalog changed since); PresentAsync rejects an override that is not a
+            // member of the selected entry, so only pass it when it really belongs to the current index.
+            var presented = _presenter.CurrentPresentedPath;
+            var pathOverride = _catalog.Current?.CaptureGroup is not null && presented is not null
+                && _catalog.IndexOf(presented) == _catalog.CurrentIndex ? presented : null;
+            CompareToggleTask = ObservePresentAsync(_presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare,
+                pathOverride: pathOverride, includeCaptureGroupInCompare: enableCompare));
         }
+    }
+
+    /// <summary>The latest fire-and-forget compare toggle presentation (tests await it).</summary>
+    internal Task CompareToggleTask { get; private set; } = Task.CompletedTask;
+
+    private static async Task ObservePresentAsync(Task present)
+    {
+        try { await present; }
+        catch (Exception ex) { AppLog.Error("ToggleCompare presentation failed", ex); }
     }
 
     /// <summary>Latest folder load, including its Explorer-order apply/ignore; completes when the order is settled (tests await it instead of a wall-clock window).</summary>
@@ -832,6 +857,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_folderTextFolder is { } folder) SetFolderText(folder, _folderTextCount, IsExplorerOrderApplied);
         OnPropertyChanged(nameof(SkippedWarningText));
         InfoOverlay.Refresh();
+        OnPropertyChanged(nameof(CapturePairBadge));
         // StatusText is event text (last action); it switches language with the next update.
         NotifyExifLineChanged();
     }

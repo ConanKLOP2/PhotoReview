@@ -86,6 +86,38 @@ public sealed class RecoveryWindowTests
     }
 
     [Fact]
+    public async Task SelectingARowBeingRechecked_AfterAGroupRow_RestoresSourceAndDestinationPanels()
+    {
+        using var temp = new PhotoReview.TestSupport.TempRoot("recovery-window-group-panels");
+        var entries = SampleEntries(temp.Path);
+        var jpg = Path.Combine(temp.Path, "shots", "pair.jpg");
+        var raw = Path.Combine(temp.Path, "shots", "pair.cr3");
+        var members = new[]
+        {
+            new JournalGroupMember(jpg, Path.Combine(temp.Path, "keep", "pair.jpg"), 10, Stamp),
+            new JournalGroupMember(raw, Path.Combine(temp.Path, "keep", "pair.cr3"), 100, Stamp),
+        };
+        var group = new JournalEntry("g", FileOperationType.Move, JournalState.Failed, jpg, members[0].Destination, 10, Stamp, Stamp,
+            GroupId: "g", GroupMembers: members);
+        entries.Insert(0, group);
+        await StaTestHost.RunAsync(async () =>
+        {
+            var window = new RecoveryWindow(entries, retry: _ => throw new InvalidOperationException("must not retry"), dismiss: _ => new DismissOutcome([], []));
+            await window.RunChecksAsync();
+            window.SelectRow(0);
+            Assert.Equal(Visibility.Collapsed, window.SourceDetails.Visibility); // group rows list their members instead
+
+            // A recheck clears the selected group row's result: the "checking" details must show source/destination again.
+            window.VisibleRows[0].SetResult(null);
+
+            Assert.Equal(Visibility.Visible, window.SourceDetails.Visibility);
+            Assert.Equal(jpg, window.SourceDetails.CurrentPath);
+            Assert.Equal(Visibility.Visible, window.DestinationDetails.Visibility);
+            window.Close();
+        });
+    }
+
+    [Fact]
     public async Task Retry_DoesNotBlockDispatcher()
     {
         using var temp = new PhotoReview.TestSupport.TempRoot("recovery-retry-async");

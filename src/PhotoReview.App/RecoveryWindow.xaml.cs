@@ -139,6 +139,9 @@ public partial class RecoveryWindow : Window
             VerdictText.Foreground = VerdictBadge.BorderBrush = RecoveryPresenter.NeutralBrush;
             ExplainText.Text = Tr.RecoveryDetailChecking;
             ActionText.Text = string.Empty;
+            // A group row checked earlier collapsed the source panel (it lists members instead); a row that is being
+            // (re)checked shows the entry's own source/destination, so bring the panel back before filling it.
+            SourcePanel.Visibility = Visibility.Visible;
             SourcePanel.Show(new RecoveryPathView(Tr.RecoveryDetailSource, entry.Source, string.Empty, RecoveryPresenter.NeutralBrush, string.Empty, RecoveryPresenter.JournalText(entry), null));
             ShowDestination(entry.Destination is null ? null : new RecoveryPathView(Tr.RecoveryDetailDestination, entry.Destination, string.Empty, RecoveryPresenter.NeutralBrush, string.Empty, RecoveryPresenter.JournalText(entry), null));
             GroupMembersHeading.Visibility = Visibility.Collapsed;
