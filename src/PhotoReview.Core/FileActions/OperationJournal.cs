@@ -274,6 +274,7 @@ public sealed class OperationJournal
     private static bool IsSharingOrLockViolation(IOException ex) =>
         ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
 
+    /// <summary>Committed Move lines. A capture-group line is one entry: top level = first member, every member in <see cref="JournalEntry.GroupMembers"/> (lookups by top-level Destination only see the first member; see ADR 0003).</summary>
     public IReadOnlyList<JournalEntry> ReadCommittedMoves()
     {
         lock (_gate)

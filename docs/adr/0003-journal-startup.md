@@ -80,3 +80,24 @@ assert journal consistency.
   other processes are excluded with the existing share-mode contract (a deny-writers handle; appenders retry),
   lines appended after the snapshot are carried over, and the new file replaces the old one with one atomic
   POSIX-semantics rename (`PhysicalJournalCompactionFiles`); a crash before the rename leaves the journal as it was.
+
+## Amendment: capture-group entries and cross-build compatibility (2026-09-29)
+
+- A JPEG+RAW capture operation is ONE journal line with extra `GroupId` and `GroupMembers` (each member: Source,
+  Destination, Size, LastWriteUtc, Permanent). The top-level Source/Destination/Size/LastWriteUtc always equal the
+  FIRST member. A group Undo is one `Undo:true` line already in undo direction (Source = the earlier destination,
+  Destination = the earlier source); reconcile and Recovery read it as written and never swap again.
+- Reconcile marks a group Committed only when EVERY member completed; a partial group stays Failed
+  (`PendingUnconfirmed`, or `SourceStillExistsAfterRecovery` for Recycle) and is one Recovery item.
+- **Older builds** skip the unknown members, so they read a group line as a single Move/Recycle of the first member
+  and may reconcile it Committed although the other members never ran. There is no schema-version guard: a cheap,
+  safe way to make an old reconcile conservative would mean changing the top-level fields (Destination/Size) of the
+  line, which new code, the file services and the journal-derived equality would all have to agree on. Do not run an
+  older build over a journal that still holds unresolved group lines (resolve them in Recovery first).
+- `ReadCommittedMoves` returns a group as one entry (top level = first member, all members in `GroupMembers`).
+  `UndoService`'s fingerprint fallback looks entries up by top-level Destination but only serves single-file Moves;
+  group Undo uses the members registered in memory, so the fallback never needs the other members.
+- Recovery of an interrupted group Delete: members still on disk make it `CanRetry` (only members whose size and
+  last-write still match are recycled again; permanent deletion only for members journaled `Permanent`); a group mixing
+  permanent and Recycle Bin members is `PartiallyPermanentlyDeleted`, and only an all-permanent group is
+  `PermanentlyDeleted`.
