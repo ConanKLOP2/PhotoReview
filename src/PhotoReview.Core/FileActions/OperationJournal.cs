@@ -408,7 +408,14 @@ public sealed class OperationJournal
         {
             if (preparedBeforeUtc is { } cutoff && pending.TimestampUtc >= cutoff) continue;
             if (IsExecuting(pending.Id)) continue; // Q-R27: skip before any (possibly slow) file check
-            if (pending.Type == FileOperationType.Recycle)
+            if (pending.GroupMembers is { Count: > 0 })
+            {
+                var allCompleted = pending.GroupMembers.All(member => IsGroupMemberCompleted(pending, member));
+                var entry = WithOutcome(pending, allCompleted ? JournalState.Committed : JournalState.Failed,
+                    pending.Type == FileOperationType.Recycle ? JournalErrors.SourceStillExistsAfterRecovery : JournalErrors.PendingUnconfirmed);
+                if (AppendIfStillPending(entry)) reconciled.Add(entry);
+            }
+            else if (pending.Type == FileOperationType.Recycle)
             {
                 var state = _fileSystem.FileExists(pending.Source) ? JournalState.Failed : JournalState.Committed;
                 var entry = WithOutcome(pending, state, JournalErrors.SourceStillExistsAfterRecovery);
@@ -430,6 +437,25 @@ public sealed class OperationJournal
             }
         }
         return reconciled;
+    }
+
+    private bool IsGroupMemberCompleted(JournalEntry group, JournalGroupMember member)
+    {
+        if (group.Type == FileOperationType.Recycle)
+        {
+            var exists = _fileSystem.FileExists(member.Source);
+            return group.Undo == true ? exists : !exists;
+        }
+
+        var destination = member.Destination is null ? null : _fileSystem.GetFileStat(member.Destination);
+        var destinationMatches = destination is not null && destination.Length == member.Size;
+        var sourceExists = _fileSystem.FileExists(member.Source);
+        return group.Type switch
+        {
+            FileOperationType.Move => !sourceExists && destinationMatches,
+            FileOperationType.Copy => destinationMatches,
+            _ => false
+        };
     }
 
     // FA-01: the verdict was computed from a stale snapshot; another process sharing this journal may have appended a
