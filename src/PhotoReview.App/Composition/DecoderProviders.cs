@@ -4,6 +4,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
+using PhotoReview.Imaging.LibRaw;
 using PhotoReview.Imaging.TurboJpeg;
 
 namespace PhotoReview.App.Composition;
@@ -40,6 +41,17 @@ internal static class DecoderProviders
             App.LogStartupErrorForced(
                 $"TurboJPEG decoder backend is not available and will not be registered: {reason}",
                 new InvalidOperationException(reason ?? "TurboJPEG probe failed."));
+        }
+
+        if (LibRawAvailability.Probe(out string? libRawReason))
+        {
+            providers.Add((DecoderBackend.LibRaw, () => new LibRawDecoder()));
+        }
+        else
+        {
+            App.LogStartupErrorForced(
+                $"LibRaw decoder backend is not available and will not be registered: {libRawReason}",
+                new InvalidOperationException(libRawReason ?? "LibRaw probe failed."));
         }
 
         return providers;

@@ -11,6 +11,16 @@ public sealed class LibRawDecoderTests
         Path.Combine(AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus"));
 
     [Fact]
+    [Trait("Category", "Native")]
+    public void AvailabilityProbe_LoadsAndInitializesPinnedRuntime()
+    {
+        Assert.True(LibRawAvailability.Probe(out var reason), reason);
+        Assert.Null(reason);
+        Assert.True(LibRawAvailability.Probe(out reason));
+        Assert.Null(reason);
+    }
+
+    [Fact]
     public void Decode_OfficialCorpusSamples_ReturnsValidRgbBackedBitmap()
     {
         var files = new[]
