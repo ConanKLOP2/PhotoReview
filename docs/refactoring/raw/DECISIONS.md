@@ -50,11 +50,11 @@ visible area); the info overlay shows the preview size separately ("RAW · previ
 | **B. Group, show the JPG, actions apply to the whole pair (+ `.xmp` sidecar)** | One decision per shot (the common culling workflow); JPG shows fastest | Needs multi-file journal transactions (RAW-41, data-safety critical); Undo must restore both; a partial failure must be visible |
 | C. Group, show the RAW | Same as B, shows RAW data | RAW preview may be smaller than the JPG; slower |
 
-**Recommendation: B, delivered as setting `RawPairMode`** with default `Separate` until RAW-41 has passed
-its crash/undo tests and the real-machine check, then default `PreferJpeg` in RAW-70. A key toggles which
-member of the pair is shown. **Decided (2026-09-28, user):** pair handling is a user-facing option in the
-Settings window (`RawPairMode`: Separate / Group–show JPG / Group–show RAW), not a fixed behaviour; default
-per the recommendation above. Pairing rule (as proposed, accepted): same folder + same base name
+**Recommendation: B, delivered as setting `RawPairMode`**; keep default `Separate` until RAW-41's crash/undo
+tests and RAW-62 real-machine check pass. The user waived RAW-62 on 2026-09-29, so the shipped/default value
+remains `Separate`; no real-machine acceptance is claimed. A key toggles which member of the pair is shown.
+**Decided (2026-09-28, user):** pair handling is a user-facing option in the Settings window (`RawPairMode`:
+Separate / Group–show JPG / Group–show RAW), not a fixed behaviour. Pairing rule (as proposed, accepted): same folder + same base name
 (case-insensitive), exactly one JPEG + one RAW; a same-name `.xmp` follows the pair in every file action;
 a RAW without a JPEG is shown on its own.
 

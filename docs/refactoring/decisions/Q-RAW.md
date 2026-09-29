@@ -2,7 +2,7 @@
 id: Q-RAW-01..07
 order: 35
 summary: |-
-  Camera RAW support shipped in PR #239 (reverses Q-R52's RAW part): embedded JPEG preview, optional LibRaw decode on zoom, 100 % = sensor size, configurable JPG+RAW pairing (default Separate), 8 formats, Adobe RGB conversion, CC0 corpus + synthetic tests; RAW-62 real-machine check waived, not passed.
+  Camera RAW support implemented in open PR #239 (reverses Q-R52's RAW part): embedded JPEG preview, ORF LibRaw thumbnail fallback, optional full LibRaw decode on zoom, 100 % = sensor size, configurable JPG+RAW pairing (default Separate), 8 formats, Adobe RGB conversion, CC0 corpus + synthetic tests; RAW-62 real-machine check waived, not passed.
 ---
 
 # Q-RAW-01..07 — camera RAW support (2026-09-28)

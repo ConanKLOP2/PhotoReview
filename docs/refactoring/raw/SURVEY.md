@@ -100,3 +100,10 @@ The Native probe ran once against each of the 23 pinned corpus samples on Window
 | **Total** | **23** | **2** | **1** | **20** |
 
 The two full DNG results were 320×240 and 4672×3104. The preview-only DNG result matched its embedded preview dimensions and was rejected. The other 20 samples could not be fully decoded by WIC on this machine. `WicRawFullDecoder` treats this probe as an optional backend; Q-RAW-02 remains decided as LibRaw for reliable full decoding.
+
+### ORF embedded-preview fallback (2026-09-29)
+
+The three ORF samples above contain JPEG previews that the Windows JPEG decoder rejects with `NotSupportedException`.
+The app now falls back to the pinned LibRaw thumbnail API for ORF only when that embedded-preview decode fails.
+The fallback was exercised through `RawDecoder` on all three corpus samples; normal embedded-preview decoding remains the first path.
+The full-corpus strict Native test also decodes all 23 samples successfully on the integration workstation.
