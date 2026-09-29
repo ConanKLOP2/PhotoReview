@@ -31,6 +31,9 @@ public sealed class LibRawDecoderTests
             .Where(path => PhotoReview.Core.Catalog.ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path)))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+        var selectedSample = Environment.GetEnvironmentVariable("PHOTOREVIEW_LIBRAW_SAMPLE");
+        if (!string.IsNullOrWhiteSpace(selectedSample))
+            files = files.Where(path => Path.GetFileName(path).Equals(selectedSample, StringComparison.OrdinalIgnoreCase)).ToArray();
         if (files.Length == 0) return;
 
         var decoder = new LibRawDecoder();
@@ -39,6 +42,8 @@ public sealed class LibRawDecoderTests
         var measurements = new List<string>();
         foreach (var path in files)
         {
+            Console.WriteLine($"LibRaw corpus decoding: {Path.GetFileName(path)}");
+            Console.Out.Flush();
             var stopwatch = Stopwatch.StartNew();
             var request = new DecodeRequest(path, DecodeBox.Unbounded);
             var image = decoder.Decode(request);
