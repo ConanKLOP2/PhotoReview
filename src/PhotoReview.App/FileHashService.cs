@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Collections.Concurrent;
 using System.Threading;
 using PhotoReview.Core.Caching;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Core.Localization;
 
@@ -94,7 +95,10 @@ public sealed class FileHashService : IFileHasher
     {
         // A file the cache could never keep (over its capacity or 2 GB) is streamed: reading it whole would spike RAM on the LOH,
         // throw OverflowException past 2 GB and evict the viewer's bytes for nothing.
-        if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(length))
+        // A camera RAW (25-80 MB) never goes through the whole-file byte cache either: it would evict the viewer's embedded-preview
+        // ranges (the RAW rule in SourceBytesCache/PreviewImageService), so it is stream-hashed like an oversized file.
+        if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(length)
+            && !ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path)))
         {
             var bytes = _sourceBytesCache.GetOrRead(path);
             return CompleteIfUnchanged(path, length, lastWriteUtc, generation, Convert.ToHexString(SHA256.HashData(bytes)));
