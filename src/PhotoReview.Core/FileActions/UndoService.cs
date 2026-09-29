@@ -28,6 +28,13 @@ public sealed class UndoService
     private UndoActionRecord? _lastUndoAction;
     private int _internalInProgress;
 
+    // A group undo that restored some members (by its own mutations) and then failed stays as _lastUndoAction so Ctrl+Z can
+    // retry it. A retry that finds nothing pending is then an idempotent success ("everything is back") and resolves the
+    // earlier Failed Recovery records; without this memory it is the "already handled" case (the user put the files back).
+    private PartialGroupUndo? _partialGroupUndo;
+
+    private sealed record PartialGroupUndo(object Action, IReadOnlyList<JournalEntry> FailedEntries);
+
     private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc, bool Permanent = false,
         IReadOnlyList<JournalGroupMember>? GroupMembers = null);
 
@@ -316,6 +323,7 @@ public sealed class UndoService
         // Original paths that are back in place (restored by this call or earlier), reported even when a later member fails
         // so the catalog can show them without a folder reload.
         var restored = new List<string>();
+        var restoredByThisUndo = 0;
         try
         {
             var undoMembers = members.Select(member => new JournalGroupMember(
@@ -345,7 +353,11 @@ public sealed class UndoService
             {
                 // Everything is already back: this entry can never do anything, so drop it (like a broken single Move)
                 // instead of failing the same way on every later Ctrl+Z.
+                var resumed = ResolvePartialUndo(action);
                 DropGroupUndo(members);
+                if (resumed)
+                    return new UndoResult(true, FileOperationType.Move, action.Source, action.Destination, null,
+                        RestoredPaths: members.Select(member => member.Source).ToArray());
                 throw new IOException(Tr.CoreRecoveryAlreadyHandled);
             }
             var prepared = new JournalEntry(Guid.NewGuid().ToString("N"), FileOperationType.Move, JournalState.Prepared,
@@ -362,16 +374,18 @@ public sealed class UndoService
                 if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
                     throw new IOException(JournalErrors.VerifySizeChanged);
                 restored.Add(member.Destination!);
+                restoredByThisUndo++;
             }
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
+            _partialGroupUndo = null;
             DropGroupUndo(members);
             return new UndoResult(true, FileOperationType.Move, action.Source, action.Destination, null,
                 RestoredPaths: members.Select(member => member.Source).ToArray());
         }
         catch (Exception ex)
         {
-            _ = tx?.Fail(ex, out _);
+            RememberPartialUndo(action, restoredByThisUndo, tx?.Fail(ex, out _));
             return new UndoResult(false, FileOperationType.Move, action.Source, action.Destination, Tr.CoreUndoFailed(ex.Message),
                 RestoredPaths: restored.Count > 0 ? restored.ToArray() : null);
         }
@@ -380,6 +394,39 @@ public sealed class UndoService
             tx?.Dispose();
             End();
         }
+    }
+
+    private void RememberPartialUndo(UndoActionRecord action, int restoredByThisUndo, JournalEntry? failedEntry)
+    {
+        var earlier = _partialGroupUndo is { } partial && ReferenceEquals(partial.Action, action) ? partial : null;
+        if (restoredByThisUndo == 0 && earlier is null) return;
+        var entries = new List<JournalEntry>(earlier?.FailedEntries ?? []);
+        if (failedEntry is not null) entries.Add(failedEntry);
+        _partialGroupUndo = new PartialGroupUndo(action, entries);
+    }
+
+    /// <summary>
+    /// True when <paramref name="action"/> is a retry of an undo that already restored members itself: its earlier Failed
+    /// records are closed with Committed (best effort; skipped when another writer touched them) and the memory is dropped.
+    /// </summary>
+    private bool ResolvePartialUndo(UndoActionRecord action)
+    {
+        var partial = _partialGroupUndo;
+        _partialGroupUndo = null;
+        if (partial is null || !ReferenceEquals(partial.Action, action)) return false;
+        foreach (var failed in partial.FailedEntries)
+        {
+            try
+            {
+                var committed = failed with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow, Error = null, ErrorCode = null };
+                _ = _journal.AppendIfUnchangedSince(failed, [], committed);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The undo itself is complete; a journal that cannot be written only leaves the old Recovery item to be dismissed.
+            }
+        }
+        return true;
     }
 
     private void DropGroupUndo(IReadOnlyList<JournalGroupMember> members)
@@ -403,6 +450,7 @@ public sealed class UndoService
         JournalTransaction? tx = null;
         // Original paths that are back (restored by this call or earlier); reported even when a later member fails.
         var restored = new List<string>();
+        var restoredByThisUndo = 0;
         try
         {
             var pending = new List<JournalGroupMember>();
@@ -432,6 +480,9 @@ public sealed class UndoService
             if (pending.Count == 0)
             {
                 _lastUndoAction = null;
+                if (ResolvePartialUndo(action))
+                    return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),
+                        RestoredPaths: RestoredInOrder(members, restored));
                 throw new IOException(Tr.CoreRecoveryAlreadyHandled);
             }
             var undoMembers = members.Where(member => !member.Permanent).Select(member => member with { }).ToArray();
@@ -446,22 +497,19 @@ public sealed class UndoService
                     throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                 if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                 restored.Add(member.Source);
+                restoredByThisUndo++;
             }
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
+            _partialGroupUndo = null;
             _lastUndoAction = null;
-            var restoredInOrder = members.Where(member => restored.Contains(member.Source, StringComparer.OrdinalIgnoreCase))
-                .Select(member => member.Source).ToArray();
             // Partly restorable capture: success for what came back, plus a message naming what cannot (a warning, not an error).
-            var note = unrecoverable.Count > 0
-                ? Tr.CoreUndoGroupPartiallyRestored(restoredInOrder.Length, members.Count,
-                    string.Join(", ", unrecoverable.Select(member => Path.GetFileName(member.Source))))
-                : null;
-            return new UndoResult(true, FileOperationType.Recycle, action.Source, null, note, RestoredPaths: restoredInOrder);
+            return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),
+                RestoredPaths: RestoredInOrder(members, restored));
         }
         catch (Exception ex)
         {
-            _ = tx?.Fail(ex, out _);
+            RememberPartialUndo(action, restoredByThisUndo, tx?.Fail(ex, out _));
             return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoFailed(ex.Message),
                 RestoredPaths: restored.Count > 0 ? restored.ToArray() : null);
         }
@@ -471,4 +519,14 @@ public sealed class UndoService
             End();
         }
     }
+
+    private static string[] RestoredInOrder(IReadOnlyList<JournalGroupMember> members, IReadOnlyCollection<string> restored) =>
+        members.Where(member => restored.Contains(member.Source, StringComparer.OrdinalIgnoreCase)).Select(member => member.Source).ToArray();
+
+    private static string? UnrecoverableNote(IReadOnlyList<JournalGroupMember> members, IReadOnlyCollection<string> restored,
+        List<JournalGroupMember> unrecoverable) =>
+        unrecoverable.Count > 0
+            ? Tr.CoreUndoGroupPartiallyRestored(RestoredInOrder(members, restored).Length, members.Count,
+                string.Join(", ", unrecoverable.Select(member => Path.GetFileName(member.Source))))
+            : null;
 }
