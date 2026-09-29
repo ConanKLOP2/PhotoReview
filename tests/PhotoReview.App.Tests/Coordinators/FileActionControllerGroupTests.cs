@@ -63,11 +63,11 @@ public sealed class FileActionControllerGroupTests : IDisposable
     /// <summary>Catalog of [before.jpg, pair (jpg+cr2[+xmp] as one entry), after.jpg] in the given pair mode.</summary>
     private (string Before, string Jpeg, string Raw, string? Xmp, string After) LoadPairBetweenTwoPhotos(RawPairMode mode = RawPairMode.PreferJpeg, bool withXmp = false)
     {
-        var before = Make("before.jpg");
+        var before = Make("zbefore.jpg");
         var jpeg = Make("pair.jpg");
         var raw = Make("pair.cr2", 8);
         var xmp = withXmp ? Make("pair.xmp", 3) : null;
-        var after = Make("zafter.jpg");
+        var after = Make("aafter.jpg");
         _catalog.Reset(
             [new CatalogEntry(before), new CatalogEntry(jpeg), new CatalogEntry(raw), new CatalogEntry(after)],
             mode, xmp is null ? null : [xmp]);
