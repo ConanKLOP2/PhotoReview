@@ -17,7 +17,6 @@ internal sealed class JournalTransaction : IDisposable
     private readonly IClock _clock;
     private readonly JournalEntry _prepared;
     private readonly JournalEntry? _retryOf;
-    private readonly bool _groupRetry;
     private IDisposable? _liveMarker;
 
     /// <param name="retryOf">
@@ -28,10 +27,9 @@ internal sealed class JournalTransaction : IDisposable
     /// when <paramref name="retryOf"/> is still the latest entry, Failed only when the entries after it are exactly
     /// this transaction's own Prepared. Otherwise nothing is appended and <see cref="Superseded"/> is set.
     /// </param>
-    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, JournalEntry? retryOf = null, bool groupRetry = false)
+    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, JournalEntry? retryOf = null)
     {
         _retryOf = retryOf;
-        _groupRetry = groupRetry;
         _journal = journal;
         _clock = clock;
         _prepared = prepared;
