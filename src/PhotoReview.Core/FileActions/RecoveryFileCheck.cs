@@ -31,6 +31,8 @@ public enum RecoveryVerdict
     NotRecycled,
     /// <summary>Q-R8: a Recycle that deleted the file permanently (drive without a Recycle Bin); it cannot be restored.</summary>
     PermanentlyDeleted,
+    /// <summary>A Delete of a capture group where some files were deleted permanently (drive without a Recycle Bin) and the others went to the Recycle Bin: only part of the capture is unrecoverable.</summary>
+    PartiallyPermanentlyDeleted,
 }
 
 /// <summary>Result of checking one path. Size/time are the current values (null when missing or unreadable).</summary>
@@ -105,6 +107,7 @@ public sealed class RecoveryFileCheck
         RecoveryVerdict.RecycleUnverifiable => "RecycleUnverifiable",
         RecoveryVerdict.NotRecycled => "NotRecycled",
         RecoveryVerdict.PermanentlyDeleted => "PermanentlyDeleted",
+        RecoveryVerdict.PartiallyPermanentlyDeleted => "PartiallyPermanentlyDeleted",
         _ => "Unknown",
     };
 
@@ -161,12 +164,29 @@ public sealed class RecoveryFileCheck
         if (entry.Undo == true && entry.Type == FileOperationType.Recycle
             && verdicts.All(verdict => verdict is RecoveryVerdict.RecycleUnverifiable or RecoveryVerdict.AlreadyDone)
             && verdicts.Contains(RecoveryVerdict.RecycleUnverifiable)) return RecoveryVerdict.CanRetry;
+        // A non-undo Delete (Recycle) group that stopped part-way: the members still on disk can be recycled again (the retry
+        // re-checks each against its journaled fingerprint and never deletes permanently unless the member was journaled
+        // Permanent), while the members already gone stay as they are. A present member that no longer matches the journal
+        // blocks the retry.
+        if (entry.Type == FileOperationType.Recycle && entry.Undo != true
+            && verdicts.All(verdict => verdict is RecoveryVerdict.NotRecycled or RecoveryVerdict.RecycleUnverifiable or RecoveryVerdict.PermanentlyDeleted)
+            && verdicts.Contains(RecoveryVerdict.NotRecycled))
+        {
+            return members.Where(member => member.Verdict == RecoveryVerdict.NotRecycled)
+                .All(member => member.Source.Status == RecoveryPathStatus.Exists)
+                ? RecoveryVerdict.CanRetry
+                : RecoveryVerdict.NotRecycled;
+        }
         if (verdicts.All(verdict => verdict is RecoveryVerdict.AlreadyDone or RecoveryVerdict.RecycleUnverifiable or RecoveryVerdict.PermanentlyDeleted))
-            return verdicts.Any(verdict => verdict == RecoveryVerdict.PermanentlyDeleted)
-                ? RecoveryVerdict.PermanentlyDeleted
-                : entry.Type == FileOperationType.Recycle ? RecoveryVerdict.RecycleUnverifiable : RecoveryVerdict.AlreadyDone;
-        if (verdicts.All(verdict => verdict is RecoveryVerdict.AlreadyDone or RecoveryVerdict.CanRetry or RecoveryVerdict.RecycleUnverifiable)
-            && verdicts.Any(verdict => verdict == RecoveryVerdict.CanRetry))
+        {
+            // Per member: only when EVERY file was deleted permanently is the whole capture unrecoverable; a mix of permanent and
+            // recycled members must not tell the user that files sitting in the Recycle Bin are gone.
+            if (verdicts.All(verdict => verdict == RecoveryVerdict.PermanentlyDeleted)) return RecoveryVerdict.PermanentlyDeleted;
+            if (verdicts.Contains(RecoveryVerdict.PermanentlyDeleted)) return RecoveryVerdict.PartiallyPermanentlyDeleted;
+            return entry.Type == FileOperationType.Recycle ? RecoveryVerdict.RecycleUnverifiable : RecoveryVerdict.AlreadyDone;
+        }
+        if (verdicts.All(verdict => verdict is RecoveryVerdict.AlreadyDone or RecoveryVerdict.CanRetry)
+            && verdicts.Contains(RecoveryVerdict.CanRetry))
             return RecoveryVerdict.CanRetry;
         if (verdicts.Contains(RecoveryVerdict.Conflict)) return RecoveryVerdict.Conflict;
         if (verdicts.Contains(RecoveryVerdict.SourceChanged)) return RecoveryVerdict.SourceChanged;

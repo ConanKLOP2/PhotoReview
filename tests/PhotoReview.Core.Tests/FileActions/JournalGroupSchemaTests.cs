@@ -25,6 +25,51 @@ public sealed class JournalGroupSchemaTests
     }
 
     [Fact]
+    public void GroupEntry_ReadByOlderBuild_LooksLikeASingleMoveOfTheFirstMember()
+    {
+        // Cross-build compatibility (documented in docs/architecture.md): a build without group support skips the unknown
+        // GroupId/GroupMembers members, so it sees ONE Move whose top-level fields are the FIRST member's. The top level is
+        // therefore always kept equal to the first member; it is not a judgement about the other members.
+        var members = new JournalGroupMember[]
+        {
+            new(@"C:\photos\a.jpg", @"C:\photos\selected\a.jpg", 12, Stamp),
+            new(@"C:\photos\a.cr2", @"C:\photos\selected\a.cr2", 120, Stamp),
+        };
+        var entry = new JournalEntry("group", FileOperationType.Move, JournalState.Committed,
+            members[0].Source, members[0].Destination, members[0].Size, Stamp, Stamp, GroupId: "capture-a", GroupMembers: members);
+
+        var legacy = JsonSerializer.Deserialize<LegacyEntry>(JsonSerializer.Serialize(entry));
+
+        Assert.NotNull(legacy);
+        Assert.Equal(members[0].Source, legacy.Source);
+        Assert.Equal(members[0].Destination, legacy.Destination);
+        Assert.Equal(members[0].Size, legacy.Size);
+    }
+
+    [Fact]
+    public void CommittedGroupMove_TailReaderKeepsEveryMemberOnTheReturnedEntry()
+    {
+        // ReadCommittedMoves exposes a group as one entry (top level = first member). Only the fingerprint fallback of
+        // UndoService looks entries up by top-level Destination, and group moves never enter that history (they undo from the
+        // members registered in memory), so a caller needing other members reads GroupMembers.
+        var entry = new JournalEntry("group", FileOperationType.Move, JournalState.Committed,
+            @"C:\photos\a.jpg", @"C:\photos\selected\a.jpg", 12, Stamp, Stamp, GroupId: "capture-a", GroupMembers:
+            [
+                new(@"C:\photos\a.jpg", @"C:\photos\selected\a.jpg", 12, Stamp),
+                new(@"C:\photos\a.cr2", @"C:\photos\selected\a.cr2", 120, Stamp),
+            ]);
+
+        var parsed = OperationJournal.TryParseTailCommittedMove(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(entry)));
+
+        Assert.NotNull(parsed);
+        Assert.Equal(entry, parsed);
+        Assert.Equal(2, parsed.GroupMembers!.Count);
+    }
+
+    // The pre-group JournalEntry shape (an older build): unknown members are ignored by System.Text.Json.
+    private sealed record LegacyEntry(string Id, string Source, string? Destination, long Size);
+
+    [Fact]
     public void GroupEntry_RoundTripsAllMemberFingerprintsAndDestinations()
     {
         var entry = new JournalEntry("group", FileOperationType.Move, JournalState.Prepared,

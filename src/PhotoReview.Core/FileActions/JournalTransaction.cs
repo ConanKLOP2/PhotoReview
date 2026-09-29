@@ -194,6 +194,6 @@ internal sealed class JournalTransaction : IDisposable
         {
             ReleaseLiveMarker(); // only after the outcome line (see Commit)
         }
-        return failed;
+        return Superseded ? null : failed; // documented contract: a skipped (superseded) append yields no record
     }
 }

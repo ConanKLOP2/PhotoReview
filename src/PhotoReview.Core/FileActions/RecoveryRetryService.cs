@@ -83,9 +83,13 @@ public sealed class RecoveryRetryService
         if (check.Verdict != RecoveryVerdict.CanRetry || check.GroupMembers is null)
             return new(false, Tr.CoreRecoverySourceChanged, null);
 
-        var pending = check.GroupMembers.Where(member => failed.Undo == true && failed.Type == FileOperationType.Recycle
-            ? member.Check.Source.Status == RecoveryPathStatus.Missing
-            : member.Check.Verdict == RecoveryVerdict.CanRetry).ToArray();
+        // Move/Copy: members whose own verdict is CanRetry. Delete (Recycle) undo: members still missing (restore them).
+        // Delete: members still on disk (NotRecycled); those already recycled or deleted permanently are left alone.
+        var pending = check.GroupMembers.Where(member => failed.Type != FileOperationType.Recycle
+            ? member.Check.Verdict == RecoveryVerdict.CanRetry
+            : failed.Undo == true
+                ? member.Check.Source.Status == RecoveryPathStatus.Missing
+                : member.Check.Verdict == RecoveryVerdict.NotRecycled).ToArray();
         if (pending.Length == 0) return new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
         if (failed.Type == FileOperationType.Recycle && _recycleBin is null)
             return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
