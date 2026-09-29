@@ -7,15 +7,16 @@ Last update: 2026-09-29 · State: IN PROGRESS
 - [x] 2. Add P/Invoke and SafeHandle based decoder with cancellation — `2af8a4f` — tests: 1 Native smoke test passed (CR2 via open_buffer, CR3 via open_wfile); full Release build 0 warnings/errors
 - [x] 3. Probe availability and register backend in application composition — `8f4834d` — tests: 1 Native LibRaw probe + 1 app composition test passed
 - [x] 4. Normalize output to Bgr32 at 96 DPI and set SourceKind = 2 — routing, source-kind cache key, cancellation, delayed zoom indicator, and RAW zoom integration coverage complete; ZoomDetailTests 25/25, DecodeOriginalTests 6/6; full Release build 0 warnings/errors. Decoder Bgr32/96 DPI and bounded output were verified by Native tests.
-- [ ] 5. Decode corpus and record timing/memory; evaluate half_size
+- [ ] 5. Decode corpus and record timing/memory; evaluate half_size  ← CURRENT: all 23/23 corpus files across 8 formats decode; per-file timing recorded (0.443–19.572 s; mean ≈5.09 s; full run 1:58). Memory was sampled only after each decode (peak reported 35.9 MB), so replace with a concurrent sampler before using it as peak evidence; 200-decode leak check and half_size evaluation remain.
 
 ## Next action
-Run every available corpus file through LibRaw; record per-file timing and peak private bytes, run 200 repeated decodes for memory stability, then evaluate half_size.
+Add a concurrent private-bytes sampler around each decode and run a 200-decode stability check on the smaller Canon 7D sRAW sample; then evaluate whether LibRaw exposes a supported half_size C API setter.
 
 ## Evidence / measurements
 - Full decode routing: regression tests prove RawFullDecode.OnZoom selects the injected RAW decoder and SourceKind=2 dimensions key, while disabled mode uses the configured standard decoder.
 - RAW zoom indicator: appears after 300 ms during a fake full decode and clears after completion; integration test proves the `.cr2` zoom takes the RAW full decoder path.
 - Bounded RAW zoom integration: ZoomDetailTests 25/25 passed. Full Release solution build: 0 warnings, 0 errors.
+- Corpus: Native test decoded all 23/23 files across 8 formats. Full-resolution decode timings: 0.443–19.572 s, mean ≈5.09 s; total 1:58. Highest times were Fujifilm X100V RAF 19.572 s, X-T2 RAF 16.992 s, and X-E2S RAF 10.856 s. Per-file dimensions/timings were emitted by the test runner. Post-decode private-bytes sample peaked at 35.9 MB but does not include allocation peaks.
 - Bounded test run: DecodeOriginalTests 6/6 passed. Full Release solution build: 0 warnings, 0 errors.
 - Official package: LibRaw 0.22.2 Windows x64; `libraw.dll` expected SHA-256 `6A459C22039ABF0EAC4D263673337C8ED5F223ACBD372FCF77610DEBF80AC8CD` (1,153,024 bytes).
 - `tools/fetch-libraw.ps1` PASS; application output contains the DLL and both license texts; copied DLL hash matches the pin.
@@ -25,4 +26,4 @@ Run every available corpus file through LibRaw; record per-file timing and peak 
 - Mutation check: changing the output format to `Bgra32` caused the LibRaw Native test to fail (`Expected: Bgr32, Actual: Bgra32`); production output restored to `Bgr32`.
 
 ## Open problems
-- Step 5 corpus-wide decode, timing/peak memory, 200-decode stability, and half_size evaluation remain. Lead license review remains.
+- Step 5 concurrent peak-memory sampling, 200-decode stability, and half_size evaluation remain. Lead license review remains.
