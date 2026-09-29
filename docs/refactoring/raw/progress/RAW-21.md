@@ -12,6 +12,7 @@ Last update: 2026-09-29 · State: IN PROGRESS
 - Added production composition wiring: `ImageDecoderFactory` decorates each selected backend with `FormatRoutingDecoder`; its `RawDecoder` shares the source reader and configured preview byte-range cache.
 - App composition regression test confirms WPF and WIC backends are both routed through the RAW support gate.
 - `PhotoReview.App.Tests` targeted routing test: 1 passed. Imaging `FactoryTests`: 16 passed.
+- Full standard solution filter after production routing: 4,284 passed, 0 failed; Release build: 0 warnings, 0 errors.
 - RAW parser/decoder unit and corpus test coverage exists in the RAW-21/reader commits; first-paint benchmark has not yet been recorded.
 
 ## Next action

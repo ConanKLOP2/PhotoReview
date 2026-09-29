@@ -19,5 +19,5 @@ Last update: 2026-09-29 · State: READY FOR REVIEW
 Review and merge the RAW integration PR after confirming overall RAW app wiring and remaining RAW wave tasks; then continue the next unimplemented task in `docs/refactoring/raw/TASKS.md`.
 
 ## Open problems
-- PR #239 remains draft. The broader RAW integration still needs lead review; app-level decoder registration was not part of this task's verified scope.
+- PR #239 remains draft. The app-level decoder registration gap identified during follow-up was fixed and verified in the RAW-21 progress entry.
 - No real-machine RAW folder latency measurement was performed.
