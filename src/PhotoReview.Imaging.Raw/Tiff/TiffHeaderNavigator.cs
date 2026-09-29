@@ -45,14 +45,21 @@ public static class TiffHeaderNavigator
             list.Add(new TiffEntry(tag, type, count, valOrOffset));
         }
 
-        // Read next IFD offset (4 bytes after all entries)
-        long nextOffsetPos = ifdOffset + 2 + (entryCount * 12L);
-        if (nextOffsetPos + 4 <= source.Length)
+        // Read next IFD offset (4 bytes after all entries). An IFD claiming more entries than we accept is
+        // malformed, so its trailing pointer cannot be located and the chain ends here.
+        if (entryCount <= RawContainerLimits.MaxEntriesPerIfd)
         {
-            var nextSpan = source.Read(nextOffsetPos, 4);
-            if (nextSpan.Length == 4)
+            long nextOffsetPos = ifdOffset + 2 + (entryCount * 12L);
+            if (nextOffsetPos + 4 <= source.Length)
             {
-                nextIfdOffset = TiffStructure.ReadU32(nextSpan, 0, littleEndian);
+                var nextSpan = source.Read(nextOffsetPos, 4);
+                if (nextSpan.Length == 4)
+                {
+                    uint next = TiffStructure.ReadU32(nextSpan, 0, littleEndian);
+                    // A next-IFD pointer must land after the TIFF header with room for at least an empty IFD
+                    // (count + next pointer = 6 bytes); anything else ends the chain.
+                    nextIfdOffset = next >= 8 && next <= source.Length - 6 ? next : 0;
+                }
             }
         }
 
@@ -96,7 +103,10 @@ public static class TiffHeaderNavigator
         int typeSize = TiffStructure.TypeSize(entry.Type);
         if (typeSize == 0 || entry.Count == 0) return result;
 
-        int count = Math.Min((int)entry.Count, maxItems);
+        if (maxItems <= 0) return result;
+
+        // entry.Count is untrusted (up to uint.MaxValue): clamp in unsigned space so the narrowing cannot go negative.
+        int count = (int)Math.Min(entry.Count, (uint)maxItems);
         long totalBytes = (long)typeSize * entry.Count;
 
         if (totalBytes <= 4)
@@ -110,7 +120,7 @@ public static class TiffHeaderNavigator
             for (int i = 0; i < count; i++)
             {
                 var slice = buf.Slice(i * typeSize, typeSize);
-                if (TiffStructure.ReadUnsigned(slice, entry.Type, littleEndian) is { } val)
+                if (ReadArrayItem(slice, entry.Type, littleEndian) is { } val)
                     result.Add(val);
             }
             return result;
@@ -124,10 +134,145 @@ public static class TiffHeaderNavigator
         {
             if ((i + 1) * typeSize > span.Length) break;
             var slice = span.Slice(i * typeSize, typeSize);
-            if (TiffStructure.ReadUnsigned(slice, entry.Type, littleEndian) is { } val)
+            if (ReadArrayItem(slice, entry.Type, littleEndian) is { } val)
                 result.Add(val);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Finds the first entry with <paramref name="tag"/>.
+    /// </summary>
+    public static bool TryGetEntry(IReadOnlyList<TiffEntry> entries, ushort tag, out TiffEntry entry)
+    {
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].Tag == tag)
+            {
+                entry = entries[i];
+                return true;
+            }
+        }
+
+        entry = default;
+        return false;
+    }
+
+    /// <summary>
+    /// True when [<paramref name="offset"/>, <paramref name="offset"/> + <paramref name="length"/>) lies inside a file of
+    /// <paramref name="fileLength"/> bytes (overflow-safe, offset 0 is never a valid payload start).
+    /// </summary>
+    public static bool IsRangeInFile(long offset, long length, long fileLength) =>
+        offset > 0 && length > 0 && offset <= fileLength - length;
+
+    /// <summary>
+    /// Reads StripOffsets (0x0111) / StripByteCounts (0x0117) when the image is stored as exactly one strip.
+    /// A JPEG payload split over several strips cannot be exposed as a single byte range, so multi-strip
+    /// images are rejected instead of silently using only the first strip.
+    /// </summary>
+    public static bool TryReadSingleStrip(
+        IRawHeaderSource source,
+        IReadOnlyList<TiffEntry> entries,
+        bool littleEndian,
+        out long offset,
+        out long length)
+    {
+        offset = 0;
+        length = 0;
+        if (!TryGetEntry(entries, 0x0111, out var offsetEntry) || !TryGetEntry(entries, 0x0117, out var lengthEntry))
+            return false;
+        if (offsetEntry.Count != 1 || lengthEntry.Count != 1)
+            return false;
+
+        if (ReadTagUnsigned(source, offsetEntry, littleEndian) is not { } strip ||
+            ReadTagUnsigned(source, lengthEntry, littleEndian) is not { } bytes)
+            return false;
+
+        if (!IsRangeInFile(strip, bytes, source.Length))
+            return false;
+
+        offset = strip;
+        length = bytes;
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the pixel size stored in an Exif IFD (PixelXDimension 0xA002 / PixelYDimension 0xA003).
+    /// </summary>
+    public static bool TryReadExifPixelDimensions(
+        IRawHeaderSource source,
+        long exifIfdOffset,
+        bool littleEndian,
+        out int width,
+        out int height)
+    {
+        width = 0;
+        height = 0;
+        var entries = ReadIfdEntries(source, exifIfdOffset, littleEndian, out _);
+        foreach (var entry in entries)
+        {
+            if (entry.Tag == 0xA002 && ReadTagUnsigned(source, entry, littleEndian) is { } w and > 0 and <= int.MaxValue)
+                width = (int)w;
+            else if (entry.Tag == 0xA003 && ReadTagUnsigned(source, entry, littleEndian) is { } h and > 0 and <= int.MaxValue)
+                height = (int)h;
+        }
+
+        return width > 0 && height > 0;
+    }
+
+    /// <summary>
+    /// Reads a single unsigned value for <paramref name="tag"/> from <paramref name="entries"/>.
+    /// </summary>
+    public static long? ReadTagValue(IRawHeaderSource source, IReadOnlyList<TiffEntry> entries, ushort tag, bool littleEndian) =>
+        TryGetEntry(entries, tag, out var entry) ? ReadTagUnsigned(source, entry, littleEndian) : null;
+
+    /// <summary>
+    /// Reads ImageWidth (0x0100) / ImageLength (0x0101); missing or absurd values yield 0.
+    /// </summary>
+    public static void ReadImageSize(IRawHeaderSource source, IReadOnlyList<TiffEntry> entries, bool littleEndian, out int width, out int height)
+    {
+        width = ClampToInt(ReadTagValue(source, entries, 0x0100, littleEndian));
+        height = ClampToInt(ReadTagValue(source, entries, 0x0101, littleEndian));
+    }
+
+    /// <summary>
+    /// Reads JPEGInterchangeFormat (0x0201) / JPEGInterchangeFormatLength (0x0202) and requires the byte range to fit the file.
+    /// </summary>
+    public static bool TryReadJpegInterchange(
+        IRawHeaderSource source,
+        IReadOnlyList<TiffEntry> entries,
+        bool littleEndian,
+        out long offset,
+        out long length)
+    {
+        offset = 0;
+        length = 0;
+        if (ReadTagValue(source, entries, 0x0201, littleEndian) is not { } start ||
+            ReadTagValue(source, entries, 0x0202, littleEndian) is not { } bytes)
+            return false;
+
+        if (!IsRangeInFile(start, bytes, source.Length)) return false;
+
+        offset = start;
+        length = bytes;
+        return true;
+    }
+
+    private static int ClampToInt(long? value) => value is > 0 ? (int)Math.Min(value.Value, int.MaxValue) : 0;
+
+    private static long? ReadArrayItem(ReadOnlySpan<byte> item, ushort type, bool littleEndian)
+    {
+        // RATIONAL (e.g. DNG DefaultCropSize): the caller wants whole pixels, so round num/den.
+        if (type == 5)
+        {
+            if (item.Length < 8) return null;
+            uint numerator = TiffStructure.ReadU32(item, 0, littleEndian);
+            uint denominator = TiffStructure.ReadU32(item, 4, littleEndian);
+            if (denominator == 0) return null;
+            return (long)Math.Round((double)numerator / denominator, MidpointRounding.AwayFromZero);
+        }
+
+        return TiffStructure.ReadUnsigned(item, type, littleEndian);
     }
 }

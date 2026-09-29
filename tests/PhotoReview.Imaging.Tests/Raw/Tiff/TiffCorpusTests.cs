@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Imaging.Raw;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Raw.Tiff;
 using Xunit;
 
@@ -52,5 +53,190 @@ public sealed class TiffCorpusTests
         }
 
         Assert.True(parsedCount >= 18, $"Expected at least 18 TIFF corpus files, parsed {parsedCount}");
+    }
+
+    // ------------------------------------------------------------------ corpus helpers
+
+    private static IEnumerable<string> CorpusFiles(params string[] extensions)
+    {
+        if (!Directory.Exists(CorpusDir)) return [];
+        return Directory.GetFiles(CorpusDir)
+            .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static RawContainerInfo ReadContainer(string file)
+    {
+        var registry = new RawContainerReaderRegistry();
+        using var fs = File.OpenRead(file);
+        byte[] header = new byte[64];
+        int read = fs.Read(header, 0, header.Length);
+        fs.Position = 0;
+
+        var reader = registry.FindReader(header.AsSpan(0, read), Path.GetExtension(file));
+        Assert.NotNull(reader);
+        using var headerSource = new SourceRawHeaderSource(fs);
+        return reader.Read(headerSource, CancellationToken.None);
+    }
+
+    private static byte[] ReadRange(string file, long offset, long length)
+    {
+        using var fs = File.OpenRead(file);
+        Assert.True(offset >= 0 && length > 0 && offset + length <= fs.Length, $"{Path.GetFileName(file)}: range {offset}+{length} outside file of {fs.Length} bytes.");
+        fs.Position = offset;
+        byte[] bytes = new byte[length];
+        fs.ReadExactly(bytes);
+        return bytes;
+    }
+
+    private static void AssertLossyJpeg(string file, EmbeddedPreview preview)
+    {
+        byte[] bytes = ReadRange(file, preview.Offset, preview.Length);
+        Assert.True(bytes[0] == 0xFF && bytes[1] == 0xD8, $"{Path.GetFileName(file)}: preview at {preview.Offset} does not start with SOI.");
+        Assert.True(
+            PreviewSelector.TryExtractJpegDimensions(bytes, out int width, out int height, out _) && width > 0 && height > 0,
+            $"{Path.GetFileName(file)}: preview at {preview.Offset} has no SOF0/1/2 frame (lossless or corrupt).");
+    }
+
+    // ------------------------------------------------------------------ DNG
+
+    [Fact]
+    public void AllDngCorpusFiles_EveryPreviewIsLossyJpegAndSelectedPreviewStartsWithSoi()
+    {
+        foreach (var file in CorpusFiles(".dng"))
+        {
+            var info = ReadContainer(file);
+            foreach (var preview in info.Previews)
+                AssertLossyJpeg(file, preview);
+
+            using var fs = File.OpenRead(file);
+            using var source = new SourceRawHeaderSource(fs);
+            var chosen = PreviewSelector.SelectPreview(source, info.Previews, DecodeBox.Unbounded, info.Orientation);
+            if (chosen is not null)
+                AssertLossyJpeg(file, chosen);
+        }
+    }
+
+    [Fact]
+    public void PentaxK7DngCorpus_LossyPreviewIsChosenOverLosslessSensorStripAndCropSetsSensorSize()
+    {
+        var file = CorpusFiles(".dng").FirstOrDefault(f => Path.GetFileName(f).Contains("K-7", StringComparison.Ordinal));
+        if (file is null) return;
+
+        var info = ReadContainer(file);
+        using var fs = File.OpenRead(file);
+        using var source = new SourceRawHeaderSource(fs);
+        var chosen = PreviewSelector.SelectPreview(source, info.Previews, DecodeBox.Unbounded, info.Orientation);
+
+        Assert.NotNull(chosen);
+        Assert.Equal(1_252_117, chosen.Length); // the SubIFD preview, not the 19 MB lossless sensor strip
+        Assert.Equal((4672, 3104), (info.SensorWidth, info.SensorHeight));
+    }
+
+    // ------------------------------------------------------------------ NEF
+
+    [Theory]
+    [InlineData("D40X", 3904, 2616, 13508)]
+    [InlineData("D800", 7424, 4924, 25336)]
+    [InlineData("Z 7", 8288, 5520, 76188)]
+    public void NefCorpus_SensorSizeComesFromRawSubIfdAndMakerNotePreviewIsListed(string model, int width, int height, long makerNotePreviewOffset)
+    {
+        var file = CorpusFiles(".nef").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        if (file is null) return;
+
+        var info = ReadContainer(file);
+
+        Assert.Equal((width, height), (info.SensorWidth, info.SensorHeight));
+        Assert.Contains(info.Previews, p => p.Offset == makerNotePreviewOffset);
+        foreach (var preview in info.Previews)
+            AssertLossyJpeg(file, preview);
+    }
+
+    // ------------------------------------------------------------------ ORF
+
+    [Fact]
+    public void AllOrfCorpusFiles_MakerNotePreviewIsWholeJpegLocatedRelativeToMakerNote()
+    {
+        // Olympus CameraSettings PreviewImageStart is relative to the MakerNote start; all three bodies place the JPEG at 52224.
+        var expectedLengths = new Dictionary<string, long>(StringComparer.Ordinal)
+        {
+            ["OM-1"] = 962_481,
+            ["E-M1"] = 922_386,
+            ["E-P3"] = 1_137_515,
+        };
+
+        int checkedFiles = 0;
+        foreach (var file in CorpusFiles(".orf"))
+        {
+            var info = ReadContainer(file);
+            var expected = expectedLengths.First(kv => Path.GetFileName(file).Contains(kv.Key, StringComparison.Ordinal));
+
+            var preview = Assert.Single(info.Previews, p => p.Offset == 52224);
+            Assert.Equal(expected.Value, preview.Length);
+
+            byte[] bytes = ReadRange(file, preview.Offset, preview.Length);
+            Assert.Equal(new byte[] { 0xFF, 0xD8 }, bytes[..2]);
+            Assert.Equal(new byte[] { 0xFF, 0xD9 }, bytes[^2..]);
+
+            using var stream = new MemoryStream(bytes);
+            var frame = System.Windows.Media.Imaging.BitmapFrame.Create(
+                stream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            Assert.True(frame.PixelWidth > 0 && frame.PixelHeight > 0);
+
+            foreach (var other in info.Previews)
+                AssertLossyJpeg(file, other);
+            checkedFiles++;
+        }
+
+        if (Directory.Exists(CorpusDir))
+            Assert.Equal(3, checkedFiles);
+    }
+
+    // ------------------------------------------------------------------ CR2 / RW2
+
+    [Theory]
+    [InlineData("350D", 3456, 2304)]
+    [InlineData("5D Mark IV", 6720, 4480)]
+    [InlineData("sRAW", 2592, 1728)]
+    public void Cr2Corpus_SensorSizeIsTheImageSizeNotTheIfd0PreviewSize(string model, int width, int height)
+    {
+        var file = CorpusFiles(".cr2").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        if (file is null) return;
+
+        var info = ReadContainer(file);
+
+        Assert.Equal((width, height), (info.SensorWidth, info.SensorHeight));
+    }
+
+    [Theory]
+    [InlineData("GH5", 5184, 3888)]
+    [InlineData("DC-S1", 6000, 4000)]
+    [InlineData("GF1", 4000, 3000)]
+    public void Rw2Corpus_SensorSizeExcludesMaskedBorders(string model, int width, int height)
+    {
+        var file = CorpusFiles(".rw2").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        if (file is null) return;
+
+        var info = ReadContainer(file);
+
+        Assert.Equal((width, height), (info.SensorWidth, info.SensorHeight));
+    }
+
+    // ------------------------------------------------------------------ all TIFF-family files
+
+    [Fact]
+    public void AllTiffCorpusFiles_EveryListedPreviewLiesInsideFileAndStartsWithSoi()
+    {
+        foreach (var file in CorpusFiles(".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2"))
+        {
+            var info = ReadContainer(file);
+            foreach (var preview in info.Previews)
+            {
+                byte[] head = ReadRange(file, preview.Offset, Math.Min(preview.Length, 2));
+                Assert.True(head is [0xFF, 0xD8], $"{Path.GetFileName(file)}: preview at {preview.Offset} does not start with SOI.");
+            }
+        }
     }
 }

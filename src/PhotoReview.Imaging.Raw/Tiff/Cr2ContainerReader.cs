@@ -5,7 +5,8 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 
 /// <summary>
 /// Reader for Canon CR2 format (TIFF container with 'CR' at offset 8).
-/// IFD0: StripOffsets (0x0111) / StripByteCounts (0x0117) contain full JPEG preview.
+/// IFD0: StripOffsets (0x0111) / StripByteCounts (0x0117) contain full JPEG preview (IFD0 is not the raw image).
+/// Sensor size: Exif PixelXDimension/PixelYDimension, else the largest IFD.
 /// IFD1: Small JPEG preview / thumbnail (0x0201 / 0x0202).
 /// Orientation in IFD0 (0x0112).
 /// </summary>
@@ -41,8 +42,11 @@ public sealed class Cr2ContainerReader : IRawContainerReader
             throw new InvalidDataException("Invalid CR2 TIFF header.");
 
         int orientation = 1;
-        int sensorWidth = 0;
-        int sensorHeight = 0;
+        int exifWidth = 0;
+        int exifHeight = 0;
+        long largestArea = 0;
+        int largestWidth = 0;
+        int largestHeight = 0;
         var previews = new List<EmbeddedPreview>();
         var exifBlocks = new List<ExifBlock>();
 
@@ -59,101 +63,67 @@ public sealed class Cr2ContainerReader : IRawContainerReader
                 break; // Cycle detected
 
             var entries = TiffHeaderNavigator.ReadIfdEntries(source, currentIfdOffset, littleEndian, out uint nextIfdOffset);
+            TiffHeaderNavigator.ReadImageSize(source, entries, littleEndian, out int ifdWidth, out int ifdHeight);
 
-            long? stripOffset = null;
-            long? stripByteCount = null;
-            long? jpegInterchange = null;
-            long? jpegLength = null;
-            int ifdWidth = 0;
-            int ifdHeight = 0;
+            if (ifdIndex == 0 && TiffHeaderNavigator.ReadTagValue(source, entries, 0x0112, littleEndian) is >= 1 and <= 8 and var o)
+                orientation = (int)o;
 
-            foreach (var entry in entries)
+            if (TiffHeaderNavigator.ReadTagValue(source, entries, 0x8769, littleEndian) is { } exifOffset && exifOffset > 0)
             {
-                switch (entry.Tag)
+                exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
+                if (exifWidth == 0 &&
+                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out int pixelWidth, out int pixelHeight))
                 {
-                    case 0x0112: // Orientation
-                        if (ifdIndex == 0)
-                        {
-                            var val = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                            if (val is >= 1 and <= 8) orientation = (int)val;
-                        }
-                        break;
-
-                    case 0x0100: // ImageWidth
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                            ifdWidth = (int)w;
-                        break;
-
-                    case 0x0101: // ImageLength
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                            ifdHeight = (int)h;
-                        break;
-
-                    case 0x0111: // StripOffsets
-                        stripOffset = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
-                    case 0x0117: // StripByteCounts
-                        stripByteCount = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
-                    case 0x0201: // JPEGInterchangeFormat
-                        jpegInterchange = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
-                    case 0x0202: // JPEGInterchangeFormatLength
-                        jpegLength = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
-                    case 0x8769: // ExifIFD pointer
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } exifOffset && exifOffset > 0)
-                        {
-                            exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
-                        }
-                        break;
+                    exifWidth = pixelWidth;
+                    exifHeight = pixelHeight;
                 }
+            }
+
+            long area = (long)ifdWidth * ifdHeight;
+            if (area > largestArea)
+            {
+                largestArea = area;
+                largestWidth = ifdWidth;
+                largestHeight = ifdHeight;
             }
 
             if (ifdIndex == 0)
             {
-                // Full size preview in IFD0 StripOffsets/ByteCounts
-                if (stripOffset is > 0 && stripByteCount is > 0 && stripOffset + stripByteCount <= source.Length)
+                // Full size preview in IFD0 StripOffsets/ByteCounts (a JPEG split over several strips is rejected).
+                if (TiffHeaderNavigator.TryReadSingleStrip(source, entries, littleEndian, out long stripOffset, out long stripLength) &&
+                    source.Read(stripOffset, Math.Min(2, (int)stripLength)) is [0xFF, 0xD8])
                 {
                     previews.Add(new EmbeddedPreview(
                         Index: previews.Count,
-                        Offset: stripOffset.Value,
-                        Length: stripByteCount.Value,
+                        Offset: stripOffset,
+                        Length: stripLength,
                         Kind: EmbeddedPreviewKind.Jpeg,
                         Width: ifdWidth,
                         Height: ifdHeight,
                         ColorSpace: PreviewColorSpace.Unknown));
-                }
-
-                if (ifdWidth > 0 && ifdHeight > 0)
-                {
-                    sensorWidth = ifdWidth;
-                    sensorHeight = ifdHeight;
                 }
             }
-            else
+            else if (TiffHeaderNavigator.TryReadJpegInterchange(source, entries, littleEndian, out long jpegOffset, out long jpegLength))
             {
                 // Secondary preview / thumbnail (IFD1, etc.)
-                if (jpegInterchange is > 0 && jpegLength is > 0 && jpegInterchange + jpegLength <= source.Length)
-                {
-                    previews.Add(new EmbeddedPreview(
-                        Index: previews.Count,
-                        Offset: jpegInterchange.Value,
-                        Length: jpegLength.Value,
-                        Kind: EmbeddedPreviewKind.Jpeg,
-                        Width: ifdWidth,
-                        Height: ifdHeight,
-                        ColorSpace: PreviewColorSpace.Unknown));
-                }
+                previews.Add(new EmbeddedPreview(
+                    Index: previews.Count,
+                    Offset: jpegOffset,
+                    Length: jpegLength,
+                    Kind: EmbeddedPreviewKind.Jpeg,
+                    Width: ifdWidth,
+                    Height: ifdHeight,
+                    ColorSpace: PreviewColorSpace.Unknown));
             }
 
             currentIfdOffset = nextIfdOffset;
             ifdIndex++;
         }
+
+        // IFD0 is only a JPEG preview (for sRAW it is the full-size preview, larger than the sensor data), and the
+        // raw IFD may lack ImageWidth/Length. The Exif pixel size is the real image size; else the largest IFD.
+        int sensorWidth = exifWidth > 0 ? exifWidth : largestWidth;
+        int sensorHeight = exifWidth > 0 ? exifHeight : largestHeight;
 
         if (exifBlocks.Count == 0 && source.Length > 0)
         {
