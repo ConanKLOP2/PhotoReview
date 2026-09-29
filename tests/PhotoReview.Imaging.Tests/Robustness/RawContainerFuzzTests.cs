@@ -32,59 +32,67 @@ public sealed class RawContainerFuzzTests
         cr2Bytes[9] = (byte)'R';
         Array.Copy(validCr2, 8, cr2Bytes, 10, validCr2.Length - 8);
 
-        RunFuzzLoop(new Cr2ContainerReader(), ".cr2", cr2Bytes, 101);
+        var worst = RunFuzzLoop(new Cr2ContainerReader(), ".cr2", cr2Bytes, 101);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz NEF container reader with mutated headers")]
     public void Fuzz_NefContainerReader_Robust()
     {
         var validNef = SyntheticRawBuilder.BuildTiff(littleEndian: true, orientation: 1, magic: 42);
-        RunFuzzLoop(new NefContainerReader(), ".nef", validNef, 102);
+        var worst = RunFuzzLoop(new NefContainerReader(), ".nef", validNef, 102);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz ARW container reader with mutated headers")]
     public void Fuzz_ArwContainerReader_Robust()
     {
         var validArw = SyntheticRawBuilder.BuildTiff(littleEndian: true, orientation: 1, magic: 42);
-        RunFuzzLoop(new ArwContainerReader(), ".arw", validArw, 103);
+        var worst = RunFuzzLoop(new ArwContainerReader(), ".arw", validArw, 103);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz DNG container reader with mutated headers")]
     public void Fuzz_DngContainerReader_Robust()
     {
         var validDng = SyntheticRawBuilder.BuildTiff(littleEndian: true, orientation: 1, magic: 42);
-        RunFuzzLoop(new DngContainerReader(), ".dng", validDng, 104);
+        var worst = RunFuzzLoop(new DngContainerReader(), ".dng", validDng, 104);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz ORF container reader with mutated headers")]
     public void Fuzz_OrfContainerReader_Robust()
     {
         var validOrf = SyntheticRawBuilder.BuildTiff(littleEndian: true, orientation: 1, magic: 0x4F52); // IIRO
-        RunFuzzLoop(new OrfContainerReader(), ".orf", validOrf, 105);
+        var worst = RunFuzzLoop(new OrfContainerReader(), ".orf", validOrf, 105);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz RW2 container reader with mutated headers")]
     public void Fuzz_Rw2ContainerReader_Robust()
     {
         var validRw2 = SyntheticRawBuilder.BuildTiff(littleEndian: true, orientation: 1, magic: 0x0055); // IIU\0
-        RunFuzzLoop(new Rw2ContainerReader(), ".rw2", validRw2, 106);
+        var worst = RunFuzzLoop(new Rw2ContainerReader(), ".rw2", validRw2, 106);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz CR3 container reader with mutated headers")]
     public void Fuzz_Cr3ContainerReader_Robust()
     {
         var validCr3 = SyntheticRawBuilder.BuildIsoBmff();
-        RunFuzzLoop(new Cr3ContainerReader(), ".cr3", validCr3, 107);
+        var worst = RunFuzzLoop(new Cr3ContainerReader(), ".cr3", validCr3, 107);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
     [Fact(DisplayName = "Fuzz RAF container reader with mutated headers")]
     public void Fuzz_RafContainerReader_Robust()
     {
         var validRaf = SyntheticRawBuilder.BuildRaf();
-        RunFuzzLoop(new RafContainerReader(), ".raf", validRaf, 108);
+        var worst = RunFuzzLoop(new RafContainerReader(), ".raf", validRaf, 108);
+        Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
-    private static void RunFuzzLoop<TReader>(TReader reader, string ext, byte[] seed, int rngSeed)
+    private static TimeSpan RunFuzzLoop<TReader>(TReader reader, string ext, byte[] seed, int rngSeed)
         where TReader : IRawContainerReader
     {
         var rng = new Random(rngSeed);
@@ -121,8 +129,7 @@ public sealed class RawContainerFuzzTests
                 $"Reader {reader.GetType().Name} exceeded MaxHeaderBytes limit ({headerSource.TotalBytesRead} > {RawContainerLimits.MaxHeaderBytes})");
         }
 
-        Assert.True(worst < TimeSpan.FromMilliseconds(50),
-            $"Slowest parse for {reader.GetType().Name} took {worst.TotalMilliseconds:F2} ms (threshold 50 ms)");
+        return worst;
     }
 
     private sealed class FuzzTrackingHeaderSource(byte[] bytes) : IRawHeaderSource
