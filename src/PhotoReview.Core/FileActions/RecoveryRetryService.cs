@@ -24,12 +24,14 @@ public sealed class RecoveryRetryService
     private readonly OperationJournal _journal;
     private readonly IFileSystem _fileSystem;
     private readonly IClock _clock;
+    private readonly IRecycleBin? _recycleBin;
 
-    public RecoveryRetryService(OperationJournal journal, IFileSystem fileSystem, IClock clock)
+    public RecoveryRetryService(OperationJournal journal, IFileSystem fileSystem, IClock clock, IRecycleBin? recycleBin = null)
     {
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _recycleBin = recycleBin;
     }
 
     /// <summary>
@@ -40,6 +42,9 @@ public sealed class RecoveryRetryService
     public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(failed);
+
+        if (failed.GroupMembers is { Count: > 0 })
+            return await RetryGroupAsync(failed, ct).ConfigureAwait(false);
 
         if (failed.Type is not (FileOperationType.Move or FileOperationType.Copy))
             return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
@@ -66,6 +71,134 @@ public sealed class RecoveryRetryService
         };
 
         return await Task.Run(() => ExecuteRetry(failed, prepared), ct).ConfigureAwait(false);
+    }
+
+    private async Task<RecoveryRetryResult> RetryGroupAsync(JournalEntry failed, CancellationToken ct)
+    {
+        if (failed.Type is not (FileOperationType.Move or FileOperationType.Copy or FileOperationType.Recycle))
+            return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
+        if (_journal.LiveOperations.IsLive(failed.Id)) return AlreadyHandled();
+
+        var check = new RecoveryFileCheck(_fileSystem).Check(failed);
+        if (check.Verdict != RecoveryVerdict.CanRetry || check.GroupMembers is null)
+            return new(false, Tr.CoreRecoverySourceChanged, null);
+
+        var pending = check.GroupMembers.Where(member => failed.Undo == true && failed.Type == FileOperationType.Recycle
+            ? member.Check.Source.Status == RecoveryPathStatus.Missing
+            : member.Check.Verdict == RecoveryVerdict.CanRetry).ToArray();
+        if (pending.Length == 0) return new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
+        if (failed.Type == FileOperationType.Recycle && _recycleBin is null)
+            return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
+        try
+        {
+            foreach (var item in pending)
+            {
+                var member = item.Member;
+                if (failed.Type == FileOperationType.Recycle)
+                {
+                    if (failed.Undo == true)
+                    {
+                        if (member.Permanent) return new(false, Tr.CoreRecoverySourceChanged, null);
+                    }
+                    else
+                    {
+                        var stat = _fileSystem.GetFileStat(member.Source);
+                        if (stat is null || stat.Length != member.Size || stat.LastWriteUtc != member.LastWriteUtc
+                            || member.Permanent && _recycleBin!.CanRecycle(member.Source)
+                            || !member.Permanent && (!_recycleBin!.CanRecycle(member.Source) || !_recycleBin.FitsInRecycleBin(member.Source, member.Size)))
+                            return new(false, Tr.CoreRecoverySourceChanged, null);
+                    }
+                }
+                else
+                {
+                    var sourcePath = member.Source;
+                    var destinationPath = member.Destination;
+                    var stat = _fileSystem.GetFileStat(sourcePath);
+                    if (stat is null || stat.Length != member.Size || stat.LastWriteUtc != member.LastWriteUtc
+                        || string.IsNullOrWhiteSpace(destinationPath) || _fileSystem.FileExists(destinationPath))
+                        return new(false, Tr.CoreRecoverySourceChanged, null);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new(false, ex.Message, null);
+        }
+
+        var prepared = failed with { State = JournalState.Prepared, Error = null, ErrorCode = null, TimestampUtc = _clock.UtcNow };
+        return await Task.Run(() => ExecuteGroupRetry(failed, prepared, pending, ct), ct).ConfigureAwait(false);
+    }
+
+    private RecoveryRetryResult ExecuteGroupRetry(JournalEntry failed, JournalEntry prepared,
+        IReadOnlyList<RecoveryGroupMemberCheck> pending, CancellationToken ct)
+    {
+        using var tx = new JournalTransaction(_journal, _clock, prepared, retryOf: failed);
+        try
+        {
+            if (!tx.TryBegin()) return AlreadyHandled();
+            foreach (var item in pending)
+            {
+                ct.ThrowIfCancellationRequested();
+                var member = item.Member;
+                if (failed.Type == FileOperationType.Recycle)
+                {
+                    if (failed.Undo == true)
+                    {
+                        if (_fileSystem.FileExists(member.Source)) continue;
+                        if (member.Permanent) throw new IOException(Tr.CoreRecoverySourceChanged);
+                        if (!_recycleBin!.TryRestore(member.Source, member.Size, member.LastWriteUtc)
+                            || !_fileSystem.FileExists(member.Source))
+                            throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                    }
+                    else if (member.Permanent)
+                    {
+                        if (_recycleBin!.CanRecycle(member.Source)) throw new IOException(Tr.CoreRecoverySourceChanged);
+                        _recycleBin.DeletePermanently(member.Source);
+                    }
+                    else _recycleBin!.SendToRecycleBin(member.Source);
+                    if (failed.Undo != true && _fileSystem.FileExists(member.Source)) throw new IOException(JournalErrors.SourceStillExistsAfterRecovery);
+                    if (failed.Undo == true && !_fileSystem.FileExists(member.Source))
+                        throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                }
+                else
+                {
+                    var sourcePath = member.Source;
+                    var destinationPath = member.Destination;
+                    var sourceStat = _fileSystem.GetFileStat(sourcePath);
+                    if (sourceStat is null || sourceStat.Length != member.Size || sourceStat.LastWriteUtc != member.LastWriteUtc)
+                        throw new IOException(Tr.CoreRecoverySourceChanged);
+                    if (string.IsNullOrWhiteSpace(destinationPath) || _fileSystem.FileExists(destinationPath))
+                        throw new IOException(Tr.CoreRecoveryDestinationExists);
+                    var folder = Path.GetDirectoryName(destinationPath);
+                    if (!string.IsNullOrWhiteSpace(folder)) _fileSystem.CreateDirectory(folder);
+                    if (failed.Type == FileOperationType.Copy)
+                    {
+                        _fileSystem.Copy(sourcePath, destinationPath);
+                        var copied = _fileSystem.GetFileStat(destinationPath);
+                        if (copied?.Length != member.Size) throw new IOException(JournalErrors.RetryVerifyFailed);
+                    }
+                    else
+                    {
+                        _fileSystem.Move(sourcePath, destinationPath);
+                        if (_fileSystem.FileExists(sourcePath) || _fileSystem.GetFileStat(destinationPath)?.Length != member.Size)
+                            throw new IOException(JournalErrors.RetryVerifyFailed);
+                    }
+                }
+            }
+            tx.MarkMutationCompleted();
+            var committed = tx.Commit(out var commitError);
+            return commitError is null
+                ? new(true, Tr.CoreRecoverySucceeded, committed)
+                : new(true, Tr.CoreRecoverySucceededJournalFailed, committed, JournalPersisted: false, JournalError: commitError);
+        }
+        catch (Exception ex)
+        {
+            var entry = tx.Fail(ex, out var failError);
+            if (tx.Superseded) return AlreadyHandled();
+            return failError is null
+                ? new(tx.MutationCompleted, ex.Message, entry)
+                : new(tx.MutationCompleted, Tr.CoreRecoveryCompletedFailureNotJournaled, entry, JournalPersisted: false, JournalError: failError);
+        }
     }
 
     private static RecoveryRetryResult AlreadyHandled() => new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);

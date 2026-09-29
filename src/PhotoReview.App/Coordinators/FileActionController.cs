@@ -31,6 +31,7 @@ public sealed class FileActionController
     private readonly IFolderPicker? _folderPicker;
     private readonly Func<string, bool> _directoryExists;
     private readonly Action<FileOperationType, string>? _rememberFolder;
+    private readonly IFileSystem? _fileSystem;
 
     /// <param name="folderPicker">"Move to… / Copy to…" folder picker; null disables those commands unless the last folder is reused.</param>
     /// <param name="fileSystem">Used to check that a picked or remembered folder exists (defaults to the real disk).</param>
@@ -50,6 +51,7 @@ public sealed class FileActionController
         Action<FileOperationType, string>? rememberFolder = null)
     {
         _folderPicker = folderPicker;
+        _fileSystem = fileSystem;
         _directoryExists = fileSystem is not null ? fileSystem.DirectoryExists : Directory.Exists;
         _rememberFolder = rememberFolder;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -99,7 +101,6 @@ public sealed class FileActionController
 
         var source = compareSelectedPath ?? currentPath;
         if (string.IsNullOrEmpty(source)) return;
-
         if (string.IsNullOrWhiteSpace(action.Destination))
         {
             _sink.SetStatusText(StatusFormatter.ActionNoDestination(action.Name));
@@ -114,8 +115,9 @@ public sealed class FileActionController
         // Q-R44: general "confirm before delete", off by default. Skipped when the permanent-delete prompt
         // (Q-R8, WillAskPermanentDelete) will already ask -- same "one prompt, not two" rule as RunActionAsync.
         var source = compareSelectedPath ?? currentPath;
-        var permanentPrompt = WillAskPermanentDelete(source);
-        if (_getSettings().ConfirmBeforeDelete && _dialogService is not null && !permanentPrompt)
+        var selectedGroup = source is null ? null : _catalog.Find(source)?.CaptureGroup;
+        var permanentPrompt = selectedGroup is null && WillAskPermanentDelete(source);
+        if (selectedGroup is null && _getSettings().ConfirmBeforeDelete && _dialogService is not null && !permanentPrompt)
         {
             var folderBeforeDialog = _clock.CurrentFolder;
             var ok = _dialogService.ShowConfirmation(Tr.DialogConfirmActionTitle, Tr.DialogConfirmActionMessage(Tr.ActionRecycleName));
@@ -145,12 +147,14 @@ public sealed class FileActionController
 
         var source = compareSelectedPath ?? currentPath;
         if (string.IsNullOrEmpty(source)) return false;
+        var selectedGroup = _catalog.Find(source)?.CaptureGroup;
+        if (selectedGroup is not null && _fileSystem is null) return false;
 
         // Q-R8: permanent delete only with the setting on AND an explicit "this is permanent" confirmation every time.
         // Without a dialog service nothing can be confirmed, so nothing is deleted. Setting off: the request stays
         // AllowPermanentDelete=false and the service refuses (fixed drives never reach this branch).
         var allowPermanent = false;
-        if (operation == FileOperationType.Recycle && WillAskPermanentDelete(source))
+        if (operation == FileOperationType.Recycle && selectedGroup is null && WillAskPermanentDelete(source))
         {
             // The dialog runs a nested dispatcher loop: a forwarded open can switch the folder meanwhile.
             var folderBeforeDialog = _clock.CurrentFolder;
@@ -161,7 +165,24 @@ public sealed class FileActionController
             allowPermanent = true;
         }
 
+        var permanentGroupPaths = operation == FileOperationType.Recycle && selectedGroup is not null
+            ? selectedGroup.Paths.Where(_fileActionService.LacksRecycleBin).ToArray()
+            : [];
+        if (selectedGroup is not null && operation == FileOperationType.Recycle
+            && (_getSettings().ConfirmBeforeDelete || permanentGroupPaths.Length > 0))
+        {
+            var folderBeforeGroupDialog = _clock.CurrentFolder;
+            var prompt = permanentGroupPaths.Length > 0
+                ? Tr.DialogConfirmGroupPermanentDeleteMessage(Path.GetFileName(source), permanentGroupPaths.Length, selectedGroup.Paths.Count)
+                : Tr.DialogConfirmGroupRecycleMessage(Path.GetFileName(source), selectedGroup.Paths.Count);
+            var title = permanentGroupPaths.Length > 0 ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
+            if (_dialogService is null || !_dialogService.ShowConfirmation(title, prompt)) return false;
+            if (_clock.CurrentFolder != folderBeforeGroupDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
+            allowPermanent = true;
+        }
+
         var sourceIndex = _catalog.IndexOf(source);
+        var group = selectedGroup;
         var isRemove = operation is FileOperationType.Move or FileOperationType.Recycle;
         // Only a Move/Recycle takes the file out of the catalog and re-presents the next photo (which also restarts
         // preload). A Copy changes nothing on screen and nothing would restart what StopForAction/Cancel stopped, so it
@@ -197,8 +218,16 @@ public sealed class FileActionController
 
         try
         {
-            var request = new FileActionRequest(source, operation, destination, allowPermanent);
-            var result = await _fileActionService.ExecuteAsync(request);
+            CaptureGroupActionResult? groupResult = null;
+            FileActionResult? singleResult = null;
+            if (group is null)
+                singleResult = await _fileActionService.ExecuteAsync(new FileActionRequest(source, operation, destination, allowPermanent));
+            else
+                groupResult = await _fileActionService.ExecuteGroupAsync(new CaptureGroupActionRequest(group, operation, destination, allowPermanent));
+            var succeeded = groupResult?.Succeeded ?? singleResult!.Succeeded;
+            var sourceRemoved = groupResult is not null
+                ? groupResult.Members.Any(member => member.Completed && (operation is FileOperationType.Move or FileOperationType.Recycle))
+                : singleResult!.SourceRemoved;
 
             // Stale Folder Guard: the user switched folder while the I/O ran. The new folder's catalog, session path,
             // current image and gate state must not be touched (the file belonged to the previous folder).
@@ -207,13 +236,29 @@ public sealed class FileActionController
             // INV-5 restore into the (now different) catalog is skipped.
             if (!_clock.IsFolderCurrent(folderGen))
             {
-                if (result.Succeeded) ReportLateCompletion(result);
+                if (groupResult is not null)
+                {
+                    if (groupResult.Succeeded) _undoService?.RegisterGroup(groupResult);
+                    if (groupResult.Succeeded)
+                    {
+                        var name = Path.GetFileName(source);
+                        var target = groupResult.Entry?.Destination;
+                        if (operation == FileOperationType.Move && target is not null)
+                            _sink.ShowLateActionStatus(Tr.StatusLateMoveUndoable(name, Path.GetDirectoryName(target) ?? string.Empty));
+                        else if (operation == FileOperationType.Recycle && groupResult.PermanentlyDeleted)
+                            _sink.ShowLateActionStatus(Tr.StatusLateDeletedPermanently(name));
+                        else if (operation == FileOperationType.Recycle)
+                            _sink.ShowLateActionStatus(Tr.StatusLateRecycleUndoable(name));
+                    }
+                }
+                else if (singleResult!.Succeeded) ReportLateCompletion(singleResult);
                 return false;
             }
 
-            if (result.Succeeded)
+            if (succeeded)
             {
-                _undoService?.Register(result);
+                if (groupResult is not null) _undoService?.RegisterGroup(groupResult);
+                else _undoService?.Register(singleResult!);
                 if (operation == FileOperationType.Move && sourceIndex >= 0) RememberMovePosition(source, previousPath);
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
 
@@ -223,7 +268,8 @@ public sealed class FileActionController
                 }
                 else if (operation == FileOperationType.Copy)
                 {
-                    _sink.SetStatusText(StatusFormatter.CopiedTo(Path.GetFileName(result.DestinationPath)));
+                    var dest = groupResult?.Entry?.Destination ?? singleResult!.DestinationPath;
+                    _sink.SetStatusText(StatusFormatter.CopiedTo(Path.GetFileName(dest)));
                 }
                 return true;
             }
@@ -231,7 +277,7 @@ public sealed class FileActionController
             // F3: a Move that failed verification (size differs) after the source was already removed. The journal says
             // Failed (Recovery window), but the source path no longer exists, so it must NOT go back into the catalog.
             // No Undo is registered: the destination no longer matches the fingerprint of the prepared source.
-            if (operation == FileOperationType.Move && result.SourceRemoved)
+            if (operation == FileOperationType.Move && sourceRemoved && groupResult is null)
             {
                 if (presentTask is not null) await presentTask;
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
@@ -242,11 +288,22 @@ public sealed class FileActionController
             // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
             if (isRemove && sourceIndex >= 0)
             {
-                _catalog.Restore(source, sourceIndex);
+                if (groupResult is null) _catalog.Restore(source, sourceIndex);
+                else
+                {
+                    var imagePaths = group is null
+                        ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        : group.ImagePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var available = groupResult.Members.Where(member => imagePaths.Contains(member.Member.Source)
+                            && member.StateKnown && member.SourceExists)
+                        .Select(member => member.Member.Source).ToArray();
+                    _catalog.RestoreMembers(available, sourceIndex, available.Contains(source, StringComparer.OrdinalIgnoreCase) ? source : available.FirstOrDefault());
+                    _sink.OnCatalogChanged(null);
+                }
             }
 
             if (presentTask is not null) await presentTask;
-            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, result.Error));
+            _sink.SetStatusText(StatusFormatter.ActionFailed(actionName, groupResult?.Error ?? singleResult!.Error));
             return false;
         }
         finally
@@ -341,7 +398,12 @@ public sealed class FileActionController
         if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
             && IsInFolder(result.Source, currentFolder))
         {
-            InsertRestoredMove(result.Source);
+            if (result.RestoredPaths is { Count: > 1 } restoredPaths)
+            {
+                var insertion = Math.Max(0, _catalog.IndexOf(result.Source));
+                _catalog.RestoreMembers(restoredPaths.Where(path => IsInFolder(path, currentFolder)), insertion, result.Source);
+            }
+            else InsertRestoredMove(result.Source);
             _sink.OnCatalogChanged(null);
             var idx = _catalog.IndexOf(result.Source);
             if (idx >= 0)
@@ -357,6 +419,11 @@ public sealed class FileActionController
             // Only for the current folder: a Recycle made in another folder must not write its path into THIS
             // folder's session (the caller reopens the restored file's own folder instead).
 
+            if (result.RestoredPaths is { Count: > 0 } restoredPaths)
+                _catalog.RestoreMembers(restoredPaths.Where(path => IsInFolder(path, currentFolder)), _catalog.Count, result.Source);
+            _sink.OnCatalogChanged(null);
+            var idx = _catalog.IndexOf(result.Source);
+            if (idx >= 0) await _sink.PresentAsync(idx);
             _sink.UpdateSessionPath(result.Source);
         }
 
@@ -451,7 +518,10 @@ public sealed class FileActionController
     public static bool RestoresOutsideFolder(UndoResult? result, string? currentFolder) =>
         result is { Succeeded: true } && !string.IsNullOrEmpty(result.Source)
         && (result.Operation == FileOperationType.Recycle
-            || (result.Operation == FileOperationType.Move && !IsInFolder(result.Source, currentFolder)));
+            || (result.Operation == FileOperationType.Move
+                && (result.RestoredPaths is { Count: > 0 } paths
+                    ? paths.Any(path => !IsInFolder(path, currentFolder))
+                    : !IsInFolder(result.Source, currentFolder))));
 
     private static bool IsInFolder(string path, string? folder)
     {

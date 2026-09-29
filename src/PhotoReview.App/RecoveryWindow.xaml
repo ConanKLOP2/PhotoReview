@@ -53,6 +53,20 @@
                         </Border>
                         <local:RecoveryPathPanel x:Name="SourcePanel"/>
                         <local:RecoveryPathPanel x:Name="DestinationPanel"/>
+                        <TextBlock x:Name="GroupMembersHeading" Foreground="{DynamicResource Dark.TextMuted}" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="Collapsed"/>
+                        <ItemsControl x:Name="GroupMembersList" Visibility="Collapsed">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource Dark.Panel}" BorderBrush="{DynamicResource Dark.Border}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Status}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Source}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding Destination}" TextWrapping="Wrap" Foreground="{DynamicResource Dark.TextMuted}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <TextBlock x:Name="NoDestinationText" Text="{loc:Tr recovery.detail.noDestination}" Foreground="{DynamicResource Dark.TextMuted}" Visibility="Collapsed"/>
                     </StackPanel>
                 </ScrollViewer>

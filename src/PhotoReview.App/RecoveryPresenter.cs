@@ -116,7 +116,9 @@ internal static class RecoveryPresenter
 
     /// <summary>Only the retry verdict enables Retry; RecoveryRetryService still re-checks everything itself.</summary>
     public static bool AllowsRetry(RecoveryCheckResult? result) =>
-        result is { Verdict: RecoveryVerdict.CanRetry, Entry.Type: FileOperationType.Move or FileOperationType.Copy };
+        result is { Verdict: RecoveryVerdict.CanRetry }
+        && (result.Entry.Type is FileOperationType.Move or FileOperationType.Copy
+            || (result.IsGroup && result.Entry.Type == FileOperationType.Recycle));
 
     public static bool Matches(RecoveryFilter filter, RecoveryVerdict? verdict) => filter switch
     {

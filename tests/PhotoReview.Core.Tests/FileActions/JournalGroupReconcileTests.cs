@@ -46,6 +46,28 @@ public sealed class JournalGroupReconcileTests
         Assert.Equal(2, Assert.Single(journal.ReadFailedOperations()).GroupMembers!.Count);
     }
 
+    [Fact]
+    public void Reconcile_PartialGroupUndoUsesReversedManifestAndStaysFailed()
+    {
+        var fileSystem = new InMemoryFileSystem();
+        fileSystem.AddFile(@"C:\photos\a.jpg", new string('j', 10), Stamp);
+        fileSystem.AddFile(@"C:\selected\a.cr2", new string('r', 100), Stamp);
+        var journal = NewJournal(fileSystem);
+        var members = new[]
+        {
+            new JournalGroupMember(@"C:\selected\a.jpg", @"C:\photos\a.jpg", 10, Stamp),
+            new JournalGroupMember(@"C:\selected\a.cr2", @"C:\photos\a.cr2", 100, Stamp),
+        };
+        journal.Append(new JournalEntry("undo", FileOperationType.Move, JournalState.Prepared,
+            members[0].Source, members[0].Destination, members[0].Size, members[0].LastWriteUtc, Stamp,
+            Undo: true, GroupId: "undo-group", GroupMembers: members));
+
+        var outcome = Assert.Single(journal.ReconcilePendingOperations());
+
+        Assert.Equal(JournalState.Failed, outcome.State);
+        Assert.Equal(2, Assert.Single(journal.ReadFailedOperations()).GroupMembers!.Count);
+    }
+
     private static OperationJournal NewJournal(InMemoryFileSystem fileSystem) =>
         new(Paths, fileSystem, new FixedClock(Stamp.AddMinutes(1)));
 

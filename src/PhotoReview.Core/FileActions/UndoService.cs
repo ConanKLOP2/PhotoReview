@@ -28,7 +28,8 @@ public sealed class UndoService
     private UndoActionRecord? _lastUndoAction;
     private int _internalInProgress;
 
-    private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc, bool Permanent = false);
+    private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc, bool Permanent = false,
+        IReadOnlyList<JournalGroupMember>? GroupMembers = null);
 
     public UndoService(
         OperationJournal journal,
@@ -114,6 +115,15 @@ public sealed class UndoService
         {
             _lastUndoAction = new UndoActionRecord(FileOperationType.Recycle, result.Source, null, result.Size, result.LastWriteUtc, result.PermanentlyDeleted);
         }
+    }
+
+    public void RegisterGroup(CaptureGroupActionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (!result.Succeeded || result.Rejected || result.Entry?.GroupMembers is not { Count: > 0 } members) return;
+        if (result.Operation is FileOperationType.Move or FileOperationType.Recycle)
+            _lastUndoAction = new UndoActionRecord(result.Operation, result.Entry.Source, result.Entry.Destination,
+                result.Entry.Size, result.Entry.LastWriteUtc, result.PermanentlyDeleted, members);
     }
 
     /// <summary>
@@ -248,11 +258,15 @@ public sealed class UndoService
         var action = _lastUndoAction;
         if (action.Operation == FileOperationType.Move)
         {
+            if (action.GroupMembers is { Count: > 0 } groupMembers)
+                return await UndoGroupMoveAsync(action, groupMembers).ConfigureAwait(false);
             return await UndoMoveAsync().ConfigureAwait(false);
         }
 
         if (action.Operation == FileOperationType.Recycle)
         {
+            if (action.GroupMembers is { Count: > 0 } recycleMembers)
+                return await UndoGroupRecycleAsync(action, recycleMembers).ConfigureAwait(false);
             // Q-R8: deleted permanently on a drive without a Recycle Bin: there is nothing to restore. Say so instead of
             // searching the Recycle Bin (it could even match an unrelated item with the same path/size/time).
             if (action.Permanent)
@@ -290,5 +304,116 @@ public sealed class UndoService
         }
 
         return new UndoResult(false, action.Operation, action.Source, null, Tr.CoreUndoUnsupported);
+    }
+
+    private async Task<UndoResult> UndoGroupMoveAsync(UndoActionRecord action, IReadOnlyList<JournalGroupMember> members)
+    {
+        if (!TryBegin()) return new UndoResult(false, FileOperationType.Move, action.Source, action.Destination, Tr.CoreUndoBusy, Rejected: true);
+        JournalTransaction? tx = null;
+        try
+        {
+            var undoMembers = members.Select(member => new JournalGroupMember(
+                member.Destination ?? throw new IOException(Tr.CoreUndoSourceOrDestinationChanged),
+                member.Source, member.Size, member.LastWriteUtc)).ToArray();
+            var pending = new List<JournalGroupMember>();
+            foreach (var member in undoMembers)
+            {
+                var sourceStat = _fileSystem.GetFileStat(member.Source);
+                var destinationStat = _fileSystem.GetFileStat(member.Destination!);
+                if (sourceStat is not null && destinationStat is not null)
+                    throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
+                if (sourceStat is null && destinationStat is not null && destinationStat.Length == member.Size)
+                    continue;
+                if (sourceStat is null || destinationStat is not null
+                    || sourceStat.Length != member.Size || sourceStat.LastWriteUtc != member.LastWriteUtc)
+                    throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
+                pending.Add(member);
+            }
+            if (pending.Count == 0) throw new IOException(Tr.CoreRecoveryAlreadyHandled);
+            var prepared = new JournalEntry(Guid.NewGuid().ToString("N"), FileOperationType.Move, JournalState.Prepared,
+                undoMembers[0].Source, undoMembers[0].Destination, undoMembers[0].Size, undoMembers[0].LastWriteUtc, _clock.UtcNow,
+                Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
+            tx = new JournalTransaction(_journal, _clock, prepared);
+            await tx.BeginAsync().ConfigureAwait(false);
+            foreach (var member in pending)
+            {
+                var folder = Path.GetDirectoryName(member.Destination!);
+                if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
+                if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                else await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!)).ConfigureAwait(false);
+                if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
+                    throw new IOException(JournalErrors.VerifySizeChanged);
+            }
+            tx.MarkMutationCompleted();
+            _ = tx.Commit(out _);
+            foreach (var member in members)
+            {
+                if (member.Destination is not null) _moveFingerprints.Remove(member.Destination);
+            }
+            _lastUndoAction = null;
+            return new UndoResult(true, FileOperationType.Move, action.Source, action.Destination, null,
+                RestoredPaths: members.Select(member => member.Source).ToArray());
+        }
+        catch (Exception ex)
+        {
+            _ = tx?.Fail(ex, out _);
+            return new UndoResult(false, FileOperationType.Move, action.Source, action.Destination, Tr.CoreUndoFailed(ex.Message));
+        }
+        finally
+        {
+            tx?.Dispose();
+            End();
+        }
+    }
+
+    private async Task<UndoResult> UndoGroupRecycleAsync(UndoActionRecord action, IReadOnlyList<JournalGroupMember> members)
+    {
+        if (action.Permanent)
+        {
+            _lastUndoAction = null;
+            return new UndoResult(false, FileOperationType.Recycle, action.Source, null,
+                Tr.CoreUndoPermanentlyDeleted(Path.GetFileName(action.Source)));
+        }
+        if (!TryBegin()) return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoBusy, Rejected: true);
+        JournalTransaction? tx = null;
+        try
+        {
+            var pending = new List<JournalGroupMember>();
+            foreach (var member in members)
+            {
+                if (_fileSystem.FileExists(member.Source)) continue;
+                if (member.Permanent)
+                    throw new IOException(Tr.CoreUndoRecycleTargetExists(Path.GetFileName(member.Source)));
+                pending.Add(member);
+            }
+            if (pending.Count == 0) throw new IOException(Tr.CoreRecoveryAlreadyHandled);
+            var undoMembers = members.Select(member => member with { }).ToArray();
+            var prepared = new JournalEntry(Guid.NewGuid().ToString("N"), FileOperationType.Recycle, JournalState.Prepared,
+                members[0].Source, null, members[0].Size, members[0].LastWriteUtc, _clock.UtcNow,
+                Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
+            tx = new JournalTransaction(_journal, _clock, prepared);
+            await tx.BeginAsync().ConfigureAwait(false);
+            foreach (var member in pending)
+            {
+                if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
+                    throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+            }
+            tx.MarkMutationCompleted();
+            _ = tx.Commit(out _);
+            _lastUndoAction = null;
+            return new UndoResult(true, FileOperationType.Recycle, action.Source, null, null,
+                RestoredPaths: members.Where(member => _fileSystem.FileExists(member.Source)).Select(member => member.Source).ToArray());
+        }
+        catch (Exception ex)
+        {
+            _ = tx?.Fail(ex, out _);
+            return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoFailed(ex.Message));
+        }
+        finally
+        {
+            tx?.Dispose();
+            End();
+        }
     }
 }

@@ -17,6 +17,7 @@ internal sealed class JournalTransaction : IDisposable
     private readonly IClock _clock;
     private readonly JournalEntry _prepared;
     private readonly JournalEntry? _retryOf;
+    private readonly bool _groupRetry;
     private IDisposable? _liveMarker;
 
     /// <param name="retryOf">
@@ -27,9 +28,10 @@ internal sealed class JournalTransaction : IDisposable
     /// when <paramref name="retryOf"/> is still the latest entry, Failed only when the entries after it are exactly
     /// this transaction's own Prepared. Otherwise nothing is appended and <see cref="Superseded"/> is set.
     /// </param>
-    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, JournalEntry? retryOf = null)
+    public JournalTransaction(OperationJournal journal, IClock clock, JournalEntry prepared, JournalEntry? retryOf = null, bool groupRetry = false)
     {
         _retryOf = retryOf;
+        _groupRetry = groupRetry;
         _journal = journal;
         _clock = clock;
         _prepared = prepared;
@@ -79,14 +81,14 @@ internal sealed class JournalTransaction : IDisposable
         bool appended;
         try
         {
-            if (_retryOf is null)
+            if (_retryOf is not null)
             {
-                _journal.Append(_prepared);
-                appended = true;
+                appended = _journal.AppendIfUnchangedSince(_retryOf, [], _prepared);
             }
             else
             {
-                appended = _journal.AppendIfUnchangedSince(_retryOf, [], _prepared);
+                _journal.Append(_prepared);
+                appended = true;
             }
         }
         catch
@@ -176,17 +178,14 @@ internal sealed class JournalTransaction : IDisposable
         var failed = _prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
         try
         {
-            if (_retryOf is null)
+            if (_retryOf is not null)
+            {
+                if (!_journal.AppendIfUnchangedSince(_retryOf, IsPrepared ? [_prepared] : [], failed))
+                    Superseded = true;
+            }
+            else
             {
                 _journal.Append(failed);
-            }
-            else if (!_journal.AppendIfUnchangedSince(_retryOf, IsPrepared ? [_prepared] : [], failed))
-            {
-                // P02: another process retried the same entry concurrently and already appended its own outcome (typically
-                // Committed -- our mutation failed because it had already moved the file). A Failed record now would win
-                // latest-entry resolution and durably misdescribe a completed operation, so nothing is appended.
-                Superseded = true;
-                return null;
             }
         }
         catch (Exception journalException)

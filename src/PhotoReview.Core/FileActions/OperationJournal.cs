@@ -447,9 +447,13 @@ public sealed class OperationJournal
             return group.Undo == true ? exists : !exists;
         }
 
-        var destination = member.Destination is null ? null : _fileSystem.GetFileStat(member.Destination);
+        var destinationPath = member.Destination;
+        var sourcePath = member.Source;
+        if (group.Undo == true && group.Type == FileOperationType.Move)
+            (sourcePath, destinationPath) = (destinationPath ?? string.Empty, sourcePath);
+        var destination = !string.IsNullOrWhiteSpace(destinationPath) ? _fileSystem.GetFileStat(destinationPath) : null;
         var destinationMatches = destination is not null && destination.Length == member.Size;
-        var sourceExists = _fileSystem.FileExists(member.Source);
+        var sourceExists = _fileSystem.FileExists(sourcePath);
         return group.Type switch
         {
             FileOperationType.Move => !sourceExists && destinationMatches,
@@ -499,22 +503,25 @@ public sealed class OperationJournal
         {
             var history = new List<JournalEntry>();
             ReadEntries(e => { if (string.Equals(e.Id, anchor.Id, StringComparison.Ordinal)) history.Add(e); });
-            var at = history.FindLastIndex(e => e == anchor); // -1: not found, the whole history is "since"
+            var at = history.FindLastIndex(e => JournalEntriesEqual(e, anchor)); // -1: not found, the whole history is "since"
             if (history.Count - at - 1 != ownSince.Count) return false;
             for (var i = 0; i < ownSince.Count; i++)
             {
-                if (history[at + 1 + i] != ownSince[i]) return false;
+                if (!JournalEntriesEqual(history[at + 1 + i], ownSince[i])) return false;
             }
             Append(entry);
             return true;
         }
     }
 
-    /// <summary>
-    /// Compaction runs only on a journal of at least this size. It must not be below <see cref="FullScanThresholdBytes"/>:
-    /// the <see cref="JournalCompactionPlan"/> argument for <see cref="ReadCommittedMoves"/> assumes the tail reader served the
-    /// uncompacted file.
-    /// </summary>
+    private static bool JournalEntriesEqual(JournalEntry left, JournalEntry right)
+    {
+        if (left with { GroupMembers = null } != right with { GroupMembers = null }) return false;
+        return left.GroupMembers is null || right.GroupMembers is null
+            ? left.GroupMembers is null && right.GroupMembers is null
+            : left.GroupMembers.SequenceEqual(right.GroupMembers);
+    }
+
     internal const long CompactionThresholdBytes = FullScanThresholdBytes;
 
     /// <summary>Compaction rewrites the journal only when it drops at least this share of its bytes (no rewrite per start for a few lines).</summary>

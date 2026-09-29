@@ -112,6 +112,29 @@ public sealed class FileActionControllerConfirmDeleteTests : IDisposable
         Assert.Contains(a, _bin.Deleted);
     }
 
+    [Fact]
+    public async Task ConfirmBeforeDelete_GroupWithPermanentMembers_AsksOnceAndCountsPermanentMembers()
+    {
+        var jpeg = Make("pair.jpg");
+        var raw = Make("pair.cr2");
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        _bin.NoBin = true;
+        var dialog = new RecordingDialog(response: true);
+        var controller = NewController(new AppSettings
+        {
+            RawSupportEnabled = true,
+            ConfirmBeforeDelete = true,
+            AllowPermanentDeleteWithoutRecycleBin = true,
+        }, dialog);
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Single(dialog.Confirmations);
+        Assert.Contains("2", dialog.Confirmations[0].Message, StringComparison.Ordinal);
+        Assert.Contains(jpeg, _bin.Deleted);
+        Assert.Contains(raw, _bin.Deleted);
+    }
+
     private sealed class FakeBin : IRecycleBin
     {
         public List<string> Recycled { get; } = [];

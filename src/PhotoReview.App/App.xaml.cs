@@ -76,7 +76,8 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
-            sp.GetRequiredService<IClock>()));
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<IRecycleBin>()));
         services.AddSingleton<FileHashService>(sp => new FileHashService(
             sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
         services.AddSingleton<FileActionService>(sp => new FileActionService(

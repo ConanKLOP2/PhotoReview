@@ -7,7 +7,10 @@ public sealed record CaptureGroupMemberResult(
     JournalGroupMember Member,
     bool Completed,
     bool Conflict,
-    string? Error = null);
+    string? Error = null,
+    bool SourceExists = false,
+    bool DestinationExists = false,
+    bool StateKnown = true);
 
 /// <summary>Result of one journaled capture-group action.</summary>
 public sealed record CaptureGroupActionResult(

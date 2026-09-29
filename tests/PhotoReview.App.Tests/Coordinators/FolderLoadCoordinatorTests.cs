@@ -300,6 +300,36 @@ public sealed partial class FolderLoadCoordinatorTests
     }
 
     [Fact]
+    public async Task LoadAsync_RawPairModeGroupsImagesAndKeepsXmpOutOfExplorerAndReadabilityProbe()
+    {
+        const string folder = @"C:\photos";
+        _fs.CreateDirectory(folder);
+        _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "jpeg");
+        _fs.WriteAllTextAtomic(@"C:\photos\a.cr2", "raw");
+        _fs.WriteAllTextAtomic(@"C:\photos\a.xmp", "sidecar");
+        _settingsStore.Current.RawSupportEnabled = true;
+        _settingsStore.Current.RawPairMode = RawPairMode.PreferJpeg;
+        string[]? explorerInput = null;
+        _explorerOrder.SnapshotHook = path =>
+        {
+            explorerInput = _fs.Files.Keys.Where(candidate => candidate.StartsWith(path, StringComparison.OrdinalIgnoreCase)
+                && ImageFileTypes.IsSupported(candidate, rawEnabled: true)).ToArray();
+            return Task.FromResult(MakeSnapshot(path, [], ExplorerOrderStatus.NativeViewUnavailable));
+        };
+
+        using var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+        await coordinator.ReadabilityProbe;
+
+        Assert.Single(_catalog.Entries);
+        var group = Assert.IsType<CatalogEntry>(_catalog.Current);
+        Assert.Equal(@"C:\photos\a.jpg", group.Path);
+        Assert.Equal(@"C:\photos\a.xmp", group.CaptureGroup!.XmpPath);
+        Assert.DoesNotContain(@"C:\photos\a.xmp", explorerInput!);
+        Assert.DoesNotContain(@"C:\photos\a.xmp", _sink.Presented.Select(item => _catalog.PathAt(item.Index)));
+    }
+
+    [Fact]
     public async Task LoadAsync_DriveRoot_KeepsTheRootAndLoadsItsImages()
     {
         // TrimEnd turned the root into "C:", which GetFullPath resolves to the drive's current directory.

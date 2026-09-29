@@ -8,6 +8,18 @@ namespace PhotoReview.Core.Tests.Catalog;
 public class ReviewCatalogTests
 {
     [Fact]
+    public void RestoreMembers_ReinsertsOnlyUniquePathsAndSelectsRepresentative()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([new CatalogEntry(@"C:\photos\before.jpg"), new CatalogEntry(@"C:\photos\after.jpg")]);
+        catalog.RestoreMembers([@"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\raw.cr2"], 1,
+            @"C:\photos\jpeg.jpg");
+
+        Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\raw.cr2", @"C:\photos\jpeg.jpg", @"C:\photos\after.jpg"], catalog.Paths);
+        Assert.Equal(@"C:\photos\jpeg.jpg", catalog.Current!.Path);
+    }
+
+    [Fact]
     public void CatalogEntry_ValidPath_InitializesCorrectly()
     {
         var entry = new CatalogEntry(@"C:\Photos\photo1.jpg");

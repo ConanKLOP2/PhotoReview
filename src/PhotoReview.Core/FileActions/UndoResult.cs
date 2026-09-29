@@ -11,4 +11,5 @@ public sealed record UndoResult(
     string Source,
     string? Destination,
     string? ErrorMessage,
-    bool Rejected = false);
+    bool Rejected = false,
+    IReadOnlyList<string>? RestoredPaths = null);

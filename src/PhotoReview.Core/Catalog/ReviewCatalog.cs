@@ -306,6 +306,33 @@ public sealed class ReviewCatalog
         return true;
     }
 
+    /// <summary>Restores available members of a previously collapsed capture at its original review position.</summary>
+    public void RestoreMembers(IEnumerable<string> paths, int index, string? representativePath = null)
+    {
+        AssertOwnerThread();
+        ArgumentNullException.ThrowIfNull(paths);
+        var unique = paths.Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (unique.Length == 0) return;
+        var insertAt = Math.Clamp(index, 0, _entries.Count);
+        var restored = new List<CatalogEntry>(unique.Length);
+        foreach (var path in unique)
+        {
+            if (IndexOf(path) >= 0) continue;
+            restored.Add(new CatalogEntry(path));
+        }
+        if (restored.Count == 0) return;
+        _entries.InsertRange(insertAt, restored);
+        InvalidateIndex();
+        if (CurrentIndex < 0) CurrentIndex = insertAt;
+        else if (insertAt <= CurrentIndex) CurrentIndex += restored.Count;
+        if (!string.IsNullOrWhiteSpace(representativePath))
+        {
+            var representativeIndex = IndexOf(representativePath);
+            if (representativeIndex >= 0) CurrentIndex = representativeIndex;
+        }
+    }
+
     /// <summary>
     /// Replaces the ordering of items in the catalog with <paramref name="newOrder"/>.
     /// Preserves the currently selected entry by path.

@@ -46,10 +46,20 @@ public sealed record RecoveryCheckResult(
     JournalEntry Entry,
     RecoveryPathCheck Source,
     RecoveryPathCheck? Destination,
-    RecoveryVerdict Verdict)
+    RecoveryVerdict Verdict,
+    IReadOnlyList<RecoveryGroupMemberCheck>? GroupMembers = null)
 {
     /// <summary>True when the destination is missing and its parent folder no longer exists either.</summary>
     public bool DestinationFolderMissing => Destination is { Status: RecoveryPathStatus.Missing, FolderExists: false };
+
+    public bool IsGroup => GroupMembers is { Count: > 0 };
+}
+
+public sealed record RecoveryGroupMemberCheck(JournalGroupMember Member, RecoveryCheckResult Check)
+{
+    public RecoveryPathCheck Source => Check.Source;
+    public RecoveryPathCheck? Destination => Check.Destination;
+    public RecoveryVerdict Verdict => Check.Verdict;
 }
 
 /// <summary>
@@ -101,12 +111,73 @@ public sealed class RecoveryFileCheck
     public RecoveryCheckResult Check(JournalEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        if (entry.GroupMembers is { Count: > 0 } members)
+        {
+            var checks = members.Select(member => CheckGroupMember(entry, member)).ToArray();
+            var verdict = AggregateGroupVerdict(entry, checks);
+            var first = checks[0].Check;
+            return new RecoveryCheckResult(entry, first.Source, first.Destination, verdict, checks);
+        }
         var source = CheckPath(entry.Source, entry.Size, entry.LastWriteUtc, compareLastWrite: true);
         var destination = string.IsNullOrWhiteSpace(entry.Destination)
             ? null
             : CheckPath(entry.Destination, entry.Size, entry.LastWriteUtc, compareLastWrite: false);
         return new RecoveryCheckResult(entry, source, destination, Decide(entry, source, destination));
     }
+
+    private RecoveryGroupMemberCheck CheckGroupMember(JournalEntry group, JournalGroupMember member)
+    {
+        var single = Check(group with
+        {
+            Source = member.Source,
+            Destination = member.Destination,
+            Size = member.Size,
+            LastWriteUtc = member.LastWriteUtc,
+            Permanent = member.Permanent,
+            GroupId = null,
+            GroupMembers = null,
+            Undo = null,
+        });
+        if (group.Undo == true && group.Type == FileOperationType.Recycle)
+        {
+            single = single with { Entry = group, Verdict = single.Source.Status switch
+            {
+                RecoveryPathStatus.Exists when single.Source.CurrentSize == member.Size
+                    && single.Source.CurrentLastWriteUtc == member.LastWriteUtc => RecoveryVerdict.AlreadyDone,
+                RecoveryPathStatus.Exists => RecoveryVerdict.Conflict,
+                RecoveryPathStatus.Missing => RecoveryVerdict.RecycleUnverifiable,
+                _ => RecoveryVerdict.Unknown,
+            } };
+        }
+        return new(member, single);
+    }
+
+    private static RecoveryVerdict AggregateGroupVerdict(JournalEntry entry, IReadOnlyList<RecoveryGroupMemberCheck> members)
+    {
+        var verdicts = members.Select(member => member.Check.Verdict).ToArray();
+        if (entry.Undo == true && entry.Type == FileOperationType.Move
+            && verdicts.All(verdict => verdict is RecoveryVerdict.CanRetry or RecoveryVerdict.AlreadyDone)
+            && verdicts.Contains(RecoveryVerdict.CanRetry)) return RecoveryVerdict.CanRetry;
+        if (entry.Undo == true && entry.Type == FileOperationType.Recycle
+            && verdicts.All(verdict => verdict is RecoveryVerdict.RecycleUnverifiable or RecoveryVerdict.AlreadyDone)
+            && verdicts.Contains(RecoveryVerdict.RecycleUnverifiable)) return RecoveryVerdict.CanRetry;
+        if (verdicts.All(verdict => verdict is RecoveryVerdict.AlreadyDone or RecoveryVerdict.RecycleUnverifiable or RecoveryVerdict.PermanentlyDeleted))
+            return verdicts.Any(verdict => verdict == RecoveryVerdict.PermanentlyDeleted)
+                ? RecoveryVerdict.PermanentlyDeleted
+                : entry.Type == FileOperationType.Recycle ? RecoveryVerdict.RecycleUnverifiable : RecoveryVerdict.AlreadyDone;
+        if (verdicts.All(verdict => verdict is RecoveryVerdict.AlreadyDone or RecoveryVerdict.CanRetry or RecoveryVerdict.RecycleUnverifiable)
+            && verdicts.Any(verdict => verdict == RecoveryVerdict.CanRetry))
+            return RecoveryVerdict.CanRetry;
+        if (verdicts.Contains(RecoveryVerdict.Conflict)) return RecoveryVerdict.Conflict;
+        if (verdicts.Contains(RecoveryVerdict.SourceChanged)) return RecoveryVerdict.SourceChanged;
+        if (verdicts.Contains(RecoveryVerdict.DestinationChanged)) return RecoveryVerdict.DestinationChanged;
+        if (verdicts.Contains(RecoveryVerdict.Lost)) return RecoveryVerdict.Lost;
+        if (verdicts.Contains(RecoveryVerdict.NotRecycled)) return RecoveryVerdict.NotRecycled;
+        return RecoveryVerdict.Unknown;
+    }
+
+    public IReadOnlyList<RecoveryGroupMemberCheck> CheckGroupMembers(JournalEntry entry) =>
+        Check(entry).GroupMembers ?? [];
 
     internal static RecoveryVerdict Decide(JournalEntry entry, RecoveryPathCheck source, RecoveryPathCheck? destination)
     {

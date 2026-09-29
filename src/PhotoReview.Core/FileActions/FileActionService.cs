@@ -54,6 +54,8 @@ public sealed class FileActionService
     /// </summary>
     public bool LacksRecycleBin(string path) => !_recycleBin.CanRecycle(path);
 
+    public bool FileExists(string path) => _fileSystem.FileExists(path);
+
     /// <summary>
     /// Executes one capture-group operation. Every member is preflighted before the group manifest is journaled;
     /// the manifest is Prepared before the first mutation and remains one Recovery item if any member fails.
@@ -216,7 +218,8 @@ public sealed class FileActionService
             {
                 var source = _fileSystem.GetFileStat(member.Source);
                 return new(member, source is null, source is not null &&
-                    (source.Length != member.Size || source.LastWriteUtc != member.LastWriteUtc), source is null ? null : error);
+                    (source.Length != member.Size || source.LastWriteUtc != member.LastWriteUtc), source is null ? null : error,
+                    SourceExists: source is not null);
             }
 
             var destination = member.Destination is null ? null : _fileSystem.GetFileStat(member.Destination);
@@ -226,11 +229,12 @@ public sealed class FileActionService
                 : destination?.Length == member.Size;
             var conflict = !completed && (sourceStat is null || sourceStat.Length != member.Size
                 || sourceStat.LastWriteUtc != member.LastWriteUtc || destination is not null);
-            return new(member, completed, conflict, completed ? null : error);
+            return new(member, completed, conflict, completed ? null : error,
+                SourceExists: sourceStat is not null, DestinationExists: destination is not null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            return new(member, false, true, ex.Message);
+            return new(member, false, true, ex.Message, StateKnown: false);
         }
     }
 
