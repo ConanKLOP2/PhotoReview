@@ -1,6 +1,8 @@
 using System.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.LibRaw;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 
@@ -43,9 +45,31 @@ public sealed class LibRawDecoderTests
             Assert.True(image.PixelWidth > 0);
             Assert.True(image.PixelHeight > 0);
             Assert.Equal(DecoderBackend.LibRaw, image.ActualBackend);
-            Assert.IsAssignableFrom<System.Windows.Media.Imaging.BitmapSource>(image.PlatformImage);
+            var bitmap = Assert.IsAssignableFrom<BitmapSource>(image.PlatformImage);
+            Assert.Equal(PixelFormats.Bgr32, bitmap.Format);
+            Assert.Equal(96, bitmap.DpiX);
+            Assert.Equal(96, bitmap.DpiY);
             Assert.Equal(image.PixelWidth, info.PixelWidth);
             Assert.Equal(image.PixelHeight, info.PixelHeight);
+
+            if (index == 0)
+            {
+                var bounded = decoder.Decode(new DecodeRequest(path, new DecodeBox(640, 480)));
+                Assert.True(bounded.Downscaled);
+                Assert.True(bounded.PixelWidth <= 640);
+                Assert.True(bounded.PixelHeight <= 480);
+                Assert.Equal(image.OriginalWidth, bounded.OriginalWidth);
+                Assert.Equal(image.OriginalHeight, bounded.OriginalHeight);
+            }
         }
+    }
+
+    [Fact]
+    public void Decode_RejectsRequestThatWouldLeaveOrientationUnapplied()
+    {
+        var error = Assert.Throws<NotSupportedException>(() =>
+            new LibRawDecoder().Decode(new DecodeRequest("unused.cr2", DecodeBox.Unbounded, applyOrientation: false)));
+
+        Assert.Contains("always applies", error.Message, StringComparison.Ordinal);
     }
 }

@@ -29,6 +29,8 @@ public sealed class LibRawDecoder : IImageDecoder
     public static IDecodedImage Decode(DecodeRequest request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
+        if (!request.ApplyOrientation)
+            throw new NotSupportedException("LibRaw always applies the RAW container's orientation; an un-oriented full decode is unavailable.");
         cancellationToken.ThrowIfCancellationRequested();
 
         using var cancellationState = new CancellationState(cancellationToken);
@@ -61,28 +63,41 @@ public sealed class LibRawDecoder : IImageDecoder
         if (header.DataSize < rgbLength || header.DataSize > int.MaxValue)
             throw new InvalidDataException("LibRaw returned an invalid processed image buffer length.");
 
-        var pixels = new byte[checked(pixelCount * 4)];
+        var (targetWidth, targetHeight) = request.Box.Fit(header.Width, header.Height);
+        var pixels = new byte[checked(targetWidth * targetHeight * 4)];
         unsafe
         {
             var source = (byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset);
             fixed (byte* target = pixels)
             {
-                for (var pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
+                for (var y = 0; y < targetHeight; y++)
                 {
-                    var sourceIndex = pixelIndex * 3;
-                    var targetIndex = pixelIndex * 4;
-                    target[targetIndex] = source[sourceIndex + 2];
-                    target[targetIndex + 1] = source[sourceIndex + 1];
-                    target[targetIndex + 2] = source[sourceIndex];
-                    target[targetIndex + 3] = byte.MaxValue;
-                    if ((pixelIndex & 0x3FFF) == 0) cancellationToken.ThrowIfCancellationRequested();
+                    var sourceY = Math.Clamp((y + 0.5d) * header.Height / targetHeight - 0.5d, 0, header.Height - 1d);
+                    var y0 = (int)sourceY;
+                    var y1 = Math.Min(y0 + 1, header.Height - 1);
+                    var fy = sourceY - y0;
+                    for (var x = 0; x < targetWidth; x++)
+                    {
+                        var sourceX = Math.Clamp((x + 0.5d) * header.Width / targetWidth - 0.5d, 0, header.Width - 1d);
+                        var x0 = (int)sourceX;
+                        var x1 = Math.Min(x0 + 1, header.Width - 1);
+                        var fx = sourceX - x0;
+                        var targetIndex = (y * targetWidth + x) * 4;
+                        target[targetIndex] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 2);
+                        target[targetIndex + 1] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 1);
+                        target[targetIndex + 2] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 0);
+                        target[targetIndex + 3] = byte.MaxValue;
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
                 }
             }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var bitmap = BitmapSource.Create(header.Width, header.Height, 96, 96, PixelFormats.Bgr32, null, pixels, checked((int)header.Width * 4));
-        return new WpfDecodedImage(bitmap, actualBackend: DecoderBackend.LibRaw);
+        var bitmap = BitmapSource.Create(targetWidth, targetHeight, 96, 96, PixelFormats.Bgr32, null, pixels, checked(targetWidth * 4));
+        var downscaled = targetWidth < header.Width || targetHeight < header.Height;
+        return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
+            originalWidth: header.Width, originalHeight: header.Height);
     }
 
     private static SafeLibRawHandle CreateHandle()
@@ -114,6 +129,17 @@ public sealed class LibRawDecoder : IImageDecoder
         {
             return 1;
         }
+    }
+
+    private static unsafe byte Interpolate(byte* source, int width, int x0, int x1, int y0, int y1, double fx, double fy, int channel)
+    {
+        var topLeft = source[(y0 * width + x0) * 3 + channel];
+        var topRight = source[(y0 * width + x1) * 3 + channel];
+        var bottomLeft = source[(y1 * width + x0) * 3 + channel];
+        var bottomRight = source[(y1 * width + x1) * 3 + channel];
+        var top = topLeft + (topRight - topLeft) * fx;
+        var bottom = bottomLeft + (bottomRight - bottomLeft) * fx;
+        return (byte)Math.Clamp((int)Math.Round(top + (bottom - top) * fy), byte.MinValue, byte.MaxValue);
     }
 
     private static void CheckResult(int errorCode, string operation, CancellationToken cancellationToken = default)
