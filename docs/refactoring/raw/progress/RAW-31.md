@@ -7,10 +7,10 @@ Last update: 2026-09-29 · State: IN PROGRESS
 - [x] 2. Add P/Invoke and SafeHandle based decoder with cancellation — `2af8a4f` — tests: 1 Native smoke test passed (CR2 via open_buffer, CR3 via open_wfile); full Release build 0 warnings/errors
 - [x] 3. Probe availability and register backend in application composition — `8f4834d` — tests: 1 Native LibRaw probe + 1 app composition test passed
 - [x] 4. Normalize output to Bgr32 at 96 DPI and set SourceKind = 2 — routing, source-kind cache key, cancellation, delayed zoom indicator, and RAW zoom integration coverage complete; ZoomDetailTests 25/25, DecodeOriginalTests 6/6; full Release build 0 warnings/errors. Decoder Bgr32/96 DPI and bounded output were verified by Native tests.
-- [ ] 5. Decode corpus and record timing/memory; evaluate half_size  ← CURRENT: all 23/23 corpus files across 8 formats decode; per-file timing recorded (0.443–19.572 s; mean ≈5.09 s; full run 1:58). Memory was sampled only after each decode (peak reported 35.9 MB), so replace with a concurrent sampler before using it as peak evidence; 200-decode leak check and half_size evaluation remain.
+- [ ] 5. Decode corpus and record timing/memory; evaluate half_size  ← CURRENT: all 23/23 corpus files across 8 formats decode; per-file timing recorded (0.443–19.572 s; mean ≈5.09 s; full run 1:58). Added 50 ms concurrent private-bytes sampler and a 200-decode Canon 7D sRAW stability test (32 MB growth ceiling); these tests still need to run with the corrected sampler.
 
 ## Next action
-Add a concurrent private-bytes sampler around each decode and run a 200-decode stability check on the smaller Canon 7D sRAW sample; then evaluate whether LibRaw exposes a supported half_size C API setter.
+Run the full corpus and 200-decode Native tests with the concurrent private-bytes sampler; then evaluate whether LibRaw exposes a supported half_size C API setter.
 
 ## Evidence / measurements
 - Full decode routing: regression tests prove RawFullDecode.OnZoom selects the injected RAW decoder and SourceKind=2 dimensions key, while disabled mode uses the configured standard decoder.

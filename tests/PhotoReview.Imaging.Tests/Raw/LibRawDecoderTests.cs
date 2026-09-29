@@ -37,16 +37,13 @@ public sealed class LibRawDecoderTests
         if (files.Length == 0) return;
 
         var decoder = new LibRawDecoder();
-        using var process = Process.GetCurrentProcess();
-        var peakPrivateBytes = process.PrivateMemorySize64;
+        using var memorySampler = new PrivateMemorySampler();
         var measurements = new List<string>();
         foreach (var path in files)
         {
             Console.WriteLine($"LibRaw corpus decoding: {Path.GetFileName(path)}");
             Console.Out.Flush();
             measurements.Add(DecodeCorpusSample(decoder, path));
-            peakPrivateBytes = Math.Max(peakPrivateBytes, process.PrivateMemorySize64);
-
             if (Path.GetFileName(path).Equals("Canon - EOS 350D - RAW (3_2).CR2", StringComparison.OrdinalIgnoreCase))
             {
                 var bounded = decoder.Decode(new DecodeRequest(path, new DecodeBox(640, 480)));
@@ -59,8 +56,35 @@ public sealed class LibRawDecoderTests
             }
         }
 
-        Console.WriteLine($"LibRaw corpus: {files.Length}/{files.Length} decoded; peak private bytes={peakPrivateBytes}; "
+        Console.WriteLine($"LibRaw corpus: {files.Length}/{files.Length} decoded; sampled peak private bytes={memorySampler.PeakPrivateBytes}; "
             + string.Join(" | ", measurements));
+    }
+
+    [Fact]
+    [Trait("Category", "Native")]
+    public void Decode_Repeated200Times_DoesNotContinuouslyGrowPrivateBytes()
+    {
+        var path = Path.Combine(CorpusDirectory, "Canon - EOS 7D - sRAW2 (sRAW) (3_2).CR2");
+        if (!File.Exists(path)) return;
+
+        var decoder = new LibRawDecoder();
+        using var memorySampler = new PrivateMemorySampler();
+        long afterWarmup = 0;
+        for (var index = 0; index < 200; index++)
+        {
+            _ = DecodeCorpusSample(decoder, path);
+            if ((index + 1) % 10 != 0) continue;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            if (index == 19) afterWarmup = memorySampler.CurrentPrivateBytes;
+        }
+
+        var finalPrivateBytes = memorySampler.CurrentPrivateBytes;
+        var growth = finalPrivateBytes - afterWarmup;
+        Console.WriteLine($"LibRaw 200 decodes: after warmup={afterWarmup}; final={finalPrivateBytes}; "
+            + $"growth={growth}; peak={memorySampler.PeakPrivateBytes}");
+        Assert.InRange(growth, long.MinValue, 32L * 1024 * 1024);
     }
 
     private static string DecodeCorpusSample(LibRawDecoder decoder, string path)
@@ -81,6 +105,41 @@ public sealed class LibRawDecoderTests
         Assert.Equal(image.PixelHeight, info.PixelHeight);
 
         return $"{Path.GetFileName(path)} {image.PixelWidth}x{image.PixelHeight} {stopwatch.Elapsed.TotalMilliseconds:F0} ms";
+    }
+
+    private sealed class PrivateMemorySampler : IDisposable
+    {
+        private readonly Process _process = Process.GetCurrentProcess();
+        private readonly Timer _timer;
+        private long _currentPrivateBytes;
+        private long _peakPrivateBytes;
+
+        internal PrivateMemorySampler()
+        {
+            Sample();
+            _timer = new Timer(_ => Sample(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
+        }
+
+        internal long CurrentPrivateBytes => Interlocked.Read(ref _currentPrivateBytes);
+        internal long PeakPrivateBytes => Interlocked.Read(ref _peakPrivateBytes);
+
+        private void Sample()
+        {
+            _process.Refresh();
+            var current = _process.PrivateMemorySize64;
+            Interlocked.Exchange(ref _currentPrivateBytes, current);
+            while (true)
+            {
+                var peak = Interlocked.Read(ref _peakPrivateBytes);
+                if (current <= peak || Interlocked.CompareExchange(ref _peakPrivateBytes, current, peak) == peak) break;
+            }
+        }
+
+        public void Dispose()
+        {
+            _timer.Dispose();
+            _process.Dispose();
+        }
     }
 
     [Fact]
