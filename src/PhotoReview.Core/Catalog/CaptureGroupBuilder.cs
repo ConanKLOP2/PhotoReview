@@ -1,4 +1,5 @@
 using System.IO;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Catalog;
 
@@ -48,6 +49,53 @@ public static class CaptureGroupBuilder
         }
 
         return groups;
+    }
+
+    /// <summary>
+    /// Replaces unambiguous pair members with one catalog entry using the selected representative.
+    /// The returned entry retains the representative member's metadata and exposes both members through its group.
+    /// </summary>
+    public static IReadOnlyList<CatalogEntry> GroupEntries(
+        IReadOnlyList<CatalogEntry> entries,
+        RawPairMode mode,
+        IEnumerable<string>? sidecarPaths = null)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+        if (mode == RawPairMode.Separate) return entries.ToArray();
+
+        var groups = Build(entries.Select(entry => entry.Path), sidecarPaths);
+        if (groups.Count == 0) return entries.ToArray();
+
+        var entryByPath = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries) entryByPath.TryAdd(entry.Path, entry);
+
+        var groupByMemberPath = new Dictionary<string, CaptureGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in groups)
+        {
+            groupByMemberPath[group.JpegPath] = group;
+            groupByMemberPath[group.RawPath] = group;
+        }
+
+        var emitted = new HashSet<CaptureGroup>();
+        var grouped = new List<CatalogEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            if (!groupByMemberPath.TryGetValue(entry.Path, out var group))
+            {
+                grouped.Add(entry);
+                continue;
+            }
+
+            if (!emitted.Add(group)) continue;
+            var representativePath = group.GetRepresentativePath(mode);
+            if (entryByPath.TryGetValue(representativePath, out var representative))
+            {
+                grouped.Add(representative with { CaptureGroup = group });
+            }
+        }
+
+        return grouped;
     }
 
     private static Dictionary<CaptureKey, List<string>> IndexSidecars(IEnumerable<string>? sidecarPaths)

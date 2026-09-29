@@ -49,4 +49,48 @@ public sealed class CaptureGroupBuilderTests
         Assert.Equal(2, groups.Count);
         Assert.All(groups, group => Assert.Null(group.XmpPath));
     }
+
+    [Fact]
+    public void GroupEntries_UsesSelectedRepresentativeAndKeepsBothMembersAddressable()
+    {
+        var jpeg = new CatalogEntry(@"C:\photos\a.jpg") { Length = 10, Width = 3000 };
+        var raw = new CatalogEntry(@"C:\photos\a.cr2") { Length = 100, Width = 6000 };
+        var other = new CatalogEntry(@"C:\photos\b.jpg");
+        var catalog = new ReviewCatalog();
+
+        catalog.Reset([jpeg, raw, other], PhotoReview.Core.Model.RawPairMode.PreferJpeg,
+            [@"C:\photos\a.xmp"]);
+
+        Assert.Equal(2, catalog.Count);
+        Assert.Equal(jpeg.Path, catalog.PathAt(0));
+        Assert.Equal(0, catalog.IndexOf(raw.Path));
+        Assert.Equal(10, catalog.Find(raw.Path)!.Length);
+        Assert.Equal([jpeg.Path, raw.Path, @"C:\photos\a.xmp"], catalog.Current!.CaptureGroup!.Paths);
+    }
+
+    [Fact]
+    public void GroupEntries_PreferRawUsesRawMetadata_AndExplorerOrderCollapsesMembers()
+    {
+        var jpeg = new CatalogEntry(@"C:\photos\a.jpg") { Length = 10 };
+        var raw = new CatalogEntry(@"C:\photos\a.cr2") { Length = 100 };
+        var other = new CatalogEntry(@"C:\photos\b.jpg");
+        var catalog = new ReviewCatalog();
+        catalog.Reset([jpeg, raw, other], PhotoReview.Core.Model.RawPairMode.PreferRaw);
+
+        Assert.Equal(raw.Path, catalog.PathAt(0));
+        Assert.Equal(100, catalog.Find(jpeg.Path)!.Length);
+        Assert.True(catalog.ReplaceOrder([other.Path, raw.Path, jpeg.Path]));
+        Assert.Equal([other.Path, raw.Path], catalog.Paths);
+        Assert.Equal(1, catalog.IndexOf(jpeg.Path));
+    }
+
+    [Fact]
+    public void Reset_DefaultModeKeepsPairMembersSeparate()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([@"C:\photos\a.jpg", @"C:\photos\a.cr2"]);
+
+        Assert.Equal(2, catalog.Count);
+        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+    }
 }

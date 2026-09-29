@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Catalog;
 
@@ -16,6 +17,7 @@ namespace PhotoReview.Core.Catalog;
 public sealed class ReviewCatalog
 {
     private readonly List<CatalogEntry> _entries = [];
+    private RawPairMode _rawPairMode = RawPairMode.Separate;
 
     // 0 = unbound (no owner check). Managed thread ids start at 1.
     private int _ownerThreadId;
@@ -124,6 +126,17 @@ public sealed class ReviewCatalog
             // First occurrence wins for unusual case-variant duplicate paths, matching the
             // previous linear-scan behavior (first match).
             if (!_indexByPath.TryAdd(_entries[i].Path, i)) _indexHasDuplicateKeys = true;
+            if (_entries[i].CaptureGroup is { } group)
+            {
+                foreach (var memberPath in group.ImagePaths)
+                {
+                    if (!string.Equals(memberPath, _entries[i].Path, StringComparison.OrdinalIgnoreCase)
+                        && !_indexByPath.TryAdd(memberPath, i))
+                    {
+                        _indexHasDuplicateKeys = true;
+                    }
+                }
+            }
         }
         _indexDirty = false;
     }
@@ -159,12 +172,18 @@ public sealed class ReviewCatalog
     }
 
     public void Reset(IEnumerable<CatalogEntry> entries)
+        => Reset(entries, RawPairMode.Separate);
+
+    /// <summary>Resets the catalog and optionally collapses matched JPEG+RAW pairs.</summary>
+    public void Reset(IEnumerable<CatalogEntry> entries, RawPairMode rawPairMode, IEnumerable<string>? sidecarPaths = null)
     {
         AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(entries);
         var fresh = entries.Where(e => e is not null && !string.IsNullOrWhiteSpace(e.Path)).ToList();
+        var grouped = CaptureGroupBuilder.GroupEntries(fresh, rawPairMode, sidecarPaths);
         _entries.Clear();
-        _entries.AddRange(fresh);
+        _entries.AddRange(grouped);
+        _rawPairMode = rawPairMode;
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
         InvalidateIndex();
     }
@@ -297,14 +316,20 @@ public sealed class ReviewCatalog
         AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(newOrder);
 
-        if (newOrder.Count != _entries.Count) return false;
+        IReadOnlyList<string> effectiveOrder = newOrder;
+        if (_rawPairMode != RawPairMode.Separate && TryCollapseMemberOrder(newOrder, out var collapsedOrder))
+        {
+            effectiveOrder = collapsedOrder;
+        }
+
+        if (effectiveOrder.Count != _entries.Count) return false;
 
         // Verify exact set match (case-insensitive)
         // CORE-01: must be a true permutation -- every current path exactly once (a duplicate such as [A,A] for [A,B]
         // has the right count and only known members, yet would drop B from the catalog).
         var currentSet = new HashSet<string>(_entries.Select(e => e.Path), StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in newOrder)
+        foreach (var path in effectiveOrder)
         {
             if (path is null || !currentSet.Contains(path) || !seen.Add(path)) return false;
         }
@@ -314,7 +339,7 @@ public sealed class ReviewCatalog
         // Build mapping and reorder
         var entryMap = _entries.ToDictionary(e => e.Path, StringComparer.OrdinalIgnoreCase);
         _entries.Clear();
-        foreach (var path in newOrder)
+        foreach (var path in effectiveOrder)
         {
             _entries.Add(entryMap[path]);
         }
@@ -330,6 +355,37 @@ public sealed class ReviewCatalog
             CurrentIndex = _entries.Count > 0 ? 0 : -1;
         }
 
+        return true;
+    }
+
+    private bool TryCollapseMemberOrder(IReadOnlyList<string> memberOrder, out IReadOnlyList<string> collapsedOrder)
+    {
+        collapsedOrder = [];
+        var representativeByMember = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var expectedMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in _entries)
+        {
+            var paths = entry.CaptureGroup?.ImagePaths ?? [entry.Path];
+            foreach (var path in paths)
+            {
+                expectedMembers.Add(path);
+                representativeByMember.TryAdd(path, entry.Path);
+            }
+        }
+
+        if (memberOrder.Count != expectedMembers.Count) return false;
+        var seenMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenRepresentatives = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>(_entries.Count);
+        foreach (var path in memberOrder)
+        {
+            if (path is null || !expectedMembers.Contains(path) || !seenMembers.Add(path)) return false;
+            var representative = representativeByMember[path];
+            if (seenRepresentatives.Add(representative)) result.Add(representative);
+        }
+
+        if (result.Count != _entries.Count) return false;
+        collapsedOrder = result;
         return true;
     }
 

@@ -20,6 +20,7 @@ public sealed record CatalogEntry(string Path)
     public DateTime? LastWriteUtc { get; init; }
     public int? Width { get; init; }
     public int? Height { get; init; }
+    public CaptureGroup? CaptureGroup { get; init; }
 
     public bool Matches(FileStat stat) => Length == stat.Length && LastWriteUtc == stat.LastWriteUtc;
 
