@@ -10,7 +10,7 @@ Last update: 2026-09-29 · State: READY FOR REVIEW
 - [x] 5. Decode corpus and record timing/memory; evaluate half_size — 23/23 samples across 8 formats pass in 1:59; concurrent private-bytes peak 1,141,518,336 (~1.06 GiB). 200 Canon 7D sRAW decodes pass in 1:33 with −540,672 bytes growth after warmup. half_size evaluated: documented parameter is not exposed through the pinned official C API, so no safe runtime toggle exists without a separate shim/rebuild.
 
 ## Next action
-Final gate: publish Release and run `tools/verify-release.ps1` on that exact directory; then review PR #239. All numbered RAW-31 steps and lead license/source-package review are complete.
+All RAW-31 steps and lead license/source-package review are complete. Local Release build, publish, and `tools/verify-release.ps1` passed; PR #239 CI passed on `f1443f2`. PR #239 remains a draft umbrella for RAW-01..RAW-70 and needs scope-level review before it is marked ready or merged.
 
 ## Evidence / measurements
 - Full decode routing: regression tests prove RawFullDecode.OnZoom selects the injected RAW decoder and SourceKind=2 dimensions key, while disabled mode uses the configured standard decoder.
