@@ -44,12 +44,12 @@ public sealed class FileActionControllerGroupTests : IDisposable
         return path;
     }
 
-    private FileActionController NewController(AppSettings? settings = null, Func<string, string, Task>? undoMoveOverride = null)
+    private FileActionController NewController(AppSettings? settings = null, Func<string, string, Task>? undoMoveOverride = null, string moveDestination = "Sorted")
     {
         settings ??= new AppSettings();
         settings.Actions =
         [
-            new ReviewAction { Name = "MoveToSub", Operation = FileOperationType.Move, Destination = "Sorted" },
+            new ReviewAction { Name = "MoveToSub", Operation = FileOperationType.Move, Destination = moveDestination },
         ];
         var fs = new PhysicalFileSystem();
         var journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
@@ -235,6 +235,133 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
+    public async Task UndoGroupRecycle_FailingMidWay_WhenTheOnlyCaptureWasRemoved_PresentsTheRestoredEntry()
+    {
+        var jpeg = Make("only.jpg");
+        var raw = Make("only.cr2", 8);
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        var controller = NewController();
+        await controller.RecycleAsync(null, jpeg);
+        Assert.Equal(0, _catalog.Count);
+        _sink.Presented.Clear();
+        _bin.FailRestoreFor = raw;
+
+        var result = await controller.UndoLastAsync(_root);
+
+        Assert.False(result!.Succeeded);
+        Assert.Equal([jpeg], _catalog.Paths);
+        Assert.Equal([0], _sink.Presented); // otherwise the view stays blank although HasImages is true
+        Assert.Equal(result.ErrorMessage, _sink.LastStatus);
+    }
+
+    [Fact]
+    public async Task UndoGroupRecycle_FailingMidWay_WhileAnotherPhotoIsShown_KeepsItDisplayed()
+    {
+        var (_, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var controller = NewController();
+        await controller.RecycleAsync(null, jpeg);
+        var presentsBefore = _sink.Presented.Count;
+        _bin.FailRestoreFor = raw;
+
+        await controller.UndoLastAsync(_root);
+
+        Assert.Equal(presentsBefore, _sink.Presented.Count);
+        Assert.Equal(after, _catalog.Current!.Path);
+    }
+
+    [Fact]
+    public async Task UndoGroupRecycle_FailingMidWay_RestoresTheMemberAtTheOriginalPosition()
+    {
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var controller = NewController();
+        await controller.RecycleAsync(null, jpeg);
+        _bin.FailRestoreFor = raw;
+
+        await controller.UndoLastAsync(_root);
+
+        Assert.Equal([before, jpeg, after], _catalog.Paths); // not appended at the end
+    }
+
+    [Fact]
+    public async Task UndoGroupMove_MembersSplitAcrossFolders_DoesNotInsertOrPresentBecauseTheCallerReloads()
+    {
+        var before = Make("zbefore.jpg");
+        var after = Make("aafter.jpg");
+        var jpeg = Make("pair.jpg");
+        var raw = Make(Path.Combine("other", "pair.cr2"), 8);
+        _catalog.Reset([new CatalogEntry(before), new CatalogEntry(after)], RawPairMode.PreferJpeg);
+        _catalog.RestoreMembers([jpeg, raw], 1, new CaptureGroup(jpeg, raw));
+        Assert.Equal([before, jpeg, after], _catalog.Paths);
+        var controller = NewController(moveDestination: Path.Combine(_root, "Elsewhere")); // absolute: the only way a capture spans folders
+        await controller.RunActionAsync(0, null, jpeg);
+        Assert.True(_catalog.Paths.SequenceEqual([before, after]), _sink.LastStatus);
+        var presentsBeforeUndo = _sink.Presented.Count;
+
+        var result = await controller.UndoLastAsync(_root);
+
+        Assert.True(result!.Succeeded, result.ErrorMessage);
+        Assert.True(FileActionController.RestoresOutsideFolder(result, _root));
+        Assert.Equal(presentsBeforeUndo, _sink.Presented.Count);
+        Assert.Equal([before, after], _catalog.Paths);
+    }
+
+    [Fact]
+    public void ReloadPathAfterUndo_SourceWasNotRestored_PicksARestoredImageMember()
+    {
+        var source = Path.Combine(_root, "gone.jpg");
+        var xmp = Path.Combine(_root, "kept.xmp");
+        var raw = Path.Combine(_root, "kept.cr2");
+        var result = new UndoResult(true, FileOperationType.Recycle, source, null, "note", RestoredPaths: [xmp, raw]);
+
+        Assert.Equal(raw, FileActionController.ReloadPathAfterUndo(result));
+    }
+
+    [Fact]
+    public void ReloadPathAfterUndo_SourceWasRestored_KeepsTheSource()
+    {
+        var source = Path.Combine(_root, "a.jpg");
+        var raw = Path.Combine(_root, "a.cr2");
+        var result = new UndoResult(true, FileOperationType.Recycle, source, null, null, RestoredPaths: [raw, source]);
+
+        Assert.Equal(source, FileActionController.ReloadPathAfterUndo(result));
+    }
+
+    [Fact]
+    public async Task GroupMove_PartnerVanishedAndNothingLeftToReview_KeepsAllImagesProcessedAndNamesTheMissingFile()
+    {
+        var jpeg = Make("pair.jpg");
+        var raw = Make("pair.cr2", 8);
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        File.Delete(raw);
+        var controller = NewController();
+
+        await controller.RunActionAsync(0, null, jpeg);
+
+        Assert.Equal(0, _catalog.Count);
+        Assert.StartsWith(StatusFormatter.AllImagesProcessed(), _sink.LastStatus, StringComparison.Ordinal);
+        Assert.Contains(Tr.StatusGroupPartnerMissing("pair.jpg", "pair.cr2"), _sink.LastStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GroupMove_PartnerVanished_FolderSwitchedWhileThePresenterRuns_DoesNotOverwriteTheNewFoldersStatus()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        File.Delete(raw);
+        var gate = new TaskCompletionSource();
+        _sink.PresentTask = () => gate.Task;
+        var controller = NewController();
+
+        var run = controller.RunActionAsync(0, null, jpeg);
+        Assert.False(run.IsCompleted); // waiting for the presenter
+        _clock.NextFolder(); // the user opens another folder meanwhile
+        _sink.SetStatusText("new folder status");
+        gate.SetResult();
+        await run;
+
+        Assert.Equal("new folder status", _sink.LastStatus);
+    }
+
+    [Fact]
     public async Task GroupRecycle_PermanentDeleteSettingOff_RefusesWithoutPromptAndDeletesNothing()
     {
         var (before, jpeg, raw, xmp, after) = LoadPairBetweenTwoPhotos(withXmp: true);
@@ -302,12 +429,14 @@ public sealed class FileActionControllerGroupTests : IDisposable
         public bool FitsAll { get; set; } = true;
         public string? FailRestoreFor { get; set; }
 
-        public bool CanRecycle(string path) => !NoBin;
+        public HashSet<string> NoBinExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool CanRecycle(string path) => !NoBin && !NoBinExtensions.Contains(Path.GetExtension(path));
         public bool FitsInRecycleBin(string path, long fileSize) => FitsAll;
 
         public void SendToRecycleBin(string path)
         {
-            if (NoBin) throw new IOException("no bin");
+            if (!CanRecycle(path)) throw new IOException("no bin");
             Recycled.Add(path);
             File.Delete(path);
         }
@@ -352,13 +481,16 @@ public sealed class FileActionControllerGroupTests : IDisposable
     {
         public string? LastStatus { get; private set; }
         public List<int> Presented { get; } = [];
+        public List<string> LateStatuses { get; } = [];
+        /// <summary>Optional: the task PresentAsync returns (a gate the test completes later); default completed.</summary>
+        public Func<Task>? PresentTask { get; set; }
         public void SetStatusText(string status) => LastStatus = status;
-        public void ShowLateActionStatus(string status) { }
+        public void ShowLateActionStatus(string status) => LateStatuses.Add(status);
         public void OnCatalogChanged(string? removedPath) { }
         public Task PresentAsync(int index)
         {
             Presented.Add(index);
-            return Task.CompletedTask;
+            return PresentTask?.Invoke() ?? Task.CompletedTask;
         }
 
         public void UpdateSessionPath(string currentPath) { }

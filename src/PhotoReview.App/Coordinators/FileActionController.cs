@@ -249,10 +249,20 @@ public sealed class FileActionController
                         var target = groupResult.Entry?.Destination;
                         if (operation == FileOperationType.Move && target is not null)
                             _sink.ShowLateActionStatus(Tr.StatusLateMoveUndoable(name, Path.GetDirectoryName(target) ?? string.Empty));
-                        else if (operation == FileOperationType.Recycle && groupResult.PermanentlyDeleted)
-                            _sink.ShowLateActionStatus(Tr.StatusLateDeletedPermanently(name));
                         else if (operation == FileOperationType.Recycle)
-                            _sink.ShowLateActionStatus(Tr.StatusLateRecycleUndoable(name));
+                        {
+                            // PermanentlyDeleted is true when ANY member was deleted for good: say exactly which ones, so a
+                            // capture whose other members went to the Recycle Bin is not reported as fully permanent.
+                            var permanentNames = groupResult.Members.Where(member => member.Completed && member.Member.Permanent)
+                                .Select(member => Path.GetFileName(member.Member.Source)).ToArray();
+                            var recycledAny = groupResult.Members.Any(member => member.Completed && !member.Member.Permanent);
+                            if (permanentNames.Length > 0 && recycledAny)
+                                _sink.ShowLateActionStatus(Tr.StatusLateDeletedPartlyPermanently(name, string.Join(", ", permanentNames)));
+                            else if (permanentNames.Length > 0)
+                                _sink.ShowLateActionStatus(Tr.StatusLateDeletedPermanently(name));
+                            else
+                                _sink.ShowLateActionStatus(Tr.StatusLateRecycleUndoable(name));
+                        }
                     }
                 }
                 else if (singleResult!.Succeeded) ReportLateCompletion(singleResult);
@@ -263,15 +273,21 @@ public sealed class FileActionController
             {
                 if (groupResult is not null) _undoService?.RegisterGroup(groupResult);
                 else _undoService?.Register(singleResult!);
-                if (operation == FileOperationType.Move && sourceIndex >= 0) RememberMovePosition(source, previousPath, group);
+                // Move AND Recycle remember where the entry sat: a partly failed undo puts the members back there.
+                if (isRemove && sourceIndex >= 0) RememberMovePosition(source, previousPath, group);
                 _sink.UpdateSessionPath(_catalog.Current?.Path ?? source);
 
                 if (groupResult?.SkippedMissing is { Count: > 0 } skipped)
                 {
                     // A partner file vanished outside the app: the action covered the remaining files. Say so (after the
-                    // presenter, which writes its own status when it finishes).
+                    // presenter, which writes its own status when it finishes) -- but only while this folder is still the
+                    // open one, and without replacing "All images processed" when nothing is left to review.
                     if (presentTask is not null) await presentTask;
-                    _sink.SetStatusText(Tr.StatusGroupPartnerMissing(Path.GetFileName(source), string.Join(", ", skipped.Select(Path.GetFileName))));
+                    if (_clock.IsFolderCurrent(folderGen))
+                    {
+                        var missing = Tr.StatusGroupPartnerMissing(Path.GetFileName(source), string.Join(", ", skipped.Select(Path.GetFileName)));
+                        _sink.SetStatusText(isRemove && _catalog.Count == 0 ? StatusFormatter.AllImagesProcessed() + " " + missing : missing);
+                    }
                 }
                 else if (_catalog.Count == 0)
                 {
@@ -355,13 +371,7 @@ public sealed class FileActionController
     /// </summary>
     private void InsertRestoredMove(string source, IReadOnlyList<string>? restoredPaths)
     {
-        _movePositions.TryGetValue(source, out var position);
-        if (position is not null)
-        {
-            _movePositions.Remove(source);
-            if (position.Group is { } forgetGroup)
-                foreach (var path in forgetGroup.Paths) _movePositions.Remove(path);
-        }
+        var position = TakeMovePosition(source);
 
         int index;
         if (position is not null && position.PreviousPath is null) index = 0;
@@ -372,6 +382,15 @@ public sealed class FileActionController
             _catalog.RestoreMembers(restoredPaths, index, position?.Group);
         else
             _catalog.Restore(source, index);
+    }
+
+    /// <summary>Returns and forgets the remembered position of <paramref name="source"/> (and of every member of its capture).</summary>
+    private MovePosition? TakeMovePosition(string source)
+    {
+        if (!_movePositions.Remove(source, out var position)) return null;
+        if (position.Group is { } forgetGroup)
+            foreach (var path in forgetGroup.Paths) _movePositions.Remove(path);
+        return position;
     }
 
     private int SortedInsertIndex(string path)
@@ -424,11 +443,23 @@ public sealed class FileActionController
             if (_clock.IsFolderCurrent(folderGen) && result.RestoredPaths is { Count: > 0 } partial
                 && !string.IsNullOrEmpty(result.Source) && IsInFolder(result.Source, currentFolder))
             {
-                if (result.Operation == FileOperationType.Move) InsertRestoredMove(result.Source, partial.Where(path => IsInFolder(path, currentFolder)).ToArray());
-                else _catalog.RestoreMembers(partial.Where(path => IsInFolder(path, currentFolder)), _catalog.Count);
-                _sink.OnCatalogChanged(null);
-                _sink.UpdateSessionPath(_catalog.Current?.Path ?? result.Source);
-                _sink.NotifyNavigationStateChanged();
+                var inFolder = partial.Where(path => IsInFolder(path, currentFolder)).ToArray();
+                if (inFolder.Length > 0)
+                {
+                    // Move and Recycle both go back to their remembered review position. When the catalog was empty (the
+                    // undone action removed the last capture) nothing is on screen: present the restored entry, otherwise
+                    // keep showing the current photo.
+                    var wasEmpty = _catalog.Count == 0;
+                    InsertRestoredMove(result.Source, inFolder);
+                    _sink.OnCatalogChanged(null);
+                    if (wasEmpty && _catalog.Count > 0)
+                    {
+                        await _sink.PresentAsync(Math.Max(_catalog.CurrentIndex, 0));
+                        if (!_clock.IsFolderCurrent(folderGen)) return result;
+                    }
+                    _sink.UpdateSessionPath(_catalog.Current?.Path ?? result.Source);
+                    _sink.NotifyNavigationStateChanged();
+                }
             }
 
             _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.NothingToUndo());
@@ -439,7 +470,20 @@ public sealed class FileActionController
 
         // R7-2: a Move made in another folder is restored there, not into this folder's catalog; the caller opens
         // that folder at the restored file, as for a Recycle undo (see RestoresOutsideFolder).
-        if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
+        if (RestoresOutsideFolder(result, currentFolder))
+        {
+            // The caller reloads the folder, which rebuilds the catalog from disk and presents the restored photo once:
+            // restoring into the catalog and presenting here as well would decode the same image twice (a Recycle undo,
+            // or a Move whose members are split across folders, so that part of them is in this one).
+            // Only for the current folder: a restore made in another folder must not write its path into THIS folder's session.
+            TakeMovePosition(result.Source);
+            if (IsInFolder(result.Source, currentFolder))
+            {
+                _sink.OnCatalogChanged(null);
+                _sink.UpdateSessionPath(result.Source);
+            }
+        }
+        else if (result.Operation == FileOperationType.Move && !string.IsNullOrEmpty(result.Source)
             && IsInFolder(result.Source, currentFolder))
         {
             InsertRestoredMove(result.Source, result.RestoredPaths is { Count: > 0 } restored
@@ -452,17 +496,6 @@ public sealed class FileActionController
                 await _sink.PresentAsync(idx);
             }
 
-            _sink.UpdateSessionPath(result.Source);
-        }
-        else if (result.Operation == FileOperationType.Recycle && !string.IsNullOrEmpty(result.Source)
-            && IsInFolder(result.Source, currentFolder))
-        {
-            // Only for the current folder: a Recycle made in another folder must not write its path into THIS
-            // folder's session (the caller reopens the restored file's own folder instead).
-            // A successful Recycle undo always makes the caller reload the folder (RestoresOutsideFolder), which rebuilds
-            // the catalog from disk and presents the restored photo once: restoring into the catalog and presenting here
-            // as well would decode the same image twice.
-            _sink.OnCatalogChanged(null);
             _sink.UpdateSessionPath(result.Source);
         }
 
@@ -563,6 +596,19 @@ public sealed class FileActionController
                 && (result.RestoredPaths is { Count: > 0 } paths
                     ? paths.Any(path => !IsInFolder(path, currentFolder))
                     : !IsInFolder(result.Source, currentFolder))));
+
+    /// <summary>
+    /// The file a reload after <paramref name="result"/> should open at. <c>Source</c> is the first manifest member, which
+    /// a partly restored capture may not have got back (it can be the permanently deleted one, no longer on disk): prefer
+    /// it when it was restored, otherwise the first restored image/RAW member (sidecars never become entries).
+    /// </summary>
+    public static string? ReloadPathAfterUndo(UndoResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (result.RestoredPaths is not { Count: > 0 } restored) return result.Source;
+        if (!string.IsNullOrEmpty(result.Source) && restored.Contains(result.Source, StringComparer.OrdinalIgnoreCase)) return result.Source;
+        return restored.FirstOrDefault(path => ImageFileTypes.IsSupported(path, rawEnabled: true)) ?? result.Source;
+    }
 
     private static bool IsInFolder(string path, string? folder)
     {
