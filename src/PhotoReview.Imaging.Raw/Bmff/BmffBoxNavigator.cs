@@ -19,14 +19,19 @@ public static class BmffBoxNavigator
         long PayloadSize,
         byte[]? Uuid = null);
 
+    /// <summary>Maximum number of immediate children returned by <see cref="ReadChildBoxes"/>; further children are ignored.</summary>
+    public const int MaxChildBoxes = 256;
+
     /// <summary>
     /// Reads the next box header at <paramref name="offset"/>.
-    /// Returns true if a valid box header was read; false on EOF or invalid structure.
+    /// Returns true if a valid box header was read; false on EOF or invalid structure
+    /// (including sizes that would extend past the source, which are compared without overflow).
     /// </summary>
     public static bool TryReadBox(IRawHeaderSource source, long offset, out BmffBox box)
     {
         box = default;
-        if (offset < 0 || offset + 8 > source.Length) return false;
+        long length = source.Length;
+        if (offset < 0 || offset > length - 8) return false;
 
         var headerSpan = source.Read(offset, 8);
         if (headerSpan.Length < 8) return false;
@@ -40,23 +45,27 @@ public static class BmffBoxNavigator
 
         if (size32 == 1) // 64-bit largesize
         {
-            if (offset + 16 > source.Length) return false;
+            if (offset > length - 16) return false;
             var largeSpan = source.Read(offset + 8, 8);
             if (largeSpan.Length < 8) return false;
-            totalSize = (long)BinaryPrimitives.ReadUInt64BigEndian(largeSpan);
+            ulong largeSize = BinaryPrimitives.ReadUInt64BigEndian(largeSpan);
+            if (largeSize > long.MaxValue) return false;
+            totalSize = (long)largeSize;
             headerSize = 16;
         }
         else if (size32 == 0) // Extends to EOF
         {
-            totalSize = source.Length - offset;
+            totalSize = length - offset;
         }
 
-        if (totalSize < headerSize || offset + totalSize > source.Length)
+        // totalSize > length - offset is the overflow-free form of offset + totalSize > length.
+        if (totalSize < headerSize || totalSize > length - offset)
             return false;
 
         if (type == "uuid")
         {
-            if (offset + headerSize + 16 > source.Length) return false;
+            // A uuid box must hold its 16-byte extended type after the regular header.
+            if (totalSize < headerSize + 16) return false;
             var uuidSpan = source.Read(offset + headerSize, 16);
             if (uuidSpan.Length < 16) return false;
             uuid = uuidSpan.ToArray();
@@ -71,20 +80,31 @@ public static class BmffBoxNavigator
     }
 
     /// <summary>
-    /// Enumerates immediate children boxes within a container box's payload.
+    /// Enumerates immediate children boxes within a container box's payload (at most <see cref="MaxChildBoxes"/>).
+    /// <paramref name="payloadSkip"/> skips a fixed-size prefix of the payload before the first child
+    /// (e.g. the 8-byte header of Canon's preview uuid box). Never throws for malformed sizes; enumeration just stops.
     /// </summary>
-    public static List<BmffBox> ReadChildBoxes(IRawHeaderSource source, in BmffBox parent)
+    public static List<BmffBox> ReadChildBoxes(IRawHeaderSource source, in BmffBox parent, int payloadSkip = 0)
     {
         var list = new List<BmffBox>();
-        long current = parent.PayloadOffset;
-        long limit = parent.PayloadOffset + parent.PayloadSize;
+        long length = source.Length;
+        long start = parent.PayloadOffset;
+        if (start < 0 || start > length || parent.PayloadSize < 0 || payloadSkip < 0)
+            return list;
 
-        while (current + 8 <= limit && list.Count < 256)
+        // Clamp to the source so the limit itself can never overflow or exceed the file.
+        long limit = start + Math.Min(parent.PayloadSize, length - start);
+        long current = start;
+        if (payloadSkip > limit - current)
+            return list;
+        current += payloadSkip;
+
+        while (limit - current >= 8 && list.Count < MaxChildBoxes)
         {
             if (!TryReadBox(source, current, out var child))
                 break;
 
-            if (child.TotalSize <= 0 || current + child.TotalSize > limit)
+            if (child.TotalSize <= 0 || child.TotalSize > limit - current)
                 break; // Corrupt box size
 
             list.Add(child);
