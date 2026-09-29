@@ -60,16 +60,33 @@ public sealed class RawContractsAndHeaderSourceTests
     [Fact]
     public void RawFileTypes_ContainsExpectedExtensions()
     {
-        Assert.True(RawFileTypes.Extensions.Contains(".cr2"));
-        Assert.True(RawFileTypes.Extensions.Contains(".cr3"));
-        Assert.True(RawFileTypes.Extensions.Contains(".nef"));
-        Assert.True(RawFileTypes.Extensions.Contains(".arw"));
-        Assert.True(RawFileTypes.Extensions.Contains(".dng"));
-        Assert.True(RawFileTypes.Extensions.Contains(".raf"));
-        Assert.True(RawFileTypes.Extensions.Contains(".orf"));
-        Assert.True(RawFileTypes.Extensions.Contains(".rw2"));
+        Assert.True(new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
+        }.SetEquals(RawFileTypes.Extensions));
         Assert.True(RawFileTypes.IsRawExtension("test.CR3"));
         Assert.False(RawFileTypes.IsRawExtension("test.jpg"));
+        Assert.False(RawFileTypes.IsRawExtension("test.nrw"));
+        Assert.False(RawFileTypes.IsRawExtension("test.pef"));
+    }
+
+    [Fact]
+    public void RawContainerReaderRegistry_DoesNotAcceptReservedFormats()
+    {
+        var registry = new RawContainerReaderRegistry();
+        var tiffHeader = new byte[] { 0x49, 0x49, 0x2A, 0x00 };
+
+        Assert.Null(registry.FindReader(tiffHeader, ".nrw"));
+        Assert.Null(registry.FindReader(tiffHeader, ".pef"));
+    }
+
+    [Fact]
+    public void InitialProbeLength_StaysBoundedForLargeSources()
+    {
+        Assert.Equal(64, RawContainerLimits.InitialProbeLength((long)int.MaxValue + 1));
+        Assert.Equal(64, RawContainerLimits.InitialProbeLength(long.MaxValue));
+        Assert.Equal(12, RawContainerLimits.InitialProbeLength(12));
+        Assert.Equal(0, RawContainerLimits.InitialProbeLength(0));
     }
 
     [Fact]

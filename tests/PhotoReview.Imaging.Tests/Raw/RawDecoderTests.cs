@@ -407,6 +407,20 @@ public sealed class RawDecoderTests
         Assert.Equal(480, decoded.OriginalHeight);
     }
 
+    [Theory]
+    [InlineData("test.nrw")]
+    [InlineData("test.pef")]
+    public void FormatRoutingDecoder_DoesNotRouteReservedRawExtensions(string path)
+    {
+        var standard = new RoutingProbeDecoder();
+        var raw = new RoutingProbeDecoder();
+        var router = new FormatRoutingDecoder(standard, raw, () => true);
+
+        Assert.Equal(1, router.ReadInfo(path).PixelWidth);
+        Assert.Equal(1, standard.ReadInfoCount);
+        Assert.Equal(0, raw.ReadInfoCount);
+    }
+
     [Fact]
     public void PreviewSelector_SelectsSmallestMatchingBox()
     {
@@ -440,5 +454,17 @@ public sealed class RawDecoderTests
             ReadCount++;
             return new RawContainerInfo(RawFormat.Dng, 4000, 3000, 1, [], []);
         }
+    }
+
+    private sealed class RoutingProbeDecoder : IImageDecoder
+    {
+        public int ReadInfoCount { get; private set; }
+        public ImageInfo ReadInfo(string path)
+        {
+            ReadInfoCount++;
+            return new ImageInfo(1, 1, 1);
+        }
+
+        public IDecodedImage Decode(DecodeRequest request) => throw new NotSupportedException();
     }
 }

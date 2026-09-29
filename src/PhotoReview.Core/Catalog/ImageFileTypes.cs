@@ -11,7 +11,7 @@ public static class ImageFileTypes
 
     public static IReadOnlySet<string> RawExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        ".cr2", ".cr3", ".nef", ".nrw", ".arw", ".dng", ".raf", ".orf", ".rw2", ".pef"
+        ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
     };
 
     public static bool IsSupported(string path) => IsSupported(path, rawEnabled: false);

@@ -13,8 +13,7 @@ public sealed class NefContainerReader : IRawContainerReader
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {
-        if (!extension.Equals(".nef", StringComparison.OrdinalIgnoreCase) &&
-            !extension.Equals(".nrw", StringComparison.OrdinalIgnoreCase))
+        if (!extension.Equals(".nef", StringComparison.OrdinalIgnoreCase))
             return false;
 
         if (first64Bytes.Length < 4) return false;

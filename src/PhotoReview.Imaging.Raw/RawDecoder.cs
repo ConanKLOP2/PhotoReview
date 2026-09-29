@@ -142,7 +142,7 @@ public sealed class RawDecoder : IImageDecoder
             if (_containerInfoCache.TryGet(key, out var cached)) return cached;
 
             var ext = Path.GetExtension(path);
-            var probeSpan = headerSource.Read(0, Math.Min(64, (int)headerSource.Length));
+            var probeSpan = headerSource.Read(0, RawContainerLimits.InitialProbeLength(headerSource.Length));
             var reader = _registry.FindReader(probeSpan, ext)
                 ?? throw new NotSupportedException($"Unsupported RAW format: {ext}");
             var info = reader.Read(headerSource, CancellationToken.None);

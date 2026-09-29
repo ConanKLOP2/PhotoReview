@@ -10,13 +10,11 @@ public static class RawFileTypes
         ".cr2",
         ".cr3",
         ".nef",
-        ".nrw",
         ".arw",
         ".dng",
         ".raf",
         ".orf",
-        ".rw2",
-        ".pef"
+        ".rw2"
     };
 
     /// <summary>

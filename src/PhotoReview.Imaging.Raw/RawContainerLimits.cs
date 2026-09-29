@@ -16,4 +16,7 @@ public static class RawContainerLimits
 
     /// <summary>Hard cap on total bytes that may be read from the header (8 MB).</summary>
     public const int MaxHeaderBytes = 8 << 20;
+
+    /// <summary>Returns a safe initial container probe length without narrowing a potentially large file length first.</summary>
+    internal static int InitialProbeLength(long sourceLength) => (int)Math.Min(64L, sourceLength);
 }

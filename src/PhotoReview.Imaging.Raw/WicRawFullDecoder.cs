@@ -101,7 +101,7 @@ public sealed class WicRawFullDecoder : IImageDecoder
         headerSource = new SourceRawHeaderSource(path, _sourceReader, priority);
         try
         {
-            var firstBytes = headerSource.Read(0, Math.Min(64, (int)headerSource.Length));
+            var firstBytes = headerSource.Read(0, RawContainerLimits.InitialProbeLength(headerSource.Length));
             var reader = _registry.FindReader(firstBytes, Path.GetExtension(path))
                 ?? throw new NotSupportedException($"Unsupported RAW format: {Path.GetExtension(path)}");
             return reader.Read(headerSource, CancellationToken.None);
