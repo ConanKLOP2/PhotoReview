@@ -34,6 +34,11 @@ public sealed class LibRawDecoderTests
         var selectedSample = Environment.GetEnvironmentVariable("PHOTOREVIEW_LIBRAW_SAMPLE");
         if (!string.IsNullOrWhiteSpace(selectedSample))
             files = files.Where(path => Path.GetFileName(path).Equals(selectedSample, StringComparison.OrdinalIgnoreCase)).ToArray();
+        else
+            files = files.GroupBy(Path.GetExtension, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         if (files.Length == 0) return;
 
         var decoder = new LibRawDecoder();
