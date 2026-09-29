@@ -57,6 +57,9 @@ public static class CaptureGroupBuilder
 
     private static string? ChooseSidecar(Dictionary<CaptureKey, List<string>> sidecars, CaptureKey key, string jpegPath, string rawPath)
     {
+        // Hot path (10k-entry folders): most folders have no sidecars at all, so skip the per-group key/list allocations.
+        if (sidecars.Count == 0) return null;
+
         // <base>.xmp wins; two of them (case variants) are ambiguous and are not silently replaced by a weaker match.
         if (sidecars.TryGetValue(key, out var exact))
             return exact.Count == 1 ? exact[0] : null;
