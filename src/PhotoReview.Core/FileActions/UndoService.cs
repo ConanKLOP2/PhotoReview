@@ -122,8 +122,11 @@ public sealed class UndoService
         ArgumentNullException.ThrowIfNull(result);
         if (!result.Succeeded || result.Rejected || result.Entry?.GroupMembers is not { Count: > 0 } members) return;
         if (result.Operation is FileOperationType.Move or FileOperationType.Recycle)
+            // Permanence is per member: only a capture whose EVERY member was deleted permanently has nothing to restore.
+            // One permanent member (e.g. an XMP) must not disable undo of the JPEG/RAW that reached the Recycle Bin.
             _lastUndoAction = new UndoActionRecord(result.Operation, result.Entry.Source, result.Entry.Destination,
-                result.Entry.Size, result.Entry.LastWriteUtc, result.PermanentlyDeleted, members);
+                result.Entry.Size, result.Entry.LastWriteUtc,
+                result.Operation == FileOperationType.Recycle && members.All(member => member.Permanent), members);
     }
 
     /// <summary>
@@ -310,6 +313,9 @@ public sealed class UndoService
     {
         if (!TryBegin()) return new UndoResult(false, FileOperationType.Move, action.Source, action.Destination, Tr.CoreUndoBusy, Rejected: true);
         JournalTransaction? tx = null;
+        // Original paths that are back in place (restored by this call or earlier), reported even when a later member fails
+        // so the catalog can show them without a folder reload.
+        var restored = new List<string>();
         try
         {
             var undoMembers = members.Select(member => new JournalGroupMember(
@@ -322,14 +328,26 @@ public sealed class UndoService
                 var destinationStat = _fileSystem.GetFileStat(member.Destination!);
                 if (sourceStat is not null && destinationStat is not null)
                     throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
-                if (sourceStat is null && destinationStat is not null && destinationStat.Length == member.Size)
+                // Already back at the original path: only when it is the moved file itself (size AND write time), not any
+                // file that happens to have the same length.
+                if (sourceStat is null && destinationStat is not null
+                    && destinationStat.Length == member.Size && destinationStat.LastWriteUtc == member.LastWriteUtc)
+                {
+                    restored.Add(member.Destination!);
                     continue;
+                }
                 if (sourceStat is null || destinationStat is not null
                     || sourceStat.Length != member.Size || sourceStat.LastWriteUtc != member.LastWriteUtc)
                     throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
                 pending.Add(member);
             }
-            if (pending.Count == 0) throw new IOException(Tr.CoreRecoveryAlreadyHandled);
+            if (pending.Count == 0)
+            {
+                // Everything is already back: this entry can never do anything, so drop it (like a broken single Move)
+                // instead of failing the same way on every later Ctrl+Z.
+                DropGroupUndo(members);
+                throw new IOException(Tr.CoreRecoveryAlreadyHandled);
+            }
             var prepared = new JournalEntry(Guid.NewGuid().ToString("N"), FileOperationType.Move, JournalState.Prepared,
                 undoMembers[0].Source, undoMembers[0].Destination, undoMembers[0].Size, undoMembers[0].LastWriteUtc, _clock.UtcNow,
                 Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
@@ -343,27 +361,34 @@ public sealed class UndoService
                 else await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!)).ConfigureAwait(false);
                 if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
                     throw new IOException(JournalErrors.VerifySizeChanged);
+                restored.Add(member.Destination!);
             }
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
-            foreach (var member in members)
-            {
-                if (member.Destination is not null) _moveFingerprints.Remove(member.Destination);
-            }
-            _lastUndoAction = null;
+            DropGroupUndo(members);
             return new UndoResult(true, FileOperationType.Move, action.Source, action.Destination, null,
                 RestoredPaths: members.Select(member => member.Source).ToArray());
         }
         catch (Exception ex)
         {
             _ = tx?.Fail(ex, out _);
-            return new UndoResult(false, FileOperationType.Move, action.Source, action.Destination, Tr.CoreUndoFailed(ex.Message));
+            return new UndoResult(false, FileOperationType.Move, action.Source, action.Destination, Tr.CoreUndoFailed(ex.Message),
+                RestoredPaths: restored.Count > 0 ? restored.ToArray() : null);
         }
         finally
         {
             tx?.Dispose();
             End();
         }
+    }
+
+    private void DropGroupUndo(IReadOnlyList<JournalGroupMember> members)
+    {
+        foreach (var member in members)
+        {
+            if (member.Destination is not null) _moveFingerprints.Remove(member.Destination);
+        }
+        _lastUndoAction = null;
     }
 
     private async Task<UndoResult> UndoGroupRecycleAsync(UndoActionRecord action, IReadOnlyList<JournalGroupMember> members)
@@ -376,20 +401,42 @@ public sealed class UndoService
         }
         if (!TryBegin()) return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoBusy, Rejected: true);
         JournalTransaction? tx = null;
+        // Original paths that are back (restored by this call or earlier); reported even when a later member fails.
+        var restored = new List<string>();
         try
         {
             var pending = new List<JournalGroupMember>();
+            var unrecoverable = new List<JournalGroupMember>();
             foreach (var member in members)
             {
-                if (_fileSystem.FileExists(member.Source)) continue;
+                // Per member: a member deleted permanently (e.g. the XMP on another kind of drive) cannot be restored, but
+                // the members that did reach the Recycle Bin still can.
                 if (member.Permanent)
+                {
+                    unrecoverable.Add(member);
+                    continue;
+                }
+                var existing = _fileSystem.GetFileStat(member.Source);
+                if (existing is null)
+                {
+                    pending.Add(member);
+                    continue;
+                }
+                // Something is at the original path: the shell Restore would replace or prompt about it. It only counts as
+                // "already restored" when it is the recycled file itself; an unrelated newer file must not hide that the
+                // real one is still in the bin.
+                if (existing.Length != member.Size || existing.LastWriteUtc != member.LastWriteUtc)
                     throw new IOException(Tr.CoreUndoRecycleTargetExists(Path.GetFileName(member.Source)));
-                pending.Add(member);
+                restored.Add(member.Source);
             }
-            if (pending.Count == 0) throw new IOException(Tr.CoreRecoveryAlreadyHandled);
-            var undoMembers = members.Select(member => member with { }).ToArray();
+            if (pending.Count == 0)
+            {
+                _lastUndoAction = null;
+                throw new IOException(Tr.CoreRecoveryAlreadyHandled);
+            }
+            var undoMembers = members.Where(member => !member.Permanent).Select(member => member with { }).ToArray();
             var prepared = new JournalEntry(Guid.NewGuid().ToString("N"), FileOperationType.Recycle, JournalState.Prepared,
-                members[0].Source, null, members[0].Size, members[0].LastWriteUtc, _clock.UtcNow,
+                undoMembers[0].Source, null, undoMembers[0].Size, undoMembers[0].LastWriteUtc, _clock.UtcNow,
                 Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
             tx = new JournalTransaction(_journal, _clock, prepared);
             await tx.BeginAsync().ConfigureAwait(false);
@@ -398,17 +445,25 @@ public sealed class UndoService
                 if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
                     throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
                 if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                restored.Add(member.Source);
             }
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
             _lastUndoAction = null;
-            return new UndoResult(true, FileOperationType.Recycle, action.Source, null, null,
-                RestoredPaths: members.Where(member => _fileSystem.FileExists(member.Source)).Select(member => member.Source).ToArray());
+            var restoredInOrder = members.Where(member => restored.Contains(member.Source, StringComparer.OrdinalIgnoreCase))
+                .Select(member => member.Source).ToArray();
+            // Partly restorable capture: success for what came back, plus a message naming what cannot (a warning, not an error).
+            var note = unrecoverable.Count > 0
+                ? Tr.CoreUndoGroupPartiallyRestored(restoredInOrder.Length, members.Count,
+                    string.Join(", ", unrecoverable.Select(member => Path.GetFileName(member.Source))))
+                : null;
+            return new UndoResult(true, FileOperationType.Recycle, action.Source, null, note, RestoredPaths: restoredInOrder);
         }
         catch (Exception ex)
         {
             _ = tx?.Fail(ex, out _);
-            return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoFailed(ex.Message));
+            return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoFailed(ex.Message),
+                RestoredPaths: restored.Count > 0 ? restored.ToArray() : null);
         }
         finally
         {
