@@ -24,6 +24,9 @@
     <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
     <ProjectReference Include="..\PhotoReview.TestSupport.Windows\PhotoReview.TestSupport.Windows.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../PhotoReview.Imaging.Tests/Raw/SyntheticRawBuilder.cs" Link="Shared/SyntheticRawBuilder.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
