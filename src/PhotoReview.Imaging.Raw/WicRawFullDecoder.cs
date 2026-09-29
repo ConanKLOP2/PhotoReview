@@ -1,26 +1,119 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Decoding.Wic;
 
 namespace PhotoReview.Imaging.Raw;
 
 /// <summary>
-/// Probes whether Windows Imaging Component has a registered RAW decoder for a container format.
-/// Full-decode behavior is added on top of this cached per-format capability check.
+/// Decodes a RAW container through WIC when a matching decoder is registered and it produces
+/// more detail than the largest embedded preview.
 /// </summary>
-public sealed class WicRawFullDecoder
+public sealed class WicRawFullDecoder : IImageDecoder
 {
     private const string WicDecoderCategoryPath = @"CLSID\{7ED96837-96F0-4812-B211-F13C24117ED3}\Instance";
     private readonly Func<RawFormat, bool> _availabilityProbe;
     private readonly ConcurrentDictionary<RawFormat, Lazy<bool>> _availability = new();
+    private readonly ISourceReader _sourceReader;
+    private readonly IImageDecoder _wicDecoder;
+    private readonly RawContainerReaderRegistry _registry = new();
 
-    /// <summary>Creates a decoder capability probe. The optional delegate is a test seam.</summary>
-    public WicRawFullDecoder(Func<RawFormat, bool>? availabilityProbe = null) =>
+    /// <summary>Creates a WIC RAW full decoder. The optional delegate is a test seam.</summary>
+    public WicRawFullDecoder(Func<RawFormat, bool>? availabilityProbe = null)
+        : this(PhysicalSourceReader.Instance, new WicDirectDecoder(), availabilityProbe)
+    {
+    }
+
+    internal WicRawFullDecoder(
+        ISourceReader sourceReader,
+        IImageDecoder wicDecoder,
+        Func<RawFormat, bool>? availabilityProbe = null)
+    {
+        _sourceReader = sourceReader ?? throw new ArgumentNullException(nameof(sourceReader));
+        _wicDecoder = wicDecoder ?? throw new ArgumentNullException(nameof(wicDecoder));
         _availabilityProbe = availabilityProbe ?? IsRegisteredInWic;
+    }
 
     /// <summary>Returns the cached codec-registration result for <paramref name="format"/>.</summary>
     public bool IsCodecAvailable(RawFormat format) =>
         _availability.GetOrAdd(format, key => new Lazy<bool>(() => _availabilityProbe(key))).Value;
+
+    /// <inheritdoc />
+    public ImageInfo ReadInfo(string path)
+    {
+        var info = ReadContainerInfo(path, SourceReadPriority.Viewer, out var headerSource);
+        using (headerSource)
+        {
+            int width = info.SensorWidth;
+            int height = info.SensorHeight;
+            if (width <= 0 || height <= 0)
+            {
+                var preview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation);
+                if (preview is not null) (width, height) = (preview.Width, preview.Height);
+            }
+
+            return new ImageInfo(width, height, info.Orientation);
+        }
+    }
+
+    /// <inheritdoc />
+    public IDecodedImage Decode(DecodeRequest request)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
+        var info = ReadContainerInfo(request.Path, request.Priority, out var headerSource);
+        using (headerSource)
+        {
+            if (!IsCodecAvailable(info.Format))
+                throw new NotSupportedException($"No WIC RAW decoder is registered for {info.Format}.");
+
+            var preview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation);
+            if (preview is not null && (preview.Width <= 0 || preview.Height <= 0))
+                throw new NotSupportedException($"The embedded preview dimensions are unavailable for {info.Format}.");
+
+            IDecodedImage decoded;
+            try
+            {
+                decoded = _wicDecoder.Decode(request with { SourceOrientation = info.Orientation });
+            }
+            catch (COMException ex)
+            {
+                throw new NotSupportedException($"WIC could not fully decode {info.Format}.", ex);
+            }
+
+            if (preview is not null)
+            {
+                var (previewWidth, previewHeight) = ExifOrientation.IsTransposed(info.Orientation)
+                    ? (preview.Height, preview.Width)
+                    : (preview.Width, preview.Height);
+                if (decoded.OriginalWidth == previewWidth && decoded.OriginalHeight == previewHeight)
+                    throw new NotSupportedException($"WIC returned only the embedded preview for {info.Format}.");
+            }
+
+            return decoded;
+        }
+    }
+
+    private RawContainerInfo ReadContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        headerSource = new SourceRawHeaderSource(path, _sourceReader, priority);
+        try
+        {
+            var firstBytes = headerSource.Read(0, Math.Min(64, (int)headerSource.Length));
+            var reader = _registry.FindReader(firstBytes, Path.GetExtension(path))
+                ?? throw new NotSupportedException($"Unsupported RAW format: {Path.GetExtension(path)}");
+            return reader.Read(headerSource, CancellationToken.None);
+        }
+        catch
+        {
+            headerSource.Dispose();
+            throw;
+        }
+    }
 
     private static bool IsRegisteredInWic(RawFormat format)
     {
