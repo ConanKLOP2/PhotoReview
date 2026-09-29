@@ -174,7 +174,7 @@ if (args.Length is >= 3 and <= 5 && args[0] == "--io-decode-split")
 if (args.Length >= 2 && args[0] == "--decoder-bench" && args[1] == "--raw")
 {
     try { Environment.ExitCode = await RawDecoderBenchmark.RunAsync(args); }
-    catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or InvalidOperationException or IOException)
+    catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or InvalidOperationException or IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException or FormatException)
     {
         Console.Error.WriteLine($"PhotoReview.Benchmark.Cli: {ex.Message}");
         Environment.ExitCode = 2;

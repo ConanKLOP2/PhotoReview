@@ -41,8 +41,10 @@
       <LibRawDllPath>$(MSBuildThisFileDirectory)..\..\native\x64\libraw.dll</LibRawDllPath>
       <FetchLibRawScriptPath>$(MSBuildThisFileDirectory)..\..\tools\fetch-libraw.ps1</FetchLibRawScriptPath>
     </PropertyGroup>
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;"
-          Condition="!Exists('$(LibRawDllPath)') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.LGPL') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.CDDL') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LibRaw-0.22.2-Win64.zip') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\NOTICE.txt')" />
+    <!-- Always run the script: it hashes libraw.dll and the source package against native/*.sha256 (about 5 MB, fast), does nothing when
+         every pin matches (no network), and re-fetches when the DLL is missing, stale or wrong. A named mutex inside the script
+         serializes the AnyCPU and x64 configurations that MSBuild may build concurrently. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;" />
   </Target>
 
 </Project>
