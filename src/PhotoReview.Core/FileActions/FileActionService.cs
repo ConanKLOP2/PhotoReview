@@ -55,6 +55,186 @@ public sealed class FileActionService
     public bool LacksRecycleBin(string path) => !_recycleBin.CanRecycle(path);
 
     /// <summary>
+    /// Executes one capture-group operation. Every member is preflighted before the group manifest is journaled;
+    /// the manifest is Prepared before the first mutation and remains one Recovery item if any member fails.
+    /// </summary>
+    public async Task<CaptureGroupActionResult> ExecuteGroupAsync(
+        CaptureGroupActionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Group);
+        var groupId = Guid.NewGuid().ToString("N");
+        if (!TryBegin())
+        {
+            return new(false, true, request.Operation, groupId, null, [], Tr.CoreFileActionBusy);
+        }
+
+        JournalTransaction? tx = null;
+        List<JournalGroupMember> manifest = [];
+        try
+        {
+            if (request.Group.Paths.Count < 2)
+                throw new ArgumentException("A grouped file action requires at least two paths.", nameof(request));
+            if (request.Operation is not (FileOperationType.Move or FileOperationType.Copy or FileOperationType.Recycle))
+                throw new NotSupportedException(Tr.CoreFileActionUnsupportedOperation(request.Operation));
+
+            var members = new List<JournalGroupMember>(request.Group.Paths.Count);
+            string? destinationFolder = null;
+            if (request.Operation is FileOperationType.Move or FileOperationType.Copy)
+            {
+                if (string.IsNullOrWhiteSpace(request.Destination))
+                    throw new IOException(Tr.CoreFileActionNoDestination);
+                if (ActionDestinationPolicy.Validate(request.Destination) != ActionDestinationCheck.Ok)
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+                var firstSourceFolder = Path.GetFullPath(Path.GetDirectoryName(request.Group.Paths[0]) ?? string.Empty);
+                destinationFolder = Path.GetFullPath(Path.IsPathRooted(request.Destination)
+                    ? request.Destination
+                    : Path.Combine(firstSourceFolder, request.Destination));
+                if (IsSamePath(destinationFolder, firstSourceFolder))
+                    throw new IOException(Tr.CoreFileActionSameFolder);
+                if (!Path.IsPathRooted(request.Destination)
+                    && !destinationFolder.StartsWith(firstSourceFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+            }
+
+            foreach (var source in request.Group.Paths)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var stat = _fileSystem.GetFileStat(source)
+                    ?? throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(source), source);
+                string? destination = null;
+                if (destinationFolder is not null)
+                {
+                    var sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source) ?? string.Empty);
+                    if (!Path.IsPathRooted(request.Destination!)
+                        && !string.Equals(sourceFolder, Path.GetFullPath(Path.GetDirectoryName(request.Group.Paths[0]) ?? string.Empty), StringComparison.OrdinalIgnoreCase))
+                        throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+                    destination = Path.Combine(destinationFolder, Path.GetFileName(source));
+                    if (_fileSystem.FileExists(destination))
+                        throw new IOException(Tr.CoreFileActionDestinationExists(destination));
+                    if (!Path.IsPathRooted(request.Destination!)
+                        && ActionDestinationPolicy.ValidateNoEscapeViaReparsePoint(sourceFolder, destination, _fileSystem) != ActionDestinationCheck.Ok)
+                        throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
+                }
+
+                var permanent = false;
+                if (request.Operation == FileOperationType.Recycle)
+                {
+                    permanent = !_recycleBin.CanRecycle(source);
+                    if (permanent && !request.AllowPermanentDelete)
+                        throw new IOException(Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(source)));
+                    if (!permanent && !_recycleBin.FitsInRecycleBin(source, stat.Length))
+                        throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(source)));
+                }
+
+                members.Add(new JournalGroupMember(source, destination, stat.Length, stat.LastWriteUtc, permanent));
+            }
+            manifest = members;
+
+            if (destinationFolder is not null) _fileSystem.CreateDirectory(destinationFolder);
+            var first = manifest[0];
+            var prepared = new JournalEntry(
+                Guid.NewGuid().ToString("N"), request.Operation, JournalState.Prepared,
+                first.Source, first.Destination, first.Size, first.LastWriteUtc, _clock.UtcNow,
+                Permanent: manifest.All(member => member.Permanent) && manifest.Any(member => member.Permanent) ? true : null,
+                GroupId: groupId, GroupMembers: manifest);
+            tx = new JournalTransaction(_journal, _clock, prepared);
+            await tx.BeginAsync().ConfigureAwait(false);
+
+            foreach (var member in manifest)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (request.Operation == FileOperationType.Copy)
+                {
+                    await Task.Run(() => _fileSystem.Copy(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    VerifyGroupDestination(member);
+                }
+                else if (request.Operation == FileOperationType.Move)
+                {
+                    if (_moveOverride is not null)
+                        await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                    else
+                        await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    VerifyGroupMove(member);
+                }
+                else if (member.Permanent)
+                {
+                    await Task.Run(() => _recycleBin.DeletePermanently(member.Source), cancellationToken).ConfigureAwait(false);
+                    if (_fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
+                }
+                else
+                {
+                    await Task.Run(() => _recycleBin.SendToRecycleBin(member.Source), cancellationToken).ConfigureAwait(false);
+                    if (_fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
+                }
+            }
+
+            tx.MarkMutationCompleted();
+            var committed = tx.Commit(out var commitError);
+            var complete = manifest.Select(member => new CaptureGroupMemberResult(member, true, false)).ToArray();
+            return new(true, false, request.Operation, groupId, committed, complete, null,
+                JournalPersisted: commitError is null, JournalError: commitError,
+                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && manifest.Any(member => member.Permanent));
+        }
+        catch (Exception ex)
+        {
+            string? journalError = null;
+            var failed = tx?.Fail(ex, out journalError);
+            var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
+            return new(false, false, request.Operation, groupId, failed, states, ex.Message,
+                JournalPersisted: journalError is null,
+                JournalError: journalError,
+                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && states.Any(member => member.Completed && member.Member.Permanent));
+        }
+        finally
+        {
+            tx?.Dispose();
+            End();
+        }
+    }
+
+    private void VerifyGroupDestination(JournalGroupMember member)
+    {
+        var destination = _fileSystem.GetFileStat(member.Destination!);
+        if (destination is null || destination.Length != member.Size)
+            throw new JournalCodedException(JournalErrors.VerifySizeChanged);
+    }
+
+    private void VerifyGroupMove(JournalGroupMember member)
+    {
+        if (_fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
+        VerifyGroupDestination(member);
+    }
+
+    private CaptureGroupMemberResult InspectGroupMember(FileOperationType operation, JournalGroupMember member, string error)
+    {
+        try
+        {
+            if (operation == FileOperationType.Recycle)
+            {
+                var source = _fileSystem.GetFileStat(member.Source);
+                return new(member, source is null, source is not null &&
+                    (source.Length != member.Size || source.LastWriteUtc != member.LastWriteUtc), source is null ? null : error);
+            }
+
+            var destination = member.Destination is null ? null : _fileSystem.GetFileStat(member.Destination);
+            var sourceStat = _fileSystem.GetFileStat(member.Source);
+            var completed = operation == FileOperationType.Move
+                ? sourceStat is null && destination?.Length == member.Size
+                : destination?.Length == member.Size;
+            var conflict = !completed && (sourceStat is null || sourceStat.Length != member.Size
+                || sourceStat.LastWriteUtc != member.LastWriteUtc || destination is not null);
+            return new(member, completed, conflict, completed ? null : error);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new(member, false, true, ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Thực thi yêu cầu thao tác tệp tin không đồng bộ.
     /// </summary>
     public async Task<FileActionResult> ExecuteAsync(FileActionRequest request, CancellationToken cancellationToken = default)
