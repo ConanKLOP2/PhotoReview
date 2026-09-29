@@ -198,7 +198,7 @@ public sealed class LibRawDecoderTests
     [Theory]
     [InlineData("Canon - EOS 350D - RAW (3_2).CR2")]
     [InlineData("Sony - NEX-6 - 12bit 12bit compressed (3_2).ARW")]
-    [InlineData("Nikon - D800 - 14bit 14bit compressed (Lossless) (3_2).NEF")]
+    [InlineData("Nikon - D40X - 12bit 12bit compressed (Lossy (type 1)) (3_2).NEF")]
     public void ReadInfo_PortraitRewrittenCorpusFile_MatchesDecodedOrientedDimensions(string fileName)
     {
         var source = Path.Combine(CorpusDirectory, fileName);
