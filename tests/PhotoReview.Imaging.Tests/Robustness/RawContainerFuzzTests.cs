@@ -92,6 +92,49 @@ public sealed class RawContainerFuzzTests
         Assert.True(worst < TimeSpan.FromMilliseconds(250), $"Slowest parse took {worst.TotalMilliseconds:F2} ms");
     }
 
+    [Fact(DisplayName = "Fuzz CR3 real Canon layout through strict sources, EXIF and preview selection")]
+    public void Fuzz_Cr3RealLayout_StrictSource_FailsOnlyCleanlyAndConsumersNeverThrow()
+    {
+        var seed = SyntheticRawBuilder.BuildCanonCr3();
+        var reader = new Cr3ContainerReader();
+        var rng = new Random(109);
+        int parsed = 0;
+
+        for (int i = 0; i < IterationsPerFormat; i++)
+        {
+            var mutated = JpegBytes.Mutate(rng, seed);
+            var source = new InMemoryRawHeaderSource(mutated);
+
+            RawContainerInfo info;
+            try
+            {
+                if (!reader.CanRead(mutated.AsSpan(0, Math.Min(64, mutated.Length)), ".cr3"))
+                    continue;
+
+                info = reader.Read(source, CancellationToken.None);
+            }
+            catch (InvalidDataException)
+            {
+                continue; // clean failure on a hostile file
+            }
+
+            parsed++;
+            Assert.InRange(info.Orientation, 1, 8);
+            Assert.True(info.SensorWidth >= 0 && info.SensorHeight >= 0, "Sensor dimensions went negative.");
+            foreach (var p in info.Previews)
+            {
+                Assert.True(p.Offset >= 0 && p.Length > 0 && p.Length <= mutated.Length - p.Offset,
+                    $"Preview {p.Offset}+{p.Length} escapes the {mutated.Length}-byte file.");
+                Assert.True(p.Width >= 0 && p.Height >= 0);
+            }
+
+            // Documented never-throw consumers must hold on whatever the reader accepted.
+            RawExif.TryReadExif(source, info);
+            PreviewSelector.SelectPreview(source, info.Previews, DecodeBox.Unbounded, info.Orientation);
+        }
+
+        Assert.True(parsed > IterationsPerFormat / 10, $"Only {parsed} mutated files parsed; the fuzz seed is not exercising the reader.");
+    }
     private static TimeSpan RunFuzzLoop<TReader>(TReader reader, string ext, byte[] seed, int rngSeed)
         where TReader : IRawContainerReader
     {

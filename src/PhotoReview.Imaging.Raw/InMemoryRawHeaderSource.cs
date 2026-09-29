@@ -34,10 +34,11 @@ public sealed class InMemoryRawHeaderSource : IRawHeaderSource
         if (offset < 0 || count < 0)
             throw new ArgumentOutOfRangeException(nameof(offset), "Offset and count must be non-negative.");
 
-        if (offset + count > _memory.Length)
+        // offset > Length - count is the overflow-free form of offset + count > Length.
+        if (offset > _memory.Length - count)
             throw new InvalidDataException($"Attempted to read past end of memory (offset: {offset}, count: {count}, length: {_memory.Length}).");
 
-        if (_totalBytesRead + count > RawContainerLimits.MaxHeaderBytes)
+        if (count > RawContainerLimits.MaxHeaderBytes - _totalBytesRead)
         {
             throw new InvalidDataException($"Header read exceeded hard limit of {RawContainerLimits.MaxHeaderBytes} bytes.");
         }

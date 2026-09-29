@@ -54,7 +54,7 @@ public static class TiffStructure
     /// </summary>
     public static ushort ReadU16(ReadOnlySpan<byte> data, int offset, bool littleEndian)
     {
-        if (offset < 0 || offset + 2 > data.Length) return 0;
+        if (offset < 0 || offset > data.Length - 2) return 0;
         var slice = data.Slice(offset, 2);
         return littleEndian ? BinaryPrimitives.ReadUInt16LittleEndian(slice) : BinaryPrimitives.ReadUInt16BigEndian(slice);
     }
@@ -64,7 +64,7 @@ public static class TiffStructure
     /// </summary>
     public static uint ReadU32(ReadOnlySpan<byte> data, int offset, bool littleEndian)
     {
-        if (offset < 0 || offset + 4 > data.Length) return 0;
+        if (offset < 0 || offset > data.Length - 4) return 0;
         var slice = data.Slice(offset, 4);
         return littleEndian ? BinaryPrimitives.ReadUInt32LittleEndian(slice) : BinaryPrimitives.ReadUInt32BigEndian(slice);
     }

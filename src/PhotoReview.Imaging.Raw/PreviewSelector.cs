@@ -92,7 +92,8 @@ public static class PreviewSelector
         if (preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        int toRead = (int)Math.Min(preview.Length, MaxSofScanBytes);
+        // Clamp to the bytes that actually exist: a preview may claim to extend past EOF.
+        int toRead = (int)Math.Min(Math.Min(preview.Length, MaxSofScanBytes), source.Length - preview.Offset);
         var span = source.Read(preview.Offset, toRead);
 
         if (TryExtractJpegDimensions(span, out int width, out int height, out var colorSpace))

@@ -33,19 +33,24 @@ public static class RawExif
             if (block.Offset < 0 || block.Offset >= source.Length || block.Length <= 0)
                 continue;
 
-            int toRead = (int)Math.Min(block.Length, MaxBlockReadBytes);
-            var span = source.Read(block.Offset, toRead);
-            if (span.IsEmpty)
-                continue;
+            // Clamp to the bytes that actually exist: a block may claim to extend past EOF.
+            int toRead = (int)Math.Min(Math.Min(block.Length, MaxBlockReadBytes), source.Length - block.Offset);
 
-            ExifSummary? summary = null;
-            if (block.IsTiffHeader)
+            ExifSummary? summary;
+            try
             {
-                summary = ExifParser.TryParseTiffBlock(span);
+                var span = source.Read(block.Offset, toRead);
+                if (span.IsEmpty)
+                    continue;
+
+                summary = block.IsTiffHeader
+                    ? ExifParser.TryParseTiffBlock(span)
+                    : ExifParser.TryParseJpeg(span);
             }
-            else
+            catch (InvalidDataException)
             {
-                summary = ExifParser.TryParseJpeg(span);
+                // Hostile or truncated header data (or an exhausted read budget): documented as never throwing.
+                continue;
             }
 
             if (summary is not null && !summary.IsEmpty)
