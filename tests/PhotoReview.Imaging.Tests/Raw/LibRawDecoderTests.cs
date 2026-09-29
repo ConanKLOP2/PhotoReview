@@ -21,10 +21,13 @@ public sealed class LibRawDecoderTests
         if (files.Any(file => !File.Exists(Path.Combine(CorpusDirectory, file)))) return;
 
         var decoder = new LibRawDecoder();
-        foreach (var file in files)
+        for (var index = 0; index < files.Length; index++)
         {
-            var path = Path.Combine(CorpusDirectory, file);
-            var image = decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+            var path = Path.Combine(CorpusDirectory, files[index]);
+            var request = index == 0
+                ? new DecodeRequest(path, DecodeBox.Unbounded, bytes: File.ReadAllBytes(path))
+                : new DecodeRequest(path, DecodeBox.Unbounded);
+            var image = decoder.Decode(request);
             var info = decoder.ReadInfo(path);
 
             Assert.True(image.PixelWidth > 0);
