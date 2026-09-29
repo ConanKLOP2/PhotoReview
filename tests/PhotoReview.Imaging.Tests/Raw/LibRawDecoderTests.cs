@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 
+[Collection(LibRawNativeDecodeGate.Name)]
 [Trait("Category", "Native")]
 public sealed class LibRawDecoderTests
 {
