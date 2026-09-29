@@ -76,6 +76,19 @@ public sealed class SourceBytesCacheTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => cache.GetOrRead(Path.Combine(_root, "never-opened.bin"), 3_000_000_000L, 1));
     }
 
+    [Theory(DisplayName = "An uncacheable range larger than a .NET array is rejected cleanly, before any file is opened")]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void GetOrReadRange_CountAboveArrayLimitBypassingTheCache_ThrowsArgumentOutOfRangeNotOutOfMemory(int overshoot)
+    {
+        var cache = new SourceBytesCache(1024); // far too small to ever keep this range: it takes the uncacheable bypass
+        var count = int.MaxValue - overshoot; // in (Array.MaxLength, int.MaxValue]
+        Assert.True(count > Array.MaxLength);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            cache.GetOrReadRange(Path.Combine(_root, "never-opened.bin"), 3_000_000_000L, 1, 0, count));
+    }
+
     [Fact(DisplayName = "Prefetch caches a file that fits and reads nothing for a file larger than the whole cache")]
     public void TryPrefetch_SkipsFilesTheCacheCouldNeverKeep()
     {

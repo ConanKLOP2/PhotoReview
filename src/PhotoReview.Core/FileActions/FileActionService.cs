@@ -79,7 +79,9 @@ public sealed class FileActionService
         // the compensation below (Copy: delete the copies this operation made; Move: put the moved files back).
         var done = new List<JournalGroupMember>();
         JournalGroupMember? inFlight = null;
-        var inFlightDestinationWasAbsent = false;
+        // True only while a Copy of the in-flight member may have created its destination: proven by TryCopyNew (it returns
+        // false, touching nothing, when the destination already existed; a throw means this call created/was creating it).
+        var inFlightDestinationIsOurs = false;
         try
         {
             if (request.Group.Paths.Count < 2)
@@ -156,13 +158,8 @@ public sealed class FileActionService
             {
                 // F-WIN-2 for the whole capture: the bin of a volume must hold ALL of that volume's members together,
                 // otherwise the shell deletes the overflow permanently while the journal says "recycle".
-                foreach (var volume in members.Where(member => !member.Permanent)
-                    .GroupBy(member => Path.GetPathRoot(member.Source) ?? string.Empty, StringComparer.OrdinalIgnoreCase))
-                {
-                    var first = volume.First();
-                    if (!_recycleBin.FitsInRecycleBin(first.Source, volume.Sum(member => member.Size)))
-                        throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(first.Source)));
-                }
+                if (RecycleBinCapacity.FirstOverflow(_recycleBin, members) is { } overflow)
+                    throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(overflow.Source)));
             }
             manifest = members;
 
@@ -180,14 +177,22 @@ public sealed class FileActionService
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 inFlight = member;
+                inFlightDestinationIsOurs = false;
                 if (request.Operation == FileOperationType.Copy)
                 {
-                    // Re-checked right before the copy: a file that appeared meanwhile is not ours and must never be
-                    // deleted by the compensation (nor silently overwritten: the copy is refused).
-                    inFlightDestinationWasAbsent = !_fileSystem.FileExists(member.Destination!);
-                    if (!inFlightDestinationWasAbsent)
+                    // Create-new copy: a file that appeared after the preflight is never overwritten and never claimed as ours,
+                    // so the compensation cannot delete it. The flag is raised inside the delegate, right before the call, so a
+                    // Task.Run cancelled before it starts never claims a destination (a throw after that may leave our partial file).
+                    var created = await Task.Run(() =>
+                    {
+                        inFlightDestinationIsOurs = true;
+                        return _fileSystem.TryCopyNew(member.Source, member.Destination!);
+                    }, cancellationToken).ConfigureAwait(false);
+                    if (!created)
+                    {
+                        inFlightDestinationIsOurs = false;
                         throw new IOException(Tr.CoreFileActionDestinationExists(member.Destination!));
-                    await Task.Run(() => _fileSystem.Copy(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    }
                     VerifyGroupDestination(member);
                 }
                 else if (request.Operation == FileOperationType.Move)
@@ -222,21 +227,29 @@ public sealed class FileActionService
         }
         catch (Exception ex)
         {
-            // Compensate first (the outcome decides what the Failed record says), then journal and inspect the real state.
-            var failure = ex;
+            // Compensate first (the outcome decides what the journal says), then inspect the real state.
+            var stuck = 0;
             if (tx is { IsPrepared: true } && request.Operation is FileOperationType.Move or FileOperationType.Copy)
             {
-                var stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
-                    ? RemoveCreatedCopies(done, inFlight, inFlightDestinationWasAbsent)
+                stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
+                    ? RemoveCreatedCopies(done, inFlight, inFlightDestinationIsOurs)
                     : RestoreMovedMembers(done, inFlight)).ConfigureAwait(false);
-                if (stuck > 0)
-                    failure = new IOException(Tr.CoreGroupActionRollbackFailed(ex.Message, stuck), ex);
             }
 
-            string? journalError = null;
-            var failed = tx?.Fail(failure, out journalError);
             var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
-            return new(false, false, request.Operation, groupId, failed, states, failure.Message,
+            // Only the message shown to the user carries the (localized) rollback note; the journal always keeps the ORIGINAL
+            // failure (invariant code + English text, so Recovery can localize it).
+            var message = stuck > 0 ? Tr.CoreGroupActionRollbackFailed(ex.Message, stuck) : ex.Message;
+
+            // Fully rolled back = every member is provably back in its original state (source untouched, nothing at the
+            // destination). Nothing is left to retry, so it is not a Recovery item (an unconditional Failed record would
+            // offer "retry" for an operation the user cancelled that left the disk unchanged).
+            var rolledBack = stuck == 0 && states.Length > 0 && tx is { IsPrepared: true }
+                && request.Operation is FileOperationType.Move or FileOperationType.Copy
+                && states.All(state => state is { StateKnown: true, Completed: false, Conflict: false, SourceExists: true, DestinationExists: false });
+            string? journalError = null;
+            var failed = rolledBack ? tx!.DismissRolledBack(out journalError) : tx?.Fail(ex, out journalError);
+            return new(false, false, request.Operation, groupId, failed, states, message,
                 JournalPersisted: journalError is null,
                 JournalError: journalError,
                 PermanentlyDeleted: request.Operation == FileOperationType.Recycle && states.Any(member => member.Completed && member.Member.Permanent),
@@ -253,10 +266,11 @@ public sealed class FileActionService
     /// Copy compensation: deletes the destination files this operation created so a failed or cancelled Copy leaves no
     /// half capture behind (and a re-run is not blocked by the "destination exists" preflight). A verified copy is only
     /// deleted while it still has the size that was copied; the member being copied when the failure hit is only touched
-    /// when its destination was absent right before the copy (so it is our partial file, never a foreign one).
+    /// when <see cref="IFileSystem.TryCopyNew"/> proved this operation created its destination (so it is our partial file,
+    /// never a foreign one that appeared between the preflight and the copy).
     /// Sources and the Recycle Bin are never touched. Returns how many files could not be cleaned up.
     /// </summary>
-    private int RemoveCreatedCopies(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationWasAbsent)
+    private int RemoveCreatedCopies(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs)
     {
         var stuck = 0;
         foreach (var member in done.Reverse())
@@ -279,7 +293,7 @@ public sealed class FileActionService
             }
         }
 
-        if (inFlight?.Destination is { } partial && inFlightDestinationWasAbsent)
+        if (inFlight?.Destination is { } partial && inFlightDestinationIsOurs)
         {
             try
             {

@@ -101,3 +101,17 @@ assert journal consistency.
   last-write still match are recycled again; permanent deletion only for members journaled `Permanent`); a group mixing
   permanent and Recycle Bin members is `PartiallyPermanentlyDeleted`, and only an all-permanent group is
   `PermanentlyDeleted`.
+
+## Amendment: fully rolled-back group Move/Copy is not a Recovery item (2026-09-30)
+
+- A group Move/Copy that fails or is cancelled part-way is compensated (moved files put back, created copies deleted).
+  When every member is then provably back in its original state (source untouched, nothing at the destination) the
+  outcome line is `Dismissed` (same Id and manifest, no error), not `Failed`: nothing is left to retry, so Recovery must
+  not offer "retry" for an operation the user cancelled. `Dismissed` is an existing state, so older builds read it as
+  "cleared", never as unfinished; reconcile ignores it. Any other outcome (rollback incomplete, a conflict, a copy left
+  behind such as `MoveSourceNotRemoved`) stays `Failed`. Trade-off: the error reason of a fully rolled-back attempt is
+  only in the message shown to the user, not in the journal.
+- A `Failed` group line always carries the ORIGINAL failure (its `JournalCodedException` code with English text, or the raw
+  OS text without code); the localized "rollback incomplete" note is only part of the result message shown to the user.
+- A group Undo retried after it already restored some members itself, when nothing is pending any more, is an idempotent
+  success and closes its earlier `Failed` lines with `Committed` (skipped if another writer touched them).

@@ -167,6 +167,62 @@ public sealed class UndoServiceGroupTests
     }
 
     [Fact]
+    public async Task UndoLastAsync_GroupMoveRetryAfterPartialUndoWhenPartnerCameBackMeanwhile_SucceedsIdempotentlyWithAllPaths()
+    {
+        _fs.AddFile(MovedJpeg, "jpeg", Stamp);
+        _fs.AddFile(MovedRaw, "raw data", Stamp);
+        _fs.MoveHook = (source, _) => source == MovedRaw ? new IOException("simulated undo failure") : null;
+        RegisterMove(Member(Jpeg, MovedJpeg, 4), Member(Raw, MovedRaw, 8));
+        var partial = await _undo.UndoLastAsync();
+        Assert.False(partial.Succeeded);
+        Assert.Single(_journal.ReadFailedOperations());
+        _fs.MoveHook = null;
+        _fs.Move(MovedRaw, Raw); // e.g. restored through the Recovery window in the meantime
+
+        var retry = await _undo.UndoLastAsync();
+
+        Assert.True(retry.Succeeded, retry.ErrorMessage);
+        Assert.Equal([Jpeg, Raw], retry.RestoredPaths);
+        Assert.False(_undo.HasLastAction);
+        Assert.Empty(_journal.ReadFailedOperations()); // the earlier Failed Recovery item is closed
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_GroupRecycleRetryAfterPartialUndoWhenPartnerCameBackMeanwhile_SucceedsIdempotentlyWithAllPaths()
+    {
+        _bin.FailFor = Raw;
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+        var partial = await _undo.UndoLastAsync();
+        Assert.False(partial.Succeeded);
+        Assert.Single(_journal.ReadFailedOperations());
+        _bin.FailFor = null;
+        _fs.AddFile(Raw, "raw data", Stamp); // restored through the Recovery window in the meantime
+        var restoreCallsBefore = _bin.RestoreCalls;
+
+        var retry = await _undo.UndoLastAsync();
+
+        Assert.True(retry.Succeeded, retry.ErrorMessage);
+        Assert.Equal([Jpeg, Raw], retry.RestoredPaths);
+        Assert.Equal(restoreCallsBefore, _bin.RestoreCalls);
+        Assert.False(_undo.HasLastAction);
+        Assert.Empty(_journal.ReadFailedOperations());
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_GroupRecycleNothingEverRestoredByThisUndo_StillReportsAlreadyHandled()
+    {
+        _fs.AddFile(Jpeg, "jpeg", Stamp);
+        _fs.AddFile(Raw, "raw data", Stamp);
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Tr.CoreRecoveryAlreadyHandled, result.ErrorMessage, StringComparison.Ordinal);
+        Assert.False(_undo.HasLastAction);
+    }
+
+    [Fact]
     public async Task UndoLastAsync_GroupRecycleAllPermanent_SaysNothingCanBeRestoredAndClears()
     {
         RegisterRecycle(Member(Jpeg, null, 4, permanent: true), Member(Raw, null, 8, permanent: true));

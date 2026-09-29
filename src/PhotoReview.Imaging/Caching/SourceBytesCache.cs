@@ -93,6 +93,10 @@ public sealed class SourceBytesCache
         ArgumentOutOfRangeException.ThrowIfNegative(length);
         if (offset < 0 || count < 0 || offset > length || count > length - offset)
             throw new ArgumentOutOfRangeException(nameof(offset), "Requested byte range is outside the source file.");
+        // Past the .NET array limit no read can succeed. Checked here, not only in GetOrRead(RangeKey): the uncacheable-range
+        // bypass below skips that method and would otherwise reach the allocation and fail with OutOfMemory/Overflow.
+        if (count > Array.MaxLength)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "The requested range is larger than a .NET array can hold; stream it instead.");
         var key = CreateRangeKey(path, length, lastWriteUtcTicks, offset, count);
         if (count == 0) return [];
         // A range the cache could never keep is read straight through: no in-flight entry and no publish attempt, so it

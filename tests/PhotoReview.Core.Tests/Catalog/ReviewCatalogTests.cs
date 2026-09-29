@@ -375,5 +375,56 @@ public class ReviewCatalogTests
         Assert.Equal(0, catalog.Count);
         Assert.Equal(-1, catalog.CurrentIndex);
     }
-}
 
+    [Theory]
+    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.jpg")]
+    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.cr2", @"C:\photos\p.jpg", @"C:\photos\p.jpg")]
+    [InlineData(RawPairMode.PreferRaw, @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.cr2")]
+    public void RestoreMembers_SecondMemberComesBackAfterFirstWasRestoredAlone_ReformsTheGroupedEntryInPlace(
+        RawPairMode mode, string firstRestored, string laterRestored, string representative)
+    {
+        var catalog = PairCatalog(mode);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.xmp");
+        catalog.RestoreMembers([firstRestored], 1, group); // partial undo: only one member came back
+        Assert.Null(catalog.Entries[1].CaptureGroup);
+        catalog.SetCurrent(1);
+
+        var restored = catalog.RestoreMembers([laterRestored], 1, group); // retry restores the partner
+
+        Assert.True(restored);
+        Assert.Equal([@"C:\photos\before.jpg", representative, @"C:\photos\after.jpg"], catalog.Paths);
+        Assert.Equal(group, catalog.Entries[1].CaptureGroup);
+        Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.jpg"));
+        Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.cr2"));
+        Assert.Equal(1, catalog.CurrentIndex); // still on the same photo
+    }
+
+    [Fact]
+    public void RestoreMembers_PartnerStillMissing_KeepsTheIndependentEntryUngrouped()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+        catalog.RestoreMembers([@"C:\photos\p.jpg"], 1, group);
+
+        var restored = catalog.RestoreMembers([@"C:\photos\p.jpg"], 1, group); // nothing new came back
+
+        Assert.False(restored);
+        Assert.Equal(3, catalog.Count);
+        Assert.Null(catalog.Entries[1].CaptureGroup);
+    }
+
+    [Fact]
+    public void RestoreMembers_ReformKeepsCurrentIndexOnThePhotoAfterTheGroup()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+        catalog.RestoreMembers([@"C:\photos\p.jpg"], 1, group);
+        catalog.SetCurrent(2); // viewing after.jpg
+
+        catalog.RestoreMembers([@"C:\photos\p.cr2"], 1, group);
+
+        Assert.Equal(3, catalog.Count);
+        Assert.Equal(2, catalog.CurrentIndex);
+        Assert.Equal(@"C:\photos\after.jpg", catalog.Current!.Path);
+    }
+}

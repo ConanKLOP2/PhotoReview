@@ -145,7 +145,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
     }
 
     [Fact]
-    public async Task GroupMovePartialFailure_RollsBackAndRestoresTheWholeGroupWithOneRecoveryEntry()
+    public async Task GroupMovePartialFailure_RollsBackAndRestoresTheWholeGroupWithoutARecoveryEntry()
     {
         var jpeg = Make("pair.jpg");
         var raw = Make("pair.cr2");
@@ -160,8 +160,9 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         Assert.Single(_catalog.Paths);
         Assert.Equal(jpeg, _catalog.PathAt(0));
         Assert.NotNull(_catalog.Find(jpeg)?.CaptureGroup);
-        var failed = Assert.Single(_journal.ReadFailedOperations());
-        Assert.Equal(2, failed.GroupMembers!.Count);
+        // Fully rolled back: the disk is unchanged, so nothing is left to retry (terminal Dismissed record, no Recovery item).
+        Assert.Empty(_journal.ReadFailedOperations());
+        Assert.Empty(_journal.ReadPendingOperations());
         Assert.Equal(0, _catalog.IndexOf(jpeg));
         Assert.Equal(0, _catalog.IndexOf(raw));
     }

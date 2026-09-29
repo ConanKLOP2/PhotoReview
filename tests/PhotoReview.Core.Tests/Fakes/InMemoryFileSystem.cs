@@ -156,6 +156,14 @@ public sealed class InMemoryFileSystem : IFileSystem
 
     public void Copy(string source, string destination)
     {
+        CopyCore(source, destination, failIfExists: false);
+    }
+
+    /// <summary>Atomic create-new copy (existence check and creation under one lock), like the physical implementation.</summary>
+    public bool TryCopyNew(string source, string destination) => CopyCore(source, destination, failIfExists: true);
+
+    private bool CopyCore(string source, string destination, bool failIfExists)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
 
@@ -176,6 +184,7 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             if (_files.ContainsKey(dstNorm))
             {
+                if (failIfExists) return false;
                 throw new IOException($"Tệp tin đích đã tồn tại: '{destination}'.");
             }
 
@@ -187,6 +196,7 @@ public sealed class InMemoryFileSystem : IFileSystem
 
             _files[dstNorm] = (byte[])bytes.Clone();
             _fileWriteTimes[dstNorm] = DateTime.UtcNow;
+            return true;
         }
     }
 

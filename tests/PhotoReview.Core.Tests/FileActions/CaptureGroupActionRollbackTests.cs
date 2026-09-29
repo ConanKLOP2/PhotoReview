@@ -2,6 +2,7 @@ using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -50,10 +51,20 @@ public sealed class CaptureGroupActionRollbackTests
             Assert.True(member.SourceExists);
             Assert.False(member.DestinationExists);
         });
-        var failed = Assert.Single(journal.ReadFailedOperations());
-        Assert.Equal(result.GroupId, failed.GroupId);
-        Assert.Equal("simulated second-member failure", failed.Error);
+        Assert.Equal("simulated second-member failure", result.Error);
+        AssertFullyRolledBackAndNotRetryable(journal, result);
+    }
+
+    /// <summary>A fully restored disk leaves nothing to retry: the outcome is a terminal Dismissed record, never a Failed Recovery item.</summary>
+    private static void AssertFullyRolledBackAndNotRetryable(OperationJournal journal, CaptureGroupActionResult result)
+    {
+        Assert.Equal(JournalState.Dismissed, result.Entry!.State);
+        Assert.Equal(result.GroupId, result.Entry.GroupId);
+        Assert.Null(result.Entry.Error);
+        Assert.Empty(journal.ReadFailedOperations());
         Assert.Empty(journal.ReadPendingOperations());
+        Assert.Empty(journal.ReconcilePendingOperations()); // reconcile never resurrects it
+        Assert.Empty(journal.ReadPendingAndFailedOperations());
     }
 
     [Fact]
@@ -92,10 +103,37 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.False(fs.FileExists(Jpeg)); // NOT moved back over an unknown file's identity
         Assert.True(fs.FileExists(MovedJpeg));
         Assert.True(fs.FileExists(Raw));
+        // The journal keeps the ORIGINAL failure (invariant text, no localized rollback note); the user-facing message
+        // carries the rollback note with the exact stuck count.
         var failed = Assert.Single(journal.ReadFailedOperations());
-        Assert.Contains("simulated second-member failure", failed.Error, StringComparison.Ordinal);
-        Assert.Contains("1", failed.Error, StringComparison.Ordinal);
-        Assert.Contains(result.Members, member => member.Conflict);
+        Assert.Equal("simulated second-member failure", failed.Error);
+        Assert.Null(failed.ErrorCode);
+        Assert.Equal(Tr.CoreGroupActionRollbackFailed("simulated second-member failure", 1), result.Error);
+        var conflict = Assert.Single(result.Members, member => member.Conflict);
+        Assert.Equal(Jpeg, conflict.Member.Source);
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_MoveRollbackIncomplete_JournalsOriginalCodedFailureNotLocalizedRollbackText()
+    {
+        var (fs, journal) = CreateWorld();
+        // Second member: the cross-volume "copied but source not removed" case (coded). First member's moved file was edited,
+        // so its rollback is blocked (stuck > 0).
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Raw) return null;
+            fs.AddFile(MovedJpeg, "edited elsewhere, different length", Stamp);
+            fs.AddFile(destination, "raw data", Stamp);
+            return new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        var failed = Assert.Single(journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, failed.ErrorCode);
+        Assert.Equal(JournalErrors.EnglishText(JournalErrors.MoveSourceNotRemoved), failed.Error);
+        Assert.NotEqual(result.Error, failed.Error); // the result message has the (localized) rollback note, the journal does not
     }
 
     [Fact]
@@ -137,7 +175,26 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.True(fs.FileExists(Jpeg));
         Assert.True(fs.FileExists(Raw));
         Assert.False(fs.FileExists(MovedJpeg));
-        Assert.Single(journal.ReadFailedOperations());
+        AssertFullyRolledBackAndNotRetryable(journal, result);
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_MoveFailsButBothCopiesRemain_StaysARetryableFailedItem()
+    {
+        var (fs, journal) = CreateWorld();
+        // A "moved" member whose source could not be removed: destination AND source exist, so the disk is NOT unchanged.
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Jpeg) return null;
+            fs.AddFile(destination, "jpeg", Stamp);
+            return new JournalCodedException(JournalErrors.MoveSourceNotRemoved);
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        var failed = Assert.Single(journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.MoveSourceNotRemoved, failed.ErrorCode);
     }
 
     [Fact]
@@ -178,6 +235,26 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.False(result.Succeeded);
         Assert.False(fs.FileExists(MovedRaw));
         Assert.False(fs.FileExists(MovedJpeg));
+        AssertFullyRolledBackAndNotRetryable(journal, result);
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_CopyDestinationAppearsBetweenCheckAndCopy_ForeignFileIsNeverDeleted()
+    {
+        var (fs, journal) = CreateWorld();
+        // The foreign file appears exactly in the window between the last existence check and the copy itself
+        // (the hook runs inside Copy/TryCopyNew, before the create-new step).
+        fs.CopyHook = (source, _) =>
+        {
+            if (source == Raw) fs.AddFile(MovedRaw, "foreign file", Stamp);
+            return null;
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Copy));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(12, fs.GetFileStat(MovedRaw)!.Length); // "foreign file": untouched
+        Assert.False(fs.FileExists(MovedJpeg));              // our earlier copy was compensated
     }
 
     [Fact]

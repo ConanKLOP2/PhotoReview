@@ -109,7 +109,7 @@ public sealed class RecoveryRetryService
                         var stat = _fileSystem.GetFileStat(member.Source);
                         if (stat is null || stat.Length != member.Size || stat.LastWriteUtc != member.LastWriteUtc
                             || member.Permanent && _recycleBin!.CanRecycle(member.Source)
-                            || !member.Permanent && (!_recycleBin!.CanRecycle(member.Source) || !_recycleBin.FitsInRecycleBin(member.Source, member.Size)))
+                            || !member.Permanent && !_recycleBin!.CanRecycle(member.Source))
                             return new(false, Tr.CoreRecoverySourceChanged, null);
                     }
                 }
@@ -128,6 +128,12 @@ public sealed class RecoveryRetryService
         {
             return new(false, ex.Message, null);
         }
+
+        // Same per-volume cumulative rule as the first run: a bin that fits each file but not their sum would make the
+        // shell delete the overflow permanently while the journal says Recycle.
+        if (failed.Type == FileOperationType.Recycle && failed.Undo != true
+            && RecycleBinCapacity.FirstOverflow(_recycleBin!, pending.Select(item => item.Member)) is { } overflow)
+            return new(false, Tr.CoreRecycleBinCannotHold(Path.GetFileName(overflow.Source)), null);
 
         var prepared = failed with { State = JournalState.Prepared, Error = null, ErrorCode = null, TimestampUtc = _clock.UtcNow };
         return await Task.Run(() => ExecuteGroupRetry(failed, prepared, pending, ct), ct).ConfigureAwait(false);
