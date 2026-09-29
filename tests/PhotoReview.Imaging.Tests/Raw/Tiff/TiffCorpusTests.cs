@@ -37,7 +37,7 @@ public sealed class TiffCorpusTests
             using var headerSource = new SourceRawHeaderSource(fs);
             var info = reader.Read(headerSource, CancellationToken.None);
 
-            // FORMATS.md §29: "Phone DNGs may have no JPEG preview (only raw) -> full decode only".
+            // RAW survey: "Phone DNGs may have no JPEG preview (only raw) -> full decode only".
             // Leica M8 DNG also has no separate JPEG preview in IFD.
             if (info.Format == RawFormat.Dng && info.Previews.Count == 0)
             {

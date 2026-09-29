@@ -364,9 +364,9 @@ public class AppSettings
 
     /// <summary>
     /// Master switch for Camera RAW format support (.cr2, .cr3, .nef, .arw, .dng, .orf, .rw2).
-    /// Default false (dark launch until RAW-70).
+    /// Default true (RAW-70 enables the completed RAW support by default).
     /// </summary>
-    public bool RawSupportEnabled { get; set; }
+    public bool RawSupportEnabled { get; set; } = true;
 
     /// <summary>
     /// RAW full demosaicing behaviour (Q-RAW-02).

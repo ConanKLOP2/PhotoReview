@@ -24,6 +24,7 @@ Open work: [`../ACTIVE-TASKS.md`](../ACTIVE-TASKS.md). Decisions: [`OPEN-DECISIO
 | **UI feedback 2026-09-26** | Q-R30: dark title bar/scrollbars, toolbar + info auto-hide (Q-R34), title-bar fields, click-zoom key `2`, glide smoothing, arrow-key pan that never leaves a zoomed image (Q-R32, `ArrowKeyNavigatesAtZoomEdge`), sort modes Default / Name A-Z / Z-A (Q-R33), preload window setting (Q-R31), Zoom menu + Zoom card in Settings, `ArrowPanStepPercent`, Taken/Modified labels. | #119-#134 |
 | **Diag 2026-09-27** | `PHOTOREVIEW_DIAG_FORCE_LOG=1` env var forces `AppLog` on at startup for one debugging run, regardless of `AppSettings.LoggingEnabled`/config.json; no rebuild needed. | |
 | **Test flake 2026-09-27** | `DarkScrollBarRenderingTests` CI flake ("Cannot create more than one Application instance") was a TOCTOU race between the `Application.Current is null` check and `new Application()`; not reproduced locally (11 runs incl. 2-vCPU emulation) but hardened by catching the race instead of asserting it away. | #179 CI run |
+| **Camera RAW support (RAW-00..70)** | Enabled CR2/CR3/NEF/ARW/DNG/RAF/ORF/RW2 by default with embedded-preview review, optional LibRaw decode on zoom, Adobe RGB conversion and configurable pairing (default Separate). Automated gates passed; user waived RAW-62 real-machine check, so no manual GUI acceptance is claimed. | #239; [ADR 0009](../adr/0009-camera-raw-support.md) |
 
 ## Handoff log (older detail dropped)
 

@@ -13,6 +13,7 @@ PhotoReview is a Windows WPF application for browsing, comparing, and organizing
 
 - Reads file order from Windows Explorer when a valid native snapshot is available; falls back to an internal sorting order during wait times or when Shell is unavailable. Sort modes `Default` (folder order as returned by the file system) and `Name A→Z / Z→A` (app order) skip the Explorer query.
 - Features Fast, Preview, and Original modes; bounded RAM/disk image caching; memory pressure checks for preloading.
+- Opens CR2, CR3, NEF, ARW, DNG, RAF, ORF and RW2 using embedded JPEG previews by default; optional LibRaw sensor decode on zoom and configurable JPG+RAW grouping (ADR 0009).
 - Delete operations move files to the Recycle Bin; Move/Copy/Delete actions are journaled to support Undo and recovery.
 - Supports side-by-side Compare, optional hash/dimension verification, batch duplicate cleanup with a confirmation step, zoom in source pixels (wheel, click-to-zoom, arrow-key pan, right-click Zoom menu), Fit and fullscreen views, and keyboard shortcuts.
 - Images and file paths are processed locally; internal diagnostics are only enabled when configured.
@@ -57,7 +58,7 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 
 ### File Associations (Optional)
 
-Register "Open with" for every extension in `ImageFileTypes` (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes the same seven:
+Register "Open with" for every extension in `ImageFileTypes` (including `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.raf`, `.orf` and `.rw2`); the uninstall script removes the registered extensions:
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'

@@ -13,7 +13,7 @@ git checkout -b feat/raw-<NN>-<slug> origin/master      # e.g. feat/raw-11-tiff-
 # resuming instead? -> git checkout -B feat/raw-<NN>-<slug> origin/feat/raw-<NN>-<slug>, then read the progress file
 ```
 
-Then read, in order: `AGENTS.md`, `docs/refactoring/WORK-RAW-SUPPORT.md`, your card in `raw/TASKS.md`,
+Then read, in order: `AGENTS.md`, `docs/adr/0009-camera-raw-support.md`, historical card in `git show HEAD:docs/refactoring/raw/TASKS.md`,
 `raw/progress/RAW-<NN>.md` if it exists (resume), and only the files your card lists.
 
 ## 2. The commit-every-step rule
