@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -292,6 +293,23 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.Equal(0, decoder.OriginalDecodes);
     }
 
+    /// <summary>
+    /// Replaces the loader's indicator delay with one gate per RAW load that the test completes itself (cancelled with the
+    /// load's token like the real delay), so the "300 ms" never depends on the clock.
+    /// </summary>
+    private static List<TaskCompletionSource> GateIndicatorDelays(ImagePresenter presenter)
+    {
+        var delays = new List<TaskCompletionSource>();
+        presenter.ZoomDetail.IndicatorDelay = (_, token) =>
+        {
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            token.Register(() => gate.TrySetCanceled(token));
+            lock (delays) delays.Add(gate);
+            return gate.Task;
+        };
+        return delays;
+    }
+
     [Fact]
     public async Task RawOnZoom_ShowsDelayedIndicatorAndUsesRawFullDecoder()
     {
@@ -306,6 +324,7 @@ public sealed class ZoomDetailTests : IDisposable
         try
         {
             var presenter = CreatePresenter(service, [rawPath]);
+            var delays = GateIndicatorDelays(presenter);
             var indicatorShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
             {
@@ -316,6 +335,7 @@ public sealed class ZoomDetailTests : IDisposable
             var load = presenter.ZoomDetail.PendingLoad;
             Assert.NotNull(load);
             Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+            delays.Single().TrySetResult(); // the 300 ms have "elapsed"
             await indicatorShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
 
@@ -351,6 +371,7 @@ public sealed class ZoomDetailTests : IDisposable
         try
         {
             var presenter = CreatePresenter(service, [pathA, pathB]);
+            var delays = GateIndicatorDelays(presenter);
             var indicatorShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
             {
@@ -365,6 +386,9 @@ public sealed class ZoomDetailTests : IDisposable
             var loadB = presenter.ZoomDetail.PendingLoad;
             Assert.NotNull(loadB);
             Assert.NotSame(loadA, loadB);
+            Assert.Equal(2, delays.Count);
+            Assert.True(delays[0].Task.IsCanceled); // A's indicator was stopped when B superseded it
+            delays[1].TrySetResult(); // B's indicator delay elapses while A's decode is still blocked on its gate
             await indicatorShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
 

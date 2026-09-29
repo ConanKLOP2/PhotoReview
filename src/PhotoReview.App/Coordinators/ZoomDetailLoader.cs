@@ -71,6 +71,10 @@ public sealed class ZoomDetailLoader
     /// <summary>Raised when a RAW full decode has remained in progress for 300 ms or when its indicator clears.</summary>
     public event Action<bool>? RawDecodeIndicatorChanged;
 
+    /// <summary>How long a RAW decode runs before its indicator shows. Test seam: a test replaces it with a gate it releases itself,
+    /// so no wall-clock time is involved.</summary>
+    internal Func<TimeSpan, CancellationToken, Task> IndicatorDelay { get; set; } = static (delay, token) => Task.Delay(delay, token);
+
     /// <summary>True after the delayed RAW decoding indicator becomes visible.</summary>
     public bool IsRawDecodeIndicatorVisible => _isRawDecodeIndicatorVisible;
 
@@ -215,7 +219,7 @@ public sealed class ZoomDetailLoader
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(300), indicatorCts.Token);
+            await IndicatorDelay(TimeSpan.FromMilliseconds(300), indicatorCts.Token);
             void ShowIfCurrent()
             {
                 if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)

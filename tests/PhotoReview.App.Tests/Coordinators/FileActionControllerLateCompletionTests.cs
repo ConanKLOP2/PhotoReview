@@ -231,6 +231,34 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         Assert.Equal(0, _bin.RestoreCalls);
     }
 
+    [Theory(DisplayName = "APP-03: a capture Recycle finishing after a folder switch names exactly which members were deleted permanently")]
+    [InlineData(false, false, "Recycle")]
+    [InlineData(true, true, "Permanent")]
+    [InlineData(true, false, "Partly")]
+    public async Task GroupRecycle_FinishingAfterFolderSwitch_ReportsPermanentMembersAccurately(bool rawPermanent, bool jpegPermanent, string expected)
+    {
+        var jpeg = Make(_folderA, "p.jpg");
+        var raw = Make(_folderA, "p.cr2");
+        _catalog.Reset([new CatalogEntry(jpeg), new CatalogEntry(raw)], RawPairMode.PreferJpeg);
+        var bFile = Make(_folderB, "x.jpg");
+        if (rawPermanent) _bin.NoBinExtensions.Add(".cr2");
+        if (jpegPermanent) _bin.NoBinExtensions.Add(".jpg");
+        var (controller, _) = NewController(new AppSettings { AllowPermanentDeleteWithoutRecycleBin = true, ConfirmBeforeDelete = false }, new ConfirmingDialog());
+        SwitchToBDuringIo([bFile]);
+
+        await controller.RecycleAsync(null, jpeg);
+
+        var late = Assert.Single(_sink.Calls, c => IsCall(c, "Late"));
+        var text = late["Late:".Length..];
+        var wanted = expected switch
+        {
+            "Recycle" => Tr.StatusLateRecycleUndoable("p.jpg"),
+            "Permanent" => Tr.StatusLateDeletedPermanently("p.jpg"),
+            _ => Tr.StatusLateDeletedPartlyPermanently("p.jpg", "p.cr2"),
+        };
+        Assert.Equal(wanted, text);
+    }
+
     [Fact(DisplayName = "APP-03: a Copy finishing after a folder switch has no undo (Copy is never undoable), stays silent and leaves the new folder untouched")]
     public async Task Copy_FinishingAfterFolderSwitch_HasNoUndo_AndLeavesNewFolderUntouched()
     {
@@ -329,11 +357,13 @@ public sealed class FileActionControllerLateCompletionTests : IDisposable
         public int RestoreCalls { get; private set; }
         public Action? OnMutation { get; set; }
 
-        public bool CanRecycle(string path) => !NoBin;
+        public HashSet<string> NoBinExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool CanRecycle(string path) => !NoBin && !NoBinExtensions.Contains(Path.GetExtension(path));
 
         public void SendToRecycleBin(string path)
         {
-            if (NoBin) throw new IOException("no bin");
+            if (!CanRecycle(path)) throw new IOException("no bin");
             OnMutation?.Invoke();
             Recycled.Add(path);
             File.Delete(path);

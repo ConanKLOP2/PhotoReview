@@ -568,12 +568,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // Recycle undo, or a Move made in a previous folder (R7-2): open the restored file's folder at that file.
         if (FileActionController.RestoresOutsideFolder(result, currentFolder))
         {
-            var folder = Path.GetDirectoryName(result!.Source);
+            // Open at a member that really came back: Source (first manifest member) may be a permanently deleted one.
+            var reloadPath = FileActionController.ReloadPathAfterUndo(result!);
+            var folder = string.IsNullOrEmpty(reloadPath) ? null : Path.GetDirectoryName(reloadPath);
             if (!string.IsNullOrEmpty(folder))
             {
-                await OpenFolderAsync(folder, result.Source);
+                await OpenFolderAsync(folder, reloadPath);
                 // The reload wrote its own status: put back the note of a capture that was only partly restorable.
-                if (!string.IsNullOrEmpty(result.ErrorMessage)) StatusText = result.ErrorMessage;
+                if (!string.IsNullOrEmpty(result!.ErrorMessage)) StatusText = result.ErrorMessage;
             }
         }
     }
