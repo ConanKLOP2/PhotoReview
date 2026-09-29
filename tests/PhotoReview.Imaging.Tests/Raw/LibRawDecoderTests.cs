@@ -50,11 +50,12 @@ public sealed class LibRawDecoderTests
             if (Path.GetFileName(path).Equals("Canon - EOS 350D - RAW (3_2).CR2", StringComparison.OrdinalIgnoreCase))
             {
                 var bounded = decoder.Decode(new DecodeRequest(path, new DecodeBox(640, 480)));
+                var info = decoder.ReadInfo(path);
                 Assert.True(bounded.Downscaled);
                 Assert.True(bounded.PixelWidth <= 640);
                 Assert.True(bounded.PixelHeight <= 480);
-                Assert.Equal(image.OriginalWidth, bounded.OriginalWidth);
-                Assert.Equal(image.OriginalHeight, bounded.OriginalHeight);
+                Assert.Equal(info.PixelWidth, bounded.OriginalWidth);
+                Assert.Equal(info.PixelHeight, bounded.OriginalHeight);
             }
         }
 
