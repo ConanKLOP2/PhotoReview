@@ -44,23 +44,7 @@ public sealed class LibRawDecoderTests
         {
             Console.WriteLine($"LibRaw corpus decoding: {Path.GetFileName(path)}");
             Console.Out.Flush();
-            var stopwatch = Stopwatch.StartNew();
-            var request = new DecodeRequest(path, DecodeBox.Unbounded);
-            var image = decoder.Decode(request);
-            stopwatch.Stop();
-            var info = decoder.ReadInfo(path);
-
-            Assert.True(image.PixelWidth > 0);
-            Assert.True(image.PixelHeight > 0);
-            Assert.Equal(DecoderBackend.LibRaw, image.ActualBackend);
-            var bitmap = Assert.IsAssignableFrom<BitmapSource>(image.PlatformImage);
-            Assert.Equal(PixelFormats.Bgr32, bitmap.Format);
-            Assert.Equal(96, bitmap.DpiX);
-            Assert.Equal(96, bitmap.DpiY);
-            Assert.Equal(image.PixelWidth, info.PixelWidth);
-            Assert.Equal(image.PixelHeight, info.PixelHeight);
-
-            measurements.Add($"{Path.GetFileName(path)} {image.PixelWidth}x{image.PixelHeight} {stopwatch.Elapsed.TotalMilliseconds:F0} ms");
+            measurements.Add(DecodeCorpusSample(decoder, path));
             peakPrivateBytes = Math.Max(peakPrivateBytes, process.PrivateMemorySize64);
 
             if (Path.GetFileName(path).Equals("Canon - EOS 350D - RAW (3_2).CR2", StringComparison.OrdinalIgnoreCase))
@@ -76,6 +60,26 @@ public sealed class LibRawDecoderTests
 
         Console.WriteLine($"LibRaw corpus: {files.Length}/{files.Length} decoded; peak private bytes={peakPrivateBytes}; "
             + string.Join(" | ", measurements));
+    }
+
+    private static string DecodeCorpusSample(LibRawDecoder decoder, string path)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var image = decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+        stopwatch.Stop();
+        var info = decoder.ReadInfo(path);
+
+        Assert.True(image.PixelWidth > 0);
+        Assert.True(image.PixelHeight > 0);
+        Assert.Equal(DecoderBackend.LibRaw, image.ActualBackend);
+        var bitmap = Assert.IsAssignableFrom<BitmapSource>(image.PlatformImage);
+        Assert.Equal(PixelFormats.Bgr32, bitmap.Format);
+        Assert.Equal(96, bitmap.DpiX);
+        Assert.Equal(96, bitmap.DpiY);
+        Assert.Equal(image.PixelWidth, info.PixelWidth);
+        Assert.Equal(image.PixelHeight, info.PixelHeight);
+
+        return $"{Path.GetFileName(path)} {image.PixelWidth}x{image.PixelHeight} {stopwatch.Elapsed.TotalMilliseconds:F0} ms";
     }
 
     [Fact]
