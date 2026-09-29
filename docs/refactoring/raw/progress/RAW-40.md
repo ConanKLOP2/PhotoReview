@@ -4,7 +4,7 @@ Last update: 2026-09-29 · State: IN PROGRESS
 
 ## Steps
 - [x] 1. Detect unambiguous same-folder, same-basename JPEG+RAW groups and associate one matching XMP sidecar — `ac52f73` — `CaptureGroupBuilderTests` 3/3.
-- [x] 2. Apply `RawPairMode` in `ReviewCatalog`; keep both image members addressable and preserve representative metadata — `PENDING` — targeted tests 6/6.
+- [x] 2. Apply `RawPairMode` in `ReviewCatalog`; keep both image members addressable and preserve representative metadata — `b2f2b5e` — targeted tests 6/6.
 - [ ] 3. Preserve Explorer order and INV-7 behavior; verify 10k-file grouping remains below 20 ms.
 
 ## Next action
