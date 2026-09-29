@@ -42,6 +42,34 @@ function Test-FetchRawSamplesSelfTest {
         Assert-RawPixlsLicenses -Samples $validSamples -Records $cc0Record
         Assert-RawSampleHash -ExpectedHash ([string]::new('A', 64)) -ActualHash ([string]::new('A', 64)) -FileName 'sample.CR2'
 
+        # Regression: a multi-row manifest / multi-record API must come back FLAT through the same call shape the main
+        # path uses (@(Read-RawSampleManifest ...), @(& provider)). A stray unary comma nests each result one level deeper.
+        $twoRowManifest = Join-Path $testTempDir 'two-rows.txt'
+        Set-Content -LiteralPath $twoRowManifest -Value @(
+            "CR2`tCamera`thttps://raw.pixls.us/getfile.php/129/nice/sample.CR2`t$([string]::new('A', 64))`thttps://creativecommons.org/publicdomain/zero/1.0/`tsample.CR2",
+            "CR3`tCamera`thttps://raw.pixls.us/getfile.php/130/nice/sample2.CR3`t$([string]::new('B', 64))`thttps://creativecommons.org/publicdomain/zero/1.0/`tsample2.CR3"
+        ) -Encoding UTF8
+        $twoSamples = @(Read-RawSampleManifest -Path $twoRowManifest)
+        if ($twoSamples.Count -ne 2 -or $twoSamples[0] -is [array] -or $twoSamples[1].FileName -ne 'sample2.CR3') {
+            throw 'SELF-TEST FAILED: A two-row manifest did not come back as two flat sample objects.'
+        }
+        $twoApi = [pscustomobject]@{ data = @(
+            @('Canon', 'EOS 7D', 'RAW', 17.92, '',
+              "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+              '2016-12-29', "<a href='https://raw.pixls.us/getfile.php/129/nice/sample.CR2'>sample.CR2</a>", ''),
+            @('Canon', 'EOS R6', 'RAW', 20.1, '',
+              "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+              '2020-09-01', "<a href='https://raw.pixls.us/getfile.php/130/nice/sample2.CR3'>sample2.CR3</a>", '')
+        ) } | ConvertTo-Json -Depth 4
+        $twoRecords = @(ConvertFrom-RawPixlsRepositoryJson -Json $twoApi)
+        if ($twoRecords.Count -ne 2 -or $twoRecords[0] -is [array] -or [string]$twoRecords[1].Id -ne '130') {
+            throw 'SELF-TEST FAILED: A two-record repository response did not come back as two flat record objects.'
+        }
+        $liveShapedProvider = { @(ConvertFrom-RawPixlsRepositoryJson -Json $twoApi) }
+        if ((Invoke-RawPixlsLicenseCheck -Samples $twoSamples -RecordsProvider $liveShapedProvider) -ne $true) {
+            throw 'SELF-TEST FAILED: Two-row manifest was not license-checked against a two-record response.'
+        }
+
         $hashRejected = $false
         try {
             Assert-RawSampleHash -ExpectedHash ([string]::new('A', 64)) -ActualHash ([string]::new('B', 64)) -FileName 'sample.CR2'
@@ -125,10 +153,10 @@ function Test-FetchRawSamplesSelfTest {
         # whose .Count is $null, which used to skip the check silently).
         $script:providerCalls = 0
         $provider = { $script:providerCalls++; return $cc0Record }
-        $oneRow = Invoke-RawPixlsLicenseCheck -Samples (Read-RawSampleManifest -Path $validManifest) -RecordsProvider $provider
+        $oneRow = Invoke-RawPixlsLicenseCheck -Samples @(Read-RawSampleManifest -Path $validManifest) -RecordsProvider $provider
         if ($oneRow -ne $true -or $script:providerCalls -ne 1) { throw 'SELF-TEST FAILED: One-row manifest skipped the raw.pixls.us license check.' }
         $nonCc0Rejected = $false
-        try { [void](Invoke-RawPixlsLicenseCheck -Samples (Read-RawSampleManifest -Path $validManifest) -RecordsProvider { $nonCc0Record }) }
+        try { [void](Invoke-RawPixlsLicenseCheck -Samples @(Read-RawSampleManifest -Path $validManifest) -RecordsProvider { $nonCc0Record }) }
         catch { if ($_.Exception.Message -like '*is not recorded as CC0 1.0*') { $nonCc0Rejected = $true } else { throw } }
         if (-not $nonCc0Rejected) { throw 'SELF-TEST FAILED: One-row manifest with a non-CC0 record was accepted.' }
 
@@ -170,7 +198,7 @@ function Get-RawPixlsRepositoryRecords {
     $apiUrl = 'https://raw.pixls.us/json/getrepository.php?set=all'
     try {
         $response = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 120
-        return ,@(ConvertFrom-RawPixlsRepositoryJson -Json $response.Content)
+        return @(ConvertFrom-RawPixlsRepositoryJson -Json $response.Content)
     }
     catch {
         throw "Could not fetch/parse raw.pixls.us repository license records; refusing to fetch corpus samples. $($_.Exception.Message)"
@@ -214,7 +242,7 @@ function ConvertFrom-RawPixlsRepositoryJson {
     if ($rowCount -gt 0 -and $records.Count -eq 0) {
         throw "raw.pixls.us repository API returned $rowCount rows but none had a raw.pixls.us file URL: $layoutHint"
     }
-    return ,($records.ToArray())
+    return $records.ToArray()
 }
 
 function Assert-RawPixlsLicenses {
@@ -308,8 +336,10 @@ function Read-RawSampleManifest {
         })
     }
 
-    # Unary comma: return the array as ONE object so PowerShell 5.1 cannot unroll a one-row manifest into a scalar.
-    return ,($samples.ToArray())
+    # Emit the rows plainly. Do NOT use a unary comma here: callers wrap the call in @(), and `,array` inside @() nests
+    # the array one level deeper (each 'sample' then becomes an Object[]). @() at the call site is what keeps a one-row
+    # manifest array-shaped on Windows PowerShell 5.1.
+    return $samples.ToArray()
 }
 
 if ($SelfTest) {
