@@ -38,30 +38,6 @@ public sealed class PreviewImageServiceRawKeyTests : IDisposable
     }
 
     [Fact]
-    public async Task DecodeOriginalAsync_RawFullDecode_DoesNotStoreDimensionsUnderTheFullDecodeKind()
-    {
-        var raw = _root.File("full.cr2", TestImages.OpaquePng);
-        var rawFull = new FixedDecoder(new FixedImage(6000, 4000));
-        var service = new PreviewImageService(new ReviewMetrics(), () => false, () => 32, decoder: new PhotoReview.Imaging.Decoding.WpfBitmapImageDecoder(),
-            disableDiskCacheOverride: true, rawFullDecoder: rawFull, isRawFullDecodeEnabled: () => true);
-        try
-        {
-            var key = service.GetCurrentCacheKey(raw);
-            Assert.Equal(ImageSourceKind.RawPreview, key.SourceKind);
-            Assert.Equal(0, service.KnownOriginalDimensionsCount);
-
-            var full = await service.DecodeOriginalAsync(raw, key, CancellationToken.None);
-
-            Assert.Equal(6000, full.OriginalWidth);
-            Assert.Equal(1, rawFull.Decodes);
-            // Nothing reads dimensions under the full-decode kind, so none are stored there.
-            Assert.Equal(0, service.KnownOriginalDimensionsCount);
-            Assert.False(service.TryGetKnownOriginalDimensions(ImageCacheKey.CreateOriginal(key, ImageSourceKind.RawFullDecode), out _));
-        }
-        finally { await service.ShutdownPersistWorkersAsync(); }
-    }
-
-    [Fact]
     public async Task DiskCacheIdentity_DistinguishesTheRawPreviewKindFromAStandardKeyOfTheSamePath()
     {
         var raw = _root.File("kind.cr2", TestImages.OpaquePng); // opaque: alpha previews are never persisted
@@ -122,29 +98,5 @@ public sealed class PreviewImageServiceRawKeyTests : IDisposable
             Interlocked.Increment(ref _readInfoCalls);
             return inner.ReadInfo(path);
         }
-    }
-
-    private sealed class FixedDecoder(IDecodedImage image) : IImageDecoder
-    {
-        private int _decodes;
-        public int Decodes => Volatile.Read(ref _decodes);
-        public IDecodedImage Decode(DecodeRequest request)
-        {
-            Interlocked.Increment(ref _decodes);
-            return image;
-        }
-        public ImageInfo ReadInfo(string path) => new(image.OriginalWidth, image.OriginalHeight);
-    }
-
-    private sealed class FixedImage(int width, int height) : IDecodedImage
-    {
-        public int PixelWidth => width;
-        public int PixelHeight => height;
-        public bool Downscaled => false;
-        public int Orientation => 1;
-        public long EstimatedBytes => (long)width * height * 4;
-        public object PlatformImage { get; } = new();
-        public int OriginalWidth => width;
-        public int OriginalHeight => height;
     }
 }

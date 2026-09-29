@@ -759,10 +759,7 @@ public sealed class PreviewImageService : IPreloadTarget
                     ? cancellableDecoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded), cancellationToken)
                     : decoderOverride.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
-            // A RAW full decode keys its own representation (RawFullDecode); nothing ever reads dimensions under that key
-            // (the viewer's key carries the preview kind), and its size may differ from the container's, so it is not stored.
-            if (key.SourceKind != ImageSourceKind.RawFullDecode)
-                _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
+            _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
             _metrics.RecordSourceRead(GetSourceBytesRead(decoded, key), stopwatch.ElapsedMilliseconds,
                 includeInDecodeEwma: key.SourceKind != ImageSourceKind.RawFullDecode);
             return decoded;
