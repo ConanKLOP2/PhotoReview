@@ -149,12 +149,14 @@ public sealed class FitWidthHeightKeepZoomSettingsTests
         settings.Shortcuts.FitWidth = "   ";
         settings.Shortcuts.FitHeight = null!;
         settings.Shortcuts.ToggleKeepZoom = " K ";
+        settings.Shortcuts.ToggleCaptureMember = null!;
 
         SettingsNormalizer.Normalize(settings);
 
         Assert.Equal("", settings.Shortcuts.FitWidth);
         Assert.Equal("", settings.Shortcuts.FitHeight);
         Assert.Equal("K", settings.Shortcuts.ToggleKeepZoom);
+        Assert.Equal("", settings.Shortcuts.ToggleCaptureMember);
     }
 
     [Fact]

@@ -565,7 +565,7 @@ public partial class MainWindow : Window
         // otherwise Space/Enter would keep re-activating that button instead of Skip / Move to folder 2.
         if (pressedKey is Key.Space or Key.Enter && e.OriginalSource is DependencyObject source && OwnsActivationKeys(source)) return;
 
-        var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible);
+        var cmd = _shortcutRouter.TryResolve(e.Key, e.SystemKey, Keyboard.Modifiers, _viewModel.Viewer.IsFullscreen, _viewModel.HasImages, hasComparePair: _viewModel.CurrentHasComparePair, isCompareVisible: _viewModel.Compare.IsVisible, hasCapturePair: _viewModel.CurrentHasCapturePair);
         if (cmd is null) return;
         e.Handled = true;
         if (e.IsRepeat && cmd.Value.Type.IgnoresAutoRepeat()) return; // R2-F-06: never repeat file actions
@@ -583,6 +583,7 @@ public partial class MainWindow : Window
             case ReviewCommandType.ZoomActualSize: await _pointer.ZoomActualSizeAsync(); break;
             case ReviewCommandType.Undo: await _viewModel.UndoAsync(); break;
             case ReviewCommandType.ToggleCompare: _viewModel.ToggleCompare(); break;
+            case ReviewCommandType.ToggleCaptureMember: await _viewModel.ToggleCaptureGroupMemberAsync(); break;
             case ReviewCommandType.RunAction:
                 await _viewModel.RunActionAsync(cmd.Value.ActionIndex);
                 break;

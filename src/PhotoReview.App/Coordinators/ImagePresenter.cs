@@ -62,6 +62,7 @@ public sealed class ImagePresenter
     // transition once) apart from "this PresentAsync is upgrading the SAME file's bitmap" (thumbnail -> preview
     // -> original within one navigation must stay an instant, seamless replacement). Null before the first image.
     private string? _presentedFilePath;
+    private string? _currentNavigationPath;
 
     private readonly IUiScheduler? _uiScheduler;
 
@@ -118,6 +119,7 @@ public sealed class ImagePresenter
     public GenerationClock Clock => _clock;
     public CompareViewModel Compare => _compareViewModel;
     public object? CurrentImage { get; private set; }
+    public string? CurrentPresentedPath => _currentNavigationPath;
 
     /// <summary>
     /// Full-resolution (post-orientation) size of the source behind <see cref="CurrentImage"/>, whatever
@@ -150,6 +152,7 @@ public sealed class ImagePresenter
     /// <summary>Clears the displayed frame when the catalog has no images.</summary>
     public void ClearPresentation()
     {
+        _currentNavigationPath = null;
         CurrentPhotoInfo = null;
         _zoomDetail.Reset();
         UpdateCurrentImage(null);
@@ -167,9 +170,13 @@ public sealed class ImagePresenter
     /// <summary>
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
-    public async Task PresentAsync(int index, bool allowCompare = true)
+    public async Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false)
     {
         if (index < 0 || index >= _catalog.Count) return;
+        if (pathOverride is not null && _catalog.IndexOf(pathOverride) != index)
+        {
+            throw new ArgumentException("The presentation path must belong to the selected catalog entry.", nameof(pathOverride));
+        }
         LastPresentStartedFromRam = false;
 
         var perf = PhotoReviewPerf.Log.IsEnabled();
@@ -178,7 +185,8 @@ public sealed class ImagePresenter
         // 1. Tăng Navigation generation
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
-        var path = _catalog.PathAt(index);
+        var path = pathOverride ?? _catalog.PathAt(index);
+        _currentNavigationPath = path;
 
         // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
         // has not started yet (a started one finishes and stays cached), and let preload re-center and
@@ -260,7 +268,7 @@ public sealed class ImagePresenter
         // and are never served; the disk LRU prunes them).
         var initialStat = initial.Stat!;
         var initialEntry = _catalog.Find(path);
-        if (initialEntry is not null && !initialEntry.Matches(initialStat))
+        if (pathOverride is null && initialEntry is not null && !initialEntry.Matches(initialStat))
         {
             if (initialEntry.Length is not null && initialEntry.LastWriteUtc is not null)
                 EvictCachedPath(path);
@@ -270,8 +278,9 @@ public sealed class ImagePresenter
         var initialSize = initialStat.Length;
         // Q-R29 option C: both keys come from the stat just taken (no second stat on the UI thread): an entry that
         // left the catalog meanwhile gets a key built from that stat, not from a fresh FileInfo.
-        var currentKey = _previewService.GetCurrentCacheKey(
-            initialEntry ?? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc));
+        var currentKey = _previewService.GetCurrentCacheKey(pathOverride is not null
+            ? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc)
+            : initialEntry ?? new CatalogEntry(path).WithMetadata(initialStat.Length, initialStat.LastWriteUtc));
         if (perf) PhotoReviewPerf.Log.Stat(token, PhotoReviewPerf.Ms(perfStat));
 
         // 3. Tạo key, RAM hit (ghi nhận preload hit)
@@ -397,7 +406,7 @@ public sealed class ImagePresenter
             if (!_clock.IsNavigationCurrent(token)) return;
             // AR16: the background readability probe may have removed other files while this image decoded.
             // It keeps the current entry by path (as ReplaceOrder does), so re-read its index for preload/status.
-            if (_catalog.Current is { } stillCurrent && string.Equals(stillCurrent.Path, path, StringComparison.OrdinalIgnoreCase))
+            if (_catalog.CurrentIndex == _catalog.IndexOf(path))
             {
                 index = _catalog.CurrentIndex;
             }
@@ -424,7 +433,7 @@ public sealed class ImagePresenter
 
             // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)
             long perfCompare = perf ? Stopwatch.GetTimestamp() : 0;
-            var pair = GetComparePair(path);
+            var pair = GetComparePair(path, includeCaptureGroupInCompare);
 
             if (perf)
             {
@@ -603,8 +612,13 @@ public sealed class ImagePresenter
     /// <summary>True when <paramref name="path"/> belongs to a numbered compare pair (lets the compare key open compare while it is closed).</summary>
     public bool HasComparePair(string path) => GetComparePair(path) is not null;
 
-    private (string Left, string Right)? GetComparePair(string path)
+    private (string Left, string Right)? GetComparePair(string path, bool includeCaptureGroup = true)
     {
+        if (includeCaptureGroup && _catalog.Find(path)?.CaptureGroup is { } group)
+        {
+            return (group.JpegPath, group.RawPath);
+        }
+
         lock (_compareIndexGate)
         {
             if (_compareIndexVersion != _catalog.StructuralVersion)

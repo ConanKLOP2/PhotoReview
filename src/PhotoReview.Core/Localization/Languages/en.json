@@ -420,6 +420,8 @@
   "settings.scalingQuality.automationName": "Image scaling quality",
   "settings.scalingQuality.label": "Scaling quality",
   "settings.shortcut.compare": "Compare",
+  "settings.shortcut.toggleCaptureMember": "Switch JPEG / RAW member",
+  "settings.shortcut.toggleCaptureMember.clearAutomationName": "Clear the Switch JPEG / RAW member shortcut",
   "settings.shortcut.firstImage": "First image",
   "settings.shortcut.fullscreen": "Fullscreen",
   "settings.shortcut.next": "Next image",

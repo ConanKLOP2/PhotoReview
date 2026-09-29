@@ -326,6 +326,8 @@
   "settings.scalingQuality.automationName": "AutomationProperties.Name of the combo.",
   "settings.scalingQuality.label": "Label.",
   "settings.shortcut.compare": "Shortcut label.",
+  "settings.shortcut.toggleCaptureMember": "Optional shortcut label for switching the displayed member of a grouped JPEG and RAW capture.",
+  "settings.shortcut.toggleCaptureMember.clearAutomationName": "Accessible name for clearing the optional capture-member shortcut.",
   "settings.shortcut.firstImage": "Shortcut label.",
   "settings.shortcut.fullscreen": "Shortcut label.",
   "settings.shortcut.next": "Shortcut label (Width=210). Candidate label for core.settings.shortcutInvalid {name} (property Next).",

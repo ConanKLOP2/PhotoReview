@@ -332,6 +332,7 @@ public partial class SettingsWindow : Window
         ClickZoomText.Text = Settings.Shortcuts.ClickZoom;
         FitWidthText.Text = Settings.Shortcuts.FitWidth; FitHeightText.Text = Settings.Shortcuts.FitHeight; ToggleKeepZoomText.Text = Settings.Shortcuts.ToggleKeepZoom;
         OpenFolderText.Text = Settings.Shortcuts.OpenFolder; CustomZoomText.Text = Settings.Shortcuts.CustomZoom;
+        ToggleCaptureMemberText.Text = Settings.Shortcuts.ToggleCaptureMember;
         ActionsText.Text = JsonSerializer.Serialize(Settings.Actions, JsonOptions);
         // PR-B: Percent400 was removed from the combo; SettingsNormalizer migrates a loaded value to Percent200 before
         // this window ever sees it, but a stray Percent400 (e.g. this window built directly on an unnormalized
@@ -514,6 +515,7 @@ public partial class SettingsWindow : Window
     private void ClearToggleKeepZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleKeepZoomText);
     private void ClearOpenFolder_Click(object sender, RoutedEventArgs e) => ClearShortcut(OpenFolderText);
     private void ClearCustomZoom_Click(object sender, RoutedEventArgs e) => ClearShortcut(CustomZoomText);
+    private void ClearToggleCaptureMember_Click(object sender, RoutedEventArgs e) => ClearShortcut(ToggleCaptureMemberText);
 
     private static void ClearShortcut(System.Windows.Controls.TextBox textBox) => textBox.Text = string.Empty;
 
@@ -541,7 +543,7 @@ public partial class SettingsWindow : Window
     private List<ReviewAction> _cachedProbeActions = [];
 
     /// <summary>
-    /// Shortcut_TextChanged fires <see cref="BuildProbeSettings"/> on every keystroke in any of the 24 shortcut
+    /// Shortcut_TextChanged fires <see cref="BuildProbeSettings"/> on every keystroke in any of the 25 shortcut
     /// boxes, which used to re-parse the (unrelated, unchanged) Actions JSON every time too. ActionsText only
     /// actually changes when the user types there or the Action Profiles editor rewrites it, so cache the parse
     /// keyed on the exact text and skip re-parsing while it's unchanged.
@@ -557,7 +559,7 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// Reads all 24 shortcut text boxes into a <see cref="ShortcutMappings"/>, exactly as typed (not canonicalized).
+    /// Reads all 25 shortcut text boxes into a <see cref="ShortcutMappings"/>, exactly as typed (not canonicalized).
     /// The single place both <see cref="Save_Click"/> and <see cref="BuildProbeSettings"/> read the shortcut
     /// controls from, so the field list only has to be kept in sync with the XAML controls once, not twice.
     /// </summary>
@@ -571,7 +573,7 @@ public partial class SettingsWindow : Window
         MoveToFolder = MoveToFolderText.Text, CopyToFolder = CopyToFolderText.Text, SendToRecycleBin = RecycleText.Text,
         ClickZoom = ClickZoomText.Text,
         FitWidth = FitWidthText.Text, FitHeight = FitHeightText.Text, ToggleKeepZoom = ToggleKeepZoomText.Text,
-        OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text,
+        OpenFolder = OpenFolderText.Text, CustomZoom = CustomZoomText.Text, ToggleCaptureMember = ToggleCaptureMemberText.Text,
     };
 
     /// <summary>
@@ -594,7 +596,7 @@ public partial class SettingsWindow : Window
         SendToRecycleBin = ShortcutKeyCanonical.Canonicalize(raw.SendToRecycleBin), ClickZoom = ShortcutKeyCanonical.Canonicalize(raw.ClickZoom),
         FitWidth = ShortcutKeyCanonical.Canonicalize(raw.FitWidth), FitHeight = ShortcutKeyCanonical.Canonicalize(raw.FitHeight),
         ToggleKeepZoom = ShortcutKeyCanonical.Canonicalize(raw.ToggleKeepZoom), OpenFolder = ShortcutKeyCanonical.Canonicalize(raw.OpenFolder),
-        CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom),
+        CustomZoom = ShortcutKeyCanonical.Canonicalize(raw.CustomZoom), ToggleCaptureMember = ShortcutKeyCanonical.Canonicalize(raw.ToggleCaptureMember),
         MoveToFolder2 = existing.MoveToFolder2,
     };
 

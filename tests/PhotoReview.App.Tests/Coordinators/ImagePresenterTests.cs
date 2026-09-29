@@ -268,6 +268,34 @@ public sealed partial class ImagePresenterTests : IDisposable
     }
 
     [Fact]
+    public async Task PresentAsync_CaptureGroup_CompareShowsBothMembersAndCanPresentAlternateMember()
+    {
+        var jpeg = CreateFakeImageFile("capture.jpg");
+        var rawPreviewFixture = CreateFakeImageFile("capture-member.jpg");
+        var group = new CaptureGroup(jpeg, rawPreviewFixture);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = group }], RawPairMode.Separate);
+        var presenter = CreatePresenter();
+
+        Assert.True(presenter.HasComparePair(jpeg));
+        await presenter.PresentAsync(0);
+
+        Assert.False(presenter.IsCompareVisible);
+
+        await presenter.PresentAsync(0, includeCaptureGroupInCompare: true);
+
+        Assert.True(presenter.IsCompareVisible);
+        Assert.Equal(jpeg, _compareViewModel.LeftPath);
+        Assert.Equal(rawPreviewFixture, _compareViewModel.RightPath);
+
+        await presenter.PresentAsync(0, allowCompare: false, pathOverride: rawPreviewFixture);
+
+        Assert.False(presenter.IsCompareVisible);
+        Assert.Equal(rawPreviewFixture, presenter.CurrentPresentedPath);
+        Assert.Equal(Path.GetFileName(rawPreviewFixture), presenter.CurrentPhotoInfo?.FileName);
+        Assert.Equal(1, _catalog.Count);
+    }
+
+    [Fact]
     public async Task PresentAsync_WhenCompareIsSuppressed_ClearsCompareAndKeepsMainImage()
     {
         var f1 = CreateFakeImageFile("photo.jpg");

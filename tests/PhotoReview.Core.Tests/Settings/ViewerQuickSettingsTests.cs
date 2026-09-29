@@ -211,6 +211,7 @@ public sealed class ViewerQuickSettingsTests
     [InlineData(nameof(ShortcutMappings.LastImage))]
     [InlineData(nameof(ShortcutMappings.ZoomActualSize))]
     [InlineData(nameof(ShortcutMappings.ToggleInfoOverlay))]
+    [InlineData(nameof(ShortcutMappings.ToggleCaptureMember))]
     [InlineData(nameof(ShortcutMappings.ClickZoom))]
     public void Validator_UnparseableOptionalShortcut_IsInvalid(string name)
     {
@@ -228,6 +229,7 @@ public sealed class ViewerQuickSettingsTests
     [InlineData(nameof(ShortcutMappings.ZoomActualSize), "F3")]        // default action "Loại 3"
     [InlineData(nameof(ShortcutMappings.ToggleInfoOverlay), "PageUp")] // PreviousFolder
     [InlineData(nameof(ShortcutMappings.ClickZoom), "F4")]             // default action "Loại 4"
+    [InlineData(nameof(ShortcutMappings.ToggleCaptureMember), "Z")]    // Undo key
     public void Validator_OptionalShortcutDuplicatingAnotherBinding_IsReported(string name, string key)
     {
         var settings = new AppSettings();

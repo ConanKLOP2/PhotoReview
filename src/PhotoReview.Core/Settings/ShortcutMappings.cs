@@ -62,13 +62,16 @@ public class ShortcutMappings
     /// </summary>
     public string CustomZoom { get; set; } = "D3";
 
+    /// <summary>Switches between the JPEG and RAW member of the current capture group. Empty = disabled.</summary>
+    public string ToggleCaptureMember { get; set; } = "";
+
     /// <summary>
     /// Shortcuts that may be empty (= feature disabled). The older shortcuts are mandatory: an empty value is invalid.
     /// A field, not a property: code that reflects over the shortcut PROPERTIES (validator) must not see it.
     /// </summary>
     public static readonly IReadOnlyList<string> OptionalNames =
         [nameof(LastImage), nameof(ZoomActualSize), nameof(ToggleInfoOverlay), nameof(MoveToFolder), nameof(CopyToFolder), nameof(ClickZoom),
-         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom)];
+         nameof(FitWidth), nameof(FitHeight), nameof(ToggleKeepZoom), nameof(OpenFolder), nameof(CustomZoom), nameof(ToggleCaptureMember)];
 
     public static bool IsOptional(string propertyName) => OptionalNames.Contains(propertyName, StringComparer.Ordinal);
 

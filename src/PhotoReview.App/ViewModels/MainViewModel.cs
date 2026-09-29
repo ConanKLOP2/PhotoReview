@@ -273,13 +273,32 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public bool CurrentHasComparePair =>
         _catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count && _presenter.HasComparePair(_catalog.PathAt(_catalog.CurrentIndex));
 
+    public bool CurrentHasCapturePair => _catalog.Current?.CaptureGroup is not null;
+    public string CapturePairBadge => CurrentHasCapturePair ? "JPG+RAW" : string.Empty;
+
+    public async Task ToggleCaptureGroupMemberAsync()
+    {
+        await WaitForPendingExplorerOrderAsync();
+        if (_compare.IsVisible || _catalog.Current is not { CaptureGroup: { } group } current) return;
+
+        var currentPath = _presenter.CurrentPresentedPath ?? current.Path;
+        var nextPath = string.Equals(currentPath, group.JpegPath, StringComparison.OrdinalIgnoreCase)
+            ? group.RawPath
+            : group.JpegPath;
+        _clock.NextInteraction();
+        _statusText = string.Empty;
+        await _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: false, pathOverride: nextPath);
+    }
+
     public void ToggleCompare()
     {
         var enableCompare = !_compare.IsVisible;
         _compare.IsVisible = enableCompare;
         if (_catalog.CurrentIndex >= 0)
         {
-            _ = _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare);
+            var pathOverride = _catalog.Current?.CaptureGroup is null ? null : _presenter.CurrentPresentedPath;
+            _ = _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare, pathOverride: pathOverride,
+                includeCaptureGroupInCompare: enableCompare);
         }
     }
 
@@ -582,7 +601,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         var editorPath = Settings.ExternalEditorPath;
         if (string.IsNullOrWhiteSpace(editorPath)) return;
-        var path = _compare.SelectedPath ?? _catalog.Current?.Path;
+        var path = _compare.SelectedPath ?? _presenter.CurrentPresentedPath ?? _catalog.Current?.Path;
         if (string.IsNullOrEmpty(path)) return;
         if (!_fileSystem.FileExists(path))
         {
@@ -824,6 +843,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(CanNavigateNext));
         OnPropertyChanged(nameof(CanNavigatePrevious));
         OnPropertyChanged(nameof(HasImages));
+        OnPropertyChanged(nameof(CurrentHasCapturePair));
+        OnPropertyChanged(nameof(CapturePairBadge));
         OnPropertyChanged(nameof(CurrentIndex));
         OnPropertyChanged(nameof(TotalFiles));
         OnPropertyChanged(nameof(CurrentImage));

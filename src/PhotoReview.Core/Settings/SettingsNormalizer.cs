@@ -129,6 +129,7 @@ public static class SettingsNormalizer
             shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
             shortcuts.ZoomActualSize = shortcuts.ZoomActualSize?.Trim() ?? "";
             shortcuts.ToggleInfoOverlay = shortcuts.ToggleInfoOverlay?.Trim() ?? "";
+            shortcuts.ToggleCaptureMember = shortcuts.ToggleCaptureMember?.Trim() ?? "";
             shortcuts.ClickZoom = shortcuts.ClickZoom?.Trim() ?? "";
             shortcuts.FitWidth = shortcuts.FitWidth?.Trim() ?? "";
             shortcuts.FitHeight = shortcuts.FitHeight?.Trim() ?? "";
@@ -238,6 +239,7 @@ public static class SettingsNormalizer
         shortcuts.FitWidth = Resolve(nameof(ShortcutMappings.FitWidth), shortcuts.FitWidth);
         shortcuts.FitHeight = Resolve(nameof(ShortcutMappings.FitHeight), shortcuts.FitHeight);
         shortcuts.ToggleKeepZoom = Resolve(nameof(ShortcutMappings.ToggleKeepZoom), shortcuts.ToggleKeepZoom);
+        shortcuts.ToggleCaptureMember = Resolve(nameof(ShortcutMappings.ToggleCaptureMember), shortcuts.ToggleCaptureMember);
         return disabled;
     }
 }

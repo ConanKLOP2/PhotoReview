@@ -416,6 +416,8 @@
   "settings.scalingQuality.automationName": "Chất lượng thu phóng ảnh",
   "settings.scalingQuality.label": "Chất lượng thu phóng",
   "settings.shortcut.compare": "So sánh",
+  "settings.shortcut.toggleCaptureMember": "Chuyển giữa ảnh JPEG và RAW",
+  "settings.shortcut.toggleCaptureMember.clearAutomationName": "Xóa phím tắt chuyển giữa JPEG và RAW",
   "settings.shortcut.firstImage": "Ảnh đầu tiên",
   "settings.shortcut.fullscreen": "Toàn màn hình",
   "settings.shortcut.next": "Ảnh tiếp theo",
