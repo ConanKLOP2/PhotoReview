@@ -187,4 +187,25 @@ public sealed class ExifParserTests
 
         Assert.Equal(new ExifRational(35, 1), summary?.FocalLength);
     }
+
+    [Theory(DisplayName = "Orientation is read from IFD0 in both byte orders")]
+    [InlineData(true, 6)]
+    [InlineData(false, 8)]
+    public void TryReadOrientationFromJpeg_ReadsIfd0Orientation(bool little, ushort orientation)
+    {
+        var jpeg = JpegWithApp1(Tiff(little, [Short(ExifParser.TagOrientation, orientation, little)], []));
+
+        Assert.Equal(orientation, ExifParser.TryReadOrientationFromJpeg(jpeg));
+    }
+
+    [Theory(DisplayName = "Orientation outside 1..8, missing, or in a non-JPEG yields null")]
+    [InlineData(0)]
+    [InlineData(9)]
+    public void TryReadOrientationFromJpeg_InvalidOrMissing_ReturnsNull(ushort orientation)
+    {
+        Assert.Null(ExifParser.TryReadOrientationFromJpeg(JpegWithApp1(Tiff(true, [Short(ExifParser.TagOrientation, orientation, true)], []))));
+        Assert.Null(ExifParser.TryReadOrientationFromJpeg(JpegWithApp1(Tiff(true, [Ascii(ExifParser.TagModel, "X")], []))));
+        Assert.Null(ExifParser.TryReadOrientationFromJpeg([0x00, 0x01, 0x02, 0x03, 0x04]));
+        Assert.Null(ExifParser.TryReadOrientationFromJpeg([]));
+    }
 }

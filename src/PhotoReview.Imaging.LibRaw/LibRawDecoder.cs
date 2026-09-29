@@ -82,6 +82,9 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         using var handle = CreateHandle();
         CheckResult(LibRawNativeMethods.LibRawOpenWFile(handle, path), "open RAW file");
         CheckResult(LibRawNativeMethods.LibRawAdjustSizesInfoOnly(handle), "read RAW dimensions");
+        // adjust_sizes_info_only applies the container flip to iwidth/iheight (a portrait file reports height > width),
+        // exactly the size Decode returns, so the orientation is already folded in: report it as 1.
+        // Pinned by ReadInfo_PortraitRewrittenCorpusFile_MatchesDecodedOrientedDimensions.
         var width = LibRawNativeMethods.LibRawGetIWidth(handle);
         var height = LibRawNativeMethods.LibRawGetIHeight(handle);
         if (width <= 0 || height <= 0) throw new InvalidDataException("LibRaw returned invalid image dimensions.");

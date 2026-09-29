@@ -7,7 +7,7 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// Reader for Panasonic RW2 format.
 /// Magic: 'IIU\0' (0x49 0x49 0x55 0x00).
 /// Embedded JPEG preview: tag 0x002E (JpgFromRaw) in IFD0.
-/// EXIF and Orientation live inside the embedded JPEG APP1 marker.
+/// EXIF lives inside the embedded JPEG APP1 marker; Orientation is IFD0 tag 0x0112 when present, else that JPEG's EXIF.
 /// </summary>
 public sealed class Rw2ContainerReader : IRawContainerReader
 {
@@ -34,7 +34,7 @@ public sealed class Rw2ContainerReader : IRawContainerReader
         bool littleEndian = headerSpan[0] == 0x49 && headerSpan[1] == 0x49;
         uint ifd0Offset = TiffStructure.ReadU32(headerSpan, 4, littleEndian);
 
-        int orientation = 1;
+        int? ifd0Orientation = null;
         int sensorWidth = 0;
         int sensorHeight = 0;
         var previews = new List<EmbeddedPreview>();
@@ -48,6 +48,11 @@ public sealed class Rw2ContainerReader : IRawContainerReader
         long? leftBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0005, littleEndian);
         long? bottomBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0006, littleEndian);
         long? rightBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0007, littleEndian);
+
+        // Orientation is normally in IFD0; some files only carry it in the embedded JPEG's EXIF.
+        if (TiffHeaderNavigator.ReadTagValue(source, entries, 0x0112, littleEndian) is { } orient and >= 1 and <= 8)
+            ifd0Orientation = (int)orient;
+        int? embeddedJpegOrientation = null;
 
         // Tags 2/3 describe the full sensor readout including masked margins; the borders (4..7) delimit the image.
         if (leftBorder is { } left && rightBorder is { } right && right > left && right <= int.MaxValue)
@@ -78,6 +83,14 @@ public sealed class Rw2ContainerReader : IRawContainerReader
 
                 // RW2 EXIF is inside the preview JPEG
                 exifBlocks.Add(new ExifBlock(offset, Math.Min(length, 128 * 1024), IsTiffHeader: false));
+
+                // Orientation is normally in IFD0; some files only carry it in the embedded JPEG's EXIF.
+                if (ifd0Orientation is null)
+                {
+                    int exifLength = (int)Math.Min(Math.Min(length, 128 * 1024), source.Length - offset);
+                    if (exifLength > 0)
+                        embeddedJpegOrientation = ExifParser.TryReadOrientationFromJpeg(source.Read(offset, exifLength));
+                }
             }
         }
 
@@ -85,7 +98,7 @@ public sealed class Rw2ContainerReader : IRawContainerReader
             RawFormat.Rw2,
             sensorWidth,
             sensorHeight,
-            orientation,
+            ifd0Orientation ?? embeddedJpegOrientation ?? 1,
             previews,
             exifBlocks);
     }
