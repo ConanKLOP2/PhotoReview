@@ -222,6 +222,43 @@ public static class TiffHeaderNavigator
     }
 
     /// <summary>
+    /// Reads DNG-style DefaultCropSize (0xC620: width, height as SHORT/LONG/RATIONAL) from an IFD; the crop size is the
+    /// active image area without the masked sensor margins that ImageWidth/ImageLength include.
+    /// </summary>
+    public static bool TryReadDefaultCropSize(
+        IRawHeaderSource source,
+        IReadOnlyList<TiffEntry> entries,
+        bool littleEndian,
+        out int width,
+        out int height)
+    {
+        width = 0;
+        height = 0;
+        if (!TryGetEntry(entries, 0xC620, out var entry)) return false;
+
+        var crop = ReadTagUnsignedArray(source, entry, littleEndian, 2);
+        if (crop.Count < 2 || crop[0] is <= 0 or > int.MaxValue || crop[1] is <= 0 or > int.MaxValue) return false;
+
+        width = (int)crop[0];
+        height = (int)crop[1];
+        return true;
+    }
+
+    /// <summary>
+    /// Picks the active sensor size: DefaultCropSize, else the Exif pixel size, else the raw IFD size. A candidate
+    /// larger than the raw IFD in either direction is ignored (masked margins can only shrink the image).
+    /// </summary>
+    public static (int Width, int Height) ChooseActiveSensorSize(
+        int rawWidth, int rawHeight, int cropWidth, int cropHeight, int exifWidth, int exifHeight)
+    {
+        if (Fits(cropWidth, cropHeight)) return (cropWidth, cropHeight);
+        if (Fits(exifWidth, exifHeight)) return (exifWidth, exifHeight);
+        return (rawWidth, rawHeight);
+
+        bool Fits(int w, int h) => w > 0 && h > 0 && (rawWidth <= 0 || rawHeight <= 0 || (w <= rawWidth && h <= rawHeight));
+    }
+
+    /// <summary>
     /// Reads a single unsigned value for <paramref name="tag"/> from <paramref name="entries"/>.
     /// </summary>
     public static long? ReadTagValue(IRawHeaderSource source, IReadOnlyList<TiffEntry> entries, ushort tag, bool littleEndian) =>

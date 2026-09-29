@@ -82,7 +82,6 @@ public sealed class DngContainerReader : IRawContainerReader
             int height = 0;
             long? jpegOffset = null;
             long? jpegLength = null;
-            TiffHeaderNavigator.TiffEntry? cropSizeEntry = null;
 
             foreach (var entry in entries)
             {
@@ -123,10 +122,6 @@ public sealed class DngContainerReader : IRawContainerReader
                     case 0x0202: // JPEGInterchangeFormatLength
                         jpegLength = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
                         break;
-
-                    case 0xC620: // DefaultCropSize: 2 SHORT/LONG/RATIONAL values (width, height)
-                        cropSizeEntry = entry;
-                        break;
                 }
             }
 
@@ -159,14 +154,10 @@ public sealed class DngContainerReader : IRawContainerReader
             {
                 int candidateWidth = width;
                 int candidateHeight = height;
-                if (cropSizeEntry is { } cropEntry)
+                if (TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out int cropWidth, out int cropHeight))
                 {
-                    var crop = TiffHeaderNavigator.ReadTagUnsignedArray(source, cropEntry, littleEndian, 2);
-                    if (crop.Count >= 2 && crop[0] is > 0 and <= int.MaxValue && crop[1] is > 0 and <= int.MaxValue)
-                    {
-                        candidateWidth = (int)crop[0];
-                        candidateHeight = (int)crop[1];
-                    }
+                    candidateWidth = cropWidth;
+                    candidateHeight = cropHeight;
                 }
 
                 int area = (int)Math.Min((long)candidateWidth * candidateHeight, int.MaxValue);

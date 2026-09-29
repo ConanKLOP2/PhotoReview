@@ -220,6 +220,12 @@ public sealed class WicRawFullDecoderTests(ITestOutputHelper output)
                     ? "preview-only"
                     : "unavailable: " + ex.Message));
             }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or FileFormatException or InvalidDataException)
+            {
+                // Machines without (or with a partly broken) WIC RAW codec: the decoder documents these WIC-side failures
+                // as "not decodable here" and normally maps them to NotSupportedException. Any other exception type is a bug.
+                results.Add((extension, "codec error: " + ex.GetType().Name));
+            }
         }
 
         Assert.NotEmpty(results);

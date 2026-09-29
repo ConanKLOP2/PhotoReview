@@ -52,6 +52,10 @@ public sealed class NefContainerReader : IRawContainerReader
         long rawArea = 0;
         int sensorWidth = 0;
         int sensorHeight = 0;
+        int cropWidth = 0;
+        int cropHeight = 0;
+        int exifPixelWidth = 0;
+        int exifPixelHeight = 0;
 
         // IFD0 chain first, then the SubIFDs it announces (raw image, JpgFromRaw and reduced previews live there).
         while (pendingIfds.Count > 0 && ifdCount < RawContainerLimits.MaxIfdCount)
@@ -90,6 +94,9 @@ public sealed class NefContainerReader : IRawContainerReader
                     if (exifTag.Tag == 0x927C && exifTag.Count > 4)
                         makerNoteOffset ??= exifTag.ValueOrOffset;
                 }
+
+                if (exifPixelWidth == 0)
+                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out exifPixelWidth, out exifPixelHeight);
             }
 
             bool isPreview = false;
@@ -114,6 +121,7 @@ public sealed class NefContainerReader : IRawContainerReader
                 rawArea = area;
                 sensorWidth = width;
                 sensorHeight = height;
+                TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out cropWidth, out cropHeight);
             }
 
             if (nextIfdOffset > 0)
@@ -129,6 +137,18 @@ public sealed class NefContainerReader : IRawContainerReader
         if (makerNoteOffset is > 0)
             ParseNikonMakerNotePreview(source, makerNoteOffset.Value, previews);
 
+        // The raw IFD size includes the masked margins (Z 7: 8288x5520 vs the 8256x5504 active area). Prefer
+        // DefaultCropSize, then the Exif pixel size, then the full-size JpgFromRaw frame (Nikon writes it at the active
+        // area size and no Exif pixel size), and only then the raw IFD size.
+        (sensorWidth, sensorHeight) = TiffHeaderNavigator.ChooseActiveSensorSize(
+            sensorWidth, sensorHeight, cropWidth, cropHeight, exifPixelWidth, exifPixelHeight);
+        if (cropWidth == 0 && exifPixelWidth == 0 &&
+            TryReadFullSizeJpegFrame(source, previews, sensorWidth, sensorHeight, out int jpegFrameWidth, out int jpegFrameHeight))
+        {
+            sensorWidth = jpegFrameWidth;
+            sensorHeight = jpegFrameHeight;
+        }
+
         exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
 
         return new RawContainerInfo(
@@ -138,6 +158,44 @@ public sealed class NefContainerReader : IRawContainerReader
             orientation,
             previews,
             exifBlocks);
+    }
+
+    /// <summary>Largest masked margin (pixels per axis) between the raw IFD and a JpgFromRaw frame that still counts as the same image.</summary>
+    private const int MaxMaskedMargin = 256;
+
+    /// <summary>
+    /// Finds the largest embedded JPEG whose frame is at most <see cref="MaxMaskedMargin"/> pixels smaller than the raw IFD
+    /// size on both axes (a full-size JpgFromRaw), reading its dimensions from the SOF header when the container gave none.
+    /// </summary>
+    private static bool TryReadFullSizeJpegFrame(IRawHeaderSource source, List<EmbeddedPreview> previews, int rawWidth, int rawHeight, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (rawWidth <= 0 || rawHeight <= 0) return false;
+
+        long bestArea = 0;
+        foreach (var preview in previews.OrderByDescending(p => p.Length).Take(4))
+        {
+            int w = preview.Width;
+            int h = preview.Height;
+            if ((w <= 0 || h <= 0) &&
+                !PreviewSelector.TryReadJpegFrame(source, preview.Offset, preview.Length, out w, out h, out _))
+                continue;
+
+            int marginX = rawWidth - w;
+            int marginY = rawHeight - h;
+            if (marginX is < 0 or > MaxMaskedMargin || marginY is < 0 or > MaxMaskedMargin) continue;
+
+            long area = (long)w * h;
+            if (area > bestArea)
+            {
+                bestArea = area;
+                width = w;
+                height = h;
+            }
+        }
+
+        return bestArea > 0;
     }
 
     private static void AddPreview(List<EmbeddedPreview> previews, long offset, long length, int width, int height)

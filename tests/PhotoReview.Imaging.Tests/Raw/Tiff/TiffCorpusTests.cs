@@ -136,10 +136,11 @@ public sealed class TiffCorpusTests
     // ------------------------------------------------------------------ NEF
 
     [Theory]
-    [InlineData("D40X", 3904, 2616, 13508)]
-    [InlineData("D800", 7424, 4924, 25336)]
-    [InlineData("Z 7", 8288, 5520, 76188)]
-    public void NefCorpus_SensorSizeComesFromRawSubIfdAndMakerNotePreviewIsListed(string model, int width, int height, long makerNotePreviewOffset)
+    // The raw SubIFD (3904x2616, 7424x4924, 8288x5520) includes masked margins; the active area is the full-size JpgFromRaw frame.
+    [InlineData("D40X", 3872, 2592, 13508)]
+    [InlineData("D800", 7360, 4912, 25336)]
+    [InlineData("Z 7", 8256, 5504, 76188)]
+    public void NefCorpus_SensorSizeIsActiveAreaOfFullSizeJpegAndMakerNotePreviewIsListed(string model, int width, int height, long makerNotePreviewOffset)
     {
         var file = CorpusFiles(".nef").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
         if (file is null) return;
@@ -150,6 +151,24 @@ public sealed class TiffCorpusTests
         Assert.Contains(info.Previews, p => p.Offset == makerNotePreviewOffset);
         foreach (var preview in info.Previews)
             AssertLossyJpeg(file, preview);
+    }
+
+    // ------------------------------------------------------------------ ARW
+
+    // Raw IFD sizes (6048x4024, 7392x4920, 4928x3276) include masked margins; the active area comes from
+    // DefaultCropSize (A7M3) or the Exif PixelXDimension/PixelYDimension (A7R, NEX-6).
+    [Theory]
+    [InlineData("ILCE-7M3", 6000, 4000)]
+    [InlineData("ILCE-7R", 7360, 4912)]
+    [InlineData("NEX-6", 4912, 3264)]
+    public void ArwCorpus_SensorSizeIsActiveAreaNotMaskedRawIfd(string model, int width, int height)
+    {
+        var file = CorpusFiles(".arw").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        if (file is null) return;
+
+        var info = ReadContainer(file);
+
+        Assert.Equal((width, height), (info.SensorWidth, info.SensorHeight));
     }
 
     // ------------------------------------------------------------------ ORF
