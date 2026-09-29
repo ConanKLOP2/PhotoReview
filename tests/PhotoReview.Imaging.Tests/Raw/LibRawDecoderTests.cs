@@ -30,7 +30,7 @@ public sealed class LibRawDecoderTests
             Assert.True(image.PixelWidth > 0);
             Assert.True(image.PixelHeight > 0);
             Assert.Equal(DecoderBackend.LibRaw, image.ActualBackend);
-            Assert.IsType<System.Windows.Media.Imaging.BitmapSource>(image.PlatformImage);
+            Assert.IsAssignableFrom<System.Windows.Media.Imaging.BitmapSource>(image.PlatformImage);
             Assert.Equal(image.PixelWidth, info.PixelWidth);
             Assert.Equal(image.PixelHeight, info.PixelHeight);
         }
