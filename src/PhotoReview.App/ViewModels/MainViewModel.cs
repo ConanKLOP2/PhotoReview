@@ -27,6 +27,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     private readonly GenerationClock _clock;
     private readonly FolderLoadCoordinator _folderCoordinator;
     private readonly ImagePresenter _presenter;
+    private bool _isRawDecodeIndicatorVisible;
     private readonly ViewerState _viewerState;
     private readonly CompareViewModel _compare;
     private readonly SettingsStore _settingsStore;
@@ -86,6 +87,12 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _folderCoordinator = folderCoordinator ?? throw new ArgumentNullException(nameof(folderCoordinator));
         _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+        _presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
+        {
+            _isRawDecodeIndicatorVisible = visible;
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(StatusNeedsAttention));
+        };
         _viewerState = viewerState ?? throw new ArgumentNullException(nameof(viewerState));
         _compare = compare ?? throw new ArgumentNullException(nameof(compare));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
@@ -209,7 +216,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     public string StatusText
     {
-        get => string.IsNullOrEmpty(_statusText) ? _presenter.StatusText : _statusText;
+        get => _isRawDecodeIndicatorVisible
+            ? StatusFormatter.DecodingRaw()
+            : string.IsNullOrEmpty(_statusText) ? _presenter.StatusText : _statusText;
         set
         {
             SetProperty(ref _statusText, value);
@@ -221,7 +230,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// result or "open failed", a loading/error status from the presenter, or the skipped-files warning), so the info
     /// auto-hide keeps it visible. A plain "index / size / name" line is false.
     /// </summary>
-    public bool StatusNeedsAttention => !string.IsNullOrEmpty(_statusText) || _presenter.StatusNeedsAttention || HasSkippedEntries;
+    public bool StatusNeedsAttention => _isRawDecodeIndicatorVisible || !string.IsNullOrEmpty(_statusText)
+        || _presenter.StatusNeedsAttention || HasSkippedEntries;
 
     private IReadOnlyList<SkippedEntry> _skippedEntries = [];
 

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
@@ -32,6 +33,7 @@ public sealed class ZoomDetailLoader
     private readonly PreviewImageService _previewService;
     private readonly GenerationClock _clock;
     private readonly Action<object, int, int> _show;
+    private readonly IUiScheduler? _uiScheduler;
 
     private Target? _target;
     private IDecodedImage? _original;
@@ -41,15 +43,17 @@ public sealed class ZoomDetailLoader
     private long _failedToken = -1; // navigation token whose full-resolution decode failed: do not retry on every zoom step
     private Task? _pendingLoad;
     private CancellationTokenSource? _indicatorCts;
-    private bool _isRawDecodeIndicatorVisible;
+    private volatile bool _isRawDecodeIndicatorVisible;
 
     /// <param name="show">Displays a platform image with the given original dimensions (the presenter's
     /// current-image update); always called with the preview's recorded original dimensions.</param>
-    public ZoomDetailLoader(PreviewImageService previewService, GenerationClock clock, Action<object, int, int> show)
+    public ZoomDetailLoader(PreviewImageService previewService, GenerationClock clock, Action<object, int, int> show,
+        IUiScheduler? uiScheduler = null)
     {
         _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _show = show ?? throw new ArgumentNullException(nameof(show));
+        _uiScheduler = uiScheduler;
     }
 
     /// <summary>The full-resolution decode currently held for the current image (null when none).</summary>
@@ -200,8 +204,13 @@ public sealed class ZoomDetailLoader
         try
         {
             await Task.Delay(TimeSpan.FromMilliseconds(300), indicatorCts.Token).ConfigureAwait(false);
-            if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)
-                SetRawDecodeIndicatorVisible(true);
+            void ShowIfCurrent()
+            {
+                if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)
+                    SetRawDecodeIndicatorVisible(true);
+            }
+            if (_uiScheduler is null) ShowIfCurrent();
+            else _uiScheduler.Post(ShowIfCurrent);
         }
         catch (OperationCanceledException) { }
     }
