@@ -2,6 +2,14 @@
 
 This project incorporates components from the open source software projects listed below.
 
+## Compact ICC Profiles — Adobe-compatible RGB profile
+
+- **Project URL:** https://github.com/saucecontrol/Compact-ICC-Profiles
+- **File:** `src/PhotoReview.Imaging.Raw/AdobeCompat-v2.icc` (374 bytes; SHA-256 `60FB2ADECACF82132DB0B1C09B303316F3BBD9E2823E7BA096D01627D12D57C9`)
+- **License:** CC0 1.0 Universal; profile is released to the public domain.
+- **Use:** source profile for Adobe RGB tagged embedded RAW JPEG previews, transformed by WIC to sRGB.
+- **Profile catalog and license:** https://github.com/saucecontrol/Compact-ICC-Profiles#readme
+
 ---
 
 ## libjpeg-turbo

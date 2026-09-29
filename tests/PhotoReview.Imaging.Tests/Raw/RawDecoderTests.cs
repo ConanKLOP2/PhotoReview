@@ -7,6 +7,10 @@ using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Raw;
+using PhotoReview.Imaging.Tests.Quality;
+using System.Windows.Media.Imaging;
+using PhotoReview.Imaging.Tests.Fixtures;
+using PhotoReview.Imaging.Decoding.Wic;
 using Xunit;
 
 namespace PhotoReview.Imaging.Tests.Raw;
@@ -206,11 +210,18 @@ public sealed class RawDecoderTests
     [Theory]
     [InlineData(1, false)]
     [InlineData(3, false)]
+    [InlineData(2, false)]
+    [InlineData(4, false)]
+    [InlineData(5, true)]
     [InlineData(6, true)]
+    [InlineData(7, true)]
     [InlineData(8, true)]
     public void Decode_AppliesOrientationAndSensorTransposition(ushort orientation, bool expectTransposed)
     {
-        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(640, 480);
+        var jpegPath = Path.Combine(Path.GetTempPath(), $"PhotoReview-raw-orientation-{Guid.NewGuid():N}.jpg");
+        FixtureGenerator.GenerateGradientJpeg(jpegPath, 640, 480);
+        var jpeg = File.ReadAllBytes(jpegPath);
+        File.Delete(jpegPath);
         var tiff = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: jpeg, orientation: orientation);
 
         var reader = new TrackingSourceReader(tiff);
@@ -221,16 +232,151 @@ public sealed class RawDecoderTests
         var result = decoder.Decode(request);
 
         Assert.Equal(orientation, result.Orientation);
+        var bitmap = Assert.IsAssignableFrom<BitmapSource>(result.PlatformImage);
+        Assert.Equal(System.Windows.Media.PixelFormats.Bgr32, bitmap.Format);
         if (expectTransposed)
         {
             Assert.Equal(480, result.OriginalWidth);
             Assert.Equal(640, result.OriginalHeight);
+            Assert.Equal(480, result.PixelWidth);
+            Assert.Equal(640, result.PixelHeight);
         }
         else
         {
             Assert.Equal(640, result.OriginalWidth);
             Assert.Equal(480, result.OriginalHeight);
+            Assert.Equal(640, result.PixelWidth);
+            Assert.Equal(480, result.PixelHeight);
         }
+    }
+
+    [Fact]
+    public void AdobeRgbHint_InjectsBundledProfileAndMatchesProfileTaggedJpeg()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"PhotoReview-raw-adobe-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var profilePath = Path.Combine(root, "AdobeCompat-v2.icc");
+        var taggedPath = Path.Combine(root, "tagged.jpg");
+        var rawPath = Path.Combine(root, "camera.dng");
+        try
+        {
+            File.WriteAllBytes(profilePath, RawJpegIccProfile.GetBundledAdobeRgbProfile());
+            FixtureGenerator.GenerateJpegWithIcc(taggedPath, 128, 96, profilePath);
+            var taggedJpeg = AddAdobeRgbHint(File.ReadAllBytes(taggedPath));
+            Assert.Same(taggedJpeg, RawJpegIccProfile.EnsureAdobeRgbProfile(taggedJpeg));
+            var untaggedPreview = StripIccProfile(taggedJpeg);
+            File.WriteAllBytes(taggedPath, taggedJpeg);
+            File.WriteAllBytes(rawPath, SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: untaggedPreview));
+
+            var wic = new WicDirectDecoder();
+            var expected = wic.Decode(new DecodeRequest(taggedPath, DecodeBox.Unbounded));
+            var actual = new RawDecoder(wic).Decode(new DecodeRequest(rawPath, DecodeBox.Unbounded));
+            var comparison = ImageCompare.Compare(expected, actual);
+
+            Assert.True(comparison.Psnr >= 50, $"RAW Adobe RGB conversion PSNR {comparison.Psnr} dB < 50 dB");
+            Assert.True(comparison.MeanDeltaE <= 0.1, $"RAW Adobe RGB conversion MeanDeltaE {comparison.MeanDeltaE} > 0.1");
+            Assert.Equal(DecoderBackend.WicDirect, actual.ActualBackend);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
+    public void AdobeRgbProfile_IsNotDuplicatedWhenJpegAlreadyHasIcc()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"PhotoReview-raw-profile-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var profilePath = Path.Combine(root, "AdobeCompat-v2.icc");
+        var jpegPath = Path.Combine(root, "profile.jpg");
+        try
+        {
+            File.WriteAllBytes(profilePath, RawJpegIccProfile.GetBundledAdobeRgbProfile());
+            FixtureGenerator.GenerateJpegWithIcc(jpegPath, 32, 24, profilePath);
+            var jpeg = File.ReadAllBytes(jpegPath);
+            Assert.Same(jpeg, RawJpegIccProfile.EnsureAdobeRgbProfile(jpeg));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
+    public void Decode_TruncatedRawContainerOrEmbeddedPreview_FailsWithTypedErrors()
+    {
+        var truncatedContainerReader = new TrackingSourceReader([0x49, 0x49, 0x2A]);
+        var truncatedContainerDecoder = new RawDecoder(new WpfBitmapImageDecoder(truncatedContainerReader), truncatedContainerReader);
+        Assert.ThrowsAny<NotSupportedException>(() => truncatedContainerDecoder.Decode(new DecodeRequest("broken.dng", DecodeBox.Unbounded)));
+
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(320, 240);
+        var complete = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: jpeg);
+        var truncated = complete.AsSpan(0, complete.Length - 8).ToArray();
+        var truncatedPreviewReader = new TrackingSourceReader(truncated);
+        var truncatedPreviewDecoder = new RawDecoder(new WpfBitmapImageDecoder(truncatedPreviewReader), truncatedPreviewReader);
+        Assert.Throws<InvalidDataException>(() => truncatedPreviewDecoder.Decode(new DecodeRequest("broken.dng", DecodeBox.Unbounded)));
+    }
+
+    [Fact]
+    public void Decode_ReleasesRawFileHandleImmediatelyAfterPreviewDecode()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"PhotoReview-raw-handle-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "camera.dng");
+        var jpegPath = Path.Combine(root, "preview.jpg");
+        try
+        {
+            FixtureGenerator.GenerateGradientJpeg(jpegPath, 80, 60);
+            File.WriteAllBytes(path, SyntheticRawBuilder.BuildTiff(true, File.ReadAllBytes(jpegPath)));
+            var decoded = new RawDecoder(new WpfBitmapImageDecoder()).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+            Assert.True(decoded.PixelWidth > 0 && decoded.PixelHeight > 0);
+            File.Delete(path);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    private static byte[] AddAdobeRgbHint(byte[] jpeg)
+    {
+        byte[] result = [.. jpeg.AsSpan(0, 2).ToArray(), 0xFF, 0xE1, 0x00, 0x10,
+            (byte)'R', (byte)'A', (byte)'W', (byte)'A', (byte)'D', (byte)'O', (byte)'B', (byte)'E',
+            (byte)'R', (byte)'G', (byte)'B', (byte)'R', (byte)'0', (byte)'3', .. jpeg.AsSpan(2).ToArray()];
+        return result;
+    }
+
+    private static byte[] StripIccProfile(byte[] jpeg)
+    {
+        using var output = new MemoryStream();
+        output.Write(jpeg, 0, 2);
+        var offset = 2;
+        while (offset + 4 <= jpeg.Length && jpeg[offset] == 0xFF)
+        {
+            var markerStart = offset;
+            while (offset < jpeg.Length && jpeg[offset] == 0xFF) offset++;
+            if (offset >= jpeg.Length) break;
+            var marker = jpeg[offset++];
+            if (marker is 0xDA or 0xD9)
+            {
+                output.Write(jpeg, markerStart, jpeg.Length - markerStart);
+                break;
+            }
+            if (marker is 0xD8 or 0x01 or (>= 0xD0 and <= 0xD7))
+            {
+                output.Write(jpeg, markerStart, offset - markerStart);
+                continue;
+            }
+            if (offset + 2 > jpeg.Length) break;
+            var length = (jpeg[offset] << 8) | jpeg[offset + 1];
+            if (length < 2 || offset + length > jpeg.Length) break;
+            var isIcc = marker == 0xE2 && length >= 14 && jpeg.AsSpan(offset + 2, 12).SequenceEqual("ICC_PROFILE\0"u8);
+            if (!isIcc) output.Write(jpeg, markerStart, 2 + length);
+            offset += length;
+        }
+        return output.ToArray();
     }
 
     [Fact]

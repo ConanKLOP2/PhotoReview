@@ -59,6 +59,13 @@ public sealed class LibRawDecoderTests
             }
         }
 
+        if (string.IsNullOrWhiteSpace(selectedSample))
+        {
+            var decodedFormats = files.Select(path => Path.GetExtension(path).ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+            var requiredFormats = new[] { ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2" };
+            Assert.Subset(requiredFormats.ToHashSet(StringComparer.Ordinal), decodedFormats);
+        }
+
         Console.WriteLine($"LibRaw corpus: {files.Length}/{files.Length} decoded; sampled peak private bytes={memorySampler.PeakPrivateBytes}; "
             + string.Join(" | ", measurements));
     }

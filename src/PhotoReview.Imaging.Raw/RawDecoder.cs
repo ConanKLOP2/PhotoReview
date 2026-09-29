@@ -85,6 +85,8 @@ public sealed class RawDecoder : IImageDecoder
                 ? _sourceBytesCache.GetOrReadRange(request.Path, fileInfo.Length, fileInfo.LastWriteTimeUtc.Ticks,
                     preview.Offset, (int)preview.Length, request.Priority)
                 : ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, request.Priority);
+            if (preview.ColorSpace == PreviewColorSpace.AdobeRgb)
+                previewBytes = RawJpegIccProfile.EnsureAdobeRgbProfile(previewBytes);
 
             // Inner decode with preview bytes and container orientation
             var innerRequest = new DecodeRequest(

@@ -21,4 +21,8 @@
     <InternalsVisibleTo Include="PhotoReview.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="AdobeCompat-v2.icc" LogicalName="PhotoReview.Imaging.Raw.AdobeCompat-v2.icc" />
+  </ItemGroup>
+
 </Project>
