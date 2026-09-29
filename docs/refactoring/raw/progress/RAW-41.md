@@ -12,7 +12,7 @@ Last update: 2026-09-29 · State: IN PROGRESS
 - Keep `RawPairMode.Separate` as the app behavior until group action, retry, undo, and crash-point tests pass.
 
 ## Steps
-- [ ] 1. Journal manifest schema, all-member preflight, group execution and group-aware reconciliation/retry.
+- [ ] 1. Journal manifest schema, all-member preflight, group execution and group-aware reconciliation/retry. Schema is added; service/recovery wiring remains.
 - [ ] 2. Group undo/Recycle restore and catalog recovery after success, failure, folder switch, and retry.
 - [ ] 3. Fault-injection crash-point tests; Category=Slow real-filesystem group checks.
 
@@ -21,6 +21,7 @@ Implement the backwards-compatible journal manifest model and tests first. Do no
 
 ## Evidence / measurements
 - Existing single-file flow: `FileActionService.ExecuteAsync` writes one Prepared entry before one mutation; startup reconciles entries independently; Recovery retries one Move/Copy; `UndoService` tracks one Move or Recycle at a time.
+- `JournalGroupSchemaTests` 2/2: legacy JSON omits group metadata and parses with null defaults; group source/destination/fingerprint manifest round-trips.
 
 ## Open problems
-- None; design reviewed and approved by lead before implementation.
+- Group manifest is not consumed by file actions or startup reconciliation yet; grouped mode remains disabled in the app.
