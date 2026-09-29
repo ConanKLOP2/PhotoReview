@@ -13,7 +13,11 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 {
     private const int MaxThumbnailBytes = 32 << 20;
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
+    private static readonly SemaphoreSlim s_fullDecodeGate = new(1, 1);
     private readonly Action<string>? _stageObserver;
+
+    /// <summary>Free slots of the single-slot gate that serialises full-resolution decodes (test seam).</summary>
+    internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.CurrentCount;
 
     public LibRawDecoder() { }
 
@@ -93,6 +97,27 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             throw new NotSupportedException("LibRaw always applies the RAW container's orientation; an un-oriented full decode is unavailable.");
         cancellationToken.ThrowIfCancellationRequested();
 
+        // A full-resolution decode holds LibRaw's working image, its 8-bit RGB output (3 B/px) and the managed BGRA copy
+        // (4 B/px) at once, which is several hundred MB for a 60-100 MP sensor. Serialise those so parallel callers
+        // (e.g. LibRaw as the general backend) cannot exhaust memory together; bounded decodes are not gated.
+        var gated = !request.IsDownscaleRequested;
+        if (gated) s_fullDecodeGate.Wait(cancellationToken);
+        try
+        {
+            return DecodeCore(request, cancellationToken);
+        }
+        catch (OutOfMemoryException ex)
+        {
+            throw new InvalidOperationException("Not enough memory to decode this RAW image.", ex);
+        }
+        finally
+        {
+            if (gated) s_fullDecodeGate.Release();
+        }
+    }
+
+    private WpfDecodedImage DecodeCore(DecodeRequest request, CancellationToken cancellationToken)
+    {
         using var cancellationState = new CancellationState(cancellationToken);
         // libraw_open_buffer stores a pointer into the caller's buffer (no copy) that unpack/process read later, so the
         // pin must outlive the LibRaw handle: declared before `raw` so it is released after libraw_close.
@@ -124,59 +149,17 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (header.Type != LibRawNativeMethods.ImageBitmap || header.Width == 0 || header.Height == 0 || header.Colors != 3 || header.Bits != 8)
             throw new InvalidDataException("LibRaw returned an unsupported processed image format.");
 
-        var pixelCount = checked((int)header.Width * header.Height);
-        var rgbLength = checked(pixelCount * 3);
-        if (header.DataSize < rgbLength || header.DataSize > int.MaxValue)
-            throw new InvalidDataException("LibRaw returned an invalid processed image buffer length.");
-
+        var rgbLength = RgbBgraResampler.ValidateSourceLength(header.Width, header.Height, header.DataSize);
         var (targetWidth, targetHeight) = request.Box.Fit(header.Width, header.Height);
-        var pixels = new byte[checked(targetWidth * targetHeight * 4)];
+        var pixels = new byte[RgbBgraResampler.ValidateTargetLength(targetWidth, targetHeight)];
         unsafe
         {
-            var source = (byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset);
-            fixed (byte* target = pixels)
-            {
-                if (targetWidth == header.Width && targetHeight == header.Height)
-                {
-                    for (var pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
-                    {
-                        var sourceIndex = pixelIndex * 3;
-                        var targetIndex = pixelIndex * 4;
-                        target[targetIndex] = source[sourceIndex + 2];
-                        target[targetIndex + 1] = source[sourceIndex + 1];
-                        target[targetIndex + 2] = source[sourceIndex];
-                        target[targetIndex + 3] = byte.MaxValue;
-                        if ((pixelIndex & 0x3FFFF) == 0) cancellationToken.ThrowIfCancellationRequested();
-                    }
-                }
-                else
-                {
-                    for (var y = 0; y < targetHeight; y++)
-                    {
-                        var sourceY = Math.Clamp((y + 0.5d) * header.Height / targetHeight - 0.5d, 0, header.Height - 1d);
-                        var y0 = (int)sourceY;
-                        var y1 = Math.Min(y0 + 1, header.Height - 1);
-                        var fy = sourceY - y0;
-                        for (var x = 0; x < targetWidth; x++)
-                        {
-                            var sourceX = Math.Clamp((x + 0.5d) * header.Width / targetWidth - 0.5d, 0, header.Width - 1d);
-                            var x0 = (int)sourceX;
-                            var x1 = Math.Min(x0 + 1, header.Width - 1);
-                            var fx = sourceX - x0;
-                            var targetIndex = (y * targetWidth + x) * 4;
-                            target[targetIndex] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 2);
-                            target[targetIndex + 1] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 1);
-                            target[targetIndex + 2] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 0);
-                            target[targetIndex + 3] = byte.MaxValue;
-                        }
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-                }
-            }
+            var source = new ReadOnlySpan<byte>((byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset), rgbLength);
+            RgbBgraResampler.Resize(source, header.Width, header.Height, pixels, targetWidth, targetHeight, cancellationToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var bitmap = BitmapSource.Create(targetWidth, targetHeight, 96, 96, PixelFormats.Bgr32, null, pixels, checked(targetWidth * 4));
+        var bitmap = BitmapSource.Create(targetWidth, targetHeight, 96, 96, PixelFormats.Bgr32, null, pixels, targetWidth * 4);
         var downscaled = targetWidth < header.Width || targetHeight < header.Height;
         return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
             originalWidth: header.Width, originalHeight: header.Height);
@@ -210,17 +193,6 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         {
             return 1;
         }
-    }
-
-    private static unsafe byte Interpolate(byte* source, int width, int x0, int x1, int y0, int y1, double fx, double fy, int channel)
-    {
-        var topLeft = source[(y0 * width + x0) * 3 + channel];
-        var topRight = source[(y0 * width + x1) * 3 + channel];
-        var bottomLeft = source[(y1 * width + x0) * 3 + channel];
-        var bottomRight = source[(y1 * width + x1) * 3 + channel];
-        var top = topLeft + (topRight - topLeft) * fx;
-        var bottom = bottomLeft + (bottomRight - bottomLeft) * fx;
-        return (byte)Math.Clamp((int)Math.Round(top + (bottom - top) * fy), byte.MinValue, byte.MaxValue);
     }
 
     private static void CheckResult(int errorCode, string operation, CancellationToken cancellationToken = default)
