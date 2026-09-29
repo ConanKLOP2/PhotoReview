@@ -2,6 +2,7 @@ using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
 using PhotoReview.Imaging.Decoding;
+using PhotoReview.Imaging.Decoding.Wic;
 using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.Imaging.Tests.Raw;
@@ -59,5 +60,60 @@ public sealed class LibRawDecoderBufferPinTests
         public override void Unpin() => Interlocked.Decrement(ref _activePins);
 
         protected override void Dispose(bool disposing) => NativeMemory.Free(_buffer);
+    }
+}
+
+public sealed class LibRawThumbnailTrimTests
+{
+    private static byte[] Jpeg() => SyntheticRawBuilder.CreateMinimalJpeg(64, 48);
+
+    [Fact]
+    public void TrimToEndOfImage_ZeroPaddedJpeg_TrimsToEoiAndStaysDecodable()
+    {
+        var jpeg = Jpeg();
+        var padded = jpeg.Concat(new byte[37]).ToArray();
+
+        var trimmed = LibRawDecoder.TrimToEndOfImage(padded);
+
+        Assert.Equal(jpeg, trimmed);
+        var decoded = new WpfBitmapImageDecoder().Decode(new DecodeRequest("thumb.jpg", DecodeBox.Unbounded, bytes: trimmed));
+        Assert.Equal(64, decoded.OriginalWidth);
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_TrailingFfFillAfterEoi_TrimsToEoi()
+    {
+        var jpeg = Jpeg();
+        var padded = jpeg.Concat(new byte[] { 0x00, 0xFF, 0xFF, 0x00 }).ToArray();
+
+        Assert.Equal(jpeg, LibRawDecoder.TrimToEndOfImage(padded));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_UnpaddedJpeg_ReturnsSameArray()
+    {
+        var jpeg = Jpeg();
+
+        Assert.Same(jpeg, LibRawDecoder.TrimToEndOfImage(jpeg));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_TruncatedJpegWithoutEoi_Throws()
+    {
+        var jpeg = Jpeg();
+        var truncated = jpeg[..(jpeg.Length - 2)].Concat(new byte[16]).ToArray();
+
+        Assert.Throws<InvalidDataException>(() => LibRawDecoder.TrimToEndOfImage(truncated));
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 })]
+    [InlineData(new byte[] { 0xFF, 0xD8, 0x00, 0x00, 0x00, 0x00 })]
+    [InlineData(new byte[] { 0xFF, 0xD8, 0xFF, 0xFF, 0xFF, 0xFF })]
+    [InlineData(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0xFF, 0xD9 })]
+    [InlineData(new byte[] { 0xFF, 0xD8, 0xFF })]
+    public void TrimToEndOfImage_HostileOrIncompleteData_Throws(byte[] data)
+    {
+        Assert.Throws<InvalidDataException>(() => LibRawDecoder.TrimToEndOfImage(data));
     }
 }

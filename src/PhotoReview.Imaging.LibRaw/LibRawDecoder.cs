@@ -50,11 +50,26 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
         var bytes = new byte[checked((int)header.DataSize)];
         Marshal.Copy(IntPtr.Add(thumbnail.DangerousGetHandle(), ProcessedImageHeader.DataOffset), bytes, 0, bytes.Length);
-        if (bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[^2] != 0xFF || bytes[^1] != 0xD9)
-            throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
+        var jpeg = TrimToEndOfImage(bytes);
 
         cancellationToken.ThrowIfCancellationRequested();
-        return bytes;
+        return jpeg;
+    }
+
+    /// <summary>
+    /// Validates the SOI marker and trims trailing fill (0x00 padding, extra 0xFF) after the final EOI marker.
+    /// Camera thumbnails are often zero-padded to a fixed slot size. Data without an SOI or without an EOI once the
+    /// fill is skipped is rejected as an incomplete stream.
+    /// </summary>
+    internal static byte[] TrimToEndOfImage(byte[] bytes)
+    {
+        if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+            throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
+        var end = bytes.Length;
+        while (end > 2 && bytes[end - 1] is 0x00 or 0xFF) end--;
+        if (end < 4 || bytes[end - 1] != 0xD9 || bytes[end - 2] != 0xFF)
+            throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
+        return end == bytes.Length ? bytes : bytes[..end];
     }
 
     public ImageInfo ReadInfo(string path)
