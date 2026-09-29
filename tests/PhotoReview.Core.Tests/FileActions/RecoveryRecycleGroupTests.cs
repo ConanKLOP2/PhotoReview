@@ -1,6 +1,7 @@
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Tests.Fakes;
 
@@ -109,6 +110,39 @@ public sealed class RecoveryRecycleGroupTests
     }
 
     [Fact]
+    public async Task Retry_BinFitsEachMemberButNotTheirSum_IsRefusedAndNothingIsRecycled()
+    {
+        _fs.AddFile(Jpg, new string('j', 10), Stamp);
+        _fs.AddFile(Raw, new string('r', 10), Stamp);
+        _bin.Capacity = 15; // each 10-byte file fits, both together (20) do not
+        var failed = FailedGroup(Member(Jpg), Member(Raw));
+        _journal.Append(failed);
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Tr.CoreRecycleBinCannotHold("a.jpg"), result.Message);
+        Assert.Empty(_bin.Recycled);
+        Assert.True(_fs.FileExists(Jpg));
+        Assert.True(_fs.FileExists(Raw));
+        Assert.Equal(JournalState.Failed, Assert.Single(_journal.ReadFailedOperations()).State); // still the same retryable item
+    }
+
+    [Fact]
+    public async Task Retry_BinFitsTheMembersStillPendingEvenIfNotTheWholeGroup_Succeeds()
+    {
+        _fs.AddFile(Raw, new string('r', 10), Stamp); // the JPEG was already recycled by the first attempt
+        _bin.Capacity = 15;
+        var failed = FailedGroup(Member(Jpg), Member(Raw));
+        _journal.Append(failed);
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal([Raw], _bin.Recycled);
+    }
+
+    [Fact]
     public async Task Retry_PresentMemberChangedSinceJournal_IsRefusedAndNothingIsRecycled()
     {
         _fs.AddFile(Raw, new string('r', 11), Stamp);
@@ -188,6 +222,8 @@ public sealed class RecoveryRecycleGroupTests
         }
 
         public bool CanRecycle(string path) => !NoBinPaths.Contains(path);
+        public long Capacity { get; set; } = long.MaxValue;
+        public bool FitsInRecycleBin(string path, long fileSize) => fileSize <= Capacity;
 
         public void DeletePermanently(string path)
         {

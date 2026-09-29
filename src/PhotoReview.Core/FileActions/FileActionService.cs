@@ -158,13 +158,8 @@ public sealed class FileActionService
             {
                 // F-WIN-2 for the whole capture: the bin of a volume must hold ALL of that volume's members together,
                 // otherwise the shell deletes the overflow permanently while the journal says "recycle".
-                foreach (var volume in members.Where(member => !member.Permanent)
-                    .GroupBy(member => Path.GetPathRoot(member.Source) ?? string.Empty, StringComparer.OrdinalIgnoreCase))
-                {
-                    var first = volume.First();
-                    if (!_recycleBin.FitsInRecycleBin(first.Source, volume.Sum(member => member.Size)))
-                        throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(first.Source)));
-                }
+                if (RecycleBinCapacity.FirstOverflow(_recycleBin, members) is { } overflow)
+                    throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(overflow.Source)));
             }
             manifest = members;
 
