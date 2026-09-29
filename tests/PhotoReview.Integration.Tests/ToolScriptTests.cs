@@ -449,7 +449,9 @@ public sealed class ToolScriptEncodingTests : IDisposable
     [
         "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
         "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
-        "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "turbojpeg.dll", "Languages\\en.json", "Languages\\vi.json",
+        "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll", "turbojpeg.dll",
+        "libraw.dll", "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-SOURCE.zip", "LibRaw-NOTICE.txt",
+        "Languages\\en.json", "Languages\\vi.json",
     ];
 
     [Fact(DisplayName = "verify-release: an empty folder fails and names a missing file")]
