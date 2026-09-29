@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
@@ -12,6 +13,12 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 {
     private const int MaxThumbnailBytes = 32 << 20;
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
+    private readonly Action<string>? _stageObserver;
+
+    public LibRawDecoder() { }
+
+    /// <summary>Test seam: <paramref name="stageObserver"/> is told "opened", "unpacked" and "processed" as each native stage completes.</summary>
+    internal LibRawDecoder(Action<string>? stageObserver) => _stageObserver = stageObserver;
 
     /// <summary>Extracts LibRaw's embedded JPEG thumbnail without demosaicing the sensor image.</summary>
     public static byte[] ReadJpegThumbnail(string path, CancellationToken cancellationToken = default)
@@ -72,16 +79,22 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         cancellationToken.ThrowIfCancellationRequested();
 
         using var cancellationState = new CancellationState(cancellationToken);
+        // libraw_open_buffer stores a pointer into the caller's buffer (no copy) that unpack/process read later, so the
+        // pin must outlive the LibRaw handle: declared before `raw` so it is released after libraw_close.
+        using var bufferPin = request.Bytes is { } bytes ? bytes.Pin() : default;
         using var raw = CreateHandle();
         LibRawNativeMethods.LibRawSetProgressHandler(raw, CancellationCallback, cancellationState.Pointer);
-        OpenSource(raw, request, cancellationToken);
+        OpenSource(raw, request, bufferPin, cancellationToken);
+        _stageObserver?.Invoke("opened");
 
         LibRawNativeMethods.LibRawSetOutputColor(raw, 1); // sRGB
         LibRawNativeMethods.LibRawSetOutputBps(raw, 8);
         LibRawNativeMethods.LibRawSetNoAutoBright(raw, 1);
         CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
+        _stageObserver?.Invoke("unpacked");
         cancellationToken.ThrowIfCancellationRequested();
         CheckResult(LibRawNativeMethods.LibRawDcrawProcess(raw), "process RAW data", cancellationToken);
+        _stageObserver?.Invoke("processed");
         cancellationToken.ThrowIfCancellationRequested();
 
         var imagePointer = LibRawNativeMethods.LibRawDcrawMakeMemImage(raw, out var imageError);
@@ -161,7 +174,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         return new SafeLibRawHandle(pointer);
     }
 
-    private static unsafe void OpenSource(SafeLibRawHandle handle, DecodeRequest request, CancellationToken cancellationToken)
+    private static unsafe void OpenSource(SafeLibRawHandle handle, DecodeRequest request, MemoryHandle bufferPin, CancellationToken cancellationToken)
     {
         if (request.Bytes is not { } bytes)
         {
@@ -169,8 +182,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             return;
         }
 
-        using var pin = bytes.Pin();
-        CheckResult(LibRawNativeMethods.LibRawOpenBuffer(handle, (IntPtr)pin.Pointer, checked((nuint)bytes.Length)), "open RAW buffer", cancellationToken);
+        CheckResult(LibRawNativeMethods.LibRawOpenBuffer(handle, (IntPtr)bufferPin.Pointer, checked((nuint)bytes.Length)), "open RAW buffer", cancellationToken);
     }
 
     private static int CheckCancellation(IntPtr data, int stage, int iteration, int expected)
