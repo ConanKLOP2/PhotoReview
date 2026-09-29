@@ -300,6 +300,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _clock.NextInteraction();
         _statusText = string.Empty;
         await _presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: false, pathOverride: nextPath);
+        // The badge names the displayed member; do not rely on the presenter's status hook to refresh it.
+        OnPropertyChanged(nameof(CapturePairBadge));
     }
 
     public void ToggleCompare()
