@@ -478,3 +478,204 @@ public sealed class ToolScriptEncodingTests : IDisposable
         Assert.True(output.Contains("turbojpeg.dll SHA-256 mismatch", StringComparison.Ordinal), "verify-release output: " + output);
     }
 }
+
+/// <summary>
+/// tools/fetch-libraw.ps1 in a fake repository (temp directory, no network): the package SHA-256 is verified BEFORE extraction,
+/// entries cannot escape the temp directory, -Verify is read-only, and a good package installs and is then idempotent.
+/// </summary>
+[Trait("Category", "Integration")]
+public sealed class FetchLibRawScriptTests : IDisposable
+{
+    private readonly TempRoot _root = new("fetch-libraw");
+    public void Dispose() => _root.Dispose();
+
+    private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    private static byte[] BuildPackage(params (string Name, byte[] Content)[] entries)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+            foreach (var (name, content) in entries)
+            {
+                using var stream = zip.CreateEntry(name).Open();
+                stream.Write(content);
+            }
+        return ms.ToArray();
+    }
+
+    /// <summary>Fake repo with the script and pins; returns (repo, scriptPath).</summary>
+    private (string Repo, string Script) FakeRepo(string name, byte[] dll, byte[] package)
+    {
+        var repo = _root.Dir(name);
+        PowerShellRunner.CopyScript(repo, "fetch-libraw.ps1");
+        Directory.CreateDirectory(Path.Combine(repo, "native"));
+        File.WriteAllText(Path.Combine(repo, "native", "libraw.sha256"), Sha(dll) + "\n");
+        File.WriteAllText(Path.Combine(repo, "native", "libraw.package.sha256"), Sha(package) + "\n");
+        return (repo, Path.Combine(repo, "tools", "fetch-libraw.ps1"));
+    }
+
+    private static readonly byte[] Dll = [1, 2, 3, 4];
+
+    [Fact(DisplayName = "fetch-libraw: a package whose SHA-256 differs from the pin is rejected before anything is extracted or installed")]
+    public void FetchLibRaw_TamperedPackage_FailsBeforeExtraction()
+    {
+        var good = BuildPackage(("LibRaw-0.22.2/bin/libraw.dll", Dll));
+        var (repo, script) = FakeRepo("tampered", Dll, good);
+        var tampered = _root.File("tampered.zip", 1, 2, 3); // not even a zip: extraction would fail with a different error
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-PackagePath", tampered);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("source package SHA-256 mismatch", output, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(repo, "native", "x64", "libraw.dll")));
+    }
+
+    [Fact(DisplayName = "fetch-libraw: a pinned package with an entry escaping the extraction root is refused and writes nothing outside")]
+    public void FetchLibRaw_ZipSlipEntry_IsRefused()
+    {
+        var evilName = "zipslip-" + Guid.NewGuid().ToString("N") + ".txt";
+        var evil = BuildPackage(("LibRaw-0.22.2/bin/libraw.dll", Dll), ("../" + evilName, [9]));
+        var (repo, script) = FakeRepo("zipslip", Dll, evil); // the pin matches: only the entry guard can stop it
+        var package = _root.File("evil.zip", evil);
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-PackagePath", package);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("outside the temp directory", output, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(Path.GetTempPath(), evilName)));
+        Assert.False(File.Exists(Path.Combine(repo, "native", "x64", "libraw.dll")));
+    }
+
+    [Fact(DisplayName = "fetch-libraw: -Verify fails without installing when the DLL is missing")]
+    public void FetchLibRaw_VerifyMode_MissingDll_FailsAndInstallsNothing()
+    {
+        var good = BuildPackage(("LibRaw-0.22.2/bin/libraw.dll", Dll));
+        var (repo, script) = FakeRepo("verify", Dll, good);
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-Verify");
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("missing/mismatched", output, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(repo, "native", "x64")));
+    }
+
+    [Fact(DisplayName = "fetch-libraw: a pinned good package installs, a stale DLL is detected by -Verify, and re-running repairs it")]
+    public void FetchLibRaw_GoodPackage_InstallsDetectsStaleAndRepairs()
+    {
+        var good = BuildPackage(
+            ("LibRaw-0.22.2/bin/libraw.dll", Dll), ("LibRaw-0.22.2/LICENSE.LGPL", [1]), ("LibRaw-0.22.2/LICENSE.CDDL", [2]));
+        var (repo, script) = FakeRepo("good", Dll, good);
+        var package = _root.File("good.zip", good);
+        var installedDll = Path.Combine(repo, "native", "x64", "libraw.dll");
+        // NOTICE.txt is repository content (not part of the package) and must exist for the pins to count as satisfied.
+        Directory.CreateDirectory(Path.Combine(repo, "native", "libraw"));
+        File.WriteAllText(Path.Combine(repo, "native", "libraw", "NOTICE.txt"), "notice");
+
+        var install = PowerShellRunner.Run("-File", script, "-PackagePath", package);
+        Assert.True(install.ExitCode == 0, install.Output);
+        Assert.Equal(Dll, File.ReadAllBytes(installedDll));
+
+        Assert.Equal(0, PowerShellRunner.Run("-File", script, "-Verify").ExitCode);
+
+        File.WriteAllBytes(installedDll, [7, 7, 7]); // stale/wrong native DLL
+        var stale = PowerShellRunner.Run("-File", script, "-Verify");
+        Assert.NotEqual(0, stale.ExitCode);
+
+        var repair = PowerShellRunner.Run("-File", script, "-PackagePath", package);
+        Assert.True(repair.ExitCode == 0, repair.Output);
+        Assert.Equal(Dll, File.ReadAllBytes(installedDll));
+    }
+}
+
+/// <summary>tools/verify-release.ps1 legal-file content checks in a fake repository (checked before the version/msbuild step).</summary>
+[Trait("Category", "Integration")]
+public sealed class VerifyReleaseLegalContentTests : IDisposable
+{
+    private readonly TempRoot _root = new("verify-release-legal");
+    public void Dispose() => _root.Dispose();
+
+    private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
+
+    private static readonly string[] ReleaseFileNames =
+    [
+        "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
+        "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
+        "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll",
+        "Languages\\en.json", "Languages\\vi.json",
+    ];
+
+    private (int ExitCode, string Output) Run(string lgpl, string cddl, string notice)
+    {
+        var name = "repo-" + Guid.NewGuid().ToString("N");
+        var repo = _root.Dir(name);
+        PowerShellRunner.CopyScript(repo, "verify-release.ps1");
+        byte[] turbo = [1], libraw = [2], package = [3];
+        Directory.CreateDirectory(Path.Combine(repo, "native"));
+        File.WriteAllText(Path.Combine(repo, "native", "turbojpeg.sha256"), Sha(turbo));
+        File.WriteAllText(Path.Combine(repo, "native", "libraw.sha256"), Sha(libraw));
+        File.WriteAllText(Path.Combine(repo, "native", "libraw.package.sha256"), Sha(package));
+        var release = _root.Dir(Path.Combine(name, "release"));
+        foreach (var file in ReleaseFileNames) _root.File(Path.Combine(name, "release", file), 1);
+        File.WriteAllBytes(Path.Combine(release, "turbojpeg.dll"), turbo);
+        File.WriteAllBytes(Path.Combine(release, "libraw.dll"), libraw);
+        File.WriteAllBytes(Path.Combine(release, "LibRaw-SOURCE.zip"), package);
+        File.WriteAllText(Path.Combine(release, "LibRaw-LICENSE.LGPL"), lgpl);
+        File.WriteAllText(Path.Combine(release, "LibRaw-LICENSE.CDDL"), cddl);
+        File.WriteAllText(Path.Combine(release, "LibRaw-NOTICE.txt"), notice);
+        return PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release);
+    }
+
+    private const string GoodLgpl = "GNU LESSER GENERAL PUBLIC LICENSE Version 2.1";
+    private const string GoodCddl = "COMMON DEVELOPMENT AND DISTRIBUTION LICENSE (CDDL) Version 1.0";
+    private const string GoodNotice = "PhotoReview uses the unmodified LibRaw 0.22.2 library";
+
+    [Theory(DisplayName = "verify-release: an empty legal file fails and names that file")]
+    [InlineData("LibRaw-LICENSE.LGPL")]
+    [InlineData("LibRaw-LICENSE.CDDL")]
+    [InlineData("LibRaw-NOTICE.txt")]
+    public void VerifyRelease_EmptyLegalFile_Fails(string file)
+    {
+        var (code, output) = Run(
+            file == "LibRaw-LICENSE.LGPL" ? "  " : GoodLgpl, file == "LibRaw-LICENSE.CDDL" ? "" : GoodCddl, file == "LibRaw-NOTICE.txt" ? "\n" : GoodNotice);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains(file + " is empty", output, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "verify-release: a legal file without its marker text fails")]
+    [InlineData("LibRaw-LICENSE.LGPL")]
+    [InlineData("LibRaw-LICENSE.CDDL")]
+    [InlineData("LibRaw-NOTICE.txt")]
+    public void VerifyRelease_WrongLegalContent_Fails(string file)
+    {
+        var (code, output) = Run(
+            file == "LibRaw-LICENSE.LGPL" ? "something else" : GoodLgpl, file == "LibRaw-LICENSE.CDDL" ? "something else" : GoodCddl,
+            file == "LibRaw-NOTICE.txt" ? "uses LibRaw 0.21.0" : GoodNotice);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains(file + " does not contain the expected text", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release: correct legal files pass the content check")]
+    public void VerifyRelease_GoodLegalFiles_PassContentCheck()
+    {
+        var (_, output) = Run(GoodLgpl, GoodCddl, GoodNotice);
+
+        Assert.DoesNotContain("is empty", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not contain the expected text", output, StringComparison.Ordinal);
+    }
+}
+
+/// <summary>Runs tools/fetch-raw-samples.ps1 -SelfTest under Windows PowerShell 5.1 (the CI shell) so its array-shape regressions are gated locally too.</summary>
+[Trait("Category", "Integration")]
+public sealed class FetchRawSamplesSelfTestTests
+{
+    [Fact(DisplayName = "fetch-raw-samples: -SelfTest passes on Windows PowerShell (a one-row manifest still runs the license check)")]
+    public void FetchRawSamples_SelfTest_Passes()
+    {
+        var (code, output) = PowerShellRunner.Run("-File", Path.Combine(PowerShellRunner.RepoRoot(), "tools", "fetch-raw-samples.ps1"), "-SelfTest");
+
+        Assert.True(code == 0, output);
+        Assert.Contains("PASS: fetch-raw-samples self-test", output, StringComparison.Ordinal);
+    }
+}

@@ -38,7 +38,7 @@ function Test-FetchRawSamplesSelfTest {
             "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
             '2016-12-29', "<a href='https://raw.pixls.us/getfile.php/129/nice/sample.CR2'>sample.CR2</a>", ''
         ) } | ConvertTo-Json -Depth 4
-        $cc0Record = ConvertFrom-RawPixlsRepositoryJson -Json $mockApi
+        $cc0Record = @(ConvertFrom-RawPixlsRepositoryJson -Json $mockApi)
         Assert-RawPixlsLicenses -Samples $validSamples -Records $cc0Record
         Assert-RawSampleHash -ExpectedHash ([string]::new('A', 64)) -ActualHash ([string]::new('A', 64)) -FileName 'sample.CR2'
 
@@ -61,7 +61,7 @@ function Test-FetchRawSamplesSelfTest {
             Set-Content -LiteralPath $manifest -Value $case.Row -Encoding UTF8
             $failedClosed = $false
             try {
-                [void](Read-RawSampleManifest -Path $manifest)
+                [void]@(Read-RawSampleManifest -Path $manifest)
             }
             catch {
                 if ($_.Exception.Message -like $case.Expected) {
@@ -81,10 +81,10 @@ function Test-FetchRawSamplesSelfTest {
             "<a href='https://creativecommons.org/licenses/by/4.0/' title='Creative Commons Attribution 4.0' class='cc'>by</a>",
             '2016-12-29', "<a href='https://raw.pixls.us/getfile.php/129/nice/sample.CR2'>sample.CR2</a>", ''
         ) } | ConvertTo-Json -Depth 4
-        $nonCc0Record = ConvertFrom-RawPixlsRepositoryJson -Json $nonCc0Api
+        $nonCc0Record = @(ConvertFrom-RawPixlsRepositoryJson -Json $nonCc0Api)
         $recordRejected = $false
         try {
-            Assert-RawPixlsLicenses -Samples $validSamples -Records @($nonCc0Record)
+            Assert-RawPixlsLicenses -Samples $validSamples -Records $nonCc0Record
         }
         catch {
             if ($_.Exception.Message -like '*is not recorded as CC0 1.0*') { $recordRejected = $true }
@@ -101,6 +101,36 @@ function Test-FetchRawSamplesSelfTest {
             else { throw "Unexpected missing-record self-test error: $($_.Exception.Message)" }
         }
         if (-not $missingRecordRejected) { throw 'SELF-TEST FAILED: Script accepted a manifest URL missing from source API records.' }
+
+        foreach ($badName in @('..', '.', 'x.')) {
+            $badManifest = Join-Path $testTempDir 'badname.txt'
+            Set-Content -LiteralPath $badManifest -Value "CR2`tCamera`thttps://raw.pixls.us/getfile.php/129/nice/sample.CR2`t$([string]::new('A', 64))`thttps://creativecommons.org/publicdomain/zero/1.0/`t$badName" -Encoding UTF8
+            $nameRejected = $false
+            try { [void]@(Read-RawSampleManifest -Path $badManifest) }
+            catch { if ($_.Exception.Message -like '*Invalid sample file name*') { $nameRejected = $true } else { throw } }
+            if (-not $nameRejected) { throw "SELF-TEST FAILED: Manifest file name '$badName' was accepted." }
+        }
+
+        $shiftedApi = [pscustomobject]@{ data = ,@(
+            'Canon', 'EOS 7D', 'RAW', 17.92, '', '2016-12-29',
+            "<a href='https://creativecommons.org/publicdomain/zero/1.0/' title='Creative Commons 0 - Public Domain' class='cc'>co</a>",
+            "<a href='https://raw.pixls.us/getfile.php/129/nice/sample.CR2'>sample.CR2</a>", ''
+        ) } | ConvertTo-Json -Depth 4
+        $layoutRejected = $false
+        try { [void](ConvertFrom-RawPixlsRepositoryJson -Json $shiftedApi) }
+        catch { if ($_.Exception.Message -like '*table layout changed*') { $layoutRejected = $true } else { throw } }
+        if (-not $layoutRejected) { throw 'SELF-TEST FAILED: A shifted raw.pixls.us column layout was accepted.' }
+
+        # Regression: a one-row manifest must still run the license check (PS 5.1 unrolls a singleton List to a scalar
+        # whose .Count is $null, which used to skip the check silently).
+        $script:providerCalls = 0
+        $provider = { $script:providerCalls++; return $cc0Record }
+        $oneRow = Invoke-RawPixlsLicenseCheck -Samples (Read-RawSampleManifest -Path $validManifest) -RecordsProvider $provider
+        if ($oneRow -ne $true -or $script:providerCalls -ne 1) { throw 'SELF-TEST FAILED: One-row manifest skipped the raw.pixls.us license check.' }
+        $nonCc0Rejected = $false
+        try { [void](Invoke-RawPixlsLicenseCheck -Samples (Read-RawSampleManifest -Path $validManifest) -RecordsProvider { $nonCc0Record }) }
+        catch { if ($_.Exception.Message -like '*is not recorded as CC0 1.0*') { $nonCc0Rejected = $true } else { throw } }
+        if (-not $nonCc0Rejected) { throw 'SELF-TEST FAILED: One-row manifest with a non-CC0 record was accepted.' }
 
         Write-Host 'PASS: fetch-raw-samples self-test matched injected CC0 source metadata and rejected missing/non-CC0 records, malformed manifest rows, and SHA-256 mismatches.' -ForegroundColor Green
         return $true
@@ -140,7 +170,7 @@ function Get-RawPixlsRepositoryRecords {
     $apiUrl = 'https://raw.pixls.us/json/getrepository.php?set=all'
     try {
         $response = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 120
-        return ConvertFrom-RawPixlsRepositoryJson -Json $response.Content
+        return ,@(ConvertFrom-RawPixlsRepositoryJson -Json $response.Content)
     }
     catch {
         throw "Could not fetch/parse raw.pixls.us repository license records; refusing to fetch corpus samples. $($_.Exception.Message)"
@@ -154,8 +184,11 @@ function ConvertFrom-RawPixlsRepositoryJson {
     catch { throw "raw.pixls.us repository API response was invalid JSON. $($_.Exception.Message)" }
     if ($null -eq $repository.data) { throw 'raw.pixls.us repository API response has no data array; refusing to fetch samples.' }
 
+    $layoutHint = 'the raw.pixls.us repository table layout changed (expected license anchor in column 6 and file anchor in column 8); refusing to fetch samples.'
     $records = [System.Collections.Generic.List[object]]::new()
+    $rowCount = 0
     foreach ($row in $repository.data) {
+        $rowCount++
         if ($row.Count -lt 8) { throw 'raw.pixls.us repository API returned a malformed row; refusing to fetch samples.' }
         $licenseHtml = [System.Net.WebUtility]::HtmlDecode([string]$row[5])
         $fileHtml = [System.Net.WebUtility]::HtmlDecode([string]$row[7])
@@ -163,7 +196,10 @@ function ConvertFrom-RawPixlsRepositoryJson {
         $licenseTitle = [regex]::Match($licenseHtml, '\btitle=[''"]([^''"]*)[''"]', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         $fileHref = [regex]::Match($fileHtml, '<a\b[^>]*href=[''"]([^''"]+)[''"]', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         if (-not $licenseHref.Success -or -not $licenseTitle.Success -or -not $fileHref.Success) {
-            throw 'raw.pixls.us repository API row lacked parseable file/license metadata; refusing to fetch samples.'
+            throw "raw.pixls.us repository API row lacked parseable file/license metadata: $layoutHint"
+        }
+        if (-not ($licenseHref.Groups[1].Value -match '^https?://')) {
+            throw "raw.pixls.us repository API license column did not hold a URL: $layoutHint"
         }
         $fileUrl = $fileHref.Groups[1].Value
         $idMatch = [regex]::Match($fileUrl, '^https://raw\.pixls\.us/getfile\.php/(?<id>\d+)/nice/', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
@@ -175,7 +211,10 @@ function ConvertFrom-RawPixlsRepositoryJson {
             LicenseLabel = $licenseTitle.Groups[1].Value
         })
     }
-    return $records.ToArray()
+    if ($rowCount -gt 0 -and $records.Count -eq 0) {
+        throw "raw.pixls.us repository API returned $rowCount rows but none had a raw.pixls.us file URL: $layoutHint"
+    }
+    return ,($records.ToArray())
 }
 
 function Assert-RawPixlsLicenses {
@@ -183,6 +222,14 @@ function Assert-RawPixlsLicenses {
         [Parameter(Mandatory = $true)][object[]]$Samples,
         [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Records
     )
+
+    # Index once by (id, file URL): O(samples + records) instead of O(samples x records).
+    $recordIndex = @{}
+    foreach ($candidate in $Records) {
+        $candidateUri = $null
+        if (-not [uri]::TryCreate([string]$candidate.FileUrl, [UriKind]::Absolute, [ref]$candidateUri)) { continue }
+        $recordIndex[('{0}|{1}' -f $candidate.Id, $candidateUri.AbsoluteUri.ToUpperInvariant())] = $candidate
+    }
 
     foreach ($sample in $Samples) {
         $sampleUri = $null
@@ -193,10 +240,7 @@ function Assert-RawPixlsLicenses {
         }
         $idMatch = [regex]::Match($sampleUri.AbsolutePath, '^/getfile\.php/(?<id>\d+)/nice/', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         if (-not $idMatch.Success) { throw "Sample '$($sample.FileName)' has no verifiable raw.pixls.us file ID in its URL." }
-        $record = $Records | Where-Object {
-            $_.Id -eq $idMatch.Groups['id'].Value -and
-            [string]::Equals(([uri]$_.FileUrl).AbsoluteUri, $sampleUri.AbsoluteUri, [StringComparison]::OrdinalIgnoreCase)
-        } | Select-Object -First 1
+        $record = $recordIndex[('{0}|{1}' -f $idMatch.Groups['id'].Value, $sampleUri.AbsoluteUri.ToUpperInvariant())]
         if ($null -eq $record) { throw "Sample '$($sample.FileName)' URL was not found in the raw.pixls.us source license records." }
 
         Assert-RawSampleLicense -LicenseUrl $sample.LicenseUrl -FileName $sample.FileName
@@ -205,6 +249,24 @@ function Assert-RawPixlsLicenses {
             throw "Sample '$($sample.FileName)' is not recorded as CC0 1.0 in the raw.pixls.us source API."
         }
     }
+}
+
+function Invoke-RawPixlsLicenseCheck {
+    # Runs the live-license check for a parsed manifest. RecordsProvider is injectable so the self-test can prove the
+    # check runs (and fails closed) without a network call.
+    param(
+        [Parameter(Mandatory = $true)][AllowNull()][object]$Samples,
+        [Parameter(Mandatory = $true)][scriptblock]$RecordsProvider
+    )
+
+    # @() keeps a singleton (PS 5.1 unrolls it to a scalar with no .Count) array-shaped.
+    $sampleList = @($Samples)
+    if ($sampleList.Count -gt 0) {
+        $repositoryRecords = @(& $RecordsProvider)
+        Assert-RawPixlsLicenses -Samples $sampleList -Records $repositoryRecords
+        return $true
+    }
+    return $false
 }
 
 function Read-RawSampleManifest {
@@ -228,6 +290,9 @@ function Read-RawSampleManifest {
         $rawFileName = $parts[5].Trim()
         $fileName = [string]::Join('_', $rawFileName.Split([System.IO.Path]::GetInvalidFileNameChars()))
 
+        if ([string]::IsNullOrWhiteSpace($fileName) -or $fileName -match '^[.\s]+$' -or $fileName.EndsWith('.', [StringComparison]::Ordinal)) {
+            throw "Invalid sample file name '$rawFileName' (empty, '.', '..' or trailing dot would escape or collide with the target directory)."
+        }
         if ($expectedHash -notmatch '^[0-9A-F]{64}$') {
             throw "Invalid SHA-256 hex format for $fileName : found '$expectedHash'"
         }
@@ -243,7 +308,8 @@ function Read-RawSampleManifest {
         })
     }
 
-    return $samples
+    # Unary comma: return the array as ONE object so PowerShell 5.1 cannot unroll a one-row manifest into a scalar.
+    return ,($samples.ToArray())
 }
 
 if ($SelfTest) {
@@ -256,11 +322,8 @@ if (-not (Test-Path -LiteralPath $SamplesFile)) {
 }
 
 $processed = 0
-$samples = Read-RawSampleManifest -Path $SamplesFile
-if ($samples.Count -gt 0) {
-    $repositoryRecords = Get-RawPixlsRepositoryRecords
-    Assert-RawPixlsLicenses -Samples $samples -Records $repositoryRecords
-}
+$samples = @(Read-RawSampleManifest -Path $SamplesFile)
+[void](Invoke-RawPixlsLicenseCheck -Samples $samples -RecordsProvider { Get-RawPixlsRepositoryRecords })
 if (-not (Test-Path -LiteralPath $TargetDir)) {
     New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 }

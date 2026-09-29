@@ -61,6 +61,26 @@ if ($actualLibRawPackageHash -ne $expectedLibRawPackageHash) {
     exit 1
 }
 
+# Shipped legal files must be real: an empty or wrong file would still pass the existence check above, so require
+# non-empty content carrying the expected marker text (LGPL/CDDL license titles, NOTICE naming the pinned LibRaw version).
+$legalMarkers = @(
+    @{ File = 'LibRaw-LICENSE.LGPL'; Marker = 'GNU LESSER GENERAL PUBLIC LICENSE' },
+    @{ File = 'LibRaw-LICENSE.CDDL'; Marker = 'COMMON DEVELOPMENT AND DISTRIBUTION LICENSE' },
+    @{ File = 'LibRaw-NOTICE.txt'; Marker = 'LibRaw 0.22.2' }
+)
+foreach ($check in $legalMarkers) {
+    $legalPath = Join-Path $resolved $check.File
+    $legalText = [IO.File]::ReadAllText($legalPath, [Text.Encoding]::UTF8)
+    if ([string]::IsNullOrWhiteSpace($legalText)) {
+        Write-Error "$($check.File) is empty."
+        exit 1
+    }
+    if ($legalText.IndexOf($check.Marker, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        Write-Error "$($check.File) does not contain the expected text '$($check.Marker)'."
+        exit 1
+    }
+}
+
 $exe = Get-Item -LiteralPath (Join-Path $resolved 'PhotoReview.App.exe')
 if ($exe.Length -le 0) { Write-Error 'Release executable is empty.'; exit 1 }
 $projectFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\PhotoReview.App\PhotoReview.App.csproj'
