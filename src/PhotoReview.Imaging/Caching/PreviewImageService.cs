@@ -61,6 +61,8 @@ public sealed class PreviewImageService : IPreloadTarget
     private readonly bool _disableDiskCache;
     private readonly SourceBytesCache? _sourceBytesCache;
     private readonly ISourceReader _sourceReader;
+    private readonly IImageDecoder? _rawFullDecoder;
+    private readonly Func<bool> _isRawFullDecodeEnabled;
 
     public DiskCacheStore DiskStore => _diskStore;
     public string DiskDirectory => _diskCacheDirectory;
@@ -97,10 +99,12 @@ public sealed class PreviewImageService : IPreloadTarget
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
         int? cacheRamPercent = null,
         PreloadWindow? preloadWindow = null,
-        ISourceReader? sourceReader = null)
+        ISourceReader? sourceReader = null,
+        IImageDecoder? rawFullDecoder = null,
+        Func<bool>? isRawFullDecodeEnabled = null)
         : this(metrics, isOriginalLoadingMode, WidthOnly(targetDecodeWidth), capacityBytes, diskCacheDirectory,
             diskCacheCapacityBytes, disableDiskCacheOverride, decoder, log, currentBackend, decoderFactory, sourceBytesCache,
-            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader)
+            originalDimensionsCapacity, cacheRamPercent, preloadWindow, sourceReader, rawFullDecoder, isRawFullDecodeEnabled)
     {
     }
 
@@ -130,9 +134,13 @@ public sealed class PreviewImageService : IPreloadTarget
         int originalDimensionsCapacity = DefaultOriginalDimensionsCapacity,
         int? cacheRamPercent = null,
         PreloadWindow? preloadWindow = null,
-        ISourceReader? sourceReader = null)
+        ISourceReader? sourceReader = null,
+        IImageDecoder? rawFullDecoder = null,
+        Func<bool>? isRawFullDecodeEnabled = null)
     {
         _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
+        _rawFullDecoder = rawFullDecoder;
+        _isRawFullDecodeEnabled = isRawFullDecodeEnabled ?? (() => false);
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _isOriginalLoadingMode = isOriginalLoadingMode ?? throw new ArgumentNullException(nameof(isOriginalLoadingMode));
         _targetDecodeBox = targetDecodeBox ?? throw new ArgumentNullException(nameof(targetDecodeBox));
@@ -710,7 +718,9 @@ public sealed class PreviewImageService : IPreloadTarget
     public async Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var key = ImageCacheKey.CreateOriginal(sourceKey);
+        var useRawFullDecoder = _rawFullDecoder is not null && _isRawFullDecodeEnabled()
+            && ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+        var key = ImageCacheKey.CreateOriginal(sourceKey, useRawFullDecoder ? (byte)2 : sourceKey.SourceKind);
         if (_cache.TryGet(key, out var cached)) return cached;
         // R2-F-13: at most one full-resolution decode (24-100 MP, ~100+ MB each) runs at a time. Paging quickly at
         // 100 % used to start one dedicated thread per image; now superseded requests wait here and are dropped on
@@ -719,12 +729,14 @@ public sealed class PreviewImageService : IPreloadTarget
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await DecodeOriginalOnDedicatedThreadAsync(path, key, cancellationToken).ConfigureAwait(false);
+            return await DecodeOriginalOnDedicatedThreadAsync(path, key,
+                useRawFullDecoder ? _rawFullDecoder : null, cancellationToken).ConfigureAwait(false);
         }
         finally { _originalDecodeGate.Writer.TryWrite(0); }
     }
 
-    private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key, CancellationToken cancellationToken)
+    private Task<IDecodedImage> DecodeOriginalOnDedicatedThreadAsync(string path, ImageCacheKey key,
+        IImageDecoder? decoderOverride, CancellationToken cancellationToken)
     {
         return Task.Factory.StartNew(() =>
         {
@@ -733,8 +745,12 @@ public sealed class PreviewImageService : IPreloadTarget
             Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
             var perf = PhotoReviewPerf.Log.IsEnabled();
             var stopwatch = Stopwatch.StartNew();
-            var decoded = DecodeFromSource(path, key.Length, key.Backend, DecodeBox.Unbounded, perf,
-                perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
+            var decoded = decoderOverride is null
+                ? DecodeFromSource(path, key.Length, key.Backend, DecodeBox.Unbounded, perf,
+                    perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "")
+                : decoderOverride is ICancellableImageDecoder cancellableDecoder
+                    ? cancellableDecoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded), cancellationToken)
+                    : decoderOverride.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
             _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
             _metrics.RecordSourceRead(GetSourceBytesRead(decoded, key), stopwatch.ElapsedMilliseconds,

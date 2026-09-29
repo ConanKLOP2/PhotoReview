@@ -37,7 +37,8 @@ public sealed class DecodeOriginalTests : IAsyncLifetime
         catch (UnauthorizedAccessException) { }
     }
 
-    private PreviewImageService CreateService(IImageDecoder? decoder = null) => _service = new PreviewImageService(
+    private PreviewImageService CreateService(IImageDecoder? decoder = null, IImageDecoder? rawFullDecoder = null,
+        Func<bool>? rawFullDecodeEnabled = null) => _service = new PreviewImageService(
         new ReviewMetrics(),
         () => false,
         () => new DecodeBox(100, 100),
@@ -45,7 +46,9 @@ public sealed class DecodeOriginalTests : IAsyncLifetime
         diskCacheDirectory: Path.Combine(_root, "cache"),
         disableDiskCacheOverride: true,
         decoder: decoder,
-        currentBackend: () => DecoderBackend.Wpf);
+        currentBackend: () => DecoderBackend.Wpf,
+        rawFullDecoder: rawFullDecoder,
+        isRawFullDecodeEnabled: rawFullDecodeEnabled);
 
     [Fact]
     public async Task DecodeOriginal_ExifRotated_ReturnsFullSizeAfterOrientation_AndSkipsTheRamCache()
@@ -95,6 +98,39 @@ public sealed class DecodeOriginalTests : IAsyncLifetime
 
         var request = Assert.Single(decoder.Requests);
         Assert.True(request.Box.IsUnbounded);
+    }
+
+    [Fact]
+    public async Task DecodeOriginal_RawOnZoom_UsesFullDecoderAndSourceKindTwo()
+    {
+        var path = Path.Combine(_root, "zoom.cr2");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        var previewDecoder = new CountingDecoder();
+        var rawDecoder = new CountingDecoder();
+        var service = CreateService(previewDecoder, rawDecoder, () => true);
+        var key = service.GetCurrentCacheKey(path);
+
+        await service.DecodeOriginalAsync(path, key, CancellationToken.None);
+
+        Assert.Empty(previewDecoder.Requests);
+        Assert.Single(rawDecoder.Requests);
+        Assert.True(service.TryGetKnownOriginalDimensions(ImageCacheKey.CreateOriginal(key, 2), out _));
+        Assert.False(service.TryGetKnownOriginalDimensions(ImageCacheKey.CreateOriginal(key, 1), out _));
+    }
+
+    [Fact]
+    public async Task DecodeOriginal_RawFullDecodeDisabled_UsesConfiguredPreviewDecoder()
+    {
+        var path = Path.Combine(_root, "never.nef");
+        File.WriteAllBytes(path, [1, 2, 3]);
+        var previewDecoder = new CountingDecoder();
+        var rawDecoder = new CountingDecoder();
+        var service = CreateService(previewDecoder, rawDecoder, () => false);
+
+        await service.DecodeOriginalAsync(path, service.GetCurrentCacheKey(path), CancellationToken.None);
+
+        Assert.Single(previewDecoder.Requests);
+        Assert.Empty(rawDecoder.Requests);
     }
 
     [Fact]

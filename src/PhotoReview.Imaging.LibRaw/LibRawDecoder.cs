@@ -8,7 +8,7 @@ using PhotoReview.Imaging.Decoding;
 namespace PhotoReview.Imaging.LibRaw;
 
 /// <summary>Full RAW decoder backed by the pinned LibRaw C API.</summary>
-public sealed class LibRawDecoder : IImageDecoder
+public sealed class LibRawDecoder : ICancellableImageDecoder
 {
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
 
@@ -26,7 +26,7 @@ public sealed class LibRawDecoder : IImageDecoder
 
     public IDecodedImage Decode(DecodeRequest request) => Decode(request, CancellationToken.None);
 
-    public static IDecodedImage Decode(DecodeRequest request, CancellationToken cancellationToken)
+    public IDecodedImage Decode(DecodeRequest request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
         if (!request.ApplyOrientation)

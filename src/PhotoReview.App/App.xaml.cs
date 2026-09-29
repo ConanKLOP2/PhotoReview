@@ -11,6 +11,7 @@ using PhotoReview.Core.IO;
 using PhotoReview.Platform.Windows;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Raw;
+using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.App;
 
@@ -172,7 +173,10 @@ public partial class App : System.Windows.Application, IDisposable
                 // feat/preload-window-setting: captured once (applies after restart, like PreloadWorkerCount/Q-AR6/Q-R19);
                 // only affects the "allowed X-90%" text logged when the requested percent is clamped.
                 preloadWindow: PreloadWindow.FromSettings(settingsStore.Current),
-                sourceReader: sp.GetRequiredService<ISourceReader>());
+                sourceReader: sp.GetRequiredService<ISourceReader>(),
+                rawFullDecoder: LibRawAvailability.Probe(out _) ? new LibRawDecoder() : null,
+                isRawFullDecodeEnabled: () => settingsStore.Current.RawSupportEnabled
+                    && settingsStore.Current.RawFullDecode == PhotoReview.Core.Model.RawFullDecode.OnZoom);
         });
 
         services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>
