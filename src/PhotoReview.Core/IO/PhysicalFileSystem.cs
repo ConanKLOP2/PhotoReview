@@ -42,6 +42,23 @@ public sealed class PhysicalFileSystem : IFileSystem
         File.Copy(source, destination);
     }
 
+    // File.Copy without overwrite is CopyFile with COPY_FILE_FAIL_IF_EXISTS: the existence check and the creation are
+    // one atomic step, and an already-existing destination surfaces as ERROR_FILE_EXISTS (80) / ERROR_ALREADY_EXISTS (183).
+    public bool TryCopyNew(string source, string destination)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+        try
+        {
+            File.Copy(source, destination);
+            return true;
+        }
+        catch (IOException ex) when ((ex.HResult & 0xFFFF) is 80 or 183 && (ex.HResult & 0x7FFF0000) == 0x70000)
+        {
+            return false;
+        }
+    }
+
     public void Delete(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

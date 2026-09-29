@@ -87,9 +87,11 @@ public sealed class CaptureGroupActionServiceTests
         Assert.True(fileSystem.FileExists(@"C:\photos\a.jpg"));
         Assert.True(fileSystem.FileExists(@"C:\photos\a.cr2"));
         Assert.False(fileSystem.FileExists(@"C:\photos\selected\a.jpg"));
-        var failed = Assert.Single(journal.ReadFailedOperations());
-        Assert.Equal(result.GroupId, failed.GroupId);
-        Assert.Equal(2, failed.GroupMembers!.Count);
+        // Fully rolled back: the journal ends in a terminal Dismissed record (same manifest), not a retryable Failed item.
+        Assert.Empty(journal.ReadFailedOperations());
+        Assert.Equal(JournalState.Dismissed, result.Entry!.State);
+        Assert.Equal(result.GroupId, result.Entry.GroupId);
+        Assert.Equal(2, result.Entry.GroupMembers!.Count);
     }
 
     [Fact]

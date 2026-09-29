@@ -166,14 +166,28 @@ internal sealed class JournalTransaction : IDisposable
     /// </summary>
     public JournalEntry? Fail(Exception failure, out string? journalError)
     {
+        var (errorCode, errorText) = JournalErrors.ForJournal(failure);
+        return AppendFailureOutcome(state: JournalState.Failed, errorText, errorCode, out journalError);
+    }
+
+    /// <summary>
+    /// The operation failed but its compensation restored the original disk state completely (a cancelled or failed group
+    /// Move/Copy that was fully rolled back): there is nothing left to retry or recover, so the outcome is a terminal
+    /// <see cref="JournalState.Dismissed"/> record instead of a retryable Failed one. An older build reads Dismissed as
+    /// "cleared", never as an unfinished operation. Same contract as <see cref="Fail"/>.
+    /// </summary>
+    public JournalEntry? DismissRolledBack(out string? journalError) =>
+        AppendFailureOutcome(state: JournalState.Dismissed, errorText: null, errorCode: null, out journalError);
+
+    private JournalEntry? AppendFailureOutcome(JournalState state, string? errorText, string? errorCode, out string? journalError)
+    {
         journalError = null;
         if (!IsPrepared && _retryOf is null)
         {
             ReleaseLiveMarker();
             return null;
         }
-        var (errorCode, errorText) = JournalErrors.ForJournal(failure);
-        var failed = _prepared with { State = JournalState.Failed, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
+        var failed = _prepared with { State = state, TimestampUtc = _clock.UtcNow, Error = errorText, ErrorCode = errorCode };
         try
         {
             if (_retryOf is not null)
