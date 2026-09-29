@@ -371,6 +371,20 @@
                             <CheckBox x:Name="CompareSizeCheck" Content="{loc:Tr settings.compareSize.label}" IsChecked="True"/>
                         </StackPanel></GroupBox>
 
+                        <!-- Camera RAW support (feat/raw-support-integration) -->
+                        <GroupBox Style="{StaticResource SectionCard}" Header="{loc:Tr settings.group.raw}"><Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <CheckBox x:Name="RawSupportEnabledCheck" Grid.Row="0" Grid.ColumnSpan="2" Content="{loc:Tr settings.rawSupportEnabled.label}" AutomationProperties.Name="{loc:Tr settings.rawSupportEnabled.automationName}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource HelpText}" Text="{loc:Tr settings.rawSupportEnabled.hint}" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="RawFullDecodeLabel" Text="{loc:Tr settings.rawFullDecode.label}" Grid.Row="2" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="RawFullDecodeCombo" AutomationProperties.LabeledBy="{Binding ElementName=RawFullDecodeLabel}" AutomationProperties.Name="{loc:Tr settings.rawFullDecode.automationName}" Grid.Row="2" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.rawFullDecode.never}"/><ComboBoxItem Content="{loc:Tr enum.rawFullDecode.onZoom}"/></ComboBox>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource HelpText}" Text="{loc:Tr settings.rawFullDecode.hint}" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="RawPairModeLabel" Text="{loc:Tr settings.rawPairMode.label}" Grid.Row="4" Style="{StaticResource FormLabel}"/>
+                            <ComboBox x:Name="RawPairModeCombo" AutomationProperties.LabeledBy="{Binding ElementName=RawPairModeLabel}" AutomationProperties.Name="{loc:Tr settings.rawPairMode.automationName}" Grid.Row="4" Grid.Column="1"><ComboBoxItem Content="{loc:Tr enum.rawPairMode.separate}"/><ComboBoxItem Content="{loc:Tr enum.rawPairMode.preferJpeg}"/><ComboBoxItem Content="{loc:Tr enum.rawPairMode.preferRaw}"/></ComboBox>
+                            <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource HelpText}" Text="{loc:Tr settings.rawPairMode.hint}"/>
+                        </Grid></GroupBox>
+
                         <StackPanel Margin="0,0,0,10">
                             <CheckBox x:Name="AllowPermanentDeleteCheck" AutomationProperties.Name="{loc:Tr settings.allowPermanentDelete.label}" Content="{loc:Tr settings.allowPermanentDelete.label}"/>
                             <TextBlock x:Name="AllowPermanentDeleteHint" Text="{loc:Tr settings.allowPermanentDelete.hint}" Style="{StaticResource HelpText}" Margin="20,4,0,0"/>

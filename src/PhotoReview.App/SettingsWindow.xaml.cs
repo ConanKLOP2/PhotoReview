@@ -354,6 +354,14 @@ public partial class SettingsWindow : Window
         InstanceModeCombo.SelectedIndex = Settings.InstanceMode == InstanceMode.PerFolder ? 1 : 0;
         CompareHashCheck.IsChecked = Settings.CompareHashEnabled;
         CompareSizeCheck.IsChecked = Settings.CompareSizeEnabled;
+        RawSupportEnabledCheck.IsChecked = Settings.RawSupportEnabled;
+        RawFullDecodeCombo.SelectedIndex = Settings.RawFullDecode == RawFullDecode.OnZoom ? 1 : 0;
+        RawPairModeCombo.SelectedIndex = Settings.RawPairMode switch
+        {
+            RawPairMode.PreferJpeg => 1,
+            RawPairMode.PreferRaw => 2,
+            _ => 0
+        };
         LoggingCheck.IsChecked = Settings.LoggingEnabled;
         AllowPermanentDeleteCheck.IsChecked = Settings.AllowPermanentDeleteWithoutRecycleBin;
         ConfirmBeforeDeleteCheck.IsChecked = Settings.ConfirmBeforeDelete;
@@ -700,6 +708,9 @@ public partial class SettingsWindow : Window
         Settings.ToolbarAutoHide = new AppSettings().ToolbarAutoHide; Settings.ToolbarAutoHideDelayMs = AppSettings.DefaultToolbarAutoHideDelayMs; Settings.InfoOverlayAutoHide = new AppSettings().InfoOverlayAutoHide; Settings.InfoOverlayAutoHideDelayMs = AppSettings.DefaultInfoOverlayAutoHideDelayMs; Settings.ToolbarOpacityPercent = AppSettings.DefaultToolbarOpacityPercent;
         Settings.InfoOverlayFontSize = AppSettings.DefaultInfoOverlayFontSize;
         Settings.TitleBarFields = TitleBarFields.Default;
+        Settings.RawSupportEnabled = new AppSettings().RawSupportEnabled;
+        Settings.RawFullDecode = new AppSettings().RawFullDecode;
+        Settings.RawPairMode = new AppSettings().RawPairMode;
         LoadFields();
     }
 
@@ -746,6 +757,14 @@ public partial class SettingsWindow : Window
         Settings.InstanceMode = InstanceModeCombo.SelectedIndex == 1 ? InstanceMode.PerFolder : InstanceMode.SingleWindow;
         Settings.CompareHashEnabled = CompareHashCheck.IsChecked == true;
         Settings.CompareSizeEnabled = CompareSizeCheck.IsChecked == true;
+        Settings.RawSupportEnabled = RawSupportEnabledCheck.IsChecked == true;
+        Settings.RawFullDecode = RawFullDecodeCombo.SelectedIndex == 1 ? RawFullDecode.OnZoom : RawFullDecode.Never;
+        Settings.RawPairMode = RawPairModeCombo.SelectedIndex switch
+        {
+            1 => RawPairMode.PreferJpeg,
+            2 => RawPairMode.PreferRaw,
+            _ => RawPairMode.Separate
+        };
         Settings.LoggingEnabled = LoggingCheck.IsChecked == true;
         Settings.AllowPermanentDeleteWithoutRecycleBin = AllowPermanentDeleteCheck.IsChecked == true;
         Settings.ConfirmBeforeDelete = ConfirmBeforeDeleteCheck.IsChecked == true;

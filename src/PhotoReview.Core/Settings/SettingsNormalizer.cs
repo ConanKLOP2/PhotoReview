@@ -187,6 +187,11 @@ public static class SettingsNormalizer
             settings.ImageTransitionMs = imageTransitionMs;
             fixedNames.Add(nameof(AppSettings.ImageTransitionMs));
         }
+
+        // feat/raw-support-integration
+        if (!Enum.IsDefined(settings.RawFullDecode)) { settings.RawFullDecode = new AppSettings().RawFullDecode; fixedNames.Add(nameof(AppSettings.RawFullDecode)); }
+        if (!Enum.IsDefined(settings.RawPairMode)) { settings.RawPairMode = new AppSettings().RawPairMode; fixedNames.Add(nameof(AppSettings.RawPairMode)); }
+
         return fixedNames;
     }
 
