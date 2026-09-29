@@ -79,7 +79,7 @@ public sealed class ZoomDetailLoader
     public void Reset()
     {
         CancelPending();
-        SetRawDecodeIndicatorVisible(false);
+        StopRawDecodeIndicator();
         _target = null;
         _original = null;
         _showingOriginal = false;
@@ -168,12 +168,11 @@ public sealed class ZoomDetailLoader
         }
         finally
         {
-            SetRawDecodeIndicatorVisible(false);
-            _indicatorCts?.Cancel();
-            _indicatorCts?.Dispose();
-            _indicatorCts = null;
+            // Only the load that still owns the slot may touch the shared state. A superseded load (Reset already
+            // stopped its indicator and dropped _cts) finishing late must not kill the newer load's RAW indicator.
             if (ReferenceEquals(_cts, cts))
             {
+                StopRawDecodeIndicator();
                 _cts = null;
                 _pendingLoad = null;
             }
@@ -194,9 +193,22 @@ public sealed class ZoomDetailLoader
 
     private void StartRawDecodeIndicator(CancellationToken loadToken)
     {
+        StopRawDecodeIndicator();
         var indicatorCts = CancellationTokenSource.CreateLinkedTokenSource(loadToken);
         _indicatorCts = indicatorCts;
         _ = ShowIndicatorAfterDelayAsync(indicatorCts);
+    }
+
+    /// <summary>Hides the indicator and cancels and disposes its delay source (idempotent).</summary>
+    private void StopRawDecodeIndicator()
+    {
+        var indicatorCts = _indicatorCts;
+        _indicatorCts = null;
+        SetRawDecodeIndicatorVisible(false);
+        if (indicatorCts is null) return;
+        try { indicatorCts.Cancel(); }
+        catch (ObjectDisposedException) { /* already disposed */ }
+        indicatorCts.Dispose();
     }
 
     private async Task ShowIndicatorAfterDelayAsync(CancellationTokenSource indicatorCts)
