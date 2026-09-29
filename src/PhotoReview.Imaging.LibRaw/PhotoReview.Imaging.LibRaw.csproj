@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <Platforms>AnyCPU;x64</Platforms>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>PhotoReview.Imaging.LibRaw</RootNamespace>
   </PropertyGroup>
 
