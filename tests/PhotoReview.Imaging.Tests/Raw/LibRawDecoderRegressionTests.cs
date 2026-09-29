@@ -72,6 +72,18 @@ public sealed class LibRawDecoderBufferPinTests
         Assert.True(image.OriginalWidth > 2 * image.PixelWidth);
     }
 
+    [Fact]
+    public void ReadJpegThumbnail_AndDecode_WithCancelledToken_ThrowOperationCanceledBeforeOpeningTheFile()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => LibRawDecoder.ReadJpegThumbnail(@"Z:\missing.orf", cts.Token));
+        Assert.Throws<OperationCanceledException>(() =>
+            new LibRawDecoder().Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
+        Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
+    }
+
     private sealed unsafe class PinTrackingMemoryManager : MemoryManager<byte>
     {
         private readonly byte* _buffer;
