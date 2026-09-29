@@ -82,3 +82,21 @@
 2. **LibRaw Full Decode (Q-RAW-02):** WIC coverage is inconsistent across OS builds without Store app dependencies. LibRaw is essential for reliable full demosaicing across all 8 formats.
 3. **100% Zoom Sensor Dimension (Q-RAW-03):** Verified that preview dimensions and sensor dimensions diverge significantly on older ARW and some NEF bodies; the UI must display sensor dimensions and indicate preview status when upscaled.
 
+
+## 4. RAW-30 WIC Full-Decode Probe (2026-09-29)
+
+The Native probe ran once against each of the 23 pinned corpus samples on Windows NT 10.0.26200.0. It checks the registered WIC RAW decoder, performs a full WIC decode, passes container orientation, and rejects a result whose source dimensions equal the largest embedded preview.
+
+| Format | Samples | Full decode | Preview-only | Unavailable on this machine |
+|---|---:|---:|---:|---:|
+| CR2 | 3 | 0 | 0 | 3 |
+| CR3 | 2 | 0 | 0 | 2 |
+| NEF | 3 | 0 | 0 | 3 |
+| ARW | 3 | 0 | 0 | 3 |
+| DNG | 3 | 2 | 1 | 0 |
+| RAF | 3 | 0 | 0 | 3 |
+| ORF | 3 | 0 | 0 | 3 |
+| RW2 | 3 | 0 | 0 | 3 |
+| **Total** | **23** | **2** | **1** | **20** |
+
+The two full DNG results were 320×240 and 4672×3104. The preview-only DNG result matched its embedded preview dimensions and was rejected. The other 20 samples could not be fully decoded by WIC on this machine. `WicRawFullDecoder` treats this probe as an optional backend; Q-RAW-02 remains decided as LibRaw for reliable full decoding.

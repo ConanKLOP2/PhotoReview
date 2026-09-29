@@ -71,8 +71,6 @@ public sealed class WicRawFullDecoder : IImageDecoder
                 throw new NotSupportedException($"No WIC RAW decoder is registered for {info.Format}.");
 
             var preview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation);
-            if (preview is not null && (preview.Width <= 0 || preview.Height <= 0))
-                throw new NotSupportedException($"The embedded preview dimensions are unavailable for {info.Format}.");
 
             IDecodedImage decoded;
             try
@@ -84,7 +82,7 @@ public sealed class WicRawFullDecoder : IImageDecoder
                 throw new NotSupportedException($"WIC could not fully decode {info.Format}.", ex);
             }
 
-            if (preview is not null)
+            if (preview is { Width: > 0, Height: > 0 })
             {
                 var (previewWidth, previewHeight) = ExifOrientation.IsTransposed(info.Orientation)
                     ? (preview.Height, preview.Width)
