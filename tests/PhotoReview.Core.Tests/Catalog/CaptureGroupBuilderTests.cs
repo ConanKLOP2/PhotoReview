@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using PhotoReview.Core.Catalog;
+using Xunit.Abstractions;
 
 namespace PhotoReview.Core.Tests.Catalog;
 
-public sealed class CaptureGroupBuilderTests
+public sealed class CaptureGroupBuilderTests(ITestOutputHelper output)
 {
     [Fact]
     public void Build_MatchesSameFolderAndBasenameIgnoringCase_AndIncludesXmp()
@@ -92,5 +94,32 @@ public sealed class CaptureGroupBuilderTests
 
         Assert.Equal(2, catalog.Count);
         Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+    }
+
+    [Fact]
+    [Trait("Category", "Slow")]
+    public void GroupEntries_TenThousandPaths_CompletesWithinTwentyMilliseconds()
+    {
+        var entries = new List<CatalogEntry>(10_000);
+        for (var index = 0; index < 5_000; index++)
+        {
+            var basename = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            entries.Add(new CatalogEntry($@"C:\photos\{basename}.jpg"));
+            entries.Add(new CatalogEntry($@"C:\photos\{basename}.cr2"));
+        }
+
+        _ = CaptureGroupBuilder.GroupEntries(entries, PhotoReview.Core.Model.RawPairMode.PreferJpeg);
+        var samples = new double[5];
+        for (var sample = 0; sample < samples.Length; sample++)
+        {
+            var started = Stopwatch.GetTimestamp();
+            var grouped = CaptureGroupBuilder.GroupEntries(entries, PhotoReview.Core.Model.RawPairMode.PreferJpeg);
+            samples[sample] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            Assert.Equal(5_000, grouped.Count);
+        }
+
+        Array.Sort(samples);
+        output.WriteLine($"10k paths (5k pairs), median grouping time: {samples[2]:F2} ms; samples: {string.Join(", ", samples.Select(value => value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)))} ms.");
+        Assert.True(samples[2] < 20, $"Median grouping time was {samples[2]:F2} ms; samples: {string.Join(", ", samples.Select(value => value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)))} ms.");
     }
 }
