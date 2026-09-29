@@ -1,5 +1,6 @@
-# Pinned RAW sample corpus from raw.pixls.us (all verified CC0)
+# Pinned RAW sample manifest from raw.pixls.us (source license is checked before download)
 # Format: Format <TAB> Camera <TAB> URL <TAB> SHA-256 <TAB> Licence URL <TAB> FileName
+# Fetcher verifies each exact file URL and license URL/label against raw.pixls.us' repository API before downloading.
 CR2	Canon EOS 350D	https://raw.pixls.us/getfile.php/758/nice/Canon - EOS 350D - RAW (3:2).CR2	8cbb84e04d93b005fe082da9c954122a612b5281af00aa088d767850f343fd38	https://creativecommons.org/publicdomain/zero/1.0/	Canon - EOS 350D - RAW (3_2).CR2
 CR2	Canon EOS 7D	https://raw.pixls.us/getfile.php/129/nice/Canon - EOS 7D - sRAW2 (sRAW) (3:2).CR2	3789b1ba5d880613104637c40a06619cd9f3b54b0cf62d2d95b9f9e885edcf6e	https://creativecommons.org/publicdomain/zero/1.0/	Canon - EOS 7D - sRAW2 (sRAW) (3_2).CR2
 CR2	Canon EOS 5D Mark IV	https://raw.pixls.us/getfile.php/980/nice/Canon - EOS 5D Mark IV - RAW (3:2).CR2	85bfec149261ffbae90797e45caae5e204e1e61ac62b92783925b5ee0f267d76	https://creativecommons.org/publicdomain/zero/1.0/	Canon - EOS 5D Mark IV - RAW (3_2).CR2

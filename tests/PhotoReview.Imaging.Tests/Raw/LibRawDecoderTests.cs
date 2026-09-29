@@ -10,6 +10,8 @@ namespace PhotoReview.Imaging.Tests.Raw;
 [Trait("Category", "Native")]
 public sealed class LibRawDecoderTests
 {
+    private const string StrictCorpusEnvironmentVariable = "PHOTOREVIEW_LIBRAW_STRICT_CORPUS";
+    private static readonly string[] RequiredRawExtensions = [".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"];
     private static readonly string CorpusDirectory = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus"));
 
@@ -26,20 +28,26 @@ public sealed class LibRawDecoderTests
     [Fact]
     public void Decode_OfficialCorpusSamples_ReturnsValidRgbBackedBitmap()
     {
-        if (!Directory.Exists(CorpusDirectory)) return;
-        var files = Directory.GetFiles(CorpusDirectory)
+        var strictFullCorpus = IsStrictFullCorpusRequested();
+        var selectedSample = Environment.GetEnvironmentVariable("PHOTOREVIEW_LIBRAW_SAMPLE");
+        if (!Directory.Exists(CorpusDirectory))
+        {
+            if (strictFullCorpus || !string.IsNullOrWhiteSpace(selectedSample))
+                throw new DirectoryNotFoundException($"LibRaw corpus is required but missing: {CorpusDirectory}");
+            return;
+        }
+
+        var allRawFiles = Directory.GetFiles(CorpusDirectory)
             .Where(path => PhotoReview.Core.Catalog.ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path)))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var selectedSample = Environment.GetEnvironmentVariable("PHOTOREVIEW_LIBRAW_SAMPLE");
-        if (!string.IsNullOrWhiteSpace(selectedSample))
-            files = files.Where(path => Path.GetFileName(path).Equals(selectedSample, StringComparison.OrdinalIgnoreCase)).ToArray();
-        else
-            files = files.GroupBy(Path.GetExtension, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First())
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        if (files.Length == 0) return;
+        var files = SelectCorpusFiles(allRawFiles, strictFullCorpus, selectedSample);
+
+        if (strictFullCorpus)
+        {
+            var formats = files.Select(path => Path.GetExtension(path).ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+            Assert.Subset(RequiredRawExtensions.ToHashSet(StringComparer.Ordinal), formats);
+        }
 
         var decoder = new LibRawDecoder();
         using var memorySampler = new PrivateMemorySampler();
@@ -67,12 +75,43 @@ public sealed class LibRawDecoderTests
         if (string.IsNullOrWhiteSpace(selectedSample))
         {
             var decodedFormats = files.Select(path => Path.GetExtension(path).ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
-            var requiredFormats = new[] { ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2" };
-            Assert.Subset(requiredFormats.ToHashSet(StringComparer.Ordinal), decodedFormats);
+            Assert.Subset(RequiredRawExtensions.ToHashSet(StringComparer.Ordinal), decodedFormats);
         }
 
         Console.WriteLine($"LibRaw corpus: {files.Length}/{files.Length} decoded; sampled peak private bytes={memorySampler.PeakPrivateBytes}; "
             + string.Join(" | ", measurements));
+    }
+
+    internal static string[] SelectCorpusFiles(IReadOnlyCollection<string> rawFiles, bool strictFullCorpus, string? selectedSample)
+    {
+        if (strictFullCorpus && !string.IsNullOrWhiteSpace(selectedSample))
+            throw new InvalidOperationException("PHOTOREVIEW_LIBRAW_SAMPLE cannot be combined with PHOTOREVIEW_LIBRAW_STRICT_CORPUS; strict mode decodes the complete corpus.");
+
+        if (strictFullCorpus)
+        {
+            if (rawFiles.Count == 0)
+                throw new InvalidOperationException("Strict LibRaw full-corpus mode requires at least one RAW corpus file.");
+            return rawFiles.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedSample))
+        {
+            var selected = rawFiles.Where(path => Path.GetFileName(path).Equals(selectedSample, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (selected.Length == 0)
+                throw new FileNotFoundException($"PHOTOREVIEW_LIBRAW_SAMPLE '{selectedSample}' did not match any RAW corpus file.");
+            return selected;
+        }
+
+        return rawFiles.GroupBy(Path.GetExtension, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).First())
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool IsStrictFullCorpusRequested()
+    {
+        var value = Environment.GetEnvironmentVariable(StrictCorpusEnvironmentVariable);
+        return value == "1" || bool.TryParse(value, out var enabled) && enabled;
     }
 
     [Fact]
@@ -164,5 +203,21 @@ public sealed class LibRawDecoderTests
             new LibRawDecoder().Decode(new DecodeRequest("unused.cr2", DecodeBox.Unbounded, applyOrientation: false)));
 
         Assert.Contains("always applies", error.Message, StringComparison.Ordinal);
+    }
+}
+
+public sealed class LibRawCorpusSelectionTests
+{
+    [Fact]
+    public void SelectCorpusFiles_DefaultIsRepresentative_AndStrictIncludesEveryRawFile()
+    {
+        string[] samples = ["a.cr2", "b.CR2", "c.cr3", "d.nef", "e.arw", "f.dng", "g.raf", "h.orf", "i.rw2"];
+
+        var representative = LibRawDecoderTests.SelectCorpusFiles(samples, strictFullCorpus: false, selectedSample: null);
+        Assert.Equal(8, representative.Length);
+        Assert.Equal(samples.Length, LibRawDecoderTests.SelectCorpusFiles(samples, strictFullCorpus: true, selectedSample: null).Length);
+        Assert.Throws<InvalidOperationException>(() => LibRawDecoderTests.SelectCorpusFiles([], strictFullCorpus: true, selectedSample: null));
+        Assert.Throws<InvalidOperationException>(() => LibRawDecoderTests.SelectCorpusFiles(samples, strictFullCorpus: true, selectedSample: "a.cr2"));
+        Assert.Throws<FileNotFoundException>(() => LibRawDecoderTests.SelectCorpusFiles(samples, strictFullCorpus: false, selectedSample: "missing.cr2"));
     }
 }

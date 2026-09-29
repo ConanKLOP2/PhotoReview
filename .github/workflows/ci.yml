@@ -36,6 +36,11 @@ jobs:
         shell: powershell
         run: ./tools/i18n-check.ps1 -SelfTest
 
+      # The curated RAW corpus manifest must keep its exact CC0 1.0 license assertion.
+      - name: Check RAW sample manifest guard (self-test)
+        shell: powershell
+        run: ./tools/fetch-raw-samples.ps1 -SelfTest
+
       # L10: translation catalogs are valid (JSON, _meta.code, no unknown keys/placeholders); prints completeness.
       - name: Check translation catalogs
         shell: powershell
