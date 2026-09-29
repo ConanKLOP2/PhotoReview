@@ -135,6 +135,7 @@ public sealed class RawOrientationTests
         var path = Path.Combine(CorpusDir, fileName);
         var decoder = new RawDecoder(new WpfBitmapImageDecoder());
         var info = decoder.ReadInfo(path);
+        Assert.True(info.Width > 0 && info.Height > 0, $"{fileName}: ReadInfo returned {info.Width}x{info.Height}");
 
         IDecodedImage decoded;
         try
@@ -153,8 +154,53 @@ public sealed class RawOrientationTests
         Assert.Equal(info.Orientation, decoded.Orientation);
         // The embedded preview may be a differently cropped/scaled view of the sensor, but its landscape/portrait
         // shape must match the orientation-adjusted shape ReadInfo reports.
-        if (info.Width != info.Height && decoded.PixelWidth != decoded.PixelHeight)
-            Assert.Equal(info.Width > info.Height, decoded.PixelWidth > decoded.PixelHeight);
+        // Square shapes are compared too: a 0x0 (unknown) ReadInfo or a square-vs-rectangular mismatch must fail.
+        Assert.Equal(Math.Sign(info.Width - info.Height), Math.Sign(decoded.PixelWidth - decoded.PixelHeight));
+    }
+
+    /// <summary>
+    /// ReadInfo must never report an unknown size for a real file, whatever the format. Fuji RAF used to yield 0x0
+    /// because its embedded JPEG frame header sits past the first 64 KiB. For RAF the size is compared with WIC's own
+    /// reading of the embedded JPEG header (independent oracle); other formats must agree with the container's sensor size.
+    /// </summary>
+    [Trait("Category", "Native")]
+    [Theory]
+    [MemberData(nameof(CorpusFiles))]
+    public void RawDecoder_CorpusFile_ReadInfoReportsPositiveDimensionsMatchingTheContainer(string fileName)
+    {
+        var path = Path.Combine(CorpusDir, fileName);
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var info = new RawDecoder(new WpfBitmapImageDecoder()).ReadInfo(path);
+
+        Assert.True(info.Width > 0 && info.Height > 0, $"{fileName}: ReadInfo returned {info.Width}x{info.Height}");
+
+        using var stream = File.OpenRead(path);
+        using var source = new SourceRawHeaderSource(stream);
+        var probe = new byte[64];
+        stream.ReadExactly(probe);
+        var container = new RawContainerReaderRegistry().FindReader(probe, extension)!.Read(source, CancellationToken.None);
+        var transposed = ExifOrientation.IsTransposed(container.Orientation);
+        if (container.SensorWidth > 0 && container.SensorHeight > 0)
+        {
+            Assert.Equal(transposed ? container.SensorHeight : container.SensorWidth, info.Width);
+            Assert.Equal(transposed ? container.SensorWidth : container.SensorHeight, info.Height);
+            return;
+        }
+
+        // No sensor size in the container (RAF): the embedded JPEG frame is the size.
+        var preview = Assert.Single(container.Previews);
+        using var jpeg = new MemoryStream(ReadRange(stream, preview.Offset, preview.Length), writable: false);
+        var frame = BitmapDecoder.Create(jpeg, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0];
+        Assert.Equal(transposed ? frame.PixelHeight : frame.PixelWidth, info.Width);
+        Assert.Equal(transposed ? frame.PixelWidth : frame.PixelHeight, info.Height);
+    }
+
+    private static byte[] ReadRange(Stream stream, long offset, long length)
+    {
+        var bytes = new byte[length];
+        stream.Position = offset;
+        stream.ReadExactly(bytes);
+        return bytes;
     }
 
     [Trait("Category", "Native")]
@@ -183,6 +229,77 @@ public sealed class RawOrientationTests
     }
 
     /// <summary>
+    /// Every corpus orientation is 1 (the default), so the test above cannot fail when orientation reading breaks. Here the
+    /// real orientation carrier is rewritten in an in-memory copy: the embedded JPEG EXIF (RAF), IFD0 0x0112 (RW2).
+    /// </summary>
+    [Trait("Category", "Native")]
+    [Theory]
+    [MemberData(nameof(CorpusFiles))]
+    public void RafAndRw2CorpusFile_RewrittenOrientation_IsReportedByContainerReader(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (extension is not (".raf" or ".rw2")) return;
+
+        var original = File.ReadAllBytes(Path.Combine(CorpusDir, fileName));
+        var originalInfo = ReadContainer(original, extension);
+        foreach (ushort orientation in new ushort[] { 6, 8, 3 })
+        {
+            var rewritten = (byte[])original.Clone();
+            Assert.True(RawOrientationPatcher.TryWriteOrientation(rewritten, extension, originalInfo, orientation), $"{fileName}: no orientation to rewrite");
+
+            Assert.Equal(orientation, ReadContainer(rewritten, extension).Orientation);
+        }
+    }
+
+    /// <summary>The RAF orientation lives only in the embedded JPEG: independent WIC oracle over the rewritten JPEG.</summary>
+    [Trait("Category", "Native")]
+    [Theory]
+    [MemberData(nameof(CorpusFiles))]
+    public void RafCorpusFile_RewrittenEmbeddedJpegOrientation_MatchesWicAndReader(string fileName)
+    {
+        if (!string.Equals(Path.GetExtension(fileName), ".raf", StringComparison.OrdinalIgnoreCase)) return;
+
+        var original = File.ReadAllBytes(Path.Combine(CorpusDir, fileName));
+        var originalInfo = ReadContainer(original, ".raf");
+        var rewritten = (byte[])original.Clone();
+        Assert.True(RawOrientationPatcher.TryWriteOrientation(rewritten, ".raf", originalInfo, 8));
+        var preview = Assert.Single(originalInfo.Previews);
+        using var stream = new MemoryStream(rewritten, checked((int)preview.Offset), checked((int)preview.Length), writable: false);
+        BitmapFrame frame;
+        try
+        {
+            frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0];
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+        {
+            return; // WIC cannot open this camera preview JPEG, so there is no independent oracle for it
+        }
+
+        Assert.Equal(8, ExifOrientation.Read(frame.Metadata as BitmapMetadata));
+        Assert.Equal(8, ReadContainer(rewritten, ".raf").Orientation);
+    }
+
+    /// <summary>
+    /// RW2 without IFD0 Orientation must fall back to the embedded JPEG EXIF: hide the real IFD0 tag (renamed to an
+    /// unknown tag id) and rewrite the JPEG orientation, both on the real file.
+    /// </summary>
+    [Trait("Category", "Native")]
+    [Theory]
+    [MemberData(nameof(CorpusFiles))]
+    public void Rw2CorpusFile_WithoutIfd0Orientation_FallsBackToEmbeddedJpegExif(string fileName)
+    {
+        if (!string.Equals(Path.GetExtension(fileName), ".rw2", StringComparison.OrdinalIgnoreCase)) return;
+
+        var original = File.ReadAllBytes(Path.Combine(CorpusDir, fileName));
+        var originalInfo = ReadContainer(original, ".rw2");
+        var file = (byte[])original.Clone();
+        Assert.True(RawOrientationPatcher.TryRenameIfd0Tag(file, 0, 0x0112, 0xFFF0), $"{fileName}: expected an IFD0 orientation tag to hide");
+        Assert.True(RawOrientationPatcher.TryWriteOrientation(file, ".rw2", originalInfo, 6), $"{fileName}: no embedded JPEG EXIF orientation to rewrite");
+
+        Assert.Equal(6, ReadContainer(file, ".rw2").Orientation);
+    }
+
+    /// <summary>
     /// The corpus holds only landscape shots (orientation 1). Rewriting the real orientation tag of every corpus file to 6
     /// (portrait) turns each real container into a portrait sample: every reader must then report 6, ReadInfo must swap
     /// the visual size and the decoded preview must come out transposed relative to the landscape original.
@@ -198,7 +315,6 @@ public sealed class RawOrientationTests
         if (originalInfo.Previews.Count == 0) return; // RAW-only DNG: no embedded preview to orient
 
         var portrait = (byte[])original.Clone();
-        if (extension == ".cr3") return; // orientation lives in an ISO-BMFF CMT1 box, which this byte patcher does not walk
         Assert.True(RawOrientationPatcher.TryWriteOrientation(portrait, extension, originalInfo, 6), $"{fileName} has no orientation tag to rewrite");
 
         Assert.Equal(1, originalInfo.Orientation);
@@ -209,6 +325,7 @@ public sealed class RawOrientationTests
         var landscapeInfo = landscapeDecoder.ReadInfo("landscape" + extension);
         var portraitInfo = portraitDecoder.ReadInfo("portrait" + extension);
         Assert.Equal(6, portraitInfo.Orientation);
+        Assert.True(landscapeInfo.Width > 0 && landscapeInfo.Height > 0, $"{fileName}: ReadInfo returned {landscapeInfo.Width}x{landscapeInfo.Height}");
         Assert.Equal(landscapeInfo.Height, portraitInfo.Width);
         Assert.Equal(landscapeInfo.Width, portraitInfo.Height);
 

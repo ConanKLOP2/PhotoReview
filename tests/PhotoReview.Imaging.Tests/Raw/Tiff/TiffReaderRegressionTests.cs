@@ -393,6 +393,8 @@ public sealed class TiffReaderRegressionTests
         Assert.Equal((700L, 640, 480), (preview.Offset, preview.Width, preview.Height));
     }
 
+    // SYNTHETIC ONLY: no file in the real corpus (A7M3, A7R, NEX-6) carries the Sony MakerNote 0x2001 PreviewImage tag,
+    // so this layout follows the documented tag format and is not verified against a real camera file.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

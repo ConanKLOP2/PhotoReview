@@ -44,6 +44,10 @@ public sealed class ArwContainerReader : IRawContainerReader
         long largestArea = 0;
         int sensorWidth = 0;
         int sensorHeight = 0;
+        int cropWidth = 0;
+        int cropHeight = 0;
+        int exifPixelWidth = 0;
+        int exifPixelHeight = 0;
 
         // IFD0 chain (IFD0 = large preview, IFD1 = thumbnail) then SubIFDs (raw image, sometimes a JPEG).
         while (pendingIfds.Count > 0 && ifdCount < RawContainerLimits.MaxIfdCount)
@@ -75,6 +79,9 @@ public sealed class ArwContainerReader : IRawContainerReader
                     if (exifTag.Tag == 0x927C && exifTag.Count > 4)
                         makerNoteOffset ??= exifTag.ValueOrOffset;
                 }
+
+                if (exifPixelWidth == 0)
+                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out exifPixelWidth, out exifPixelHeight);
             }
 
             bool isPreview = TiffHeaderNavigator.TryReadJpegInterchange(source, entries, littleEndian, out long jpegOffset, out long jpegLength);
@@ -88,11 +95,17 @@ public sealed class ArwContainerReader : IRawContainerReader
                 largestArea = area;
                 sensorWidth = width;
                 sensorHeight = height;
+                TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out cropWidth, out cropHeight);
             }
 
             if (nextIfdOffset > 0)
                 pendingIfds.Enqueue(nextIfdOffset);
         }
+
+        // ImageWidth/ImageLength of the raw IFD include the masked margins (A7M3: 6048x4024); the active area is
+        // DefaultCropSize, else the Exif pixel size, so ARW agrees with CR2/DNG/RW2 on the displayed original size.
+        (sensorWidth, sensorHeight) = TiffHeaderNavigator.ChooseActiveSensorSize(
+            sensorWidth, sensorHeight, cropWidth, cropHeight, exifPixelWidth, exifPixelHeight);
 
         if (makerNoteOffset is > 0)
             ParseSonyMakerNotePreview(source, makerNoteOffset.Value, littleEndian, previews);
