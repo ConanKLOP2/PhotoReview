@@ -44,6 +44,9 @@ public sealed class LibRawDecoderTests
             Console.WriteLine($"LibRaw corpus decoding: {Path.GetFileName(path)}");
             Console.Out.Flush();
             measurements.Add(DecodeCorpusSample(decoder, path));
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
             if (Path.GetFileName(path).Equals("Canon - EOS 350D - RAW (3_2).CR2", StringComparison.OrdinalIgnoreCase))
             {
                 var bounded = decoder.Decode(new DecodeRequest(path, new DecodeBox(640, 480)));
