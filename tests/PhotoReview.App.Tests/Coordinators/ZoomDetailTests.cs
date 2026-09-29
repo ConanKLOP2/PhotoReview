@@ -306,12 +306,17 @@ public sealed class ZoomDetailTests : IDisposable
         try
         {
             var presenter = CreatePresenter(service, [rawPath]);
+            var indicatorShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
+            {
+                if (visible) indicatorShown.TrySetResult();
+            };
             await presenter.PresentAsync(0);
             _viewer.SetZoom(1.0);
             var load = presenter.ZoomDetail.PendingLoad;
             Assert.NotNull(load);
             Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
-            await Task.Delay(350);
+            await indicatorShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
 
             rawDecoder.OriginalGate.Release();

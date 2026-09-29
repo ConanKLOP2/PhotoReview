@@ -14,7 +14,7 @@ Final gate: publish Release and run `tools/verify-release.ps1` on that exact dir
 
 ## Evidence / measurements
 - Full decode routing: regression tests prove RawFullDecode.OnZoom selects the injected RAW decoder and SourceKind=2 dimensions key, while disabled mode uses the configured standard decoder.
-- RAW zoom indicator: appears after 300 ms during a fake full decode and clears after completion; integration test proves the `.cr2` zoom takes the RAW full decoder path.
+- RAW zoom indicator: appears after 300 ms during a fake full decode and clears after completion; integration test proves the `.cr2` zoom takes the RAW full decoder path. The wait is signal-based (no fixed test delay); indicator dispatch preserves UI affinity.
 - Bounded RAW zoom integration: ZoomDetailTests 25/25 passed. Full Release solution build: 0 warnings, 0 errors.
 - Corpus: 23/23 files across 8 formats passed in 1:59; full-resolution timings 0.447–20.120 s, mean ≈5.10 s; concurrent 50 ms sampler peak private bytes 1,141,518,336 (~1.06 GiB). Highest timings: Fujifilm X100V RAF 20.120 s, X-T2 RAF 16.936 s, and X-E2S RAF 10.842 s.
 - 200 consecutive Canon 7D sRAW decodes passed in 1:33; after-warmup private bytes 186,818,560, final 186,277,888 (−540,672 bytes), peak 215,646,208.
@@ -28,6 +28,7 @@ Final gate: publish Release and run `tools/verify-release.ps1` on that exact dir
 - `dotnet build PhotoReview.slnx -c Release`: 0 warnings, 0 errors. LibRaw Native tests: 3 passed (runtime probe, CR2 buffer + CR3 file decode, Bgr32/96 DPI, bounded-box scaling, orientation guard).
 - Mutation check: removing the LibRaw provider caused the app composition test to fail (`Expected: True, Actual: False`); production registration restored.
 - Mutation check: changing the output format to `Bgra32` caused the LibRaw Native test to fail (`Expected: Bgr32, Actual: Bgra32`); production output restored to `Bgr32`.
+- CI follow-up: first PR run found the App-layer `ConfigureAwait(false)` rule and an added fixed-delay test call; both were removed. Focused architecture rules passed 2/2 and ZoomDetailTests passed 25/25 afterward; rerun PR CI is pending.
 
 ## Open problems
 - No RAW-31 implementation blockers. Runtime half_size comparison is unavailable through this pinned C API; a future implementation would require a version-matched native shim or a C++ API migration.

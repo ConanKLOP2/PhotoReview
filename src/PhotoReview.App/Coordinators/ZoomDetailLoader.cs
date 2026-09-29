@@ -203,7 +203,7 @@ public sealed class ZoomDetailLoader
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(300), indicatorCts.Token).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(300), indicatorCts.Token);
             void ShowIfCurrent()
             {
                 if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)
