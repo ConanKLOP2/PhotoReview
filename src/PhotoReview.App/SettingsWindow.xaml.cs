@@ -56,14 +56,10 @@ public partial class SettingsWindow : Window
 
         InitializePages();
 
-        var allShortcutBoxes = new[]
-        {
-            NextText, PreviousText, FirstImageText, LastImageText, NextFolderText, PreviousFolderText,
-            ZoomInText, ZoomOutText, ZoomActualSizeText, ToggleFitText, FullscreenText, ToggleInfoOverlayText,
-            SkipText, UndoText, CompareText, MoveToFolderText, CopyToFolderText, RecycleText, ClickZoomText,
-            FitWidthText, FitHeightText, ToggleKeepZoomText, OpenFolderText, CustomZoomText,
-        };
-        foreach (var textBox in allShortcutBoxes)
+        // Single source of truth for the shortcut boxes: input capture, duplicate warning and the "must parse" checks in
+        // Save_Click all derive from this list, so a box missing here cannot silently miss one of them.
+        ShortcutBoxes = BuildShortcutBoxes();
+        foreach (var (_, textBox) in ShortcutBoxes)
         {
             textBox.PreviewKeyDown += ShortcutText_PreviewKeyDown;
             textBox.TextChanged += Shortcut_TextChanged;
@@ -74,6 +70,25 @@ public partial class SettingsWindow : Window
         LoadLanguages();
         Localizer.CurrentChanged += OnLanguageChanged;
     }
+
+    /// <summary>Every shortcut text box with the <see cref="ShortcutMappings"/> property it edits (test seam).</summary>
+    internal IReadOnlyList<(string Property, System.Windows.Controls.TextBox Box)> ShortcutBoxes { get; }
+
+    private (string Property, System.Windows.Controls.TextBox Box)[] BuildShortcutBoxes() =>
+    [
+        (nameof(ShortcutMappings.Next), NextText), (nameof(ShortcutMappings.Previous), PreviousText),
+        (nameof(ShortcutMappings.FirstImage), FirstImageText), (nameof(ShortcutMappings.LastImage), LastImageText),
+        (nameof(ShortcutMappings.NextFolder), NextFolderText), (nameof(ShortcutMappings.PreviousFolder), PreviousFolderText),
+        (nameof(ShortcutMappings.ZoomIn), ZoomInText), (nameof(ShortcutMappings.ZoomOut), ZoomOutText),
+        (nameof(ShortcutMappings.ZoomActualSize), ZoomActualSizeText), (nameof(ShortcutMappings.ToggleFit), ToggleFitText),
+        (nameof(ShortcutMappings.Fullscreen), FullscreenText), (nameof(ShortcutMappings.ToggleInfoOverlay), ToggleInfoOverlayText),
+        (nameof(ShortcutMappings.Skip), SkipText), (nameof(ShortcutMappings.Undo), UndoText), (nameof(ShortcutMappings.Compare), CompareText),
+        (nameof(ShortcutMappings.MoveToFolder), MoveToFolderText), (nameof(ShortcutMappings.CopyToFolder), CopyToFolderText),
+        (nameof(ShortcutMappings.SendToRecycleBin), RecycleText), (nameof(ShortcutMappings.ClickZoom), ClickZoomText),
+        (nameof(ShortcutMappings.FitWidth), FitWidthText), (nameof(ShortcutMappings.FitHeight), FitHeightText),
+        (nameof(ShortcutMappings.ToggleKeepZoom), ToggleKeepZoomText), (nameof(ShortcutMappings.OpenFolder), OpenFolderText),
+        (nameof(ShortcutMappings.CustomZoom), CustomZoomText), (nameof(ShortcutMappings.ToggleCaptureMember), ToggleCaptureMemberText),
+    ];
 
     // ---- Left navigation: page list, remembers the last page for this process only (DR02) ----
 
@@ -729,14 +744,14 @@ public partial class SettingsWindow : Window
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         AppLog.Info("Settings save requested");
-        var values = new[] { NextText.Text, PreviousText.Text, RecycleText.Text, CompareText.Text, NextFolderText.Text, PreviousFolderText.Text, FirstImageText.Text, ZoomInText.Text, ZoomOutText.Text, ToggleFitText.Text, SkipText.Text, UndoText.Text, FullscreenText.Text };
+        var values = ShortcutBoxes.Where(b => !ShortcutMappings.IsOptional(b.Property)).Select(b => b.Box.Text).ToArray();
         if (values.Any(v => !ShortcutKeyName.TryParse(v, out _)) || values.Select(ShortcutKeyCanonical.Canonicalize).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Length)
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
         }
         // Optional shortcuts (ShortcutMappings.OptionalNames) may be empty (= feature disabled); non-empty ones still
         // have to be a real key name. Cross-duplicate checking against everything else happens in SettingsValidator below.
-        var optionalValues = new[] { LastImageText.Text, ZoomActualSizeText.Text, ToggleInfoOverlayText.Text, MoveToFolderText.Text, CopyToFolderText.Text, ClickZoomText.Text, FitWidthText.Text, FitHeightText.Text, ToggleKeepZoomText.Text, OpenFolderText.Text, CustomZoomText.Text };
+        var optionalValues = ShortcutBoxes.Where(b => ShortcutMappings.IsOptional(b.Property)).Select(b => b.Box.Text);
         if (optionalValues.Any(v => !string.IsNullOrWhiteSpace(v) && !ShortcutKeyName.TryParse(v, out _)))
         {
             ShowInvalid(Tr.DialogSettingsInvalidShortcuts); return;
