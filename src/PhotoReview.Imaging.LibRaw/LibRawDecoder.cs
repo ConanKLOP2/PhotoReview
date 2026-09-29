@@ -70,25 +70,41 @@ public sealed class LibRawDecoder : IImageDecoder
             var source = (byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset);
             fixed (byte* target = pixels)
             {
-                for (var y = 0; y < targetHeight; y++)
+                if (targetWidth == header.Width && targetHeight == header.Height)
                 {
-                    var sourceY = Math.Clamp((y + 0.5d) * header.Height / targetHeight - 0.5d, 0, header.Height - 1d);
-                    var y0 = (int)sourceY;
-                    var y1 = Math.Min(y0 + 1, header.Height - 1);
-                    var fy = sourceY - y0;
-                    for (var x = 0; x < targetWidth; x++)
+                    for (var pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++)
                     {
-                        var sourceX = Math.Clamp((x + 0.5d) * header.Width / targetWidth - 0.5d, 0, header.Width - 1d);
-                        var x0 = (int)sourceX;
-                        var x1 = Math.Min(x0 + 1, header.Width - 1);
-                        var fx = sourceX - x0;
-                        var targetIndex = (y * targetWidth + x) * 4;
-                        target[targetIndex] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 2);
-                        target[targetIndex + 1] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 1);
-                        target[targetIndex + 2] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 0);
+                        var sourceIndex = pixelIndex * 3;
+                        var targetIndex = pixelIndex * 4;
+                        target[targetIndex] = source[sourceIndex + 2];
+                        target[targetIndex + 1] = source[sourceIndex + 1];
+                        target[targetIndex + 2] = source[sourceIndex];
                         target[targetIndex + 3] = byte.MaxValue;
+                        if ((pixelIndex & 0x3FFFF) == 0) cancellationToken.ThrowIfCancellationRequested();
                     }
-                    cancellationToken.ThrowIfCancellationRequested();
+                }
+                else
+                {
+                    for (var y = 0; y < targetHeight; y++)
+                    {
+                        var sourceY = Math.Clamp((y + 0.5d) * header.Height / targetHeight - 0.5d, 0, header.Height - 1d);
+                        var y0 = (int)sourceY;
+                        var y1 = Math.Min(y0 + 1, header.Height - 1);
+                        var fy = sourceY - y0;
+                        for (var x = 0; x < targetWidth; x++)
+                        {
+                            var sourceX = Math.Clamp((x + 0.5d) * header.Width / targetWidth - 0.5d, 0, header.Width - 1d);
+                            var x0 = (int)sourceX;
+                            var x1 = Math.Min(x0 + 1, header.Width - 1);
+                            var fx = sourceX - x0;
+                            var targetIndex = (y * targetWidth + x) * 4;
+                            target[targetIndex] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 2);
+                            target[targetIndex + 1] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 1);
+                            target[targetIndex + 2] = Interpolate(source, header.Width, x0, x1, y0, y1, fx, fy, 0);
+                            target[targetIndex + 3] = byte.MaxValue;
+                        }
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
                 }
             }
         }
