@@ -68,6 +68,98 @@ public sealed class JournalGroupReconcileTests
         Assert.Equal(2, Assert.Single(journal.ReadFailedOperations()).GroupMembers!.Count);
     }
 
+    [Fact]
+    public void Reconcile_GroupUndoCrashedBeforeAnyMove_StaysFailed()
+    {
+        // The undo manifest is already in undo direction (Source = original destination). Nothing was moved back yet:
+        // both files still sit at the undo sources, so the undo never ran and must not be recorded as Committed.
+        var fileSystem = new InMemoryFileSystem();
+        fileSystem.AddFile(@"C:\selected\a.jpg", new string('j', 10), Stamp);
+        fileSystem.AddFile(@"C:\selected\a.cr2", new string('r', 100), Stamp);
+        var journal = NewJournal(fileSystem);
+        journal.Append(UndoPrepared());
+
+        var outcome = Assert.Single(journal.ReconcilePendingOperations());
+
+        Assert.Equal(JournalState.Failed, outcome.State);
+        Assert.Equal(JournalErrors.PendingUnconfirmed, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public void Reconcile_GroupUndoCompletedButOutcomeNotJournaled_Commits()
+    {
+        // Every member is back at its original location (the undo destination); only the Committed append was lost.
+        var fileSystem = new InMemoryFileSystem();
+        fileSystem.AddFile(@"C:\photos\a.jpg", new string('j', 10), Stamp);
+        fileSystem.AddFile(@"C:\photos\a.cr2", new string('r', 100), Stamp);
+        var journal = NewJournal(fileSystem);
+        journal.Append(UndoPrepared());
+
+        var outcome = Assert.Single(journal.ReconcilePendingOperations());
+
+        Assert.Equal(JournalState.Committed, outcome.State);
+        Assert.Empty(journal.ReadPendingOperations());
+        Assert.Empty(journal.ReadFailedOperations());
+    }
+
+    [Fact]
+    public void Dismiss_GroupEntryReReadFromJournal_IsDismissedNotSkipped()
+    {
+        var journal = NewJournal(new InMemoryFileSystem());
+        journal.Append(Prepared(
+            new(@"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp),
+            new(@"C:\photos\a.cr2", @"C:\selected\a.cr2", 100, Stamp)) with { State = JournalState.Failed });
+        var snapshot = Assert.Single(journal.ReadFailedOperations());
+
+        var outcome = journal.Dismiss([snapshot]);
+
+        Assert.Empty(outcome.Skipped);
+        Assert.Equal(snapshot.Id, Assert.Single(outcome.Dismissed).Id);
+        Assert.Empty(journal.ReadFailedOperations());
+    }
+
+    [Fact]
+    public void Dismiss_MixedGroupAndSingleEntries_ClearsAllOfThem()
+    {
+        var journal = NewJournal(new InMemoryFileSystem());
+        journal.Append(Prepared(
+            new(@"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp),
+            new(@"C:\photos\a.cr2", @"C:\selected\a.cr2", 100, Stamp)) with { State = JournalState.Failed });
+        journal.Append(new JournalEntry("single", FileOperationType.Move, JournalState.Failed,
+            @"C:\photos\b.jpg", @"C:\selected\b.jpg", 5, Stamp, Stamp));
+
+        var outcome = journal.Dismiss(journal.ReadFailedOperations());
+
+        Assert.Empty(outcome.Skipped);
+        Assert.Equal(2, outcome.Dismissed.Count);
+        Assert.Empty(journal.ReadFailedOperations());
+    }
+
+    [Fact]
+    public void JournalEntry_GroupEntriesWithEqualMembers_AreValueEqual()
+    {
+        var left = Prepared(new JournalGroupMember(@"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp));
+        var right = Prepared(new JournalGroupMember(@"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp));
+        var different = Prepared(new JournalGroupMember(@"C:\photos\a.jpg", @"C:\selected\a.jpg", 11, Stamp));
+
+        Assert.Equal(left, right);
+        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        Assert.NotEqual(left, different);
+        Assert.NotEqual(left, left with { GroupMembers = null });
+    }
+
+    private static JournalEntry UndoPrepared()
+    {
+        var members = new JournalGroupMember[]
+        {
+            new(@"C:\selected\a.jpg", @"C:\photos\a.jpg", 10, Stamp),
+            new(@"C:\selected\a.cr2", @"C:\photos\a.cr2", 100, Stamp),
+        };
+        return new JournalEntry("undo", FileOperationType.Move, JournalState.Prepared,
+            members[0].Source, members[0].Destination, members[0].Size, members[0].LastWriteUtc, Stamp,
+            Undo: true, GroupId: "undo-group", GroupMembers: members);
+    }
+
     private static OperationJournal NewJournal(InMemoryFileSystem fileSystem) =>
         new(Paths, fileSystem, new FixedClock(Stamp.AddMinutes(1)));
 

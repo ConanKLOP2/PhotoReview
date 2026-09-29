@@ -77,7 +77,7 @@ public static class CaptureGroupBuilder
             groupByMemberPath[group.RawPath] = group;
         }
 
-        var emitted = new HashSet<CaptureGroup>();
+        var emitted = new HashSet<CaptureGroup>(ReferenceEqualityComparer.Instance); // one emission per group instance: no path hashing on the 10k-entry hot path
         var grouped = new List<CatalogEntry>(entries.Count);
         foreach (var entry in entries)
         {

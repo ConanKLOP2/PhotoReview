@@ -32,7 +32,54 @@ public sealed record JournalEntry(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Permanent = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Undo = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GroupId = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<JournalGroupMember>? GroupMembers = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<JournalGroupMember>? GroupMembers = null)
+{
+    // GroupMembers is a list: the compiler-generated record equality would compare it by reference, and every journal read
+    // builds a fresh list, so two reads of the same group line would never be equal (Dismiss skipped every group entry).
+    // Value equality over the members keeps every comparison (Dismiss, AppendIfUnchangedSince, ...) correct.
+    public bool Equals(JournalEntry? other) =>
+        other is not null
+        && string.Equals(Id, other.Id, StringComparison.Ordinal)
+        && Type == other.Type
+        && State == other.State
+        && string.Equals(Source, other.Source, StringComparison.Ordinal)
+        && string.Equals(Destination, other.Destination, StringComparison.Ordinal)
+        && Size == other.Size
+        && LastWriteUtc == other.LastWriteUtc
+        && TimestampUtc == other.TimestampUtc
+        && string.Equals(Error, other.Error, StringComparison.Ordinal)
+        && string.Equals(ErrorCode, other.ErrorCode, StringComparison.Ordinal)
+        && Permanent == other.Permanent
+        && Undo == other.Undo
+        && string.Equals(GroupId, other.GroupId, StringComparison.Ordinal)
+        && MembersEqual(GroupMembers, other.GroupMembers);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Id, StringComparer.Ordinal);
+        hash.Add(Type);
+        hash.Add(State);
+        hash.Add(Source, StringComparer.Ordinal);
+        hash.Add(Destination, StringComparer.Ordinal);
+        hash.Add(Size);
+        hash.Add(LastWriteUtc);
+        hash.Add(TimestampUtc);
+        hash.Add(Error, StringComparer.Ordinal);
+        hash.Add(ErrorCode, StringComparer.Ordinal);
+        hash.Add(Permanent);
+        hash.Add(Undo);
+        hash.Add(GroupId, StringComparer.Ordinal);
+        if (GroupMembers is not null)
+        {
+            foreach (var member in GroupMembers) hash.Add(member);
+        }
+        return hash.ToHashCode();
+    }
+
+    private static bool MembersEqual(IReadOnlyList<JournalGroupMember>? left, IReadOnlyList<JournalGroupMember>? right) =>
+        left is null || right is null ? left is null && right is null : left.SequenceEqual(right);
+}
 
 /// <summary>
 /// Result of <see cref="OperationJournal.Dismiss"/>: <see cref="Dismissed"/> are the entries actually appended as
@@ -447,13 +494,12 @@ public sealed class OperationJournal
             return group.Undo == true ? exists : !exists;
         }
 
-        var destinationPath = member.Destination;
-        var sourcePath = member.Source;
-        if (group.Undo == true && group.Type == FileOperationType.Move)
-            (sourcePath, destinationPath) = (destinationPath ?? string.Empty, sourcePath);
-        var destination = !string.IsNullOrWhiteSpace(destinationPath) ? _fileSystem.GetFileStat(destinationPath) : null;
+        // An undo group is journaled already in undo direction (UndoService: Source = the original destination, Destination =
+        // the original source), like the single-entry reconcile and RecoveryFileCheck read it: no Undo-specific swap here.
+        // Undo is only ever journaled for Move and Recycle (handled above); Copy is never undone.
+        var destination = !string.IsNullOrWhiteSpace(member.Destination) ? _fileSystem.GetFileStat(member.Destination) : null;
         var destinationMatches = destination is not null && destination.Length == member.Size;
-        var sourceExists = _fileSystem.FileExists(sourcePath);
+        var sourceExists = _fileSystem.FileExists(member.Source);
         return group.Type switch
         {
             FileOperationType.Move => !sourceExists && destinationMatches,
@@ -503,23 +549,15 @@ public sealed class OperationJournal
         {
             var history = new List<JournalEntry>();
             ReadEntries(e => { if (string.Equals(e.Id, anchor.Id, StringComparison.Ordinal)) history.Add(e); });
-            var at = history.FindLastIndex(e => JournalEntriesEqual(e, anchor)); // -1: not found, the whole history is "since"
+            var at = history.FindLastIndex(e => e == anchor); // -1: not found, the whole history is "since"
             if (history.Count - at - 1 != ownSince.Count) return false;
             for (var i = 0; i < ownSince.Count; i++)
             {
-                if (!JournalEntriesEqual(history[at + 1 + i], ownSince[i])) return false;
+                if (history[at + 1 + i] != ownSince[i]) return false;
             }
             Append(entry);
             return true;
         }
-    }
-
-    private static bool JournalEntriesEqual(JournalEntry left, JournalEntry right)
-    {
-        if (left with { GroupMembers = null } != right with { GroupMembers = null }) return false;
-        return left.GroupMembers is null || right.GroupMembers is null
-            ? left.GroupMembers is null && right.GroupMembers is null
-            : left.GroupMembers.SequenceEqual(right.GroupMembers);
     }
 
     internal const long CompactionThresholdBytes = FullScanThresholdBytes;

@@ -29,6 +29,24 @@ public sealed record CaptureGroup
             : new[] { JpegPath, RawPath, xmpPath });
     }
 
+    // The cached path lists are fresh collections per instance (a compiler-generated record Equals would compare them by
+    // reference and never report two equal captures as equal, which also broke CatalogEntry equality), so equality is
+    // defined on the three paths only. Windows paths: ordinal, ignoring case (same rule as CaptureGroupBuilder).
+    public bool Equals(CaptureGroup? other) =>
+        other is not null
+        && string.Equals(JpegPath, other.JpegPath, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(RawPath, other.RawPath, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(XmpPath, other.XmpPath, StringComparison.OrdinalIgnoreCase);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(JpegPath, StringComparer.OrdinalIgnoreCase);
+        hash.Add(RawPath, StringComparer.OrdinalIgnoreCase);
+        hash.Add(XmpPath, StringComparer.OrdinalIgnoreCase);
+        return hash.ToHashCode();
+    }
+
     /// <summary>Gets the path shown for this pair under the selected review mode.</summary>
     public string GetRepresentativePath(RawPairMode mode) => mode switch
     {
