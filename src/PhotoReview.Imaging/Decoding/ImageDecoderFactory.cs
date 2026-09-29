@@ -20,11 +20,13 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
     private readonly ConcurrentDictionary<DecoderBackend, IImageDecoder> _created = new();
     private readonly ILog _log;
     private readonly ReviewMetrics? _metrics;
+    private readonly Func<DecoderBackend, IImageDecoder, IImageDecoder>? _decoderDecorator;
 
     public ImageDecoderFactory(
         IEnumerable<(DecoderBackend Backend, Func<IImageDecoder> Factory)> providers,
         ILog? log = null,
-        ReviewMetrics? metrics = null)
+        ReviewMetrics? metrics = null,
+        Func<DecoderBackend, IImageDecoder, IImageDecoder>? decoderDecorator = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
         var dict = new Dictionary<DecoderBackend, Func<IImageDecoder>>();
@@ -42,6 +44,7 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
         _registry = dict;
         _log = log ?? NullLog.Instance;
         _metrics = metrics;
+        _decoderDecorator = decoderDecorator;
     }
 
     public ImageDecoderFactory(ILog? log = null, ReviewMetrics? metrics = null)
@@ -66,17 +69,20 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
     {
         if (backend == DecoderBackend.Wpf)
         {
-            return _registry[DecoderBackend.Wpf]();
+            return Decorate(backend, _registry[DecoderBackend.Wpf]());
         }
 
         if (!_registry.TryGetValue(backend, out var primaryFactory))
         {
             _log.Warn($"Decoder backend {backend} is not registered, falling back to Wpf.");
-            return _registry[DecoderBackend.Wpf]();
+            return Decorate(backend, _registry[DecoderBackend.Wpf]());
         }
 
         var primary = primaryFactory();
         var fallback = _registry[DecoderBackend.Wpf]();
-        return new FallbackImageDecoder(primary, backend, fallback, DecoderBackend.Wpf, _log, _metrics);
+        return Decorate(backend, new FallbackImageDecoder(primary, backend, fallback, DecoderBackend.Wpf, _log, _metrics));
     }
+
+    private IImageDecoder Decorate(DecoderBackend backend, IImageDecoder decoder) =>
+        _decoderDecorator?.Invoke(backend, decoder) ?? decoder;
 }

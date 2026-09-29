@@ -10,6 +10,7 @@ using PhotoReview.Core.Instance;
 using PhotoReview.Core.IO;
 using PhotoReview.Platform.Windows;
 using PhotoReview.Core.Settings;
+using PhotoReview.Imaging.Raw;
 
 namespace PhotoReview.App;
 
@@ -112,7 +113,17 @@ public partial class App : System.Windows.Application, IDisposable
         // 6. Imaging & Decoding
         services.AddSingleton<IImageDecoderFactory>(sp =>
         {
-            return new ImageDecoderFactory(Composition.DecoderProviders.Create(sp.GetRequiredService<ISourceReader>()), sp.GetService<ILog>(), sp.GetService<ReviewMetrics>());
+            var sourceReader = sp.GetRequiredService<ISourceReader>();
+            var settingsStore = sp.GetRequiredService<SettingsStore>();
+            var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
+            return new ImageDecoderFactory(
+                Composition.DecoderProviders.Create(sourceReader),
+                sp.GetService<ILog>(),
+                sp.GetService<ReviewMetrics>(),
+                (_, standardDecoder) => new FormatRoutingDecoder(
+                    standardDecoder,
+                    new RawDecoder(standardDecoder, sourceReader, sourceBytesCache: sourceBytesCache),
+                    () => settingsStore.Current.RawSupportEnabled));
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,

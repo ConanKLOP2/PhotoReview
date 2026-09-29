@@ -12,11 +12,13 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.FileActions;
+using PhotoReview.Core.Model;
 using PhotoReview.Core.Session;
 using PhotoReview.Core.Settings;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Preload;
+using PhotoReview.Imaging.Raw;
 using PhotoReview.TestSupport;
 using PhotoReview.TestSupport.Windows;
 using Xunit;
@@ -67,6 +69,16 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<PreviewStateContext>());
         Assert.NotNull(provider.GetRequiredService<PreviewImageService>());
         Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>());
+    }
+
+    [Fact]
+    public void AppHost_DecoderFactoryRoutesEveryBackendThroughRawSupportGate()
+    {
+        using var provider = AppHost.BuildServices();
+        var factory = provider.GetRequiredService<IImageDecoderFactory>();
+
+        Assert.IsType<FormatRoutingDecoder>(factory.Create(DecoderBackend.Wpf));
+        Assert.IsType<FormatRoutingDecoder>(factory.Create(DecoderBackend.WicDirect));
     }
 
     // AR02a step 1: AppHost is the single entry point App.App_Startup, Benchmark.Cli (AR02c) and
