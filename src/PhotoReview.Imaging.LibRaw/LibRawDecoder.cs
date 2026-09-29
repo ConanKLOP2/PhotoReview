@@ -16,7 +16,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     private static readonly SemaphoreSlim s_fullDecodeGate = new(1, 1);
     private readonly Action<string>? _stageObserver;
 
-    /// <summary>Free slots of the single-slot gate that serialises full-resolution decodes (test seam).</summary>
+    /// <summary>Free slots of the single-slot gate that serialises LibRaw decodes (test seam).</summary>
     internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.CurrentCount;
 
     public LibRawDecoder() { }
@@ -100,11 +100,11 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             throw new NotSupportedException("LibRaw always applies the RAW container's orientation; an un-oriented full decode is unavailable.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        // A full-resolution decode holds LibRaw's working image, its 8-bit RGB output (3 B/px) and the managed BGRA copy
-        // (4 B/px) at once, which is several hundred MB for a 60-100 MP sensor. Serialise those so parallel callers
-        // (e.g. LibRaw as the general backend) cannot exhaust memory together; bounded decodes are not gated.
-        var gated = !request.IsDownscaleRequested;
-        if (gated) s_fullDecodeGate.Wait(cancellationToken);
+        // LibRaw has no reduced-size decode: even a preview-sized request unpacks and processes the whole sensor image, and
+        // holds LibRaw's working image plus its 8-bit RGB output (3 B/px) at once (several hundred MB for a 60-100 MP
+        // sensor; a full-size request adds the managed BGRA copy, 4 B/px). Serialise every decode so parallel callers
+        // (e.g. LibRaw as the general backend, preload workers) cannot exhaust memory together.
+        s_fullDecodeGate.Wait(cancellationToken);
         try
         {
             return DecodeCore(request, cancellationToken);
@@ -115,7 +115,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         }
         finally
         {
-            if (gated) s_fullDecodeGate.Release();
+            s_fullDecodeGate.Release();
         }
     }
 
