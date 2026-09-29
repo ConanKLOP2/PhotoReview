@@ -28,7 +28,7 @@ Final gate: publish Release and run `tools/verify-release.ps1` on that exact dir
 - `dotnet build PhotoReview.slnx -c Release`: 0 warnings, 0 errors. LibRaw Native tests: 3 passed (runtime probe, CR2 buffer + CR3 file decode, Bgr32/96 DPI, bounded-box scaling, orientation guard).
 - Mutation check: removing the LibRaw provider caused the app composition test to fail (`Expected: True, Actual: False`); production registration restored.
 - Mutation check: changing the output format to `Bgra32` caused the LibRaw Native test to fail (`Expected: Bgr32, Actual: Bgra32`); production output restored to `Bgr32`.
-- CI follow-up: first PR run found the App-layer `ConfigureAwait(false)` rule and an added fixed-delay test call; both were removed. Focused architecture rules passed 2/2 and ZoomDetailTests passed 25/25 afterward; rerun PR CI is pending.
+- CI follow-up: PR run 1 found the App-layer `ConfigureAwait(false)` rule and an added fixed-delay test call; both were removed. PR run 2 found the persisted `DecoderBackend` enum contract missing `LibRaw`; updated it and verified ModelEnumTests 8/8. A fresh PR CI run is pending.
 
 ## Open problems
 - No RAW-31 implementation blockers. Runtime half_size comparison is unavailable through this pinned C API; a future implementation would require a version-matched native shim or a C++ API migration.

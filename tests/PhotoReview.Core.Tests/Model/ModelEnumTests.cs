@@ -19,7 +19,7 @@ public class ModelEnumTests
         { typeof(FitWidthAnchor), ["Centre", "TopThird"] },
         { typeof(FileOperationType), ["Move", "Copy", "Recycle"] },
         { typeof(JournalState), ["Prepared", "Committed", "Failed", "Dismissed"] },
-        { typeof(DecoderBackend), ["Wpf", "WicDirect", "TurboJpeg"] },
+        { typeof(DecoderBackend), ["Wpf", "WicDirect", "TurboJpeg", "LibRaw"] },
         { typeof(ScalingQuality), ["Linear", "HighQuality"] },
     };
 
