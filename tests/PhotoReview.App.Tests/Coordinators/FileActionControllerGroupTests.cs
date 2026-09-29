@@ -351,10 +351,15 @@ public sealed class FileActionControllerGroupTests : IDisposable
         _sink.PresentTask = () => gate.Task;
         var controller = NewController();
 
+        // The switch happens after the action's own stale-folder check passed and before the presenter finished: only the
+        // guard right before the partner-missing status can still protect the new folder's status line.
+        _sink.OnUpdateSessionPath = () =>
+        {
+            _clock.NextFolder(); // the user opens another folder meanwhile
+            _sink.SetStatusText("new folder status");
+        };
+
         var run = controller.RunActionAsync(0, null, jpeg);
-        Assert.False(run.IsCompleted); // waiting for the presenter
-        _clock.NextFolder(); // the user opens another folder meanwhile
-        _sink.SetStatusText("new folder status");
         gate.SetResult();
         await run;
 
@@ -493,7 +498,9 @@ public sealed class FileActionControllerGroupTests : IDisposable
             return PresentTask?.Invoke() ?? Task.CompletedTask;
         }
 
-        public void UpdateSessionPath(string currentPath) { }
+        /// <summary>Runs inside UpdateSessionPath: after the action's stale-folder check, right before the controller awaits the presenter.</summary>
+        public Action? OnUpdateSessionPath { get; set; }
+        public void UpdateSessionPath(string currentPath) => OnUpdateSessionPath?.Invoke();
         public void NotifyNavigationStateChanged() { }
     }
 }
