@@ -52,6 +52,81 @@ public sealed class CaptureGroupBuilderTests(ITestOutputHelper output)
         Assert.All(groups, group => Assert.Null(group.XmpPath));
     }
 
+    [Theory]
+    [InlineData(".tif")]
+    [InlineData(".tiff")]
+    [InlineData(".png")]
+    [InlineData(".bmp")]
+    [InlineData(".gif")]
+    public void Build_NonJpegImageNextToRaw_IsNotGrouped(string extension)
+    {
+        var groups = CaptureGroupBuilder.Build([@"C:\photos\A" + extension, @"C:\photos\A.dng"]);
+
+        Assert.Empty(groups);
+    }
+
+    [Fact]
+    public void Build_NonJpegImageBesideJpegAndRaw_DoesNotMakePairAmbiguousOrJoinIt()
+    {
+        var groups = CaptureGroupBuilder.Build([@"C:\photos\A.jpg", @"C:\photos\A.tif", @"C:\photos\A.dng"]);
+
+        var group = Assert.Single(groups);
+        Assert.DoesNotContain(@"C:\photos\A.tif", group.Paths);
+    }
+
+    [Fact]
+    public void Build_SidecarNamedBaseXmpWinsOverFileExtensionSidecars()
+    {
+        var groups = CaptureGroupBuilder.Build(
+            [@"C:\photos\a.jpg", @"C:\photos\a.cr2"],
+            [@"C:\photos\a.cr2.xmp", @"C:\photos\a.xmp"]);
+
+        Assert.Equal(@"C:\photos\a.xmp", Assert.Single(groups).XmpPath);
+    }
+
+    [Fact]
+    public void Build_SingleFileExtensionSidecar_IsIncludedWhenNoBaseNamedSidecarExists()
+    {
+        var groups = CaptureGroupBuilder.Build(
+            [@"C:\photos\a.jpg", @"C:\photos\a.cr2"],
+            [@"C:\photos\A.CR2.xmp"]);
+
+        Assert.Equal(@"C:\photos\A.CR2.xmp", Assert.Single(groups).XmpPath);
+    }
+
+    [Fact]
+    public void Build_TwoCompetingFileExtensionSidecars_AreAmbiguousAndLeftOutOfTheGroup()
+    {
+        // Documented behavior: with no base-named sidecar and two candidates the group is still built (so the pair
+        // stays together) but no sidecar is claimed; Recycle/Move leave both .xmp files where they are.
+        var groups = CaptureGroupBuilder.Build(
+            [@"C:\photos\a.jpg", @"C:\photos\a.cr2"],
+            [@"C:\photos\a.cr2.xmp", @"C:\photos\a.jpg.xmp"]);
+
+        var group = Assert.Single(groups);
+        Assert.Null(group.XmpPath);
+        Assert.Equal(2, group.Paths.Count);
+    }
+
+    [Theory]
+    [InlineData(PhotoReview.Core.Model.RawPairMode.PreferJpeg)]
+    [InlineData(PhotoReview.Core.Model.RawPairMode.PreferRaw)]
+    public void GroupEntries_CollapsedEntryTakesPositionOfFirstMemberSeen_NotTheRepresentative(PhotoReview.Core.Model.RawPairMode mode)
+    {
+        // Documented behavior for name/size/date sorts: the pair's single entry sits where its FIRST member appears in
+        // the incoming order, even when the representative (JPEG or RAW per mode) appears later.
+        var order = new[]
+        {
+            new CatalogEntry(@"C:\photos\a.cr2"), new CatalogEntry(@"C:\photos\b.jpg"), new CatalogEntry(@"C:\photos\a.jpg"),
+        };
+
+        var grouped = CaptureGroupBuilder.GroupEntries(order, mode);
+
+        Assert.Equal(2, grouped.Count);
+        Assert.Equal(mode == PhotoReview.Core.Model.RawPairMode.PreferJpeg ? @"C:\photos\a.jpg" : @"C:\photos\a.cr2", grouped[0].Path);
+        Assert.Equal(@"C:\photos\b.jpg", grouped[1].Path);
+    }
+
     [Fact]
     public void GroupEntries_UsesSelectedRepresentativeAndKeepsBothMembersAddressable()
     {
