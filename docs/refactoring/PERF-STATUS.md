@@ -33,3 +33,4 @@ See [`perf/`](perf/) for every measurement pass, oldest first by filename:
 - [2026-09-28 -- IMG-07 single JPEG header marker walk; title-bar/EXIF-line rebuild cost check (no change)](perf/2026-09-28-img07-single-header-walk.md)
 - [2026-09-29 -- RAW-22 cache/preload/RAM estimate](perf/2026-09-29-raw-22-cache-preload.md)
 - [2026-09-29 -- RAW-60 decoder benchmark](perf/2026-09-29-raw-60-decoder-bench.md)
+- [2026-09-29 -- RAW-31 LibRaw `half_size` evaluation](perf/2026-09-29-raw-31-half-size-evaluation.md)
