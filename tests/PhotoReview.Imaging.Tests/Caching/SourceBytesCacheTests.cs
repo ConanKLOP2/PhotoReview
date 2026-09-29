@@ -24,6 +24,27 @@ public sealed class SourceBytesCacheTests : IDisposable
         Assert.Equal(1, cache.Count);
     }
 
+    [Fact(DisplayName = "Source bytes cache retains a preview range without reading the whole source identity")]
+    public void GetOrReadRange_CachesOnlyRequestedRanges()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "raw.dng");
+        var contents = Enumerable.Range(0, 4096).Select(value => (byte)(value % 251)).ToArray();
+        File.WriteAllBytes(path, contents);
+        var info = new FileInfo(path);
+        var cache = new SourceBytesCache(1024);
+
+        var first = cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 512, 128);
+        var firstAgain = cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 512, 128);
+        var second = cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 1024, 64);
+
+        Assert.Same(first, firstAgain);
+        Assert.Equal(contents[512..640], first);
+        Assert.Equal(contents[1024..1088], second);
+        Assert.Equal(192, cache.CurrentSize);
+        Assert.Equal(2, cache.Count);
+    }
+
     [Fact(DisplayName = "Prefetch caches a file that fits and reads nothing for a file larger than the whole cache")]
     public void TryPrefetch_SkipsFilesTheCacheCouldNeverKeep()
     {

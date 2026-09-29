@@ -54,4 +54,18 @@ public sealed class SourceOrientationOverrideTests
         Assert.NotEqual(key1, key2);
         Assert.NotEqual(key0.GetHashCode(), key1.GetHashCode());
     }
+
+    [Fact]
+    public void ImageCacheKey_CreateOriginalCanDistinguishRawFullDecode()
+    {
+        var source = ImageCacheKey.Create(new FileInfo(typeof(SourceOrientationOverrideTests).Assembly.Location),
+            isOriginal: false, 1000, sourceKind: 1);
+
+        var previewOriginal = ImageCacheKey.CreateOriginal(source);
+        var rawFullDecode = ImageCacheKey.CreateOriginal(source, sourceKind: 2);
+
+        Assert.Equal(1, previewOriginal.SourceKind);
+        Assert.Equal(2, rawFullDecode.SourceKind);
+        Assert.NotEqual(previewOriginal, rawFullDecode);
+    }
 }

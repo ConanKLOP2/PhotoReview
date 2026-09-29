@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -54,7 +54,7 @@ public sealed class ReviewMetrics
     public void RecordDecoderFallback(DecoderBackend backend) =>
         _decoderFallbacks.AddOrUpdate(backend, 1, (_, count) => count + 1);
 
-    public void RecordSourceRead(long bytes, long milliseconds)
+    public void RecordSourceRead(long bytes, long milliseconds, bool includeInDecodeEwma = true)
     {
         // A negative value (clock adjustment, a caller bug) must not shrink a running total.
         bytes = Math.Max(0, bytes);
@@ -62,7 +62,7 @@ public sealed class ReviewMetrics
         Interlocked.Increment(ref _sourceReads);
         Interlocked.Add(ref _sourceBytesRead, bytes);
         Interlocked.Add(ref _decodeMilliseconds, milliseconds);
-        UpdateDecodeEwma(milliseconds);
+        if (includeInDecodeEwma) UpdateDecodeEwma(milliseconds);
     }
 
     /// <summary>Weight of the newest sample in <see cref="DecodeMillisecondsEwma"/>.</summary>

@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using PhotoReview.Core.Catalog;
@@ -305,13 +305,17 @@ public sealed class PreviewImageService : IPreloadTarget
     public ImageCacheKey GetCurrentCacheKey(string path)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
+        var sourceKind = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path)) ? (byte)1 : (byte)0;
+        return ImageCacheKey.Create(path, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(),
+            orientationApplied: true, backend: _currentBackend(), sourceKind: sourceKind);
     }
 
     public ImageCacheKey GetCurrentCacheKey(CatalogEntry entry)
     {
         var isOriginal = IsOriginalLoadingMode();
-        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(), orientationApplied: true, backend: _currentBackend());
+        var sourceKind = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(entry.Path)) ? (byte)1 : (byte)0;
+        return ImageCacheKey.Create(entry, isOriginal, isOriginal ? DecodeBox.Unbounded : _targetDecodeBox(),
+            orientationApplied: true, backend: _currentBackend(), sourceKind: sourceKind);
     }
 
     public Task<IDecodedImage> GetPreviewAsync(string path) => GetPreviewAsync(path, GetCurrentCacheKey(path));
@@ -554,7 +558,9 @@ public sealed class PreviewImageService : IPreloadTarget
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
-        if (sourceRead) _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
+        if (sourceRead)
+            _metrics.RecordSourceRead(GetSourceBytesRead(decodedImage, key), stopwatch.ElapsedMilliseconds,
+                includeInDecodeEwma: key.SourceKind != 2);
         return decodedImage;
     }
 
@@ -650,11 +656,12 @@ public sealed class PreviewImageService : IPreloadTarget
         // A file the byte cache cannot hold is not pre-read here (the WPF/WIC decoders stream it; TurboJpeg still reads it whole
         // itself, which needs the full buffer anyway): pre-reading it would allocate the whole file (LOH, and
         // several at once under preload) only to drop it again.
-        if (_sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
+        var isRawSource = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+        if (!isRawSource && _sourceBytesCache is not null && _sourceBytesCache.CanCache(sourceLength))
         {
             preReadBytes = _sourceBytesCache.GetOrRead(path, priority);
         }
-        else if (Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
+        else if (!isRawSource && Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PREREAD") == "1")
         {
             long readStart = perf ? Stopwatch.GetTimestamp() : 0;
             byte[] bytes;
@@ -676,6 +683,9 @@ public sealed class PreviewImageService : IPreloadTarget
         if (perf) PhotoReviewPerf.Log.Decode(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0), targetBox.Width, decoded.Downscaled, !targetBox.IsUnbounded && !decoded.Downscaled);
         return decoded;
     }
+
+    private static long GetSourceBytesRead(IDecodedImage image, ImageCacheKey key) =>
+        image is ISourceReadMetrics metrics ? metrics.SourceBytesRead : key.Length;
 
     /// <summary>
     /// Original (post-orientation) dimensions already known for <paramref name="currentKey"/>'s source
@@ -727,7 +737,8 @@ public sealed class PreviewImageService : IPreloadTarget
                 perf ? PhotoReviewPerf.NavContext : 0, perf ? PhotoReviewPerf.PathId(path) : "");
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
             _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
-            _metrics.RecordSourceRead(key.Length, stopwatch.ElapsedMilliseconds);
+            _metrics.RecordSourceRead(GetSourceBytesRead(decoded, key), stopwatch.ElapsedMilliseconds,
+                includeInDecodeEwma: key.SourceKind != 2);
             return decoded;
             // RunContinuationsAsynchronously: the dedicated thread exits right after the decode
             // instead of running the awaiting caller's continuation on its own (above-normal) stack.

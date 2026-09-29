@@ -1,5 +1,7 @@
 ﻿namespace PhotoReview.Imaging.Tests;
 
+using PhotoReview.Core.Catalog;
+
 [Trait("Category", "HotPath")]
 public sealed class RamBudgetPolicyTests
 {
@@ -49,6 +51,33 @@ public sealed class RamBudgetPolicyTests
     {
         Assert.True(RamBudgetPolicy.ShouldPreloadWholeFolder(100, 1_000, new FakeMemoryProbe(true)));
         Assert.False(RamBudgetPolicy.ShouldPreloadWholeFolder(101, 1_000, new FakeMemoryProbe(true)));
+    }
+
+    [Fact]
+    public void RawOriginalEstimateWithoutDimensionsDoesNotUseCompressedFileLength()
+    {
+        var small = new CatalogEntry("small.cr3").WithMetadata(1_000, DateTime.UnixEpoch);
+        var large = new CatalogEntry("large.cr3").WithMetadata(100_000_000, DateTime.UnixEpoch);
+
+        Assert.Equal(long.MaxValue, RamBudgetPolicy.EstimateFolderPreviewBytes([small], DecodeBox.Unbounded));
+        Assert.Equal(long.MaxValue, RamBudgetPolicy.EstimateFolderPreviewBytes([large], DecodeBox.Unbounded));
+    }
+
+    [Fact]
+    public void RawFolderEstimateUsesPerFileDimensionsAtTheDecodeBox()
+    {
+        const int imageCount = 200;
+        const int targetWidth = 2048;
+        const int targetHeight = 1536;
+        var entries = Enumerable.Range(0, imageCount)
+            .Select(index => new CatalogEntry($"image-{index:D3}.arw")
+                .WithMetadata(20_000_000 + index, DateTime.UnixEpoch, 4000, 3000))
+            .ToArray();
+
+        var estimate = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, new DecodeBox(targetWidth, targetHeight));
+        var measured = (long)imageCount * targetWidth * targetHeight * 4;
+
+        Assert.InRange(estimate, (long)(measured * 0.8), (long)(measured * 1.2));
     }
 }
 

@@ -1,7 +1,9 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging;
+using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Raw;
@@ -93,6 +95,21 @@ public sealed class RawDecoderTests
     }
 
     [Fact]
+    public void ReadInfo_CachesParsedContainerBySourceIdentity()
+    {
+        var reader = new TrackingSourceReader(new byte[128]);
+        var containerReader = new CountingContainerReader();
+        var decoder = new RawDecoder(new WpfBitmapImageDecoder(reader), reader,
+            new RawContainerReaderRegistry([containerReader]));
+
+        var first = decoder.ReadInfo("virtual.dng");
+        var second = decoder.ReadInfo("virtual.dng");
+
+        Assert.Equal(first, second);
+        Assert.Equal(1, containerReader.ReadCount);
+    }
+
+    [Fact]
     public void Decode_ReadsOnlyPreviewBytesAndHeader_NoWholeFileRead()
     {
         // Create 10MB synthetic file with 640x480 JPEG embedded inside
@@ -119,6 +136,71 @@ public sealed class RawDecoderTests
         long maxExpectedRead = 1024 * 1024 + jpeg.Length + 64 * 1024;
         Assert.True(trackingReader.TotalBytesRead < maxExpectedRead,
             $"Expected total bytes read < {maxExpectedRead}, but was {trackingReader.TotalBytesRead}");
+    }
+
+    [Fact]
+    public void Decode_CachesPreviewRangeInsteadOfWholeRawFile()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(640, 480);
+        var tiff = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: jpeg);
+        var largeFile = new byte[10 * 1024 * 1024];
+        Array.Copy(tiff, largeFile, tiff.Length);
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.dng");
+        File.WriteAllBytes(path, largeFile);
+        try
+        {
+            var reader = new TrackingSourceReader(largeFile);
+            var cache = new SourceBytesCache(2 * 1024 * 1024, reader);
+            var decoder = new RawDecoder(new WpfBitmapImageDecoder(reader), reader, sourceBytesCache: cache);
+            var request = new DecodeRequest(path, new DecodeBox(320, 240), priority: SourceReadPriority.Preload);
+
+            decoder.Decode(request);
+            var bytesReadAfterFirstDecode = reader.TotalBytesRead;
+            decoder.Decode(request);
+
+            Assert.Equal(jpeg.Length, cache.CurrentSize);
+            Assert.Equal(1, cache.Count);
+            Assert.True(reader.TotalBytesRead <= bytesReadAfterFirstDecode + 128 * 1024,
+                $"The second decode should reuse the cached preview byte range; additional bytes={reader.TotalBytesRead - bytesReadAfterFirstDecode}.");
+            Assert.True(cache.CurrentSize < largeFile.Length);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task PreviewService_DoesNotPreReadWholeRawFileIntoSourceCache()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(640, 480);
+        var tiff = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: jpeg);
+        var largeFile = new byte[10 * 1024 * 1024];
+        Array.Copy(tiff, largeFile, tiff.Length);
+        var root = Path.Combine(Path.GetTempPath(), $"PhotoReview-raw-cache-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "camera.dng");
+        File.WriteAllBytes(path, largeFile);
+        var bytesCache = new SourceBytesCache(16 * 1024 * 1024);
+        var metrics = new ReviewMetrics();
+        var service = new PreviewImageService(metrics, () => false, () => new DecodeBox(320, 240),
+            capacityBytes: 64 * 1024 * 1024, diskCacheDirectory: Path.Combine(root, "preview-cache"),
+            diskCacheCapacityBytes: 0, disableDiskCacheOverride: true,
+            decoder: new RawDecoder(new WpfBitmapImageDecoder(), sourceBytesCache: bytesCache), sourceBytesCache: bytesCache);
+        try
+        {
+            Assert.Equal(1, service.GetCurrentCacheKey(path).SourceKind);
+            var image = await service.GetPreviewAsync(path);
+
+            Assert.True(image.PixelWidth > 0);
+            Assert.Equal(jpeg.Length, bytesCache.CurrentSize);
+            Assert.True(metrics.Snapshot().SourceBytesRead < largeFile.Length);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Theory]
@@ -200,5 +282,17 @@ public sealed class RawDecoderTests
         Assert.NotNull(selectedUnbounded);
         Assert.Equal(4000, selectedUnbounded.Width);
         Assert.Equal(3000, selectedUnbounded.Height);
+    }
+
+    private sealed class CountingContainerReader : IRawContainerReader
+    {
+        public RawFormat Format => RawFormat.Dng;
+        public int ReadCount { get; private set; }
+        public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase);
+        public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken)
+        {
+            ReadCount++;
+            return new RawContainerInfo(RawFormat.Dng, 4000, 3000, 1, [], []);
+        }
     }
 }

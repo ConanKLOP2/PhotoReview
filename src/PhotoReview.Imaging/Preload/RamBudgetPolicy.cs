@@ -1,5 +1,7 @@
-using PhotoReview.Core.Abstractions;
+﻿using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Settings;
+using System.IO;
 
 namespace PhotoReview.Imaging.Preload;
 
@@ -249,6 +251,54 @@ public static class RamBudgetPolicy
             return checked((long)(totalSourceBytes * JpegExpansionFactor));
         }
         return checked((long)Math.Ceiling(imageCount * perImage));
+    }
+
+    /// <summary>
+    /// Estimates the decoded preview cost from known per-file dimensions. RAW entries without parsed dimensions
+    /// use the bounded decode-box ceiling, or disable whole-folder preload in unbounded mode rather than deriving
+    /// a decoded size from the compressed RAW file length.
+    /// </summary>
+    public static long EstimateFolderPreviewBytes(IReadOnlyList<CatalogEntry> entries, DecodeBox targetBox,
+        double? measuredMeanPreviewBytes = null)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var bounded = targetBox.Width > 0 && targetBox.Height > 0;
+        var boxBound = bounded ? (double)targetBox.Width * targetBox.Height * DefaultAverageBytesPerPixel : 0;
+        double total = 0;
+        foreach (var entry in entries)
+        {
+            var width = entry.Width.GetValueOrDefault();
+            var height = entry.Height.GetValueOrDefault();
+            double estimate;
+            if (width > 0 && height > 0)
+            {
+                var scale = Math.Min(1d, Math.Min(
+                    targetBox.Width > 0 ? targetBox.Width / (double)width : 1d,
+                    targetBox.Height > 0 ? targetBox.Height / (double)height : 1d));
+                estimate = Math.Ceiling(width * scale) * Math.Ceiling(height * scale) * DefaultAverageBytesPerPixel;
+            }
+            else if (measuredMeanPreviewBytes is > 0)
+            {
+                estimate = measuredMeanPreviewBytes.Value * MeasuredPreviewMargin;
+                if (bounded) estimate = Math.Min(estimate, boxBound);
+            }
+            else if (bounded)
+            {
+                estimate = boxBound;
+            }
+            else if (ImageFileTypes.RawExtensions.Contains(Path.GetExtension(entry.Path)))
+            {
+                return long.MaxValue;
+            }
+            else
+            {
+                estimate = Math.Max(0, entry.Length.GetValueOrDefault()) * JpegExpansionFactor;
+            }
+
+            total += estimate;
+            if (total >= long.MaxValue) return long.MaxValue;
+        }
+        return checked((long)Math.Ceiling(total));
     }
 
     public static bool ShouldPreloadWholeFolder(long totalSourceBytes, long capacityBytes, IMemoryProbe memoryProbe,

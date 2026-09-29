@@ -35,3 +35,10 @@ public interface IDecodedImage
     /// </summary>
     PhotoReview.Imaging.Metadata.ExifSummary? Exif => null;
 }
+
+/// <summary>Optional diagnostics for decoders that read only a range of a larger source file.</summary>
+public interface ISourceReadMetrics
+{
+    /// <summary>Logical source bytes consumed to produce this decoded image.</summary>
+    long SourceBytesRead { get; }
+}

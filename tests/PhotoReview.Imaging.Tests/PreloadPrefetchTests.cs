@@ -32,6 +32,22 @@ public sealed class PreloadPrefetchTests
         Assert.Equal(expected.Order(StringComparer.OrdinalIgnoreCase), prefetched.Order(StringComparer.OrdinalIgnoreCase));
     }
 
+    [Fact(DisplayName = "Source-bytes prefetch never reads whole RAW files")]
+    public async Task Prefetch_SkipsRawSources()
+    {
+        var target = new DiskAwareTarget(_ => false, ".cr3");
+        var prefetched = new ConcurrentBag<string>();
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+            new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
+            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance,
+            prefetchSourceBytes: (path, _) => { prefetched.Add(path); return Task.CompletedTask; });
+
+        await scheduler.PreloadAroundAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Empty(prefetched);
+        Assert.Equal(ImageCount - 1, target.PreloadCount);
+    }
+
     private sealed class DiskAwareTarget : IPreloadTarget
     {
         private readonly Func<int, bool> _onDisk;
@@ -39,12 +55,12 @@ public sealed class PreloadPrefetchTests
         private readonly ConcurrentDictionary<string, byte> _cached = new(StringComparer.OrdinalIgnoreCase);
         private int _preloads;
 
-        public DiskAwareTarget(Func<int, bool> onDisk)
+        public DiskAwareTarget(Func<int, bool> onDisk, string extension = ".jpg")
         {
             _onDisk = onDisk;
             var written = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             Entries = Enumerable.Range(0, ImageCount)
-                .Select(i => new CatalogEntry($@"C:\r7-prefetch\img-{i:D3}.jpg").WithMetadata(1000 + i, written))
+                .Select(i => new CatalogEntry($@"C:\r7-prefetch\img-{i:D3}{extension}").WithMetadata(1000 + i, written))
                 .ToArray();
             for (var i = 0; i < Entries.Length; i++) _indexByPath[Entries[i].Path] = i;
         }

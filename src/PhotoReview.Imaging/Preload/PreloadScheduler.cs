@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using PhotoReview.Core.Abstractions;
@@ -21,7 +21,6 @@ public sealed class PreloadScheduler : IDisposable
     // GetCurrentCacheKey(entry), which reuses the folder scan's Length/LastWriteUtc instead of
     // stat-ing every candidate examined during a preload scan.
     private readonly Func<CatalogEntry[]> _snapshotEntries;
-    private readonly Func<long> _totalSourceBytes;
     private readonly PreloadOptions _options;
     private readonly IMemoryProbe _memoryProbe;
     private readonly IUiScheduler _ui;
@@ -86,7 +85,7 @@ public sealed class PreloadScheduler : IDisposable
         _pace = pace ?? new NavigationPace();
         _metrics = metrics ?? throw new ArgumentNullException(nameof(metrics));
         _snapshotEntries = snapshotEntries ?? throw new ArgumentNullException(nameof(snapshotEntries));
-        _totalSourceBytes = totalSourceBytes ?? throw new ArgumentNullException(nameof(totalSourceBytes));
+        ArgumentNullException.ThrowIfNull(totalSourceBytes); // retained for constructor compatibility; estimates now use per-entry metadata.
         _options = options ?? new PreloadOptions();
         _memoryProbe = memoryProbe ?? throw new ArgumentNullException(nameof(memoryProbe));
         _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
@@ -327,15 +326,14 @@ public sealed class PreloadScheduler : IDisposable
                 if (seenVersion != currentVersion || shape != seenShape || calibrated != seenCalibrated)
                 {
                     order?.Dispose();
-                    var sourceBytes = _totalSourceBytes();
                     var center = Volatile.Read(ref _preloadCenter);
                     var box = CurrentBox(entries, center);
                     var measured = _sizes.MeanBytes(box);
-                    var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries.Length, box, sourceBytes, measured);
+                    var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, box, measured);
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(estimated,
                         _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes, _options.MemoryLoadLimit);
                     if (_log.Enabled)
-                        _log.Info($"Preload policy: sourceBytes={sourceBytes} images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
+                        _log.Info($"Preload policy: images={entries.Length} box={box.Width}x{box.Height} measuredMeanBytes={measured?.ToString("F0", CultureInfo.InvariantCulture) ?? "none"} estimatedBytes={estimated} capacityBytes={_options.FullFolderThresholdBytes} wholeFolder={wholeFolder} center={center} direction={shape.Direction} lead={shape.Lead}");
                     order = PreloadOrderService.Build(center, entries.Length,
                         wholeFolder, shape.Direction, shape.Lead, _options.Window).GetEnumerator();
                     seenVersion = currentVersion;
@@ -609,7 +607,8 @@ public sealed class PreloadScheduler : IDisposable
             {
                 // A preview already in the disk cache decodes from there without touching the original:
                 // prefetching the whole source file would be a read nobody uses.
-                if (_prefetchSourceBytes is not null && !_target.HasDiskCachedPreview(key))
+                var isRawSource = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+                if (!isRawSource && _prefetchSourceBytes is not null && !_target.HasDiskCachedPreview(key))
                     await _prefetchSourceBytes(path, cancellationToken).ConfigureAwait(false);
                 // Snapshot() copies/sorts the per-path open table: only pay for it when tracing.
                 var beforeReads = perf ? _metrics.Snapshot().SourceReads : 0;

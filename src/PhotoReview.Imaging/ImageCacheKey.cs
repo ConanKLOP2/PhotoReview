@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using PhotoReview.Core.Model;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Localization;
@@ -84,6 +84,11 @@ public readonly record struct ImageCacheKey
     /// </summary>
     public static ImageCacheKey CreateOriginal(ImageCacheKey source) =>
         new(source.Path, source.Length, source.LastWriteUtcTicks, isOriginal: true, DecodeBox.Unbounded, source.OrientationApplied, source.Backend, source.SourceKind);
+
+    /// <summary>Builds an original-quality key while selecting a distinct source representation, such as a RAW full decode.</summary>
+    public static ImageCacheKey CreateOriginal(ImageCacheKey source, byte sourceKind) =>
+        new(source.Path, source.Length, source.LastWriteUtcTicks, isOriginal: true, DecodeBox.Unbounded,
+            source.OrientationApplied, source.Backend, sourceKind);
 
     public bool MatchesCurrentSource()
     {

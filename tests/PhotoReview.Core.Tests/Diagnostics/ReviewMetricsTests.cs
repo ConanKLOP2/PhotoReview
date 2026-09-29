@@ -58,6 +58,20 @@ public sealed class ReviewMetricsTests
     }
 
     [Fact]
+    public void FullDecodeSourceReadIsCountedButDoesNotAffectPreloadEwma()
+    {
+        var metrics = new ReviewMetrics();
+
+        metrics.RecordSourceRead(24_000_000, 1_500, includeInDecodeEwma: false);
+
+        var snapshot = metrics.Snapshot();
+        Assert.Equal(1, snapshot.SourceReads);
+        Assert.Equal(24_000_000, snapshot.SourceBytesRead);
+        Assert.Equal(1_500, snapshot.DecodeMilliseconds);
+        Assert.Equal(0, metrics.DecodeMillisecondsEwma);
+    }
+
+    [Fact]
     public void ConcurrentRecordingIsThreadSafe()
     {
         var metrics = new ReviewMetrics();
