@@ -151,6 +151,26 @@ public static class SyntheticRawBuilder
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// Builds a minimal Panasonic RW2 container ('IIU' + NUL): IFD0 with JpgFromRaw (0x002E, offset in the value, length
+    /// in the count as the reader expects) and, when <paramref name="ifd0Orientation"/> is given, Orientation (0x0112).
+    /// </summary>
+    public static byte[] BuildRw2(byte[] jpegBytes, ushort? ifd0Orientation = null)
+    {
+        using var ms = new MemoryStream();
+        ms.Write([(byte)'I', (byte)'I', 0x55, 0x00]);
+        WriteUInt32(ms, 8, littleEndian: true);
+        WriteUInt16(ms, (ushort)(ifd0Orientation.HasValue ? 2 : 1), littleEndian: true);
+        uint jpegOffset = 64;
+        WriteTiffEntry(ms, 0x002E, 4, (uint)jpegBytes.Length, jpegOffset, littleEndian: true);
+        if (ifd0Orientation is { } orientation)
+            WriteTiffEntry(ms, 0x0112, 3, 1, orientation, littleEndian: true);
+        WriteUInt32(ms, 0, littleEndian: true);
+        while (ms.Position < jpegOffset) ms.WriteByte(0);
+        ms.Write(jpegBytes);
+        return ms.ToArray();
+    }
+
     private static void WriteTiffEntry(Stream s, ushort tag, ushort type, uint count, uint valOrOffset, bool littleEndian)
     {
         WriteUInt16(s, tag, littleEndian);

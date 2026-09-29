@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO;
 using System.Text;
+using PhotoReview.Imaging.Metadata;
 
 namespace PhotoReview.Imaging.Raw.Raf;
 
@@ -55,16 +56,20 @@ public sealed class RafContainerReader : IRawContainerReader
         };
 
         // EXIF block inside embedded JPEG APP1
+        long exifLength = Math.Min(jpegLength, 128 * 1024);
         var exifBlocks = new List<ExifBlock>
         {
-            new(jpegOffset, Math.Min(jpegLength, 128 * 1024), IsTiffHeader: false)
+            new(jpegOffset, exifLength, IsTiffHeader: false)
         };
+
+        // RAF has no orientation of its own: the camera writes it into the embedded JPEG's EXIF.
+        int orientation = ExifParser.TryReadOrientationFromJpeg(source.Read(jpegOffset, (int)exifLength)) ?? 1;
 
         return new RawContainerInfo(
             RawFormat.Raf,
             SensorWidth: 0,
             SensorHeight: 0,
-            Orientation: 1, // Read from embedded JPEG EXIF
+            Orientation: orientation,
             Previews: previews,
             ExifBlocks: exifBlocks);
     }
