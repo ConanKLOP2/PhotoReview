@@ -1,5 +1,5 @@
 # RAW-41 Pair file actions — progress
-Branch: feat/raw22-cache-preload-ram · PR: #239 draft umbrella · Agent model: Codex
+Branch: feat/raw-support-integration · PR: #239 draft umbrella · Agent model: Codex
 Last update: 2026-09-29 · State: IN PROGRESS
 
 ## Approved design (lead)
@@ -14,16 +14,19 @@ Last update: 2026-09-29 · State: IN PROGRESS
 ## Steps
 - [x] Journal manifest schema, all-member preflight, group execution, group-aware reconciliation/retry, and per-member Recovery status.
 - [x] Group undo/Recycle restore and catalog recovery after success, failure, folder switch, and retry; group Recycle confirmation is consolidated.
-- [ ] Fault-injection crash-point tests; Category=Slow real-filesystem group checks; final visual Recovery-window review.
+- [x] Add fault-injection coverage for Prepared journal append failure, second-member Move failure, and partial group Recycle restore during Undo.
+- [x] Add Category=Slow real-filesystem group Move + journaled Undo check.
+- [ ] Category=Native RAW corpus group checks; final visual Recovery-window review.
 
 ## Next action
-Add failure injection around group journal append, second-member mutation, and Undo restore; run Slow/Native checks on the user's machine. Keep grouped mode opt-in/default Separate until those gates pass.
+Run the bounded Category=Native RAW corpus checks and complete the final visual Recovery-window review. Keep grouped mode opt-in/default Separate until those gates pass.
 
 ## Evidence / measurements
-- `CaptureGroupActionServiceTests`: 8/8 pass, including partial recovery retry, reversed Undo Move manifest, Recycle restore, target-conflict preflight, and stale snapshot rejection.
+- Bounded focused Release run: 31/31 passed across `CaptureGroupActionServiceTests`, `UndoServiceTests`, and `CaptureGroupActionSlowTests`; includes a real temporary-filesystem group Move + journaled Undo.
+- Fault injection covers Prepared journal append failure (no member mutation), failure on the second member's real `IFileSystem.Move` hook, and second-member failure while Undo restores a recycled group (first restore remains represented in a Failed group manifest).
 - Related Core catalog/journal/undo tests: 54/54 pass. Related App controller/loading/Recovery tests: 97/97 pass.
 - `tools/verify-all.ps1 -Hidden`: build succeeded with 0 warnings; default suite passed: Architecture 64, Core 1776, Imaging 642, Integration 635, App 1196. Slow/Native categories were excluded by the documented default gate; Integration&Slow supplementary gate ran 1 test successfully.
 - Docs budget/links, generated OPEN-DECISIONS, translation catalog validation, publish guard, and framework-dependent release verification passed. Vietnamese catalog has one existing unused-key warning: `status.noSupportedImagesButSubfolders.one`.
 
 ## Open problems
-- Crash-point, Slow/Native filesystem checks, and visual Recovery review remain. Group mode stays opt-in; the complete feature is not done.
+- The focused run includes the new Category=Slow filesystem test. Category=Native RAW corpus checks and visual Recovery review remain. Group mode stays opt-in; the complete feature is not done.

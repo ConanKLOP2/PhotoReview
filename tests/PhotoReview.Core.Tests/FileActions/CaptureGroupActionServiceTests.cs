@@ -31,6 +31,31 @@ public sealed class CaptureGroupActionServiceTests
     }
 
     [Fact]
+    public async Task ExecuteGroupAsync_PreparedJournalAppendFails_DoesNotMutateAnyMember()
+    {
+        var fileSystem = new InMemoryFileSystem();
+        fileSystem.AddFile(@"C:\photos\a.jpg", "jpeg", Stamp);
+        fileSystem.AddFile(@"C:\photos\a.cr2", "raw data", Stamp);
+        var paths = new AppPaths(@"C:\Users\test\AppData\Local");
+        var journalPath = paths.JournalFile;
+        fileSystem.OpenAppendHook = path => string.Equals(path, journalPath, StringComparison.OrdinalIgnoreCase)
+            ? new IOException("simulated journal append failure")
+            : null;
+        var journal = new OperationJournal(paths, fileSystem, new FixedClock());
+        var service = CreateService(fileSystem, journal);
+
+        var result = await service.ExecuteGroupAsync(new CaptureGroupActionRequest(
+            new CaptureGroup(@"C:\photos\a.jpg", @"C:\photos\a.cr2"), FileOperationType.Move, "selected"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(fileSystem.FileExists(@"C:\photos\a.jpg"));
+        Assert.True(fileSystem.FileExists(@"C:\photos\a.cr2"));
+        Assert.False(fileSystem.FileExists(@"C:\photos\selected\a.jpg"));
+        Assert.False(fileSystem.FileExists(@"C:\photos\selected\a.cr2"));
+        Assert.DoesNotContain(fileSystem.Events, item => item.Kind is "move" or "copy");
+    }
+
+    [Fact]
     public async Task ExecuteGroupAsync_PreparesManifestBeforeMovingAndReportsPartialFailure()
     {
         var fileSystem = new InMemoryFileSystem();
@@ -38,12 +63,14 @@ public sealed class CaptureGroupActionServiceTests
         fileSystem.AddFile(@"C:\photos\a.cr2", "raw data", Stamp);
         var journal = new OperationJournal(new AppPaths(@"C:\Users\test\AppData\Local"), fileSystem, new FixedClock());
         var sawCompletePreparedManifest = false;
+        fileSystem.MoveHook = (source, _) => source.EndsWith(".cr2", StringComparison.OrdinalIgnoreCase)
+            ? new IOException("simulated second-member failure")
+            : null;
         var service = CreateService(fileSystem, journal, async (source, destination) =>
         {
             var prepared = Assert.Single(journal.ReadPendingOperations());
             Assert.Equal(2, prepared.GroupMembers!.Count);
             sawCompletePreparedManifest = true;
-            if (source.EndsWith(".cr2", StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated second-member failure");
             await Task.Run(() => fileSystem.Move(source, destination));
         });
 
