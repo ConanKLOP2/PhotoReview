@@ -29,7 +29,9 @@ function Test-FetchRawSamplesSelfTest {
     try {
         $validManifest = Join-Path $testTempDir 'valid.txt'
         Set-Content -LiteralPath $validManifest -Value "CR2`tCamera`thttps://raw.pixls.us/getfile.php/129/nice/sample.CR2`t$([string]::new('A', 64))`thttps://creativecommons.org/publicdomain/zero/1.0/`tsample.CR2" -Encoding UTF8
-        $validSamples = Read-RawSampleManifest -Path $validManifest
+        # Windows PowerShell 5.1 does not expose .Count on a scalar PSCustomObject;
+        # keep singleton manifest results array-shaped for the same check as pwsh 7.
+        $validSamples = @(Read-RawSampleManifest -Path $validManifest)
         if ($validSamples.Count -ne 1) { throw 'SELF-TEST FAILED: Valid CC0 manifest row was not accepted.' }
         $mockApi = [pscustomobject]@{ data = ,@(
             'Canon', 'EOS 7D', 'RAW', 17.92, '',
