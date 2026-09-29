@@ -1,6 +1,6 @@
 # RAW-41 Pair file actions — progress
 Branch: feat/raw-support-integration · PR: #239 draft umbrella · Agent model: Codex
-Last update: 2026-09-29 · State: IN PROGRESS
+Last update: 2026-09-29 · State: READY FOR REVIEW
 
 ## Approved design (lead)
 - Keep one append-only journal operation per capture group. Add optional, omitted-when-null group metadata at the end of `JournalEntry`; old single-file JSON keeps its existing shape and remains readable.
@@ -17,10 +17,10 @@ Last update: 2026-09-29 · State: IN PROGRESS
 - [x] Add fault-injection coverage for Prepared journal append failure, second-member Move failure, and partial group Recycle restore during Undo.
 - [x] Add Category=Slow real-filesystem group Move + journaled Undo check.
 - [x] Category=Native RAW corpus group Move/Undo check using a copied corpus RAW file in an isolated temporary directory.
-- [ ] Final visual Recovery-window review.
+- [x] Recovery-window visual review waived by the user (2026-09-29); automated behavior/recovery coverage remains the validation basis.
 
 ## Next action
-Complete the final visual Recovery-window review with the user. Keep grouped mode opt-in/default Separate until that gate passes.
+No further RAW-41 implementation work remains; review this task's changes in PR #239. Keep grouped mode opt-in/default Separate as decided in Q-RAW-04 until RAW-62/RAW-70 handles real-machine validation and default selection.
 
 ## Evidence / measurements
 - Bounded focused Release run: 31/31 passed across `CaptureGroupActionServiceTests`, `UndoServiceTests`, and `CaptureGroupActionSlowTests`; includes a real temporary-filesystem group Move + journaled Undo.
@@ -29,11 +29,11 @@ Complete the final visual Recovery-window review with the user. Keep grouped mod
 - Bounded imaging `Category=Native` RAW corpus/runtime gate: 35/35 passed in 3m33s.
 - Bounded `CaptureGroupActionNativeTests`: 1/1 passed on the copied Canon EOS 350D CR2 corpus sample; Move + journaled Undo restored the copied pair and left the original corpus file intact. Replacing the group Move with a no-op made this test fail; the source mutation was reverted and the test passed again.
 - Full Release build: 0 warnings, 0 errors. `tools/verify-all.ps1 -Hidden` passed: Architecture 64, Core 1778, Imaging 642, Integration 635, App 1196; supplementary Integration+Slow 1/1; docs/link/localization/publish checks passed (the known unused vi key warning remains).
-- GitHub CI for branch head `e417badc`: `repo-checks`, `build-test-publish`, and `tag-version` all passed; PR #239 remains open and draft.
+- GitHub CI for branch head `d114eafd`: `repo-checks`, `build-test-publish`, and `tag-version` all passed; PR #239 remains open and draft.
 - Separate Core `Category=Slow` gate: 7/8 passed, including the new real-filesystem action test; the 10k-path grouping performance assertion measured 31.12 ms median against its 20 ms threshold under suite load. The same test passed on immediate isolated rerun; treat the suite timing miss as environment-sensitive and retain both results.
 - Related Core catalog/journal/undo tests: 54/54 pass. Related App controller/loading/Recovery tests: 97/97 pass.
 - `tools/verify-all.ps1 -Hidden`: build succeeded with 0 warnings; default suite passed: Architecture 64, Core 1776, Imaging 642, Integration 635, App 1196. Slow/Native categories were excluded by the documented default gate; Integration&Slow supplementary gate ran 1 test successfully.
 - Docs budget/links, generated OPEN-DECISIONS, translation catalog validation, publish guard, and framework-dependent release verification passed. Vietnamese catalog has one existing unused-key warning: `status.noSupportedImagesButSubfolders.one`.
 
 ## Open problems
-- Visual Recovery-window review remains. Group mode stays opt-in; the complete feature is not done.
+- None for RAW-41. The user explicitly waived the optional visual Recovery-window review; no GUI behavior is claimed from that waiver. RAW-70 still owns product documentation/default decisions after RAW-62.
