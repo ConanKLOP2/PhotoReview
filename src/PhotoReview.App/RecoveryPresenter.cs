@@ -51,7 +51,8 @@ internal static class RecoveryPresenter
     {
         RecoveryVerdict.CanRetry => Good,
         RecoveryVerdict.AlreadyDone => Info,
-        RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled => Warn,
+        RecoveryVerdict.Conflict or RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged or RecoveryVerdict.NotRecycled
+            or RecoveryVerdict.PartiallyPermanentlyDeleted => Warn,
         RecoveryVerdict.PermanentlyDeleted or RecoveryVerdict.Lost => Bad,
         _ => Neutral,
     };
@@ -67,6 +68,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryVerdictRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryVerdictNotRecycled,
         RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryVerdictPermanentlyDeleted,
+        RecoveryVerdict.PartiallyPermanentlyDeleted => Tr.RecoveryVerdictPartiallyPermanentlyDeleted,
         _ => Tr.RecoveryVerdictUnknown,
     };
 
@@ -81,6 +83,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryExplainRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryExplainNotRecycled,
         RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryExplainPermanentlyDeleted,
+        RecoveryVerdict.PartiallyPermanentlyDeleted => Tr.RecoveryExplainPartiallyPermanentlyDeleted,
         _ => Tr.RecoveryExplainUnknown,
     };
 
@@ -95,6 +98,7 @@ internal static class RecoveryPresenter
         RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryActionRecycleUnverifiable,
         RecoveryVerdict.NotRecycled => Tr.RecoveryActionNotRecycled,
         RecoveryVerdict.PermanentlyDeleted => Tr.RecoveryActionPermanentlyDeleted,
+        RecoveryVerdict.PartiallyPermanentlyDeleted => Tr.RecoveryActionPartiallyPermanentlyDeleted,
         _ => Tr.RecoveryActionUnknown,
     };
 
