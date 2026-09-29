@@ -14,6 +14,8 @@ public sealed class ReviewMetrics
     private long _sourceBytesRead;
     private long _sourceReads;
     private long _decodeMilliseconds;
+    private long _fullDecodeReads;
+    private long _fullDecodeMilliseconds;
     private long _decodeEwmaBits; // double bits of DecodeMillisecondsEwma (0 = no sample yet)
     private long _presentedImages;
     private long _presentMilliseconds;
@@ -62,7 +64,17 @@ public sealed class ReviewMetrics
         Interlocked.Increment(ref _sourceReads);
         Interlocked.Add(ref _sourceBytesRead, bytes);
         Interlocked.Add(ref _decodeMilliseconds, milliseconds);
-        if (includeInDecodeEwma) UpdateDecodeEwma(milliseconds);
+        if (includeInDecodeEwma)
+        {
+            UpdateDecodeEwma(milliseconds);
+        }
+        else
+        {
+            // Full-resolution (RAW) decodes are part of the totals above but are tracked separately as well, so an average
+            // over ordinary preview decodes can be derived (total minus these) without diverging from the EWMA.
+            Interlocked.Increment(ref _fullDecodeReads);
+            Interlocked.Add(ref _fullDecodeMilliseconds, milliseconds);
+        }
     }
 
     /// <summary>Weight of the newest sample in <see cref="DecodeMillisecondsEwma"/>.</summary>
@@ -143,6 +155,8 @@ public sealed class ReviewMetrics
     {
         PreloadHits = Interlocked.Read(ref _preloadHits),
         InflightJoins = Interlocked.Read(ref _inflightJoins),
+        FullDecodeReads = Interlocked.Read(ref _fullDecodeReads),
+        FullDecodeMilliseconds = Interlocked.Read(ref _fullDecodeMilliseconds),
         DiskCacheHits = Interlocked.Read(ref _diskCacheHits),
         QueueWaitMilliseconds = Interlocked.Read(ref _queueWaitMilliseconds),
         UiAssignMilliseconds = Interlocked.Read(ref _uiAssignMilliseconds),
@@ -168,6 +182,10 @@ public sealed record ReviewMetricsSnapshot(long CacheHits, long CacheMisses, lon
 {
     public long PreloadHits { get; init; }
     public long InflightJoins { get; init; }
+    /// <summary>Subset of <see cref="SourceReads"/> that were full-resolution decodes (excluded from the decode EWMA).</summary>
+    public long FullDecodeReads { get; init; }
+    /// <summary>Subset of <see cref="DecodeMilliseconds"/> spent in full-resolution decodes.</summary>
+    public long FullDecodeMilliseconds { get; init; }
     public long DiskCacheHits { get; init; }
     public long QueueWaitMilliseconds { get; init; }
     public long UiAssignMilliseconds { get; init; }
