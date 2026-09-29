@@ -72,6 +72,25 @@ public sealed class ReviewMetricsTests
     }
 
     [Fact]
+    public void FullDecodeSourceReads_AreTrackedSeparatelyAsASubsetOfTheTotals()
+    {
+        var metrics = new ReviewMetrics();
+        metrics.RecordSourceRead(1_000, 40);
+        metrics.RecordSourceRead(2_000, 60);
+        metrics.RecordSourceRead(24_000_000, 1_500, includeInDecodeEwma: false);
+
+        var snapshot = metrics.Snapshot();
+
+        Assert.Equal(3, snapshot.SourceReads);
+        Assert.Equal(1_600, snapshot.DecodeMilliseconds);
+        Assert.Equal(1, snapshot.FullDecodeReads);
+        Assert.Equal(1_500, snapshot.FullDecodeMilliseconds);
+        // What the EWMA saw is exactly the total minus the full decodes.
+        Assert.Equal(2, snapshot.SourceReads - snapshot.FullDecodeReads);
+        Assert.Equal(100, snapshot.DecodeMilliseconds - snapshot.FullDecodeMilliseconds);
+    }
+
+    [Fact]
     public void ConcurrentRecordingIsThreadSafe()
     {
         var metrics = new ReviewMetrics();

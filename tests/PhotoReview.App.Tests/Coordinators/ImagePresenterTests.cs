@@ -296,6 +296,84 @@ public sealed partial class ImagePresenterTests : IDisposable
     }
 
     [Fact]
+    public async Task PresentAsync_CaptureGroupMemberOverride_DoesNotOverwriteRepresentativeMetadata()
+    {
+        var jpeg = CreateFakeImageFile("capture-rep.jpg");
+        var member = Path.Combine(_tempDir, "capture-member.png");
+        File.WriteAllBytes(member, CreatePng(3, 3));
+        Assert.NotEqual(new FileInfo(jpeg).Length, new FileInfo(member).Length);
+        var group = new CaptureGroup(jpeg, member);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = group }], RawPairMode.Separate);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+        var repLength = _catalog.Find(jpeg)!.Length;
+        Assert.Equal(new FileInfo(jpeg).Length, repLength);
+
+        await presenter.PresentAsync(0, allowCompare: false, pathOverride: member);
+
+        Assert.Equal(member, presenter.CurrentPresentedPath);
+        Assert.Equal(repLength, _catalog.Find(jpeg)!.Length);
+    }
+
+    [Fact]
+    public async Task PresentAsync_CurrentEntryLeavesCatalogWhileDecoding_NeverPreloadsAroundMinusOne()
+    {
+        var photo = CreateFakeImageFile("vanishes-during-decode.jpg");
+        _catalog.Reset([photo]);
+        var emptied = false;
+        _sink.OnSetStatusText = _ =>
+        {
+            if (emptied) return;
+            emptied = true;
+            _catalog.Reset(Array.Empty<string>());
+        };
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+
+        Assert.True(emptied);
+        Assert.DoesNotContain(-1, _preloadController.PreloadAroundCalls);
+    }
+
+    [Fact]
+    public async Task PresentAsync_MissingCaptureGroupMember_KeepsTheRemainingMemberAsAStandaloneEntry()
+    {
+        var jpeg = CreateFakeImageFile("pair-survivor.jpg");
+        var missingRaw = Path.Combine(_tempDir, "pair-survivor.cr3");
+        var group = new CaptureGroup(jpeg, missingRaw);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = group }], RawPairMode.PreferJpeg);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0, allowCompare: false, pathOverride: missingRaw);
+
+        Assert.Equal(1, _catalog.Count);
+        var entry = _catalog.Find(jpeg);
+        Assert.NotNull(entry);
+        Assert.Null(entry!.CaptureGroup);
+        Assert.Equal(-1, _catalog.IndexOf(missingRaw));
+        Assert.Equal(jpeg, presenter.CurrentPresentedPath);
+        Assert.Equal([jpeg], _sink.PresentedPaths);
+    }
+
+    [Fact]
+    public async Task PresentAsync_MissingRepresentativeOfCaptureGroup_PresentsTheRemainingMember()
+    {
+        var missingJpeg = Path.Combine(_tempDir, "rep-gone.jpg");
+        var raw = CreateFakeImageFile("rep-gone.png");
+        var group = new CaptureGroup(missingJpeg, raw);
+        _catalog.Reset([new CatalogEntry(missingJpeg) { CaptureGroup = group }], RawPairMode.PreferJpeg);
+        var presenter = CreatePresenter();
+
+        await presenter.PresentAsync(0);
+
+        Assert.Equal(1, _catalog.Count);
+        Assert.Equal(raw, _catalog.PathAt(0));
+        Assert.Null(_catalog.Find(raw)!.CaptureGroup);
+        Assert.Equal([raw], _sink.PresentedPaths);
+    }
+
+    [Fact]
     public async Task PresentAsync_WhenCompareIsSuppressed_ClearsCompareAndKeepsMainImage()
     {
         var f1 = CreateFakeImageFile("photo.jpg");
@@ -842,7 +920,8 @@ public sealed partial class ImagePresenterTests : IDisposable
             FileChangeFlags.Add(isFileChange);
             OnSetCurrentImage?.Invoke(image, isFileChange);
         }
-        public void SetStatusText(string status) => Statuses.Add(status);
+        public Action<string>? OnSetStatusText { get; set; }
+        public void SetStatusText(string status) { Statuses.Add(status); OnSetStatusText?.Invoke(status); }
         public void ApplyInitialViewMode() => InitialViewModeAppliedCount++;
         public void OnPresented(string path) => PresentedPaths.Add(path);
         public void TracePresented(long token, string kind, long assignedTimestamp) => TracedKinds.Add(kind);

@@ -45,6 +45,37 @@ public sealed class SourceBytesCacheTests : IDisposable
         Assert.Equal(2, cache.Count);
     }
 
+    [Fact(DisplayName = "A range larger than the whole cache is read uncached and never evicts the entries already held")]
+    public void GetOrReadRange_RangeLargerThanCapacity_IsReadWithoutThrashingTheCache()
+    {
+        Directory.CreateDirectory(_root);
+        var path = Path.Combine(_root, "raw.dng");
+        var contents = Enumerable.Range(0, 4096).Select(value => (byte)(value % 251)).ToArray();
+        File.WriteAllBytes(path, contents);
+        var info = new FileInfo(path);
+        var cache = new SourceBytesCache(1024);
+        var publishAttempts = 0;
+        var kept = cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 0, 128);
+        cache.BeforePublishForTests = () => publishAttempts++;
+        Assert.False(cache.CanCacheRange(2048));
+
+        var oversized = cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 512, 2048);
+
+        Assert.Equal(contents[512..2560], oversized);
+        Assert.Equal(0, publishAttempts); // never offered to the cache
+        Assert.Equal(1, cache.Count);
+        Assert.Equal(128, cache.CurrentSize);
+        Assert.Same(kept, cache.GetOrReadRange(path, info.Length, info.LastWriteTimeUtc.Ticks, 0, 128));
+    }
+
+    [Fact(DisplayName = "A source larger than a .NET array is rejected cleanly, before any file is opened")]
+    public void GetOrRead_SourceLargerThanArrayLimit_ThrowsArgumentOutOfRangeNotOverflow()
+    {
+        var cache = new SourceBytesCache(1024);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => cache.GetOrRead(Path.Combine(_root, "never-opened.bin"), 3_000_000_000L, 1));
+    }
+
     [Fact(DisplayName = "Prefetch caches a file that fits and reads nothing for a file larger than the whole cache")]
     public void TryPrefetch_SkipsFilesTheCacheCouldNeverKeep()
     {

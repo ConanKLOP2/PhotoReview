@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Runtime.InteropServices;
-using Microsoft.Win32;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
@@ -13,9 +12,8 @@ namespace PhotoReview.Imaging.Raw;
 /// Decodes a RAW container through WIC when a matching decoder is registered and it produces
 /// more detail than the largest embedded preview.
 /// </summary>
-public sealed class WicRawFullDecoder : IImageDecoder
+public sealed class WicRawFullDecoder : ICancellableImageDecoder
 {
-    private const string WicDecoderCategoryPath = @"CLSID\{7ED96837-96F0-4812-B211-F13C24117ED3}\Instance";
     private readonly Func<RawFormat, bool> _availabilityProbe;
     private readonly ConcurrentDictionary<RawFormat, Lazy<bool>> _availability = new();
     private readonly ISourceReader _sourceReader;
@@ -31,11 +29,13 @@ public sealed class WicRawFullDecoder : IImageDecoder
     internal WicRawFullDecoder(
         ISourceReader sourceReader,
         IImageDecoder wicDecoder,
-        Func<RawFormat, bool>? availabilityProbe = null)
+        Func<RawFormat, bool>? availabilityProbe = null,
+        IWicCodecRegistry? codecRegistry = null)
     {
         _sourceReader = sourceReader ?? throw new ArgumentNullException(nameof(sourceReader));
         _wicDecoder = wicDecoder ?? throw new ArgumentNullException(nameof(wicDecoder));
-        _availabilityProbe = availabilityProbe ?? IsRegisteredInWic;
+        var registry = codecRegistry ?? WindowsWicCodecRegistry.Instance;
+        _availabilityProbe = availabilityProbe ?? (format => IsRegisteredInWic(registry, format));
     }
 
     /// <summary>Returns the cached codec-registration result for <paramref name="format"/>.</summary>
@@ -61,26 +61,39 @@ public sealed class WicRawFullDecoder : IImageDecoder
     }
 
     /// <inheritdoc />
-    public IDecodedImage Decode(DecodeRequest request)
+    public IDecodedImage Decode(DecodeRequest request) => Decode(request, CancellationToken.None);
+
+    /// <summary>
+    /// Decodes the RAW through WIC. Cancellation is observed before each step and again after WIC returns (the pixels
+    /// of a superseded request are dropped); the WIC call itself cannot be interrupted, so a request cancelled while
+    /// it runs still occupies the caller's single full-decode slot until WIC returns.
+    /// </summary>
+    public IDecodedImage Decode(DecodeRequest request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
-        var info = ReadContainerInfo(request.Path, request.Priority, out var headerSource);
+        cancellationToken.ThrowIfCancellationRequested();
+        var info = ReadContainerInfo(request.Path, request.Priority, cancellationToken, out var headerSource);
         using (headerSource)
         {
             if (!IsCodecAvailable(info.Format))
                 throw new NotSupportedException($"No WIC RAW decoder is registered for {info.Format}.");
 
             var preview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation);
+            cancellationToken.ThrowIfCancellationRequested();
 
             IDecodedImage decoded;
             try
             {
-                decoded = _wicDecoder.Decode(request with { SourceOrientation = info.Orientation });
+                // Bytes must not be forwarded: a pre-read buffer belongs to the caller's (JPEG/preview) decode and WIC
+                // would decode those bytes instead of the RAW file. The full decode always reads the RAW itself.
+                decoded = _wicDecoder.Decode(request with { SourceOrientation = info.Orientation, Bytes = null });
             }
-            catch (COMException ex)
+            catch (Exception ex) when (ex is COMException or InvalidDataException or OutOfMemoryException or FileFormatException)
             {
+                // Any WIC-side failure to fully decode this RAW means "use the embedded preview instead" to the caller.
                 throw new NotSupportedException($"WIC could not fully decode {info.Format}.", ex);
             }
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (preview is { Width: > 0, Height: > 0 })
             {
@@ -95,7 +108,10 @@ public sealed class WicRawFullDecoder : IImageDecoder
         }
     }
 
-    private RawContainerInfo ReadContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource)
+    private RawContainerInfo ReadContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource) =>
+        ReadContainerInfo(path, priority, CancellationToken.None, out headerSource);
+
+    private RawContainerInfo ReadContainerInfo(string path, SourceReadPriority priority, CancellationToken cancellationToken, out SourceRawHeaderSource headerSource)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         headerSource = new SourceRawHeaderSource(path, _sourceReader, priority);
@@ -104,7 +120,7 @@ public sealed class WicRawFullDecoder : IImageDecoder
             var firstBytes = headerSource.Read(0, RawContainerLimits.InitialProbeLength(headerSource.Length));
             var reader = _registry.FindReader(firstBytes, Path.GetExtension(path))
                 ?? throw new NotSupportedException($"Unsupported RAW format: {Path.GetExtension(path)}");
-            return reader.Read(headerSource, CancellationToken.None);
+            return reader.Read(headerSource, cancellationToken);
         }
         catch
         {
@@ -113,35 +129,22 @@ public sealed class WicRawFullDecoder : IImageDecoder
         }
     }
 
-    private static bool IsRegisteredInWic(RawFormat format)
+    /// <summary>
+    /// True when any registered WIC decoder lists the RAW extension of <paramref name="format"/> in its
+    /// <c>FileExtensions</c> (case-insensitive). No name-based guess: a decoder that lists no extensions is not a match.
+    /// </summary>
+    internal static bool IsRegisteredInWic(IWicCodecRegistry registry, RawFormat format)
     {
         var extension = ExtensionFor(format);
         if (extension is null) return false;
 
         try
         {
-            using var category = Registry.ClassesRoot.OpenSubKey(WicDecoderCategoryPath);
-            if (category is null) return false;
-
-            foreach (var name in category.GetSubKeyNames())
+            foreach (var codec in registry.ReadDecoders())
             {
-                using var codec = category.OpenSubKey(name);
-                var friendlyName = codec?.GetValue("FriendlyName") as string;
-                var extensions = codec?.GetValue("FileExtensions");
-                var extensionText = extensions switch
-                {
-                    string value => value,
-                    string[] values => string.Join(';', values),
-                    _ => string.Empty
-                };
-
-                if (extensionText.Split([';', ',', ' '], StringSplitOptions.RemoveEmptyEntries)
+                if (string.IsNullOrWhiteSpace(codec.FileExtensions)) continue;
+                if (codec.FileExtensions.Split([';', ',', ' '], StringSplitOptions.RemoveEmptyEntries)
                     .Any(value => string.Equals(value, extension, StringComparison.OrdinalIgnoreCase)))
-                    return true;
-
-                // Microsoft registers its general-purpose RAW decoder without listing extensions.
-                if (string.IsNullOrWhiteSpace(extensionText) &&
-                    friendlyName?.Contains("raw", StringComparison.OrdinalIgnoreCase) == true)
                     return true;
             }
         }

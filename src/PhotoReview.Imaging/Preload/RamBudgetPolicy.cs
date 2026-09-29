@@ -269,29 +269,35 @@ public static class RamBudgetPolicy
         {
             var width = entry.Width.GetValueOrDefault();
             var height = entry.Height.GetValueOrDefault();
+            var isRaw = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(entry.Path));
             double estimate;
-            if (width > 0 && height > 0)
+            if (measuredMeanPreviewBytes is > 0)
+            {
+                // The measured mean of previews really decoded at this box is the calibration (same rule as the scalar
+                // overload): it also covers 16-bit / 8-byte-per-pixel images that the 4-byte geometry would underestimate.
+                var measured = measuredMeanPreviewBytes.Value;
+                estimate = measured * MeasuredPreviewMargin;
+                // Capped at the 4-byte box bound, unless the images already measure above it (16-bit pixels).
+                if (bounded && measured <= boxBound) estimate = Math.Min(estimate, boxBound);
+            }
+            else if (width > 0 && height > 0 && (bounded || isRaw))
             {
                 var scale = Math.Min(1d, Math.Min(
                     targetBox.Width > 0 ? targetBox.Width / (double)width : 1d,
                     targetBox.Height > 0 ? targetBox.Height / (double)height : 1d));
                 estimate = Math.Ceiling(width * scale) * Math.Ceiling(height * scale) * DefaultAverageBytesPerPixel;
             }
-            else if (measuredMeanPreviewBytes is > 0)
-            {
-                estimate = measuredMeanPreviewBytes.Value * MeasuredPreviewMargin;
-                if (bounded) estimate = Math.Min(estimate, boxBound);
-            }
             else if (bounded)
             {
                 estimate = boxBound;
             }
-            else if (ImageFileTypes.RawExtensions.Contains(Path.GetExtension(entry.Path)))
+            else if (isRaw)
             {
                 return long.MaxValue;
             }
             else
             {
+                // Unbounded box (Original mode, width-only box): the pre-Q-R17 compressed-size estimate, as before RAW support.
                 estimate = Math.Max(0, entry.Length.GetValueOrDefault()) * JpegExpansionFactor;
             }
 

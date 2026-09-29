@@ -333,6 +333,59 @@ public sealed class ZoomDetailTests : IDisposable
     }
 
     [Fact]
+    public async Task RawOnZoom_SupersededLoadFinishingLate_DoesNotClearTheNewerLoadsIndicator()
+    {
+        var pathA = Path.Combine(_tempDir, "a.cr2");
+        var pathB = Path.Combine(_tempDir, "b.cr2");
+        File.WriteAllBytes(pathA, [0x49, 0x49, 0x2A, 0x00]);
+        File.WriteAllBytes(pathB, [0x49, 0x49, 0x2A, 0x00]);
+        using var gateA = new SemaphoreSlim(0);
+        using var gateB = new SemaphoreSlim(0);
+        var rawDecoder = new SizedDecoder();
+        rawDecoder.GateByName["a.cr2"] = gateA;
+        rawDecoder.GateByName["b.cr2"] = gateB;
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new SizedDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [pathA, pathB]);
+            var indicatorShown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            presenter.ZoomDetail.RawDecodeIndicatorChanged += visible =>
+            {
+                if (visible) indicatorShown.TrySetResult();
+            };
+            _sink.OnApplyInitialViewMode = () => _viewer.ApplyInitialViewMode(InitialViewMode.Percent200, 1280, 720);
+            await presenter.PresentAsync(0);
+            var loadA = presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(loadA);
+
+            await presenter.PresentAsync(1); // supersedes A while its RAW decode is still running
+            var loadB = presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(loadB);
+            Assert.NotSame(loadA, loadB);
+            await indicatorShown.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+
+            gateA.Release(); // the superseded load finishes late
+            await loadA!;
+
+            Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+
+            gateB.Release();
+            await loadB!;
+            Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+        }
+        finally
+        {
+            gateA.Release();
+            gateB.Release();
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
     public async Task NavigatingAway_IgnoresTheInFlightOriginal_AndFetchesTheNextImagesOriginal()
     {
         var decoder = new SizedDecoder();

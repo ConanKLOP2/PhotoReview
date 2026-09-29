@@ -122,7 +122,8 @@ public partial class App : System.Windows.Application, IDisposable
                 ? new Composition.LibRawPreviewFallback()
                 : null;
             return new ImageDecoderFactory(
-                Composition.DecoderProviders.Create(sourceReader),
+                Composition.DecoderProviders.Create(sourceReader,
+                    () => settingsStore.Current.RawSupportEnabled || settingsStore.Current.DecoderBackend == PhotoReview.Core.Model.DecoderBackend.LibRaw),
                 sp.GetService<ILog>(),
                 sp.GetService<ReviewMetrics>(),
                 (_, standardDecoder) => new FormatRoutingDecoder(

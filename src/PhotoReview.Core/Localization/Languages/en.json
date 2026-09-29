@@ -479,6 +479,8 @@
   "test.sample": "Sample",
   "main.skipped.warning.one": "Skipped {count} unreadable file",
   "main.skipped.warning.other": "Skipped {count} unreadable files",
+  "main.capturePair.badge.jpeg": "JPG+RAW (showing JPG)",
+  "main.capturePair.badge.raw": "JPG+RAW (showing RAW)",
   "main.skipped.viewList": "View list",
   "main.skipped.viewList.automationName": "View the list of skipped files",
   "main.skipped.window.title": "Skipped files",

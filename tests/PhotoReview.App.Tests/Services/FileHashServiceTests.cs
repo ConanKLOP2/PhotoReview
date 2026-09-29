@@ -48,6 +48,43 @@ public sealed class FileHashServiceTests : IDisposable
         Assert.Null(cache.LastReadManagedThreadId); // the cache never read the file whole
     }
 
+    [Theory(DisplayName = "File hash service streams a RAW file instead of routing it through the whole-file byte cache")]
+    [InlineData("shot.cr3")]
+    [InlineData("shot.NEF")]
+    public async Task FileHashServiceStreamsRawFilesInsteadOfUsingTheWholeFileByteCache(string name)
+    {
+        var fixture = Path.Combine(_root.Path, name);
+        var content = new byte[64 * 1024];
+        new Random(11).NextBytes(content);
+        File.WriteAllBytes(fixture, content);
+        var expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content));
+        var cache = new PhotoReview.Imaging.Caching.SourceBytesCache(1024 * 1024);
+        Assert.True(cache.CanCache(content.Length)); // it would fit: only the RAW rule keeps it out
+        var service = new FileHashService(cache);
+
+        var actual = await service.GetAsync(fixture);
+
+        Assert.Equal(expected, actual);
+        Assert.Null(cache.LastReadManagedThreadId);
+        Assert.Equal(0, cache.Count);
+    }
+
+    [Fact(DisplayName = "File hash service still uses the byte cache for a small non-RAW file")]
+    public async Task FileHashServiceUsesTheByteCacheForSmallNonRawFiles()
+    {
+        var fixture = Path.Combine(_root.Path, "small.jpg");
+        var content = new byte[4096];
+        new Random(5).NextBytes(content);
+        File.WriteAllBytes(fixture, content);
+        var cache = new PhotoReview.Imaging.Caching.SourceBytesCache(1024 * 1024);
+        var service = new FileHashService(cache);
+
+        var actual = await service.GetAsync(fixture);
+
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content)), actual);
+        Assert.Equal(1, cache.Count);
+    }
+
     [Fact(DisplayName = "File hash service deduplicates concurrent reads")]
     public async Task FileHashServiceDeduplicatesConcurrentReads()
     {

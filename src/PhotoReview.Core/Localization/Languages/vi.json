@@ -473,6 +473,8 @@
   "test.items.other": "{count} mục",
   "test.sample": "Mẫu",
   "main.skipped.warning.other": "Bỏ qua {count} tệp không đọc được",
+  "main.capturePair.badge.jpeg": "JPG+RAW (đang xem JPG)",
+  "main.capturePair.badge.raw": "JPG+RAW (đang xem RAW)",
   "main.skipped.viewList": "Xem danh sách",
   "main.skipped.viewList.automationName": "Xem danh sách tệp bị bỏ qua",
   "main.skipped.window.title": "Tệp bị bỏ qua",

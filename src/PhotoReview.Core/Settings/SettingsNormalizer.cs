@@ -86,7 +86,9 @@ public static class SettingsNormalizer
         if (!Enum.IsDefined(settings.LoadingMode)) { settings.LoadingMode = LoadingMode.Preview; fixedNames.Add(nameof(AppSettings.LoadingMode)); }
         if (!Enum.IsDefined(settings.ImageSortMode)) { settings.ImageSortMode = ImageSortMode.Default; fixedNames.Add(nameof(AppSettings.ImageSortMode)); }
         if (!Enum.IsDefined(settings.ScalingQuality)) { settings.ScalingQuality = ScalingQuality.HighQuality; fixedNames.Add(nameof(AppSettings.ScalingQuality)); }
-        if (!Enum.IsDefined(settings.DecoderBackend)) { settings.DecoderBackend = DecoderBackend.WicDirect; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
+        // DecoderBackend.LibRaw is registered internally for RAW files only (never a user choice): persisted, the Settings
+        // combo would show "WPF" while the runtime decoded every JPEG through LibRaw, so it is repaired like an undefined value.
+        if (!Enum.IsDefined(settings.DecoderBackend) || settings.DecoderBackend == DecoderBackend.LibRaw) { settings.DecoderBackend = DecoderBackend.WicDirect; fixedNames.Add(nameof(AppSettings.DecoderBackend)); }
         if (!Enum.IsDefined(settings.JournalDurability)) { settings.JournalDurability = JournalDurability.Fast; fixedNames.Add(nameof(AppSettings.JournalDurability)); }
         if (!Enum.IsDefined(settings.InstanceMode)) { settings.InstanceMode = InstanceMode.SingleWindow; fixedNames.Add(nameof(AppSettings.InstanceMode)); }
         if (!Enum.IsDefined(settings.FitWidthAnchor)) { settings.FitWidthAnchor = FitWidthAnchor.Centre; fixedNames.Add(nameof(AppSettings.FitWidthAnchor)); }
