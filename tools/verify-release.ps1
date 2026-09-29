@@ -25,6 +25,8 @@ $required = @(
     'libraw.dll',
     'LibRaw-LICENSE.LGPL',
     'LibRaw-LICENSE.CDDL',
+    'LibRaw-SOURCE.zip',
+    'LibRaw-NOTICE.txt',
     # Translation catalogs (ADR 0006): English is also embedded, but shipped files let users read/edit them.
     'Languages\en.json',
     'Languages\vi.json')
@@ -49,6 +51,13 @@ $expectedLibRawHash = (Get-Content -LiteralPath $libRawHashFile -TotalCount 1).T
 $actualLibRawHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'libraw.dll') -Algorithm SHA256).Hash
 if ($actualLibRawHash -ne $expectedLibRawHash) {
     Write-Error "libraw.dll SHA-256 mismatch: expected $expectedLibRawHash, found $actualLibRawHash"
+    exit 1
+}
+$libRawPackageHashFile = Join-Path $repoRoot 'native\libraw.package.sha256'
+$expectedLibRawPackageHash = (Get-Content -LiteralPath $libRawPackageHashFile -TotalCount 1).Trim().ToUpperInvariant()
+$actualLibRawPackageHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'LibRaw-SOURCE.zip') -Algorithm SHA256).Hash
+if ($actualLibRawPackageHash -ne $expectedLibRawPackageHash) {
+    Write-Error "LibRaw-SOURCE.zip SHA-256 mismatch: expected $expectedLibRawPackageHash, found $actualLibRawPackageHash"
     exit 1
 }
 

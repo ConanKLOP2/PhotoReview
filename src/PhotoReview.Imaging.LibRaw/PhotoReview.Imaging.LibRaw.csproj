@@ -24,6 +24,12 @@
     <None Include="..\..\native\libraw\LICENSE.CDDL" Link="LibRaw-LICENSE.CDDL">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\native\libraw\LibRaw-0.22.2-Win64.zip" Link="LibRaw-SOURCE.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\NOTICE.txt" Link="LibRaw-NOTICE.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <Target Name="EnsureLibRawBinary" BeforeTargets="BeforeBuild;AssignTargetPaths">
@@ -32,7 +38,7 @@
       <FetchLibRawScriptPath>$(MSBuildThisFileDirectory)..\..\tools\fetch-libraw.ps1</FetchLibRawScriptPath>
     </PropertyGroup>
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;"
-          Condition="!Exists('$(LibRawDllPath)') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.LGPL') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.CDDL')" />
+          Condition="!Exists('$(LibRawDllPath)') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.LGPL') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.CDDL') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LibRaw-0.22.2-Win64.zip') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\NOTICE.txt')" />
   </Target>
 
 </Project>

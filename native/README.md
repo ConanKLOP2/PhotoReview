@@ -11,8 +11,9 @@ Thư mục này chứa các thư viện native unmanaged được nạp runtime 
 - **Kích thước:** 1,153,024 bytes
 - **SHA-256:** `6A459C22039ABF0EAC4D263673337C8ED5F223ACBD372FCF77610DEBF80AC8CD`
 - **Giấy phép:** LGPL-2.1-only hoặc CDDL-1.0; bản quyền và điều khoản đầy đủ nằm ở `native/libraw/LICENSE.LGPL` và `native/libraw/LICENSE.CDDL`.
-- **Mã nguồn:** gói tải kèm source; upstream repository: `https://github.com/LibRaw/LibRaw`.
-- **Tải/kiểm tra:** `tools/fetch-libraw.ps1` xác minh hash DLL trước khi lưu vào `native/x64/`.
+- **Mã nguồn tương ứng:** archive phát hành chính thức `native/libraw/LibRaw-0.22.2-Win64.zip`; SHA-256 được ghim tại `native/libraw.package.sha256`. Archive này được đóng cùng output phát hành dưới tên `LibRaw-SOURCE.zip`.
+- **Thông báo và giấy phép:** output phát hành có `LibRaw-NOTICE.txt`, `LibRaw-LICENSE.LGPL`, và `LibRaw-LICENSE.CDDL`.
+- **Tải/kiểm tra:** `tools/fetch-libraw.ps1` xác minh hash của cả DLL và archive mã nguồn trước khi lưu.
 
 ## `native/x64/turbojpeg.dll`
 

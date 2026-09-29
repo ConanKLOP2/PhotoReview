@@ -1,0 +1,5 @@
+PhotoReview uses the unmodified LibRaw 0.22.2 library as libraw.dll, loaded dynamically at runtime.
+
+LibRaw is distributed under the terms of either the GNU Lesser General Public License version 2.1 or the Common Development and Distribution License version 1.0. Copies of both license texts accompany this application as LibRaw-LICENSE.LGPL and LibRaw-LICENSE.CDDL.
+
+The corresponding official LibRaw 0.22.2 Windows x64 package, including the complete source code and build files, accompanies this application as LibRaw-SOURCE.zip. A compatible modified libraw.dll may be placed beside PhotoReview.App.exe and loaded in place of the bundled library.
