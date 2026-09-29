@@ -40,6 +40,8 @@ public sealed class ZoomDetailLoader
     private CancellationTokenSource? _cts;
     private long _failedToken = -1; // navigation token whose full-resolution decode failed: do not retry on every zoom step
     private Task? _pendingLoad;
+    private CancellationTokenSource? _indicatorCts;
+    private bool _isRawDecodeIndicatorVisible;
 
     /// <param name="show">Displays a platform image with the given original dimensions (the presenter's
     /// current-image update); always called with the preview's recorded original dimensions.</param>
@@ -62,11 +64,18 @@ public sealed class ZoomDetailLoader
     /// <summary>Raised on the UI thread right after the original replaced the preview (measure seam).</summary>
     public event Action<string>? OriginalShown;
 
+    /// <summary>Raised when a RAW full decode has remained in progress for 300 ms or when its indicator clears.</summary>
+    public event Action<bool>? RawDecodeIndicatorChanged;
+
+    /// <summary>True after the delayed RAW decoding indicator becomes visible.</summary>
+    public bool IsRawDecodeIndicatorVisible => _isRawDecodeIndicatorVisible;
+
     /// <summary>Navigation started or the presentation was cleared: drop the target, cancel a
     /// not-yet-started decode and release the held original.</summary>
     public void Reset()
     {
         CancelPending();
+        SetRawDecodeIndicatorVisible(false);
         _target = null;
         _original = null;
         _showingOriginal = false;
@@ -124,6 +133,7 @@ public sealed class ZoomDetailLoader
 
         var cts = new CancellationTokenSource();
         _cts = cts;
+        if (_previewService.IsRawFullDecodeRequest(target.Path)) StartRawDecodeIndicator(cts.Token);
         var load = LoadAsync(target, cts);
         // Only an in-flight load is kept (a completed task's state machine would pin the original).
         if (!load.IsCompleted) _pendingLoad = load;
@@ -154,6 +164,10 @@ public sealed class ZoomDetailLoader
         }
         finally
         {
+            SetRawDecodeIndicatorVisible(false);
+            _indicatorCts?.Cancel();
+            _indicatorCts?.Dispose();
+            _indicatorCts = null;
             if (ReferenceEquals(_cts, cts))
             {
                 _cts = null;
@@ -172,6 +186,31 @@ public sealed class ZoomDetailLoader
         // Cancelling only drops a decode that has not started yet; LoadAsync's finally disposes it.
         try { cts?.Cancel(); }
         catch (ObjectDisposedException) { /* the load already finished and disposed it */ }
+    }
+
+    private void StartRawDecodeIndicator(CancellationToken loadToken)
+    {
+        var indicatorCts = CancellationTokenSource.CreateLinkedTokenSource(loadToken);
+        _indicatorCts = indicatorCts;
+        _ = ShowIndicatorAfterDelayAsync(indicatorCts);
+    }
+
+    private async Task ShowIndicatorAfterDelayAsync(CancellationTokenSource indicatorCts)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), indicatorCts.Token).ConfigureAwait(false);
+            if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)
+                SetRawDecodeIndicatorVisible(true);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void SetRawDecodeIndicatorVisible(bool visible)
+    {
+        if (_isRawDecodeIndicatorVisible == visible) return;
+        _isRawDecodeIndicatorVisible = visible;
+        RawDecodeIndicatorChanged?.Invoke(visible);
     }
 
     private sealed record Target(long Token, string Path, ImageCacheKey Key, object Preview, int PreviewPixelWidth, int OriginalWidth, int OriginalHeight);

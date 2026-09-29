@@ -293,6 +293,41 @@ public sealed class ZoomDetailTests : IDisposable
     }
 
     [Fact]
+    public async Task RawOnZoom_ShowsDelayedIndicatorAndUsesRawFullDecoder()
+    {
+        var rawPath = Path.Combine(_tempDir, "zoom.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var previewDecoder = new SizedDecoder();
+        var rawDecoder = new SizedDecoder { OriginalGate = new SemaphoreSlim(0) };
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: previewDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+            _viewer.SetZoom(1.0);
+            var load = presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(load);
+            Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+            await Task.Delay(350);
+            Assert.True(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+
+            rawDecoder.OriginalGate.Release();
+            await load!;
+
+            Assert.False(presenter.ZoomDetail.IsRawDecodeIndicatorVisible);
+            Assert.Equal(1, rawDecoder.OriginalDecodes);
+            Assert.Equal(0, previewDecoder.OriginalDecodes);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
     public async Task NavigatingAway_IgnoresTheInFlightOriginal_AndFetchesTheNextImagesOriginal()
     {
         var decoder = new SizedDecoder();

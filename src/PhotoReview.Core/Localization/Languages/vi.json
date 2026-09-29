@@ -440,6 +440,7 @@
   "status.imageError": "Lỗi ảnh: {fileName} — {message}",
   "status.loading": "{position}/{count} · {size} · Đang tải",
   "status.loadingFullRes": "{position}/{count} · {size} · Đang tải độ phân giải đầy đủ",
+  "status.decodingRaw": "Đang giải mã RAW…",
   "status.noDuplicatesFound": "Không có bản trùng lặp nào cùng hash phù hợp.",
   "status.noImagesRemaining": "Không còn ảnh trong thư mục",
   "status.noSupportedImages": "Không tìm thấy ảnh được hỗ trợ trong thư mục này.",

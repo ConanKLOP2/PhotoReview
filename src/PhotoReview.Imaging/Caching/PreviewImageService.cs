@@ -702,6 +702,10 @@ public sealed class PreviewImageService : IPreloadTarget
     public bool TryGetKnownOriginalDimensions(ImageCacheKey currentKey, out (int Width, int Height) dimensions) =>
         _originalDimensions.TryGet(ImageCacheKey.CreateOriginal(currentKey), out dimensions);
 
+    /// <summary>Whether an original request for this path will use the configured RAW full decoder now.</summary>
+    public bool IsRawFullDecodeRequest(string path) => _rawFullDecoder is not null && _isRawFullDecodeEnabled()
+        && ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+
     /// <summary>
     /// feat(zoom) (option A for #43): full-resolution decode of one source for the zoomed viewer.
     /// Unlike <see cref="GetPreviewAsync(string, ImageCacheKey)"/> with an original key, the result is
@@ -718,8 +722,7 @@ public sealed class PreviewImageService : IPreloadTarget
     public async Task<IDecodedImage> DecodeOriginalAsync(string path, ImageCacheKey sourceKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var useRawFullDecoder = _rawFullDecoder is not null && _isRawFullDecodeEnabled()
-            && ImageFileTypes.RawExtensions.Contains(Path.GetExtension(path));
+        var useRawFullDecoder = IsRawFullDecodeRequest(path);
         var key = ImageCacheKey.CreateOriginal(sourceKey, useRawFullDecoder ? (byte)2 : sourceKey.SourceKind);
         if (_cache.TryGet(key, out var cached)) return cached;
         // R2-F-13: at most one full-resolution decode (24-100 MP, ~100+ MB each) runs at a time. Paging quickly at

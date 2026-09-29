@@ -444,6 +444,7 @@
   "status.imageError": "Image error: {fileName} — {message}",
   "status.loading": "{position}/{count} · {size} · Loading",
   "status.loadingFullRes": "{position}/{count} · {size} · Loading full resolution",
+  "status.decodingRaw": "Decoding RAW…",
   "status.noDuplicatesFound": "No matching duplicates with the same hash.",
   "status.noImagesRemaining": "No images left in the folder",
   "status.noSupportedImages": "No supported images were found in this folder.",

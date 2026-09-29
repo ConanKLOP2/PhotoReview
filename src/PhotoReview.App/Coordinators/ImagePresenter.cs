@@ -109,9 +109,25 @@ public sealed class ImagePresenter
         // feat/image-crossfade: ZoomDetailLoader upgrades the SAME image's bitmap (zoom-triggered full-resolution
         // decode) -- never a file change, so no path is passed (UpdateCurrentImage's isFileChange stays false).
         _zoomDetail = new ZoomDetailLoader(_previewService, _clock, (image, w, h) => UpdateCurrentImage(image, w, h));
+        _zoomDetail.RawDecodeIndicatorChanged += visible =>
+        {
+            if (visible)
+            {
+                _preRawDecodeStatus = _sinkStatusText;
+                _sinkStatusText = StatusFormatter.DecodingRaw();
+                _sink.SetStatusText(_sinkStatusText);
+            }
+            else if (string.Equals(_sinkStatusText, StatusFormatter.DecodingRaw(), StringComparison.Ordinal))
+            {
+                _sinkStatusText = _preRawDecodeStatus;
+                _sink.SetStatusText(_sinkStatusText);
+            }
+        };
     }
 
     private readonly ZoomDetailLoader _zoomDetail;
+    private string _sinkStatusText = string.Empty;
+    private string _preRawDecodeStatus = string.Empty;
 
     public ReviewCatalog Catalog => _catalog;
     public GenerationClock Clock => _clock;
@@ -648,6 +664,7 @@ public sealed class ImagePresenter
     private void UpdateStatus(string status, bool needsAttention = false)
     {
         StatusText = status;
+        _sinkStatusText = status;
         StatusNeedsAttention = needsAttention;
         _sink.SetStatusText(status);
     }
