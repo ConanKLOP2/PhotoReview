@@ -857,5 +857,8 @@
   "enum.rawPairMode.preferRaw": "Prefer RAW (stack, show RAW)",
   "image.error.rawUnsupported": "Unsupported RAW container format.",
   "image.error.rawCorrupt": "Corrupt or invalid RAW file.",
-  "overlay.rawPreview": "RAW preview {width}×{height}"
+  "overlay.rawPreview": "RAW preview {width}×{height}",
+  "status.groupPartnerMissing": "{fileName}: companion file(s) were missing on disk ({missing}), so the action was applied to the remaining files.",
+  "core.groupAction.rollbackFailed": "{message} In addition, {count} file(s) that were already processed could not be put back automatically; check Recovery.",
+  "core.undo.groupPartiallyRestored": "Restored {restored} of {total} files. Could not restore (deleted permanently): {names}"
 }

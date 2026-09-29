@@ -145,7 +145,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
     }
 
     [Fact]
-    public async Task GroupMovePartialFailure_RestoresRemainingImageMemberAndKeepsOneRecoveryEntry()
+    public async Task GroupMovePartialFailure_RollsBackAndRestoresTheWholeGroupWithOneRecoveryEntry()
     {
         var jpeg = Make("pair.jpg");
         var raw = Make("pair.cr2");
@@ -154,13 +154,15 @@ public sealed class FileActionControllerOrderingTests : IDisposable
 
         await _controller.RunActionAsync(0, null, jpeg);
 
-        Assert.False(File.Exists(jpeg));
+        // The RAW move failed after the JPEG had moved: the JPEG was put back, so the pair is whole on disk and in the catalog.
+        Assert.True(File.Exists(jpeg));
         Assert.True(File.Exists(raw));
         Assert.Single(_catalog.Paths);
-        Assert.Equal(raw, _catalog.PathAt(0));
+        Assert.Equal(jpeg, _catalog.PathAt(0));
+        Assert.NotNull(_catalog.Find(jpeg)?.CaptureGroup);
         var failed = Assert.Single(_journal.ReadFailedOperations());
         Assert.Equal(2, failed.GroupMembers!.Count);
-        Assert.Equal(-1, _catalog.IndexOf(jpeg));
+        Assert.Equal(0, _catalog.IndexOf(jpeg));
         Assert.Equal(0, _catalog.IndexOf(raw));
     }
 

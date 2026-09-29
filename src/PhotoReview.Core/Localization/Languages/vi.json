@@ -849,5 +849,8 @@
   "enum.rawPairMode.preferRaw": "Ưu tiên RAW (gộp nhóm, hiện ảnh RAW)",
   "image.error.rawUnsupported": "Định dạng container RAW không được hỗ trợ.",
   "image.error.rawCorrupt": "Tệp RAW bị hỏng hoặc không hợp lệ.",
-  "overlay.rawPreview": "Bản xem trước RAW {width}×{height}"
+  "overlay.rawPreview": "Bản xem trước RAW {width}×{height}",
+  "status.groupPartnerMissing": "{fileName}: (các) tệp đi kèm không còn trên đĩa ({missing}), nên thao tác được áp dụng cho các tệp còn lại.",
+  "core.groupAction.rollbackFailed": "{message} Ngoài ra, {count} tệp đã được xử lý không thể tự đưa về chỗ cũ; hãy kiểm tra Recovery.",
+  "core.undo.groupPartiallyRestored": "Đã khôi phục {restored}/{total} tệp. Không thể khôi phục (đã xóa vĩnh viễn): {names}"
 }
