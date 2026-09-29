@@ -118,13 +118,17 @@ public partial class App : System.Windows.Application, IDisposable
             var sourceReader = sp.GetRequiredService<ISourceReader>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
             var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
+            IRawPreviewFallback? rawPreviewFallback = LibRawAvailability.Probe(out _)
+                ? new Composition.LibRawPreviewFallback()
+                : null;
             return new ImageDecoderFactory(
                 Composition.DecoderProviders.Create(sourceReader),
                 sp.GetService<ILog>(),
                 sp.GetService<ReviewMetrics>(),
                 (_, standardDecoder) => new FormatRoutingDecoder(
                     standardDecoder,
-                    new RawDecoder(standardDecoder, sourceReader, sourceBytesCache: sourceBytesCache),
+                    new RawDecoder(standardDecoder, sourceReader, sourceBytesCache: sourceBytesCache,
+                        previewFallback: rawPreviewFallback),
                     () => settingsStore.Current.RawSupportEnabled));
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(

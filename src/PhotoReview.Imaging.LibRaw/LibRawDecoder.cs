@@ -10,7 +10,45 @@ namespace PhotoReview.Imaging.LibRaw;
 /// <summary>Full RAW decoder backed by the pinned LibRaw C API.</summary>
 public sealed class LibRawDecoder : ICancellableImageDecoder
 {
+    private const int MaxThumbnailBytes = 32 << 20;
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
+
+    /// <summary>Extracts LibRaw's embedded JPEG thumbnail without demosaicing the sensor image.</summary>
+    public static byte[] ReadJpegThumbnail(string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var cancellationState = new CancellationState(cancellationToken);
+        using var raw = CreateHandle();
+        LibRawNativeMethods.LibRawSetProgressHandler(raw, CancellationCallback, cancellationState.Pointer);
+        CheckResult(LibRawNativeMethods.LibRawOpenWFile(raw, path), "open RAW file", cancellationToken);
+        CheckResult(LibRawNativeMethods.LibRawUnpackThumb(raw), "unpack embedded thumbnail", cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var thumbnailPointer = LibRawNativeMethods.LibRawDcrawMakeMemThumb(raw, out var thumbnailError);
+        if (thumbnailPointer == IntPtr.Zero)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw CreateDecodeException(thumbnailError, "create embedded JPEG thumbnail");
+        }
+
+        using var thumbnail = new SafeLibRawImageHandle(thumbnailPointer);
+        var header = Marshal.PtrToStructure<ProcessedImageHeader>(thumbnail.DangerousGetHandle());
+        // LibRaw's memory wrapper leaves width/height as zero for JPEG thumbnails; validate the encoded
+        // payload and let the existing JPEG decoder verify dimensions and structure.
+        if (header.Type != LibRawNativeMethods.ImageJpeg || header.DataSize < 4 || header.DataSize > MaxThumbnailBytes)
+            throw new InvalidDataException($"LibRaw returned an unsupported or oversized thumbnail (type={header.Type}, " +
+                $"width={header.Width}, height={header.Height}, bytes={header.DataSize}).");
+
+        var bytes = new byte[checked((int)header.DataSize)];
+        Marshal.Copy(IntPtr.Add(thumbnail.DangerousGetHandle(), ProcessedImageHeader.DataOffset), bytes, 0, bytes.Length);
+        if (bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[^2] != 0xFF || bytes[^1] != 0xD9)
+            throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return bytes;
+    }
 
     public ImageInfo ReadInfo(string path)
     {

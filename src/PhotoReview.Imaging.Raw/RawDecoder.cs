@@ -20,22 +20,26 @@ namespace PhotoReview.Imaging.Raw;
 /// </summary>
 public sealed class RawDecoder : IImageDecoder
 {
+    private const int MaxFallbackThumbnailBytes = 32 << 20;
     private readonly IImageDecoder _innerDecoder;
     private readonly ISourceReader _sourceReader;
     private readonly RawContainerReaderRegistry _registry;
     private readonly SourceBytesCache? _sourceBytesCache;
+    private readonly IRawPreviewFallback? _previewFallback;
     private readonly BoundedLruCache<RawInfoKey, RawContainerInfo> _containerInfoCache = new(256, _ => 1);
 
     public RawDecoder(
         IImageDecoder innerDecoder,
         ISourceReader? sourceReader = null,
         RawContainerReaderRegistry? registry = null,
-        SourceBytesCache? sourceBytesCache = null)
+        SourceBytesCache? sourceBytesCache = null,
+        IRawPreviewFallback? previewFallback = null)
     {
         _innerDecoder = innerDecoder ?? throw new ArgumentNullException(nameof(innerDecoder));
         _sourceReader = sourceReader ?? PhysicalSourceReader.Instance;
         _registry = registry ?? new RawContainerReaderRegistry();
         _sourceBytesCache = sourceBytesCache;
+        _previewFallback = previewFallback;
     }
 
     public ImageInfo ReadInfo(string path)
@@ -97,7 +101,21 @@ public sealed class RawDecoder : IImageDecoder
                 priority: request.Priority,
                 sourceOrientation: containerInfo.Orientation);
 
-            var decoded = _innerDecoder.Decode(innerRequest);
+            IDecodedImage decoded;
+            long fallbackThumbnailBytesRead = 0;
+            try
+            {
+                decoded = _innerDecoder.Decode(innerRequest);
+            }
+            catch (NotSupportedException) when (containerInfo.Format == RawFormat.Orf && _previewFallback is not null)
+            {
+                var thumbnailBytes = _previewFallback.ReadJpegThumbnail(request.Path, containerInfo.Format);
+                if (thumbnailBytes.Length <= 0 || thumbnailBytes.Length > MaxFallbackThumbnailBytes)
+                    throw new InvalidDataException($"RAW fallback thumbnail size is invalid: {thumbnailBytes.Length} bytes.");
+
+                fallbackThumbnailBytesRead = thumbnailBytes.Length;
+                decoded = _innerDecoder.Decode(innerRequest with { Bytes = thumbnailBytes });
+            }
 
             int sensorW = containerInfo.SensorWidth;
             int sensorH = containerInfo.SensorHeight;
@@ -123,7 +141,9 @@ public sealed class RawDecoder : IImageDecoder
                 orientation: containerInfo.Orientation,
                 exif: exif ?? decoded.Exif,
                 actualBackend: decoded.ActualBackend,
-                sourceBytesRead: checked(headerSource.TotalBytesRead + preview.Length));
+                // LibRaw's native thumbnail path does not expose exact stream read counts. Include the returned JPEG
+                // payload as an estimate; any additional LibRaw metadata I/O is not represented here.
+                sourceBytesRead: checked(headerSource.TotalBytesRead + preview.Length + fallbackThumbnailBytesRead));
         }
     }
 

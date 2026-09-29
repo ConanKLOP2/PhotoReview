@@ -422,6 +422,54 @@ public sealed class RawDecoderTests
     }
 
     [Fact]
+    public void RawDecoder_UsesInjectedFallbackOnlyForUnsupportedOrfPreview()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(320, 240);
+        var invalidPreview = new byte[] { 0x13, 0x37, 0x00, 0x00 };
+        var orf = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: invalidPreview);
+        var reader = new TrackingSourceReader(orf);
+        var fallback = new TestRawPreviewFallback(jpeg);
+        var inner = new FallbackAwareDecoder(new WpfBitmapImageDecoder());
+
+        var decoded = new RawDecoder(inner, reader, previewFallback: fallback)
+            .Decode(new DecodeRequest("test.orf", DecodeBox.Unbounded));
+
+        Assert.Equal(1, fallback.CallCount);
+        Assert.Equal(RawFormat.Orf, fallback.LastFormat);
+        Assert.True(decoded.PixelWidth > 0);
+        Assert.True(decoded.PixelHeight > 0);
+    }
+
+    [Fact]
+    public void RawDecoder_UsesEmbeddedOrfPreviewBeforeFallback()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(320, 240);
+        var orf = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: jpeg);
+        var reader = new TrackingSourceReader(orf);
+        var fallback = new TestRawPreviewFallback(jpeg);
+        var decoder = new RawDecoder(new WpfBitmapImageDecoder(), reader, previewFallback: fallback);
+
+        _ = decoder.Decode(new DecodeRequest("test.orf", DecodeBox.Unbounded));
+
+        Assert.Equal(0, fallback.CallCount);
+    }
+
+    [Fact]
+    public void RawDecoder_DoesNotUseOrfFallbackForOtherFormats()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(320, 240);
+        var invalidPreview = new byte[] { 0x13, 0x37, 0x00, 0x00 };
+        var dng = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: invalidPreview);
+        var reader = new TrackingSourceReader(dng);
+        var fallback = new TestRawPreviewFallback(jpeg);
+        var inner = new FallbackAwareDecoder(new WpfBitmapImageDecoder());
+        var decoder = new RawDecoder(inner, reader, previewFallback: fallback);
+
+        Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest("test.dng", DecodeBox.Unbounded)));
+        Assert.Equal(0, fallback.CallCount);
+    }
+
+    [Fact]
     public void PreviewSelector_SelectsSmallestMatchingBox()
     {
         var pSmall = new EmbeddedPreview(100, 0, 1000, EmbeddedPreviewKind.Jpeg, 320, 240, PreviewColorSpace.Srgb);
@@ -466,5 +514,30 @@ public sealed class RawDecoderTests
         }
 
         public IDecodedImage Decode(DecodeRequest request) => throw new NotSupportedException();
+    }
+
+    private sealed class TestRawPreviewFallback(byte[] thumbnailBytes) : IRawPreviewFallback
+    {
+        public int CallCount { get; private set; }
+        public RawFormat LastFormat { get; private set; }
+
+        public ReadOnlyMemory<byte> ReadJpegThumbnail(string path, RawFormat format)
+        {
+            CallCount++;
+            LastFormat = format;
+            return thumbnailBytes;
+        }
+    }
+
+    private sealed class FallbackAwareDecoder(IImageDecoder jpegDecoder) : IImageDecoder
+    {
+        public ImageInfo ReadInfo(string path) => throw new NotSupportedException();
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            if (request.Bytes is not { } bytes || bytes.Span[0] != 0xFF)
+                throw new NotSupportedException("No imaging component suitable to complete this operation was found.");
+            return jpegDecoder.Decode(request);
+        }
     }
 }

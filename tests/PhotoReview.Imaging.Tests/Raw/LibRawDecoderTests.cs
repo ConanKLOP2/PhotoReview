@@ -1,7 +1,9 @@
 using System.IO;
 using System.Diagnostics;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
+using PhotoReview.Imaging.Decoding.Wic;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -116,6 +118,57 @@ public sealed class LibRawDecoderTests
 
     [Fact]
     [Trait("Category", "Native")]
+    public void ReadJpegThumbnail_OrfCorpusSamples_FallsBackToDecodablePreview()
+    {
+        if (!Directory.Exists(CorpusDirectory)) return;
+        var files = Directory.GetFiles(CorpusDirectory)
+            .Where(path => Path.GetExtension(path).Equals(".orf", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (files.Length == 0) return;
+
+        Assert.Equal(3, files.Length);
+        var fallback = new LibRawTestPreviewFallback();
+        var rawDecoder = new RawDecoder(new WpfBitmapImageDecoder(), previewFallback: fallback);
+        foreach (var path in files)
+        {
+            var decoded = rawDecoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+            Assert.True(decoded.PixelWidth > 0);
+            Assert.True(decoded.PixelHeight > 0);
+            Assert.Equal(DecoderBackend.Wpf, decoded.ActualBackend);
+            Assert.IsAssignableFrom<BitmapSource>(decoded.PlatformImage);
+            Assert.IsAssignableFrom<ISourceReadMetrics>(decoded);
+            Assert.True(((ISourceReadMetrics)decoded).SourceBytesRead >= fallback.LastThumbnailLength);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Native")]
+    public void ReadJpegThumbnail_RepeatedOrfExtraction_DoesNotContinuouslyGrowPrivateBytes()
+    {
+        var path = Path.Combine(CorpusDirectory, "Olympus - E-P3 - 16bit (4_3).ORF");
+        if (!File.Exists(path)) return;
+
+        using var memorySampler = new PrivateMemorySampler();
+        long afterWarmup = 0;
+        for (var index = 0; index < 100; index++)
+        {
+            var thumbnail = LibRawDecoder.ReadJpegThumbnail(path);
+            Assert.InRange(thumbnail.Length, 4, RawContainerLimits.MaxHeaderBytes * 4);
+            if ((index + 1) % 10 != 0) continue;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            if (index == 19) afterWarmup = memorySampler.CurrentPrivateBytes;
+        }
+
+        var growth = memorySampler.CurrentPrivateBytes - afterWarmup;
+        Console.WriteLine($"LibRaw thumbnail extraction 100x: after warmup={afterWarmup}; growth={growth}; peak={memorySampler.PeakPrivateBytes}");
+        Assert.InRange(growth, long.MinValue, 32L * 1024 * 1024);
+    }
+
+    [Fact]
+    [Trait("Category", "Native")]
     public void Decode_Repeated200Times_DoesNotContinuouslyGrowPrivateBytes()
     {
         var path = Path.Combine(CorpusDirectory, "Canon - EOS 7D - sRAW2 (sRAW) (3_2).CR2");
@@ -159,6 +212,24 @@ public sealed class LibRawDecoderTests
         Assert.Equal(image.PixelHeight, info.PixelHeight);
 
         return $"{Path.GetFileName(path)} {image.PixelWidth}x{image.PixelHeight} {stopwatch.Elapsed.TotalMilliseconds:F0} ms";
+    }
+
+    private sealed class LibRawTestPreviewFallback : IRawPreviewFallback
+    {
+        internal int LastThumbnailLength { get; private set; }
+
+        public ReadOnlyMemory<byte> ReadJpegThumbnail(string path, RawFormat format)
+        {
+            Assert.Equal(RawFormat.Orf, format);
+            var bytes = LibRawDecoder.ReadJpegThumbnail(path);
+            Assert.InRange(bytes.Length, 4, RawContainerLimits.MaxHeaderBytes * 4);
+            Assert.Equal((byte)0xFF, bytes[0]);
+            Assert.Equal((byte)0xD8, bytes[1]);
+            Assert.Equal((byte)0xFF, bytes[^2]);
+            Assert.Equal((byte)0xD9, bytes[^1]);
+            LastThumbnailLength = bytes.Length;
+            return bytes;
+        }
     }
 
     private sealed class PrivateMemorySampler : IDisposable

@@ -6,6 +6,7 @@ internal static class LibRawNativeMethods
 {
     internal const string LibraryName = "libraw.dll";
     internal const int ImageBitmap = 2;
+    internal const int ImageJpeg = 1;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate int ProgressCallback(IntPtr data, int stage, int iteration, int expected);
@@ -25,11 +26,17 @@ internal static class LibRawNativeMethods
     [DllImport(LibraryName, EntryPoint = "libraw_unpack", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int LibRawUnpack(SafeLibRawHandle handle);
 
+    [DllImport(LibraryName, EntryPoint = "libraw_unpack_thumb", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int LibRawUnpackThumb(SafeLibRawHandle handle);
+
     [DllImport(LibraryName, EntryPoint = "libraw_dcraw_process", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int LibRawDcrawProcess(SafeLibRawHandle handle);
 
     [DllImport(LibraryName, EntryPoint = "libraw_dcraw_make_mem_image", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern IntPtr LibRawDcrawMakeMemImage(SafeLibRawHandle handle, out int errorCode);
+
+    [DllImport(LibraryName, EntryPoint = "libraw_dcraw_make_mem_thumb", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern IntPtr LibRawDcrawMakeMemThumb(SafeLibRawHandle handle, out int errorCode);
 
     [DllImport(LibraryName, EntryPoint = "libraw_dcraw_clear_mem", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawDcrawClearMem(IntPtr image);
