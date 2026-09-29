@@ -32,12 +32,15 @@ internal static class DecoderProviders
     /// </param>
     public static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create(ISourceReader sourceReader,
         Func<bool>? isLibRawNeeded = null)
-        => Create(sourceReader, isLibRawNeeded, LibRawAvailability.Probe, App.LogStartupErrorForced, AppLog.Info);
+        => Create(sourceReader, isLibRawNeeded, LibRawAvailability.Probe, TurboJpegAvailability.Probe, App.LogStartupErrorForced, AppLog.Info);
 
     internal delegate bool LibRawProbe(out string? reason);
 
+    internal delegate bool TurboJpegProbe(out string? reason);
+
     internal static List<(DecoderBackend Backend, Func<IImageDecoder> Factory)> Create(ISourceReader sourceReader,
-        Func<bool>? isLibRawNeeded, LibRawProbe libRawProbe, Action<string, Exception> logForcedError, Action<string> logInfo)
+        Func<bool>? isLibRawNeeded, LibRawProbe libRawProbe, TurboJpegProbe turboJpegProbe,
+        Action<string, Exception> logForcedError, Action<string> logInfo)
     {
         var providers = new List<(DecoderBackend, Func<IImageDecoder>)>
         {
@@ -45,14 +48,14 @@ internal static class DecoderProviders
             (DecoderBackend.WicDirect, () => new WicDirectDecoder(sourceReader))
         };
 
-        if (TurboJpegAvailability.Probe(out string? reason))
+        if (turboJpegProbe(out string? reason))
         {
             Func<IImageDecoder> createTurboJpeg = () => new TurboJpegDecoder();
             providers.Add((DecoderBackend.TurboJpeg, createTurboJpeg));
         }
         else
         {
-            App.LogStartupErrorForced(
+            logForcedError(
                 $"TurboJPEG decoder backend is not available and will not be registered: {reason}",
                 new InvalidOperationException(reason ?? "TurboJPEG probe failed."));
         }

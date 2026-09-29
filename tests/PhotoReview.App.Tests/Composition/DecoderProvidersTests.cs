@@ -20,10 +20,29 @@ public sealed class DecoderProvidersTests
         return true;
     }
 
+    /// <summary>Stub: the test never loads the real turbojpeg.dll nor lets a missing one write to the real startup log.</summary>
+    private static bool TurboJpegAvailable(out string? reason)
+    {
+        reason = null;
+        return true;
+    }
+
     private static List<(DecoderBackend Backend, Func<PhotoReview.Imaging.Decoding.IImageDecoder> Factory)> Create(
         Func<bool>? needed, DecoderProviders.LibRawProbe probe, List<string> errors, List<string> infos) =>
-        DecoderProviders.Create(PhysicalSourceReader.Instance, needed, probe,
+        DecoderProviders.Create(PhysicalSourceReader.Instance, needed, probe, TurboJpegAvailable,
             (message, _) => errors.Add(message), infos.Add);
+
+    [Fact]
+    public void Create_TurboJpegMissing_LogsThroughTheInjectedLoggerAndDoesNotRegisterIt()
+    {
+        var errors = new List<string>();
+        var providers = DecoderProviders.Create(PhysicalSourceReader.Instance, () => false, TurboJpegOrLibRawAvailable,
+            (out string? reason) => { reason = "turbojpeg.dll not found"; return false; },
+            (message, _) => errors.Add(message), _ => { });
+
+        Assert.Contains(errors, message => message.Contains("TurboJPEG", StringComparison.Ordinal));
+        Assert.DoesNotContain(providers, provider => provider.Backend == DecoderBackend.TurboJpeg);
+    }
 
     [Fact]
     public void Create_LibRawMissingWhileRawSupportIsOff_LogsInfoNotAnError()
