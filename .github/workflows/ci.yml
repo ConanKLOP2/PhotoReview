@@ -96,6 +96,10 @@ jobs:
         shell: powershell
         run: ./tools/fetch-native.ps1
 
+      - name: Fetch LibRaw native binary
+        shell: powershell
+        run: ./tools/fetch-libraw.ps1
+
       - name: Restore
         run: dotnet restore PhotoReview.slnx
 

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PhotoReview.Imaging.LibRaw</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
+    <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\native\x64\libraw.dll" Link="libraw.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\LICENSE.LGPL" Link="LibRaw-LICENSE.LGPL">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\native\libraw\LICENSE.CDDL" Link="LibRaw-LICENSE.CDDL">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="EnsureLibRawBinary" BeforeTargets="BeforeBuild;AssignTargetPaths">
+    <PropertyGroup>
+      <LibRawDllPath>$(MSBuildThisFileDirectory)..\..\native\x64\libraw.dll</LibRawDllPath>
+      <FetchLibRawScriptPath>$(MSBuildThisFileDirectory)..\..\tools\fetch-libraw.ps1</FetchLibRawScriptPath>
+    </PropertyGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;"
+          Condition="!Exists('$(LibRawDllPath)') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.LGPL') or !Exists('$(MSBuildThisFileDirectory)..\..\native\libraw\LICENSE.CDDL')" />
+  </Target>
+
+</Project>

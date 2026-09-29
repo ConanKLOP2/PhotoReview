@@ -20,7 +20,11 @@ $required = @(
     'PhotoReview.Benchmarking.dll',
     'PhotoReview.PerfAnalysis.dll',
     'PhotoReview.Imaging.TurboJpeg.dll',
+    'PhotoReview.Imaging.LibRaw.dll',
     'turbojpeg.dll',
+    'libraw.dll',
+    'LibRaw-LICENSE.LGPL',
+    'LibRaw-LICENSE.CDDL',
     # Translation catalogs (ADR 0006): English is also embedded, but shipped files let users read/edit them.
     'Languages\en.json',
     'Languages\vi.json')
@@ -37,6 +41,14 @@ $expectedNativeHash = (Get-Content -LiteralPath $hashFile -TotalCount 1).Trim().
 $actualNativeHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'turbojpeg.dll') -Algorithm SHA256).Hash
 if ($actualNativeHash -ne $expectedNativeHash) {
     Write-Error "turbojpeg.dll SHA-256 mismatch: expected $expectedNativeHash, found $actualNativeHash"
+    exit 1
+}
+
+$libRawHashFile = Join-Path $repoRoot 'native\libraw.sha256'
+$expectedLibRawHash = (Get-Content -LiteralPath $libRawHashFile -TotalCount 1).Trim().ToUpperInvariant()
+$actualLibRawHash = (Get-FileHash -LiteralPath (Join-Path $resolved 'libraw.dll') -Algorithm SHA256).Hash
+if ($actualLibRawHash -ne $expectedLibRawHash) {
+    Write-Error "libraw.dll SHA-256 mismatch: expected $expectedLibRawHash, found $actualLibRawHash"
     exit 1
 }
 

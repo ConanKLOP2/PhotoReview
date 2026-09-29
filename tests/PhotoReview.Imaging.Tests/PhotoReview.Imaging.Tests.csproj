@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.Raw\PhotoReview.Imaging.Raw.csproj" />
+    <ProjectReference Include="..\..\src\PhotoReview.Imaging.LibRaw\PhotoReview.Imaging.LibRaw.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Imaging.TurboJpeg\PhotoReview.Imaging.TurboJpeg.csproj" />
     <ProjectReference Include="..\..\src\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\PhotoReview.TestSupport\PhotoReview.TestSupport.csproj" />
