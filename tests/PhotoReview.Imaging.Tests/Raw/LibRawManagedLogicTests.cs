@@ -292,4 +292,93 @@ public sealed class LibRawManagedLogicTests
         Assert.Null(LibRawDecoder.ToExtendedLengthPath(@"\\?\" + Long(@"C:\photos\")));
         Assert.Null(LibRawDecoder.ToExtendedLengthPath(@"\\.\" + Long(@"C:\photos\")));
     }
+
+    // ---- TrimToEndOfImage: arbitrary trailing bytes after the real EOI, hostile embedded FFD9 ----
+
+    private static byte[] Jpeg() => SyntheticRawBuilder.CreateMinimalJpeg(64, 48);
+
+    /// <summary>The same JPEG with an APP1 segment (an EXIF-style embedded thumbnail, itself a complete JPEG) right after SOI.</summary>
+    private static byte[] JpegWithEmbeddedThumbnail()
+    {
+        var thumbnail = SyntheticRawBuilder.CreateMinimalJpeg(8, 6);
+        var main = Jpeg();
+        var app1 = new List<byte> { 0xFF, 0xE1 };
+        var length = 2 + 6 + thumbnail.Length;
+        app1.Add((byte)(length >> 8));
+        app1.Add((byte)length);
+        app1.AddRange("Exif\0\0"u8.ToArray());
+        app1.AddRange(thumbnail);
+        return [.. main[..2], .. app1, .. main[2..]];
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(37)]
+    [InlineData(4096)]
+    public void TrimToEndOfImage_ArbitraryNonFillTailAfterTheEoi_IsTrimmed(int tailLength)
+    {
+        var jpeg = Jpeg();
+        var tail = new byte[tailLength];
+        for (var i = 0; i < tail.Length; i++) tail[i] = (byte)(0x11 + i % 0x60); // never 00/FF
+
+        Assert.Equal(jpeg, LibRawDecoder.TrimToEndOfImage([.. jpeg, .. tail]));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_TailWithFfBytesButNoEoi_IsTrimmed()
+    {
+        var jpeg = Jpeg();
+        byte[] tail = [0x12, 0xFF, 0x00, 0x34, 0xFF, 0xFE, 0x56, 0xFF, 0x78];
+
+        Assert.Equal(jpeg, LibRawDecoder.TrimToEndOfImage([.. jpeg, .. tail]));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_EmbeddedThumbnailWithCompleteMainImage_KeepsTheWholeMainImage()
+    {
+        var jpeg = JpegWithEmbeddedThumbnail();
+
+        Assert.Equal(jpeg, LibRawDecoder.TrimToEndOfImage([.. jpeg, 0x12, 0x34, 0x56]));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_MainImageTruncatedAfterAnEmbeddedThumbnailEoi_IsNotCutAtTheThumbnail()
+    {
+        var jpeg = JpegWithEmbeddedThumbnail();
+        // The main image lost its EOI (truncated stream) and carries a garbage tail: the only FFD9 left is the thumbnail's,
+        // followed by the main image's DQT/SOF/SOS, so it must not be taken as the end of the image.
+        var truncated = jpeg[..^2];
+
+        Assert.Throws<InvalidDataException>(() => LibRawDecoder.TrimToEndOfImage([.. truncated, 0x12, 0x34, 0x56, 0x78]));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_TruncatedStreamWithGarbageTail_Throws()
+    {
+        var jpeg = Jpeg();
+
+        Assert.Throws<InvalidDataException>(() => LibRawDecoder.TrimToEndOfImage([.. jpeg[..^2], 0x12, 0x34, 0x56, 0x78]));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_ProgressiveStyleSecondScanBeforeTheEoi_IsKept()
+    {
+        // Two scans: the first scan's entropy data ends at a SOS marker, not at the EOI.
+        var jpeg = Jpeg();
+        var sos = jpeg.AsSpan().IndexOf(new byte[] { 0xFF, 0xDA });
+        var twoScans = jpeg[..^2].Concat(jpeg[sos..^2]).Concat(new byte[] { 0xFF, 0xD9 }).ToArray();
+
+        Assert.Equal(twoScans, LibRawDecoder.TrimToEndOfImage([.. twoScans, 0x12, 0x34]));
+    }
+
+    [Fact]
+    public void TrimToEndOfImage_UnparsableSegmentLengthButLastEoiWithCleanTail_FallsBackToTheLastEoi()
+    {
+        var jpeg = Jpeg();
+        var corrupted = (byte[])jpeg.Clone();
+        corrupted[4] = 0x00; // APP0 length 1: invalid, the structure walk gives up
+        corrupted[5] = 0x01;
+
+        Assert.Equal(corrupted, LibRawDecoder.TrimToEndOfImage([.. corrupted, 0x12, 0x34, 0x56]));
+    }
 }

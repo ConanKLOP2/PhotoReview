@@ -77,9 +77,12 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     }
 
     /// <summary>
-    /// Validates the SOI marker and trims trailing fill (0x00 padding, extra 0xFF) after the final EOI marker.
-    /// Camera thumbnails are often zero-padded to a fixed slot size. Data without an SOI or without an EOI once the
-    /// fill is skipped is rejected as an incomplete stream.
+    /// Validates the SOI marker and trims everything after the end of the image. Camera thumbnails are often padded to a fixed
+    /// slot size, usually with 0x00/0xFF fill (fast path: the data ends with EOI once the fill is skipped) but sometimes with
+    /// other bytes. For those the marker structure is walked (segment lengths, entropy data where FF is only followed by 00,
+    /// RSTn or FF) to find the real EOI, so an FFD9 inside an embedded EXIF thumbnail is skipped with its APP1 segment. A
+    /// truncated stream (no real EOI) is rejected, unless the last FFD9 of the final 64 KB is followed only by bytes that
+    /// contain no JPEG structure (no SOI/SOS/SOF/DQT/DHT/APPn marker).
     /// </summary>
     internal static byte[] TrimToEndOfImage(byte[] bytes)
     {
@@ -87,9 +90,69 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
         var end = bytes.Length;
         while (end > 2 && bytes[end - 1] is 0x00 or 0xFF) end--;
-        if (end < 4 || bytes[end - 1] != 0xD9 || bytes[end - 2] != 0xFF)
-            throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
-        return end == bytes.Length ? bytes : bytes[..end];
+        if (end >= 4 && bytes[end - 1] == 0xD9 && bytes[end - 2] == 0xFF)
+            return end == bytes.Length ? bytes : bytes[..end];
+
+        var eoi = FindEndOfImageByStructure(bytes);
+        if (eoi < 0) eoi = FindTrailingEoiWithStructureFreeTail(bytes);
+        if (eoi < 0) throw new InvalidDataException("LibRaw thumbnail is not a complete JPEG stream.");
+        return bytes[..eoi];
+    }
+
+    /// <summary>Index just past the EOI found by walking the JPEG segments from the SOI, or -1 when the structure ends (truncated/invalid) before an EOI.</summary>
+    private static int FindEndOfImageByStructure(byte[] b)
+    {
+        var i = 2;
+        while (true)
+        {
+            if (i >= b.Length || b[i] != 0xFF) return -1;
+            while (i < b.Length && b[i] == 0xFF) i++; // fill bytes before a marker
+            if (i >= b.Length) return -1;
+            var marker = b[i++];
+            if (marker == 0xD9) return i;
+            if (marker is 0x00 or 0x01 or 0xD8 or (>= 0xD0 and <= 0xD7)) continue; // standalone markers carry no length
+            if (i + 2 > b.Length) return -1;
+            var segmentLength = (b[i] << 8) | b[i + 1];
+            if (segmentLength < 2) return -1;
+            i += segmentLength;
+            if (i > b.Length) return -1;
+            if (marker != 0xDA) continue;
+
+            // Entropy-coded data: an FF is followed by 00 (stuffed), RSTn or more FF; any other marker ends the scan.
+            while (true)
+            {
+                if (i >= b.Length) return -1;
+                if (b[i] != 0xFF) { i++; continue; }
+                if (i + 1 >= b.Length) return -1;
+                var next = b[i + 1];
+                if (next == 0x00 || next is >= 0xD0 and <= 0xD7) { i += 2; continue; }
+                if (next == 0xFF) { i++; continue; }
+                break;
+            }
+        }
+    }
+
+    private const int TrailingEoiSearchWindow = 64 * 1024;
+
+    /// <summary>Fallback for streams the structure walk cannot follow: the last FFD9 of the final 64 KB when nothing after it looks like JPEG structure; else -1.</summary>
+    private static int FindTrailingEoiWithStructureFreeTail(byte[] b)
+    {
+        var start = Math.Max(2, b.Length - TrailingEoiSearchWindow);
+        for (var i = b.Length - 2; i >= start; i--)
+        {
+            if (b[i] != 0xFF || b[i + 1] != 0xD9) continue;
+            for (var j = i + 2; j < b.Length - 1; j++)
+            {
+                if (b[j] != 0xFF) continue;
+                var marker = b[j + 1];
+                // SOI, SOFn/DHT (C0-CF), SOS, DQT, DRI, APPn, COM: the tail is more image, not padding.
+                if (marker is 0xD8 or 0xDA or 0xDB or 0xDD or 0xFE or (>= 0xC0 and <= 0xCF) or (>= 0xE0 and <= 0xEF)) return -1;
+            }
+
+            return i + 2;
+        }
+
+        return -1;
     }
 
     public ImageInfo ReadInfo(string path)
