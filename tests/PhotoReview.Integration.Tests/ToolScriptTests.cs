@@ -678,4 +678,29 @@ public sealed class FetchRawSamplesSelfTestTests
         Assert.True(code == 0, output);
         Assert.Contains("PASS: fetch-raw-samples self-test", output, StringComparison.Ordinal);
     }
+
+    [Fact(DisplayName = "fetch-raw-samples: a -FormatFilter that matches nothing fails before any network access")]
+    public void FetchRawSamples_UnknownFormatFilter_FailsNonZeroWithoutNetwork()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "fetch-raw-filter-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var manifest = Path.Combine(dir, "samples.txt");
+            File.WriteAllText(manifest, "CR2\tCamera\thttps://raw.pixls.us/getfile.php/129/nice/sample.CR2\t" + new string('A', 64) +
+                "\thttps://creativecommons.org/publicdomain/zero/1.0/\tsample.CR2\n", new UTF8Encoding(false));
+
+            // The selection check runs before the (network) licence check, so this never reaches raw.pixls.us.
+            var (code, output) = PowerShellRunner.Run("-File", Path.Combine(PowerShellRunner.RepoRoot(), "tools", "fetch-raw-samples.ps1"),
+                "-SamplesFile", manifest, "-TargetDir", Path.Combine(dir, "out"), "-FormatFilter", "CR4");
+
+            Assert.NotEqual(0, code);
+            Assert.Contains("FormatFilter 'CR4' matches no sample", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("Done:", output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

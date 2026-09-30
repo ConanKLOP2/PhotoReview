@@ -70,6 +70,14 @@ function Test-FetchRawSamplesSelfTest {
             throw 'SELF-TEST FAILED: Two-row manifest was not license-checked against a two-record response.'
         }
 
+        # -FormatFilter: case-insensitive match selects rows; a typo must fail instead of "0 samples verified".
+        if (@(Select-RawSamples -Samples $twoSamples -FormatFilter 'cr3').Count -ne 1) { throw 'SELF-TEST FAILED: FormatFilter cr3 did not select exactly the CR3 row.' }
+        if (@(Select-RawSamples -Samples $twoSamples -FormatFilter '').Count -ne 2) { throw 'SELF-TEST FAILED: An empty FormatFilter must select every row.' }
+        $filterRejected = $false
+        try { [void]@(Select-RawSamples -Samples $twoSamples -FormatFilter 'CR4') }
+        catch { if ($_.Exception.Message -like "*FormatFilter 'CR4' matches no sample*") { $filterRejected = $true } else { throw } }
+        if (-not $filterRejected) { throw 'SELF-TEST FAILED: A FormatFilter matching no manifest row was accepted.' }
+
         $hashRejected = $false
         try {
             Assert-RawSampleHash -ExpectedHash ([string]::new('A', 64)) -ActualHash ([string]::new('B', 64)) -FileName 'sample.CR2'
@@ -342,6 +350,23 @@ function Read-RawSampleManifest {
     return $samples.ToArray()
 }
 
+function Select-RawSamples {
+    # Applies -FormatFilter. A non-empty filter that matches no manifest row (typo such as CR4) is an error, not a
+    # silent "Done: 0 samples verified" with exit code 0.
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Samples,
+        [string]$FormatFilter = ""
+    )
+    if ([string]::IsNullOrWhiteSpace($FormatFilter)) { return $Samples }
+    $wanted = $FormatFilter.Trim().ToUpperInvariant()
+    $selected = @($Samples | Where-Object { $_.Format.ToUpperInvariant() -eq $wanted })
+    if ($selected.Count -eq 0) {
+        $known = (@($Samples | ForEach-Object { $_.Format.ToUpperInvariant() } | Sort-Object -Unique)) -join ', '
+        throw "FormatFilter '$FormatFilter' matches no sample in the manifest (known formats: $known)."
+    }
+    return $selected
+}
+
 if ($SelfTest) {
     Test-FetchRawSamplesSelfTest
     exit 0
@@ -353,21 +378,18 @@ if (-not (Test-Path -LiteralPath $SamplesFile)) {
 
 $processed = 0
 $samples = @(Read-RawSampleManifest -Path $SamplesFile)
+$selectedSamples = @(Select-RawSamples -Samples $samples -FormatFilter $FormatFilter)
 [void](Invoke-RawPixlsLicenseCheck -Samples $samples -RecordsProvider { Get-RawPixlsRepositoryRecords })
 if (-not (Test-Path -LiteralPath $TargetDir)) {
     New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 }
 
-foreach ($sample in $samples) {
+foreach ($sample in $selectedSamples) {
     $format = $sample.Format
     $camera = $sample.Camera
     $url = $sample.Url
     $expectedHash = $sample.ExpectedHash
     $fileName = $sample.FileName
-
-    if ($FormatFilter -and ($format -ne $FormatFilter.ToUpperInvariant())) {
-        continue
-    }
 
     $targetPath = Join-Path $TargetDir $fileName
 
