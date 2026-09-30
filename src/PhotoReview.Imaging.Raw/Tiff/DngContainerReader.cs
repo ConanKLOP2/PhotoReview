@@ -47,10 +47,14 @@ public sealed class DngContainerReader : IRawContainerReader
 
         // Step 1: Scan IFD chain and collect SubIFDs
         long currentIfdOffset = ifd0Offset;
-        while (currentIfdOffset > 0 && allIfdOffsets.Count < RawContainerLimits.MaxIfdCount)
+        // The IFD chain and the SubIFDs are capped separately: many SubIFDs must not stop the IFD1+ chain early.
+        int chainCount = 0;
+        int subIfdCount = 0;
+        while (currentIfdOffset > 0 && chainCount < RawContainerLimits.MaxIfdCount)
         {
             ct.ThrowIfCancellationRequested();
             if (!visited.Add(currentIfdOffset)) break;
+            chainCount++;
 
             var entries = TiffHeaderNavigator.ReadIfdEntries(source, currentIfdOffset, littleEndian, out uint nextIfdOffset);
             foreach (var entry in entries)
@@ -60,8 +64,11 @@ public sealed class DngContainerReader : IRawContainerReader
                     var subs = TiffHeaderNavigator.ReadTagUnsignedArray(source, entry, littleEndian);
                     foreach (var s in subs)
                     {
-                        if (s > 0 && !allIfdOffsets.Contains(s))
+                        if (s > 0 && subIfdCount < RawContainerLimits.MaxIfdCount && !allIfdOffsets.Contains(s))
+                        {
                             allIfdOffsets.Add(s);
+                            subIfdCount++;
+                        }
                     }
                 }
             }

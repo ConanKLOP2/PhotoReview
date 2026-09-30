@@ -14,6 +14,9 @@ public static class PreviewSelector
 {
     private const int MaxJpegSegments = 512;
 
+    /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
+    private const int MaxFillBytes = 64 * 1024;
+
     /// <summary>
     /// Selects the best embedded preview matching <paramref name="requestBox"/> and <paramref name="orientation"/>.
     /// </summary>
@@ -152,13 +155,22 @@ public static class PreviewSelector
         if (end - offset < 4 || source.Read(offset, 2) is not [0xFF, 0xD8]) return false;
 
         long pos = offset + 2;
+        int fillBytes = 0;
         for (int segment = 0; segment < MaxJpegSegments && pos + 4 <= end; segment++)
         {
             var head = source.Read(pos, 4);
             if (head[0] != 0xFF) break;
 
             byte marker = head[1];
-            if (marker == 0xFF) { pos++; continue; } // fill byte
+            if (marker == 0xFF)
+            {
+                // Fill byte: does not consume a segment iteration (only the separate fill cap bounds it).
+                if (++fillBytes > MaxFillBytes) break;
+                pos++;
+                segment--;
+                continue;
+            }
+            fillBytes = 0;
             if (marker == 0x00 || marker is 0xDA or 0xD9) break; // stuffed / SOS / EOI
             if (marker == 0x01 || marker is >= 0xD0 and <= 0xD8) { pos += 2; continue; } // standalone markers
 
