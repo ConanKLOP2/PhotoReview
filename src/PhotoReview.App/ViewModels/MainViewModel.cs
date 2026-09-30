@@ -338,6 +338,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// <summary>Latest folder load, including its Explorer-order apply/ignore; completes when the order is settled (tests await it instead of a wall-clock window).</summary>
     internal Task FolderLoadTask { get; private set; } = Task.CompletedTask;
 
+    /// <summary>The re-present of the current image started by the last <see cref="ShowSettings"/> (test seam).</summary>
+    internal Task SettingsRefreshTask { get; private set; } = Task.CompletedTask;
+
     /// <summary>AR16: the latest load's background readability probe (unreadable files removed and reported); tests await it.</summary>
     internal Task ReadabilityProbeTask => _folderCoordinator.ReadabilityProbe;
 
@@ -733,6 +736,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var previousBackend = _settingsStore.Current.DecoderBackend;
         var previousRawSupport = _settingsStore.Current.RawSupportEnabled;
         var previousPairMode = _settingsStore.Current.RawPairMode;
+        var previousRawFullDecode = _settingsStore.Current.RawFullDecode;
         var changed = _dialogService.ShowSettings();
         if (!changed) return;
 
@@ -751,7 +755,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var reloadFolder = (previousRawSupport != newRawSupport
                 || (newRawSupport && previousPairMode != _settingsStore.Current.RawPairMode))
             && _currentSession?.Folder is { Length: > 0 };
-        if (reloadFolder || previousMode != newMode || previousBackend != newBackend)
+        // The RAW full-decode setting is read when the zoom target is armed (ZoomDetailLoader.OnPreviewPresented), so the open
+        // image must be re-presented (cheap: RAM-cached preview, no folder reload) for Never <-> OnZoom to apply to it.
+        var rawFullDecodeChanged = previousRawFullDecode != _settingsStore.Current.RawFullDecode;
+        if (reloadFolder || previousMode != newMode || previousBackend != newBackend || rawFullDecodeChanged)
         {
             _preloadController?.Cancel();
             if (previousBackend != newBackend)
@@ -771,7 +778,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             }
             else if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
             {
-                _ = _presenter.PresentAsync(_catalog.CurrentIndex);
+                // Drop an armed target / held full decode made under the old setting before the image is presented again.
+                _presenter.ZoomDetail.Reset();
+                SettingsRefreshTask = _presenter.PresentAsync(_catalog.CurrentIndex);
             }
         }
     }
