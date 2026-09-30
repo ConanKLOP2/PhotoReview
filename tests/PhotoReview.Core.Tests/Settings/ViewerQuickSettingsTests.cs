@@ -161,6 +161,43 @@ public sealed class ViewerQuickSettingsTests
         Assert.Equal("", settings.Shortcuts.ClickZoom);
     }
 
+    public static TheoryData<string> OptionalShortcutNames()
+    {
+        var data = new TheoryData<string>();
+        foreach (var name in ShortcutMappings.OptionalNames) data.Add(name);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(OptionalShortcutNames))]
+    public void DisableConflictingOptionalShortcuts_EveryOptionalShortcutConflictingWithAMandatoryOne_IsDisabled(string name)
+    {
+        var settings = new AppSettings();
+        var property = typeof(ShortcutMappings).GetProperty(name)!;
+        property.SetValue(settings.Shortcuts, settings.Shortcuts.Next); // same key as the mandatory Next shortcut
+
+        var disabled = SettingsNormalizer.DisableConflictingOptionalShortcuts(settings);
+
+        Assert.Equal(new[] { name }, disabled);
+        Assert.Equal("", (string?)property.GetValue(settings.Shortcuts));
+        Assert.Null(new SettingsValidator(new AllKeysValid()).ValidateShortcuts(settings));
+    }
+
+    [Theory]
+    [MemberData(nameof(OptionalShortcutNames))]
+    public void DisableConflictingOptionalShortcuts_EveryOptionalShortcutConflictingWithAnAction_IsDisabled(string name)
+    {
+        var settings = new AppSettings();
+        settings.Actions[0].Shortcut = "F9";
+        var property = typeof(ShortcutMappings).GetProperty(name)!;
+        property.SetValue(settings.Shortcuts, "F9");
+
+        var disabled = SettingsNormalizer.DisableConflictingOptionalShortcuts(settings);
+
+        Assert.Equal(new[] { name }, disabled);
+        Assert.Equal("F9", settings.Actions[0].Shortcut);
+    }
+
     [Fact]
     public void DisableConflictingOptionalShortcuts_NoConflict_KeepsEverything()
     {

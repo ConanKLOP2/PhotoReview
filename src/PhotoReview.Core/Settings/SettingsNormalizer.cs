@@ -232,16 +232,14 @@ public static class SettingsNormalizer
             }
             return key;
         }
-        shortcuts.LastImage = Resolve(nameof(ShortcutMappings.LastImage), shortcuts.LastImage);
-        shortcuts.ZoomActualSize = Resolve(nameof(ShortcutMappings.ZoomActualSize), shortcuts.ZoomActualSize);
-        shortcuts.ToggleInfoOverlay = Resolve(nameof(ShortcutMappings.ToggleInfoOverlay), shortcuts.ToggleInfoOverlay);
-        shortcuts.MoveToFolder = Resolve(nameof(ShortcutMappings.MoveToFolder), shortcuts.MoveToFolder);
-        shortcuts.CopyToFolder = Resolve(nameof(ShortcutMappings.CopyToFolder), shortcuts.CopyToFolder);
-        shortcuts.ClickZoom = Resolve(nameof(ShortcutMappings.ClickZoom), shortcuts.ClickZoom);
-        shortcuts.FitWidth = Resolve(nameof(ShortcutMappings.FitWidth), shortcuts.FitWidth);
-        shortcuts.FitHeight = Resolve(nameof(ShortcutMappings.FitHeight), shortcuts.FitHeight);
-        shortcuts.ToggleKeepZoom = Resolve(nameof(ShortcutMappings.ToggleKeepZoom), shortcuts.ToggleKeepZoom);
-        shortcuts.ToggleCaptureMember = Resolve(nameof(ShortcutMappings.ToggleCaptureMember), shortcuts.ToggleCaptureMember);
+        // Every optional shortcut, derived from the one list (OptionalNames): a hand-kept list silently missed OpenFolder and CustomZoom,
+        // so a saved value that conflicted with another shortcut stayed and then failed SettingsValidator.
+        foreach (var name in ShortcutMappings.OptionalNames)
+        {
+            var property = typeof(ShortcutMappings).GetProperty(name)
+                ?? throw new InvalidOperationException($"ShortcutMappings.OptionalNames lists '{name}', which is not a property.");
+            property.SetValue(shortcuts, Resolve(name, (string?)property.GetValue(shortcuts)));
+        }
         return disabled;
     }
 }
