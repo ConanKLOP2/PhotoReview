@@ -129,7 +129,7 @@ public sealed class RawDecoder : IImageDecoder
             }
             else
             {
-                decoded = DecodePreviewWithFallbacks(request, containerInfo, headerSource, preview,
+                decoded = DecodePreviewWithFallbacks(request, containerInfo, key, headerSource, preview,
                     out previewBytesRead, out fallbackThumbnailBytesRead, out fullDecodeBytesRead, out fromJpegPreview);
             }
 
@@ -183,6 +183,7 @@ public sealed class RawDecoder : IImageDecoder
     private IDecodedImage DecodePreviewWithFallbacks(
         DecodeRequest request,
         RawContainerInfo containerInfo,
+        RawInfoKey key,
         IRawHeaderSource headerSource,
         EmbeddedPreview chosen,
         out long previewBytesRead,
@@ -197,7 +198,7 @@ public sealed class RawDecoder : IImageDecoder
 
         bool orfThumbnailPossible = containerInfo.Format == RawFormat.Orf && _previewFallback is not null;
         if (_noPreviewDecoder is null && !orfThumbnailPossible)
-            return DecodePreview(request, containerInfo, chosen, out previewBytesRead);
+            return DecodePreview(request, containerInfo, key, chosen, out previewBytesRead);
 
         System.Runtime.ExceptionServices.ExceptionDispatchInfo? firstFailure = null;
         Exception? lastFailure = null;
@@ -209,7 +210,7 @@ public sealed class RawDecoder : IImageDecoder
             tried.Add(current.Offset);
             try
             {
-                var decoded = DecodePreview(request, containerInfo, current, out long read);
+                var decoded = DecodePreview(request, containerInfo, key, current, out long read);
                 previewBytesRead = checked(read + failedBytes);
                 return decoded;
             }
@@ -269,7 +270,7 @@ public sealed class RawDecoder : IImageDecoder
             : PreviewSelector.SelectPreview(headerSource, remaining, request.Box, containerInfo.Orientation);
     }
 
-    private IDecodedImage DecodePreview(DecodeRequest request, RawContainerInfo containerInfo, EmbeddedPreview preview, out long previewBytesRead)
+    private IDecodedImage DecodePreview(DecodeRequest request, RawContainerInfo containerInfo, RawInfoKey key, EmbeddedPreview preview, out long previewBytesRead)
     {
         previewBytesRead = 0;
         // Read and cache ONLY the preview byte range. Never route a RAW file through the whole-file byte cache.
@@ -279,6 +280,13 @@ public sealed class RawDecoder : IImageDecoder
             if (preview.Length > RawContainerLimits.MaxPreviewBytes)
                 throw new InvalidDataException($"Embedded preview is too large: {preview.Length} bytes (limit {RawContainerLimits.MaxPreviewBytes}).");
             var fileInfo = new FileInfo(request.Path);
+            if (fileInfo.Exists && (fileInfo.Length != key.Length || fileInfo.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks))
+            {
+                // The preview offsets come from a container info keyed by another file state: never read with them.
+                _containerInfoCache.Remove(key);
+                throw ChangedWhileReading(request.Path);
+            }
+
             if (_sourceBytesCache is not null && fileInfo.Exists && _sourceBytesCache.CanCacheRange(preview.Length))
             {
                 // A range-cache hit reads nothing from the source; only a miss counts the preview bytes.
@@ -296,7 +304,7 @@ public sealed class RawDecoder : IImageDecoder
             }
             else
             {
-                previewBytes = ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, request.Priority);
+                previewBytes = ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, key.Length, request.Priority);
                 previewBytesRead = preview.Length;
             }
             if (preview.ColorSpace == PreviewColorSpace.AdobeRgb)
@@ -382,17 +390,29 @@ public sealed class RawDecoder : IImageDecoder
 
     private CachedRaw GetContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource, out RawInfoKey key)
     {
+        // The identity (length, write time) is taken from a stat BEFORE the file is opened and must still hold after the
+        // container was parsed, and the opened stream must have that same length: a file replaced (rename) at any point in
+        // between can then never have its old identity cached for the new bytes (or the other way round).
+        // Injectable source readers also support virtual/test paths with no physical FileInfo: no stat checks for those.
+        var before = new FileInfo(path);
+        var exists = before.Exists;
+        long statLength = exists ? before.Length : -1;
+        long lastWriteUtcTicks = exists ? before.LastWriteTimeUtc.Ticks : 0;
+
         headerSource = new SourceRawHeaderSource(path, _sourceReader, priority);
         try
         {
-            var file = new FileInfo(path);
-            var exists = file.Exists;
-            // Injectable source readers also support virtual/test paths with no physical FileInfo.
             var sourceLength = headerSource.Length;
-            var lastWriteUtcTicks = exists ? file.LastWriteTimeUtc.Ticks : 0;
+            if (exists && sourceLength != statLength)
+                throw ChangedWhileReading(path);
+
             var fullPath = Path.GetFullPath(path).ToUpperInvariant();
             key = new RawInfoKey(fullPath, sourceLength, lastWriteUtcTicks);
-            if (_containerInfoCache.TryGet(key, out var cached)) return cached;
+            if (_containerInfoCache.TryGet(key, out var cached))
+            {
+                ThrowIfStatChanged(path, exists, statLength, lastWriteUtcTicks);
+                return cached;
+            }
 
             var ext = Path.GetExtension(path);
             var probeSpan = headerSource.Read(0, RawContainerLimits.InitialProbeLength(headerSource.Length));
@@ -410,9 +430,7 @@ public sealed class RawDecoder : IImageDecoder
                 throw;
             }
 
-            var current = new FileInfo(path);
-            if (exists && (!current.Exists || current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks))
-                throw new IOException($"RAW source changed while reading its container: {path}");
+            ThrowIfStatChanged(path, exists, statLength, lastWriteUtcTicks);
             var entry = new CachedRaw(info, null, false);
             _containerInfoCache.Set(key, entry);
             return entry;
@@ -431,10 +449,24 @@ public sealed class RawDecoder : IImageDecoder
         }
     }
 
-    private byte[] ReadPreviewRange(string path, long offset, int count, SourceReadPriority priority)
+    private static IOException ChangedWhileReading(string path) =>
+        UserFacingError.Localized(new IOException($"RAW source changed while reading: {path}"), () => Tr.ErrIoFileChangedWhileReading(path));
+
+    /// <summary>Throws when a fresh stat of <paramref name="path"/> no longer equals the identity the container info was keyed with.</summary>
+    private static void ThrowIfStatChanged(string path, bool existedBefore, long expectedLength, long expectedLastWriteTicks)
+    {
+        if (!existedBefore) return;
+        var current = new FileInfo(path);
+        if (!current.Exists || current.Length != expectedLength || current.LastWriteTimeUtc.Ticks != expectedLastWriteTicks)
+            throw ChangedWhileReading(path);
+    }
+
+    private byte[] ReadPreviewRange(string path, long offset, int count, long expectedLength, SourceReadPriority priority)
     {
         var bytes = new byte[count];
         using var stream = _sourceReader.OpenSource(path, priority);
+        if (stream.Length != expectedLength)
+            throw ChangedWhileReading(path); // not the file the container info (and its preview offsets) describe
         stream.Seek(offset, SeekOrigin.Begin);
         var totalRead = 0;
         while (totalRead < bytes.Length)
