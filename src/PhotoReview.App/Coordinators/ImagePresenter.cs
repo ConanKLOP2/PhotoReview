@@ -129,7 +129,10 @@ public sealed class ImagePresenter
 
     private void ShowZoomDetailImageCore(object image, int w, int h)
     {
-        var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image);
+        // Decided from the shown bitmap itself, not from "the held original is shown": a held original that is still the
+        // embedded JPEG (a full decode that fell back to it) is still a RAW preview and keeps its info line.
+        var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image)
+            && held is not PhotoReview.Imaging.Decoding.IRawPreviewInfo { EmbeddedPreviewWidth: > 0 };
         if (showingOriginal)
         {
             // Always reassigned (null for a non-RAW photo) so a value left by an earlier photo can never be restored.
