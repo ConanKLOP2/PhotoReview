@@ -624,6 +624,18 @@ public sealed class OperationJournal
         }
     }
 
+    /// <summary>The most recent journal line of <paramref name="id"/> (null when there is none), read under the journal lock.</summary>
+    internal JournalEntry? ReadLatestEntry(string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        lock (_gate)
+        {
+            JournalEntry? latest = null;
+            ReadEntries(entry => { if (string.Equals(entry.Id, id, StringComparison.Ordinal)) latest = entry; });
+            return latest;
+        }
+    }
+
     internal const long CompactionThresholdBytes = FullScanThresholdBytes;
 
     /// <summary>Compaction rewrites the journal only when it drops at least this share of its bytes (no rewrite per start for a few lines).</summary>

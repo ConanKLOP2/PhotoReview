@@ -53,11 +53,16 @@ public sealed class PhysicalFileSystem : IFileSystem
             File.Copy(source, destination);
             return true;
         }
-        catch (IOException ex) when (FileSystemErrors.IsDestinationExists(ex))
+        catch (Exception ex) when (IsSwallowedAsDestinationExists(ex))
         {
             return false;
         }
     }
+
+    /// <summary>Which failures of the no-overwrite copy mean "the destination already exists" (TryCopyNew returns false): only the
+    /// Win32 file-exists/already-exists IOExceptions. Everything else (access denied, missing folder, sharing violation, disk full,
+    /// an IOException without such an HResult) must be rethrown: a false means nothing of the caller's is at the destination.</summary>
+    internal static bool IsSwallowedAsDestinationExists(Exception ex) => FileSystemErrors.IsDestinationExists(ex);
 
     public void Delete(string path)
     {

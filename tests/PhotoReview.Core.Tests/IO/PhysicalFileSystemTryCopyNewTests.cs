@@ -71,6 +71,60 @@ public sealed class PhysicalFileSystemTryCopyNewTests
         Assert.Equal(expected, FileSystemErrors.IsDestinationExists(new IOException("x", hresult)));
     }
 
+    [Theory]
+    [InlineData(unchecked((int)0x80070050))] // ERROR_FILE_EXISTS with the failure bit
+    [InlineData(unchecked((int)0x800700B7))] // ERROR_ALREADY_EXISTS with the failure bit
+    [InlineData(0x00070050)]                 // the same codes without the severity bit (facility 7 only)
+    [InlineData(0x000700B7)]
+    public void IsSwallowedAsDestinationExists_DestinationExistsHResults_AreSwallowed(int hresult)
+    {
+        Assert.True(PhysicalFileSystem.IsSwallowedAsDestinationExists(new IOException("x", hresult)));
+    }
+
+    public static TheoryData<Exception> RethrownFailures => new()
+    {
+        new UnauthorizedAccessException("denied"),
+        new DirectoryNotFoundException("missing folder"),
+        new IOException("no hresult"),
+        new IOException("sharing violation", unchecked((int)0x80070020)),
+        new IOException("disk full", unchecked((int)0x80070070)),
+        new IOException("file exists code but not Win32", 0x00000050),
+        new InvalidOperationException("other") { HResult = unchecked((int)0x800700B7) },
+    };
+
+    [Theory]
+    [MemberData(nameof(RethrownFailures))]
+    public void IsSwallowedAsDestinationExists_EveryOtherFailure_IsRethrown(Exception failure)
+    {
+        Assert.False(PhysicalFileSystem.IsSwallowedAsDestinationExists(failure));
+    }
+
+    [Fact]
+    public void TryCopyNew_ExistingFileAtDestination_ReturnsFalseAndKeepsItUntouched()
+    {
+        using var root = new TempRoot("trycopynew-exists");
+        var source = root.File("a.txt", 1, 2, 3);
+        var destination = root.File("b.txt", 9);
+
+        Assert.False(new PhysicalFileSystem().TryCopyNew(source, destination));
+
+        Assert.Equal([9], File.ReadAllBytes(destination));
+    }
+
+    [Fact]
+    public void TryCopyNew_FailsForADirectoryDestination_LeavesNoFileBehind()
+    {
+        using var root = new TempRoot("trycopynew-nofile");
+        var source = root.File("a.txt", 1, 2, 3);
+        var destination = root.Dir("b.txt");
+
+        Assert.ThrowsAny<Exception>(() => new PhysicalFileSystem().TryCopyNew(source, destination));
+
+        Assert.False(File.Exists(destination));
+        Assert.Empty(Directory.GetFileSystemEntries(destination));
+        Assert.Equal(["a.txt", "b.txt"], Directory.GetFileSystemEntries(root.Path).Select(entry => System.IO.Path.GetFileName(entry)).Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public void IsDestinationExists_NonIoExceptionWithTheSameHResult_IsNotRecognized()
     {
