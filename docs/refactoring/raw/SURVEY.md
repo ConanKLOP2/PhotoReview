@@ -22,7 +22,7 @@
 - **Total samples surveyed:** 23 across 8 formats (ARW, CR2, CR3, DNG, NEF, ORF, RAF, RW2).
 - **Full-size embedded JPEG previews:** 9/23 bodies embed a preview at or near full sensor resolution. For these bodies, normal viewing AND zoom can be served instantaneously from the preview byte range without full demosaicing.
 - **Bodies requiring full decode on zoom:** 14/23 bodies (e.g. early Sony ARW with 1616×1080 preview, small DNG/NEF previews) have embedded previews smaller than the sensor. Q-RAW-02's full decode on zoom is necessary for pixel-sharp 100% inspection on these bodies.
-- **WIC Native Decode Coverage:** 3/23 files decoded via Windows Imaging Component. On Windows without Microsoft Raw Image Extension installed, WIC can decode standard container headers or JPEG previews, but lacks full demosaicing for newer formats (CR3, X-Trans RAF, RW2).
+- **WIC Native Decode Coverage:** 3/23 files (the three DNG samples) decoded via Windows Imaging Component in this survey's WIC Decode column; section 4 is a separate, later probe (RAW-30) with a stricter rule (it rejects a result equal to the embedded preview size) that classifies the same outcome as 2 fully decoded, 1 preview-only and 20 unavailable. On Windows without Microsoft Raw Image Extension installed, WIC can decode standard container headers or JPEG previews, but lacks full demosaicing for newer formats (CR3, X-Trans RAF, RW2).
 - **Adobe RGB previews:** 0 sample(s) flagged Adobe RGB color space hint, validating Q-RAW-06 (convert with bundled CC0 profile).
 
 ## 2. Per-Format Survey Tables

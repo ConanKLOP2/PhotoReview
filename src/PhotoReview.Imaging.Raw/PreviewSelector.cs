@@ -4,7 +4,7 @@ namespace PhotoReview.Imaging.Raw;
 
 /// <summary>
 /// Helper to select the most appropriate embedded preview from a RAW container.
-/// Follows RAW-21 / TASKS.md:
+/// Follows RAW-21 (ADR 0009, docs/adr/0009-camera-raw-support.md):
 /// Among JPEG previews, select the smallest with both sides &gt;= requested box (after orientation transpose),
 /// else the largest preview.
 /// Unknown preview sizes (Width == 0 or Height == 0) are resolved by walking the preview's JPEG marker segments with bounded per-segment reads (SOF may sit past 64 KB, e.g. Fujifilm RAF),

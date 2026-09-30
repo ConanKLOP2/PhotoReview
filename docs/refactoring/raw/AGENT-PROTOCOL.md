@@ -13,7 +13,7 @@ git checkout -b feat/raw-<NN>-<slug> origin/master      # e.g. feat/raw-11-tiff-
 # resuming instead? -> git checkout -B feat/raw-<NN>-<slug> origin/feat/raw-<NN>-<slug>, then read the progress file
 ```
 
-Then read, in order: `AGENTS.md`, `docs/adr/0009-camera-raw-support.md`, historical card in `git show HEAD:docs/refactoring/raw/TASKS.md`,
+Then read, in order: `AGENTS.md`, `docs/adr/0009-camera-raw-support.md`, historical card in `git show 1b806be3^:docs/refactoring/raw/TASKS.md` (the file was deleted in 1b806be3),
 `raw/progress/RAW-<NN>.md` if it exists (resume), and only the files your card lists.
 
 ## 2. The commit-every-step rule
@@ -89,7 +89,7 @@ never put secrets or user file paths from outside the repo into it (corpus file 
   across branches to avoid CPU contention), then report to the user. Never relay "N tests pass" unverified.
 - Resume abandoned tasks from their progress file; merge conflicts are resolved by the lead (or a strongest-
   model agent), never by force-push.
-- After a wave merges: tick it in WORK-RAW-SUPPORT.md §4 in the next task's PR (not a separate edit).
+- After a wave merges: record it in `docs/refactoring/raw/PROGRESS.md` in the next task's PR (not a separate edit). The former WORK-RAW-SUPPORT.md plan was deleted in 1b806be3 (`git show 1b806be3^:docs/refactoring/WORK-RAW-SUPPORT.md`).
 
 ## 7. Prompt template (lead fills the `<>` parts)
 
@@ -100,7 +100,7 @@ after every numbered step and at least every 20 minutes, keep docs/refactoring/r
 in every commit, and hand off cleanly if you near your context limit.
 <"Start fresh" | "RESUME: branch feat/raw-<NN>-<slug> exists; read the progress file and git log, verify with a
 build, continue from 'Next action'">.
-Your card: docs/refactoring/raw/TASKS.md § RAW-<NN>. Contracts: WORK-RAW-SUPPORT.md §3 (names are final).
+Your card: `git show 1b806be3^:docs/refactoring/raw/TASKS.md` § RAW-<NN>. Contracts: `git show 1b806be3^:docs/refactoring/WORK-RAW-SUPPORT.md` §3 (names are final).
 Decisions in force: <paste the Decided lines from raw/DECISIONS.md>.
 You may delegate mechanical sub-tasks (extra tests, mutation checks) only to sonnet/haiku sub-agents, which
 must follow the same protocol on your branch (no parallel edits to the same file).
