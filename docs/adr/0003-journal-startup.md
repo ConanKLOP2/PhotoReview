@@ -90,10 +90,23 @@ assert journal consistency.
 - Reconcile marks a group Committed only when EVERY member completed; a partial group stays Failed
   (`PendingUnconfirmed`, or `SourceStillExistsAfterRecovery` for Recycle) and is one Recovery item.
 - **Older builds** skip the unknown members, so they read a group line as a single Move/Recycle of the first member
-  and may reconcile it Committed although the other members never ran. There is no schema-version guard: a cheap,
-  safe way to make an old reconcile conservative would mean changing the top-level fields (Destination/Size) of the
-  line, which new code, the file services and the journal-derived equality would all have to agree on. Do not run an
-  older build over a journal that still holds unresolved group lines (resolve them in Recovery first).
+  and may reconcile it Committed although the other members never ran. Checked against `origin/master`'s
+  `OperationJournal`/`JournalLineParser`/`JournalCompactionPlan`: an older build ignores unknown JSON members, DROPS a line
+  whose `Type`/`State` it does not recognize (compaction keeps such lines verbatim), and its `WithOutcome` copies only the
+  record it knows, so every line it appends for a group Id (reconcile verdict, retry, Dismiss) carries NO
+  `GroupId`/`GroupMembers`. In-band guards were rejected: a schema marker is ignored by the old reader (no protection), and
+  a new `Type`/`State` value would make old builds drop the line (or, in their lenient tail reader, map it to Move) and would
+  ripple through every new switch and the file services; changing the top-level Destination/Size would break those too.
+  The format is therefore unchanged and the guard sits in the NEW build (downgrade guard):
+  `ReconcilePendingOperations` looks for an Id whose latest line has no members although an earlier line of that Id had them
+  (the signature of an older build's write). It appends a repaired line restoring `GroupId`/`GroupMembers`; a Committed
+  verdict is re-checked against EVERY member on disk and becomes Failed (no `ErrorCode`, English text
+  `OperationJournal.SettledByOlderBuildText`, because FA-01 ignores the reconcile codes after a Committed line) when a member
+  is missing, so the half-moved capture is a Recovery item again. Dismissed lines are left alone; the repair is idempotent.
+  Residual risk: (1) the repair runs at the next start of a new build, so until then Recovery shows the member-less lines;
+  (2) if an older build COMPACTED the journal after settling, the earlier member-carrying lines of that Id are gone and the
+  signature cannot be detected; (3) an older build's own Undo/Retry of a group acts on the first member only.
+  Supported downgrade path: resolve unresolved group lines in Recovery first, then run the older build.
 - `ReadCommittedMoves` returns a group as one entry (top level = first member, all members in `GroupMembers`).
   `UndoService`'s fingerprint fallback looks entries up by top-level Destination but only serves single-file Moves;
   group Undo uses the members registered in memory, so the fallback never needs the other members.

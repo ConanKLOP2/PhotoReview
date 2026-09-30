@@ -403,11 +403,12 @@ public sealed class OperationJournal
     // state must be resolved from its most recent entry, not from "was any terminal
     // entry ever appended for this Id" — otherwise an old Failed entry permanently
     // shadows a later, still-in-flight retry under the same Id.
-    private Dictionary<string, JournalEntry> ComputeLatestEntries()
+    private Dictionary<string, JournalEntry> ComputeLatestEntries(Dictionary<string, (string? GroupId, IReadOnlyList<JournalGroupMember> Members)>? groupHistory = null)
     {
         var latest = new Dictionary<string, JournalEntry>(StringComparer.Ordinal);
         ReadEntries(entry =>
         {
+            if (groupHistory is not null && entry.GroupMembers is { Count: > 0 } members) groupHistory[entry.Id] = (entry.GroupId, members);
             // FA-01 (cross-process residue): another process's reconcile judged this operation from a stale snapshot and its
             // Failed landed after the owner's Committed (the recheck-then-append window cannot be closed without a file lock).
             // A reconcile verdict can only ever follow Prepared, so after Committed it is stale and must not win.
@@ -452,7 +453,10 @@ public sealed class OperationJournal
     public IReadOnlyList<JournalEntry> ReconcilePendingOperations(DateTime? preparedBeforeUtc = null)
     {
         var reconciled = new List<JournalEntry>();
-        foreach (var pending in ReadPendingOperations())
+        var groupHistory = new Dictionary<string, (string? GroupId, IReadOnlyList<JournalGroupMember> Members)>(StringComparer.Ordinal);
+        var latestEntries = ComputeLatestEntries(groupHistory);
+        RepairGroupLinesSettledByOlderBuild(latestEntries, groupHistory, reconciled);
+        foreach (var pending in latestEntries.Values.Where(entry => entry.State == JournalState.Prepared).ToList())
         {
             if (preparedBeforeUtc is { } cutoff && pending.TimestampUtc >= cutoff) continue;
             if (IsExecuting(pending.Id)) continue; // Q-R27: skip before any (possibly slow) file check
@@ -485,6 +489,62 @@ public sealed class OperationJournal
             }
         }
         return reconciled;
+    }
+
+    /// <summary>
+    /// English text of a group line an older build settled (ADR 0003, downgrade guard). Deliberately no <see cref="JournalEntry.ErrorCode"/>:
+    /// the reconcile codes are ignored when they follow a Committed line (FA-01), and this verdict follows exactly that.
+    /// </summary>
+    internal const string SettledByOlderBuildText =
+        "This capture group was settled by an older PhotoReview build that only tracks its first file; not every file was found in its expected place.";
+
+    // ADR 0003 downgrade guard. An older build does not know GroupId/GroupMembers, so when it reconciles, retries or dismisses a
+    // group line it appends the outcome WITHOUT them (and may call a half-moved capture Committed after seeing only the first
+    // member). A new build recognises that signature: the Id's latest line has no members although an earlier line of the same
+    // Id had them. It restores the members on a fresh line; a Committed verdict is re-checked against every member on disk and
+    // becomes a Failed Recovery item when a member is missing. Dismissed lines are left alone (the user already decided).
+    private void RepairGroupLinesSettledByOlderBuild(
+        Dictionary<string, JournalEntry> latestEntries,
+        Dictionary<string, (string? GroupId, IReadOnlyList<JournalGroupMember> Members)> groupHistory,
+        List<JournalEntry> reconciled)
+    {
+        foreach (var id in groupHistory.Keys.ToList())
+        {
+            if (!latestEntries.TryGetValue(id, out var latest) || latest.GroupMembers is { Count: > 0 }
+                || latest.State == JournalState.Dismissed) continue;
+            var (groupId, members) = groupHistory[id];
+            var restored = latest with { GroupId = groupId, GroupMembers = members };
+            if (restored.State == JournalState.Prepared)
+            {
+                latestEntries[id] = restored; // reconciled below like any group line; the outcome line carries the members
+                continue;
+            }
+            if (IsExecuting(id)) continue;
+            var outcome = restored;
+            if (restored.State == JournalState.Committed && !members.All(member => IsGroupMemberCompleted(restored, member)))
+                outcome = restored with
+                {
+                    State = JournalState.Failed,
+                    TimestampUtc = _clock.UtcNow,
+                    Error = SettledByOlderBuildText,
+                    ErrorCode = null,
+                };
+            if (!AppendIfLatestIs(latest, outcome)) continue;
+            latestEntries[id] = outcome;
+            if (outcome.State != restored.State) reconciled.Add(outcome);
+        }
+    }
+
+    private bool AppendIfLatestIs(JournalEntry expected, JournalEntry outcome)
+    {
+        lock (_gate)
+        {
+            JournalEntry? current = null;
+            ReadEntries(entry => { if (string.Equals(entry.Id, expected.Id, StringComparison.Ordinal)) current = entry; });
+            if (current is null || !current.Equals(expected)) return false;
+            Append(outcome);
+            return true;
+        }
     }
 
     private bool IsGroupMemberCompleted(JournalEntry group, JournalGroupMember member)
