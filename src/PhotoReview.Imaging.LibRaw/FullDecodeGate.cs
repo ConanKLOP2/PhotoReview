@@ -148,6 +148,9 @@ internal sealed class FullDecodeGate
         /// <summary>Declares that this lease really ran a decode (past the memory guard, unpack started): its disposal then advances the aging clock.</summary>
         internal void MarkWorked() => Volatile.Write(ref _worked, 1);
 
+        /// <summary>Test seam: whether <see cref="MarkWorked"/> was called.</summary>
+        internal bool IsWorked => Volatile.Read(ref _worked) != 0;
+
         public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release(Volatile.Read(ref _worked) != 0);
     }
 }

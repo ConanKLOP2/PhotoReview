@@ -648,6 +648,7 @@ public sealed class PreloadScheduler : IDisposable
                 // The first busy of a path is worth one Info line; repeats (bounded by PreloadBusyBackoff) only go to the debugger.
                 if (_busyBackoff.NoteBusy(path, key) == 1) _log.Info($"Preload deferred, decoder busy: {path}");
                 else Debug.WriteLine($"Preload deferred again, decoder busy: {path}");
+                BusyNoted?.Invoke(path);
                 if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "busy", stopwatch.Elapsed.TotalMilliseconds);
                 return PreloadOutcome.Busy;
             }
@@ -672,6 +673,9 @@ public sealed class PreloadScheduler : IDisposable
             _preloadSlots.Release();
         }
     }
+
+    /// <summary>Test seam: invoked with the path right AFTER a busy preload outcome was recorded in the backoff (set before the first pass).</summary>
+    internal Action<string>? BusyNoted { get; set; }
 
     /// <summary>Cancellation lifetimes and scheduler tasks this scheduler still tracks for Dispose (test seam: must stay bounded over a long session).</summary>
     internal (int Lifetimes, int Tasks) TrackedLifetimeCounts

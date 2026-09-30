@@ -31,7 +31,8 @@ public sealed class LibRawGateSlotNativeTests
     [Fact]
     public void Decode_CancelledAfterTheGateWasEntered_ReleasesTheSlotOnUnwind()
     {
-        if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
+            RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
         using var cts = new CancellationTokenSource();
         var stages = new List<string>();
         // The slot is held from before DecodeCore: cancelling at "opened" proves the release after a real acquisition (a token cancelled
