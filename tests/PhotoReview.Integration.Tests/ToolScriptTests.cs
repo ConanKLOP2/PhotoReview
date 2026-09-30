@@ -560,6 +560,12 @@ public sealed class FetchLibRawScriptTests : IDisposable
         Assert.Contains("committed", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Downloading", output, StringComparison.Ordinal);
         Assert.Equal(0, PowerShellRunner.Run("-File", script, "-Verify").ExitCode);
+
+        // Every pin now matches: the default mode is a no-op that never touches the network.
+        var again = PowerShellRunner.Run("-File", script, "-DownloadUrl", UnreachableUrl);
+        Assert.True(again.ExitCode == 0, again.Output);
+        Assert.Contains("PASS: LibRaw DLL", again.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Downloading", again.Output, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "fetch-libraw: a committed package that fails its pin is not trusted; the script falls back to the download and fails closed")]

@@ -6,8 +6,8 @@ namespace PhotoReview.Integration.Tests;
 
 /// <summary>
 /// The LibRaw project runs tools/fetch-libraw.ps1 on every build. Behavioural: the real EnsureLibRawBinary target of the real
-/// project is executed by MSBuild with a stub fetch script (and a fake DLL path) injected through global properties, and the tests
-/// observe whether the stub ran. A failed fetch (offline, source package missing from the checkout) must only warn: the DLL may
+/// project (a copy in a fake repository layout) is executed by MSBuild against a stub fetch script and a fake native folder, and the
+/// tests observe whether the stub ran. A failed fetch (offline, source package missing from the checkout) must only warn: the DLL may
 /// still be usable, and LibRawAvailability / verify-release.ps1 fail closed on a missing or wrong one.
 /// </summary>
 public sealed class LibRawBuildTargetTests : IDisposable
@@ -21,20 +21,25 @@ public sealed class LibRawBuildTargetTests : IDisposable
     /// <summary>Runs the target; returns the MSBuild exit code, its output and whether the stub fetch script was invoked.</summary>
     private (int ExitCode, string Output, bool StubRan) RunTarget(string name, bool dllExists, string? fetchOnEveryBuild, int stubExitCode = 0)
     {
+        // The target computes its paths from $(MSBuildThisFileDirectory) inside the target (they cannot be overridden from the command
+        // line), so the REAL, unmodified project file is copied into a fake repository layout whose tools\ and native\ hold the stubs.
         var dir = _root.Dir(name);
+        var projectDir = _root.Dir(Path.Combine(name, "src", "PhotoReview.Imaging.LibRaw"));
+        var project = Path.Combine(projectDir, "PhotoReview.Imaging.LibRaw.csproj");
+        File.Copy(ProjectPath(), project);
         var marker = Path.Combine(dir, "stub-ran.txt");
-        var stub = Path.Combine(dir, "stub-fetch.ps1");
-        File.WriteAllText(stub, $"[IO.File]::WriteAllText('{marker}', 'ran')\r\nexit {stubExitCode}\r\n", new UTF8Encoding(false));
-        var dll = Path.Combine(dir, "libraw.dll");
-        if (dllExists) File.WriteAllBytes(dll, [1, 2, 3]);
+        var toolsDir = _root.Dir(Path.Combine(name, "tools"));
+        File.WriteAllText(Path.Combine(toolsDir, "fetch-libraw.ps1"),
+            $"[IO.File]::WriteAllText('{marker}', 'ran')\r\nexit {stubExitCode}\r\n", new UTF8Encoding(false));
+        var nativeDir = _root.Dir(Path.Combine(name, "native", "x64"));
+        if (dllExists) File.WriteAllBytes(Path.Combine(nativeDir, "libraw.dll"), [1, 2, 3]);
 
         var psi = new ProcessStartInfo("dotnet")
         {
             RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
         };
-        foreach (var arg in new[] { "msbuild", ProjectPath(), "-nologo", "-nodeReuse:false", "-v:minimal", "-t:EnsureLibRawBinary",
-                     "-p:LibRawDllPath=" + dll, "-p:FetchLibRawScriptPath=" + stub })
+        foreach (var arg in new[] { "msbuild", project, "-nologo", "-nodeReuse:false", "-v:minimal", "-t:EnsureLibRawBinary" })
             psi.ArgumentList.Add(arg);
         if (fetchOnEveryBuild is not null) psi.ArgumentList.Add("-p:LibRawFetchOnEveryBuild=" + fetchOnEveryBuild);
         PowerShellRunner.ForWindowsPowerShell(psi);
