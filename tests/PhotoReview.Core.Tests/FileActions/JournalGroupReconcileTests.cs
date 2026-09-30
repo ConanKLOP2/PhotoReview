@@ -102,6 +102,38 @@ public sealed class JournalGroupReconcileTests
         Assert.Empty(journal.ReadFailedOperations());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Reconcile_GroupLineWithBlankMemberSource_IsQuarantinedAndLaterPendingEntriesStillReconcile(string? badSource)
+    {
+        var fileSystem = new InMemoryFileSystem();
+        fileSystem.AddFile(@"C:\selected\b.jpg", new string('j', 10), Stamp);
+        var journal = NewJournal(fileSystem);
+        journal.Append(Prepared(new JournalGroupMember(badSource!, @"C:\selected\a.jpg", 10, Stamp)) with { Id = "bad-group" });
+        journal.Append(new JournalEntry("good", FileOperationType.Move, JournalState.Prepared,
+            @"C:\photos\b.jpg", @"C:\selected\b.jpg", 10, Stamp, Stamp));
+
+        var reconciled = journal.ReconcilePendingOperations(); // used to throw ArgumentException out of the loop
+
+        var outcome = Assert.Single(reconciled);
+        Assert.Equal("good", outcome.Id);
+        Assert.Equal(JournalState.Committed, outcome.State);
+    }
+
+    [Fact]
+    public void TryParse_GroupLineWithNullMemberOrBlankSource_IsRejected()
+    {
+        var good = "{\"Id\":\"g\",\"Type\":\"Move\",\"State\":\"Prepared\",\"Source\":\"C:\\\\a.jpg\",\"GroupMembers\":[{\"Source\":\"C:\\\\a.jpg\",\"Destination\":\"C:\\\\s\\\\a.jpg\",\"Size\":1}]}";
+        var nullMember = good.Replace("[{", "[null,{", StringComparison.Ordinal);
+        var blank = good.Replace("\"Source\":\"C:\\\\a.jpg\",\"Destination", "\"Source\":\" \",\"Destination", StringComparison.Ordinal);
+
+        Assert.NotNull(JournalLineParser.TryParse(good));
+        Assert.Null(JournalLineParser.TryParse(nullMember));
+        Assert.Null(JournalLineParser.TryParse(blank));
+    }
+
     [Fact]
     public void Dismiss_GroupEntryReReadFromJournal_IsDismissedNotSkipped()
     {
