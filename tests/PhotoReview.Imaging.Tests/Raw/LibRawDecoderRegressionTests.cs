@@ -26,7 +26,7 @@ public sealed class LibRawDecoderBufferPinTests
         var image = decoder.Decode(new DecodeRequest(SamplePath, DecodeBox.Unbounded, bytes: manager.Memory));
 
         Assert.True(image.PixelWidth > 0);
-        Assert.Equal(["opened", "unpacked", "processed"], pinCounts.Select(entry => entry.Stage));
+        Assert.Equal(["configured", "opened", "unpacked", "processed"], pinCounts.Select(entry => entry.Stage));
         // libraw_open_buffer keeps a pointer into the buffer; it must stay pinned until the handle is closed.
         Assert.All(pinCounts, entry => Assert.Equal(1, entry.Pins));
         Assert.Equal(0, manager.ActivePins);

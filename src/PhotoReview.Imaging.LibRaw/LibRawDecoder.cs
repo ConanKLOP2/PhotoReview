@@ -15,6 +15,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
     private static readonly SemaphoreSlim s_fullDecodeGate = new(1, 1);
     private readonly Action<string>? _stageObserver;
+    private readonly bool _configureAfterOpen;
 
     /// <summary>Free slots of the single-slot gate that serialises LibRaw decodes (test seam).</summary>
     internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.CurrentCount;
@@ -23,6 +24,16 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
     /// <summary>Test seam: <paramref name="stageObserver"/> is told "opened", "unpacked" and "processed" as each native stage completes.</summary>
     internal LibRawDecoder(Action<string>? stageObserver) => _stageObserver = stageObserver;
+
+    /// <summary>
+    /// Test seam reproducing the pre-fix order: <paramref name="configureAfterOpen"/> applies the output settings and
+    /// use_camera_wb after libraw_open (as before), so a test can measure what the open-time order changes. Also reports "configured".
+    /// </summary>
+    internal LibRawDecoder(Action<string>? stageObserver, bool configureAfterOpen)
+    {
+        _stageObserver = stageObserver;
+        _configureAfterOpen = configureAfterOpen;
+    }
 
     /// <summary>Extracts LibRaw's embedded JPEG thumbnail without demosaicing the sensor image.</summary>
     public static byte[] ReadJpegThumbnail(string path, CancellationToken cancellationToken = default)
@@ -127,15 +138,13 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         using var bufferPin = request.Bytes is { } bytes ? bytes.Pin() : default;
         using var raw = CreateHandle();
         LibRawNativeMethods.LibRawSetProgressHandler(raw, CancellationCallback, cancellationState.Pointer);
+        // The parameters must be set BEFORE libraw_open: identify() adopts the embedded camera matrix (rgb_cam) only when
+        // use_camera_wb is already set at open time (identify.cpp: use_camera_matrix & (use_camera_wb|dng_version ? 1 : 0 | 2)), and some
+        // makers (Olympus ORF, Pentax PEF, Leaf) read it while parsing. Setting it afterwards leaves those files on LibRaw's generic matrix.
+        if (!_configureAfterOpen) ConfigureOutput(raw);
         OpenSource(raw, request, bufferPin, cancellationToken);
         _stageObserver?.Invoke("opened");
-
-        LibRawNativeMethods.LibRawSetOutputColor(raw, 1); // sRGB
-        LibRawNativeMethods.LibRawSetOutputBps(raw, 8);
-        LibRawNativeMethods.LibRawSetNoAutoBright(raw, 1);
-        // As-shot white balance, like the embedded JPEG preview; without it LibRaw applies its daylight multipliers and the zoom
-        // decode looks off-white-balance. Falls back to the daylight default if the struct layout does not match the verified one.
-        LibRawNativeMethods.TrySetUseCameraWb(raw, 1, 8, 1);
+        if (_configureAfterOpen) ConfigureOutput(raw);
         CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
         _stageObserver?.Invoke("unpacked");
         cancellationToken.ThrowIfCancellationRequested();
@@ -169,6 +178,18 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         var downscaled = targetWidth < header.Width || targetHeight < header.Height;
         return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
             originalWidth: header.Width, originalHeight: header.Height);
+    }
+
+    private void ConfigureOutput(SafeLibRawHandle raw)
+    {
+        LibRawNativeMethods.LibRawSetOutputColor(raw, 1); // sRGB
+        LibRawNativeMethods.LibRawSetOutputBps(raw, 8);
+        LibRawNativeMethods.LibRawSetNoAutoBright(raw, 1);
+        // As-shot white balance, like the embedded JPEG preview; without it LibRaw applies its daylight multipliers and the zoom
+        // decode looks off-white-balance. Only written on the exact tested LibRaw (0.22.2) whose struct layout is proven by the
+        // sentinel check; any other build keeps LibRaw's defaults and no raw memory is touched.
+        LibRawNativeMethods.TrySetUseCameraWb(raw, 1, 8, 1);
+        _stageObserver?.Invoke("configured");
     }
 
     private static SafeLibRawHandle CreateHandle()

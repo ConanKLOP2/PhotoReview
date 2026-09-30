@@ -62,6 +62,12 @@ internal static class LibRawNativeMethods
     [DllImport(LibraryName, EntryPoint = "libraw_set_no_auto_bright", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawSetNoAutoBright(SafeLibRawHandle handle, int value);
 
+    [DllImport(LibraryName, EntryPoint = "libraw_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern IntPtr LibRawVersion();
+
+    /// <summary>The loaded runtime's version string (for example "0.22.2-Release").</summary>
+    internal static string? GetVersionString() => Marshal.PtrToStringAnsi(LibRawVersion());
+
     /// <summary>Byte offsets, from the libraw_data_t pointer libraw_init returns, of the libraw_output_params_t fields the white-balance write depends on.</summary>
     internal readonly record struct WhiteBalanceLayout(int OutputColor, int OutputBps, int NoAutoBright, int UseCameraWb);
 
@@ -105,9 +111,9 @@ internal static class LibRawNativeMethods
         return Marshal.ReadInt32(pointer, layout.UseCameraWb) == 1;
     }
 
-    /// <summary>Production entry point: pinned-version gate (<see cref="LibRawAvailability.Probe"/>) and the pinned layout.</summary>
+    /// <summary>Production entry point: exact-patch gate (<see cref="LibRawAvailability.IsExactPinnedVersion"/>, 0.22.2 only) and the pinned layout.</summary>
     internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright) =>
-        TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.Probe(out _), PinnedWhiteBalanceLayout);
+        TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.IsExactPinnedVersion, PinnedWhiteBalanceLayout);
 
     /// <summary>Reads an int at a byte offset of the libraw_data_t (test seam).</summary>
     internal static int ReadInt32(SafeLibRawHandle handle, int offset) => Marshal.ReadInt32(handle.DangerousGetHandle(), offset);
