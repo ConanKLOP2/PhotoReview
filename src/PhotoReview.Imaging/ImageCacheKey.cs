@@ -14,7 +14,7 @@ public static class ImageSourceKind
     /// <summary>A camera RAW container decoded through its embedded preview.</summary>
     public const byte RawPreview = 1;
 
-    /// <summary>A camera RAW container decoded at full resolution (WIC RAW codec); never RAM- or disk-cached.</summary>
+    /// <summary>A camera RAW container decoded at full resolution by the LibRaw full decoder (not the embedded preview, not the WIC RAW codec); never RAM- or disk-cached.</summary>
     public const byte RawFullDecode = 2;
 }
 

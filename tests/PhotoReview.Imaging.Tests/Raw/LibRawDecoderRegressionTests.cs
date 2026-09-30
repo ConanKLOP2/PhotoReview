@@ -12,21 +12,20 @@ namespace PhotoReview.Imaging.Tests.Raw;
 [Trait("Category", "Native")]
 public sealed class LibRawDecoderBufferPinTests
 {
-    private static readonly string SamplePath = Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus/Canon - EOS 350D - RAW (3_2).CR2"));
+    private const string SampleName = "Canon - EOS 350D - RAW (3_2).CR2";
 
     [Fact]
     public void Decode_WithRequestBytes_KeepsBufferPinnedThroughUnpackAndProcess()
     {
-        if (!File.Exists(SamplePath)) return;
-        using var manager = new PinTrackingMemoryManager(File.ReadAllBytes(SamplePath));
+        if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
+        using var manager = new PinTrackingMemoryManager(File.ReadAllBytes(samplePath));
         var pinCounts = new List<(string Stage, int Pins)>();
         var decoder = new LibRawDecoder(stage => pinCounts.Add((stage, manager.ActivePins)));
 
-        var image = decoder.Decode(new DecodeRequest(SamplePath, DecodeBox.Unbounded, bytes: manager.Memory));
+        var image = decoder.Decode(new DecodeRequest(samplePath, DecodeBox.Unbounded, bytes: manager.Memory));
 
         Assert.True(image.PixelWidth > 0);
-        Assert.Equal(["opened", "unpacked", "processed"], pinCounts.Select(entry => entry.Stage));
+        Assert.Equal(["configured", "opened", "unpacked", "processed", "handle-closed", "source-released", "bitmap-created"], pinCounts.Select(entry => entry.Stage));
         // libraw_open_buffer keeps a pointer into the buffer; it must stay pinned until the handle is closed.
         Assert.All(pinCounts, entry => Assert.Equal(1, entry.Pins));
         Assert.Equal(0, manager.ActivePins);
@@ -36,11 +35,11 @@ public sealed class LibRawDecoderBufferPinTests
     [Fact]
     public void Decode_FullResolution_HoldsTheSingleFullDecodeSlotAndReleasesIt()
     {
-        if (!File.Exists(SamplePath)) return;
+        if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
         var slotsWhileDecoding = -1;
         var decoder = new LibRawDecoder(stage => { if (stage == "processed") slotsWhileDecoding = LibRawDecoder.FullDecodeSlotsAvailable; });
 
-        _ = decoder.Decode(new DecodeRequest(SamplePath, DecodeBox.Unbounded));
+        _ = decoder.Decode(new DecodeRequest(samplePath, DecodeBox.Unbounded));
 
         Assert.Equal(0, slotsWhileDecoding);
         Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
@@ -49,12 +48,12 @@ public sealed class LibRawDecoderBufferPinTests
     [Fact]
     public void Decode_OutOfMemoryDuringDecode_MapsToInvalidOperationAndReleasesSlot()
     {
-        if (!File.Exists(SamplePath)) return;
+        if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
 #pragma warning disable CA2201 // Simulating the runtime's allocation failure is the point of this test.
         var decoder = new LibRawDecoder(stage => { if (stage == "processed") throw new OutOfMemoryException(); });
 #pragma warning restore CA2201
 
-        var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(SamplePath, DecodeBox.Unbounded)));
+        var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(samplePath, DecodeBox.Unbounded)));
 
         Assert.IsType<OutOfMemoryException>(error.InnerException);
         Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
@@ -63,25 +62,13 @@ public sealed class LibRawDecoderBufferPinTests
     [Fact]
     public void Decode_BoundedDownscale_UsesBoxAverageAndKeepsOriginalSize()
     {
-        if (!File.Exists(SamplePath)) return;
+        if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
 
-        var image = new LibRawDecoder().Decode(new DecodeRequest(SamplePath, new DecodeBox(300, 300)));
+        var image = new LibRawDecoder().Decode(new DecodeRequest(samplePath, new DecodeBox(300, 300)));
 
         Assert.True(image.Downscaled);
         Assert.InRange(image.PixelWidth, 1, 300);
         Assert.True(image.OriginalWidth > 2 * image.PixelWidth);
-    }
-
-    [Fact]
-    public void ReadJpegThumbnail_AndDecode_WithCancelledToken_ThrowOperationCanceledBeforeOpeningTheFile()
-    {
-        using var cts = new CancellationTokenSource();
-        cts.Cancel();
-
-        Assert.Throws<OperationCanceledException>(() => LibRawDecoder.ReadJpegThumbnail(@"Z:\missing.orf", cts.Token));
-        Assert.Throws<OperationCanceledException>(() =>
-            new LibRawDecoder().Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
-        Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
     }
 
     private sealed unsafe class PinTrackingMemoryManager : MemoryManager<byte>

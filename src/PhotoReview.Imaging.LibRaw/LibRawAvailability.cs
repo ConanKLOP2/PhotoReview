@@ -11,6 +11,28 @@ public static class LibRawAvailability
     internal const int RequiredMajor = 0;
     internal const int RequiredMinor = 22;
 
+    /// <summary>The exact patch release whose libraw_data_t layout the raw struct write was derived from and verified against (0.22.2).</summary>
+    internal const int RequiredPatch = 2;
+
+    private static readonly Lazy<bool> ExactVersionResult = new(() =>
+        Probe(out _) && CheckExactVersion(LibRawNativeMethods.GetVersionString()));
+
+    /// <summary>True when the loaded runtime is exactly the pinned 0.22.2 (the only version the raw struct write is allowed on).</summary>
+    internal static bool IsExactPinnedVersion => ExactVersionResult.Value;
+
+    /// <summary>
+    /// True only for the exact pinned major.minor.patch (a suffix such as "-Release" is ignored). Other patch releases are
+    /// ABI compatible for the C API but their struct layout is not proven, so raw memory writes must be skipped for them.
+    /// </summary>
+    internal static bool CheckExactVersion(string? version)
+    {
+        if (!TryParseVersion(version, out var major, out var minor) || major != RequiredMajor || minor != RequiredMinor) return false;
+        var parts = (version ?? string.Empty).Split('.');
+        if (parts.Length < 3) return false;
+        var digits = new string(parts[2].TakeWhile(char.IsAsciiDigit).ToArray());
+        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var patch) && patch == RequiredPatch;
+    }
+
     private static readonly Lazy<(bool Available, string? Reason)> ProbeResult = new(RunProbe);
 
     public static bool Probe(out string? reason)

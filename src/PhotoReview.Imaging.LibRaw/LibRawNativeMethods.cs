@@ -62,6 +62,12 @@ internal static class LibRawNativeMethods
     [DllImport(LibraryName, EntryPoint = "libraw_set_no_auto_bright", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawSetNoAutoBright(SafeLibRawHandle handle, int value);
 
+    [DllImport(LibraryName, EntryPoint = "libraw_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern IntPtr LibRawVersion();
+
+    /// <summary>The loaded runtime's version string (for example "0.22.2-Release").</summary>
+    internal static string? GetVersionString() => Marshal.PtrToStringAnsi(LibRawVersion());
+
     /// <summary>Byte offsets, from the libraw_data_t pointer libraw_init returns, of the libraw_output_params_t fields the white-balance write depends on.</summary>
     internal readonly record struct WhiteBalanceLayout(int OutputColor, int OutputBps, int NoAutoBright, int UseCameraWb);
 
@@ -87,27 +93,35 @@ internal static class LibRawNativeMethods
     /// The output settings are always applied, whatever the result.
     /// </summary>
     internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright,
-        Func<bool> versionPinned, WhiteBalanceLayout layout)
+        Func<bool> versionPinned, WhiteBalanceLayout layout) =>
+        TrySetUseCameraWb(handle.DangerousGetHandle(), value => LibRawSetOutputColor(handle, value), value => LibRawSetOutputBps(handle, value),
+            value => LibRawSetNoAutoBright(handle, value), outputColor, outputBps, noAutoBright, versionPinned, layout);
+
+    /// <summary>
+    /// The logic of <see cref="TrySetUseCameraWb(SafeLibRawHandle, int, int, int, Func{bool}, WhiteBalanceLayout)"/> over a raw block and the three
+    /// supported setters, so the layout proof can be tested with a fake memory block (no native library needed).
+    /// </summary>
+    internal static bool TrySetUseCameraWb(IntPtr pointer, Action<int> setOutputColor, Action<int> setOutputBps, Action<int> setNoAutoBright,
+        int outputColor, int outputBps, int noAutoBright, Func<bool> versionPinned, WhiteBalanceLayout layout)
     {
         if (!versionPinned()) return false;
-        var pointer = handle.DangerousGetHandle();
-        LibRawSetOutputColor(handle, SentinelOutputColor);
-        LibRawSetOutputBps(handle, SentinelOutputBps);
-        LibRawSetNoAutoBright(handle, SentinelNoAutoBright);
+        setOutputColor(SentinelOutputColor);
+        setOutputBps(SentinelOutputBps);
+        setNoAutoBright(SentinelNoAutoBright);
         var layoutMatches = Marshal.ReadInt32(pointer, layout.OutputColor) == SentinelOutputColor &&
                             Marshal.ReadInt32(pointer, layout.OutputBps) == SentinelOutputBps &&
                             Marshal.ReadInt32(pointer, layout.NoAutoBright) == SentinelNoAutoBright;
-        LibRawSetOutputColor(handle, outputColor);
-        LibRawSetOutputBps(handle, outputBps);
-        LibRawSetNoAutoBright(handle, noAutoBright);
+        setOutputColor(outputColor);
+        setOutputBps(outputBps);
+        setNoAutoBright(noAutoBright);
         if (!layoutMatches) return false;
         Marshal.WriteInt32(pointer, layout.UseCameraWb, 1);
         return Marshal.ReadInt32(pointer, layout.UseCameraWb) == 1;
     }
 
-    /// <summary>Production entry point: pinned-version gate (<see cref="LibRawAvailability.Probe"/>) and the pinned layout.</summary>
+    /// <summary>Production entry point: exact-patch gate (<see cref="LibRawAvailability.IsExactPinnedVersion"/>, 0.22.2 only) and the pinned layout.</summary>
     internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright) =>
-        TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.Probe(out _), PinnedWhiteBalanceLayout);
+        TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.IsExactPinnedVersion, PinnedWhiteBalanceLayout);
 
     /// <summary>Reads an int at a byte offset of the libraw_data_t (test seam).</summary>
     internal static int ReadInt32(SafeLibRawHandle handle, int offset) => Marshal.ReadInt32(handle.DangerousGetHandle(), offset);

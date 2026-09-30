@@ -7,30 +7,12 @@ using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 
+// Needs libraw.dll (and the corpus). The pure managed checks (error mapping, version gates, the layout proof over a fake
+// memory block) live in LibRawManagedLogicTests, which runs in the default category.
 [Collection(LibRawNativeDecodeGate.Name)]
 [Trait("Category", "Native")]
 public sealed class LibRawWhiteBalanceAndErrorTests
 {
-    [Theory]
-    [InlineData(-100007)] // LIBRAW_UNSUFFICIENT_MEMORY
-    [InlineData(12)]      // ENOMEM returned as a positive errno
-    public void CreateFailure_InsufficientMemory_IsInvalidOperationLikeManagedOutOfMemory(int code)
-    {
-        var ex = LibRawDecoder.CreateFailure(code, "unpack RAW data");
-
-        Assert.IsType<InvalidOperationException>(ex);
-        Assert.IsNotType<InvalidDataException>(ex);
-    }
-
-    [Theory]
-    [InlineData(-100008)] // LIBRAW_DATA_ERROR
-    [InlineData(-100009)] // LIBRAW_IO_ERROR
-    [InlineData(-2)]      // LIBRAW_FILE_UNSUPPORTED
-    public void CreateFailure_OtherCodes_StayInvalidData(int code)
-    {
-        Assert.IsType<InvalidDataException>(LibRawDecoder.CreateFailure(code, "unpack RAW data"));
-    }
-
     [Fact]
     public void TrySetUseCameraWb_PinnedLayout_SetsFlagAndAppliesOutputSettings()
     {
@@ -69,44 +51,6 @@ public sealed class LibRawWhiteBalanceAndErrorTests
         Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, real.OutputColor));
         Assert.Equal(8, LibRawNativeMethods.ReadInt32(handle, real.OutputBps));
         Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, real.NoAutoBright));
-    }
-
-    [Fact]
-    public void TrySetUseCameraWb_VersionNotPinned_TouchesNoNativeMemory()
-    {
-        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
-        using var handle = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
-        var layout = LibRawNativeMethods.PinnedWhiteBalanceLayout;
-        var before = Snapshot(handle, layout);
-        var gateCalls = 0;
-
-        var applied = LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 8, 1, () => { gateCalls++; return false; }, layout);
-
-        Assert.False(applied);
-        Assert.Equal(1, gateCalls);
-        // Not even the sentinel/setter traffic happens: the gate runs before any write.
-        Assert.Equal(before, Snapshot(handle, layout));
-    }
-
-    private static (int Color, int Bps, int Bright, int Flag) Snapshot(SafeLibRawHandle handle, LibRawNativeMethods.WhiteBalanceLayout layout) =>
-        (LibRawNativeMethods.ReadInt32(handle, layout.OutputColor), LibRawNativeMethods.ReadInt32(handle, layout.OutputBps),
-            LibRawNativeMethods.ReadInt32(handle, layout.NoAutoBright), LibRawNativeMethods.ReadInt32(handle, layout.UseCameraWb));
-
-    [Theory]
-    [InlineData("0.22.2", true)]
-    [InlineData("0.22.0", true)]
-    [InlineData("0.22.9-Release", true)]
-    [InlineData("0.23.0", false)]
-    [InlineData("0.21.4", false)]
-    [InlineData("1.22.0", false)]
-    [InlineData("garbage", false)]
-    [InlineData("", false)]
-    public void CheckVersion_OnlyThePinnedMajorMinorPasses(string version, bool accepted)
-    {
-        var problem = LibRawAvailability.CheckVersion(version, "libraw.dll");
-
-        Assert.Equal(accepted, problem is null);
-        if (!accepted) Assert.Contains("libraw.dll", problem, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -161,11 +105,12 @@ public sealed class LibRawWhiteBalanceAndErrorTests
     private static (double R, double G, double B) NativeDecodeMeans(string path, bool useCameraWb)
     {
         using var raw = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
-        Assert.Equal(0, LibRawNativeMethods.LibRawOpenWFile(raw, path));
+        // Same order as LibRawDecoder: parameters first, then open (ORF/PEF only adopt the camera matrix if the flag is set at open).
         LibRawNativeMethods.LibRawSetOutputColor(raw, 1);
         LibRawNativeMethods.LibRawSetOutputBps(raw, 8);
         LibRawNativeMethods.LibRawSetNoAutoBright(raw, 1);
         if (useCameraWb) Assert.True(LibRawNativeMethods.TrySetUseCameraWb(raw, 1, 8, 1));
+        Assert.Equal(0, LibRawNativeMethods.LibRawOpenWFile(raw, path));
         Assert.Equal(0, LibRawNativeMethods.LibRawUnpack(raw));
         Assert.Equal(0, LibRawNativeMethods.LibRawDcrawProcess(raw));
         var pointer = LibRawNativeMethods.LibRawDcrawMakeMemImage(raw, out var error);

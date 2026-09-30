@@ -861,5 +861,6 @@
   "recovery.group.retryConfirmRestore": "Khôi phục các tệp của nhóm ảnh từ Thùng rác (tối đa {count} tệp)? Các tệp đã có lại sẽ được bỏ qua.",
   "core.journal.cancelledByUser": "Thao tác đã bị hủy trước khi hoàn tất.",
   "core.recovery.cancelledNeedsConfirm": "Bạn đã hủy thao tác này trước đó. Thử lại sẽ hoàn tất nó, nên cần xác nhận rõ ràng trong cửa sổ Khôi phục. Chưa có gì bị thay đổi.",
-  "recovery.retryConfirmCancelled": "Bạn đã hủy {operation} này trước đó. Thử lại sẽ HOÀN TẤT thao tác cho {count} tệp. Tiếp tục?"
+  "recovery.retryConfirmCancelled": "Bạn đã hủy {operation} này trước đó. Thử lại sẽ HOÀN TẤT thao tác cho {count} tệp. Tiếp tục?",
+  "image.error.rawDisabled": "Hỗ trợ RAW đang tắt trong Cài đặt nên không thể hiển thị {fileName}."
 }

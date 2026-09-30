@@ -869,5 +869,6 @@
   "recovery.group.retryConfirmRestore": "Restore capture-group members from the Recycle Bin (up to {count})? Members that are already back will be skipped.",
   "core.journal.cancelledByUser": "The operation was cancelled before it finished.",
   "core.recovery.cancelledNeedsConfirm": "You cancelled this operation earlier. Retrying would finish it, so it needs an explicit confirmation in the Recovery window. Nothing was changed.",
-  "recovery.retryConfirmCancelled": "You cancelled this {operation} earlier. Retrying will FINISH it for {count} file(s). Continue?"
+  "recovery.retryConfirmCancelled": "You cancelled this {operation} earlier. Retrying will FINISH it for {count} file(s). Continue?",
+  "image.error.rawDisabled": "RAW support is turned off in Settings, so {fileName} cannot be shown."
 }
