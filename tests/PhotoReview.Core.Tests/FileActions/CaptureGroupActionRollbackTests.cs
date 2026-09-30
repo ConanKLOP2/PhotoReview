@@ -55,6 +55,70 @@ public sealed class CaptureGroupActionRollbackTests
         AssertFullyRolledBackAndNotRetryable(journal, result);
     }
 
+    [Fact]
+    public async Task ExecuteGroupAsync_CrossVolumeMoveLeavesPartialDestination_PartialIsRemovedAndCaptureIsRetryable()
+    {
+        var (fs, journal) = CreateWorld();
+        // Cross-volume Move = copy + delete: the copy of the second member is cut short and the move fails, source intact.
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Raw) return null;
+            fs.AddFile(destination, "raw", Stamp); // 3 of 8 bytes
+            return new IOException("simulated cross-volume failure");
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        Assert.False(fs.FileExists(MovedRaw));  // our partial copy is gone
+        Assert.False(fs.FileExists(MovedJpeg)); // first member rolled back
+        Assert.True(fs.FileExists(Raw));
+        Assert.True(fs.FileExists(Jpeg));
+        AssertFullyRolledBackAndNotRetryable(journal, result);
+
+        fs.MoveHook = null; // the user retries: no "destination exists" conflict is left behind
+        var retry = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+        Assert.True(retry.Succeeded);
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_MoveFailsWithForeignLongerFileAtDestination_ForeignFileIsNeverDeleted()
+    {
+        var (fs, journal) = CreateWorld();
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Raw) return null;
+            fs.AddFile(destination, "foreign file, longer than the raw source", Stamp); // appears after the preflight
+            return new IOException("simulated failure");
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        Assert.True(fs.FileExists(MovedRaw)); // never ours to delete
+        Assert.Equal(40,fs.GetFileStat(MovedRaw)!.Length);
+        Assert.True(fs.FileExists(Raw));
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_MoveFailsPartialDestinationButSourceChanged_PartialIsLeftAlone()
+    {
+        var (fs, journal) = CreateWorld();
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Raw) return null;
+            fs.AddFile(destination, "raw", Stamp);
+            fs.AddFile(Raw, "raw data edited meanwhile", Stamp.AddMinutes(1)); // the source is no longer the manifest file
+            return new IOException("simulated failure");
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        Assert.True(fs.FileExists(MovedRaw));
+        Assert.True(fs.FileExists(Raw));
+    }
+
     /// <summary>A fully restored disk leaves nothing to retry: the outcome is a terminal Dismissed record, never a Failed Recovery item.</summary>
     private static void AssertFullyRolledBackAndNotRetryable(OperationJournal journal, CaptureGroupActionResult result)
     {

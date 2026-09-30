@@ -364,7 +364,8 @@ public sealed class ReviewCatalog
     /// <summary>
     /// Re-forms <paramref name="group"/> when at least one of its image members is already an independent catalog entry
     /// and every missing member is among <paramref name="restoredPaths"/>: the standalone entry becomes the grouped one
-    /// (same position, same <see cref="CurrentIndex"/>) and nothing is inserted. Returns false (nothing changed) otherwise.
+    /// (same position, same <see cref="CurrentIndex"/>) and nothing is inserted. The entry keeps the currently displayed member
+    /// as its path when that member is one of the standalone entries. Returns false (nothing changed) otherwise.
     /// </summary>
     private bool TryReformGroup(IReadOnlyCollection<string> restoredPaths, CaptureGroup? group)
     {
@@ -388,8 +389,11 @@ public sealed class ReviewCatalog
         standalone.Sort();
         var slot = standalone[0];
         var representative = group.GetRepresentativePath(_rawPairMode);
-        var existing = _entries[slot];
-        _entries[slot] = string.Equals(existing.Path, representative, StringComparison.OrdinalIgnoreCase)
+        // The displayed image must not switch under the user: when one of the standalone entries is the current one, it stays
+        // the entry's path (even if it is not the mode's representative); otherwise the representative follows the mode.
+        var current = standalone.Contains(CurrentIndex) ? _entries[CurrentIndex] : null;
+        var existing = current ?? _entries[slot];
+        _entries[slot] = current is not null || string.Equals(existing.Path, representative, StringComparison.OrdinalIgnoreCase)
             ? existing with { CaptureGroup = group }
             : new CatalogEntry(representative) { CaptureGroup = group };
         for (var i = standalone.Count - 1; i >= 1; i--) // both members were listed separately: one entry remains
@@ -492,9 +496,12 @@ public sealed class ReviewCatalog
     }
 
     /// <summary>
-    /// AR16: removes every entry whose path is in <paramref name="paths"/> (the background readability
-    /// probe's unreadable files) and returns the paths actually removed, in catalog order. Like
-    /// <see cref="ReplaceOrder"/>, the current entry is kept by path when it survives. When the current
+    /// AR16: removes the unreadable files in <paramref name="paths"/> (the background readability probe's result) and
+    /// returns the paths actually removed, in catalog order. A JPEG+RAW capture with only ONE of its image members
+    /// listed keeps its readable partner: the entry degrades in place to that survivor as a standalone (group-less)
+    /// entry, whichever member is the representative; only when every image member is listed does the capture go
+    /// (all its image members are then returned). The current position is kept when the current entry survives or
+    /// degrades (a degraded current may show the partner instead). When the current
     /// entry itself is removed, the position advances as <see cref="Remove"/> does for a Delete: the
     /// first surviving entry after it, else the last one, or -1 once the catalog is empty.
     /// </summary>
@@ -512,7 +519,30 @@ public sealed class ReviewCatalog
         for (var i = 0; i < _entries.Count; i++)
         {
             var entry = _entries[i];
-            if (doomed.Contains(entry.Path))
+            var entryDoomed = doomed.Contains(entry.Path);
+            if (entry.CaptureGroup is { } group)
+            {
+                var bad = group.ImagePaths.Where(doomed.Contains).ToArray();
+                if (bad.Length == group.ImagePaths.Count)
+                {
+                    removed.Add(entry.Path);
+                    removed.AddRange(bad.Where(p => !string.Equals(p, entry.Path, StringComparison.OrdinalIgnoreCase)));
+                    continue;
+                }
+
+                if (bad.Length > 0)
+                {
+                    // Degrade in place: the readable partner stays reachable as a standalone entry.
+                    var survivor = group.ImagePaths.First(p => !doomed.Contains(p));
+                    removed.AddRange(bad);
+                    entry = string.Equals(entry.Path, survivor, StringComparison.OrdinalIgnoreCase)
+                        ? entry with { CaptureGroup = null }
+                        : new CatalogEntry(survivor);
+                    entryDoomed = false;
+                }
+            }
+
+            if (entryDoomed)
             {
                 removed.Add(entry.Path);
                 continue;

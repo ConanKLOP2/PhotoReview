@@ -421,40 +421,10 @@ public sealed class FolderLoadCoordinator : IDisposable
         var currentPath = _catalog.Current?.Path;
         var unreadableSet = new HashSet<string>(unreadable.Select(s => s.Path), StringComparer.OrdinalIgnoreCase);
 
-        // A capture (JPEG+RAW) with ONE unreadable image member must not lose its readable partner (like the presenter's
-        // RemoveOrDegrade for a missing member): the entry degrades to the survivor as a standalone entry at the same
-        // position. When both image members are unreadable the whole entry goes (RemovePaths below).
-        var degraded = new List<string>();
-        var bothUnreadable = new List<(string Representative, string[] Mates)>();
-        var keptIndex = _catalog.CurrentIndex;
-        foreach (var entry in _catalog.Entries.Where(e => e.CaptureGroup is not null).ToArray())
-        {
-            var group = entry.CaptureGroup!;
-            var bad = group.ImagePaths.Where(unreadableSet.Contains).ToArray();
-            if (bad.Length == 0) continue;
-            if (bad.Length == group.ImagePaths.Count)
-            {
-                bothUnreadable.Add((entry.Path, bad.Where(p => !string.Equals(p, entry.Path, StringComparison.OrdinalIgnoreCase)).ToArray()));
-                continue;
-            }
-
-            var index = _catalog.IndexOf(entry.Path);
-            if (index < 0) continue;
-            var survivor = group.ImagePaths.First(p => !unreadableSet.Contains(p));
-            _catalog.Remove(entry.Path);
-            _catalog.Restore(survivor, index);
-            if (keptIndex >= 0) _catalog.SetCurrent(keptIndex); // Remove/Restore moved it; the entry count and positions are unchanged
-            degraded.AddRange(bad);
-        }
-
-        var removedByCatalog = _catalog.RemovePaths(unreadableSet);
-        var removedRepresentatives = new HashSet<string>(removedByCatalog, StringComparer.OrdinalIgnoreCase);
-        List<string> removed =
-        [
-            .. removedByCatalog,
-            .. degraded,
-            .. bothUnreadable.Where(pair => removedRepresentatives.Contains(pair.Representative)).SelectMany(pair => pair.Mates),
-        ];
+        // A capture (JPEG+RAW) with ONE unreadable image member keeps its readable partner: RemovePaths degrades the entry
+        // to the survivor as a standalone entry at the same position and reports only the unreadable member. When both
+        // image members are unreadable the whole capture goes and both are reported.
+        var removed = _catalog.RemovePaths(unreadableSet);
         if (removed.Count == 0) return; // already gone (deleted/moved by the user meanwhile)
 
         var removedSet = new HashSet<string>(removed, StringComparer.OrdinalIgnoreCase);

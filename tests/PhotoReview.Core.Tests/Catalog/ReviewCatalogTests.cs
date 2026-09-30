@@ -378,8 +378,8 @@ public class ReviewCatalogTests
 
     [Theory]
     [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.jpg")]
-    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.cr2", @"C:\photos\p.jpg", @"C:\photos\p.jpg")]
-    [InlineData(RawPairMode.PreferRaw, @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.cr2")]
+    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.cr2", @"C:\photos\p.jpg", @"C:\photos\p.cr2")] // current: the displayed member stays
+    [InlineData(RawPairMode.PreferRaw, @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\p.jpg")]
     public void RestoreMembers_SecondMemberComesBackAfterFirstWasRestoredAlone_ReformsTheGroupedEntryInPlace(
         RawPairMode mode, string firstRestored, string laterRestored, string representative)
     {
@@ -397,6 +397,104 @@ public class ReviewCatalogTests
         Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.jpg"));
         Assert.Equal(1, catalog.IndexOf(@"C:\photos\p.cr2"));
         Assert.Equal(1, catalog.CurrentIndex); // still on the same photo
+    }
+
+    [Theory]
+    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.cr2", @"C:\photos\p.jpg")]
+    [InlineData(RawPairMode.PreferRaw, @"C:\photos\p.jpg", @"C:\photos\p.cr2")]
+    public void RestoreMembers_ReformOfANonCurrentEntry_FollowsThePairMode(RawPairMode mode, string firstRestored, string representative)
+    {
+        var catalog = PairCatalog(mode);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+        catalog.RestoreMembers([firstRestored], 1, group);
+        catalog.SetCurrent(2); // viewing after.jpg
+
+        catalog.RestoreMembers([mode == RawPairMode.PreferJpeg ? @"C:\photos\p.jpg" : @"C:\photos\p.cr2"], 1, group);
+
+        Assert.Equal(representative, catalog.PathAt(1));
+        Assert.Equal(group, catalog.Entries[1].CaptureGroup);
+        Assert.Equal(2, catalog.CurrentIndex);
+    }
+
+    [Fact]
+    public void RestoreMembers_ReformWhenBothMembersWereStandaloneAndSecondIsCurrent_KeepsTheDisplayedMemberAndIndex()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+        catalog.RestoreMembers([@"C:\photos\p.jpg"], 1, group);
+        catalog.Restore(@"C:\photos\p.cr2", 2); // the partner was listed as its own entry too
+        catalog.SetCurrent(2); // viewing the RAW
+
+        catalog.RestoreMembers([@"C:\photos\p.cr2"], 1, group);
+
+        Assert.Equal(3, catalog.Count);
+        Assert.Equal(@"C:\photos\p.cr2", catalog.Current!.Path);
+        Assert.Equal(1, catalog.CurrentIndex);
+        Assert.Equal(group, catalog.Current.CaptureGroup);
+    }
+
+    private static ReviewCatalog GroupedCatalog(RawPairMode mode, params string[] extraStandalone)
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset(extraStandalone.Prepend(@"C:\photos\p.cr2").Prepend(@"C:\photos\p.jpg").Select(path => new CatalogEntry(path)), mode);
+        return catalog;
+    }
+
+    [Theory]
+    [InlineData(RawPairMode.PreferRaw, @"C:\photos\p.cr2", @"C:\photos\p.jpg")] // unreadable representative
+    [InlineData(RawPairMode.PreferJpeg, @"C:\photos\p.jpg", @"C:\photos\p.cr2")]
+    public void RemovePaths_UnreadableRepresentativeOfCapture_DegradesToTheReadablePartner(RawPairMode mode, string bad, string survivor)
+    {
+        var catalog = GroupedCatalog(mode, @"C:\photos\z.jpg");
+        catalog.SetCurrent(1);
+
+        var removed = catalog.RemovePaths([bad]);
+
+        Assert.Equal([bad], removed);
+        Assert.Equal([survivor, @"C:\photos\z.jpg"], catalog.Paths);
+        Assert.Null(catalog.Entries[0].CaptureGroup);
+        Assert.Equal(-1, catalog.IndexOf(bad));
+        Assert.Equal(1, catalog.CurrentIndex); // z.jpg stays current
+    }
+
+    [Fact]
+    public void RemovePaths_UnreadableNonRepresentativeMember_KeepsRepresentativeAndDropsTheGroup()
+    {
+        var catalog = GroupedCatalog(RawPairMode.PreferJpeg);
+        var before = catalog.Entries[0];
+
+        var removed = catalog.RemovePaths([@"C:\photos\p.cr2"]);
+
+        Assert.Equal([@"C:\photos\p.cr2"], removed);
+        Assert.Equal([@"C:\photos\p.jpg"], catalog.Paths);
+        Assert.Null(catalog.Entries[0].CaptureGroup);
+        Assert.Equal(before.Path, catalog.Entries[0].Path);
+        Assert.Equal(0, catalog.CurrentIndex);
+    }
+
+    [Fact]
+    public void RemovePaths_CurrentCaptureDegrades_StaysCurrentAtTheSamePosition()
+    {
+        var catalog = GroupedCatalog(RawPairMode.PreferRaw, @"C:\photos\z.jpg");
+        Assert.Equal(0, catalog.CurrentIndex);
+
+        catalog.RemovePaths([@"C:\photos\p.cr2"]);
+
+        Assert.Equal(0, catalog.CurrentIndex);
+        Assert.Equal(@"C:\photos\p.jpg", catalog.Current!.Path);
+        Assert.Equal(2, catalog.Count);
+    }
+
+    [Fact]
+    public void RemovePaths_BothImageMembersOfCapture_RemovesTheEntryAndReportsBoth()
+    {
+        var catalog = GroupedCatalog(RawPairMode.PreferJpeg, @"C:\photos\z.jpg");
+
+        var removed = catalog.RemovePaths([@"C:\photos\p.cr2", @"C:\photos\p.jpg"]);
+
+        Assert.Equal([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], removed);
+        Assert.Equal([@"C:\photos\z.jpg"], catalog.Paths);
+        Assert.Equal(0, catalog.CurrentIndex);
     }
 
     [Fact]

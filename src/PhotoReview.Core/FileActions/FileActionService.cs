@@ -197,6 +197,9 @@ public sealed class FileActionService
                 }
                 else if (request.Operation == FileOperationType.Move)
                 {
+                    // A cross-volume Move is copy + delete: a failure in between can leave a partial destination. It is only ours
+                    // to clean when nothing was at the destination right before this member's Move started.
+                    inFlightDestinationIsOurs = _fileSystem.GetFileStat(member.Destination!) is null;
                     if (_moveOverride is not null)
                         await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
                     else
@@ -233,7 +236,7 @@ public sealed class FileActionService
             {
                 stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
                     ? RemoveCreatedCopies(done, inFlight, inFlightDestinationIsOurs)
-                    : RestoreMovedMembers(done, inFlight)).ConfigureAwait(false);
+                    : RestoreMovedMembers(done, inFlight, inFlightDestinationIsOurs)).ConfigureAwait(false);
             }
 
             var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
@@ -317,9 +320,13 @@ public sealed class FileActionService
     /// not leave a split pair. A member is moved back only when that is provably safe: its source is absent and its
     /// destination is still the file that was moved (same size and last-write time). Anything else (a new file at the
     /// source, an edited or vanished destination) is left alone. A plain file-system move is used, not the forward Move
-    /// override. Returns how many already-moved members could not be put back.
+    /// override. The member being moved when the failure hit (a cross-volume Move is copy + delete) may have left a partial
+    /// copy at its destination while its source is still there: that partial is deleted, but only when nothing was at the
+    /// destination before this Move started, the source is still exactly the manifest file, and the destination cannot be a
+    /// complete file (it is strictly shorter than the source: a full-size destination is left for Recovery to judge, as a
+    /// finished copy whose source could not be removed is a retryable failure); otherwise it is left alone. Returns how many already-moved members (or undeletable partials) could not be put back.
     /// </summary>
-    private int RestoreMovedMembers(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight)
+    private int RestoreMovedMembers(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs)
     {
         var stuck = 0;
         var candidates = new List<(JournalGroupMember Member, bool WasDone)>();
@@ -333,6 +340,15 @@ public sealed class FileActionService
                 var source = _fileSystem.GetFileStat(member.Source);
                 var destination = _fileSystem.GetFileStat(member.Destination!);
                 if (source is not null && destination is null) continue; // already back
+                if (!wasDone && inFlightDestinationIsOurs && source is not null && destination is not null
+                    && source.Length == member.Size && source.LastWriteUtc == member.LastWriteUtc
+                    && destination.Length < member.Size)
+                {
+                    _fileSystem.Delete(member.Destination!);
+                    if (_fileSystem.FileExists(member.Destination!)) stuck++;
+                    continue;
+                }
+
                 if (source is not null || destination is null)
                 {
                     // Both present (a conflict) or neither (lost): only a finished member counts as "could not be put back".
