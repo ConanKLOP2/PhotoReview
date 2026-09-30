@@ -326,6 +326,26 @@ public sealed class SettingsStoreTests
         Assert.Equal(ExpectedRepairs.Order(), _store.LastLoadRepairs.Order());
     }
 
+    [Fact(DisplayName = "Load reports every optional shortcut that a legacy action key disabled, one repair entry per shortcut")]
+    public void Load_WhenAnActionUsesAnOptionalShortcutKey_ReportsTheDisabledShortcutAsARepair()
+    {
+        var json = """
+        {
+            "Actions": [
+                { "Name": "Keep", "Shortcut": "O", "Operation": "Copy", "Destination": "Keep" },
+                { "Name": "Zoomed", "Shortcut": "D3", "Operation": "Copy", "Destination": "Zoomed" }
+            ]
+        }
+        """;
+        _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, json);
+
+        var loaded = _store.Load();
+
+        Assert.Equal("", loaded.Shortcuts.OpenFolder); // resolution priority unchanged: the action keeps the key
+        Assert.Equal("", loaded.Shortcuts.CustomZoom);
+        Assert.Equal(["Shortcuts.CustomZoom", "Shortcuts.OpenFolder"], _store.LastLoadRepairs.Order());
+    }
+
     [Fact(DisplayName = "Load of a valid config reports no repairs")]
     public void Load_WhenConfigIsValid_ReportsNoRepairs()
     {
