@@ -45,12 +45,13 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     private FileActionController NewController(AppSettings? settings = null, Func<string, string, Task>? undoMoveOverride = null, string moveDestination = "Sorted",
-        RecordingDialog? dialog = null, IFileSystem? fileSystem = null)
+        RecordingDialog? dialog = null, IFileSystem? fileSystem = null, bool confirmActions = false)
     {
         settings ??= new AppSettings();
         settings.Actions =
         [
-            new ReviewAction { Name = "MoveToSub", Operation = FileOperationType.Move, Destination = moveDestination },
+            new ReviewAction { Name = "MoveToSub", Operation = FileOperationType.Move, Destination = moveDestination, Confirm = confirmActions },
+            new ReviewAction { Name = "DeleteIt", Operation = FileOperationType.Recycle, Confirm = confirmActions },
         ];
         var fs = fileSystem ?? new PhysicalFileSystem();
         var journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
@@ -223,6 +224,70 @@ public sealed class FileActionControllerGroupTests : IDisposable
         await controller.RecycleAsync(null, plain);
 
         Assert.Empty(_sink.Evicted);
+    }
+
+    [Fact]
+    public async Task RecycleAction_WithConfirmAndConfirmBeforeDeleteOnAGroup_AsksOnlyTheGroupQuestion()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(new AppSettings { ConfirmBeforeDelete = true }, confirmActions: true);
+
+        await controller.RunActionAsync(1, null, jpeg);
+
+        var (_, message) = Assert.Single(_dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmGroupRecycleMessage("pair.jpg", 2), message);
+        Assert.Equal(2, _bin.Recycled.Count);
+    }
+
+    [Fact]
+    public async Task MoveAction_WithConfirmFromCompareOnAGroup_AsksOnlyTheGroupQuestion()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(confirmActions: true);
+
+        await controller.RunActionAsync(0, raw, jpeg);
+
+        var (_, message) = Assert.Single(_dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmCompareGroupMoveMessage("pair.cr2", "pair.jpg, pair.cr2"), message);
+        Assert.True(File.Exists(Path.Combine(_root, "Sorted", "pair.cr2")));
+    }
+
+    [Fact]
+    public async Task MoveAction_WithConfirmOnAGroupWithoutCompare_AsksTheGenericQuestionOnce()
+    {
+        var (_, jpeg, _, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(confirmActions: true);
+
+        await controller.RunActionAsync(0, null, jpeg);
+
+        var (_, message) = Assert.Single(_dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmActionMessage("MoveToSub"), message);
+    }
+
+    [Fact]
+    public async Task RecycleAction_WithConfirmOnAGroupWhenNoGroupPromptApplies_AsksTheGenericQuestionOnce()
+    {
+        var (_, jpeg, _, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(new AppSettings { ConfirmBeforeDelete = false }, confirmActions: true);
+
+        await controller.RunActionAsync(1, null, jpeg);
+
+        var (_, message) = Assert.Single(_dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmActionMessage("DeleteIt"), message);
+    }
+
+    [Fact]
+    public async Task RecycleAction_WithConfirmOnAGroup_PermanentDeletePromptStaysSeparateAndSingle()
+    {
+        var (_, jpeg, raw, xmp, _) = LoadPairBetweenTwoPhotos(withXmp: true);
+        _bin.NoBin = true;
+        var controller = NewController(new AppSettings { AllowPermanentDeleteWithoutRecycleBin = true }, confirmActions: true);
+
+        await controller.RunActionAsync(1, null, jpeg);
+
+        var prompt = Assert.Single(_dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmPermanentDeleteTitle, prompt.Title);
+        Assert.Equal(3, _bin.Deleted.Count);
     }
 
     [Fact]

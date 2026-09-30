@@ -81,7 +81,9 @@ public sealed class FileActionController
 
         // Q-R8: a permanent delete gets its own explicit confirmation (in the core step), which replaces the generic one.
         var permanentPrompt = action.Operation == FileOperationType.Recycle && WillAskPermanentDelete(compareSelectedPath ?? currentPath);
-        if (action.Confirm && _dialogService is not null && !permanentPrompt)
+        // A capture that gets its own confirmation in the core step (which already names the files) must not be asked twice.
+        var groupPrompt = WillAskGroupConfirmation(action.Operation, compareSelectedPath, compareSelectedPath ?? currentPath);
+        if (action.Confirm && _dialogService is not null && !permanentPrompt && !groupPrompt)
         {
             // R7-4: the dialog runs a nested dispatcher loop (a forwarded open can switch the folder meanwhile),
             // so re-check state afterwards like the permanent-delete prompt does.
@@ -127,6 +129,22 @@ public sealed class FileActionController
         }
 
         await ExecuteFileActionCoreAsync(Tr.ActionRecycleName, FileOperationType.Recycle, null, compareSelectedPath, currentPath);
+    }
+
+    /// <summary>
+    /// True when <see cref="ExecuteFileActionCoreAsync"/> will show its own confirmation for the capture behind
+    /// <paramref name="source"/>: a Recycle with "confirm before delete" on or a member without a Recycle Bin (permanent), or any
+    /// Recycle/Move started from a Compare selection (Q-RAW-COMPARE-GROUP). Keep in step with the prompt condition there.
+    /// </summary>
+    private bool WillAskGroupConfirmation(FileOperationType operation, string? compareSelectedPath, string? source)
+    {
+        if (string.IsNullOrEmpty(source) || _fileActionService is null || _fileSystem is null) return false;
+        if (_catalog.Find(source)?.CaptureGroup is not { } group) return false;
+        if (compareSelectedPath is not null && operation is FileOperationType.Recycle or FileOperationType.Move) return true;
+        if (operation != FileOperationType.Recycle) return false;
+        var settings = _getSettings();
+        return settings.ConfirmBeforeDelete
+            || (settings.AllowPermanentDeleteWithoutRecycleBin && group.Paths.Any(_fileActionService.LacksRecycleBin));
     }
 
     /// <summary>Q-R8: the setting is on and <paramref name="source"/> is on a drive without a Recycle Bin, so Recycle would delete permanently.</summary>
