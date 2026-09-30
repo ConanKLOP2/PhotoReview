@@ -342,9 +342,10 @@ public sealed class RawDecoderTests
 
     private static byte[] AddAdobeRgbHint(byte[] jpeg)
     {
-        byte[] result = [.. jpeg.AsSpan(0, 2).ToArray(), 0xFF, 0xE1, 0x00, 0x10,
-            (byte)'R', (byte)'A', (byte)'W', (byte)'A', (byte)'D', (byte)'O', (byte)'B', (byte)'E',
-            (byte)'R', (byte)'G', (byte)'B', (byte)'R', (byte)'0', (byte)'3', .. jpeg.AsSpan(2).ToArray()];
+        var exif = PreviewSelectorColorSpaceTests.ExifWithInteropIndex("R03");
+        var length = exif.Length + 2;
+        byte[] result = [.. jpeg.AsSpan(0, 2).ToArray(), 0xFF, 0xE1, (byte)(length >> 8), (byte)length,
+            .. exif, .. jpeg.AsSpan(2).ToArray()];
         return result;
     }
 

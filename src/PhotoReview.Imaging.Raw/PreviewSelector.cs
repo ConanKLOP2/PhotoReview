@@ -23,6 +23,16 @@ public static class PreviewSelector
         DecodeBox requestBox,
         int orientation)
     {
+        var chosen = SelectPreviewCore(source, previews, requestBox, orientation);
+        return chosen is { Kind: EmbeddedPreviewKind.Jpeg } ? ResolveColorSpace(source, chosen) : chosen;
+    }
+
+    private static EmbeddedPreview? SelectPreviewCore(
+        IRawHeaderSource source,
+        IReadOnlyList<EmbeddedPreview> previews,
+        DecodeBox requestBox,
+        int orientation)
+    {
         if (previews == null || previews.Count == 0)
             return null;
 
@@ -112,7 +122,25 @@ public static class PreviewSelector
     /// frames, malformed markers, truncation and SOS/EOI before a frame header yield <c>false</c> (dimensions unknown).
     /// At most <see cref="MaxJpegSegments"/> segments are visited. Never reads past the source or the range.
     /// </summary>
-    public static bool TryReadJpegFrame(IRawHeaderSource source, long offset, long length, out int width, out int height, out PreviewColorSpace colorSpace)
+    public static bool TryReadJpegFrame(IRawHeaderSource source, long offset, long length, out int width, out int height, out PreviewColorSpace colorSpace) =>
+        WalkJpeg(source, offset, length, needFrame: true, out width, out height, out colorSpace);
+
+    /// <summary>
+    /// The container may declare the preview size (CR3 PRVW, CR2/DNG IFDs) yet say nothing about its colour space, so the
+    /// EXIF interoperability marker is still looked up. Same bounded per-segment walk, stopping at the frame header
+    /// (the EXIF APP1 precedes it), so no extra full-JPEG read happens.
+    /// </summary>
+    private static EmbeddedPreview ResolveColorSpace(IRawHeaderSource source, EmbeddedPreview preview)
+    {
+        if (preview.ColorSpace != PreviewColorSpace.Unknown
+            || preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
+            return preview;
+
+        WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out var colorSpace);
+        return colorSpace != PreviewColorSpace.Unknown ? preview with { ColorSpace = colorSpace } : preview;
+    }
+
+    private static bool WalkJpeg(IRawHeaderSource source, long offset, long length, bool needFrame, out int width, out int height, out PreviewColorSpace colorSpace)
     {
         width = 0;
         height = 0;
@@ -140,6 +168,7 @@ public static class PreviewSelector
             int payloadLen = segLen - 2;
             if (marker is >= 0xC0 and <= 0xCF && marker is not (0xC4 or 0xC8 or 0xCC))
             {
+                if (!needFrame) return false; // colour space only: the EXIF APP1 always precedes the frame header
                 if (marker > 0xC2 || payloadLen < 5) return false;
                 var frame = source.Read(pos + 4, 5); // precision, height (2), width (2)
                 height = (frame[1] << 8) | frame[2];
@@ -150,14 +179,80 @@ public static class PreviewSelector
             if (marker == 0xE1 && payloadLen >= 14 && colorSpace == PreviewColorSpace.Unknown) // APP1 EXIF
             {
                 var payload = source.Read(pos + 4, payloadLen);
-                if (payload.IndexOf("Adobe RGB"u8) >= 0 || payload.IndexOf("R03"u8) >= 0)
+                if (IsAdobeRgbExif(payload))
+                {
                     colorSpace = PreviewColorSpace.AdobeRgb;
+                    if (!needFrame) return false; // colour space found and no frame requested
+                }
             }
 
             pos += 2 + segLen;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// True when the EXIF APP1 payload ("Exif\0\0" + TIFF) marks Adobe RGB the standard way: the Interoperability IFD
+    /// (Exif IFD pointer 0x8769 -> Interop pointer 0xA005) has InteropIndex (0x0001) "R03" (DCF option file / Adobe RGB).
+    /// Only that IFD entry counts: a byte search over the payload also hit MakerNote binary at random (~0.4 % per 64 KB).
+    /// Every offset is bounds-checked against the payload; malformed data yields <c>false</c>.
+    /// </summary>
+    internal static bool IsAdobeRgbExif(ReadOnlySpan<byte> payload)
+    {
+        if (payload.Length < 14 || !payload[..6].SequenceEqual("Exif\0\0"u8)) return false;
+        var tiff = payload[6..];
+        bool little;
+        if (tiff[0] == (byte)'I' && tiff[1] == (byte)'I') little = true;
+        else if (tiff[0] == (byte)'M' && tiff[1] == (byte)'M') little = false;
+        else return false;
+        if (ReadU16(tiff, 2, little) != 42) return false;
+
+        var ifd0 = ReadU32(tiff, 4, little);
+        if (!TryFindLongEntry(tiff, ifd0, 0x8769, little, out var exifIfd)) return false;
+        if (!TryFindLongEntry(tiff, exifIfd, 0xA005, little, out var interopIfd)) return false;
+        return TryFindEntry(tiff, interopIfd, 0x0001, little, out var entryOffset)
+            && ReadU16(tiff, entryOffset + 2, little) == 2 // ASCII
+            && ReadU32(tiff, entryOffset + 4, little) == 4 // "R03\0" fits the 4-byte inline value
+            && entryOffset + 12 <= tiff.Length
+            && tiff.Slice((int)entryOffset + 8, 4).SequenceEqual("R03\0"u8);
+    }
+
+    private static bool TryFindLongEntry(ReadOnlySpan<byte> tiff, long ifdOffset, ushort tag, bool little, out long value)
+    {
+        value = 0;
+        if (!TryFindEntry(tiff, ifdOffset, tag, little, out var entryOffset)) return false;
+        var type = ReadU16(tiff, entryOffset + 2, little);
+        if (type != 4 || ReadU32(tiff, entryOffset + 4, little) != 1) return false; // LONG x 1
+        value = ReadU32(tiff, entryOffset + 8, little);
+        return true;
+    }
+
+    private static bool TryFindEntry(ReadOnlySpan<byte> tiff, long ifdOffset, ushort tag, bool little, out long entryOffset)
+    {
+        entryOffset = 0;
+        if (ifdOffset < 8 || ifdOffset + 2 > tiff.Length) return false;
+        var count = ReadU16(tiff, ifdOffset, little);
+        for (var i = 0; i < count; i++)
+        {
+            var entry = ifdOffset + 2 + 12L * i;
+            if (entry + 12 > tiff.Length) return false;
+            if (ReadU16(tiff, entry, little) != tag) continue;
+            entryOffset = entry;
+            return true;
+        }
+        return false;
+    }
+
+    private static ushort ReadU16(ReadOnlySpan<byte> data, long offset, bool little) =>
+        little ? (ushort)(data[(int)offset] | (data[(int)offset + 1] << 8)) : (ushort)((data[(int)offset] << 8) | data[(int)offset + 1]);
+
+    private static uint ReadU32(ReadOnlySpan<byte> data, long offset, bool little)
+    {
+        var o = (int)offset;
+        return little
+            ? (uint)(data[o] | (data[o + 1] << 8) | (data[o + 2] << 16) | (data[o + 3] << 24))
+            : (uint)((data[o] << 24) | (data[o + 1] << 16) | (data[o + 2] << 8) | data[o + 3]);
     }
 
     /// <summary>
@@ -197,8 +292,7 @@ public static class PreviewSelector
             }
             else if (marker == 0xE1 && payloadLen >= 14) // APP1 EXIF
             {
-                var payload = span.Slice(payloadOffset, payloadLen);
-                if (payload.IndexOf("Adobe RGB"u8) >= 0 || payload.IndexOf("R03"u8) >= 0)
+                if (IsAdobeRgbExif(span.Slice(payloadOffset, payloadLen)))
                 {
                     colorSpace = PreviewColorSpace.AdobeRgb;
                 }

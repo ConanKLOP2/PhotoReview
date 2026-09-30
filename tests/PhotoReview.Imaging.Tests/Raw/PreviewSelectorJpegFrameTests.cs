@@ -150,9 +150,7 @@ public sealed class PreviewSelectorJpegFrameTests
     [Fact]
     public void TryReadJpegFrame_AdobeRgbMarkerInExif_IsReported()
     {
-        var app1 = AppSegment(0xE1, 200);
-        "Adobe RGB"u8.CopyTo(app1.AsSpan(20));
-        var jpeg = JpegWithLeadingSegments(640, 480, app1);
+        var jpeg = PreviewSelectorColorSpaceTests.JpegWithExif(PreviewSelectorColorSpaceTests.ExifWithInteropIndex("R03"));
 
         Assert.True(PreviewSelector.TryReadJpegFrame(new InMemoryRawHeaderSource(jpeg), 0, jpeg.Length, out _, out _, out var colorSpace));
 
