@@ -8,6 +8,7 @@ namespace PhotoReview.Imaging.Tests.Raw;
 public sealed class LibRawFullDecodeGateTests
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+    private static readonly string[] ViewerNames = ["v1", "v2", "v3", "v4"];
 
     /// <summary>A gate whose test can wait until N waiters are really queued (no sleeps).</summary>
     private sealed class Harness : IDisposable
@@ -27,7 +28,7 @@ public sealed class LibRawFullDecodeGateTests
 
         /// <summary>Starts a thread that enters the gate, records its name, then holds the slot until released.
         /// <paramref name="worked"/> = the lease did real decode work (see <see cref="FullDecodeGate.Lease.MarkWorked"/>) before it is released.</summary>
-        internal (Task Task, SemaphoreSlim Release) Start(string name, SourceReadPriority priority, CancellationToken token = default, bool worked = true)
+        internal (Task Task, SemaphoreSlim Release) Start(string name, SourceReadPriority priority, bool worked = true, CancellationToken token = default)
         {
             var release = new SemaphoreSlim(0);
             var task = Task.Factory.StartNew(() =>
@@ -106,7 +107,7 @@ public sealed class LibRawFullDecodeGateTests
         using var h = new Harness();
         var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None);
         using var cts = new CancellationTokenSource();
-        var waiter = h.Start("cancelled", SourceReadPriority.Viewer, cts.Token);
+        var waiter = h.Start("cancelled", SourceReadPriority.Viewer, token: cts.Token);
         h.AwaitQueued(1);
 
         cts.Cancel();
@@ -125,7 +126,7 @@ public sealed class LibRawFullDecodeGateTests
         using var h = new Harness(maxQueuedPreloads: 1);
         var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None);
         using var cts = new CancellationTokenSource();
-        var first = h.Start("first", SourceReadPriority.Preload, cts.Token);
+        var first = h.Start("first", SourceReadPriority.Preload, token: cts.Token);
         h.AwaitQueued(1);
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first.Task);
@@ -225,7 +226,7 @@ public sealed class LibRawFullDecodeGateTests
         var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None); // never marked worked: e.g. a memory-guard refusal
         var preload = h.Start("p", SourceReadPriority.Preload, worked: false);
         h.AwaitQueued(1);
-        var viewers = new[] { "v1", "v2", "v3", "v4" }.Select(n => { var e = h.Start(n, SourceReadPriority.Viewer, worked: false); h.AwaitQueued(1); return e; }).ToArray();
+        var viewers = ViewerNames.Select(n => { var e = h.Start(n, SourceReadPriority.Viewer, worked: false); h.AwaitQueued(1); return e; }).ToArray();
 
         running.Dispose();
         foreach (var entry in viewers.Append(preload)) entry.Release.Release();
@@ -243,7 +244,7 @@ public sealed class LibRawFullDecodeGateTests
         h.AwaitQueued(1);
         var p2 = h.Start("p2", SourceReadPriority.Preload);
         h.AwaitQueued(1);
-        var viewers = new[] { "v1", "v2", "v3", "v4" }.Select(n => { var e = h.Start(n, SourceReadPriority.Viewer); h.AwaitQueued(1); return e; }).ToArray();
+        var viewers = ViewerNames.Select(n => { var e = h.Start(n, SourceReadPriority.Viewer); h.AwaitQueued(1); return e; }).ToArray();
 
         running.MarkWorked();
         running.Dispose();
