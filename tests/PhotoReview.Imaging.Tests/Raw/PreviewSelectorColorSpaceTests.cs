@@ -112,7 +112,8 @@ public sealed class PreviewSelectorColorSpaceTests
         _ = PreviewSelector.SelectPreview(source, [new EmbeddedPreview(0, 0, padded.Length, EmbeddedPreviewKind.Jpeg, 1920, 1280, PreviewColorSpace.Unknown)],
             DecodeBox.Unbounded, 1);
 
-        Assert.True(source.TotalBytesRead < 1_000, $"Read {source.TotalBytesRead} bytes.");
+        // Budget is charged per 64 KB block like production: only the first block (headers + EXIF), not the 200 KB of padding.
+        Assert.Equal(SourceRawHeaderSource.BlockSize, source.TotalBytesRead);
     }
 
     [Fact]
