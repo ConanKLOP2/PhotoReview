@@ -171,9 +171,7 @@ public sealed class CaptureGroupBuilderTests(ITestOutputHelper output)
         Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
     }
 
-    [Fact]
-    [Trait("Category", "Slow")]
-    public void GroupEntries_TenThousandPaths_CompletesWithinTwentyMilliseconds()
+    private static List<CatalogEntry> TenThousandPairedEntries()
     {
         var entries = new List<CatalogEntry>(10_000);
         for (var index = 0; index < 5_000; index++)
@@ -183,8 +181,40 @@ public sealed class CaptureGroupBuilderTests(ITestOutputHelper output)
             entries.Add(new CatalogEntry($@"C:\photos\{basename}.cr2"));
         }
 
+        return entries;
+    }
+
+    /// <summary>Measured 4146 KiB after the bucket/presize optimisation (6504 KiB before it); 5 MiB fails the old code and leaves ~20% headroom.</summary>
+    private const long AllocationBudgetBytes = 5 * 1024 * 1024;
+
+    [Fact]
+    [Trait("Category", "HotPath")]
+    public void GroupEntries_TenThousandPaths_GroupsAllPairsWithBoundedAllocation()
+    {
+        // Deterministic guard for the 10k-entry hot path. It replaces a wall-clock budget, which is meaningless on a
+        // shared, parallel runner (see docs/TESTING.md > Timing tests). Allocation on the calling thread does not depend
+        // on machine load, and a per-path regression (LINQ, per-group lists, re-hashing...) shows up as a multiple of it.
+        var entries = TenThousandPairedEntries();
+        _ = CaptureGroupBuilder.GroupEntries(entries, PhotoReview.Core.Model.RawPairMode.PreferJpeg); // warm-up (JIT/static init)
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var grouped = CaptureGroupBuilder.GroupEntries(entries, PhotoReview.Core.Model.RawPairMode.PreferJpeg);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(5_000, grouped.Count);
+        Assert.All(grouped, entry => Assert.NotNull(entry.CaptureGroup));
+        output.WriteLine($"10k paths (5k pairs): {allocated / 1024} KiB allocated ({allocated / 10_000.0:F0} B/path).");
+        Assert.True(allocated < AllocationBudgetBytes, $"GroupEntries allocated {allocated / 1024} KiB for 10k paths (budget {AllocationBudgetBytes / 1024} KiB).");
+    }
+
+    /// <summary>Timing report for a human, never in the gate: the wall-clock assertion this replaces flaked at ~2x under a full parallel run.</summary>
+    [Fact]
+    [Trait("Category", "Manual")]
+    public void GroupEntries_TenThousandPaths_TimingReport()
+    {
+        var entries = TenThousandPairedEntries();
         _ = CaptureGroupBuilder.GroupEntries(entries, PhotoReview.Core.Model.RawPairMode.PreferJpeg);
-        var samples = new double[5];
+        var samples = new double[15];
         for (var sample = 0; sample < samples.Length; sample++)
         {
             var started = Stopwatch.GetTimestamp();
@@ -194,7 +224,6 @@ public sealed class CaptureGroupBuilderTests(ITestOutputHelper output)
         }
 
         Array.Sort(samples);
-        output.WriteLine($"10k paths (5k pairs), median grouping time: {samples[2]:F2} ms; samples: {string.Join(", ", samples.Select(value => value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)))} ms.");
-        Assert.True(samples[2] < 20, $"Median grouping time was {samples[2]:F2} ms; samples: {string.Join(", ", samples.Select(value => value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)))} ms.");
+        output.WriteLine($"10k paths (5k pairs) grouping time: min {samples[0]:F2} ms, median {samples[7]:F2} ms, max {samples[^1]:F2} ms.");
     }
 }

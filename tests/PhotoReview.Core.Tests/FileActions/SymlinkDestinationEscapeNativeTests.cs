@@ -71,7 +71,30 @@ public sealed class SymlinkDestinationEscapeNativeTests : IDisposable
             CreateNoWindow = true,
         });
         process!.WaitForExit();
-        return process.ExitCode == 0 && Directory.Exists(linkPath);
+        return process.ExitCode == 0 && Directory.Exists(linkPath) && CanCreateDirectoryThroughJunction(linkPath, targetPath);
+    }
+
+    /// <summary>Junction creation succeeding does not prove the junction is usable for WRITES: under some
+    /// filesystem-virtualizing setups (observed for %LOCALAPPDATA%\Temp when the process is launched from an
+    /// AppData-redirected host such as the Claude desktop app) <c>mklink /J</c> exits 0 and the link lists fine, but
+    /// creating a directory through it fails and never reaches the target. That is a machine precondition, not a
+    /// defect in <see cref="FileActionService"/>, so probe it and let the test skip instead of failing spuriously.</summary>
+    private static bool CanCreateDirectoryThroughJunction(string linkPath, string targetPath)
+    {
+        var probeName = ".junction-probe-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(linkPath, probeName));
+            return Directory.Exists(Path.Combine(targetPath, probeName));
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        finally
+        {
+            try { Directory.Delete(Path.Combine(targetPath, probeName)); } catch { /* best-effort probe cleanup */ }
+        }
     }
 
     private FileActionService CreateService(out OperationJournal journal)
@@ -128,7 +151,7 @@ public sealed class SymlinkDestinationEscapeNativeTests : IDisposable
         var service = CreateService(out _);
         var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"link\processed"));
 
-        Assert.True(result.Succeeded);
+        Assert.True(result.Succeeded, result.Error);
         Assert.True(File.Exists(Path.Combine(real, "processed", "a.jpg")));
     }
 
@@ -144,7 +167,7 @@ public sealed class SymlinkDestinationEscapeNativeTests : IDisposable
         var service = CreateService(out _);
         var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, @"sub\deeper"));
 
-        Assert.True(result.Succeeded);
+        Assert.True(result.Succeeded, result.Error);
         Assert.True(File.Exists(Path.Combine(photoFolder, "sub", "deeper", "a.jpg")));
     }
 }

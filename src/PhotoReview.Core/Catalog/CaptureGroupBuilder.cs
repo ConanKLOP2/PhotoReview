@@ -21,7 +21,7 @@ public static class CaptureGroupBuilder
         ArgumentNullException.ThrowIfNull(imagePaths);
 
         var buckets = new Dictionary<CaptureKey, PathBucket>(CaptureKeyComparer.Instance);
-        var order = new List<CaptureKey>();
+        var order = new List<PathBucket>(); // first-seen order; each bucket carries its own key (no second dictionary lookup)
         foreach (var path in imagePaths)
         {
             if (string.IsNullOrWhiteSpace(path)) continue;
@@ -32,24 +32,23 @@ public static class CaptureGroupBuilder
             var key = new CaptureKey(Path.GetDirectoryName(path) ?? string.Empty, Path.GetFileNameWithoutExtension(path));
             if (!buckets.TryGetValue(key, out var bucket))
             {
-                bucket = new PathBucket();
+                bucket = new PathBucket(key);
                 buckets.Add(key, bucket);
-                order.Add(key);
+                order.Add(bucket);
             }
 
-            if (isJpeg) bucket.JpegPaths.Add(path);
-            else bucket.RawPaths.Add(path);
+            if (isJpeg) bucket.AddJpeg(path);
+            else bucket.AddRaw(path);
         }
 
         var sidecars = IndexSidecars(sidecarPaths);
         var groups = new List<CaptureGroup>();
-        foreach (var key in order)
+        foreach (var bucket in order)
         {
-            var bucket = buckets[key];
-            if (bucket.JpegPaths.Count != 1 || bucket.RawPaths.Count != 1) continue;
+            if (bucket.JpegCount != 1 || bucket.RawCount != 1) continue;
 
-            var xmp = ChooseSidecar(sidecars, key, bucket.JpegPaths[0], bucket.RawPaths[0]);
-            groups.Add(new CaptureGroup(bucket.JpegPaths[0], bucket.RawPaths[0], xmp));
+            var xmp = ChooseSidecar(sidecars, bucket.Key, bucket.JpegPath!, bucket.RawPath!);
+            groups.Add(new CaptureGroup(bucket.JpegPath!, bucket.RawPath!, xmp));
         }
 
         return groups;
@@ -92,17 +91,17 @@ public static class CaptureGroupBuilder
         var groups = Build(entries.Select(entry => entry.Path), sidecarPaths);
         if (groups.Count == 0) return entries.ToArray();
 
-        var entryByPath = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
+        var entryByPath = new Dictionary<string, CatalogEntry>(entries.Count, StringComparer.OrdinalIgnoreCase); // presized: no rehash-growth on 10k entries
         foreach (var entry in entries) entryByPath.TryAdd(entry.Path, entry);
 
-        var groupByMemberPath = new Dictionary<string, CaptureGroup>(StringComparer.OrdinalIgnoreCase);
+        var groupByMemberPath = new Dictionary<string, CaptureGroup>(groups.Count * 2, StringComparer.OrdinalIgnoreCase);
         foreach (var group in groups)
         {
             groupByMemberPath[group.JpegPath] = group;
             groupByMemberPath[group.RawPath] = group;
         }
 
-        var emitted = new HashSet<CaptureGroup>(ReferenceEqualityComparer.Instance); // one emission per group instance: no path hashing on the 10k-entry hot path
+        var emitted = new HashSet<CaptureGroup>(groups.Count, ReferenceEqualityComparer.Instance); // one emission per group instance: no path hashing on the 10k-entry hot path
         var grouped = new List<CatalogEntry>(entries.Count);
         foreach (var entry in entries)
         {
@@ -149,10 +148,24 @@ public static class CaptureGroupBuilder
 
     private readonly record struct CaptureKey(string Directory, string BaseName);
 
-    private sealed class PathBucket
+    /// <summary>Only the first path and a count per kind are needed: a bucket is grouped iff it has exactly one of each (no per-bucket lists).</summary>
+    private sealed class PathBucket(CaptureKey key)
     {
-        public List<string> JpegPaths { get; } = [];
-        public List<string> RawPaths { get; } = [];
+        public CaptureKey Key { get; } = key;
+        public string? JpegPath { get; private set; }
+        public string? RawPath { get; private set; }
+        public int JpegCount { get; private set; }
+        public int RawCount { get; private set; }
+
+        public void AddJpeg(string path)
+        {
+            if (JpegCount++ == 0) JpegPath = path;
+        }
+
+        public void AddRaw(string path)
+        {
+            if (RawCount++ == 0) RawPath = path;
+        }
     }
 
     private sealed class CaptureKeyComparer : IEqualityComparer<CaptureKey>

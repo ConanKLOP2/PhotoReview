@@ -17,3 +17,7 @@ Detail behind [`AGENTS.md` > Tests](../AGENTS.md#tests): categories, parallel lo
 ## Hang guard
 
 `tests/test.runsettings` caps `dotnet test` at 120s/test, 20min/session, no flags needed; prefer `verify-all.ps1` ([detail](refactoring/decisions/TEST-HANG-GUARD.md)).
+
+## Timing tests
+
+Never assert a wall-clock budget in a gated test: a full parallel run on a shared runner makes it flake (`GroupEntries` 10k paths: 4-7 ms alone, 27-65 ms inside the full `Core.Tests` run). Guard hot paths with a deterministic proxy instead (`GC.GetAllocatedBytesForCurrentThread()` bound, operation counts) and keep stopwatch numbers in a `Category=Manual` report test (example: `CaptureGroupBuilderTests`).
