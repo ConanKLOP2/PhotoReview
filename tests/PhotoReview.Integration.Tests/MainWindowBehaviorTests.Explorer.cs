@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using PhotoReview.App;
+using PhotoReview.Core.Model;
 using PhotoReview.Integration.Tests.Fakes;
 using PhotoReview.Integration.Tests.Infrastructure;
 using Xunit;
@@ -25,10 +26,18 @@ namespace PhotoReview.Integration.Tests;
 [Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
+// Integration too: CI's Integration+Slow step runs these (the main filter excludes Slow; they rotted unrun before).
+[Trait("Category", "Integration")]
 public sealed class MainWindowExplorerOrderTests
 {
     /// <summary>Upper bound for a wait that is expected to succeed quickly.</summary>
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// A sort mode that follows the Explorer view order. The store default (PR #186: <see cref="ImageSortMode.Default"/>)
+    /// never queries Explorer, which silently turned every test here into one where the fake was never called.
+    /// </summary>
+    private const ImageSortMode ExplorerSortMode = ImageSortMode.Name;
 
     private static readonly string[] Names = ["a.png", "b.png", "c.png", "d.png"];
 
@@ -115,6 +124,7 @@ public sealed class MainWindowExplorerOrderTests
                 var opened = TestAppHost.CreateMainWindow(requested, new TestHostHooks
                 {
                     Explorer = fake,
+                    SortMode = ExplorerSortMode,
                     OnPresented = path => { snapshotHadReturned.Add(fake.HasReturned); presented.Add(path); },
                 });
                 window = opened;
@@ -179,6 +189,7 @@ public sealed class MainWindowExplorerOrderTests
                 var opened = TestAppHost.CreateMainWindow(folder, new TestHostHooks
                 {
                     Explorer = fake,
+                    SortMode = ExplorerSortMode,
                     OnPresented = path => { snapshotHadReturned.Add(fake.HasReturned); presented.Add(path); },
                 });
                 window = opened;
@@ -252,7 +263,7 @@ public sealed class MainWindowExplorerOrderTests
     // --------------------------------------------------------------- helpers
 
     private static MainWindow Open(string folder, FakeExplorerOrderProvider fake, List<string> presented)
-        => TestAppHost.CreateMainWindow(folder, new TestHostHooks { Explorer = fake, OnPresented = presented.Add });
+        => TestAppHost.CreateMainWindow(folder, new TestHostHooks { Explorer = fake, SortMode = ExplorerSortMode, OnPresented = presented.Add });
 
     /// <summary>
     /// Waits (pumping the dispatcher, normal timeout) until the folder load has finished, i.e. the Explorer
