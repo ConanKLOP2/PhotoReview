@@ -379,17 +379,21 @@ public sealed class UndoService
                 Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
             tx = new JournalTransaction(_journal, _clock, prepared);
             await tx.BeginAsync().ConfigureAwait(false);
-            foreach (var member in pending)
+            // Whole loop on the pool (directory creation, moves and verification stats), same order as before.
+            await Task.Run(async () =>
             {
-                var folder = Path.GetDirectoryName(member.Destination!);
-                if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
-                if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
-                else await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!)).ConfigureAwait(false);
-                if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
-                    throw new IOException(JournalErrors.VerifySizeChanged);
-                restored.Add(member.Destination!);
-                restoredByThisUndo++;
-            }
+                foreach (var member in pending)
+                {
+                    var folder = Path.GetDirectoryName(member.Destination!);
+                    if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
+                    if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                    else _fileSystem.Move(member.Source, member.Destination!);
+                    if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
+                        throw new IOException(JournalErrors.VerifySizeChanged);
+                    restored.Add(member.Destination!);
+                    restoredByThisUndo++;
+                }
+            }).ConfigureAwait(false);
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
             // A retry that really restored the remaining members completes the earlier partial undo: close its Failed lines.
@@ -506,14 +510,19 @@ public sealed class UndoService
                 Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
             tx = new JournalTransaction(_journal, _clock, prepared);
             await tx.BeginAsync().ConfigureAwait(false);
-            foreach (var member in pending)
+            // On the pool: BeginAsync completes synchronously in Fast journal mode, so without this the (slow, bin-enumerating)
+            // restore would run on the caller's (UI) thread. Awaited, so `restored` is safely read after it, also on failure.
+            await Task.Run(() =>
             {
-                if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
-                    throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
-                if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
-                restored.Add(member.Source);
-                restoredByThisUndo++;
-            }
+                foreach (var member in pending)
+                {
+                    if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
+                        throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                    if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                    restored.Add(member.Source);
+                    restoredByThisUndo++;
+                }
+            }).ConfigureAwait(false);
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
             _ = ResolvePartialUndo(action);

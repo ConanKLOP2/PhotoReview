@@ -47,6 +47,69 @@ public sealed class UndoServiceGroupTests
             PermanentlyDeleted: members.Any(member => member.Permanent));
     }
 
+    /// <summary>
+    /// Runs <paramref name="undoCall"/> from a dedicated blocked thread (like a UI thread that awaits): with the Fast journal
+    /// BeginAsync completes synchronously, so any file work not moved to the pool would run on THIS thread.
+    /// </summary>
+    private static UndoResult RunOnDedicatedThread(Func<Task<UndoResult>> undoCall, out int callerThreadId)
+    {
+        UndoResult? result = null;
+        Exception? failure = null;
+        var id = 0;
+        var thread = new Thread(() =>
+        {
+            id = Environment.CurrentManagedThreadId;
+            try { result = undoCall().GetAwaiter().GetResult(); }
+            catch (Exception ex) { failure = ex; }
+        });
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(60)));
+        if (failure is not null) throw failure;
+        callerThreadId = id;
+        return result!;
+    }
+
+    [Fact]
+    public void UndoLastAsync_GroupRecycle_RestoresOffTheCallerThreadInOrder()
+    {
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+
+        var result = RunOnDedicatedThread(() => _undo.UndoLastAsync(), out var callerThread);
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Equal([Jpeg, Raw], _bin.RestoreOrder);
+        Assert.All(_bin.RestoreThreadIds, id => Assert.NotEqual(callerThread, id));
+    }
+
+    [Fact]
+    public void UndoLastAsync_GroupRecyclePartialRestoreOffTheCallerThread_StillReportsRestoredPaths()
+    {
+        _bin.FailFor = Raw;
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+
+        var result = RunOnDedicatedThread(() => _undo.UndoLastAsync(), out var callerThread);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal([Jpeg], result.RestoredPaths);
+        Assert.Equal([Jpeg, Raw], _bin.RestoreOrder);
+        Assert.All(_bin.RestoreThreadIds, id => Assert.NotEqual(callerThread, id));
+    }
+
+    [Fact]
+    public void UndoLastAsync_GroupMove_MovesBackOffTheCallerThread()
+    {
+        _fs.AddFile(MovedJpeg, "jpeg", Stamp);
+        _fs.AddFile(MovedRaw, "raw data", Stamp);
+        RegisterMove(Member(Jpeg, MovedJpeg, 4), Member(Raw, MovedRaw, 8));
+
+        var result = RunOnDedicatedThread(() => _undo.UndoLastAsync(), out var callerThread);
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        var moves = _fs.Events.Where(item => item.Kind == "move").ToArray();
+        Assert.Equal([MovedJpeg, MovedRaw], moves.Select(item => item.Path));
+        Assert.All(moves, item => Assert.NotEqual(callerThread, item.ThreadId));
+    }
+
     [Fact]
     public async Task UndoLastAsync_GroupMoveAlreadyRestoredExternally_ClearsTheActionSoItDoesNotRepeat()
     {
@@ -310,10 +373,14 @@ public sealed class UndoServiceGroupTests
     {
         public int RestoreCalls { get; private set; }
         public string? FailFor { get; set; }
+        public List<string> RestoreOrder { get; } = [];
+        public List<int> RestoreThreadIds { get; } = [];
         public void SendToRecycleBin(string path) => throw new NotSupportedException();
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
         {
             RestoreCalls++;
+            RestoreOrder.Add(originalPath);
+            RestoreThreadIds.Add(Environment.CurrentManagedThreadId);
             if (string.Equals(originalPath, FailFor, StringComparison.OrdinalIgnoreCase)) return false;
             fs.AddFile(originalPath, new string('x', checked((int)expectedSize)), expectedLastWriteUtc);
             return true;
