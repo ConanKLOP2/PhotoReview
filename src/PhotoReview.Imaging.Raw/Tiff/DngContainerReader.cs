@@ -7,11 +7,14 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// Reader for Adobe DNG format.
 /// Previews: IFD0 or SubIFDs whose JPEG frame is lossy (SOF0/1/2). Compression=7 alone is not enough because
 /// lossless JPEG (SOF3) sensor data uses it too.
-/// Sensor size: largest IFD that is neither reduced-resolution nor a preview; DefaultCropSize (0xC620) or ImageWidth/Length.
+/// Sensor size: the IFD that is not a preview or a secondary image (reduced, mask, enhanced); IFDs with a raw
+/// PhotometricInterpretation (CFA / LinearRaw) win over others, then the largest; DefaultCropSize (0xC620) or ImageWidth/Length.
 /// </summary>
 public sealed class DngContainerReader : IRawContainerReader
 {
     public RawFormat Format => RawFormat.Dng;
+
+    private const uint SecondaryImageMask = 0x1 | 0x4 | 0x8 | 0x10;
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {
@@ -71,6 +74,7 @@ public sealed class DngContainerReader : IRawContainerReader
 
         // Step 2: Parse each IFD
         int primaryArea = 0;
+        bool primaryIsRaw = false;
         foreach (var ifdOffset in allIfdOffsets)
         {
             ct.ThrowIfCancellationRequested();
@@ -78,6 +82,7 @@ public sealed class DngContainerReader : IRawContainerReader
 
             uint subFileType = 0;
             ushort compression = 1;
+            long photometric = 0;
             int width = 0;
             int height = 0;
             long? jpegOffset = null;
@@ -100,6 +105,11 @@ public sealed class DngContainerReader : IRawContainerReader
                     case 0x0101: // ImageLength
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
                             height = (int)Math.Min(h, int.MaxValue);
+                        break;
+
+                    case 0x0106: // PhotometricInterpretation: 32803 = CFA, 34892 = LinearRaw mark the raw image
+                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } photo)
+                            photometric = photo;
                         break;
 
                     case 0x0103: // Compression: 1 = uncompressed, 6/7 = JPEG (7 is also lossless JPEG raw data)
@@ -148,9 +158,10 @@ public sealed class DngContainerReader : IRawContainerReader
                 isPreview = true;
             }
 
-            // The full-resolution raw image is the IFD that is neither reduced-resolution nor a JPEG preview.
-            bool isReduced = (subFileType & 1) != 0;
-            if (!isPreview && !isReduced)
+            // The full-resolution raw image is the IFD that is neither a JPEG preview nor a secondary image:
+            // reduced-resolution (bit 0), transparency mask (bit 2), bit 3, or DNG 1.6 enhanced/super-resolution data (bit 4).
+            bool isSecondary = (subFileType & SecondaryImageMask) != 0;
+            if (!isPreview && !isSecondary)
             {
                 int candidateWidth = width;
                 int candidateHeight = height;
@@ -161,9 +172,13 @@ public sealed class DngContainerReader : IRawContainerReader
                 }
 
                 int area = (int)Math.Min((long)candidateWidth * candidateHeight, int.MaxValue);
-                if (candidateWidth > 0 && candidateHeight > 0 && area > primaryArea)
+                // An IFD with a raw PhotometricInterpretation beats a larger one without; area breaks ties.
+                bool isRaw = photometric is 32803 or 34892;
+                if (candidateWidth > 0 && candidateHeight > 0 &&
+                    ((isRaw && !primaryIsRaw) || (isRaw == primaryIsRaw && area > primaryArea)))
                 {
                     primaryArea = area;
+                    primaryIsRaw = isRaw;
                     sensorWidth = candidateWidth;
                     sensorHeight = candidateHeight;
                 }
