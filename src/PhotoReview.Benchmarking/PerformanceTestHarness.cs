@@ -16,7 +16,16 @@ public sealed record PerformanceReport(DateTimeOffset StartedUtc, string Folder,
 
 public static class PerformanceTestHarness
 {
-    private static readonly IReadOnlySet<string> Supported = PhotoReview.Core.Catalog.ImageFileTypes.SupportedExtensions;
+    // Pinned on purpose (not ImageFileTypes.SupportedExtensions): the viewer gained .gif later, and reports must stay
+    // comparable with earlier runs over the same folders. Extend this set only together with a new baseline.
+    private static readonly HashSet<string> Supported = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"
+    };
+
+    /// <summary>The extensions a run measures (test seam for the pinned set).</summary>
+    internal static IReadOnlySet<string> MeasuredExtensions => Supported;
+
     private static readonly JsonSerializerOptions DefaultOptions = new() { WriteIndented = true };
 
     // A valid, tiny PNG keeps the fixture portable while exercising WPF's real decoder; also the in-memory warm-up image.

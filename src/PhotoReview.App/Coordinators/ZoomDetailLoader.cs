@@ -71,6 +71,10 @@ public sealed class ZoomDetailLoader
     /// <summary>Raised when a RAW full decode has remained in progress for 300 ms or when its indicator clears.</summary>
     public event Action<bool>? RawDecodeIndicatorChanged;
 
+    /// <summary>How long a RAW decode runs before its indicator shows. Test seam: a test replaces it with a gate it releases itself,
+    /// so no wall-clock time is involved.</summary>
+    internal Func<TimeSpan, CancellationToken, Task> IndicatorDelay { get; set; } = static (delay, token) => Task.Delay(delay, token);
+
     /// <summary>True after the delayed RAW decoding indicator becomes visible.</summary>
     public bool IsRawDecodeIndicatorVisible => _isRawDecodeIndicatorVisible;
 
@@ -79,7 +83,7 @@ public sealed class ZoomDetailLoader
     public void Reset()
     {
         CancelPending();
-        SetRawDecodeIndicatorVisible(false);
+        StopRawDecodeIndicator();
         _target = null;
         _original = null;
         _showingOriginal = false;
@@ -168,12 +172,11 @@ public sealed class ZoomDetailLoader
         }
         finally
         {
-            SetRawDecodeIndicatorVisible(false);
-            _indicatorCts?.Cancel();
-            _indicatorCts?.Dispose();
-            _indicatorCts = null;
+            // Only the load that still owns the slot may touch the shared state. A superseded load (Reset already
+            // stopped its indicator and dropped _cts) finishing late must not kill the newer load's RAW indicator.
             if (ReferenceEquals(_cts, cts))
             {
+                StopRawDecodeIndicator();
                 _cts = null;
                 _pendingLoad = null;
             }
@@ -194,16 +197,29 @@ public sealed class ZoomDetailLoader
 
     private void StartRawDecodeIndicator(CancellationToken loadToken)
     {
+        StopRawDecodeIndicator();
         var indicatorCts = CancellationTokenSource.CreateLinkedTokenSource(loadToken);
         _indicatorCts = indicatorCts;
         _ = ShowIndicatorAfterDelayAsync(indicatorCts);
+    }
+
+    /// <summary>Hides the indicator and cancels and disposes its delay source (idempotent).</summary>
+    private void StopRawDecodeIndicator()
+    {
+        var indicatorCts = _indicatorCts;
+        _indicatorCts = null;
+        SetRawDecodeIndicatorVisible(false);
+        if (indicatorCts is null) return;
+        try { indicatorCts.Cancel(); }
+        catch (ObjectDisposedException) { /* already disposed */ }
+        indicatorCts.Dispose();
     }
 
     private async Task ShowIndicatorAfterDelayAsync(CancellationTokenSource indicatorCts)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(300), indicatorCts.Token);
+            await IndicatorDelay(TimeSpan.FromMilliseconds(300), indicatorCts.Token);
             void ShowIfCurrent()
             {
                 if (ReferenceEquals(_indicatorCts, indicatorCts) && !indicatorCts.IsCancellationRequested)

@@ -16,6 +16,8 @@ public sealed class CaptureGroupActionServiceTests
     {
         var fileSystem = new InMemoryFileSystem();
         fileSystem.WriteAllTextAtomic(@"C:\photos\a.jpg", "jpeg");
+        fileSystem.WriteAllTextAtomic(@"C:\photos\a.cr2", "raw data");
+        fileSystem.WriteAllTextAtomic(@"C:\photos\selected\a.cr2", "already there"); // second member's destination exists
         var journal = new OperationJournal(new AppPaths(@"C:\Users\test\AppData\Local"), fileSystem, new FixedClock());
         var service = CreateService(fileSystem, journal);
 
@@ -56,7 +58,7 @@ public sealed class CaptureGroupActionServiceTests
     }
 
     [Fact]
-    public async Task ExecuteGroupAsync_PreparesManifestBeforeMovingAndReportsPartialFailure()
+    public async Task ExecuteGroupAsync_PreparesManifestBeforeMovingAndRollsBackFirstMemberOnFailure()
     {
         var fileSystem = new InMemoryFileSystem();
         fileSystem.AddFile(@"C:\photos\a.jpg", "jpeg", Stamp);
@@ -79,14 +81,17 @@ public sealed class CaptureGroupActionServiceTests
 
         Assert.False(result.Succeeded);
         Assert.True(sawCompletePreparedManifest);
-        Assert.True(result.Members[0].Completed);
+        Assert.False(result.Members[0].Completed); // rolled back: nothing of the pair is left moved
         Assert.False(result.Members[1].Completed);
         Assert.False(result.Members[1].Conflict);
-        Assert.False(fileSystem.FileExists(@"C:\photos\a.jpg"));
+        Assert.True(fileSystem.FileExists(@"C:\photos\a.jpg"));
         Assert.True(fileSystem.FileExists(@"C:\photos\a.cr2"));
-        var failed = Assert.Single(journal.ReadFailedOperations());
-        Assert.Equal(result.GroupId, failed.GroupId);
-        Assert.Equal(2, failed.GroupMembers!.Count);
+        Assert.False(fileSystem.FileExists(@"C:\photos\selected\a.jpg"));
+        // Fully rolled back: the journal ends in a terminal Dismissed record (same manifest), not a retryable Failed item.
+        Assert.Empty(journal.ReadFailedOperations());
+        Assert.Equal(JournalState.Dismissed, result.Entry!.State);
+        Assert.Equal(result.GroupId, result.Entry.GroupId);
+        Assert.Equal(2, result.Entry.GroupMembers!.Count);
     }
 
     [Fact]

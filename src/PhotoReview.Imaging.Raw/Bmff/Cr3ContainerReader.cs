@@ -13,6 +13,7 @@ namespace PhotoReview.Imaging.Raw.Bmff;
 /// - Small THMB JPEG preview (~160x120).
 /// - Medium PRVW JPEG preview (~1620x1080).
 /// - Full-size JPEG preview from track 1 (stsz + stco/co64 chunks in mdat).
+/// Previews are returned PRVW first, then full-size track JPEGs, then THMB.
 /// </summary>
 public sealed class Cr3ContainerReader : IRawContainerReader
 {
@@ -29,6 +30,14 @@ public sealed class Cr3ContainerReader : IRawContainerReader
     [
         0xEA, 0xF4, 0x2B, 0x5E, 0x1C, 0x98, 0x4B, 0x88, 0xB9, 0xFB, 0xB7, 0xDC, 0x40, 0x6E, 0x4D, 0x16
     ];
+
+    // Canon preview box layouts (verified against real EOS R6 / EOS M50 files):
+    //   uuid(eaf42b5e...) payload: u32 0, u32 1 (8-byte prefix), then child PRVW box(es).
+    //   PRVW payload: u32 0, u16 1, u16 width, u16 height, u16 1, u32 jpegSize, JPEG (SOI) at +16.
+    //   THMB payload: u32 0, u16 width, u16 height, u32 jpegSize, u16 1, u16 0, JPEG (SOI) at +16.
+    private const int PreviewUuidPrefixBytes = 8;
+    private const int PreviewHeaderBytes = 16;
+    private const int SoiBytes = 2;
 
     public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension)
     {
@@ -57,12 +66,12 @@ public sealed class Cr3ContainerReader : IRawContainerReader
         int orientation = 1;
         int sensorWidth = 0;
         int sensorHeight = 0;
-        var previews = new List<EmbeddedPreview>();
+        var previews = new PreviewCollector();
         var exifBlocks = new List<ExifBlock>();
 
         // Top-level box scan
         long offset = 0;
-        while (offset + 8 <= source.Length)
+        while (offset <= source.Length - 8)
         {
             ct.ThrowIfCancellationRequested();
             if (!BmffBoxNavigator.TryReadBox(source, offset, out var box))
@@ -93,95 +102,107 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             sensorWidth,
             sensorHeight,
             orientation,
-            previews,
+            previews.ToOrderedList(),
             exifBlocks);
     }
 
-    private static void ParsePreviewUuidBox(IRawHeaderSource source, in BmffBoxNavigator.BmffBox uuidBox, List<EmbeddedPreview> previews)
+    /// <summary>
+    /// Previews grouped by origin. The final list is PRVW (medium) first, then full-size track JPEGs, then THMB
+    /// (tiny thumbnail), so consumers that fall back to the first entry get the most useful one.
+    /// </summary>
+    private sealed class PreviewCollector
     {
-        var children = BmffBoxNavigator.ReadChildBoxes(source, uuidBox);
+        public List<EmbeddedPreview> Prvw { get; } = [];
+        public List<EmbeddedPreview> Track { get; } = [];
+        public List<EmbeddedPreview> Thumb { get; } = [];
+
+        public List<EmbeddedPreview> ToOrderedList()
+        {
+            var ordered = new List<EmbeddedPreview>(Prvw.Count + Track.Count + Thumb.Count);
+            foreach (var p in Prvw.Concat(Track).Concat(Thumb))
+                ordered.Add(p with { Index = ordered.Count });
+            return ordered;
+        }
+    }
+
+    private static EmbeddedPreview NewJpeg(long offset, long length, int width, int height) =>
+        new(Index: 0, Offset: offset, Length: length, Kind: EmbeddedPreviewKind.Jpeg,
+            Width: width, Height: height, ColorSpace: PreviewColorSpace.Unknown);
+
+    /// <summary>Reads up to <paramref name="maxCount"/> bytes at <paramref name="offset"/>, clamped to the source; empty if out of range.</summary>
+    private static ReadOnlySpan<byte> ReadClamped(IRawHeaderSource source, long offset, long maxCount)
+    {
+        if (offset < 0 || offset >= source.Length || maxCount <= 0)
+            return ReadOnlySpan<byte>.Empty;
+
+        int count = (int)Math.Min(maxCount, source.Length - offset);
+        return source.Read(offset, count);
+    }
+
+    private static bool HasSoi(IRawHeaderSource source, long offset) =>
+        ReadClamped(source, offset, SoiBytes) is [0xFF, 0xD8];
+
+    /// <summary>
+    /// Reads the JPEG that follows a 16-byte Canon preview header (PRVW or THMB layout) if it is valid:
+    /// SOI present and the advertised size fits in the box and the file (an inconsistent size is clamped to the box).
+    /// </summary>
+    private static EmbeddedPreview? TryReadHeaderedJpeg(
+        IRawHeaderSource source, in BmffBoxNavigator.BmffBox box, int sizeFieldOffset, int widthOffset, int heightOffset)
+    {
+        if (box.PayloadSize < PreviewHeaderBytes + SoiBytes)
+            return null;
+
+        var header = source.Read(box.PayloadOffset, PreviewHeaderBytes);
+        int width = BinaryPrimitives.ReadUInt16BigEndian(header.Slice(widthOffset, 2));
+        int height = BinaryPrimitives.ReadUInt16BigEndian(header.Slice(heightOffset, 2));
+        uint declared = BinaryPrimitives.ReadUInt32BigEndian(header.Slice(sizeFieldOffset, 4));
+
+        long jpegOffset = box.PayloadOffset + PreviewHeaderBytes;
+        long available = box.PayloadSize - PreviewHeaderBytes;
+        long jpegLength = declared > 0 && declared <= available ? declared : available;
+
+        if (jpegLength < SoiBytes || jpegOffset > source.Length - jpegLength || !HasSoi(source, jpegOffset))
+            return null;
+
+        return NewJpeg(jpegOffset, jpegLength, width, height);
+    }
+
+    private static void ParsePreviewUuidBox(IRawHeaderSource source, in BmffBoxNavigator.BmffBox uuidBox, PreviewCollector previews)
+    {
+        // The Canon preview uuid has an 8-byte prefix before its children; tolerate producers that omit it.
+        var children = BmffBoxNavigator.ReadChildBoxes(source, uuidBox, PreviewUuidPrefixBytes);
+        if (children.Count == 0)
+            children = BmffBoxNavigator.ReadChildBoxes(source, uuidBox);
+
         foreach (var child in children)
         {
-            if (child.Type == "PRVW")
+            if (child.Type == "PRVW" &&
+                TryReadHeaderedJpeg(source, child, sizeFieldOffset: 12, widthOffset: 6, heightOffset: 8) is { } preview)
             {
-                // PRVW box payload: 4 bytes version/flags, 4 bytes width, 4 bytes height, then JPEG payload
-                if (child.PayloadSize > 14)
-                {
-                    var prvwHeader = source.Read(child.PayloadOffset, 14);
-                    int w = BinaryPrimitives.ReadUInt16BigEndian(prvwHeader.Slice(6, 2));
-                    int h = BinaryPrimitives.ReadUInt16BigEndian(prvwHeader.Slice(8, 2));
-
-                    long jpegOffset = child.PayloadOffset + 14;
-                    long jpegLength = child.PayloadSize - 14;
-
-                    previews.Add(new EmbeddedPreview(
-                        Index: previews.Count,
-                        Offset: jpegOffset,
-                        Length: jpegLength,
-                        Kind: EmbeddedPreviewKind.Jpeg,
-                        Width: w,
-                        Height: h,
-                        ColorSpace: PreviewColorSpace.Unknown));
-                }
+                previews.Prvw.Add(preview);
             }
         }
     }
 
-    private static void AddPrvwBox(IRawHeaderSource source, in BmffBoxNavigator.BmffBox prvwBox, List<EmbeddedPreview> previews)
+    private static void AddPrvwBox(IRawHeaderSource source, in BmffBoxNavigator.BmffBox prvwBox, PreviewCollector previews)
     {
-        if (prvwBox.PayloadSize < 2) return;
+        if (prvwBox.PayloadSize < SoiBytes) return;
 
-        var probe = source.Read(prvwBox.PayloadOffset, 2);
-        if (probe.Length == 2 && probe[0] == 0xFF && probe[1] == 0xD8)
+        if (HasSoi(source, prvwBox.PayloadOffset))
         {
             // Direct JPEG payload inside PRVW (e.g. synthetic test)
-            previews.Add(new EmbeddedPreview(
-                Index: previews.Count,
-                Offset: prvwBox.PayloadOffset,
-                Length: prvwBox.PayloadSize,
-                Kind: EmbeddedPreviewKind.Jpeg,
-                Width: 0,
-                Height: 0,
-                ColorSpace: PreviewColorSpace.Unknown));
+            previews.Prvw.Add(NewJpeg(prvwBox.PayloadOffset, prvwBox.PayloadSize, 0, 0));
             return;
         }
 
-        if (prvwBox.PayloadSize > 14)
-        {
-            var prvwHeader = source.Read(prvwBox.PayloadOffset, 14);
-            int w = BinaryPrimitives.ReadUInt16BigEndian(prvwHeader.Slice(6, 2));
-            int h = BinaryPrimitives.ReadUInt16BigEndian(prvwHeader.Slice(8, 2));
-
-            long jpegOffset = prvwBox.PayloadOffset + 14;
-            long jpegLength = prvwBox.PayloadSize - 14;
-
-            previews.Add(new EmbeddedPreview(
-                Index: previews.Count,
-                Offset: jpegOffset,
-                Length: jpegLength,
-                Kind: EmbeddedPreviewKind.Jpeg,
-                Width: w,
-                Height: h,
-                ColorSpace: PreviewColorSpace.Unknown));
-        }
-        else if (prvwBox.PayloadSize > 2)
-        {
-            // Raw JPEG payload directly inside PRVW
-            previews.Add(new EmbeddedPreview(
-                Index: previews.Count,
-                Offset: prvwBox.PayloadOffset,
-                Length: prvwBox.PayloadSize,
-                Kind: EmbeddedPreviewKind.Jpeg,
-                Width: 0,
-                Height: 0,
-                ColorSpace: PreviewColorSpace.Unknown));
-        }
+        if (TryReadHeaderedJpeg(source, prvwBox, sizeFieldOffset: 12, widthOffset: 6, heightOffset: 8) is { } preview)
+            previews.Prvw.Add(preview);
     }
 
     private static void ParseMoovBox(
         IRawHeaderSource source,
         in BmffBoxNavigator.BmffBox moovBox,
-        List<EmbeddedPreview> previews,
+        PreviewCollector previews,
         List<ExifBlock> exifBlocks,
         ref int orientation,
         ref int sensorWidth,
@@ -206,7 +227,7 @@ public sealed class Cr3ContainerReader : IRawContainerReader
     private static void ParseCanonMoovUuid(
         IRawHeaderSource source,
         in BmffBoxNavigator.BmffBox uuidBox,
-        List<EmbeddedPreview> previews,
+        PreviewCollector previews,
         List<ExifBlock> exifBlocks,
         ref int orientation,
         ref int sensorWidth,
@@ -222,7 +243,8 @@ public sealed class Cr3ContainerReader : IRawContainerReader
                 if (child.PayloadSize >= 16)
                 {
                     var tiffSpan = source.Read(child.PayloadOffset, (int)Math.Min(child.PayloadSize, 4096));
-                    if (TiffStructure.TryReadHeader(tiffSpan, out bool little, out _, out uint ifd0))
+                    if (TiffStructure.TryReadHeader(tiffSpan, out bool little, out _, out uint ifd0)
+                        && ifd0 >= 8 && ifd0 <= child.PayloadSize - 2) // IFD0 must lie inside the CMT1 payload
                     {
                         var entries = TiffHeaderNavigator.ReadIfdEntries(source, child.PayloadOffset + ifd0, little, out _);
                         foreach (var e in entries)
@@ -233,11 +255,11 @@ public sealed class Cr3ContainerReader : IRawContainerReader
                             }
                             else if (e.Tag == 0x0100 && TiffHeaderNavigator.ReadTagUnsigned(source, e, little) is { } w)
                             {
-                                sensorWidth = (int)w;
+                                if (w is > 0 and <= int.MaxValue) sensorWidth = (int)w;
                             }
                             else if (e.Tag == 0x0101 && TiffHeaderNavigator.ReadTagUnsigned(source, e, little) is { } h)
                             {
-                                sensorHeight = (int)h;
+                                if (h is > 0 and <= int.MaxValue) sensorHeight = (int)h;
                             }
                         }
                     }
@@ -247,37 +269,10 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             {
                 exifBlocks.Add(new ExifBlock(child.PayloadOffset, child.PayloadSize, IsTiffHeader: true));
             }
-            else if (child.Type == "THMB")
+            else if (child.Type == "THMB" &&
+                TryReadHeaderedJpeg(source, child, sizeFieldOffset: 8, widthOffset: 4, heightOffset: 6) is { } thumb)
             {
-                // THMB box payload has a small header before JPEG
-                if (child.PayloadSize > 12)
-                {
-                    var thmbSpan = source.Read(child.PayloadOffset, 32);
-                    // Locate JPEG SOI (FF D8) in first 32 bytes
-                    int soiIndex = -1;
-                    for (int i = 0; i < thmbSpan.Length - 1; i++)
-                    {
-                        if (thmbSpan[i] == 0xFF && thmbSpan[i + 1] == 0xD8)
-                        {
-                            soiIndex = i;
-                            break;
-                        }
-                    }
-
-                    if (soiIndex >= 0)
-                    {
-                        long jpegOffset = child.PayloadOffset + soiIndex;
-                        long jpegLength = child.PayloadSize - soiIndex;
-                        previews.Add(new EmbeddedPreview(
-                            Index: previews.Count,
-                            Offset: jpegOffset,
-                            Length: jpegLength,
-                            Kind: EmbeddedPreviewKind.Jpeg,
-                            Width: 160,
-                            Height: 120,
-                            ColorSpace: PreviewColorSpace.Unknown));
-                    }
-                }
+                previews.Thumb.Add(thumb);
             }
         }
     }
@@ -285,7 +280,7 @@ public sealed class Cr3ContainerReader : IRawContainerReader
     private static void ParseTrackForJpegPreview(
         IRawHeaderSource source,
         in BmffBoxNavigator.BmffBox trakBox,
-        List<EmbeddedPreview> previews)
+        PreviewCollector previews)
     {
         // Walk trak -> mdia -> minf -> stbl
         var mdia = BmffBoxNavigator.ReadChildBoxes(source, trakBox).FirstOrDefault(b => b.Type == "mdia");
@@ -338,25 +333,16 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             if (count >= 1 && co64.PayloadSize >= 16)
             {
                 var offsetData = source.Read(co64.PayloadOffset + 8, 8);
-                chunkOffset = (long)BinaryPrimitives.ReadUInt64BigEndian(offsetData);
+                ulong rawOffset = BinaryPrimitives.ReadUInt64BigEndian(offsetData);
+                chunkOffset = rawOffset <= long.MaxValue ? (long)rawOffset : 0;
             }
         }
 
-        if (chunkOffset > 0 && sampleSize > 0 && chunkOffset + sampleSize <= source.Length)
+        // sampleSize <= Length - chunkOffset is the overflow-free form of chunkOffset + sampleSize <= Length.
+        if (chunkOffset > 0 && sampleSize > 0 && chunkOffset < source.Length && sampleSize <= source.Length - chunkOffset
+            && HasSoi(source, chunkOffset))
         {
-            // Verify JPEG SOI
-            var soiCheck = source.Read(chunkOffset, 2);
-            if (soiCheck.Length == 2 && soiCheck[0] == 0xFF && soiCheck[1] == 0xD8)
-            {
-                previews.Add(new EmbeddedPreview(
-                    Index: previews.Count,
-                    Offset: chunkOffset,
-                    Length: sampleSize,
-                    Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: 0,
-                    Height: 0,
-                    ColorSpace: PreviewColorSpace.Unknown));
-            }
+            previews.Track.Add(NewJpeg(chunkOffset, sampleSize, 0, 0));
         }
     }
 }

@@ -46,8 +46,14 @@ public sealed class SourceRawHeaderSource : IRawHeaderSource, IDisposable
         if (offset < 0 || count < 0)
             throw new ArgumentOutOfRangeException(nameof(offset), "Offset and count must be non-negative.");
 
-        if (offset + count > _length)
+        // offset > Length - count is the overflow-free form of offset + count > Length.
+        if (offset > _length - count)
             throw new InvalidDataException($"Attempted to read past end of stream (offset: {offset}, count: {count}, length: {_length}).");
+
+        // Reject before allocating the multi-block buffer: no read may exceed the total header budget.
+        if (count > RawContainerLimits.MaxHeaderBytes)
+            throw new InvalidDataException(
+                $"RAW header read of {count} bytes exceeds hard limit of {RawContainerLimits.MaxHeaderBytes} bytes.");
 
         if (count == 0)
             return ReadOnlySpan<byte>.Empty;
@@ -96,7 +102,7 @@ public sealed class SourceRawHeaderSource : IRawHeaderSource, IDisposable
         long blockStartOffset = blockIndex * BlockSize;
         int bytesToRead = (int)Math.Min(BlockSize, _length - blockStartOffset);
 
-        if (_totalBytesRead + bytesToRead > RawContainerLimits.MaxHeaderBytes)
+        if (bytesToRead > RawContainerLimits.MaxHeaderBytes - _totalBytesRead)
         {
             throw new InvalidDataException(
                 $"RAW header read exceeded hard limit of {RawContainerLimits.MaxHeaderBytes} bytes.");

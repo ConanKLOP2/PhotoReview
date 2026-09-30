@@ -5,8 +5,9 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 
 /// <summary>
 /// Reader for Adobe DNG format.
-/// Previews: IFD0 or SubIFDs with NewSubFileType=1 (0x00FE) and Compression=7 (JPEG) or 6.
-/// Sensor size: Raw IFD (NewSubFileType=0) DefaultCropSize (0xC620) or ImageWidth/Length.
+/// Previews: IFD0 or SubIFDs whose JPEG frame is lossy (SOF0/1/2). Compression=7 alone is not enough because
+/// lossless JPEG (SOF3) sensor data uses it too.
+/// Sensor size: largest IFD that is neither reduced-resolution nor a preview; DefaultCropSize (0xC620) or ImageWidth/Length.
 /// </summary>
 public sealed class DngContainerReader : IRawContainerReader
 {
@@ -69,6 +70,7 @@ public sealed class DngContainerReader : IRawContainerReader
         }
 
         // Step 2: Parse each IFD
+        int primaryArea = 0;
         foreach (var ifdOffset in allIfdOffsets)
         {
             ct.ThrowIfCancellationRequested();
@@ -80,29 +82,27 @@ public sealed class DngContainerReader : IRawContainerReader
             int height = 0;
             long? jpegOffset = null;
             long? jpegLength = null;
-            long? stripOffset = null;
-            long? stripByteCount = null;
 
             foreach (var entry in entries)
             {
                 switch (entry.Tag)
                 {
-                    case 0x00FE: // NewSubFileType: 0 = primary image, 1 = preview/thumbnail
+                    case 0x00FE: // NewSubFileType: bit 0 = reduced-resolution version of another image
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } sft)
                             subFileType = (uint)sft;
                         break;
 
                     case 0x0100: // ImageWidth
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                            width = (int)w;
+                            width = (int)Math.Min(w, int.MaxValue);
                         break;
 
                     case 0x0101: // ImageLength
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                            height = (int)h;
+                            height = (int)Math.Min(h, int.MaxValue);
                         break;
 
-                    case 0x0103: // Compression: 1 = uncompressed, 6 = JPEG, 7 = JPEG (lossless/baseline)
+                    case 0x0103: // Compression: 1 = uncompressed, 6/7 = JPEG (7 is also lossless JPEG raw data)
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } comp)
                             compression = (ushort)comp;
                         break;
@@ -115,14 +115,6 @@ public sealed class DngContainerReader : IRawContainerReader
                         }
                         break;
 
-                    case 0x0111: // StripOffsets
-                        stripOffset = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
-                    case 0x0117: // StripByteCounts
-                        stripByteCount = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
                     case 0x0201: // JPEGInterchangeFormat
                         jpegOffset = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
                         break;
@@ -130,41 +122,51 @@ public sealed class DngContainerReader : IRawContainerReader
                     case 0x0202: // JPEGInterchangeFormatLength
                         jpegLength = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
                         break;
-
-                    case 0xC620: // DefaultCropSize (2 rationals: width, height)
-                        if (subFileType == 0 && entry.Count >= 2)
-                        {
-                            var cropSizes = TiffHeaderNavigator.ReadTagUnsignedArray(source, entry, littleEndian, 2);
-                            if (cropSizes.Count >= 2 && cropSizes[0] > 0 && cropSizes[1] > 0)
-                            {
-                                sensorWidth = (int)cropSizes[0];
-                                sensorHeight = (int)cropSizes[1];
-                            }
-                        }
-                        break;
                 }
             }
 
-            if (subFileType == 0 && sensorWidth == 0 && width > 0 && height > 0)
+            bool isPreview = false;
+            if (jpegOffset is { } jo && jpegLength is { } jl && TiffHeaderNavigator.IsRangeInFile(jo, jl, source.Length))
             {
-                sensorWidth = width;
-                sensorHeight = height;
+                previews.Add(new EmbeddedPreview(previews.Count, jo, jl, EmbeddedPreviewKind.Jpeg, width, height, PreviewColorSpace.Unknown));
+                isPreview = true;
             }
-
-            // Check if this IFD contains a JPEG preview
-            long? finalOffset = jpegOffset ?? ((compression is 6 or 7) ? stripOffset : null);
-            long? finalLength = jpegLength ?? ((compression is 6 or 7) ? stripByteCount : null);
-
-            if (finalOffset is > 0 && finalLength is > 0 && finalOffset + finalLength <= source.Length)
+            else if (compression is 6 or 7 &&
+                     TiffHeaderNavigator.TryReadSingleStrip(source, entries, littleEndian, out long stripOffset, out long stripLength) &&
+                     JpegMarkerProbe.TryReadLossyFrame(source, stripOffset, stripLength, out int jpegWidth, out int jpegHeight))
             {
+                // Compression 7 is shared by real previews and lossless-JPEG (SOF3) sensor data: only a lossy
+                // SOF0/1/2 frame is a preview, whatever NewSubFileType says.
                 previews.Add(new EmbeddedPreview(
                     Index: previews.Count,
-                    Offset: finalOffset.Value,
-                    Length: finalLength.Value,
+                    Offset: stripOffset,
+                    Length: stripLength,
                     Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: width,
-                    Height: height,
+                    Width: width > 0 ? width : jpegWidth,
+                    Height: height > 0 ? height : jpegHeight,
                     ColorSpace: PreviewColorSpace.Unknown));
+                isPreview = true;
+            }
+
+            // The full-resolution raw image is the IFD that is neither reduced-resolution nor a JPEG preview.
+            bool isReduced = (subFileType & 1) != 0;
+            if (!isPreview && !isReduced)
+            {
+                int candidateWidth = width;
+                int candidateHeight = height;
+                if (TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out int cropWidth, out int cropHeight))
+                {
+                    candidateWidth = cropWidth;
+                    candidateHeight = cropHeight;
+                }
+
+                int area = (int)Math.Min((long)candidateWidth * candidateHeight, int.MaxValue);
+                if (candidateWidth > 0 && candidateHeight > 0 && area > primaryArea)
+                {
+                    primaryArea = area;
+                    sensorWidth = candidateWidth;
+                    sensorHeight = candidateHeight;
+                }
             }
         }
 

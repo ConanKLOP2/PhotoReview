@@ -5,6 +5,19 @@ using PhotoReview.Core.Localization;
 
 namespace PhotoReview.Imaging;
 
+/// <summary>Named values of <see cref="ImageCacheKey.SourceKind"/> (kept a <see cref="byte"/> on the key for compatibility).</summary>
+public static class ImageSourceKind
+{
+    /// <summary>An ordinary image file.</summary>
+    public const byte Standard = 0;
+
+    /// <summary>A camera RAW container decoded through its embedded preview.</summary>
+    public const byte RawPreview = 1;
+
+    /// <summary>A camera RAW container decoded at full resolution (WIC RAW codec); never RAM- or disk-cached.</summary>
+    public const byte RawFullDecode = 2;
+}
+
 /// <summary>Identity of a decoded bitmap, including its source version and decode quality.</summary>
 // Constructor is private so Create(...) is the only way to build a valid instance;
 // a public one would let callers bypass the full-path/uppercase normalization below.

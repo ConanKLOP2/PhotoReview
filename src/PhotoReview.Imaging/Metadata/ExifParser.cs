@@ -15,6 +15,7 @@ public static class ExifParser
     internal const ushort TagMake = 0x010F;
     internal const ushort TagModel = 0x0110;
     internal const ushort TagDateTime = 0x0132;
+    internal const ushort TagOrientation = 0x0112;
     internal const ushort TagExifIfd = 0x8769;
     internal const ushort TagExposureTime = 0x829A;
     internal const ushort TagFNumber = 0x829D;
@@ -53,6 +54,41 @@ public static class ExifParser
             // Defensive only: the bounds checks below should make this unreachable. A metadata bug must never fail a decode.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads the EXIF Orientation (tag 0x0112, IFD0) of a JPEG's first Exif APP1 segment. Null for a non-JPEG, no/corrupt
+    /// EXIF, or an orientation outside 1 to 8; never throws.
+    /// </summary>
+    public static int? TryReadOrientationFromJpeg(ReadOnlySpan<byte> jpeg) => TryReadOrientation(FindExifTiffBlock(jpeg));
+
+    /// <summary>
+    /// Reads the Orientation (tag 0x0112) from IFD0 of an Exif TIFF block ("II*\0" / "MM\0*" header). Null when the block is
+    /// empty/corrupt, has no Orientation, or the value is outside 1 to 8; never throws.
+    /// </summary>
+    public static int? TryReadOrientation(ReadOnlySpan<byte> tiff)
+    {
+        if (tiff.Length < 8) return null;
+        bool little;
+        if (tiff[0] == (byte)'I' && tiff[1] == (byte)'I') little = true;
+        else if (tiff[0] == (byte)'M' && tiff[1] == (byte)'M') little = false;
+        else return null;
+        if (TiffStructure.ReadU16(tiff, 2, little) != 42) return null;
+
+        var ifd0 = TiffStructure.ReadU32(tiff, 4, little);
+        if (ifd0 < 8 || ifd0 > (uint)tiff.Length - 2) return null;
+        var start = (int)ifd0;
+        int count = Math.Min(Math.Min((int)TiffStructure.ReadU16(tiff, start, little), MaxIfdEntries), (tiff.Length - start - 2) / 12);
+        for (var i = 0; i < count; i++)
+        {
+            var entry = start + 2 + (i * 12);
+            if (TiffStructure.ReadU16(tiff, entry, little) != TagOrientation) continue;
+            var type = TiffStructure.ReadU16(tiff, entry + 2, little);
+            var n = TiffStructure.ReadU32(tiff, entry + 4, little);
+            if (!TiffStructure.TryGetValueSpan(tiff, entry, type, n, little, out var value)) return null;
+            return TiffStructure.ReadUnsigned(value, type, little) is long orientation and >= 1 and <= 8 ? (int)orientation : null;
+        }
+        return null;
     }
 
     /// <summary>The TIFF structure inside the first APP1 Exif segment, or empty.</summary>

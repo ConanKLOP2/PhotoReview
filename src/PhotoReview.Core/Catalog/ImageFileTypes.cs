@@ -9,6 +9,16 @@ public static class ImageFileTypes
         ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff"
     };
 
+    /// <summary>
+    /// The only extensions that form the "JPEG" side of a same-name JPEG+RAW capture group. An edited A.tif / A.png
+    /// next to the original A.dng is a different file, not the camera JPEG of that shot, so it must never be grouped
+    /// (a group action on it would also recycle/move the RAW).
+    /// </summary>
+    public static IReadOnlySet<string> JpegExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg"
+    };
+
     public static IReadOnlySet<string> RawExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"

@@ -4,7 +4,8 @@ using PhotoReview.Imaging.Metadata;
 namespace PhotoReview.Imaging.Raw.Tiff;
 
 /// <summary>
-/// Reader for Sony ARW format (TIFF container with IFD0 JPEG preview in 0x0201/0x0202 and IFD1 thumbnail).
+/// Reader for Sony ARW format (TIFF container with IFD0 JPEG preview in 0x0201/0x0202 and IFD1 thumbnail;
+/// SubIFD JPEGs and the MakerNote PreviewImage (0x2001) are picked up too).
 /// </summary>
 public sealed class ArwContainerReader : IRawContainerReader
 {
@@ -32,108 +33,82 @@ public sealed class ArwContainerReader : IRawContainerReader
             throw new InvalidDataException("Invalid ARW TIFF header.");
 
         int orientation = 1;
-        int sensorWidth = 0;
-        int sensorHeight = 0;
         var previews = new List<EmbeddedPreview>();
         var exifBlocks = new List<ExifBlock>();
 
-        var subIfdOffsets = new List<long>();
+        var pendingIfds = new Queue<long>();
+        pendingIfds.Enqueue(ifd0Offset);
         var visited = new HashSet<long>();
-        long currentIfdOffset = ifd0Offset;
-        int ifdIndex = 0;
+        long? makerNoteOffset = null;
+        int ifdCount = 0;
+        long largestArea = 0;
+        int sensorWidth = 0;
+        int sensorHeight = 0;
+        int cropWidth = 0;
+        int cropHeight = 0;
+        int exifPixelWidth = 0;
+        int exifPixelHeight = 0;
 
-        while (currentIfdOffset > 0 && ifdIndex < RawContainerLimits.MaxIfdCount)
+        // IFD0 chain (IFD0 = large preview, IFD1 = thumbnail) then SubIFDs (raw image, sometimes a JPEG).
+        while (pendingIfds.Count > 0 && ifdCount < RawContainerLimits.MaxIfdCount)
         {
             ct.ThrowIfCancellationRequested();
-            if (!visited.Add(currentIfdOffset)) break;
+            long ifdOffset = pendingIfds.Dequeue();
+            if (ifdOffset <= 0 || !visited.Add(ifdOffset)) continue;
 
-            var entries = TiffHeaderNavigator.ReadIfdEntries(source, currentIfdOffset, littleEndian, out uint nextIfdOffset);
-            long? jpegOffset = null;
-            long? jpegLength = null;
-            int ifdWidth = 0;
-            int ifdHeight = 0;
+            var entries = TiffHeaderNavigator.ReadIfdEntries(source, ifdOffset, littleEndian, out uint nextIfdOffset);
+            bool isIfd0 = ifdCount == 0;
+            ifdCount++;
 
-            foreach (var entry in entries)
+            TiffHeaderNavigator.ReadImageSize(source, entries, littleEndian, out int width, out int height);
+
+            if (isIfd0 && TiffHeaderNavigator.ReadTagValue(source, entries, 0x0112, littleEndian) is >= 1 and <= 8 and var o)
+                orientation = (int)o;
+
+            if (TiffHeaderNavigator.TryGetEntry(entries, 0x014A, out var subIfdEntry))
             {
-                switch (entry.Tag)
+                foreach (long sub in TiffHeaderNavigator.ReadTagUnsignedArray(source, subIfdEntry, littleEndian))
+                    pendingIfds.Enqueue(sub);
+            }
+
+            if (TiffHeaderNavigator.TryGetEntry(entries, 0x8769, out var exifEntry) &&
+                TiffHeaderNavigator.ReadTagUnsigned(source, exifEntry, littleEndian) is { } exifOffset && exifOffset > 0)
+            {
+                foreach (var exifTag in TiffHeaderNavigator.ReadIfdEntries(source, exifOffset, littleEndian, out _))
                 {
-                    case 0x0112: // Orientation
-                        if (ifdIndex == 0)
-                        {
-                            var val = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                            if (val is >= 1 and <= 8) orientation = (int)val;
-                        }
-                        break;
-
-                    case 0x0100: // ImageWidth
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                            ifdWidth = (int)w;
-                        break;
-
-                    case 0x0101: // ImageLength
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                            ifdHeight = (int)h;
-                        break;
-
-                    case 0x014A: // SubIFDs
-                        var subs = TiffHeaderNavigator.ReadTagUnsignedArray(source, entry, littleEndian);
-                        subIfdOffsets.AddRange(subs);
-                        break;
-
-                    case 0x0201: // JPEGInterchangeFormat
-                        jpegOffset = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
-
-                    case 0x0202: // JPEGInterchangeFormatLength
-                        jpegLength = TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
-                        break;
+                    if (exifTag.Tag == 0x927C && exifTag.Count > 4)
+                        makerNoteOffset ??= exifTag.ValueOrOffset;
                 }
+
+                if (exifPixelWidth == 0)
+                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out exifPixelWidth, out exifPixelHeight);
             }
 
-            if (ifdIndex == 0 && ifdWidth > 0 && ifdHeight > 0)
+            bool isPreview = TiffHeaderNavigator.TryReadJpegInterchange(source, entries, littleEndian, out long jpegOffset, out long jpegLength);
+            if (isPreview)
+                AddPreview(previews, jpegOffset, jpegLength, width, height);
+
+            // The sensor size is the largest IFD that is not a JPEG preview (Sony raw SubIFD).
+            long area = (long)width * height;
+            if (!isPreview && area > largestArea)
             {
-                sensorWidth = ifdWidth;
-                sensorHeight = ifdHeight;
+                largestArea = area;
+                sensorWidth = width;
+                sensorHeight = height;
+                TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out cropWidth, out cropHeight);
             }
 
-            if (jpegOffset is > 0 && jpegLength is > 0 && jpegOffset + jpegLength <= source.Length)
-            {
-                previews.Add(new EmbeddedPreview(
-                    Index: previews.Count,
-                    Offset: jpegOffset.Value,
-                    Length: jpegLength.Value,
-                    Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: ifdWidth,
-                    Height: ifdHeight,
-                    ColorSpace: PreviewColorSpace.Unknown));
-            }
-
-            currentIfdOffset = nextIfdOffset;
-            ifdIndex++;
+            if (nextIfdOffset > 0)
+                pendingIfds.Enqueue(nextIfdOffset);
         }
 
-        // SubIFDs check (Sony raw/SR2 IFD might have actual sensor dimensions)
-        foreach (var subOffset in subIfdOffsets)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (subOffset <= 0 || !visited.Add(subOffset)) continue;
+        // ImageWidth/ImageLength of the raw IFD include the masked margins (A7M3: 6048x4024); the active area is
+        // DefaultCropSize, else the Exif pixel size, so ARW agrees with CR2/DNG/RW2 on the displayed original size.
+        (sensorWidth, sensorHeight) = TiffHeaderNavigator.ChooseActiveSensorSize(
+            sensorWidth, sensorHeight, cropWidth, cropHeight, exifPixelWidth, exifPixelHeight);
 
-            var entries = TiffHeaderNavigator.ReadIfdEntries(source, subOffset, littleEndian, out _);
-            int subWidth = 0, subHeight = 0;
-            foreach (var entry in entries)
-            {
-                if (entry.Tag == 0x0100 && TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                    subWidth = (int)w;
-                else if (entry.Tag == 0x0101 && TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                    subHeight = (int)h;
-            }
-
-            if (subWidth > sensorWidth)
-            {
-                sensorWidth = subWidth;
-                sensorHeight = subHeight;
-            }
-        }
+        if (makerNoteOffset is > 0)
+            ParseSonyMakerNotePreview(source, makerNoteOffset.Value, littleEndian, previews);
 
         exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
 
@@ -144,5 +119,44 @@ public sealed class ArwContainerReader : IRawContainerReader
             orientation,
             previews,
             exifBlocks);
+    }
+
+    private static void AddPreview(List<EmbeddedPreview> previews, long offset, long length, int width, int height)
+    {
+        if (previews.Any(p => p.Offset == offset)) return;
+        previews.Add(new EmbeddedPreview(
+            Index: previews.Count,
+            Offset: offset,
+            Length: length,
+            Kind: EmbeddedPreviewKind.Jpeg,
+            Width: width,
+            Height: height,
+            ColorSpace: PreviewColorSpace.Unknown));
+    }
+
+    /// <summary>
+    /// Sony MakerNote tag 0x2001 (PreviewImage): UNDEFINED bytes, Count = length, offset relative to the TIFF header.
+    /// Some bodies prefix the note with "SONY DSC \0\0\0" (IFD at +12); offsets stay file-absolute either way.
+    /// </summary>
+    private static void ParseSonyMakerNotePreview(IRawHeaderSource source, long noteOffset, bool littleEndian, List<EmbeddedPreview> previews)
+    {
+        if (noteOffset < 8 || noteOffset > source.Length - 14) return;
+
+        long ifdStart = noteOffset;
+        if (source.Read(noteOffset, 9).SequenceEqual("SONY DSC "u8))
+            ifdStart = noteOffset + 12;
+
+        var entries = TiffHeaderNavigator.ReadIfdEntries(source, ifdStart, littleEndian, out _);
+        if (!TiffHeaderNavigator.TryGetEntry(entries, 0x2001, out var previewEntry) || previewEntry.Count <= 4)
+            return;
+
+        long start = previewEntry.ValueOrOffset;
+        long length = previewEntry.Count;
+        if (!TiffHeaderNavigator.IsRangeInFile(start, length, source.Length) ||
+            length < 4 ||
+            source.Read(start, 2) is not [0xFF, 0xD8])
+            return;
+
+        AddPreview(previews, start, length, 0, 0);
     }
 }

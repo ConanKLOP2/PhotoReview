@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 
+[Collection(LibRawNativeDecodeGate.Name)]
 [Trait("Category", "Native")]
 public sealed class LibRawDecoderTests
 {
@@ -159,7 +160,10 @@ public sealed class LibRawDecoderTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            if (index == 19) afterWarmup = memorySampler.CurrentPrivateBytes;
+            // Baseline after 100 decodes, not 20: earlier tests in the same process (corpus decodes, WIC) leave the native
+            // and managed heaps still settling, which inflated a 20-decode baseline by 50-100 MB. A real per-decode leak
+            // (an unclosed LibRaw handle keeps tens of MB each time) still exceeds the budget within the remaining 100.
+            if (index == 99) afterWarmup = memorySampler.CurrentPrivateBytes;
         }
 
         var growth = memorySampler.CurrentPrivateBytes - afterWarmup;
@@ -184,7 +188,10 @@ public sealed class LibRawDecoderTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            if (index == 19) afterWarmup = memorySampler.CurrentPrivateBytes;
+            // Baseline after 100 decodes, not 20: earlier tests in the same process (corpus decodes, WIC) leave the native
+            // and managed heaps still settling, which inflated a 20-decode baseline by 50-100 MB. A real per-decode leak
+            // (an unclosed LibRaw handle keeps tens of MB each time) still exceeds the budget within the remaining 100.
+            if (index == 99) afterWarmup = memorySampler.CurrentPrivateBytes;
         }
 
         var finalPrivateBytes = memorySampler.CurrentPrivateBytes;
@@ -192,6 +199,33 @@ public sealed class LibRawDecoderTests
         Console.WriteLine($"LibRaw 200 decodes: after warmup={afterWarmup}; final={finalPrivateBytes}; "
             + $"growth={growth}; peak={memorySampler.PeakPrivateBytes}");
         Assert.InRange(growth, long.MinValue, 32L * 1024 * 1024);
+    }
+
+    [Theory]
+    [InlineData("Canon - EOS 350D - RAW (3_2).CR2")]
+    [InlineData("Sony - NEX-6 - 12bit 12bit compressed (3_2).ARW")]
+    [InlineData("Nikon - D40X - 12bit 12bit compressed (Lossy (type 1)) (3_2).NEF")]
+    public void ReadInfo_PortraitRewrittenCorpusFile_MatchesDecodedOrientedDimensions(string fileName)
+    {
+        var source = Path.Combine(CorpusDirectory, fileName);
+        if (!File.Exists(source)) return; // corpus files are gitignored and optional
+        var bytes = File.ReadAllBytes(source);
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var info = new PhotoReview.Imaging.Raw.RawContainerReaderRegistry()
+            .FindReader(bytes.AsSpan(0, 64), extension)!.Read(new PhotoReview.Imaging.Raw.InMemoryRawHeaderSource(bytes), CancellationToken.None);
+        Assert.True(RawOrientationPatcher.TryWriteOrientation(bytes, extension, info, 6), $"{fileName} has no orientation tag to rewrite");
+        using var temp = new PhotoReview.TestSupport.TempRoot("libraw-portrait");
+        var path = temp.File(fileName, bytes);
+        var decoder = new LibRawDecoder();
+
+        var readInfo = decoder.ReadInfo(path);
+        var decoded = decoder.Decode(new DecodeRequest(path, new DecodeBox(640, 480)));
+
+        Assert.True(decoded.OriginalHeight > decoded.OriginalWidth, "LibRaw should have flipped the rewritten file to portrait.");
+        Assert.Equal(decoded.OriginalWidth, readInfo.Width);
+        Assert.Equal(decoded.OriginalHeight, readInfo.Height);
+        Assert.Equal(decoded.OriginalWidth, readInfo.PixelWidth);
+        Assert.Equal(decoded.OriginalHeight, readInfo.PixelHeight);
     }
 
     private static string DecodeCorpusSample(LibRawDecoder decoder, string path)

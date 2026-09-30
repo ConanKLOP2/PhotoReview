@@ -85,6 +85,117 @@ public sealed class WicRawFullDecoderTests(ITestOutputHelper output)
         Assert.Same(wic.Image, decoder.Decode(new DecodeRequest("sample.dng", DecodeBox.Unbounded)));
     }
 
+    [Theory]
+    [InlineData(".3FR,.ARW,.CR2,.CR3,.DNG,.NEF,.RAF,.RW2", RawFormat.Cr3, true)]
+    [InlineData(".3FR,.ARW,.CR2,.CR3,.DNG,.NEF,.RAF,.RW2", RawFormat.Rw2, true)]
+    [InlineData(".arw;.cr2", RawFormat.Arw, true)]
+    [InlineData(".ARW .CR2", RawFormat.Cr2, true)]
+    [InlineData(".ARW,.CR2", RawFormat.Nef, false)]
+    [InlineData(".jpg,.jpeg", RawFormat.Dng, false)]
+    [InlineData("", RawFormat.Dng, false)]
+    [InlineData(null, RawFormat.Dng, false)]
+    public void IsCodecAvailable_UsesTheCodecsFileExtensionsCaseInsensitively(string? fileExtensions, RawFormat format, bool expected)
+    {
+        var registry = new FakeCodecRegistry(new WicCodecRegistration("Some Decoder", fileExtensions));
+        var decoder = new WicRawFullDecoder(new MemorySourceReader([]), new FakeDecoder(new FakeImage(1, 1)), codecRegistry: registry);
+
+        Assert.Equal(expected, decoder.IsCodecAvailable(format));
+    }
+
+    [Fact]
+    public void IsCodecAvailable_DecoderNamedRawWithoutExtensions_IsNotAssumedToSupportTheFormat()
+    {
+        var registry = new FakeCodecRegistry(new WicCodecRegistration("Microsoft Raw Image Decoder", null));
+        var decoder = new WicRawFullDecoder(new MemorySourceReader([]), new FakeDecoder(new FakeImage(1, 1)), codecRegistry: registry);
+
+        Assert.False(decoder.IsCodecAvailable(RawFormat.Cr2));
+    }
+
+    [Fact]
+    public void IsCodecAvailable_ChecksEveryRegisteredDecoder()
+    {
+        var registry = new FakeCodecRegistry(
+            new WicCodecRegistration("JPEG", ".jpg,.jpeg"),
+            new WicCodecRegistration("Raw", ".DNG,.RAF"));
+        var decoder = new WicRawFullDecoder(new MemorySourceReader([]), new FakeDecoder(new FakeImage(1, 1)), codecRegistry: registry);
+
+        Assert.True(decoder.IsCodecAvailable(RawFormat.Raf));
+        Assert.Equal(1, registry.Reads); // cached per format, one registry walk
+    }
+
+    [Fact]
+    public void Decode_DoesNotForwardPreReadBytesToWic()
+    {
+        var bytes = SyntheticRawBuilder.BuildTiff(littleEndian: true,
+            jpegBytes: SyntheticRawBuilder.CreateMinimalJpeg(320, 240), orientation: 1);
+        var wic = new FakeDecoder(new FakeImage(640, 480));
+        var decoder = new WicRawFullDecoder(new MemorySourceReader(bytes), wic, _ => true);
+
+        decoder.Decode(new DecodeRequest("sample.dng", DecodeBox.Unbounded, bytes: new byte[] { 1, 2, 3 }));
+
+        Assert.NotNull(wic.LastRequest);
+        Assert.Null(wic.LastRequest!.Value.Bytes);
+    }
+
+    [Theory]
+    [InlineData(typeof(System.Runtime.InteropServices.COMException))]
+    [InlineData(typeof(InvalidDataException))]
+    [InlineData(typeof(OutOfMemoryException))]
+    [InlineData(typeof(System.IO.FileFormatException))]
+    public void Decode_WicFailure_IsReportedAsNotSupportedSoTheCallerFallsBackToThePreview(Type exceptionType)
+    {
+        var bytes = SyntheticRawBuilder.BuildTiff(littleEndian: true,
+            jpegBytes: SyntheticRawBuilder.CreateMinimalJpeg(320, 240));
+        var wic = new FakeDecoder(new FakeImage(640, 480)) { Throw = (Exception)Activator.CreateInstance(exceptionType)! };
+        var decoder = new WicRawFullDecoder(new MemorySourceReader(bytes), wic, _ => true);
+
+        var error = Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest("sample.dng", DecodeBox.Unbounded)));
+
+        Assert.IsType(exceptionType, error.InnerException);
+    }
+
+    [Fact]
+    public void Decode_CancelledWhileWicRuns_DropsTheDecodedImage()
+    {
+        var bytes = SyntheticRawBuilder.BuildTiff(littleEndian: true,
+            jpegBytes: SyntheticRawBuilder.CreateMinimalJpeg(320, 240));
+        using var cts = new CancellationTokenSource();
+        var wic = new FakeDecoder(new FakeImage(640, 480)) { OnDecode = cts.Cancel };
+        var decoder = new WicRawFullDecoder(new MemorySourceReader(bytes), wic, _ => true);
+
+        Assert.Throws<OperationCanceledException>(() =>
+            decoder.Decode(new DecodeRequest("sample.dng", DecodeBox.Unbounded), cts.Token));
+    }
+
+    [Fact]
+    public void Decode_AlreadyCancelled_DoesNotOpenWic()
+    {
+        var bytes = SyntheticRawBuilder.BuildTiff(littleEndian: true,
+            jpegBytes: SyntheticRawBuilder.CreateMinimalJpeg(320, 240));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var wic = new FakeDecoder(new FakeImage(640, 480));
+        var decoder = new WicRawFullDecoder(new MemorySourceReader(bytes), wic, _ => true);
+
+        Assert.Throws<OperationCanceledException>(() =>
+            decoder.Decode(new DecodeRequest("sample.dng", DecodeBox.Unbounded), cts.Token));
+        Assert.Null(wic.LastRequest);
+    }
+
+    [Fact]
+    [Trait("Category", "Native")]
+    public void WindowsRegistry_ReadsFileExtensionsFromTheCodecClassKey()
+    {
+        // The extension list lives under HKCR\CLSID\{codec-clsid}, not under the category's Instance key (which only
+        // holds CLSID + FriendlyName). Machine-dependent: only asserted where the Microsoft RAW codec is installed.
+        var codecs = WindowsWicCodecRegistry.Instance.ReadDecoders();
+        var microsoftRaw = codecs.FirstOrDefault(codec => string.Equals(codec.FriendlyName, "Microsoft Raw Image Decoder", StringComparison.Ordinal));
+        if (microsoftRaw is null) return;
+
+        Assert.Contains(".CR2", microsoftRaw.FileExtensions!, StringComparison.OrdinalIgnoreCase);
+        Assert.True(new WicRawFullDecoder().IsCodecAvailable(RawFormat.Cr2));
+    }
+
     [Fact]
     [Trait("Category", "Native")]
     public void AllRawCorpusSamples_ReportWicFullDecodeAvailability()
@@ -109,6 +220,12 @@ public sealed class WicRawFullDecoderTests(ITestOutputHelper output)
                     ? "preview-only"
                     : "unavailable: " + ex.Message));
             }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or FileFormatException or InvalidDataException)
+            {
+                // Machines without (or with a partly broken) WIC RAW codec: the decoder documents these WIC-side failures
+                // as "not decodable here" and normally maps them to NotSupportedException. Any other exception type is a bug.
+                results.Add((extension, "codec error: " + ex.GetType().Name));
+            }
         }
 
         Assert.NotEmpty(results);
@@ -118,6 +235,16 @@ public sealed class WicRawFullDecoderTests(ITestOutputHelper output)
             var outcomes = string.Join("; ", group.GroupBy(result => result.Result, StringComparer.Ordinal)
                 .Select(outcome => $"{outcome.Count()} sample(s): {outcome.Key}"));
             output.WriteLine($"{group.Key}: {outcomes}");
+        }
+    }
+
+    private sealed class FakeCodecRegistry(params WicCodecRegistration[] codecs) : IWicCodecRegistry
+    {
+        public int Reads { get; private set; }
+        public IReadOnlyList<WicCodecRegistration> ReadDecoders()
+        {
+            Reads++;
+            return codecs;
         }
     }
 
@@ -131,9 +258,13 @@ public sealed class WicRawFullDecoderTests(ITestOutputHelper output)
     {
         public IDecodedImage Image { get; } = image;
         public DecodeRequest? LastRequest { get; private set; }
+        public Exception? Throw { get; init; }
+        public Action? OnDecode { get; init; }
         public IDecodedImage Decode(DecodeRequest request)
         {
             LastRequest = request;
+            OnDecode?.Invoke();
+            if (Throw is not null) throw Throw;
             return Image;
         }
         public ImageInfo ReadInfo(string path) => new(Image.OriginalWidth, Image.OriginalHeight);

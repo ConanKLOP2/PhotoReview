@@ -406,9 +406,11 @@ public sealed class ImagePresenter
             if (!_clock.IsNavigationCurrent(token)) return;
             // AR16: the background readability probe may have removed other files while this image decoded.
             // It keeps the current entry by path (as ReplaceOrder does), so re-read its index for preload/status.
-            if (_catalog.CurrentIndex == _catalog.IndexOf(path))
+            // Both sides are -1 when the entry itself left the catalog meanwhile: that is not "still current".
+            var currentIndexNow = _catalog.CurrentIndex;
+            if (currentIndexNow >= 0 && currentIndexNow == _catalog.IndexOf(path))
             {
-                index = _catalog.CurrentIndex;
+                index = currentIndexNow;
             }
 
             long perfAssign = perf ? Stopwatch.GetTimestamp() : 0;
@@ -521,7 +523,9 @@ public sealed class ImagePresenter
                 if (!_clock.IsNavigationCurrent(token)) return;
                 if (current.Outcome != StatOutcome.Found) return;
                 var currentInfo = current.Stat!;
-                if (initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
+                // A capture-group member shown via pathOverride is a different file from the entry's representative:
+                // its stat must not overwrite the representative's Length/LastWriteUtc (that evicted the cache each toggle).
+                if (pathOverride is null && initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
                 {
                     _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
                 }
@@ -571,6 +575,24 @@ public sealed class ImagePresenter
     }
 
     /// <summary>
+    /// Removes a missing file from the catalog. A missing member of a JPEG+RAW capture group must not hide its
+    /// surviving partner: the entry degrades to the other member as a standalone (group-less) entry at the same
+    /// position and is selected. Returns the new current index (as <see cref="ReviewCatalog.Remove"/> does).
+    /// </summary>
+    private int RemoveOrDegrade(string path)
+    {
+        var index = _catalog.IndexOf(path);
+        var group = index >= 0 ? _catalog.Find(path)?.CaptureGroup : null;
+        var survivor = group?.ImagePaths.FirstOrDefault(p => !string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        if (survivor is null) return _catalog.Remove(path);
+
+        _catalog.Remove(path);
+        _catalog.Restore(survivor, index);
+        _catalog.SetCurrent(index);
+        return index;
+    }
+
+    /// <summary>
     /// Xóa tệp không tồn tại khỏi danh mục và tự động chuyển đến ảnh kế tiếp.
     /// </summary>
     public async Task RemoveMissingCatalogItemAsync(string path, int index, long token)
@@ -582,7 +604,7 @@ public sealed class ImagePresenter
         {
             if (!_clock.IsNavigationCurrent(token)) return;
 
-            var nextIndex = _catalog.Remove(path);
+            var nextIndex = RemoveOrDegrade(path);
             if (_catalog.Count == 0)
             {
                 CurrentPhotoInfo = null;

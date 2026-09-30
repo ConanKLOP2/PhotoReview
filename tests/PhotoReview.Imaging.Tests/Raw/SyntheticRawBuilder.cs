@@ -120,6 +120,49 @@ public static class SyntheticRawBuilder
     }
 
     /// <summary>
+    /// Builds a CR3 laid out like a real Canon file: ftyp, moov (Canon uuid with CMT1 + THMB, one trak with stsz/co64),
+    /// a preview uuid (8-byte prefix + PRVW with 16-byte header) and the track sample JPEG after it.
+    /// </summary>
+    public static byte[] BuildCanonCr3(byte[]? prvwJpeg = null, byte[]? thumbJpeg = null, byte[]? trackJpeg = null)
+    {
+        prvwJpeg ??= CreateMinimalJpeg(1620, 1080);
+        thumbJpeg ??= CreateMinimalJpeg(160, 120);
+        trackJpeg ??= CreateMinimalJpeg(6000, 4000);
+
+        byte[] U16(int v) => [(byte)(v >> 8), (byte)v];
+        byte[] U32(uint v) => [(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v];
+        byte[] U64(ulong v) => [.. U32((uint)(v >> 32)), .. U32((uint)v)];
+        byte[] Box(string type, params byte[][] parts)
+        {
+            byte[] payload = [.. parts.SelectMany(x => x)];
+            return [.. U32((uint)(8 + payload.Length)), .. Encoding.ASCII.GetBytes(type), .. payload];
+        }
+
+        byte[] canonUuid = [0x85, 0xC0, 0xB6, 0x87, 0x82, 0x0F, 0x11, 0xE0, 0x81, 0x11, 0xF4, 0xCE, 0x46, 0x2B, 0x6A, 0x48];
+        byte[] previewUuid = [0xEA, 0xF4, 0x2B, 0x5E, 0x1C, 0x98, 0x4B, 0x88, 0xB9, 0xFB, 0xB7, 0xDC, 0x40, 0x6E, 0x4D, 0x16];
+
+        // CMT1: little-endian TIFF with Orientation=6, ImageWidth=6000, ImageLength=4000.
+        byte[] Le16(int v) => [(byte)v, (byte)(v >> 8)];
+        byte[] Le32(uint v) => [(byte)v, (byte)(v >> 8), (byte)(v >> 16), (byte)(v >> 24)];
+        byte[] Entry(int tag, int type, uint value) => [.. Le16(tag), .. Le16(type), .. Le32(1), .. Le32(value)];
+        byte[] cmt1 = [0x49, 0x49, 0x2A, 0x00, .. Le32(8), .. Le16(3), .. Entry(0x0100, 4, 6000), .. Entry(0x0101, 4, 4000), .. Entry(0x0112, 3, 6), .. Le32(0)];
+
+        byte[] thmb = Box("THMB", U32(0), U16(160), U16(120), U32((uint)thumbJpeg.Length), U16(1), U16(0), thumbJpeg);
+        byte[] prvw = Box("PRVW", U32(0), U16(1), U16(1620), U16(1080), U16(1), U32((uint)prvwJpeg.Length), prvwJpeg);
+        byte[] previewBox = Box("uuid", previewUuid, U32(0), U32(1), prvw);
+        byte[] ftyp = Box("ftyp", Encoding.ASCII.GetBytes("crx "), U32(1), Encoding.ASCII.GetBytes("crx "));
+
+        byte[] Moov(ulong chunkOffset) => Box("moov",
+            Box("uuid", canonUuid, Box("CMT1", cmt1), thmb),
+            Box("trak", Box("mdia", Box("minf", Box("stbl",
+                Box("stsz", U32(0), U32((uint)trackJpeg.Length), U32(1)),
+                Box("co64", U32(0), U32(1), U64(chunkOffset)))))));
+
+        // The chunk offset does not change the moov size, so size it once and then place the track JPEG after the preview box.
+        long trackOffset = ftyp.Length + Moov(0).Length + previewBox.Length;
+        return [.. ftyp, .. Moov((ulong)trackOffset), .. previewBox, .. trackJpeg];
+    }
+    /// <summary>
     /// Builds a minimal RAF container: 16-byte magic "FUJIFILMCCD-RAW ", header offsets, and embedded JPEG.
     /// </summary>
     public static byte[] BuildRaf(byte[]? jpegBytes = null)
@@ -148,6 +191,26 @@ public static class SyntheticRawBuilder
         // Write JPEG payload
         ms.Write(jpegBytes);
 
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Builds a minimal Panasonic RW2 container ('IIU' + NUL): IFD0 with JpgFromRaw (0x002E, offset in the value, length
+    /// in the count as the reader expects) and, when <paramref name="ifd0Orientation"/> is given, Orientation (0x0112).
+    /// </summary>
+    public static byte[] BuildRw2(byte[] jpegBytes, ushort? ifd0Orientation = null)
+    {
+        using var ms = new MemoryStream();
+        ms.Write([(byte)'I', (byte)'I', 0x55, 0x00]);
+        WriteUInt32(ms, 8, littleEndian: true);
+        WriteUInt16(ms, (ushort)(ifd0Orientation.HasValue ? 2 : 1), littleEndian: true);
+        uint jpegOffset = 64;
+        WriteTiffEntry(ms, 0x002E, 4, (uint)jpegBytes.Length, jpegOffset, littleEndian: true);
+        if (ifd0Orientation is { } orientation)
+            WriteTiffEntry(ms, 0x0112, 3, 1, orientation, littleEndian: true);
+        WriteUInt32(ms, 0, littleEndian: true);
+        while (ms.Position < jpegOffset) ms.WriteByte(0);
+        ms.Write(jpegBytes);
         return ms.ToArray();
     }
 

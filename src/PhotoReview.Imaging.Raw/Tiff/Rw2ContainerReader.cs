@@ -7,7 +7,7 @@ namespace PhotoReview.Imaging.Raw.Tiff;
 /// Reader for Panasonic RW2 format.
 /// Magic: 'IIU\0' (0x49 0x49 0x55 0x00).
 /// Embedded JPEG preview: tag 0x002E (JpgFromRaw) in IFD0.
-/// EXIF and Orientation live inside the embedded JPEG APP1 marker.
+/// EXIF lives inside the embedded JPEG APP1 marker; Orientation is IFD0 tag 0x0112 when present, else that JPEG's EXIF.
 /// </summary>
 public sealed class Rw2ContainerReader : IRawContainerReader
 {
@@ -34,7 +34,7 @@ public sealed class Rw2ContainerReader : IRawContainerReader
         bool littleEndian = headerSpan[0] == 0x49 && headerSpan[1] == 0x49;
         uint ifd0Offset = TiffStructure.ReadU32(headerSpan, 4, littleEndian);
 
-        int orientation = 1;
+        int? ifd0Orientation = null;
         int sensorWidth = 0;
         int sensorHeight = 0;
         var previews = new List<EmbeddedPreview>();
@@ -42,41 +42,36 @@ public sealed class Rw2ContainerReader : IRawContainerReader
 
         var entries = TiffHeaderNavigator.ReadIfdEntries(source, ifd0Offset, littleEndian, out _);
 
-        long? jpgFromRawOffset = null;
-        long? jpgFromRawLength = null;
+        long? sensorWidthTag = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0002, littleEndian);
+        long? sensorHeightTag = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0003, littleEndian);
+        long? topBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0004, littleEndian);
+        long? leftBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0005, littleEndian);
+        long? bottomBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0006, littleEndian);
+        long? rightBorder = TiffHeaderNavigator.ReadTagValue(source, entries, 0x0007, littleEndian);
 
-        foreach (var entry in entries)
+        // Orientation is normally in IFD0; some files only carry it in the embedded JPEG's EXIF.
+        if (TiffHeaderNavigator.ReadTagValue(source, entries, 0x0112, littleEndian) is { } orient and >= 1 and <= 8)
+            ifd0Orientation = (int)orient;
+        int? embeddedJpegOrientation = null;
+
+        // Tags 2/3 describe the full sensor readout including masked margins; the borders (4..7) delimit the image.
+        if (leftBorder is { } left && rightBorder is { } right && right > left && right <= int.MaxValue)
+            sensorWidth = (int)(right - left);
+        else if (sensorWidthTag is > 0 and <= int.MaxValue)
+            sensorWidth = (int)sensorWidthTag.Value;
+
+        if (topBorder is { } top && bottomBorder is { } bottom && bottom > top && bottom <= int.MaxValue)
+            sensorHeight = (int)(bottom - top);
+        else if (sensorHeightTag is > 0 and <= int.MaxValue)
+            sensorHeight = (int)sensorHeightTag.Value;
+
+        // JpgFromRaw (0x002E): the entry offset points at the JPEG and the entry count is its length in bytes.
+        if (TiffHeaderNavigator.TryGetEntry(entries, 0x002E, out var jpgEntry) && jpgEntry.Count > 4)
         {
-            switch (entry.Tag)
+            long offset = jpgEntry.ValueOrOffset;
+            long length = jpgEntry.Count;
+            if (TiffHeaderNavigator.IsRangeInFile(offset, length, source.Length) && source.Read(offset, 2) is [0xFF, 0xD8])
             {
-                case 0x0002: // Sensor width / ImageWidth
-                    if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                        sensorWidth = (int)w;
-                    break;
-
-                case 0x0003: // Sensor height / ImageHeight
-                    if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                        sensorHeight = (int)h;
-                    break;
-
-                case 0x002E: // JpgFromRaw
-                    // In RW2 tag 0x002E can be offset to the JPEG, or offset to an IFD with offset/length
-                    jpgFromRawOffset = entry.ValueOrOffset;
-                    // Tag 0x002E count gives the length in bytes (or check value)
-                    if (entry.Count > 4)
-                        jpgFromRawLength = entry.Count;
-                    break;
-            }
-        }
-
-        // If length is not directly from tag count, probe JPEG SOI -> EOI or remaining file length
-        if (jpgFromRawOffset is > 0 && jpgFromRawOffset < source.Length)
-        {
-            long offset = jpgFromRawOffset.Value;
-            var probeSpan = source.Read(offset, 4);
-            if (probeSpan.Length >= 2 && probeSpan[0] == 0xFF && probeSpan[1] == 0xD8) // Valid JPEG SOI
-            {
-                long length = jpgFromRawLength ?? (source.Length - offset);
                 previews.Add(new EmbeddedPreview(
                     Index: 0,
                     Offset: offset,
@@ -88,6 +83,14 @@ public sealed class Rw2ContainerReader : IRawContainerReader
 
                 // RW2 EXIF is inside the preview JPEG
                 exifBlocks.Add(new ExifBlock(offset, Math.Min(length, 128 * 1024), IsTiffHeader: false));
+
+                // Orientation is normally in IFD0; some files only carry it in the embedded JPEG's EXIF.
+                if (ifd0Orientation is null)
+                {
+                    int exifLength = (int)Math.Min(Math.Min(length, 128 * 1024), source.Length - offset);
+                    if (exifLength > 0)
+                        embeddedJpegOrientation = ExifParser.TryReadOrientationFromJpeg(source.Read(offset, exifLength));
+                }
             }
         }
 
@@ -95,7 +98,7 @@ public sealed class Rw2ContainerReader : IRawContainerReader
             RawFormat.Rw2,
             sensorWidth,
             sensorHeight,
-            orientation,
+            ifd0Orientation ?? embeddedJpegOrientation ?? 1,
             previews,
             exifBlocks);
     }

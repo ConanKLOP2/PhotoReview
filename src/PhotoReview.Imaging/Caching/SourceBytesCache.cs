@@ -93,8 +93,15 @@ public sealed class SourceBytesCache
         ArgumentOutOfRangeException.ThrowIfNegative(length);
         if (offset < 0 || count < 0 || offset > length || count > length - offset)
             throw new ArgumentOutOfRangeException(nameof(offset), "Requested byte range is outside the source file.");
+        // Past the .NET array limit no read can succeed. Checked here, not only in GetOrRead(RangeKey): the uncacheable-range
+        // bypass below skips that method and would otherwise reach the allocation and fail with OutOfMemory/Overflow.
+        if (count > Array.MaxLength)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "The requested range is larger than a .NET array can hold; stream it instead.");
         var key = CreateRangeKey(path, length, lastWriteUtcTicks, offset, count);
         if (count == 0) return [];
+        // A range the cache could never keep is read straight through: no in-flight entry and no publish attempt, so it
+        // can never displace the ranges the viewer relies on (the LRU would drop it anyway, after the bookkeeping).
+        if (!CanCacheRange(count)) return ReadAndCache(key, generation: 0, pathVersion: 0, priority, publish: false);
         return GetOrRead(key, priority);
     }
 
@@ -125,6 +132,9 @@ public sealed class SourceBytesCache
 
     private byte[] GetOrRead(RangeKey key, SourceReadPriority priority)
     {
+        // Past the .NET array limit no read can succeed; fail cleanly instead of an OverflowException from the cast below.
+        if (key.Count > Array.MaxLength)
+            throw new ArgumentOutOfRangeException(nameof(key), key.Count, "The requested source is larger than a .NET array can hold; stream it instead (see CanCache).");
         if (_cache.TryGet(key, out var cached)) return cached;
         System.Diagnostics.Debug.Assert(SynchronizationContext.Current is null,
             "SourceBytesCache.GetOrRead must never be called from a UI (or other SynchronizationContext-bound) thread -- it reads synchronously.");
@@ -178,7 +188,7 @@ public sealed class SourceBytesCache
         }
     }
 
-    private byte[] ReadAndCache(RangeKey key, int generation, int pathVersion, SourceReadPriority priority)
+    private byte[] ReadAndCache(RangeKey key, int generation, int pathVersion, SourceReadPriority priority, bool publish = true)
     {
         LastReadManagedThreadId = Environment.CurrentManagedThreadId;
         using var stream = _sourceReader.OpenSource(key.Path, priority);
@@ -197,6 +207,7 @@ public sealed class SourceBytesCache
         var current = new FileInfo(key.Path);
         if (current.Length != key.SourceLength || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks)
             throw UserFacingError.Localized(new IOException($"File changed while reading: {key.Path}"), () => Tr.ErrIoFileChangedWhileReading(key.Path));
+        if (!publish) return bytes;
         lock (_publishGate)
         {
             if (generation == Volatile.Read(ref _generation) && pathVersion == _pathVersions.GetValueOrDefault(key.Path))

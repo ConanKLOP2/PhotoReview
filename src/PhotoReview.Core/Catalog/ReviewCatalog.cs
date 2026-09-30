@@ -306,31 +306,106 @@ public sealed class ReviewCatalog
         return true;
     }
 
-    /// <summary>Restores available members of a previously collapsed capture at its original review position.</summary>
-    public void RestoreMembers(IEnumerable<string> paths, int index, string? representativePath = null)
+    /// <summary>
+    /// Restores members of a previously collapsed capture (or a plain photo set) at <paramref name="index"/>.
+    /// Only image and RAW files ever become entries: an .xmp sidecar in <paramref name="paths"/> is never listed (it only
+    /// supplies the group's sidecar when a group is derived). When the catalog is in a pairing mode and both image members
+    /// of a capture are among <paramref name="paths"/>, ONE grouped entry is restored (the explicit
+    /// <paramref name="group"/>, else one derived from the paths) whose representative follows the mode; members that
+    /// cannot form a pair come back as independent entries. <see cref="CurrentIndex"/> keeps pointing at the image that
+    /// was displayed, exactly like <see cref="Restore"/>; it only moves when the catalog was empty.
+    /// </summary>
+    /// <returns>True when at least one entry was restored.</returns>
+    public bool RestoreMembers(IEnumerable<string> paths, int index, CaptureGroup? group = null)
     {
         AssertOwnerThread();
         ArgumentNullException.ThrowIfNull(paths);
-        var unique = paths.Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (unique.Length == 0) return;
-        var insertAt = Math.Clamp(index, 0, _entries.Count);
+        var all = paths.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        // A retried partial undo: one member is already listed as an independent entry (restored earlier) and the other has
+        // just come back -- fold them into the grouped entry at the present member's position instead of listing a second one.
+        var reformed = TryReformGroup(all, group);
+        if (reformed) all = all.Where(path => !group!.ImagePaths.Contains(path, StringComparer.OrdinalIgnoreCase)).ToArray();
+        var unique = all.Where(IsRestorableImage).Where(path => IndexOf(path) < 0).ToArray();
+        if (unique.Length == 0) return reformed;
+
+        var groups = new List<CaptureGroup>();
+        if (_rawPairMode != RawPairMode.Separate)
+        {
+            var present = new HashSet<string>(unique, StringComparer.OrdinalIgnoreCase);
+            if (group is not null && group.ImagePaths.All(present.Contains)) groups.Add(group);
+            var rest = unique.Where(path => group is null || groups.Count == 0 || !group.ImagePaths.Contains(path, StringComparer.OrdinalIgnoreCase));
+            groups.AddRange(CaptureGroupBuilder.Build(rest,
+                all.Where(path => string.Equals(System.IO.Path.GetExtension(path), ".xmp", StringComparison.OrdinalIgnoreCase))));
+        }
+
+        var groupByMember = new Dictionary<string, CaptureGroup>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in groups)
+        {
+            groupByMember[candidate.JpegPath] = candidate;
+            groupByMember[candidate.RawPath] = candidate;
+        }
+
+        var emitted = new HashSet<CaptureGroup>();
         var restored = new List<CatalogEntry>(unique.Length);
         foreach (var path in unique)
         {
-            if (IndexOf(path) >= 0) continue;
-            restored.Add(new CatalogEntry(path));
+            if (!groupByMember.TryGetValue(path, out var owner)) restored.Add(new CatalogEntry(path));
+            else if (emitted.Add(owner)) restored.Add(new CatalogEntry(owner.GetRepresentativePath(_rawPairMode)) { CaptureGroup = owner });
         }
-        if (restored.Count == 0) return;
+
+        var insertAt = Math.Clamp(index, 0, _entries.Count);
         _entries.InsertRange(insertAt, restored);
         InvalidateIndex();
         if (CurrentIndex < 0) CurrentIndex = insertAt;
         else if (insertAt <= CurrentIndex) CurrentIndex += restored.Count;
-        if (!string.IsNullOrWhiteSpace(representativePath))
+        return true;
+    }
+
+    /// <summary>
+    /// Re-forms <paramref name="group"/> when at least one of its image members is already an independent catalog entry
+    /// and every missing member is among <paramref name="restoredPaths"/>: the standalone entry becomes the grouped one
+    /// (same position, same <see cref="CurrentIndex"/>) and nothing is inserted. Returns false (nothing changed) otherwise.
+    /// </summary>
+    private bool TryReformGroup(IReadOnlyCollection<string> restoredPaths, CaptureGroup? group)
+    {
+        if (group is null || _rawPairMode == RawPairMode.Separate) return false;
+        var standalone = new List<int>();
+        foreach (var member in group.ImagePaths)
         {
-            var representativeIndex = IndexOf(representativePath);
-            if (representativeIndex >= 0) CurrentIndex = representativeIndex;
+            var at = IndexOf(member);
+            if (at >= 0)
+            {
+                if (_entries[at].CaptureGroup is not null) return false; // already grouped: not a partial restore
+                standalone.Add(at);
+            }
+            else if (!restoredPaths.Contains(member, StringComparer.OrdinalIgnoreCase) || !IsRestorableImage(member))
+            {
+                return false; // a member is still missing: keep the independent entry
+            }
         }
+        if (standalone.Count == 0) return false;
+
+        standalone.Sort();
+        var slot = standalone[0];
+        var representative = group.GetRepresentativePath(_rawPairMode);
+        var existing = _entries[slot];
+        _entries[slot] = string.Equals(existing.Path, representative, StringComparison.OrdinalIgnoreCase)
+            ? existing with { CaptureGroup = group }
+            : new CatalogEntry(representative) { CaptureGroup = group };
+        for (var i = standalone.Count - 1; i >= 1; i--) // both members were listed separately: one entry remains
+        {
+            _entries.RemoveAt(standalone[i]);
+            if (CurrentIndex == standalone[i]) CurrentIndex = slot;
+            else if (CurrentIndex > standalone[i]) CurrentIndex--;
+        }
+        InvalidateIndex();
+        return true;
+    }
+
+    private static bool IsRestorableImage(string path)
+    {
+        var extension = System.IO.Path.GetExtension(path);
+        return ImageFileTypes.SupportedExtensions.Contains(extension) || ImageFileTypes.RawExtensions.Contains(extension);
     }
 
     /// <summary>

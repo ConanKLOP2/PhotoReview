@@ -250,4 +250,62 @@ public sealed class SettingsWindowFieldMapTests
         });
         Assert.True(failures.Count == 0, string.Join('\n', failures));
     }
+
+    [Fact(DisplayName = "Every ShortcutMappings property read from the UI has a shortcut box registered in SettingsWindow.ShortcutBoxes (input capture, duplicate warning and validation all derive from it)")]
+    public async Task ShortcutBoxes_CoverEveryShortcutPropertyReadFromTheUi()
+    {
+        List<string> registered = [];
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings());
+            registered = window.ShortcutBoxes.Select(b => b.Property).ToList();
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal(ShortcutPropertiesReadFromUi.OrderBy(n => n, StringComparer.Ordinal), registered.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(registered.Count, registered.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact(DisplayName = "Save rejects an unparsable key name typed into ANY shortcut box, optional or mandatory")]
+    public async Task Save_UnparsableKeyInAnyShortcutBox_IsRejected()
+    {
+        var failures = new List<string>();
+        await StaTestHost.RunAsync(() =>
+        {
+            var names = new SettingsWindow(new AppSettings()).ShortcutBoxes.Select(b => b.Property).ToList();
+            foreach (var name in names)
+            {
+                var warnings = new List<string>();
+                var window = new SettingsWindow(new AppSettings()) { InvalidSettingsWarning = warnings.Add };
+                window.ShortcutBoxes.Single(b => b.Property == name).Box.Text = "NotARealKeyName";
+                InvokeSave(window);
+                if (warnings.Count == 0) failures.Add(name);
+            }
+            return Task.CompletedTask;
+        });
+        Assert.True(failures.Count == 0, "Save accepted an invalid key name for: " + string.Join(", ", failures));
+    }
+
+    [Fact(DisplayName = "Pressing a key in ANY shortcut box captures it (PreviewKeyDown is wired for every box)")]
+    public async Task PreviewKeyDown_InAnyShortcutBox_CapturesTheKey()
+    {
+        var failures = new List<string>();
+        await StaTestHost.RunAsync(() =>
+        {
+            var window = new SettingsWindow(new AppSettings());
+            using var source = new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters("shortcut-capture-test"));
+            foreach (var (property, box) in window.ShortcutBoxes)
+            {
+                box.Text = string.Empty;
+                var args = new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, 0, System.Windows.Input.Key.F8)
+                {
+                    RoutedEvent = System.Windows.UIElement.PreviewKeyDownEvent,
+                };
+                box.RaiseEvent(args);
+                if (!string.Equals(box.Text, "F8", StringComparison.Ordinal)) failures.Add(property);
+            }
+            return Task.CompletedTask;
+        });
+        Assert.True(failures.Count == 0, "Key capture is not wired for: " + string.Join(", ", failures));
+    }
 }

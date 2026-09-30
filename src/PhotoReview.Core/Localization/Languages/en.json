@@ -479,6 +479,8 @@
   "test.sample": "Sample",
   "main.skipped.warning.one": "Skipped {count} unreadable file",
   "main.skipped.warning.other": "Skipped {count} unreadable files",
+  "main.capturePair.badge.jpeg": "JPG+RAW (showing JPG)",
+  "main.capturePair.badge.raw": "JPG+RAW (showing RAW)",
   "main.skipped.viewList": "View list",
   "main.skipped.viewList.automationName": "View the list of skipped files",
   "main.skipped.window.title": "Skipped files",
@@ -501,6 +503,9 @@
   "recovery.verdict.permanentlyDeleted": "Deleted permanently",
   "recovery.explain.permanentlyDeleted": "The file was deleted permanently because its drive has no Recycle Bin. It cannot be restored from Photo Review.",
   "recovery.action.permanentlyDeleted": "Nothing to restore. Dismiss this entry, or recover the file with a backup or data-recovery tool.",
+  "recovery.verdict.partiallyPermanentlyDeleted": "Partly deleted permanently",
+  "recovery.explain.partiallyPermanentlyDeleted": "Some files of this capture were deleted permanently because their drive has no Recycle Bin and cannot be restored from Photo Review. The other files were moved to the Recycle Bin.",
+  "recovery.action.partiallyPermanentlyDeleted": "Restore the other files from the Recycle Bin if you need them, then dismiss this entry. The permanently deleted files can only come back from a backup or a data-recovery tool.",
   "settings.allowPermanentDelete.label": "Allow permanent delete on drives without a Recycle Bin",
   "settings.allowPermanentDelete.hint": "Off by default: Delete is refused on removable, network and unknown drives because they have no Recycle Bin. When on, Delete removes the file permanently after a confirmation. Deleted files cannot be restored, not even with Undo.",
   "dialog.confirmPermanentDelete.title": "Delete permanently?",
@@ -854,5 +859,9 @@
   "enum.rawPairMode.preferRaw": "Prefer RAW (stack, show RAW)",
   "image.error.rawUnsupported": "Unsupported RAW container format.",
   "image.error.rawCorrupt": "Corrupt or invalid RAW file.",
-  "overlay.rawPreview": "RAW preview {width}×{height}"
+  "overlay.rawPreview": "RAW preview {width}×{height}",
+  "status.groupPartnerMissing": "{fileName}: companion file(s) were missing on disk ({missing}), so the action was applied to the remaining files.",
+  "core.groupAction.rollbackFailed": "{message} In addition, {count} file(s) that were already processed could not be put back automatically; check Recovery.",
+  "core.undo.groupPartiallyRestored": "Restored {restored} of {total} files. Could not restore (deleted permanently): {names}",
+  "status.lateDeletedPartlyPermanently": "{fileName} was moved to the Recycle Bin after you left its folder, except {permanentFiles}, which could not go to the Recycle Bin and was deleted permanently."
 }

@@ -73,6 +73,37 @@ public sealed class FileSystemCollisionContractTests : IDisposable
         Assert.Equal("source-bytes", fs.ReadAllText(source));
     }
 
+    [Theory(DisplayName = "TryCopyNew onto an existing file returns false and touches nothing")]
+    [MemberData(nameof(Kinds))]
+    public void TryCopyNew_DestinationExists_ReturnsFalseAndKeepsBoth(string kind)
+    {
+        var (fs, dir) = Make(kind);
+        var source = Path.Combine(dir, "a.txt");
+        var destination = Path.Combine(dir, "b.txt");
+        fs.WriteAllTextAtomic(source, "source-bytes");
+        fs.WriteAllTextAtomic(destination, "other-bytes");
+
+        Assert.False(fs.TryCopyNew(source, destination));
+
+        Assert.Equal("other-bytes", fs.ReadAllText(destination));
+        Assert.Equal("source-bytes", fs.ReadAllText(source));
+    }
+
+    [Theory(DisplayName = "TryCopyNew onto a free path copies and returns true")]
+    [MemberData(nameof(Kinds))]
+    public void TryCopyNew_DestinationFree_CopiesAndReturnsTrue(string kind)
+    {
+        var (fs, dir) = Make(kind);
+        var source = Path.Combine(dir, "a.txt");
+        var destination = Path.Combine(dir, "b.txt");
+        fs.WriteAllTextAtomic(source, "source-bytes");
+
+        Assert.True(fs.TryCopyNew(source, destination));
+
+        Assert.Equal("source-bytes", fs.ReadAllText(destination));
+        Assert.Equal("source-bytes", fs.ReadAllText(source));
+    }
+
     [Theory(DisplayName = "Move into a missing folder throws DirectoryNotFound and keeps the source")]
     [MemberData(nameof(Kinds))]
     public void Move_MissingDestinationFolder_KeepsSource(string kind)

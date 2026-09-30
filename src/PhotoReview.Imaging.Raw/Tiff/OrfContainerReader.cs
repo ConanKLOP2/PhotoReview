@@ -105,7 +105,8 @@ public sealed class OrfContainerReader : IRawContainerReader
                             var exifEntries = TiffHeaderNavigator.ReadIfdEntries(source, exifPtr, littleEndian, out _);
                             foreach (var ee in exifEntries)
                             {
-                                if (ee.Tag == 0x927C) // MakerNote
+                                // MakerNote is UNDEFINED data: it is only an offset when it does not fit inline.
+                                if (ee.Tag == 0x927C && ee.Count > 4)
                                 {
                                     makerNoteOffset = ee.ValueOrOffset;
                                 }
@@ -114,7 +115,8 @@ public sealed class OrfContainerReader : IRawContainerReader
                         break;
 
                     case 0x927C: // MakerNote in IFD0
-                        makerNoteOffset = entry.ValueOrOffset;
+                        if (entry.Count > 4)
+                            makerNoteOffset = entry.ValueOrOffset;
                         break;
                 }
             }
@@ -144,7 +146,7 @@ public sealed class OrfContainerReader : IRawContainerReader
         // Search MakerNote for PreviewImage (Olympus MakerNote CameraSettings 0x2020)
         if (makerNoteOffset is > 0 && makerNoteOffset < source.Length - 16)
         {
-            ParseOlympusMakerNote(source, makerNoteOffset.Value, previews);
+            ParseOlympusMakerNote(source, makerNoteOffset.Value, littleEndian, previews);
         }
 
         exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
@@ -158,79 +160,73 @@ public sealed class OrfContainerReader : IRawContainerReader
             exifBlocks);
     }
 
-    private static void ParseOlympusMakerNote(IRawHeaderSource source, long baseOffset, List<EmbeddedPreview> previews)
+    /// <summary>
+    /// Olympus/OM System MakerNote. Offsets stored inside the note (CameraSettings pointer 0x2020 and the
+    /// PreviewImageStart/ThumbnailImage values) are relative to the start of the MakerNote ("OLYMPUS\0" or
+    /// "OM SYSTEM\0"), not to the file. Notes without a known signature are treated as plain TIFF-style
+    /// directories in the file's byte order with file-absolute offsets.
+    /// </summary>
+    private static void ParseOlympusMakerNote(IRawHeaderSource source, long noteOffset, bool fileLittleEndian, List<EmbeddedPreview> previews)
     {
-        // Olympus MakerNote often begins with "OLYMPUS\0II\x03\0" (12 bytes) or similar
-        var header = source.Read(baseOffset, 32);
-        if (header.Length < 16) return;
+        // Short reads (note near the end of a truncated file) skip the MakerNote instead of throwing.
+        int available = (int)Math.Min(32L, source.Length - noteOffset);
+        if (available < 16) return;
 
-        bool mnLittle = true;
-        long ifdStart = baseOffset;
+        var header = source.Read(noteOffset, available);
 
-        if (header.Length >= 16 &&
-            header[0] == (byte)'O' && header[1] == (byte)'M' && header[2] == (byte)' ' &&
-            header[3] == (byte)'S' && header[4] == (byte)'Y' && header[5] == (byte)'S' &&
-            header[6] == (byte)'T' && header[7] == (byte)'E' && header[8] == (byte)'M' && header[9] == 0)
+        bool noteLittleEndian = fileLittleEndian;
+        long ifdStart = noteOffset;
+        long offsetBase = 0; // file-absolute unless the signature says the note is self-relative
+
+        if (header[..10].SequenceEqual("OM SYSTEM\0"u8))
         {
-            mnLittle = header[12] == (byte)'I' && header[13] == (byte)'I';
-            ifdStart = baseOffset + 16;
+            noteLittleEndian = header[12] == (byte)'I' && header[13] == (byte)'I';
+            ifdStart = noteOffset + 16;
+            offsetBase = noteOffset;
         }
-        else if (header.Length >= 12 &&
-            header[0] == (byte)'O' && header[1] == (byte)'L' && header[2] == (byte)'Y' &&
-            header[3] == (byte)'M' && header[4] == (byte)'P' && header[5] == (byte)'U' &&
-            header[6] == (byte)'S' && header[7] == 0)
+        else if (header[..8].SequenceEqual("OLYMPUS\0"u8))
         {
-            mnLittle = header[8] == (byte)'I' && header[9] == (byte)'I';
-            ifdStart = baseOffset + 12;
+            noteLittleEndian = header[8] == (byte)'I' && header[9] == (byte)'I';
+            ifdStart = noteOffset + 12;
+            offsetBase = noteOffset;
         }
 
-        var entries = TiffHeaderNavigator.ReadIfdEntries(source, ifdStart, mnLittle, out _);
-        long? previewStart = null;
-        long? previewLength = null;
+        var entries = TiffHeaderNavigator.ReadIfdEntries(source, ifdStart, noteLittleEndian, out _);
 
         foreach (var entry in entries)
         {
-            // Tag 0x0101 / 0x0102 or CameraSettings 0x2020
-            if (entry.Tag == 0x0101)
-                previewStart = TiffHeaderNavigator.ReadTagUnsigned(source, entry, mnLittle);
-            else if (entry.Tag == 0x0102)
-                previewLength = TiffHeaderNavigator.ReadTagUnsigned(source, entry, mnLittle);
-            else if (entry.Tag == 0x2020) // CameraSettings IFD
-            {
-                long subOffset = (entry.ValueOrOffset > baseOffset) ? entry.ValueOrOffset : (baseOffset + entry.ValueOrOffset);
-                var subEntries = TiffHeaderNavigator.ReadIfdEntries(source, subOffset, mnLittle, out _);
-                foreach (var se in subEntries)
-                {
-                    if (se.Tag == 0x0101)
-                    {
-                        var rawOffset = TiffHeaderNavigator.ReadTagUnsigned(source, se, mnLittle);
-                        if (rawOffset is > 0)
-                        {
-                            // Could be absolute or relative to baseOffset
-                            previewStart = (rawOffset.Value > baseOffset) ? rawOffset.Value : (baseOffset + rawOffset.Value);
-                        }
-                    }
-                    else if (se.Tag == 0x0102)
-                    {
-                        previewLength = TiffHeaderNavigator.ReadTagUnsigned(source, se, mnLittle);
-                    }
-                }
-            }
+            // 0x0100 ThumbnailImage: UNDEFINED bytes whose offset is relative to offsetBase.
+            if (entry.Tag == 0x0100 && entry.Count > 4)
+                AddPreview(source, offsetBase + entry.ValueOrOffset, entry.Count, previews);
         }
 
-        if (previewStart is > 0 && previewLength is > 0 && previewStart + previewLength <= source.Length)
+        if (!TiffHeaderNavigator.TryGetEntry(entries, 0x2020, out var cameraSettings))
+            return;
+
+        // CameraSettings is an IFD (type 13): the four value bytes are the IFD offset.
+        var settingsEntries = TiffHeaderNavigator.ReadIfdEntries(source, offsetBase + cameraSettings.ValueOrOffset, noteLittleEndian, out _);
+        if (TiffHeaderNavigator.ReadTagValue(source, settingsEntries, 0x0101, noteLittleEndian) is { } previewStart &&
+            TiffHeaderNavigator.ReadTagValue(source, settingsEntries, 0x0102, noteLittleEndian) is { } previewLength)
         {
-            if (!previews.Any(p => p.Offset == previewStart.Value))
-            {
-                previews.Add(new EmbeddedPreview(
-                    Index: previews.Count,
-                    Offset: previewStart.Value,
-                    Length: previewLength.Value,
-                    Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: 0,
-                    Height: 0,
-                    ColorSpace: PreviewColorSpace.Unknown));
-            }
+            AddPreview(source, offsetBase + previewStart, previewLength, previews);
         }
+    }
+
+    private static void AddPreview(IRawHeaderSource source, long offset, long length, List<EmbeddedPreview> previews)
+    {
+        if (!TiffHeaderNavigator.IsRangeInFile(offset, length, source.Length) ||
+            length < 4 ||
+            source.Read(offset, 2) is not [0xFF, 0xD8] ||
+            previews.Any(p => p.Offset == offset))
+            return;
+
+        previews.Add(new EmbeddedPreview(
+            Index: previews.Count,
+            Offset: offset,
+            Length: length,
+            Kind: EmbeddedPreviewKind.Jpeg,
+            Width: 0,
+            Height: 0,
+            ColorSpace: PreviewColorSpace.Unknown));
     }
 }

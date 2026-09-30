@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
+using System.Linq;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Settings;
 using PhotoReview.TestSupport;
 using Xunit;
 
@@ -64,6 +67,59 @@ public sealed partial class FolderLoadCoordinatorTests
         Assert.False(removal.CurrentRemoved);
         Assert.Single(_sink.Presented); // the current image is kept, not re-presented
         Assert.Empty(_sink.Failures);
+    }
+
+    private async Task<FolderLoadCoordinator> LoadPairFolderAsync(RawPairMode mode, params string[] unreadableFiles)
+    {
+        const string folder = @"C:\photos";
+        _fs.CreateDirectory(folder);
+        _fs.WriteAllTextAtomic(@"C:\photos\a.jpg", "jpeg");
+        _fs.WriteAllTextAtomic(@"C:\photos\a.cr2", "raw");
+        _fs.WriteAllTextAtomic(@"C:\photos\b.jpg", "other");
+        _settingsStore.Current.RawSupportEnabled = true;
+        _settingsStore.Current.RawPairMode = mode;
+        foreach (var file in unreadableFiles) _fs.Unreadable[file] = "locked";
+        var coordinator = CreateCoordinator();
+        await coordinator.LoadAsync(folder);
+        await coordinator.ReadabilityProbe.WithTimeout(Wait.DefaultTimeout, "readability probe");
+        return coordinator;
+    }
+
+    [Fact(DisplayName = "Probe: an unreadable representative of a JPEG+RAW capture degrades it to the readable RAW instead of dropping the pair")]
+    public async Task Probe_UnreadableRepresentativeOfCapture_DegradesToTheReadablePartner()
+    {
+        using var coordinator = await LoadPairFolderAsync(RawPairMode.PreferJpeg, @"C:\photos\a.jpg");
+
+        Assert.Equal([@"C:\photos\a.cr2", @"C:\photos\b.jpg"], _catalog.Paths);
+        Assert.Null(_catalog.Entries[0].CaptureGroup);
+        Assert.Equal(0, _catalog.CurrentIndex);
+        var removal = Assert.Single(_sink.Removals);
+        Assert.Equal([@"C:\photos\a.jpg"], removal.Paths);
+        Assert.True(removal.CurrentRemoved); // the sink presents the survivor now at the current index
+        Assert.Equal(@"C:\photos\a.jpg", Assert.Single(Assert.Single(_sink.SkippedCalls).Skipped).Path);
+    }
+
+    [Fact(DisplayName = "Probe: an unreadable non-representative member keeps the readable representative and reports the member")]
+    public async Task Probe_UnreadablePartnerOfCapture_KeepsTheRepresentativeAndReportsThePartner()
+    {
+        using var coordinator = await LoadPairFolderAsync(RawPairMode.PreferJpeg, @"C:\photos\a.cr2");
+
+        Assert.Equal([@"C:\photos\a.jpg", @"C:\photos\b.jpg"], _catalog.Paths);
+        Assert.Equal(0, _catalog.CurrentIndex);
+        var removal = Assert.Single(_sink.Removals);
+        Assert.Equal([@"C:\photos\a.cr2"], removal.Paths);
+        Assert.False(removal.CurrentRemoved);
+        Assert.Equal(@"C:\photos\a.cr2", Assert.Single(Assert.Single(_sink.SkippedCalls).Skipped).Path);
+    }
+
+    [Fact(DisplayName = "Probe: a capture whose both image members are unreadable is removed and both are reported")]
+    public async Task Probe_BothMembersOfCaptureUnreadable_RemovesEntryAndReportsBoth()
+    {
+        using var coordinator = await LoadPairFolderAsync(RawPairMode.PreferJpeg, @"C:\photos\a.jpg", @"C:\photos\a.cr2");
+
+        Assert.Equal([@"C:\photos\b.jpg"], _catalog.Paths);
+        var skipped = Assert.Single(_sink.SkippedCalls).Skipped.Select(s => s.Path).Order(StringComparer.OrdinalIgnoreCase);
+        Assert.Equal([@"C:\photos\a.cr2", @"C:\photos\a.jpg"], skipped);
     }
 
     [Fact(DisplayName = "AR16: removing a file before the current one keeps the current path at its shifted index")]

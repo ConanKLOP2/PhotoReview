@@ -80,3 +80,38 @@ assert journal consistency.
   other processes are excluded with the existing share-mode contract (a deny-writers handle; appenders retry),
   lines appended after the snapshot are carried over, and the new file replaces the old one with one atomic
   POSIX-semantics rename (`PhysicalJournalCompactionFiles`); a crash before the rename leaves the journal as it was.
+
+## Amendment: capture-group entries and cross-build compatibility (2026-09-29)
+
+- A JPEG+RAW capture operation is ONE journal line with extra `GroupId` and `GroupMembers` (each member: Source,
+  Destination, Size, LastWriteUtc, Permanent). The top-level Source/Destination/Size/LastWriteUtc always equal the
+  FIRST member. A group Undo is one `Undo:true` line already in undo direction (Source = the earlier destination,
+  Destination = the earlier source); reconcile and Recovery read it as written and never swap again.
+- Reconcile marks a group Committed only when EVERY member completed; a partial group stays Failed
+  (`PendingUnconfirmed`, or `SourceStillExistsAfterRecovery` for Recycle) and is one Recovery item.
+- **Older builds** skip the unknown members, so they read a group line as a single Move/Recycle of the first member
+  and may reconcile it Committed although the other members never ran. There is no schema-version guard: a cheap,
+  safe way to make an old reconcile conservative would mean changing the top-level fields (Destination/Size) of the
+  line, which new code, the file services and the journal-derived equality would all have to agree on. Do not run an
+  older build over a journal that still holds unresolved group lines (resolve them in Recovery first).
+- `ReadCommittedMoves` returns a group as one entry (top level = first member, all members in `GroupMembers`).
+  `UndoService`'s fingerprint fallback looks entries up by top-level Destination but only serves single-file Moves;
+  group Undo uses the members registered in memory, so the fallback never needs the other members.
+- Recovery of an interrupted group Delete: members still on disk make it `CanRetry` (only members whose size and
+  last-write still match are recycled again; permanent deletion only for members journaled `Permanent`); a group mixing
+  permanent and Recycle Bin members is `PartiallyPermanentlyDeleted`, and only an all-permanent group is
+  `PermanentlyDeleted`.
+
+## Amendment: fully rolled-back group Move/Copy is not a Recovery item (2026-09-30)
+
+- A group Move/Copy that fails or is cancelled part-way is compensated (moved files put back, created copies deleted).
+  When every member is then provably back in its original state (source untouched, nothing at the destination) the
+  outcome line is `Dismissed` (same Id and manifest, no error), not `Failed`: nothing is left to retry, so Recovery must
+  not offer "retry" for an operation the user cancelled. `Dismissed` is an existing state, so older builds read it as
+  "cleared", never as unfinished; reconcile ignores it. Any other outcome (rollback incomplete, a conflict, a copy left
+  behind such as `MoveSourceNotRemoved`) stays `Failed`. Trade-off: the error reason of a fully rolled-back attempt is
+  only in the message shown to the user, not in the journal.
+- A `Failed` group line always carries the ORIGINAL failure (its `JournalCodedException` code with English text, or the raw
+  OS text without code); the localized "rollback incomplete" note is only part of the result message shown to the user.
+- A group Undo retried after it already restored some members itself, when nothing is pending any more, is an idempotent
+  success and closes its earlier `Failed` lines with `Committed` (skipped if another writer touched them).

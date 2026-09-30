@@ -6,6 +6,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.Decoding.Wic;
+using PhotoReview.Imaging.Raw;
 
 namespace PhotoReview.Benchmark.Cli;
 
@@ -43,7 +44,9 @@ internal static class RawSurvey
         int WicDecodedHeight,
         double WicMedianDecodeTimeMs,
         string? WicDecodeError,
-        bool WicDecodedPreviewOnly);
+        bool WicDecodedPreviewOnly,
+        string SensorSource = "unknown",
+        string? Error = null);
 
     public sealed record SurveySummary(
         string WindowsVersion,
@@ -74,19 +77,44 @@ internal static class RawSurvey
             }
         }
 
-        var summary = await SurveyDirectoryAsync(dir);
+        SurveySummary summary;
+        try
+        {
+            summary = await SurveyDirectoryAsync(dir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Could not enumerate {dir}: {ex.Message}");
+            return 2;
+        }
 
         PrintConsoleSummary(summary);
 
+        var exitCode = ComputeExitCode(summary);
         if (!string.IsNullOrWhiteSpace(markdownPath))
         {
-            var md = GenerateMarkdownReport(summary);
-            await File.WriteAllTextAsync(markdownPath, md, Encoding.UTF8);
-            Console.WriteLine($"Markdown report written to: {markdownPath}");
+            try
+            {
+                var md = GenerateMarkdownReport(summary);
+                await File.WriteAllTextAsync(markdownPath, md, Encoding.UTF8);
+                Console.WriteLine($"Markdown report written to: {markdownPath}");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine($"Could not write the markdown report {markdownPath}: {ex.Message}");
+                return 2;
+            }
         }
 
-        return 0;
+        foreach (var failed in summary.Files.Where(f => f.Error is not null))
+            Console.Error.WriteLine($"FAILED {failed.FileName}: {failed.Error}");
+        if (summary.Files.Count == 0) Console.Error.WriteLine($"No surveyable files found in {dir}.");
+        return exitCode;
     }
+
+    /// <summary>1 when nothing was surveyed or any file could not be read/parsed; 0 only for a fully surveyed corpus.</summary>
+    internal static int ComputeExitCode(SurveySummary summary) =>
+        summary.Files.Count == 0 || summary.Files.Any(f => f.Error is not null) ? 1 : 0;
 
     public static async Task<SurveySummary> SurveyDirectoryAsync(string dir)
     {
@@ -131,7 +159,21 @@ internal static class RawSurvey
             _ => ext
         };
 
-        var embeddedJpegs = ScanEmbeddedJpegs(filePath);
+        IReadOnlyList<EmbeddedJpeg> embeddedJpegs = [];
+        string? fileError = null;
+        try
+        {
+            embeddedJpegs = ScanEmbeddedJpegs(filePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            fileError = $"{ex.GetType().Name}: {ex.Message}";
+        }
+
+        // Sensor size and orientation come from the RAW container readers (never from WIC: without a RAW codec WIC only sees the preview).
+        var container = ReadContainer(filePath, out var containerError);
+        fileError ??= containerError;
+
 
         // WIC probe
         var wic = new WicDirectDecoder();
@@ -190,10 +232,26 @@ internal static class RawSurvey
             wicDecodeErr = wicInfoErr;
         }
 
-        // Sensor / container dimensions
-        int sensorW = wicReadSuccess ? wicInfoW : 0;
-        int sensorH = wicReadSuccess ? wicInfoH : 0;
-        int containerOrient = wicReadSuccess ? wicInfoOrient : 1;
+        // Sensor / container dimensions: container readers for RAW files; plain JPEG files have no container, their image size is the frame size.
+        int sensorW = 0, sensorH = 0, containerOrient = 1;
+        var sensorSource = "unknown";
+        if (container is not null)
+        {
+            containerOrient = container.Orientation;
+            if (container.SensorWidth > 0 && container.SensorHeight > 0)
+            {
+                sensorW = container.SensorWidth;
+                sensorH = container.SensorHeight;
+                sensorSource = "container";
+            }
+        }
+        else if (format == "JPEG" && wicReadSuccess)
+        {
+            sensorW = wicInfoW;
+            sensorH = wicInfoH;
+            containerOrient = wicInfoOrient;
+            sensorSource = "jpeg";
+        }
 
         // If embedded JPEGs exist, check if WIC decoded only the preview
         var largestPreview = embeddedJpegs.OrderByDescending(j => (long)j.Width * j.Height).FirstOrDefault();
@@ -227,7 +285,9 @@ internal static class RawSurvey
             wicDecodedH,
             Math.Round(medianTimeMs, 1),
             wicDecodeErr,
-            isPreviewOnly);
+            isPreviewOnly,
+            sensorSource,
+            fileError);
     }
 
     /// <summary>
@@ -464,6 +524,31 @@ internal static class RawSurvey
         }
     }
 
+    /// <summary>Reads the RAW container header for RAW extensions; null for non-RAW files (plain JPEG) or when parsing failed (error set).</summary>
+    internal static RawContainerInfo? ReadContainer(string filePath, out string? error)
+    {
+        error = null;
+        if (!RawFileTypes.IsRawExtension(filePath)) return null;
+        try
+        {
+            using var source = new SourceRawHeaderSource(filePath, PhysicalSourceReader.Instance);
+            var probe = source.Read(0, RawContainerLimits.InitialProbeLength(source.Length));
+            var reader = new RawContainerReaderRegistry().FindReader(probe, Path.GetExtension(filePath))
+                ?? throw new NotSupportedException($"No RAW container reader accepted {Path.GetExtension(filePath)}");
+            return reader.Read(source, CancellationToken.None);
+        }
+        catch (Exception ex) when (RawDecoderBenchmark.IsMeasurementFailure(ex))
+        {
+            error = $"container: {ex.GetType().Name}: {ex.Message}";
+            return null;
+        }
+    }
+
+    private static long LongSide(int width, int height) => Math.Max(width, height);
+
+    private static EmbeddedJpeg? LargestPreview(SurveyFileResult f) =>
+        f.EmbeddedJpegs.OrderByDescending(j => (long)j.Width * j.Height).FirstOrDefault();
+
     private static void PrintConsoleSummary(SurveySummary summary)
     {
         Console.WriteLine("================================================================================");
@@ -474,17 +559,93 @@ internal static class RawSurvey
         Console.WriteLine($"Total Files Surveyed: {summary.Files.Count}");
         Console.WriteLine("--------------------------------------------------------------------------------");
 
+        // Console output is a diagnostic log: format numbers with the invariant culture, never the user locale.
+        var inv = CultureInfo.InvariantCulture;
         foreach (var f in summary.Files)
         {
-            var largestPreview = f.EmbeddedJpegs.OrderByDescending(j => (long)j.Width * j.Height).FirstOrDefault();
-            var previewStr = largestPreview != null ? $"{largestPreview.Width}x{largestPreview.Height} ({largestPreview.Length / 1024} KB)" : "None";
-            var wicStr = f.WicDecodeSuccess ? $"{f.WicDecodedWidth}x{f.WicDecodedHeight} in {f.WicMedianDecodeTimeMs:F1}ms" : (f.WicDecodeError ?? "Failed");
+            var largestPreview = LargestPreview(f);
+            var previewStr = largestPreview != null ? string.Create(inv, $"{largestPreview.Width}x{largestPreview.Height} ({largestPreview.Length / 1024} KB)") : "None";
+            var wicStr = f.WicDecodeSuccess ? string.Create(inv, $"{f.WicDecodedWidth}x{f.WicDecodedHeight} in {f.WicMedianDecodeTimeMs:F1}ms") : (f.WicDecodeError ?? "Failed");
+            var sensorStr = f.SensorWidth > 0 ? string.Create(inv, $"{f.SensorWidth}x{f.SensorHeight} ({f.SensorSource})") : "unknown";
 
-            Console.WriteLine($"[{f.Format}] {f.FileName} ({f.FileSizeBytes / (1024 * 1024.0):F1} MB)");
-            Console.WriteLine($"  Previews ({f.EmbeddedJpegs.Count}): {string.Join(", ", f.EmbeddedJpegs.Select(j => $"{j.Width}x{j.Height}@{j.Offset}"))}");
-            Console.WriteLine($"  Largest Preview: {previewStr} | ColorSpace: {largestPreview?.ColorSpaceHint ?? "N/A"}");
+            Console.WriteLine(string.Create(inv, $"[{f.Format}] {f.FileName} ({f.FileSizeBytes / (1024 * 1024.0):F1} MB)"));
+            Console.WriteLine(string.Create(inv, $"  Previews ({f.EmbeddedJpegs.Count}): {string.Join(", ", f.EmbeddedJpegs.Select(j => $"{j.Width}x{j.Height}@{j.Offset}"))}"));
+            Console.WriteLine($"  Largest Preview: {previewStr} | ColorSpace: {largestPreview?.ColorSpaceHint ?? "N/A"} | Sensor: {sensorStr}");
             Console.WriteLine($"  WIC Direct: {wicStr} | PreviewOnly: {f.WicDecodedPreviewOnly}");
+            if (f.Error is not null) Console.WriteLine($"  ERROR: {f.Error}");
         }
+    }
+
+    private static double? MedianOf(List<double> values)
+    {
+        if (values.Count == 0) return null;
+        var sorted = values.OrderBy(v => v).ToArray();
+        return sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2d;
+    }
+
+    /// <summary>
+    /// Conclusions derived only from what was measured in this corpus. Nothing here is a fixed claim: with an empty or unrepresentative
+    /// corpus the text says that no conclusion can be drawn.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildConclusions(SurveySummary summary)
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var raws = summary.Files.Where(f => f.Format != "JPEG" && f.Error is null).ToList();
+        var lines = new List<string>();
+
+        // 1. Disk read reduction: bytes of the largest embedded preview relative to the file (bytes only, no timing claim).
+        var ratios = raws.Where(f => f.FileSizeBytes > 0 && LargestPreview(f) is not null)
+            .Select(f => LargestPreview(f)!.Length * 100.0 / f.FileSizeBytes).ToList();
+        if (ratios.Count == 0)
+        {
+            lines.Add("**Disk Read Reduction (Goal 1):** no RAW file with an embedded JPEG preview was surveyed, so no reduction can be concluded from this corpus.");
+        }
+        else
+        {
+            var median = MedianOf(ratios)!.Value;
+            var factor = median > 0 ? 100.0 / median : double.PositiveInfinity;
+            lines.Add(string.Create(inv, $"**Disk Read Reduction (Goal 1):** across {ratios.Count} RAW file(s) with previews, the largest embedded preview is {ratios.Min():F1}%-{ratios.Max():F1}% of the file size (median {median:F1}%), i.e. reading only that byte range reads about {factor:F1}x fewer bytes at the median. This is a byte ratio, not a measured time."));
+        }
+
+        // 2. WIC coverage versus full decode need.
+        if (raws.Count == 0)
+        {
+            lines.Add("**LibRaw Full Decode (Q-RAW-02):** no RAW file was surveyed, so WIC coverage cannot be judged.");
+        }
+        else
+        {
+            var wicOk = raws.Count(f => f.WicDecodeSuccess);
+            var previewOnly = raws.Count(f => f.WicDecodeSuccess && f.WicDecodedPreviewOnly);
+            var failedFormats = raws.Where(f => !f.WicDecodeSuccess).Select(f => f.Format).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToList();
+            var text = string.Create(inv, $"**LibRaw Full Decode (Q-RAW-02):** WIC decoded {wicOk}/{raws.Count} surveyed RAW file(s) on this machine, {previewOnly} of them only at embedded-preview resolution");
+            if (failedFormats.Count > 0) text += $"; it failed for format(s) {string.Join(", ", failedFormats)}";
+            text += wicOk < raws.Count || previewOnly > 0
+                ? ". WIC therefore does not give reliable full-resolution decoding here, which supports a bundled full decoder (LibRaw)."
+                : ". WIC produced full-size decodes for every surveyed RAW file here, so this corpus alone does not show a need for LibRaw on this machine.";
+            lines.Add(text);
+        }
+
+        // 3. Preview versus sensor size, using the container reader sensor dimensions.
+        var known = raws.Where(f => f.SensorWidth > 0 && f.SensorHeight > 0 && LargestPreview(f) is not null).ToList();
+        if (known.Count == 0)
+        {
+            lines.Add("**100% Zoom Sensor Dimension (Q-RAW-03):** the RAW container readers reported no sensor dimensions together with a preview for this corpus, so preview versus sensor size cannot be concluded.");
+        }
+        else
+        {
+            var smaller = known.Where(f => LongSide(LargestPreview(f)!.Width, LargestPreview(f)!.Height) < LongSide(f.SensorWidth, f.SensorHeight) * 0.95).ToList();
+            if (smaller.Count == 0)
+            {
+                lines.Add(string.Create(inv, $"**100% Zoom Sensor Dimension (Q-RAW-03):** for all {known.Count} file(s) with known sensor size the largest preview is within 5% of the sensor long side (sensor size read from the RAW container). No preview/sensor divergence was observed in this corpus."));
+            }
+            else
+            {
+                var formats = string.Join(", ", smaller.Select(f => f.Format).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
+                lines.Add(string.Create(inv, $"**100% Zoom Sensor Dimension (Q-RAW-03):** the largest preview is smaller than the sensor size (long side, container-reported) for {smaller.Count}/{known.Count} file(s) with known sensor size (formats: {formats}); for those the UI must show the sensor dimensions and indicate preview status when upscaled."));
+            }
+        }
+
+        return lines;
     }
 
     public static string GenerateMarkdownReport(SurveySummary summary)
@@ -498,45 +659,36 @@ internal static class RawSurvey
         sb.AppendLine("## 1. Executive Summary");
         sb.AppendLine();
 
-        var byFormat = summary.Files.GroupBy(f => f.Format).OrderBy(g => g.Key).ToList();
+        var byFormat = summary.Files.GroupBy(f => f.Format).OrderBy(g => g.Key, StringComparer.Ordinal).ToList();
         var fullSizePreviews = 0;
-        var needsFullDecodeZoom = 0;
+        var smallerPreviews = 0;
+        var unknownSize = 0;
         var adobeRgbCount = 0;
         var wicDecodes = 0;
 
         foreach (var f in summary.Files)
         {
-            var largest = f.EmbeddedJpegs.OrderByDescending(j => (long)j.Width * j.Height).FirstOrDefault();
-            if (largest != null)
-            {
-                if (largest.ColorSpaceHint == "AdobeRGB") adobeRgbCount++;
-                // Full size preview if preview dimensions >= sensor dimensions (or > 18MP)
-                if (f.SensorWidth > 0 && largest.Width >= f.SensorWidth * 0.95)
-                {
-                    fullSizePreviews++;
-                }
-                else if (largest.Width >= 4000)
-                {
-                    fullSizePreviews++;
-                }
-                else
-                {
-                    needsFullDecodeZoom++;
-                }
-            }
-            else
-            {
-                needsFullDecodeZoom++;
-            }
+            var largest = LargestPreview(f);
+            if (largest != null && largest.ColorSpaceHint == "AdobeRGB") adobeRgbCount++;
+            if (largest == null || f.SensorWidth <= 0) unknownSize++;
+            else if (LongSide(largest.Width, largest.Height) >= LongSide(f.SensorWidth, f.SensorHeight) * 0.95) fullSizePreviews++;
+            else smallerPreviews++;
 
             if (f.WicDecodeSuccess) wicDecodes++;
         }
 
         sb.AppendLine(CultureInfo.InvariantCulture, $"- **Total samples surveyed:** {summary.Files.Count} across {byFormat.Count} formats ({string.Join(", ", byFormat.Select(g => g.Key))}).");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Full-size embedded JPEG previews:** {fullSizePreviews}/{summary.Files.Count} bodies embed a preview at or near full sensor resolution. For these bodies, normal viewing AND zoom can be served instantaneously from the preview byte range without full demosaicing.");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Bodies requiring full decode on zoom:** {needsFullDecodeZoom}/{summary.Files.Count} bodies (e.g. early Sony ARW with 1616×1080 preview, small DNG/NEF previews) have embedded previews smaller than the sensor. Q-RAW-02's full decode on zoom is necessary for pixel-sharp 100% inspection on these bodies.");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- **WIC Native Decode Coverage:** {wicDecodes}/{summary.Files.Count} files decoded via Windows Imaging Component. On Windows without Microsoft Raw Image Extension installed, WIC can decode standard container headers or JPEG previews, but lacks full demosaicing for newer formats (CR3, X-Trans RAF, RW2).");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Adobe RGB previews:** {adobeRgbCount} sample(s) flagged Adobe RGB color space hint, validating Q-RAW-06 (convert with bundled CC0 profile).");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Previews at or near sensor resolution:** {fullSizePreviews}/{summary.Files.Count} file(s) (largest preview long side >= 95% of the container-reported sensor long side).");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Previews smaller than the sensor:** {smallerPreviews}/{summary.Files.Count} file(s); 100% inspection of these needs a full decode.");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Unknown preview or sensor size:** {unknownSize}/{summary.Files.Count} file(s) (no embedded preview found, or the container reader reported no sensor dimensions).");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **WIC decode coverage:** {wicDecodes}/{summary.Files.Count} file(s) decoded through Windows Imaging Component on this machine (see the WIC codec status above).");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- **Adobe RGB previews:** {adobeRgbCount} sample(s) carry an Adobe RGB hint in the preview EXIF (relevant to Q-RAW-06 colour handling).");
+        var failures = summary.Files.Where(f => f.Error is not null).ToList();
+        if (failures.Count > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- **Files that could not be surveyed:** {failures.Count}: {string.Join("; ", failures.Select(f => $"`{f.FileName}` ({f.Error})"))}.");
+        }
+
         sb.AppendLine();
 
         sb.AppendLine("## 2. Per-Format Survey Tables");
@@ -546,22 +698,23 @@ internal static class RawSurvey
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"### Format: {g.Key}");
             sb.AppendLine();
-            sb.AppendLine("| Camera / Sample | Size (MB) | Previews Found | Largest Preview | Preview Size Ratio | WIC ReadInfo | WIC Decode (3-run median) | Preview Only? |");
-            sb.AppendLine("|---|---|---|---|---|---|---|---|");
+            sb.AppendLine("| Camera / Sample | Size (MB) | Previews Found | Largest Preview | Sensor (container) | Preview Size Ratio | WIC ReadInfo | WIC Decode (3-run median) | Preview Only? |");
+            sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
 
             foreach (var f in g)
             {
-                var largest = f.EmbeddedJpegs.OrderByDescending(j => (long)j.Width * j.Height).FirstOrDefault();
+                var largest = LargestPreview(f);
                 var largestStr = largest != null ? $"{largest.Width}×{largest.Height}" : "None";
+                var sensorStr = f.SensorWidth > 0 ? $"{f.SensorWidth}×{f.SensorHeight}" : "unknown";
                 var ratioStr = (largest != null && f.SensorWidth > 0)
-                    ? string.Create(CultureInfo.InvariantCulture, $"{(largest.Width * 100.0 / f.SensorWidth):F0}%")
-                    : (largest != null && largest.Width >= 4000 ? "~100%" : "<50%");
+                    ? string.Create(CultureInfo.InvariantCulture, $"{LongSide(largest.Width, largest.Height) * 100.0 / LongSide(f.SensorWidth, f.SensorHeight):F0}%")
+                    : "n/a";
 
                 var wicInfo = f.WicReadInfoSuccess ? $"{f.WicInfoWidth}×{f.WicInfoHeight} (orient {f.WicInfoOrientation})" : "Unsupported";
                 var wicDecode = f.WicDecodeSuccess ? string.Create(CultureInfo.InvariantCulture, $"{f.WicDecodedWidth}×{f.WicDecodedHeight} ({f.WicMedianDecodeTimeMs:F1} ms)") : "Failed/Unsupported";
                 var prevOnly = f.WicDecodedPreviewOnly ? "Yes (preview)" : (f.WicDecodeSuccess ? "Full" : "N/A");
 
-                sb.AppendLine(CultureInfo.InvariantCulture, $"| `{f.FileName}` | {f.FileSizeBytes / (1024 * 1024.0):F1} | {f.EmbeddedJpegs.Count} ({string.Join(", ", f.EmbeddedJpegs.Select(j => $"{j.Width}×{j.Height}"))}) | {largestStr} | {ratioStr} | {wicInfo} | {wicDecode} | {prevOnly} |");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"| `{f.FileName}` | {f.FileSizeBytes / (1024 * 1024.0):F1} | {f.EmbeddedJpegs.Count} ({string.Join(", ", f.EmbeddedJpegs.Select(j => $"{j.Width}×{j.Height}"))}) | {largestStr} | {sensorStr} | {ratioStr} | {wicInfo} | {wicDecode} | {prevOnly} |");
             }
 
             sb.AppendLine();
@@ -569,9 +722,9 @@ internal static class RawSurvey
 
         sb.AppendLine("## 3. Conclusions for RAW Architecture (RAW-10..RAW-70)");
         sb.AppendLine();
-        sb.AppendLine("1. **Disk Read Reduction (Goal 1):** Header + embedded JPEG preview byte ranges account for only 5–15% of the total RAW file size. Preload and normal viewing will be nearly 10× faster than reading entire RAW files.");
-        sb.AppendLine("2. **LibRaw Full Decode (Q-RAW-02):** WIC coverage is inconsistent across OS builds without Store app dependencies. LibRaw is essential for reliable full demosaicing across all 8 formats.");
-        sb.AppendLine("3. **100% Zoom Sensor Dimension (Q-RAW-03):** Verified that preview dimensions and sensor dimensions diverge significantly on older ARW and some NEF bodies; the UI must display sensor dimensions and indicate preview status when upscaled.");
+        var conclusions = BuildConclusions(summary);
+        for (var i = 0; i < conclusions.Count; i++)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{i + 1}. {conclusions[i]}");
         sb.AppendLine();
 
         return sb.ToString();

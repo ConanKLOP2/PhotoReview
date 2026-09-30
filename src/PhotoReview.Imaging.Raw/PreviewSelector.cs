@@ -7,12 +7,12 @@ namespace PhotoReview.Imaging.Raw;
 /// Follows RAW-21 / TASKS.md:
 /// Among JPEG previews, select the smallest with both sides &gt;= requested box (after orientation transpose),
 /// else the largest preview.
-/// Unknown preview sizes (Width == 0 or Height == 0) are resolved by inspecting &lt;= 64 KB of the preview's JPEG SOF header,
+/// Unknown preview sizes (Width == 0 or Height == 0) are resolved by walking the preview's JPEG marker segments with bounded per-segment reads (SOF may sit past 64 KB, e.g. Fujifilm RAF),
 /// largest-first, stopping as soon as the choice is certain.
 /// </summary>
 public static class PreviewSelector
 {
-    private const int MaxSofScanBytes = 64 * 1024;
+    private const int MaxJpegSegments = 512;
 
     /// <summary>
     /// Selects the best embedded preview matching <paramref name="requestBox"/> and <paramref name="orientation"/>.
@@ -40,7 +40,7 @@ public static class PreviewSelector
         }
 
         // Resolve dimensions for candidates (largest byte length first)
-        // If dimensions are missing (0,0), read up to 64KB to parse SOF
+        // If dimensions are missing (0,0), walk the JPEG segments to the SOF
         var resolved = new List<EmbeddedPreview>(jpegPreviews.Count);
         foreach (var p in jpegPreviews.OrderByDescending(p => p.Length))
         {
@@ -92,10 +92,7 @@ public static class PreviewSelector
         if (preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        int toRead = (int)Math.Min(preview.Length, MaxSofScanBytes);
-        var span = source.Read(preview.Offset, toRead);
-
-        if (TryExtractJpegDimensions(span, out int width, out int height, out var colorSpace))
+        if (TryReadJpegFrame(source, preview.Offset, preview.Length, out int width, out int height, out var colorSpace))
         {
             return preview with
             {
@@ -106,6 +103,61 @@ public static class PreviewSelector
         }
 
         return preview;
+    }
+
+    /// <summary>
+    /// Walks the JPEG marker segments of the byte range <paramref name="offset"/>..+<paramref name="length"/> with
+    /// bounded per-segment reads, so a frame header located anywhere in the range (Fuji RAF: after a ~65 KB EXIF APP1)
+    /// is found without buffering the range. Accepts SOF0/1/2 only; lossless (SOF3), arithmetic-coded or hierarchical
+    /// frames, malformed markers, truncation and SOS/EOI before a frame header yield <c>false</c> (dimensions unknown).
+    /// At most <see cref="MaxJpegSegments"/> segments are visited. Never reads past the source or the range.
+    /// </summary>
+    public static bool TryReadJpegFrame(IRawHeaderSource source, long offset, long length, out int width, out int height, out PreviewColorSpace colorSpace)
+    {
+        width = 0;
+        height = 0;
+        colorSpace = PreviewColorSpace.Unknown;
+
+        if (length < 4 || offset < 0 || offset >= source.Length) return false;
+
+        long end = Math.Min(offset + length, source.Length);
+        if (end - offset < 4 || source.Read(offset, 2) is not [0xFF, 0xD8]) return false;
+
+        long pos = offset + 2;
+        for (int segment = 0; segment < MaxJpegSegments && pos + 4 <= end; segment++)
+        {
+            var head = source.Read(pos, 4);
+            if (head[0] != 0xFF) break;
+
+            byte marker = head[1];
+            if (marker == 0xFF) { pos++; continue; } // fill byte
+            if (marker == 0x00 || marker is 0xDA or 0xD9) break; // stuffed / SOS / EOI
+            if (marker == 0x01 || marker is >= 0xD0 and <= 0xD8) { pos += 2; continue; } // standalone markers
+
+            int segLen = (head[2] << 8) | head[3];
+            if (segLen < 2 || pos + 2 + segLen > end) break;
+
+            int payloadLen = segLen - 2;
+            if (marker is >= 0xC0 and <= 0xCF && marker is not (0xC4 or 0xC8 or 0xCC))
+            {
+                if (marker > 0xC2 || payloadLen < 5) return false;
+                var frame = source.Read(pos + 4, 5); // precision, height (2), width (2)
+                height = (frame[1] << 8) | frame[2];
+                width = (frame[3] << 8) | frame[4];
+                return width > 0 && height > 0;
+            }
+
+            if (marker == 0xE1 && payloadLen >= 14 && colorSpace == PreviewColorSpace.Unknown) // APP1 EXIF
+            {
+                var payload = source.Read(pos + 4, payloadLen);
+                if (payload.IndexOf("Adobe RGB"u8) >= 0 || payload.IndexOf("R03"u8) >= 0)
+                    colorSpace = PreviewColorSpace.AdobeRgb;
+            }
+
+            pos += 2 + segLen;
+        }
+
+        return false;
     }
 
     /// <summary>

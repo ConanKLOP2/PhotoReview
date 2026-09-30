@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using Xunit;
 
@@ -17,18 +18,60 @@ public sealed partial class MainViewModelAdvancedTests
         var (vm, _) = CreateViewModel();
 
         Assert.True(vm.CurrentHasCapturePair);
-        Assert.Equal("JPG+RAW", vm.CapturePairBadge);
+        Assert.Equal(Tr.MainCapturePairBadgeJpeg, vm.CapturePairBadge);
+
+        var badgeChanges = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.CapturePairBadge)) badgeChanges++; };
 
         await vm.ToggleCaptureGroupMemberAsync();
 
+        Assert.True(badgeChanges > 0);
         Assert.Equal(rawMemberFixture, vm.Presenter.CurrentPresentedPath);
+        Assert.Equal(Tr.MainCapturePairBadgeRaw, vm.CapturePairBadge);
         Assert.Equal(0, vm.CurrentIndex);
         Assert.Equal(1, vm.TotalFiles);
 
         await vm.ToggleCaptureGroupMemberAsync();
 
         Assert.Equal(jpeg, vm.Presenter.CurrentPresentedPath);
+        Assert.Equal(Tr.MainCapturePairBadgeJpeg, vm.CapturePairBadge);
         Assert.Equal(0, vm.CurrentIndex);
         Assert.Equal(1, vm.TotalFiles);
+    }
+
+    [Fact]
+    public void CapturePairBadge_WithoutCapturePair_IsEmpty()
+    {
+        var plain = CreateImageFile(_tempDir, "plain.jpg");
+        _catalog.Reset([plain]);
+        var (vm, _) = CreateViewModel();
+
+        Assert.Equal(string.Empty, vm.CapturePairBadge);
+    }
+
+    [Fact]
+    public async Task ToggleCompare_WhenPresentedPathBelongsToAnotherEntry_ComparesTheCurrentEntryWithoutThrowing()
+    {
+        var jpegA = CreateImageFile(_tempDir, "a.jpg");
+        var rawA = CreateImageFile(_tempDir, "a-member.jpg", DifferentPngBytes);
+        var jpegB = CreateImageFile(_tempDir, "b.jpg");
+        var rawB = CreateImageFile(_tempDir, "b-member.jpg", DifferentPngBytes);
+        _catalog.Reset(
+        [
+            new CatalogEntry(jpegA) { CaptureGroup = new CaptureGroup(jpegA, rawA) },
+            new CatalogEntry(jpegB) { CaptureGroup = new CaptureGroup(jpegB, rawB) },
+        ], RawPairMode.Separate);
+        var (vm, _) = CreateViewModel();
+        await vm.Presenter.PresentAsync(0);
+        Assert.Equal(jpegA, vm.Presenter.CurrentPresentedPath);
+
+        // The catalog moved on (probe/undo/etc.) while the presenter still reports entry A's path.
+        _catalog.SetCurrent(1);
+        vm.ToggleCompare();
+        await vm.CompareToggleTask;
+
+        Assert.True(vm.Compare.IsVisible);
+        Assert.Equal(jpegB, vm.Compare.LeftPath);
+        Assert.Equal(rawB, vm.Compare.RightPath);
     }
 }

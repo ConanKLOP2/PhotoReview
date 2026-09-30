@@ -74,6 +74,14 @@ public sealed class FileActionService
 
         JournalTransaction? tx = null;
         List<JournalGroupMember> manifest = [];
+        var missingSources = new List<string>();
+        // Members whose operation finished and verified, and the one being processed when the failure hit: the inputs of
+        // the compensation below (Copy: delete the copies this operation made; Move: put the moved files back).
+        var done = new List<JournalGroupMember>();
+        JournalGroupMember? inFlight = null;
+        // True only while a Copy of the in-flight member may have created its destination: proven by TryCopyNew (it returns
+        // false, touching nothing, when the destination already existed; a throw means this call created/was creating it).
+        var inFlightDestinationIsOurs = false;
         try
         {
             if (request.Group.Paths.Count < 2)
@@ -101,11 +109,18 @@ public sealed class FileActionService
                     throw new JournalCodedException(JournalErrors.DestinationOutsideSource);
             }
 
+            var imagePaths = request.Group.ImagePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var source in request.Group.Paths)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var stat = _fileSystem.GetFileStat(source)
-                    ?? throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(source), source);
+                // A stale group: a partner (RAW/JPEG/XMP) vanished outside the app. It is skipped and reported instead of
+                // making the whole capture un-actionable; the action then covers the members that still exist.
+                var stat = _fileSystem.GetFileStat(source);
+                if (stat is null)
+                {
+                    missingSources.Add(source);
+                    continue;
+                }
                 string? destination = null;
                 if (destinationFolder is not null)
                 {
@@ -127,19 +142,32 @@ public sealed class FileActionService
                     permanent = !_recycleBin.CanRecycle(source);
                     if (permanent && !request.AllowPermanentDelete)
                         throw new IOException(Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(source)));
-                    if (!permanent && !_recycleBin.FitsInRecycleBin(source, stat.Length))
-                        throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(source)));
                 }
 
                 members.Add(new JournalGroupMember(source, destination, stat.Length, stat.LastWriteUtc, permanent));
             }
+
+            // Only a sidecar left (or nothing): the photo itself is gone, there is nothing to act on.
+            if (!members.Any(member => imagePaths.Contains(member.Source)))
+            {
+                var gone = missingSources.FirstOrDefault(imagePaths.Contains) ?? request.Group.Paths[0];
+                throw new FileNotFoundException(Tr.CoreFileActionSourceMissing(gone), gone);
+            }
+
+            if (request.Operation == FileOperationType.Recycle)
+            {
+                // F-WIN-2 for the whole capture: the bin of a volume must hold ALL of that volume's members together,
+                // otherwise the shell deletes the overflow permanently while the journal says "recycle".
+                if (RecycleBinCapacity.FirstOverflow(_recycleBin, members) is { } overflow)
+                    throw new IOException(Tr.CoreRecycleBinCannotHold(Path.GetFileName(overflow.Source)));
+            }
             manifest = members;
 
             if (destinationFolder is not null) _fileSystem.CreateDirectory(destinationFolder);
-            var first = manifest[0];
+            var firstMember = manifest[0];
             var prepared = new JournalEntry(
                 Guid.NewGuid().ToString("N"), request.Operation, JournalState.Prepared,
-                first.Source, first.Destination, first.Size, first.LastWriteUtc, _clock.UtcNow,
+                firstMember.Source, firstMember.Destination, firstMember.Size, firstMember.LastWriteUtc, _clock.UtcNow,
                 Permanent: manifest.All(member => member.Permanent) && manifest.Any(member => member.Permanent) ? true : null,
                 GroupId: groupId, GroupMembers: manifest);
             tx = new JournalTransaction(_journal, _clock, prepared);
@@ -148,9 +176,23 @@ public sealed class FileActionService
             foreach (var member in manifest)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                inFlight = member;
+                inFlightDestinationIsOurs = false;
                 if (request.Operation == FileOperationType.Copy)
                 {
-                    await Task.Run(() => _fileSystem.Copy(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    // Create-new copy: a file that appeared after the preflight is never overwritten and never claimed as ours,
+                    // so the compensation cannot delete it. The flag is raised inside the delegate, right before the call, so a
+                    // Task.Run cancelled before it starts never claims a destination (a throw after that may leave our partial file).
+                    var created = await Task.Run(() =>
+                    {
+                        inFlightDestinationIsOurs = true;
+                        return _fileSystem.TryCopyNew(member.Source, member.Destination!);
+                    }, cancellationToken).ConfigureAwait(false);
+                    if (!created)
+                    {
+                        inFlightDestinationIsOurs = false;
+                        throw new IOException(Tr.CoreFileActionDestinationExists(member.Destination!));
+                    }
                     VerifyGroupDestination(member);
                 }
                 else if (request.Operation == FileOperationType.Move)
@@ -171,6 +213,8 @@ public sealed class FileActionService
                     await Task.Run(() => _recycleBin.SendToRecycleBin(member.Source), cancellationToken).ConfigureAwait(false);
                     if (_fileSystem.FileExists(member.Source)) throw new JournalCodedException(JournalErrors.SourceStillExistsAfterRecovery);
                 }
+                done.Add(member);
+                inFlight = null;
             }
 
             tx.MarkMutationCompleted();
@@ -178,23 +222,141 @@ public sealed class FileActionService
             var complete = manifest.Select(member => new CaptureGroupMemberResult(member, true, false)).ToArray();
             return new(true, false, request.Operation, groupId, committed, complete, null,
                 JournalPersisted: commitError is null, JournalError: commitError,
-                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && manifest.Any(member => member.Permanent));
+                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && manifest.Any(member => member.Permanent),
+                SkippedMissing: missingSources.Count > 0 ? missingSources : null);
         }
         catch (Exception ex)
         {
-            string? journalError = null;
-            var failed = tx?.Fail(ex, out journalError);
+            // Compensate first (the outcome decides what the journal says), then inspect the real state.
+            var stuck = 0;
+            if (tx is { IsPrepared: true } && request.Operation is FileOperationType.Move or FileOperationType.Copy)
+            {
+                stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
+                    ? RemoveCreatedCopies(done, inFlight, inFlightDestinationIsOurs)
+                    : RestoreMovedMembers(done, inFlight)).ConfigureAwait(false);
+            }
+
             var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
-            return new(false, false, request.Operation, groupId, failed, states, ex.Message,
+            // Only the message shown to the user carries the (localized) rollback note; the journal always keeps the ORIGINAL
+            // failure (invariant code + English text, so Recovery can localize it).
+            var message = stuck > 0 ? Tr.CoreGroupActionRollbackFailed(ex.Message, stuck) : ex.Message;
+
+            // Fully rolled back = every member is provably back in its original state (source untouched, nothing at the
+            // destination). Nothing is left to retry, so it is not a Recovery item (an unconditional Failed record would
+            // offer "retry" for an operation the user cancelled that left the disk unchanged).
+            var rolledBack = stuck == 0 && states.Length > 0 && tx is { IsPrepared: true }
+                && request.Operation is FileOperationType.Move or FileOperationType.Copy
+                && states.All(state => state is { StateKnown: true, Completed: false, Conflict: false, SourceExists: true, DestinationExists: false });
+            string? journalError = null;
+            var failed = rolledBack ? tx!.DismissRolledBack(out journalError) : tx?.Fail(ex, out journalError);
+            return new(false, false, request.Operation, groupId, failed, states, message,
                 JournalPersisted: journalError is null,
                 JournalError: journalError,
-                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && states.Any(member => member.Completed && member.Member.Permanent));
+                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && states.Any(member => member.Completed && member.Member.Permanent),
+                SkippedMissing: missingSources.Count > 0 ? missingSources : null);
         }
         finally
         {
             tx?.Dispose();
             End();
         }
+    }
+
+    /// <summary>
+    /// Copy compensation: deletes the destination files this operation created so a failed or cancelled Copy leaves no
+    /// half capture behind (and a re-run is not blocked by the "destination exists" preflight). A verified copy is only
+    /// deleted while it still has the size that was copied; the member being copied when the failure hit is only touched
+    /// when <see cref="IFileSystem.TryCopyNew"/> proved this operation created its destination (so it is our partial file,
+    /// never a foreign one that appeared between the preflight and the copy).
+    /// Sources and the Recycle Bin are never touched. Returns how many files could not be cleaned up.
+    /// </summary>
+    private int RemoveCreatedCopies(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight, bool inFlightDestinationIsOurs)
+    {
+        var stuck = 0;
+        foreach (var member in done.Reverse())
+        {
+            try
+            {
+                var stat = _fileSystem.GetFileStat(member.Destination!);
+                if (stat is null) continue;
+                if (stat.Length != member.Size)
+                {
+                    stuck++;
+                    continue;
+                }
+                _fileSystem.Delete(member.Destination!);
+                if (_fileSystem.FileExists(member.Destination!)) stuck++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                stuck++;
+            }
+        }
+
+        if (inFlight?.Destination is { } partial && inFlightDestinationIsOurs)
+        {
+            try
+            {
+                if (_fileSystem.FileExists(partial))
+                {
+                    _fileSystem.Delete(partial);
+                    if (_fileSystem.FileExists(partial)) stuck++;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                stuck++;
+            }
+        }
+
+        return stuck;
+    }
+
+    /// <summary>
+    /// Move compensation: puts members that were already moved back to their sources so a failed or cancelled Move does
+    /// not leave a split pair. A member is moved back only when that is provably safe: its source is absent and its
+    /// destination is still the file that was moved (same size and last-write time). Anything else (a new file at the
+    /// source, an edited or vanished destination) is left alone. A plain file-system move is used, not the forward Move
+    /// override. Returns how many already-moved members could not be put back.
+    /// </summary>
+    private int RestoreMovedMembers(IReadOnlyList<JournalGroupMember> done, JournalGroupMember? inFlight)
+    {
+        var stuck = 0;
+        var candidates = new List<(JournalGroupMember Member, bool WasDone)>();
+        if (inFlight is not null) candidates.Add((inFlight, false));
+        foreach (var member in done.Reverse()) candidates.Add((member, true));
+
+        foreach (var (member, wasDone) in candidates)
+        {
+            try
+            {
+                var source = _fileSystem.GetFileStat(member.Source);
+                var destination = _fileSystem.GetFileStat(member.Destination!);
+                if (source is not null && destination is null) continue; // already back
+                if (source is not null || destination is null)
+                {
+                    // Both present (a conflict) or neither (lost): only a finished member counts as "could not be put back".
+                    if (wasDone) stuck++;
+                    continue;
+                }
+
+                if (destination.Length != member.Size || destination.LastWriteUtc != member.LastWriteUtc)
+                {
+                    stuck++;
+                    continue;
+                }
+
+                _fileSystem.Move(member.Destination!, member.Source);
+                var back = _fileSystem.GetFileStat(member.Source);
+                if (back is null || back.Length != member.Size || _fileSystem.FileExists(member.Destination!)) stuck++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                stuck++;
+            }
+        }
+
+        return stuck;
     }
 
     private void VerifyGroupDestination(JournalGroupMember member)
