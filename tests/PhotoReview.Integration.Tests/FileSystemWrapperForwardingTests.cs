@@ -28,34 +28,27 @@ public sealed class FileSystemWrapperForwardingTests
         }
     }
 
-    // Real file systems and test doubles, not decorators in the forwarding sense: excluded by name.
-    // PhysicalFileSystem / InMemoryFileSystem implement the primitive themselves; CrashPointFileSystem (a test project type, listed
-    // here in case it moves into a product assembly) wraps an InMemoryFileSystem only to inject crashes.
+    // The real file systems, not decorators in the forwarding sense: they implement the primitive themselves.
     private static readonly HashSet<string> NotDecorators = new(StringComparer.Ordinal)
     {
-        "PhysicalFileSystem", "InMemoryFileSystem", "CrashPointFileSystem",
+        "PhysicalFileSystem", "InMemoryFileSystem",
     };
 
-    /// <summary>Every product (non-test) PhotoReview assembly reachable from this test project, loaded.</summary>
+    /// <summary>
+    /// Every product (non-test) PhotoReview assembly found in the test output directory, loaded: not only the assemblies this
+    /// test project references, so a decorator living in an otherwise unreferenced product assembly is found too.
+    /// </summary>
     private static List<Assembly> ProductAssemblies()
     {
         var result = new List<Assembly>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<Assembly>([typeof(FileSystemWrapperForwardingTests).Assembly]);
-        while (pending.Count > 0)
+        foreach (var file in Directory.EnumerateFiles(AppContext.BaseDirectory, "PhotoReview*.dll"))
         {
-            foreach (var reference in pending.Pop().GetReferencedAssemblies())
-            {
-                var name = reference.Name;
-                if (name is null || !name.StartsWith("PhotoReview", StringComparison.Ordinal)
-                    || name.EndsWith(".Tests", StringComparison.Ordinal) || name.StartsWith("PhotoReview.TestSupport", StringComparison.Ordinal)
-                    || !seen.Add(name)) continue;
-                Assembly assembly;
-                try { assembly = Assembly.Load(reference); }
-                catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or BadImageFormatException) { continue; }
-                pending.Push(assembly);
-                result.Add(assembly);
-            }
+            var name = Path.GetFileNameWithoutExtension(file);
+            if (name.EndsWith(".Tests", StringComparison.Ordinal) || name.StartsWith("PhotoReview.TestSupport", StringComparison.Ordinal)
+                || !seen.Add(name)) continue;
+            try { result.Add(Assembly.LoadFrom(file)); }
+            catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or BadImageFormatException) { continue; } // native/non-managed PhotoReview*.dll
         }
 
         return result;
@@ -67,7 +60,11 @@ public sealed class FileSystemWrapperForwardingTests
         catch (ReflectionTypeLoadException ex) { return ex.Types.OfType<Type>(); }
     }
 
-    /// <summary>Concrete IFileSystem implementations that take another IFileSystem in a constructor (decorators), product assemblies only.</summary>
+    /// <summary>
+    /// Concrete IFileSystem implementations that take another IFileSystem in a constructor (decorators), product assemblies only.
+    /// Only a constructor parameter of exactly type <see cref="IFileSystem"/> counts: a decorator built through a factory
+    /// (<c>Func&lt;IFileSystem&gt;</c>, a provider, a static Wrap method) is out of scope of this discovery and needs its own proof.
+    /// </summary>
     private static List<(Type Type, ConstructorInfo Constructor)> DiscoverDecorators() =>
         ProductAssemblies()
             .SelectMany(SafeTypes)
@@ -94,6 +91,7 @@ public sealed class FileSystemWrapperForwardingTests
     {
         var decorators = DiscoverDecorators();
         // Sanity: discovery must find the decorators known today, or the reflection (not the decorators) is broken.
+        Assert.True(decorators.Count >= 2, $"expected at least 2 IFileSystem decorators, found {decorators.Count}: discovery is broken");
         Assert.Contains(decorators, entry => entry.Type == typeof(CountingFileSystem));
         Assert.Contains(decorators, entry => entry.Type == typeof(SlowLinkFileSystem));
         // Every current and future "TryXxxNew(source, destination)" primitive of the interface (TryCopyNew today).

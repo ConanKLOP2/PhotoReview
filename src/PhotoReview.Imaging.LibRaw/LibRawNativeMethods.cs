@@ -71,6 +71,39 @@ internal static class LibRawNativeMethods
     internal static string? TryGetDecoderName(SafeLibRawHandle handle) =>
         LibRawGetDecoderInfo(handle, out var info) == 0 && info.Name != IntPtr.Zero ? Marshal.PtrToStringAnsi(info.Name) : null;
 
+    [DllImport(LibraryName, EntryPoint = "libraw_get_iparams", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern IntPtr LibRawGetIParams(SafeLibRawHandle handle);
+
+    // libraw_iparams_t (LibRaw 0.22.x, x64 MSVC, libraw_types.h of 0.22.2; ints 4 B, no packing pragma). libraw_get_iparams returns a
+    // pointer to the struct itself, so only offsets INSIDE it matter: guard[4] + make/model/software/normalized_make/normalized_model
+    // (5 x 64 B) = 324 -> maker_index 324, raw_count 328, dng_version 332, is_foveon 336, colors 340, filters 344,
+    // xtrans[6][6] 348, xtrans_abs[6][6] 384, cdesc[5] 420. There is no public getter for colors/filters, hence the raw read; it is used only
+    // on the exact pinned runtime and a plausibility check (see TryReadRawStructure) fails closed into the conservative estimate.
+    internal const int IParamsColorsOffset = 340;
+    internal const int IParamsFiltersOffset = 344;
+    internal const int IParamsCdescOffset = 420;
+
+    /// <summary>
+    /// Reads colors/filters from a libraw_iparams_t block and returns null when they are implausible (colors outside 1..4 or a cdesc
+    /// that is not a run of ASCII capital letters of that length), i.e. when the layout does not match.
+    /// </summary>
+    internal static DecodeMemoryGuard.RawStructure? TryReadRawStructure(IntPtr iparams)
+    {
+        if (iparams == IntPtr.Zero) return null;
+        var colors = Marshal.ReadInt32(iparams, IParamsColorsOffset);
+        if (colors is < 1 or > 4) return null;
+        for (var i = 0; i < colors; i++)
+        {
+            var c = Marshal.ReadByte(iparams, IParamsCdescOffset + i);
+            if (c is < (byte)'A' or > (byte)'Z') return null;
+        }
+        return new DecodeMemoryGuard.RawStructure(colors, unchecked((uint)Marshal.ReadInt32(iparams, IParamsFiltersOffset)));
+    }
+
+    /// <summary>The file's sampling structure, or null when it cannot be read safely (other LibRaw build, implausible values).</summary>
+    internal static DecodeMemoryGuard.RawStructure? TryGetRawStructure(SafeLibRawHandle handle) =>
+        LibRawAvailability.IsExactPinnedVersion ? TryReadRawStructure(LibRawGetIParams(handle)) : null;
+
     [DllImport(LibraryName, EntryPoint = "libraw_set_progress_handler", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawSetProgressHandler(SafeLibRawHandle handle, ProgressCallback callback, IntPtr data);
 

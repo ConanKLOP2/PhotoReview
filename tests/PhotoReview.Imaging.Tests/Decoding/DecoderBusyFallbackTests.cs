@@ -34,6 +34,26 @@ public sealed class DecoderBusyFallbackTests
         Assert.Equal(0, fallback.Calls);
     }
 
+    [Fact]
+    public void IsFallbackable_DecoderBusy_IsFalse()
+    {
+        Assert.False(FallbackImageDecoder.IsFallbackable(new DecoderBusyException()));
+        Assert.False(FallbackImageDecoder.IsFallbackable(new DecoderBusyException("queue full", new NotSupportedException())));
+    }
+
+    [Fact]
+    public void DecoderBusyException_IsNotAFallbackableExceptionType_SoTheWhitelistNeverSeesItAsOne()
+    {
+        // IsFallbackable is a whitelist: DecoderBusyException stays non-fallbackable only while it derives from none of the whitelisted
+        // types. Deriving it from NotSupportedException/InvalidDataException/... would make the explicit exclusion the only guard.
+        foreach (var whitelisted in new[] { typeof(NotSupportedException), typeof(InvalidCastException), typeof(OverflowException),
+                     typeof(System.IO.InvalidDataException), typeof(System.Runtime.InteropServices.COMException) })
+        {
+            Assert.False(whitelisted.IsAssignableFrom(typeof(DecoderBusyException)),
+                $"DecoderBusyException must not derive from {whitelisted.Name}: a busy refusal would then look like a backend failure to fall back from.");
+        }
+    }
+
     private sealed class BusyDecoder : IImageDecoder
     {
         public IDecodedImage Decode(DecodeRequest request) => throw new DecoderBusyException();

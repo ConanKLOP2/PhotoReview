@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Media;
@@ -36,9 +37,19 @@ public sealed class LibRawDecodeMemoryTests
     {
         const int Width = 11_600, Height = 8_700;
 
-        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height, DecodeMemoryGuard.RawBufferFamily.LinearOrFloat);
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height, DecodeMemoryGuard.RawBufferFamily.Linear);
 
         Assert.Equal((long)Width * Height * 19 + 1920L * 1280 * 4, estimate);
+    }
+
+    [Fact]
+    public void EstimatePeakBytes_FloatHundredMegapixelBoundedTarget_CountsTheFloatBufferAndTheSixteenBitCopyTogether()
+    {
+        const int Width = 11_600, Height = 8_700;
+
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height, DecodeMemoryGuard.RawBufferFamily.Float);
+
+        Assert.Equal((long)Width * Height * (8 + 3 + 24) + 1920L * 1280 * 4, estimate); // 35 B/px: above the 19 of an integer linear file
     }
 
     [Fact]
@@ -60,17 +71,133 @@ public sealed class LibRawDecodeMemoryTests
         Assert.True(DecodeMemoryGuard.HasHeadroom(estimate, totalAvailableBytes: 1_500_000_000L, memoryLoadBytes: 0));
     }
 
+    private static readonly DecodeMemoryGuard.RawStructure Mosaic = new(Colors: 3, Filters: 0x94949494);
+    private static readonly DecodeMemoryGuard.RawStructure NoMosaic = new(Colors: 3, Filters: 0);
+
     [Theory]
-    [InlineData("lossless_dng_load_raw()", false)]
-    [InlineData("canon_load_raw()", false)]
-    [InlineData("deflate_dng_load_raw()", true)]
-    [InlineData("uncompressed_fp_dng_load_raw()", true)]
-    [InlineData("lossy_dng_load_raw()", true)]
-    [InlineData(null, false)]
-    public void FamilyFromDecoderName_MapsLinearAndFloatDngDecodersOnly(string? name, bool expectedLinear)
+    [InlineData("lossless_dng_load_raw()")]
+    [InlineData("packed_dng_load_raw()")]
+    [InlineData("deflate_dng_load_raw()")]
+    [InlineData("lossy_dng_load_raw()")]
+    public void Classify_DngDecoderOnAMosaicFile_IsBayer(string name)
     {
-        Assert.Equal(expectedLinear, DecodeMemoryGuard.FamilyFromDecoderName(name) == DecodeMemoryGuard.RawBufferFamily.LinearOrFloat);
+        // A Bayer deflate DNG is no longer charged 8 B/px (a 100 MP file used to be refused ~600 MB early).
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Bayer, DecodeMemoryGuard.Classify(name, Mosaic));
     }
+
+    [Theory]
+    [InlineData("lossless_dng_load_raw()")]
+    [InlineData("packed_dng_load_raw()")]
+    [InlineData("deflate_dng_load_raw()")]
+    [InlineData("lossy_dng_load_raw()")]
+    public void Classify_DngDecoderOnANonMosaicFile_IsLinear(string name)
+    {
+        // Linear DNG / ProRAW-style (ADOBECOPYPIXEL): 4 x 16-bit raw_alloc, not 2 B/px.
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Linear, DecodeMemoryGuard.Classify(name, NoMosaic));
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Linear, DecodeMemoryGuard.Classify(name, new DecodeMemoryGuard.RawStructure(4, 0)));
+    }
+
+    [Theory]
+    [InlineData("lossless_dng_load_raw()")]
+    [InlineData("packed_dng_load_raw()")]
+    [InlineData("deflate_dng_load_raw()")]
+    [InlineData("lossy_dng_load_raw()")]
+    public void Classify_DngDecoderWithUnreadableStructure_FallsBackToTheConservativeLinearEstimate(string name)
+    {
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Linear, DecodeMemoryGuard.Classify(name, null));
+    }
+
+    [Theory]
+    [InlineData("uncompressed_fp_dng_load_raw()")]
+    [InlineData("deflate_fp_dng_load_raw()")]
+    public void Classify_FloatDngDecoder_IsFloatWhateverTheStructure(string name)
+    {
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Float, DecodeMemoryGuard.Classify(name, Mosaic));
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Float, DecodeMemoryGuard.Classify(name, NoMosaic));
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Float, DecodeMemoryGuard.Classify(name, null));
+    }
+
+    [Theory]
+    [InlineData("canon_load_raw()")]
+    [InlineData("nikon_load_raw()")]
+    [InlineData(null)]
+    public void Classify_NonDngOrUnknownDecoder_IsBayerEvenWithoutAMosaic(string? name)
+    {
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Bayer, DecodeMemoryGuard.Classify(name, NoMosaic));
+        Assert.Equal(DecodeMemoryGuard.RawBufferFamily.Bayer, DecodeMemoryGuard.Classify(name, null));
+    }
+
+    [Fact]
+    public void Estimate_LinearFortyEightMegapixelLosslessDng_IsNotChargedAsBayer()
+    {
+        const int Width = 8_000, Height = 6_000; // 48 MP
+        var linear = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height,
+            DecodeMemoryGuard.Classify("lossless_dng_load_raw()", NoMosaic));
+        var bayer = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height,
+            DecodeMemoryGuard.Classify("lossless_dng_load_raw()", Mosaic));
+
+        Assert.Equal((long)Width * Height * 6, linear - bayer); // ~288 MB of under-estimate fixed
+    }
+
+    [Fact]
+    public void Estimate_BayerHundredMegapixelDeflateDng_IsTheThirteenBytesPerPixelBayerResult()
+    {
+        const int Width = 11_600, Height = 8_700;
+        var family = DecodeMemoryGuard.Classify("deflate_dng_load_raw()", Mosaic);
+
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height, family);
+
+        Assert.Equal((long)Width * Height * 13 + 1920L * 1280 * 4, estimate);
+    }
+
+    /// <summary>Builds a fake libraw_iparams_t block holding the given colors/filters/cdesc at the pinned offsets.</summary>
+    private static IntPtr FakeIParams(int colors, uint filters, byte[] cdesc)
+    {
+        var block = Marshal.AllocHGlobal(440);
+        for (var i = 0; i < 440; i++) Marshal.WriteByte(block, i, 0);
+        Marshal.WriteInt32(block, LibRawNativeMethods.IParamsColorsOffset, colors);
+        Marshal.WriteInt32(block, LibRawNativeMethods.IParamsFiltersOffset, unchecked((int)filters));
+        for (var i = 0; i < cdesc.Length; i++) Marshal.WriteByte(block, LibRawNativeMethods.IParamsCdescOffset + i, cdesc[i]);
+        return block;
+    }
+
+    private static readonly byte[] Rgbg = "RGBG"u8.ToArray();
+
+    [Fact]
+    public void TryReadRawStructure_PlausibleBlock_ReturnsColorsAndFilters()
+    {
+        var block = FakeIParams(3, 0x94949494, Rgbg);
+        try
+        {
+            var structure = LibRawNativeMethods.TryReadRawStructure(block);
+
+            Assert.Equal(new DecodeMemoryGuard.RawStructure(3, 0x94949494), structure);
+            Assert.True(structure!.Value.IsBayer);
+        }
+        finally { Marshal.FreeHGlobal(block); }
+    }
+
+    [Fact]
+    public void TryReadRawStructure_ColorsOutOfRange_FailsClosed()
+    {
+        foreach (var colors in new[] { 0, 7, -1 })
+        {
+            var block = FakeIParams(colors, 0x94949494, Rgbg);
+            try { Assert.Null(LibRawNativeMethods.TryReadRawStructure(block)); }
+            finally { Marshal.FreeHGlobal(block); }
+        }
+    }
+
+    [Fact]
+    public void TryReadRawStructure_CdescNotLetters_FailsClosedBecauseTheLayoutDoesNotMatch()
+    {
+        var block = FakeIParams(3, 0x94949494, [0, (byte)'G', (byte)'B', (byte)'G']);
+        try { Assert.Null(LibRawNativeMethods.TryReadRawStructure(block)); }
+        finally { Marshal.FreeHGlobal(block); }
+    }
+
+    [Fact]
+    public void TryReadRawStructure_NullPointer_IsNull() => Assert.Null(LibRawNativeMethods.TryReadRawStructure(IntPtr.Zero));
 
     [Fact]
     public void EstimatePeakBytes_BoundedTarget_CountsOnlyTheTargetBitmap()
@@ -125,9 +252,10 @@ public sealed class LibRawDecodeMemoryTests
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Equal((Width, Height), (bitmap.PixelWidth, bitmap.PixelHeight));
-        // The ~16.6 MB of BGRA pixels live in a temporary unmanaged buffer and the bitmap's own copy; a managed byte[] of them would show up here
-        // (the budget is 1/16 of the BGRA size, as the former 30 MP variant used 8 MB for 120 MB).
-        Assert.True(allocated < 1L * 1024 * 1024, $"allocated {allocated} managed bytes for a {Width * Height * 4L}-byte bitmap");
+        // The ~16.6 MB of BGRA pixels live in a temporary unmanaged buffer and the bitmap's own copy; a managed byte[] of them would show up here.
+        // The budget is 2 MB (1 MB was too tight): tiered JIT and WPF's first-use statics (even after the warm-up above) can allocate a few
+        // hundred KB on this thread, while a 16.6 MB managed copy would still exceed the bound 8x over.
+        Assert.True(allocated < 2L * 1024 * 1024, $"allocated {allocated} managed bytes for a {Width * Height * 4L}-byte bitmap");
     }
 
     [Fact]

@@ -420,6 +420,15 @@ public sealed class PreviewImageService : IPreloadTarget
         {
             return null;
         }
+        // The creator of a Preload-priority decode that the RAW full-decode gate refused (DecoderBusyException) failed
+        // only for ITS priority. A joiner (often the viewer, which must never show an error for a file that decodes
+        // fine) retries with its own decode: the finally below removes the failed Lazy first, so the retry either
+        // creates its own (viewer priority waits in the gate instead of failing fast) or joins a fresh one.
+        // The creator itself still surfaces the busy signal (PreloadScheduler handles it).
+        catch (DecoderBusyException) when (!ReferenceEquals(lazy, candidate))
+        {
+            return null;
+        }
         finally
         {
             _previewLoads.TryRemove(new KeyValuePair<(ImageCacheKey, long), Lazy<Task<IDecodedImage>>>(loadKey, lazy));

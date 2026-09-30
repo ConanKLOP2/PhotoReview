@@ -190,7 +190,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         using var slot = s_fullDecodeGate.Enter(request.Priority, cancellationToken);
         try
         {
-            return DecodeCore(request, cancellationToken);
+            return DecodeCore(request, slot, cancellationToken);
         }
         catch (OutOfMemoryException ex)
         {
@@ -201,7 +201,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     /// <summary>Test seam: (total available, current load) of the memory the pre-decode headroom check compares against; the GC's reading by default.</summary>
     internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = DecodeMemoryGuard.ReadGcMemoryInfo;
 
-    private WpfDecodedImage DecodeCore(DecodeRequest request, CancellationToken cancellationToken)
+    private WpfDecodedImage DecodeCore(DecodeRequest request, FullDecodeGate.Lease slot, CancellationToken cancellationToken)
     {
         using var cancellationState = new CancellationState(cancellationToken);
         // libraw_open_buffer stores a pointer into the caller's buffer (no copy) that unpack/process read later, so the
@@ -222,6 +222,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             _stageObserver?.Invoke("opened");
             if (_configureAfterOpen) ConfigureOutput(raw);
             EnsureMemoryHeadroom(raw, request);
+            slot.MarkWorked(); // past the guard: real decode work starts, so this lease counts for the gate's preload aging
             CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
             _stageObserver?.Invoke("unpacked");
             cancellationToken.ThrowIfCancellationRequested();
@@ -277,7 +278,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (width <= 0 || height <= 0) return; // unknown size: nothing to estimate from
         var (targetWidth, targetHeight) = request.Box.Fit(width, height);
         var (total, load) = MemoryInfo();
-        var family = DecodeMemoryGuard.FamilyFromDecoderName(LibRawNativeMethods.TryGetDecoderName(raw));
+        var family = DecodeMemoryGuard.Classify(LibRawNativeMethods.TryGetDecoderName(raw), LibRawNativeMethods.TryGetRawStructure(raw));
         var estimate = DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight,
             LibRawNativeMethods.LibRawGetRawWidth(raw), LibRawNativeMethods.LibRawGetRawHeight(raw), family);
         if (!DecodeMemoryGuard.HasHeadroom(estimate, total, load))

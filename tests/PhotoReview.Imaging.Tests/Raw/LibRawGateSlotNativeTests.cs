@@ -29,6 +29,32 @@ public sealed class LibRawGateSlotNativeTests
     }
 
     [Fact]
+    public void Decode_CancelledAfterTheGateWasEntered_ReleasesTheSlotOnUnwind()
+    {
+        if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
+        using var cts = new CancellationTokenSource();
+        var stages = new List<string>();
+        // The slot is held from before DecodeCore: cancelling at "opened" proves the release after a real acquisition (a token cancelled
+        // before the call throws before the gate and proves nothing about it).
+        var decoder = new LibRawDecoder(stage =>
+        {
+            stages.Add(stage);
+            if (stage == "opened")
+            {
+                Assert.Equal(0, LibRawDecoder.FullDecodeSlotsAvailable);
+                cts.Cancel();
+            }
+        });
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            decoder.Decode(new DecodeRequest(samplePath, new DecodeBox(240, 180)), cts.Token));
+
+        Assert.Contains("opened", stages);
+        Assert.DoesNotContain("processed", stages); // it really stopped mid-decode
+        Assert.Equal(1, LibRawDecoder.FullDecodeSlotsAvailable);
+    }
+
+    [Fact]
     public async Task Decode_QueuedWaiterCancelled_LeavesTheHolderInChargeAndFreesTheSlotAtTheEnd()
     {
         if (RawCorpus.TryGetFile(SampleName) is not { } samplePath) return;
