@@ -334,9 +334,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         {
             // The presented path can be stale (catalog changed since); PresentAsync rejects an override that is not a
             // member of the selected entry, so only pass it when it really belongs to the current index.
-            var presented = _presenter.CurrentPresentedPath;
-            var pathOverride = _catalog.Current?.CaptureGroup is not null && presented is not null
-                && _catalog.IndexOf(presented) == _catalog.CurrentIndex ? presented : null;
+            var pathOverride = PresentedPathOfCurrentEntry();
             CompareToggleTask = ObservePresentAsync(_presenter.PresentAsync(_catalog.CurrentIndex, allowCompare: enableCompare,
                 pathOverride: pathOverride, includeCaptureGroupInCompare: enableCompare));
         }
@@ -797,9 +795,29 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             {
                 // Drop an armed target / held full decode made under the old setting before the image is presented again.
                 _presenter.ZoomDetail.Reset();
-                SettingsRefreshTask = _presenter.PresentAsync(_catalog.CurrentIndex);
+                // Keep the displayed JPEG/RAW member and the Compare state (the same rules as ToggleCompare).
+                SettingsRefreshTask = RepresentCurrentAfterSettingsAsync();
             }
         }
+    }
+
+    private async Task RepresentCurrentAfterSettingsAsync()
+    {
+        await _presenter.PresentAsync(_catalog.CurrentIndex, pathOverride: PresentedPathOfCurrentEntry(),
+            includeCaptureGroupInCompare: _compare.IsVisible);
+        // The badge names the displayed member; do not rely on the presenter's status hook to refresh it.
+        OnPropertyChanged(nameof(CapturePairBadge));
+    }
+
+    /// <summary>
+    /// The path the presenter shows for the current capture-group entry (the toggled member), or null when it is stale
+    /// (the catalog changed since) or the entry has no pair: PresentAsync rejects an override that is not a member of the entry.
+    /// </summary>
+    private string? PresentedPathOfCurrentEntry()
+    {
+        var presented = _presenter.CurrentPresentedPath;
+        return _catalog.Current?.CaptureGroup is not null && presented is not null
+            && _catalog.IndexOf(presented) == _catalog.CurrentIndex ? presented : null;
     }
 
     /// <summary>
@@ -815,7 +833,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             while (_fileActionGate.IsHeld) await _fileActionGate.WhenReleasedAsync();
             // Read after the wait: the action may have moved the current photo, or the user may have opened another folder.
             if (_isClosed || _currentSession?.Folder is not { Length: > 0 } folder) return;
-            await OpenFolderAsync(folder, _catalog.Current?.Path);
+            await OpenFolderAsync(folder, PresentedPathOfCurrentEntry() ?? _catalog.Current?.Path);
         }
         catch (Exception ex)
         {

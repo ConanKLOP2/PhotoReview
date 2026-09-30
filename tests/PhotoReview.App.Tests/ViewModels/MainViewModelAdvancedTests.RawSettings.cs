@@ -27,6 +27,88 @@ public sealed partial class MainViewModelAdvancedTests
         return vm;
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShowSettings_RawFullDecodeChanged_KeepsTheToggledCaptureMemberAndCompareState(bool compareOpen)
+    {
+        var jpeg = CreateImageFile(_tempDir, "keep-pair.jpg");
+        var rawMember = CreateImageFile(_tempDir, "keep-pair-member.jpg", DifferentPngBytes);
+        _settings.RawFullDecode = RawFullDecode.Never;
+        _settingsStore.Save(_settings);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = new CaptureGroup(jpeg, rawMember) }], RawPairMode.PreferJpeg);
+        var (vm, _) = CreateViewModel();
+        await vm.Presenter.PresentAsync(0);
+        if (compareOpen)
+        {
+            vm.ToggleCompare();
+            await vm.CompareToggleTask;
+        }
+        else
+        {
+            await vm.ToggleCaptureGroupMemberAsync();
+            Assert.Equal(rawMember, vm.Presenter.CurrentPresentedPath);
+        }
+        var badgeChanges = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.CapturePairBadge)) badgeChanges++; };
+        _dialogService.OnShowSettings = () => { _settings.RawFullDecode = RawFullDecode.OnZoom; _settingsStore.Save(_settings); };
+
+        vm.ShowSettings();
+        await vm.SettingsRefreshTask;
+
+        if (compareOpen)
+        {
+            Assert.True(vm.Compare.IsVisible);
+            Assert.Equal(jpeg, vm.Compare.LeftPath);
+            Assert.Equal(rawMember, vm.Compare.RightPath);
+        }
+        else
+        {
+            Assert.Equal(rawMember, vm.Presenter.CurrentPresentedPath);
+            Assert.Equal(Tr.MainCapturePairBadgeRaw, vm.CapturePairBadge);
+        }
+        Assert.True(badgeChanges > 0);
+    }
+
+    [Fact]
+    public async Task ShowSettings_FolderReload_OpensAtTheCurrentlyPresentedCaptureMember()
+    {
+        var vm = await OpenRawFolderAsync("raw_reload_member", RawPairMode.PreferJpeg);
+        var jpeg = CreateImageFile(_tempDir, "reload-pair.jpg");
+        var rawMember = CreateImageFile(_tempDir, "reload-pair-member.jpg", DifferentPngBytes);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = new CaptureGroup(jpeg, rawMember) }], RawPairMode.PreferJpeg);
+        await vm.Presenter.PresentAsync(0);
+        await vm.ToggleCaptureGroupMemberAsync();
+        Assert.Equal(rawMember, vm.Presenter.CurrentPresentedPath);
+        var ownership = new RecordingOwnership();
+        vm.FolderOwnership = ownership;
+        _dialogService.OnShowSettings = () =>
+        {
+            _settings.RawPairMode = RawPairMode.Separate;
+            _settingsStore.Save(_settings);
+        };
+
+        vm.ShowSettings();
+        await vm.SettingsRefreshTask;
+
+        Assert.Equal(rawMember, ownership.InitialPath); // not the entry's representative JPEG
+    }
+
+    private sealed class RecordingOwnership : PhotoReview.Core.Instance.IFolderOwnership
+    {
+        public string? InitialPath { get; private set; }
+
+        public Task<PhotoReview.Core.Instance.FolderOpenDecision> BeforeOpenAsync(string folder, string? initialPath, CancellationToken cancellationToken = default)
+        {
+            InitialPath = initialPath;
+            return Task.FromResult(PhotoReview.Core.Instance.FolderOpenDecision.Proceed);
+        }
+
+        public void OnFolderShown(string folder) { }
+
+        public void AfterOpen(string folder, string? shownFolder) { }
+    }
+
     [Fact]
     public async Task ShowSettings_WhenRawSupportToggledWithOtherChanges_StillAppliesTheSharedSettings()
     {
