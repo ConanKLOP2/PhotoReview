@@ -387,6 +387,28 @@ public sealed class UndoServiceGroupTests
     }
 
     [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWhereTheRecycledMemberWasRestoredAndEdited_RestoresNothingAndRecoveryOffersNoRetry()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var entry = RegisterFailedDelete([jpeg, raw], [jpeg]);
+        _fs.AddFile(Jpeg, "jpeg", Stamp.AddHours(2)); // put back by hand, then edited: same size, other write time
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, _bin.RestoreCalls);
+        Assert.Equal(entry, Assert.Single(_journal.ReadFailedOperations())); // the line is untouched: nothing was undone
+        // Recovery must not offer a retry that would recycle the edited JPEG.
+        var check = new RecoveryFileCheck(_fs).Check(entry);
+        Assert.NotEqual(RecoveryVerdict.CanRetry, check.Verdict);
+        var retry = await new RecoveryRetryService(_journal, _fs, new FixedClock(), _bin).RetryMoveOrCopyAsync(entry);
+        Assert.False(retry.Succeeded);
+        Assert.True(_fs.FileExists(Jpeg)); // the edited file is still there (the fake bin would have thrown on SendToRecycleBin)
+    }
+
+    [Fact]
     public void RegisterGroup_FailedWithNothingCompletedOrNotRecycle_RegistersNothing()
     {
         var jpeg = Member(Jpeg, null, 4);
