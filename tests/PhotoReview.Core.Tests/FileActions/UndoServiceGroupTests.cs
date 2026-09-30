@@ -209,6 +209,38 @@ public sealed class UndoServiceGroupTests
     }
 
     [Fact]
+    public async Task UndoLastAsync_GroupMoveRetryThatRestoresRemainingMembers_ClosesTheEarlierFailedLine()
+    {
+        _fs.AddFile(MovedJpeg, "jpeg", Stamp);
+        _fs.AddFile(MovedRaw, "raw data", Stamp);
+        _fs.MoveHook = (source, _) => source == MovedRaw ? new IOException("simulated undo failure") : null;
+        RegisterMove(Member(Jpeg, MovedJpeg, 4), Member(Raw, MovedRaw, 8));
+        Assert.False((await _undo.UndoLastAsync()).Succeeded);
+        Assert.Single(_journal.ReadFailedOperations());
+        _fs.MoveHook = null;
+
+        var retry = await _undo.UndoLastAsync();
+
+        Assert.True(retry.Succeeded, retry.ErrorMessage);
+        Assert.Empty(_journal.ReadFailedOperations()); // otherwise it looks retryable and would move fresh files
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_GroupRecycleRetryThatRestoresRemainingMembers_ClosesTheEarlierFailedLine()
+    {
+        _bin.FailFor = Raw;
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+        Assert.False((await _undo.UndoLastAsync()).Succeeded);
+        Assert.Single(_journal.ReadFailedOperations());
+        _bin.FailFor = null;
+
+        var retry = await _undo.UndoLastAsync();
+
+        Assert.True(retry.Succeeded, retry.ErrorMessage);
+        Assert.Empty(_journal.ReadFailedOperations());
+    }
+
+    [Fact]
     public async Task UndoLastAsync_GroupRecycleNothingEverRestoredByThisUndo_StillReportsAlreadyHandled()
     {
         _fs.AddFile(Jpeg, "jpeg", Stamp);

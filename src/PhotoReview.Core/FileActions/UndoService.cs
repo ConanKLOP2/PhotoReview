@@ -378,7 +378,8 @@ public sealed class UndoService
             }
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
-            _partialGroupUndo = null;
+            // A retry that really restored the remaining members completes the earlier partial undo: close its Failed lines.
+            _ = ResolvePartialUndo(action);
             DropGroupUndo(members);
             return new UndoResult(true, FileOperationType.Move, action.Source, action.Destination, null,
                 RestoredPaths: members.Select(member => member.Source).ToArray());
@@ -501,7 +502,7 @@ public sealed class UndoService
             }
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
-            _partialGroupUndo = null;
+            _ = ResolvePartialUndo(action);
             _lastUndoAction = null;
             // Partly restorable capture: success for what came back, plus a message naming what cannot (a warning, not an error).
             return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),
