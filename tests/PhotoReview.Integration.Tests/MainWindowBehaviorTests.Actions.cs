@@ -33,6 +33,8 @@ namespace PhotoReview.Integration.Tests;
 [Trait("Category", "UI")]
 [Collection("GlobalState")]
 [Trait("Category", "Slow")]
+// Integration too: CI's Integration+Slow step runs these (the main filter excludes Slow; they rotted unrun before).
+[Trait("Category", "Integration")]
 public sealed class MainWindowBehaviorActionTests
 {
     /// <summary>Not bound by <see cref="ShortcutMappings.Default"/>, so the action branch is reached.</summary>
@@ -150,8 +152,13 @@ public sealed class MainWindowBehaviorActionTests
         }
     }
 
+    /// <summary>
+    /// INV-4 with Q-T1's queue semantics (277177ab, Q-T1 reversed): a second press while the first
+    /// action is still running is queued, not dropped, and it only starts once the first one has
+    /// finished -- two file actions never run at the same time.
+    /// </summary>
     [Fact]
-    public async Task ASecondActionIsIgnoredWhileTheFirstIsStillRunning()
+    public async Task ASecondActionIsQueuedAndRunsOnlyAfterTheFirstCompletes()
     {
         using var root = new TempRoot("t14b-inv4");
         using var dataRoot = new DataRootFixture();
@@ -159,10 +166,14 @@ public sealed class MainWindowBehaviorActionTests
         var destination = root.Dir("sorted");
         var first = Path.Combine(folder, "a.png");
         var second = Path.Combine(folder, "b.png");
+        var third = Path.Combine(folder, "c.png");
 
         var presented = new List<string>();
         var moveGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var moveInvocations = 0;
+        var movesInFlight = 0;
+        var maxMovesInFlight = 0;
+        var movedSources = new List<string>();
         MainWindow? window = null;
 
         try
@@ -176,8 +187,21 @@ public sealed class MainWindowBehaviorActionTests
                     MoveOverride = async (source, target) =>
                     {
                         Interlocked.Increment(ref moveInvocations);
-                        await moveGate.Task;
-                        await Task.Run(() => File.Move(source, target));
+                        var inFlight = Interlocked.Increment(ref movesInFlight);
+                        lock (movedSources)
+                        {
+                            movedSources.Add(source);
+                            maxMovesInFlight = Math.Max(maxMovesInFlight, inFlight);
+                        }
+                        try
+                        {
+                            await moveGate.Task;
+                            await Task.Run(() => File.Move(source, target));
+                        }
+                        finally
+                        {
+                            Interlocked.Decrement(ref movesInFlight);
+                        }
                     },
                 };
                 window = TestAppHost.CreateMainWindow(folder, hooks);
@@ -190,7 +214,7 @@ public sealed class MainWindowBehaviorActionTests
                 InstallTestAction(window, destination);
 
                 // Two presses back to back, the way a user double-taps the key. The first parks in
-                // MoveOverride; the second must be dropped by the in-flight guard, not queued.
+                // MoveOverride; the second must wait behind it (INV-4), not start alongside it.
                 Assert.True(PressKey(window, ActionKey), "The first key press did not reach the action branch of Window_KeyDown.");
                 Assert.True(PressKey(window, ActionKey), "The second key press did not reach the action branch of Window_KeyDown.");
 
@@ -199,26 +223,23 @@ public sealed class MainWindowBehaviorActionTests
                 Assert.Equal(1, Volatile.Read(ref moveInvocations));
                 Assert.Equal(1, FileActionInProgress(window));
 
+                // Opening the gate lets the first move finish; only then may the queued second one run
+                // (the gate is already open, so it completes too). The guard is released once both did.
                 moveGate.SetResult();
-                Assert.True(
-                    await StaTestHost.WaitForAsync(() => FileActionInProgress(window) == 0, SettleTimeout),
-                    "The file action never released its in-flight guard.");
-                await StaTestHost.DrainAsync(DrainWindow);
-
-                // The dropped press must not resurface once the first action finishes.
-                Assert.Equal(1, Volatile.Read(ref moveInvocations));
-                Assert.True(File.Exists(Path.Combine(destination, "a.png")), "The first move did not reach the destination.");
-                Assert.False(File.Exists(Path.Combine(destination, "b.png")), "The blocked second action moved a file anyway (INV-4).");
-                Assert.True(File.Exists(second), "The blocked second action removed b.png from the source folder (INV-4).");
-
-                // Settled normally: the guard is released, so a later action runs as usual.
-                Assert.True(PressKey(window, ActionKey), "The follow-up key press did not reach the action branch of Window_KeyDown.");
                 Assert.True(
                     await StaTestHost.WaitForAsync(
                         () => Volatile.Read(ref moveInvocations) == 2 && FileActionInProgress(window) == 0,
                         SettleTimeout),
-                    "The window did not accept a new action after the first one completed.");
-                Assert.True(File.Exists(Path.Combine(destination, "b.png")), "The follow-up move did not reach the destination.");
+                    $"The queued second action did not run after the first one (Q-T1). Moves={Volatile.Read(ref moveInvocations)}");
+                await StaTestHost.DrainAsync(DrainWindow);
+
+                // Exactly once each, one at a time, in order: a then the image that replaced it, b.
+                Assert.Equal(2, Volatile.Read(ref moveInvocations));
+                Assert.Equal(1, maxMovesInFlight);
+                Assert.Equal([first, second], movedSources.ToArray(), StringComparer.OrdinalIgnoreCase);
+                Assert.True(File.Exists(Path.Combine(destination, "a.png")), "The first move did not reach the destination.");
+                Assert.True(File.Exists(Path.Combine(destination, "b.png")), "The queued second move did not reach the destination.");
+                Assert.True(File.Exists(third), "An action ran more often than it was pressed: c.png left the source folder.");
             });
         }
         finally
