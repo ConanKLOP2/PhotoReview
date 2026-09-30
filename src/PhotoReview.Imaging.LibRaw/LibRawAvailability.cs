@@ -62,6 +62,16 @@ public static class LibRawAvailability
                int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out minor);
     }
 
+    /// <summary>Null when <paramref name="version"/> is the pinned major.minor; otherwise the reason the library must be rejected. Runs before init and before any raw struct write.</summary>
+    internal static string? CheckVersion(string? version, string displayName)
+    {
+        if (!TryParseVersion(version, out var major, out var minor))
+            return $"{displayName} reported an unreadable LibRaw version '{version}'.";
+        return major != RequiredMajor || minor != RequiredMinor
+            ? $"{displayName} is LibRaw {version} but this build requires {RequiredMajor}.{RequiredMinor}.x (run tools/fetch-libraw.ps1)."
+            : null;
+    }
+
     /// <summary>
     /// Validates an already loaded native library: all required exports resolve (a missing one would otherwise surface as an
     /// <see cref="EntryPointNotFoundException"/> at decode time), <c>libraw_version()</c> is the pinned major.minor, and init/close work.
@@ -78,15 +88,7 @@ public static class LibRawAvailability
         try
         {
             var version = Marshal.PtrToStringAnsi(((delegate* unmanaged[Cdecl]<IntPtr>)NativeLibrary.GetExport(libraryHandle, "libraw_version"))());
-            if (!TryParseVersion(version, out var major, out var minor))
-            {
-                return (false, $"{displayName} reported an unreadable LibRaw version '{version}'.");
-            }
-
-            if (major != RequiredMajor || minor != RequiredMinor)
-            {
-                return (false, $"{displayName} is LibRaw {version} but this build requires {RequiredMajor}.{RequiredMinor}.x (run tools/fetch-libraw.ps1).");
-            }
+            if (CheckVersion(version, displayName) is { } versionProblem) return (false, versionProblem);
 
             var init = (delegate* unmanaged[Cdecl]<uint, IntPtr>)NativeLibrary.GetExport(libraryHandle, "libraw_init");
             var close = (delegate* unmanaged[Cdecl]<IntPtr, void>)NativeLibrary.GetExport(libraryHandle, "libraw_close");

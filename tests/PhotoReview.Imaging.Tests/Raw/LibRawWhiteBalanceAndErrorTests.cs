@@ -11,9 +11,6 @@ namespace PhotoReview.Imaging.Tests.Raw;
 [Trait("Category", "Native")]
 public sealed class LibRawWhiteBalanceAndErrorTests
 {
-    private static readonly string SamplePath = Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus/Canon - EOS 350D - RAW (3_2).CR2"));
-
     [Theory]
     [InlineData(-100007)] // LIBRAW_UNSUFFICIENT_MEMORY
     [InlineData(12)]      // ENOMEM returned as a positive errno
@@ -35,40 +32,120 @@ public sealed class LibRawWhiteBalanceAndErrorTests
     }
 
     [Fact]
-    public void TrySetUseCameraWb_AfterOutputSetters_SetsTheFlagAndRefusesAMismatchedLayout()
+    public void TrySetUseCameraWb_PinnedLayout_SetsFlagAndAppliesOutputSettings()
     {
         if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
         using var handle = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
-        LibRawNativeMethods.LibRawSetOutputColor(handle, 1);
-        LibRawNativeMethods.LibRawSetOutputBps(handle, 8);
-        LibRawNativeMethods.LibRawSetNoAutoBright(handle, 1);
-        Assert.Equal(0, LibRawNativeMethods.ReadUseCameraWb(handle));
-
-        // Values that do not read back where expected (a different layout) must leave memory untouched.
-        Assert.False(LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 16, 1));
+        var layout = LibRawNativeMethods.PinnedWhiteBalanceLayout;
         Assert.Equal(0, LibRawNativeMethods.ReadUseCameraWb(handle));
 
         Assert.True(LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 8, 1));
+
         Assert.Equal(1, LibRawNativeMethods.ReadUseCameraWb(handle));
+        // The sentinels used for the layout proof must be gone: the real settings are what LibRaw will use.
+        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, layout.OutputColor));
+        Assert.Equal(8, LibRawNativeMethods.ReadInt32(handle, layout.OutputBps));
+        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, layout.NoAutoBright));
+    }
+
+    [Theory]
+    [InlineData(4, 0, 0)]    // output_color read from the wrong place
+    [InlineData(0, -4, 0)]   // output_bps read from the wrong place
+    [InlineData(0, 0, 8)]    // no_auto_bright read from the wrong place
+    [InlineData(-8, -8, -8)] // a whole shifted block
+    public void TrySetUseCameraWb_WrongOffset_FailsClosedWithoutWritingTheFlag(int colorShift, int bpsShift, int brightShift)
+    {
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
+        using var handle = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
+        var real = LibRawNativeMethods.PinnedWhiteBalanceLayout;
+        var wrong = new LibRawNativeMethods.WhiteBalanceLayout(real.OutputColor + colorShift, real.OutputBps + bpsShift,
+            real.NoAutoBright + brightShift, real.UseCameraWb);
+
+        var applied = LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 8, 1, () => true, wrong);
+
+        Assert.False(applied);
+        Assert.Equal(0, LibRawNativeMethods.ReadUseCameraWb(handle));
+        // The output settings still reach LibRaw through the supported setters (daylight WB, sRGB, 8 bit).
+        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, real.OutputColor));
+        Assert.Equal(8, LibRawNativeMethods.ReadInt32(handle, real.OutputBps));
+        Assert.Equal(1, LibRawNativeMethods.ReadInt32(handle, real.NoAutoBright));
     }
 
     [Fact]
-    public void Decode_UsesCameraWhiteBalance_NotLibRawDaylightDefaults()
+    public void TrySetUseCameraWb_VersionNotPinned_TouchesNoNativeMemory()
     {
-        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) || RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is null) return;
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
+        using var handle = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
+        var layout = LibRawNativeMethods.PinnedWhiteBalanceLayout;
+        var before = Snapshot(handle, layout);
+        var gateCalls = 0;
 
-        var daylight = RedToBlueRatio(NativeDecodeMeans(useCameraWb: false));
-        var camera = RedToBlueRatio(NativeDecodeMeans(useCameraWb: true));
-        // Guard the premise: the two white balances must be distinguishable on this sample.
-        Assert.True(Math.Abs(camera / daylight - 1) > 0.05, $"daylight R/B {daylight:F3} vs camera R/B {camera:F3}");
+        var applied = LibRawNativeMethods.TrySetUseCameraWb(handle, 1, 8, 1, () => { gateCalls++; return false; }, layout);
 
-        var image = new LibRawDecoder().Decode(new DecodeRequest(SamplePath, new DecodeBox(640, 480)));
-        var decoded = RedToBlueRatio(BitmapMeans((BitmapSource)image.PlatformImage));
-
-        Assert.True(Math.Abs(decoded / camera - 1) < 0.03, $"decoder R/B {decoded:F3}, camera-WB {camera:F3}, daylight {daylight:F3}");
+        Assert.False(applied);
+        Assert.Equal(1, gateCalls);
+        // Not even the sentinel/setter traffic happens: the gate runs before any write.
+        Assert.Equal(before, Snapshot(handle, layout));
     }
 
-    private static double RedToBlueRatio((double R, double G, double B) means) => means.R / means.B;
+    private static (int Color, int Bps, int Bright, int Flag) Snapshot(SafeLibRawHandle handle, LibRawNativeMethods.WhiteBalanceLayout layout) =>
+        (LibRawNativeMethods.ReadInt32(handle, layout.OutputColor), LibRawNativeMethods.ReadInt32(handle, layout.OutputBps),
+            LibRawNativeMethods.ReadInt32(handle, layout.NoAutoBright), LibRawNativeMethods.ReadInt32(handle, layout.UseCameraWb));
+
+    [Theory]
+    [InlineData("0.22.2", true)]
+    [InlineData("0.22.0", true)]
+    [InlineData("0.22.9-Release", true)]
+    [InlineData("0.23.0", false)]
+    [InlineData("0.21.4", false)]
+    [InlineData("1.22.0", false)]
+    [InlineData("garbage", false)]
+    [InlineData("", false)]
+    public void CheckVersion_OnlyThePinnedMajorMinorPasses(string version, bool accepted)
+    {
+        var problem = LibRawAvailability.CheckVersion(version, "libraw.dll");
+
+        Assert.Equal(accepted, problem is null);
+        if (!accepted) Assert.Contains("libraw.dll", problem, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Canon - EOS 350D - RAW (3_2).CR2")]
+    [InlineData("Nikon - D40X - 12bit 12bit compressed (Lossy (type 1)) (3_2).NEF")]
+    [InlineData("Olympus - E-P3 - 16bit (4_3).ORF")]
+    public void Decode_CameraWhiteBalance_ChangesOutputAndMovesTowardTheEmbeddedPreview(string fileName)
+    {
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) || RawCorpus.TryGetFile(fileName) is not { } path) return;
+
+        var daylight = Ratios(NativeDecodeMeans(path, useCameraWb: false));
+        var camera = Ratios(NativeDecodeMeans(path, useCameraWb: true));
+        var preview = Ratios(PreviewMeans(path));
+
+        // The flag really changed LibRaw's output (R/G or B/G moves by more than 5 %).
+        Assert.True(Math.Abs(camera.RG / daylight.RG - 1) > 0.05 || Math.Abs(camera.BG / daylight.BG - 1) > 0.05,
+            $"{fileName}: daylight {daylight} vs camera {camera}");
+        // The camera-WB decode has the cast of the camera's own JPEG preview, the daylight decode does not.
+        Assert.True(Distance(camera, preview) < Distance(daylight, preview) / 2,
+            $"{fileName}: preview {preview}, camera-WB {camera}, daylight {daylight}");
+
+        var image = new LibRawDecoder().Decode(new DecodeRequest(path, new DecodeBox(320, 240)));
+        var decoded = Ratios(BitmapMeans((BitmapSource)image.PlatformImage));
+        Assert.True(Math.Abs(decoded.RG / camera.RG - 1) < 0.04 && Math.Abs(decoded.BG / camera.BG - 1) < 0.04,
+            $"{fileName}: decoder {decoded}, camera-WB {camera}, daylight {daylight}");
+    }
+
+    private static (double RG, double BG) Ratios((double R, double G, double B) means) => (means.R / means.G, means.B / means.G);
+
+    private static double Distance((double RG, double BG) a, (double RG, double BG) b) =>
+        Math.Abs(Math.Log(a.RG / b.RG)) + Math.Abs(Math.Log(a.BG / b.BG));
+
+    private static (double R, double G, double B) PreviewMeans(string path)
+    {
+        var jpeg = LibRawDecoder.ReadJpegThumbnail(path);
+        using var stream = new MemoryStream(jpeg);
+        var frame = new JpegBitmapDecoder(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad).Frames[0];
+        return BitmapMeans(new FormatConvertedBitmap(frame, System.Windows.Media.PixelFormats.Bgr32, null, 0));
+    }
 
     private static (double R, double G, double B) BitmapMeans(BitmapSource bitmap)
     {
@@ -81,10 +158,10 @@ public sealed class LibRawWhiteBalanceAndErrorTests
         return (r / count, g / count, b / count);
     }
 
-    private static (double R, double G, double B) NativeDecodeMeans(bool useCameraWb)
+    private static (double R, double G, double B) NativeDecodeMeans(string path, bool useCameraWb)
     {
         using var raw = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
-        Assert.Equal(0, LibRawNativeMethods.LibRawOpenWFile(raw, SamplePath));
+        Assert.Equal(0, LibRawNativeMethods.LibRawOpenWFile(raw, path));
         LibRawNativeMethods.LibRawSetOutputColor(raw, 1);
         LibRawNativeMethods.LibRawSetOutputBps(raw, 8);
         LibRawNativeMethods.LibRawSetNoAutoBright(raw, 1);
