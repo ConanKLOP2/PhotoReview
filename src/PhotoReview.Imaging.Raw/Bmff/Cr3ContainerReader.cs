@@ -267,7 +267,8 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             }
             else if (child.Type == "CMT2")
             {
-                exifBlocks.Add(new ExifBlock(child.PayloadOffset, child.PayloadSize, IsTiffHeader: true));
+                // CMT2 IFD0 holds the exposure fields directly (Exif IFD without a 0x8769 pointer).
+                exifBlocks.Add(new ExifBlock(child.PayloadOffset, child.PayloadSize, IsTiffHeader: true, IfdIsExif: true));
             }
             else if (child.Type == "THMB" &&
                 TryReadHeaderedJpeg(source, child, sizeFieldOffset: 8, widthOffset: 4, heightOffset: 6) is { } thumb)

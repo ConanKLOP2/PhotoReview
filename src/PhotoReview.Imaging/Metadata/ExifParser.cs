@@ -45,14 +45,23 @@ public static class ExifParser
     /// accepted here too, because the RAW pipeline hands ORF blocks to this method; <see cref="TryParseJpeg"/> stays strict.
     /// </summary>
     public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock) =>
-        TryParseGuarded(tiffBlock, allowOlympusRawMagic: true);
+        TryParseGuarded(tiffBlock, allowOlympusRawMagic: true, ifdIsExif: false);
 
-    private static ExifSummary? TryParseGuarded(ReadOnlySpan<byte> tiffBlock, bool allowOlympusRawMagic)
+    /// <summary>
+    /// Like <see cref="TryParseTiffBlock(ReadOnlySpan{byte})"/> but, when <paramref name="ifdIsExif"/> is true, treats the
+    /// block's IFD0 itself as the Exif IFD (exposure time, f-number, ISO, dates, focal length, lens) instead of following a
+    /// 0x8769 pointer. Canon CR3 stores its exposure fields this way in the moov "CMT2" box. Make/Model/DateTime are not
+    /// read in that mode (they belong to IFD0 proper, i.e. CMT1).
+    /// </summary>
+    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock, bool ifdIsExif) =>
+        TryParseGuarded(tiffBlock, allowOlympusRawMagic: true, ifdIsExif);
+
+    private static ExifSummary? TryParseGuarded(ReadOnlySpan<byte> tiffBlock, bool allowOlympusRawMagic, bool ifdIsExif = false)
     {
         if (tiffBlock.IsEmpty) return null;
         try
         {
-            return TryParseTiff(tiffBlock, allowOlympusRawMagic);
+            return TryParseTiff(tiffBlock, allowOlympusRawMagic, ifdIsExif);
         }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or OverflowException or DecoderFallbackException)
         {
@@ -124,7 +133,7 @@ public static class ExifParser
     }
 
     /// <summary>Parses a TIFF-structured EXIF block ("II*\0" / "MM\0*" header).</summary>
-    internal static ExifSummary? TryParseTiff(ReadOnlySpan<byte> tiff, bool allowOlympusRawMagic = false)
+    internal static ExifSummary? TryParseTiff(ReadOnlySpan<byte> tiff, bool allowOlympusRawMagic = false, bool ifdIsExif = false)
     {
         if (tiff.Length < 8) return null;
         bool little;
@@ -137,10 +146,17 @@ public static class ExifParser
 
         var values = new RawValues();
         var ifd0 = TiffStructure.ReadU32(tiff, 4, little);
-        var exifIfd = ReadIfd(tiff, ifd0, little, ref values, isExifIfd: false);
-        // Only one level is followed (no recursion), so a hostile pointer back to IFD0 cannot loop.
-        if (exifIfd is { } exifOffset)
-            ReadIfd(tiff, exifOffset, little, ref values, isExifIfd: true);
+        if (ifdIsExif)
+        {
+            ReadIfd(tiff, ifd0, little, ref values, isExifIfd: true);
+        }
+        else
+        {
+            var exifIfd = ReadIfd(tiff, ifd0, little, ref values, isExifIfd: false);
+            // Only one level is followed (no recursion), so a hostile pointer back to IFD0 cannot loop.
+            if (exifIfd is { } exifOffset)
+                ReadIfd(tiff, exifOffset, little, ref values, isExifIfd: true);
+        }
 
         return ExifSummary.Create(
             values.DateOriginal ?? values.DateDigitized ?? values.DateTime,

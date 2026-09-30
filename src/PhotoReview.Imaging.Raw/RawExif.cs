@@ -18,6 +18,9 @@ public static class RawExif
     /// Iterates through <see cref="RawContainerInfo.ExifBlocks"/>:
     /// - For TIFF blocks (<see cref="ExifBlock.IsTiffHeader"/> = true), reads the block span and parses via <see cref="ExifParser.TryParseTiffBlock"/>.
     /// - For JPEG preview blocks (e.g. RAF/RW2 where <see cref="ExifBlock.IsTiffHeader"/> = false), reads the leading bytes and parses via <see cref="ExifParser.TryParseJpeg"/>.
+    /// Summaries of several blocks are merged (first non-null value per field wins, in block order): a Canon CR3 has
+    /// camera/date in CMT1 and the exposure fields in CMT2 (<see cref="ExifBlock.IfdIsExif"/>). Later blocks are only
+    /// read while the merged summary still lacks a field.
     /// Returns null if no valid EXIF metadata is found or on corrupt input; never throws.
     /// </summary>
     public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo)
@@ -28,6 +31,7 @@ public static class RawExif
         if (containerInfo.ExifBlocks.Count == 0)
             return null;
 
+        ExifSummary? merged = null;
         foreach (var block in containerInfo.ExifBlocks)
         {
             if (block.Offset < 0 || block.Offset >= source.Length || block.Length <= 0)
@@ -44,7 +48,7 @@ public static class RawExif
                     continue;
 
                 summary = block.IsTiffHeader
-                    ? ExifParser.TryParseTiffBlock(span)
+                    ? ExifParser.TryParseTiffBlock(span, block.IfdIsExif)
                     : ExifParser.TryParseJpeg(span);
             }
             catch (InvalidDataException)
@@ -54,9 +58,29 @@ public static class RawExif
             }
 
             if (summary is not null && !summary.IsEmpty)
-                return summary;
+            {
+                merged = merged is null ? summary : Merge(merged, summary);
+                if (IsComplete(merged))
+                    break;
+            }
         }
 
-        return null;
+        return merged;
     }
+
+    private static bool IsComplete(ExifSummary s) =>
+        s.DateTaken is not null && s.CameraMake is not null && s.CameraModel is not null && s.LensModel is not null
+        && s.Iso is not null && s.FocalLength is not null && s.FNumber is not null && s.ExposureTime is not null;
+
+    private static ExifSummary Merge(ExifSummary first, ExifSummary later) => first with
+    {
+        DateTaken = first.DateTaken ?? later.DateTaken,
+        CameraMake = first.CameraMake ?? later.CameraMake,
+        CameraModel = first.CameraModel ?? later.CameraModel,
+        LensModel = first.LensModel ?? later.LensModel,
+        Iso = first.Iso ?? later.Iso,
+        FocalLength = first.FocalLength ?? later.FocalLength,
+        FNumber = first.FNumber ?? later.FNumber,
+        ExposureTime = first.ExposureTime ?? later.ExposureTime,
+    };
 }
