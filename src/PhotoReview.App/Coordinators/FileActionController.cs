@@ -242,7 +242,7 @@ public sealed class FileActionController
             {
                 if (groupResult is not null)
                 {
-                    if (groupResult.Succeeded) _undoService?.RegisterGroup(groupResult);
+                    _undoService?.RegisterGroup(groupResult); // also the completed members of a part-way failed Delete
                     if (groupResult.Succeeded)
                     {
                         var name = Path.GetFileName(source);
@@ -311,6 +311,9 @@ public sealed class FileActionController
                 _sink.SetStatusText(Tr.StatusMoveUnverified(Path.GetFileName(source)));
                 return false;
             }
+
+            // A Delete that failed part-way: the members already in the Recycle Bin get a Ctrl+Z (RegisterGroup ignores the rest).
+            if (groupResult is not null) _undoService?.RegisterGroup(groupResult);
 
             // INV-5: Thất bại thì khôi phục lại ảnh nguồn vào danh mục
             if (isRemove && sourceIndex >= 0)

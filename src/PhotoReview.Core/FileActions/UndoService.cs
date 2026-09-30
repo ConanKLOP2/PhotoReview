@@ -127,12 +127,26 @@ public sealed class UndoService
     public void RegisterGroup(CaptureGroupActionResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (!result.Succeeded || result.Rejected || result.Entry?.GroupMembers is not { Count: > 0 } members) return;
+        if (result.Rejected) return;
+        IReadOnlyList<JournalGroupMember> members;
+        if (result.Succeeded)
+        {
+            if (result.Entry?.GroupMembers is not { Count: > 0 } entryMembers) return;
+            members = entryMembers;
+        }
+        else if (result.Operation == FileOperationType.Recycle)
+        {
+            // A group Delete that failed part-way (e.g. the JPEG reached the Recycle Bin, the RAW did not): the members that
+            // already went there still deserve a Ctrl+Z. Only completed members; a failed one is still on disk.
+            members = result.Members.Where(member => member.Completed).Select(member => member.Member).ToArray();
+            if (members.Count == 0) return;
+        }
+        else return;
         if (result.Operation is FileOperationType.Move or FileOperationType.Recycle)
             // Permanence is per member: only a capture whose EVERY member was deleted permanently has nothing to restore.
             // One permanent member (e.g. an XMP) must not disable undo of the JPEG/RAW that reached the Recycle Bin.
-            _lastUndoAction = new UndoActionRecord(result.Operation, result.Entry.Source, result.Entry.Destination,
-                result.Entry.Size, result.Entry.LastWriteUtc,
+            _lastUndoAction = new UndoActionRecord(result.Operation, result.Entry?.Source ?? members[0].Source, result.Entry?.Destination ?? members[0].Destination,
+                result.Entry?.Size ?? members[0].Size, result.Entry?.LastWriteUtc ?? members[0].LastWriteUtc,
                 result.Operation == FileOperationType.Recycle && members.All(member => member.Permanent), members);
     }
 

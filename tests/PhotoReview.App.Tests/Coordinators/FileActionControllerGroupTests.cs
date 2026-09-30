@@ -195,6 +195,27 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
+    public async Task GroupRecycle_FailingPartWay_RegistersTheAlreadyRecycledMembersForUndo()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        _bin.FailSendFor = raw;
+        var controller = NewController();
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Equal([jpeg], _bin.Recycled); // the JPEG is in the bin, the RAW is still on disk
+        Assert.True(File.Exists(raw));
+        _bin.FailSendFor = null;
+
+        var result = await controller.UndoLastAsync(_root);
+
+        Assert.NotNull(result);
+        Assert.True(result!.Succeeded, result.ErrorMessage);
+        Assert.True(File.Exists(jpeg)); // Ctrl+Z brought the recycled member back
+        Assert.True(File.Exists(raw));
+    }
+
+    [Fact]
     public async Task UndoGroupRecycle_FailingMidWay_ShowsTheAlreadyRestoredMemberInTheCatalog()
     {
         var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
@@ -458,6 +479,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         public bool NoBin { get; set; }
         public bool FitsAll { get; set; } = true;
         public string? FailRestoreFor { get; set; }
+        public string? FailSendFor { get; set; }
 
         public HashSet<string> NoBinExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -467,6 +489,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         public void SendToRecycleBin(string path)
         {
             if (!CanRecycle(path)) throw new IOException("no bin");
+            if (string.Equals(path, FailSendFor, StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated recycle failure");
             Recycled.Add(path);
             File.Delete(path);
         }

@@ -241,6 +241,39 @@ public sealed class UndoServiceGroupTests
     }
 
     [Fact]
+    public async Task RegisterGroup_RecycleFailedPartWay_RegistersOnlyTheCompletedNonPermanentlyDeletedMembers()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3, permanent: true);
+        var failed = new CaptureGroupActionResult(false, false, FileOperationType.Recycle, "g", null,
+            [new CaptureGroupMemberResult(jpeg, true, false), new CaptureGroupMemberResult(xmp, true, false),
+             new CaptureGroupMemberResult(raw, false, false, "boom", SourceExists: true)], "boom");
+
+        _undo.RegisterGroup(failed);
+
+        Assert.True(_undo.HasLastAction);
+        _fs.AddFile(Raw, "raw data", Stamp); // never left the disk
+        var result = await _undo.UndoLastAsync();
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Equal(1, _bin.RestoreCalls); // only the JPEG
+        Assert.True(_fs.FileExists(Jpeg));
+        Assert.False(_fs.FileExists(Xmp));
+    }
+
+    [Fact]
+    public void RegisterGroup_FailedWithNothingCompletedOrNotRecycle_RegistersNothing()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        _undo.RegisterGroup(new CaptureGroupActionResult(false, false, FileOperationType.Recycle, "g", null,
+            [new CaptureGroupMemberResult(jpeg, false, false, "x", SourceExists: true)], "x"));
+        _undo.RegisterGroup(new CaptureGroupActionResult(false, false, FileOperationType.Move, "g", null,
+            [new CaptureGroupMemberResult(Member(Jpeg, MovedJpeg, 4), true, false)], "x"));
+
+        Assert.False(_undo.HasLastAction);
+    }
+
+    [Fact]
     public async Task UndoLastAsync_GroupRecycleNothingEverRestoredByThisUndo_StillReportsAlreadyHandled()
     {
         _fs.AddFile(Jpeg, "jpeg", Stamp);
