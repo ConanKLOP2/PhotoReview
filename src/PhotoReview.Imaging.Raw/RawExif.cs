@@ -11,7 +11,7 @@ namespace PhotoReview.Imaging.Raw;
 /// </summary>
 public static class RawExif
 {
-    private const int MaxBlockReadBytes = 128 * 1024;
+    private const int MaxBlockReadBytes = RawContainerLimits.MaxExifBlockBytes;
 
     /// <summary>
     /// Attempts to extract an <see cref="ExifSummary"/> from the container's EXIF blocks.

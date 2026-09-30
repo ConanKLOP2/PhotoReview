@@ -149,7 +149,7 @@ public sealed class OrfContainerReader : IRawContainerReader
             ParseOlympusMakerNote(source, makerNoteOffset.Value, littleEndian, previews);
         }
 
-        exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
+        exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
 
         return new RawContainerInfo(
             RawFormat.Orf,

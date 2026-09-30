@@ -70,7 +70,7 @@ public sealed class Cr2ContainerReader : IRawContainerReader
 
             if (TiffHeaderNavigator.ReadTagValue(source, entries, 0x8769, littleEndian) is { } exifOffset && exifOffset > 0)
             {
-                exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
+                exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
                 if (exifWidth == 0 &&
                     TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out int pixelWidth, out int pixelHeight))
                 {
@@ -127,7 +127,7 @@ public sealed class Cr2ContainerReader : IRawContainerReader
 
         if (exifBlocks.Count == 0 && source.Length > 0)
         {
-            exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
+            exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
         }
 
         return new RawContainerInfo(

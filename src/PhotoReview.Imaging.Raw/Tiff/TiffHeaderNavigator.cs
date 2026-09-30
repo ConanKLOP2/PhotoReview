@@ -141,6 +141,53 @@ public static class TiffHeaderNavigator
         return result;
     }
 
+    // Tags ExifParser.TryParseTiff actually reads: IFD0 Make/Model/DateTime/ExifIFD pointer, then the Exif IFD values below.
+    private static readonly ushort[] ExifSummaryIfd0Tags = [0x010F, 0x0110, 0x0132, 0x8769];
+    private static readonly ushort[] ExifSummaryExifTags = [0x829A, 0x829D, 0x8827, 0x9003, 0x9004, 0x920A, 0xA434];
+
+    /// <summary>
+    /// Sizes the TIFF-header EXIF block. It always starts at 0 (ExifParser offsets are relative to the TIFF header) and is at
+    /// least min(file, <see cref="RawContainerLimits.DefaultExifBlockBytes"/>); it grows to cover IFD0, the Exif IFD and the
+    /// out-of-line values of the tags the summary reads when a writer placed them after the pixel data, bounded by
+    /// <see cref="RawContainerLimits.MaxExifBlockBytes"/> and the file length.
+    /// </summary>
+    public static ExifBlock ComputeExifBlock(IRawHeaderSource source, bool littleEndian, long ifd0Offset)
+    {
+        long length = Math.Min(source.Length, RawContainerLimits.DefaultExifBlockBytes);
+        try
+        {
+            long needed = ExifSummaryExtent(source, ifd0Offset, littleEndian, ExifSummaryIfd0Tags, out uint exifPointer);
+            if (exifPointer > 0)
+                needed = Math.Max(needed, ExifSummaryExtent(source, exifPointer, littleEndian, ExifSummaryExifTags, out _));
+            length = Math.Max(length, Math.Min(needed, Math.Min(source.Length, RawContainerLimits.MaxExifBlockBytes)));
+        }
+        catch (InvalidDataException)
+        {
+            // Exhausted header budget or hostile structure: keep the default block.
+        }
+
+        return new ExifBlock(0, length, IsTiffHeader: true);
+    }
+
+    private static long ExifSummaryExtent(IRawHeaderSource source, long ifdOffset, bool littleEndian, ushort[] wantedTags, out uint exifPointer)
+    {
+        exifPointer = 0;
+        var entries = ReadIfdEntries(source, ifdOffset, littleEndian, out _);
+        if (entries.Count == 0) return 0;
+
+        long end = ifdOffset + 2 + (entries.Count * 12L) + 4;
+        foreach (var entry in entries)
+        {
+            if (entry.Tag == 0x8769) exifPointer = entry.ValueOrOffset;
+            if (Array.IndexOf(wantedTags, entry.Tag) < 0) continue;
+
+            long bytes = (long)TiffStructure.TypeSize(entry.Type) * entry.Count;
+            if (bytes > 4) end = Math.Max(end, entry.ValueOrOffset + bytes);
+        }
+
+        return end;
+    }
+
     /// <summary>
     /// Finds the first entry with <paramref name="tag"/>.
     /// </summary>

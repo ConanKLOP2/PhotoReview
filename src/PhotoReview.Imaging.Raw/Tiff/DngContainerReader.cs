@@ -192,7 +192,7 @@ public sealed class DngContainerReader : IRawContainerReader
             sensorHeight = largest.Height;
         }
 
-        exifBlocks.Add(new ExifBlock(0, Math.Min(source.Length, 128 * 1024), IsTiffHeader: true));
+        exifBlocks.Add(TiffHeaderNavigator.ComputeExifBlock(source, littleEndian, ifd0Offset));
 
         return new RawContainerInfo(
             RawFormat.Dng,
