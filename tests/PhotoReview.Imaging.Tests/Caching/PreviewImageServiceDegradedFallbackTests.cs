@@ -50,7 +50,7 @@ public sealed class PreviewImageServiceDegradedFallbackTests : IDisposable
         public bool IsDegradedFallback => degraded;
     }
 
-    private PreviewImageService NewService(string diskDir, IImageDecoder decoder) =>
+    private static PreviewImageService NewService(string diskDir, IImageDecoder decoder) =>
         new(new ReviewMetrics(), () => false, () => 32, capacityBytes: 64L * 1024 * 1024, diskCacheDirectory: diskDir, decoder: decoder);
 
     [Fact]
