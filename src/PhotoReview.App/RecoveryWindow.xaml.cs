@@ -52,10 +52,12 @@ public partial class RecoveryWindow : Window
     private bool _retrying;
     private readonly Func<IReadOnlyList<JournalEntry>, DismissOutcome>? _dismiss;
     private readonly RecoveryFileCheck _checker;
+    private readonly Func<bool>? _allowPermanentDelete;
     private readonly System.Collections.ObjectModel.ObservableCollection<RecoveryRow> _visible = [];
     private Action? _cancelCheck;
 
-    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, Task<RecoveryRetryResult>>? retry = null, Func<IReadOnlyList<JournalEntry>, DismissOutcome>? dismiss = null, IFileSystem? fileSystem = null)
+    public RecoveryWindow(IReadOnlyList<JournalEntry> entries, Func<JournalEntry, Task<RecoveryRetryResult>>? retry = null, Func<IReadOnlyList<JournalEntry>, DismissOutcome>? dismiss = null, IFileSystem? fileSystem = null,
+        Func<bool>? allowPermanentDelete = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         InitializeComponent();
@@ -63,6 +65,7 @@ public partial class RecoveryWindow : Window
         _rows = entries.Select(entry => new RecoveryRow(entry)).ToList();
         _retry = retry;
         _dismiss = dismiss;
+        _allowPermanentDelete = allowPermanentDelete;
         _checker = new RecoveryFileCheck(fileSystem ?? new PhysicalFileSystem());
         foreach (var row in _rows) row.PropertyChanged += OnRowChanged;
         void ExplorerFailed(string message) => System.Windows.MessageBox.Show(this, message, Tr.RecoveryExplorerFailedTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -158,7 +161,7 @@ public partial class RecoveryWindow : Window
         if (result.GroupMembers is { Count: > 0 } groupMembers)
         {
             var views = groupMembers.Select(item => new RecoveryGroupMemberView(
-                GroupStatusText(item.Verdict, item.Member, item.Source, item.Destination), item.Member.Source,
+                RecoveryPresenter.GroupStatusText(item.Verdict, item.Member, item.Source, item.Destination), item.Member.Source,
                 item.Member.Destination ?? Tr.RecoveryDetailNoDestination)).ToArray();
             GroupMembersHeading.Text = Tr.RecoveryGroupMembers(groupMembers.Count);
             GroupMembersHeading.Visibility = Visibility.Visible;
@@ -180,25 +183,6 @@ public partial class RecoveryWindow : Window
             SourcePanel.Show(RecoveryPresenter.PathView(Tr.RecoveryDetailSource, result.Source, entry, folderMissingNote: false));
             ShowDestination(result.Destination is null ? null : RecoveryPresenter.PathView(Tr.RecoveryDetailDestination, result.Destination, entry, result.DestinationFolderMissing));
         }
-    }
-
-    private static string GroupStatusText(RecoveryVerdict verdict, JournalGroupMember member,
-        RecoveryPathCheck source, RecoveryPathCheck? destination)
-    {
-        var state = verdict switch
-        {
-            RecoveryVerdict.AlreadyDone => Tr.RecoveryGroupExists,
-            RecoveryVerdict.CanRetry => Tr.RecoveryGroupSourceStatus,
-            RecoveryVerdict.NotRecycled or RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryGroupMissing,
-            RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged => Tr.RecoveryGroupChanged,
-            RecoveryVerdict.Conflict => Tr.RecoveryGroupConflict,
-            RecoveryVerdict.Lost => Tr.RecoveryGroupLost,
-            RecoveryVerdict.Unknown => Tr.RecoveryGroupUnreadable,
-            _ => RecoveryPresenter.VerdictText(verdict),
-        };
-        if (member.Destination is null) return state;
-        return $"{state} · {Tr.RecoveryDetailSource}: {RecoveryPresenter.PathStatusText(source.Status)}"
-            + $" · {Tr.RecoveryDetailDestination}: {RecoveryPresenter.PathStatusText(destination?.Status ?? RecoveryPathStatus.Missing)}";
     }
 
     private void ShowDestination(RecoveryPathView? view)
@@ -341,9 +325,7 @@ public partial class RecoveryWindow : Window
         var row = SelectedRow;
         if (_retry is null || row is null || _retrying) return;
         var entry = row.Entry;
-        var confirm = entry.GroupMembers is { Count: > 0 } members
-            ? Tr.RecoveryGroupRetryConfirm(RecoveryPresenter.OperationText(entry.Type), members.Count)
-            : Tr.DialogConfirmRetryMessage(RecoveryPresenter.OperationText(entry.Type), Path.GetFileName(entry.Source));
+        var confirm = RecoveryPresenter.RetryConfirmText(entry, row.Check, _allowPermanentDelete?.Invoke() == true);
         if (System.Windows.MessageBox.Show(this, confirm, Tr.DialogConfirmRetryTitle, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         RecoveryRetryResult result;
         try { result = await ExecuteRetryAsync(entry); }

@@ -863,5 +863,8 @@
   "status.groupPartnerMissing": "{fileName}: companion file(s) were missing on disk ({missing}), so the action was applied to the remaining files.",
   "core.groupAction.rollbackFailed": "{message} In addition, {count} file(s) that were already processed could not be put back automatically; check Recovery.",
   "core.undo.groupPartiallyRestored": "Restored {restored} of {total} files. Could not restore (deleted permanently): {names}",
-  "status.lateDeletedPartlyPermanently": "{fileName} was moved to the Recycle Bin after you left its folder, except {permanentFiles}, which could not go to the Recycle Bin and was deleted permanently."
+  "status.lateDeletedPartlyPermanently": "{fileName} was moved to the Recycle Bin after you left its folder, except {permanentFiles}, which could not go to the Recycle Bin and was deleted permanently.",
+  "recovery.group.onDisk": "Still on disk",
+  "recovery.group.retryConfirmPermanent": "Retry {operation} for {count} capture-group members? {permanentCount} of them are on drives without a Recycle Bin and will be deleted PERMANENTLY. This cannot be undone. Completed members will be skipped.",
+  "recovery.group.retryConfirmRestore": "Restore capture-group members from the Recycle Bin (up to {count})? Members that are already back will be skipped."
 }
