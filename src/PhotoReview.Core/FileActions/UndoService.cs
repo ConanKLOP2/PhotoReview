@@ -542,8 +542,7 @@ public sealed class UndoService
                     return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),
                         RestoredPaths: RestoredInOrder(members, restored));
                 }
-                // Members the user put back by hand still must leave the Failed Delete line, or Retry would recycle them again.
-                SettleFailedDeleteLine(action, restored);
+                // The catch below settles the Failed Delete line for members the user put back by hand (restored is non-empty).
                 throw new IOException(Tr.CoreRecoveryAlreadyHandled);
             }
             var undoMembers = members.Where(member => !member.Permanent).Select(member => member with { }).ToArray();
