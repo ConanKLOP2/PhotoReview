@@ -530,6 +530,53 @@ public sealed class FetchLibRawScriptTests : IDisposable
         Assert.False(File.Exists(Path.Combine(repo, "native", "x64", "libraw.dll")));
     }
 
+    // A closed local port: any attempt to download fails immediately, so a test that expects "no network" cannot pass by accident
+    // and a fallback attempt is observable ("Downloading ..." in the output) without touching the internet.
+    private const string UnreachableUrl = "https://127.0.0.1:1/LibRaw-0.22.2-Win64.zip";
+
+    private static readonly string[] CommittedPackageEntries = ["LibRaw-0.22.2/bin/libraw.dll", "LibRaw-0.22.2/LICENSE.LGPL", "LibRaw-0.22.2/LICENSE.CDDL"];
+
+    private (string Repo, string Script, string CommittedZip, byte[] Package) FakeRepoWithCommittedPackage(string name)
+    {
+        var package = BuildPackage((CommittedPackageEntries[0], Dll), (CommittedPackageEntries[1], [1]), (CommittedPackageEntries[2], [2]));
+        var (repo, script) = FakeRepo(name, Dll, package);
+        var licenseDir = Path.Combine(repo, "native", "libraw");
+        Directory.CreateDirectory(licenseDir);
+        File.WriteAllText(Path.Combine(licenseDir, "NOTICE.txt"), "notice");
+        var zip = Path.Combine(licenseDir, "LibRaw-0.22.2-Win64.zip");
+        File.WriteAllBytes(zip, package);
+        return (repo, script, zip, package);
+    }
+
+    [Fact(DisplayName = "fetch-libraw: a fresh checkout installs from the committed package without any download")]
+    public void FetchLibRaw_FreshCheckout_UsesCommittedPackageWithoutNetwork()
+    {
+        var (repo, script, _, _) = FakeRepoWithCommittedPackage("committed");
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-DownloadUrl", UnreachableUrl);
+
+        Assert.True(code == 0, output);
+        Assert.Equal(Dll, File.ReadAllBytes(Path.Combine(repo, "native", "x64", "libraw.dll")));
+        Assert.Contains("committed", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Downloading", output, StringComparison.Ordinal);
+        Assert.Equal(0, PowerShellRunner.Run("-File", script, "-Verify").ExitCode);
+    }
+
+    [Fact(DisplayName = "fetch-libraw: a committed package that fails its pin is not trusted; the script falls back to the download and fails closed")]
+    public void FetchLibRaw_TamperedCommittedPackage_FallsBackToDownloadAndFailsClosed()
+    {
+        var (repo, script, zip, _) = FakeRepoWithCommittedPackage("committed-tampered");
+        File.WriteAllBytes(zip, [1, 2, 3]); // not the pinned package (and not even a zip)
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-DownloadUrl", UnreachableUrl);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("does not match native/libraw.package.sha256", output, StringComparison.Ordinal);
+        Assert.Contains("Downloading", output, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(repo, "native", "x64", "libraw.dll")));
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(zip)); // the bad file is left alone, never installed over
+    }
+
     [Fact(DisplayName = "fetch-libraw: a pinned package with an entry escaping the extraction root is refused and writes nothing outside")]
     public void FetchLibRaw_ZipSlipEntry_IsRefused()
     {
