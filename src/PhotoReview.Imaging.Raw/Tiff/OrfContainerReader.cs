@@ -153,12 +153,28 @@ public sealed class OrfContainerReader : IRawContainerReader
 
         return new RawContainerInfo(
             RawFormat.Orf,
-            sensorWidth,
+            DecodedWidth(sensorWidth),
             sensorHeight,
             orientation,
             previews,
             exifBlocks);
     }
+
+    /// <summary>Raw frame width (IFD0 ImageWidth) of the E-PM1 / E-PL3 / E-P3 sensor: 24 of its 4080 columns are not image.</summary>
+    internal const int RawFrameWidthWithMaskedColumns = 4080;
+
+    /// <summary>Width LibRaw decodes for <see cref="RawFrameWidthWithMaskedColumns"/> (its identify.cpp trims the 24 columns).</summary>
+    internal const int DecodedWidthWithoutMaskedColumns = 4056;
+
+    /// <summary>
+    /// The size the zoom (LibRaw) decode returns, which is what the viewer swaps in at 100 %. IFD0 ImageWidth/ImageLength is the raw
+    /// frame and LibRaw decodes it unchanged (E-M1 4640x3472, OM-1 5220x3912) except for one hard-coded per-family rule the file
+    /// itself does not carry: a 4080-wide frame (E-PM1, E-PL3, E-P3) loses 24 columns. Reporting 4080 made the zoom decode (4056)
+    /// change the image size under the user. The camera image proper is smaller still (MakerNote ImageProcessing 0x0614/0x0615:
+    /// 4032x3024 for the E-P3), as for every other format the decode is a superset of it. Pinned by OrfDisplayedSizeTests.
+    /// </summary>
+    private static int DecodedWidth(int ifd0Width) =>
+        ifd0Width == RawFrameWidthWithMaskedColumns ? DecodedWidthWithoutMaskedColumns : ifd0Width;
 
     /// <summary>
     /// Olympus/OM System MakerNote. Offsets stored inside the note (CameraSettings pointer 0x2020 and the
