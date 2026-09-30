@@ -13,7 +13,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 {
     private const int MaxThumbnailBytes = 32 << 20;
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
-    /// <summary>Viewer decodes jump ahead of queued preloads; at most this many preload decodes may wait (extra ones are skipped with <see cref="LibRawBusyException"/>).</summary>
+    /// <summary>Viewer decodes jump ahead of queued preloads; at most this many preload decodes may wait (extra ones are skipped with <see cref="DecoderBusyException"/>).</summary>
     internal const int MaxQueuedPreloadDecodes = 2;
     private static readonly FullDecodeGate s_fullDecodeGate = new(MaxQueuedPreloadDecodes);
     private readonly Action<string>? _stageObserver;
@@ -21,6 +21,9 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 
     /// <summary>Free slots of the single-slot gate that serialises LibRaw decodes (test seam).</summary>
     internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.SlotsAvailable;
+
+    /// <summary>Test seam: decodes currently waiting for the full-decode slot (both lanes).</summary>
+    internal static int FullDecodeQueuedWaiters => s_fullDecodeGate.QueuedViewers + s_fullDecodeGate.QueuedPreloads;
 
     public LibRawDecoder() { }
 
@@ -274,7 +277,10 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (width <= 0 || height <= 0) return; // unknown size: nothing to estimate from
         var (targetWidth, targetHeight) = request.Box.Fit(width, height);
         var (total, load) = MemoryInfo();
-        if (!DecodeMemoryGuard.HasHeadroom(DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight), total, load))
+        var family = DecodeMemoryGuard.FamilyFromDecoderName(LibRawNativeMethods.TryGetDecoderName(raw));
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight,
+            LibRawNativeMethods.LibRawGetRawWidth(raw), LibRawNativeMethods.LibRawGetRawHeight(raw), family);
+        if (!DecodeMemoryGuard.HasHeadroom(estimate, total, load))
             throw new InvalidOperationException("Not enough memory to decode this RAW image.");
     }
 

@@ -50,6 +50,27 @@ internal static class LibRawNativeMethods
     [DllImport(LibraryName, EntryPoint = "libraw_get_iheight", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int LibRawGetIHeight(SafeLibRawHandle handle);
 
+    [DllImport(LibraryName, EntryPoint = "libraw_get_raw_width", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int LibRawGetRawWidth(SafeLibRawHandle handle);
+
+    [DllImport(LibraryName, EntryPoint = "libraw_get_raw_height", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int LibRawGetRawHeight(SafeLibRawHandle handle);
+
+    /// <summary>libraw_decoder_info_t: the selected load_raw decoder's name (static C string) and flags; valid once the file is open.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct DecoderInfo
+    {
+        internal IntPtr Name;
+        internal uint Flags;
+    }
+
+    [DllImport(LibraryName, EntryPoint = "libraw_get_decoder_info", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern int LibRawGetDecoderInfo(SafeLibRawHandle handle, out DecoderInfo info);
+
+    /// <summary>The decoder name LibRaw picked while opening the file (e.g. "lossless_dng_load_raw()"), or null when unavailable.</summary>
+    internal static string? TryGetDecoderName(SafeLibRawHandle handle) =>
+        LibRawGetDecoderInfo(handle, out var info) == 0 && info.Name != IntPtr.Zero ? Marshal.PtrToStringAnsi(info.Name) : null;
+
     [DllImport(LibraryName, EntryPoint = "libraw_set_progress_handler", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawSetProgressHandler(SafeLibRawHandle handle, ProgressCallback callback, IntPtr data);
 

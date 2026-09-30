@@ -13,9 +13,6 @@ namespace PhotoReview.Imaging.Tests.Raw;
 [Trait("Category", "HotPath")]
 public sealed class PreviewSelectorColorSpaceTests
 {
-    private static readonly string CorpusDir = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus"));
-
     /// <summary>EXIF APP1 payload ("Exif\0\0" + TIFF): IFD0 -&gt; Exif IFD -&gt; Interop IFD with InteropIndex = <paramref name="interopIndex"/>.</summary>
     internal static byte[] ExifWithInteropIndex(string interopIndex, bool littleEndian = true, byte[]? extraTail = null)
     {
@@ -149,6 +146,7 @@ public sealed class PreviewSelectorColorSpaceTests
     }
 
     [Theory]
+    [Trait("Category", "Native")] // needs the RAW corpus: RawCorpus fails instead of skipping in strict mode (the raw-corpus workflow)
     [InlineData("Fujifilm - X-E2S - 14bit 14bit uncompressed (3_2).RAF")]
     [InlineData("Panasonic - DC-GH5 - 1_1.RW2")]
     public void Corpus_KnownAdobeRgbSample_IsDetectedWhetherOrNotTheContainerDeclaresTheSize(string fileName)
@@ -170,6 +168,7 @@ public sealed class PreviewSelectorColorSpaceTests
     }
 
     [Fact]
+    [Trait("Category", "Native")] // needs the RAW corpus: RawCorpus fails instead of skipping in strict mode (the raw-corpus workflow)
     public void Corpus_SrgbSamples_AreNotFlaggedAdobeRgb()
     {
         var path = RawCorpus.TryGetFile("Canon - EOS 5D Mark IV - RAW (3_2).CR2");

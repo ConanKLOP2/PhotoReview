@@ -23,7 +23,8 @@ public sealed class RamBudgetPolicyRawLengthTests
 
         var estimate = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, DecodeBox.Unbounded);
 
-        Assert.Equal((long)(10 * 25_000_000 * RamBudgetPolicy.RawCompressedToPreviewFactor), estimate);
+        // The literal product (10 files x 25 MB x the documented factor 6) on purpose: a change of the factor must fail this test.
+        Assert.Equal(1_500_000_000L, estimate);
         Assert.NotEqual(long.MaxValue, estimate);
     }
 
@@ -88,7 +89,8 @@ public sealed class RamBudgetPolicyRawLengthTests
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Equal(100_000L * 1_250_000, estimate);
-        Assert.True(allocated < 1024, $"allocated {allocated} bytes");
+        // 16 KB, not 1 KB: same tiered-JIT/OSR constant cost as the 100k-entry test above. Visiting the 100k entries would allocate far more.
+        Assert.True(allocated < 16 * 1024, $"allocated {allocated} bytes");
     }
 
     [Fact]

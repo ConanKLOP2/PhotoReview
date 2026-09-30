@@ -11,20 +11,71 @@ namespace PhotoReview.Imaging.Tests.Raw;
 public sealed class LibRawDecodeMemoryTests
 {
     [Fact]
-    public void EstimatePeakBytes_HundredMegapixelFullSize_CountsWorkingImageRgbAndBitmap()
+    public void EstimatePeakBytes_HundredMegapixelFullSize_CountsWorkingImageRgbRawBufferAndBitmap()
     {
         const int Width = 11_600, Height = 8_700; // ~100 MP
 
         var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, Width, Height);
 
-        Assert.Equal((long)Width * Height * (8 + 3 + 4), estimate);
-        Assert.InRange(estimate, 1_400_000_000L, 1_600_000_000L);
+        Assert.Equal((long)Width * Height * (8 + 3 + 2 + 4), estimate);
+        Assert.InRange(estimate, 1_650_000_000L, 1_750_000_000L);
+    }
+
+    [Fact]
+    public void EstimatePeakBytes_BayerHundredMegapixelBoundedTarget_IsThirteenBytesPerPixelPlusTheTarget()
+    {
+        const int Width = 11_600, Height = 8_700;
+
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height, DecodeMemoryGuard.RawBufferFamily.Bayer);
+
+        Assert.Equal((long)Width * Height * 13 + 1920L * 1280 * 4, estimate);
+    }
+
+    [Fact]
+    public void EstimatePeakBytes_LinearHundredMegapixelBoundedTarget_IsNineteenBytesPerPixelPlusTheTarget()
+    {
+        const int Width = 11_600, Height = 8_700;
+
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height, DecodeMemoryGuard.RawBufferFamily.LinearOrFloat);
+
+        Assert.Equal((long)Width * Height * 19 + 1920L * 1280 * 4, estimate);
+    }
+
+    [Fact]
+    public void EstimatePeakBytes_RawBufferUsesTheSensorSizeNotTheOutputSize()
+    {
+        // A 10 MP output cropped from a 12 MP sensor: the unpacked buffer is sensor sized.
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(4000, 2500, 100, 100, rawWidth: 4200, rawHeight: 2860);
+
+        Assert.Equal(4000L * 2500 * 11 + 4200L * 2860 * 2 + 100L * 100 * 4, estimate);
+    }
+
+    [Fact]
+    public void HasHeadroom_BayerHundredMegapixel_IsRefusedWithTwelveHundredMegabytesAndAllowedWithFifteenHundred()
+    {
+        const int Width = 11_600, Height = 8_700;
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(Width, Height, 1920, 1280, Width, Height);
+
+        Assert.False(DecodeMemoryGuard.HasHeadroom(estimate, totalAvailableBytes: 1_200_000_000L, memoryLoadBytes: 0));
+        Assert.True(DecodeMemoryGuard.HasHeadroom(estimate, totalAvailableBytes: 1_500_000_000L, memoryLoadBytes: 0));
+    }
+
+    [Theory]
+    [InlineData("lossless_dng_load_raw()", false)]
+    [InlineData("canon_load_raw()", false)]
+    [InlineData("deflate_dng_load_raw()", true)]
+    [InlineData("uncompressed_fp_dng_load_raw()", true)]
+    [InlineData("lossy_dng_load_raw()", true)]
+    [InlineData(null, false)]
+    public void FamilyFromDecoderName_MapsLinearAndFloatDngDecodersOnly(string? name, bool expectedLinear)
+    {
+        Assert.Equal(expectedLinear, DecodeMemoryGuard.FamilyFromDecoderName(name) == DecodeMemoryGuard.RawBufferFamily.LinearOrFloat);
     }
 
     [Fact]
     public void EstimatePeakBytes_BoundedTarget_CountsOnlyTheTargetBitmap()
     {
-        Assert.Equal((6000L * 4000 * 11) + (1920L * 1280 * 4), DecodeMemoryGuard.EstimatePeakBytes(6000, 4000, 1920, 1280));
+        Assert.Equal((6000L * 4000 * 13) + (1920L * 1280 * 4), DecodeMemoryGuard.EstimatePeakBytes(6000, 4000, 1920, 1280));
     }
 
     [Theory]
@@ -61,9 +112,9 @@ public sealed class LibRawDecodeMemoryTests
     }
 
     [Fact]
-    public void ResizeToBuffer_ThirtyMegapixelFullSize_DoesNotAllocateAManagedBgraCopy()
+    public void ResizeToBuffer_FourMegapixelFullSize_DoesNotAllocateAManagedBgraCopy()
     {
-        const int Width = 6_500, Height = 4_600; // ~30 MP
+        const int Width = 2_300, Height = 1_800; // ~4 MP
         var gray = new byte[Width * Height];
         for (var i = 0; i < gray.Length; i += 4099) gray[i] = 200;
         // Warm the path (JIT, WPF statics) on a small image: only the full-size run is measured.
@@ -74,8 +125,9 @@ public sealed class LibRawDecodeMemoryTests
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.Equal((Width, Height), (bitmap.PixelWidth, bitmap.PixelHeight));
-        // The 120 MB of BGRA pixels live in a temporary unmanaged buffer and the bitmap's own copy; a managed byte[] of them would show up here.
-        Assert.True(allocated < 8L * 1024 * 1024, $"allocated {allocated} managed bytes for a {Width * Height * 4L}-byte bitmap");
+        // The ~16.6 MB of BGRA pixels live in a temporary unmanaged buffer and the bitmap's own copy; a managed byte[] of them would show up here
+        // (the budget is 1/16 of the BGRA size, as the former 30 MP variant used 8 MB for 120 MB).
+        Assert.True(allocated < 1L * 1024 * 1024, $"allocated {allocated} managed bytes for a {Width * Height * 4L}-byte bitmap");
     }
 
     [Fact]

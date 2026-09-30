@@ -473,6 +473,11 @@ public sealed class PreviewImageService : IPreloadTarget
 
     private IDecodedImage DecodeAndCache(string path, ImageCacheKey key, DecodeBox targetBox, long cacheEpoch, SourceReadPriority priority)
     {
+        // Invariant (a runtime guard, not a Debug.Assert: Release must enforce it too): this path decodes previews
+        // (Standard / RawPreview keys). RawFullDecode keys are only created by DecodeOriginalAsync, which records its own
+        // (EWMA-excluded) sample, so every read recorded below belongs in the decode EWMA.
+        if (key.SourceKind == ImageSourceKind.RawFullDecode)
+            throw new InvalidOperationException("DecodeAndCache never handles RawFullDecode keys; use DecodeOriginalAsync.");
         var perf = PhotoReviewPerf.Log.IsEnabled();
         var perfNav = perf ? PhotoReviewPerf.NavContext : 0;
         var perfPathId = perf ? PhotoReviewPerf.PathId(path) : "";
@@ -570,9 +575,6 @@ public sealed class PreviewImageService : IPreloadTarget
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
-        // Invariant: this path decodes previews (Standard / RawPreview keys). RawFullDecode keys are only created by
-        // DecodeOriginalAsync, which records its own (EWMA-excluded) sample, so every read here belongs in the decode EWMA.
-        Debug.Assert(key.SourceKind != ImageSourceKind.RawFullDecode, "DecodeAndCache never handles RawFullDecode keys.");
         if (sourceRead)
             _metrics.RecordSourceRead(GetSourceBytesRead(decodedImage, key), stopwatch.ElapsedMilliseconds);
         return decodedImage;

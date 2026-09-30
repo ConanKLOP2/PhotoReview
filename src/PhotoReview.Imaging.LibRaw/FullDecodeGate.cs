@@ -1,17 +1,13 @@
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.LibRaw;
 
-/// <summary>Thrown when a preload-priority full decode is refused because too many preload decodes are already queued; the caller skips the file.</summary>
-public sealed class LibRawBusyException : NotSupportedException
-{
-    public LibRawBusyException() : base("The RAW full-decode queue is busy; this background decode was skipped.") { }
-}
-
 /// <summary>
 /// Single-slot gate serialising LibRaw full decodes (each holds hundreds of MB), with two lanes: waiting
-/// <see cref="SourceReadPriority.Viewer"/> decodes are always served before any waiting
-/// <see cref="SourceReadPriority.Preload"/> decode. A running decode is never interrupted, the number of queued preload
+/// <see cref="SourceReadPriority.Viewer"/> decodes are served before waiting <see cref="SourceReadPriority.Preload"/> decodes,
+/// except that a preload waiter which has seen <c>maxPreloadAgeCompletions</c> decodes finish since it queued is promoted
+/// ahead of newer viewer waiters (aging: a user paging through RAWs must not starve queued preloads forever). A running decode is never interrupted, the number of queued preload
 /// waiters is bounded (extra preload requests fail fast so worker threads are released instead of piling up), and a
 /// queued waiter is cancellable without disturbing the slot. Every acquisition returns a lease that releases exactly once.
 /// </summary>
@@ -22,11 +18,16 @@ internal sealed class FullDecodeGate
     private readonly LinkedList<Waiter> _preloadQueue = new();
     private readonly int _maxQueuedPreloads;
     private readonly Action<SourceReadPriority>? _waiterQueued;
+    private readonly int _maxPreloadAgeCompletions;
+    private long _completions; // decodes finished so far (lease disposals); the aging clock, no wall time involved
     private bool _busy;
 
-    internal FullDecodeGate(int maxQueuedPreloads, Action<SourceReadPriority>? waiterQueued = null)
+    internal const int DefaultMaxPreloadAgeCompletions = 3;
+
+    internal FullDecodeGate(int maxQueuedPreloads, Action<SourceReadPriority>? waiterQueued = null, int maxPreloadAgeCompletions = DefaultMaxPreloadAgeCompletions)
     {
         _maxQueuedPreloads = maxQueuedPreloads;
+        _maxPreloadAgeCompletions = Math.Max(1, maxPreloadAgeCompletions);
         _waiterQueued = waiterQueued;
     }
 
@@ -39,7 +40,7 @@ internal sealed class FullDecodeGate
     internal int QueuedViewers { get { lock (_sync) return _viewerQueue.Count; } }
     internal int QueuedPreloads { get { lock (_sync) return _preloadQueue.Count; } }
 
-    /// <summary>Blocks until the slot is granted. Throws <see cref="OperationCanceledException"/> (slot untouched) or <see cref="LibRawBusyException"/> (preload queue full).</summary>
+    /// <summary>Blocks until the slot is granted. Throws <see cref="OperationCanceledException"/> (slot untouched) or <see cref="DecoderBusyException"/> (preload queue full).</summary>
     internal Lease Enter(SourceReadPriority priority, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -53,8 +54,8 @@ internal sealed class FullDecodeGate
             }
 
             var preload = priority == SourceReadPriority.Preload;
-            if (preload && _preloadQueue.Count >= _maxQueuedPreloads) throw new LibRawBusyException();
-            waiter = new Waiter();
+            if (preload && _preloadQueue.Count >= _maxQueuedPreloads) throw new DecoderBusyException("The RAW full-decode queue is busy; this background decode was skipped.");
+            waiter = new Waiter { EnqueuedAtCompletion = _completions };
             var queue = preload ? _preloadQueue : _viewerQueue;
             waiter.Queue = queue;
             waiter.Node = queue.AddLast(waiter);
@@ -88,12 +89,19 @@ internal sealed class FullDecodeGate
 
     private void Release()
     {
-        lock (_sync) ReleaseLocked();
+        lock (_sync)
+        {
+            _completions++;
+            ReleaseLocked();
+        }
     }
 
     private void ReleaseLocked()
     {
-        var next = Dequeue(_viewerQueue) ?? Dequeue(_preloadQueue);
+        var preloadIsOverdue = _preloadQueue.First is { } oldest && _completions - oldest.Value.EnqueuedAtCompletion >= _maxPreloadAgeCompletions;
+        var next = preloadIsOverdue
+            ? Dequeue(_preloadQueue)
+            : Dequeue(_viewerQueue) ?? Dequeue(_preloadQueue);
         if (next is null)
         {
             _busy = false;
@@ -116,6 +124,7 @@ internal sealed class FullDecodeGate
     {
         internal SemaphoreSlim Signal { get; } = new(0, 1);
         internal bool Granted { get; set; }
+        internal long EnqueuedAtCompletion { get; init; }
         internal LinkedList<Waiter>? Queue { get; set; }
         internal LinkedListNode<Waiter>? Node { get; set; }
     }
