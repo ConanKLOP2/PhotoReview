@@ -129,7 +129,9 @@ public partial class App : System.Windows.Application, IDisposable
                 (_, standardDecoder) => new FormatRoutingDecoder(
                     standardDecoder,
                     new RawDecoder(standardDecoder, sourceReader, sourceBytesCache: sourceBytesCache,
-                        previewFallback: rawPreviewFallback),
+                        previewFallback: rawPreviewFallback,
+                        // A RAW with no embedded JPEG (Leica M8 DNG, some phone DNGs) is decoded by LibRaw instead of failing.
+                        noPreviewDecoder: rawPreviewFallback is null ? null : new LibRawDecoder()),
                     () => settingsStore.Current.RawSupportEnabled));
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
