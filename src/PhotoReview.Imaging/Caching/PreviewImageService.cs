@@ -759,9 +759,7 @@ public sealed class PreviewImageService : IPreloadTarget
                     ? cancellableDecoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded), cancellationToken)
                     : decoderOverride.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
             if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
-            // A RAW full decode reports the LibRaw sensor area, a few pixels off the camera-visible size the preview (and every
-            // later dimensions lookup for this source) uses: it must not be recorded as the source's original dimensions.
-            if (key.SourceKind != ImageSourceKind.RawFullDecode) _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
+            _originalDimensions.Set(key, (decoded.OriginalWidth, decoded.OriginalHeight));
             _metrics.RecordSourceRead(GetSourceBytesRead(decoded, key), stopwatch.ElapsedMilliseconds,
                 includeInDecodeEwma: key.SourceKind != ImageSourceKind.RawFullDecode);
             return decoded;

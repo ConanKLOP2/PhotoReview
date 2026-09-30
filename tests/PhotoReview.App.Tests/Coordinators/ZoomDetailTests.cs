@@ -650,7 +650,11 @@ public sealed class ZoomDetailTests : IDisposable
     [InlineData(6719, 4479, 3.0, 1.25)]
     public async Task OriginalSwap_ShowsDecodedSizeTimesZoomOverDpi_NotThePreviewsSize(int decodedWidth, int decodedHeight, double zoom, double dpi)
     {
-        var decoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = decodedWidth, DecodedHeight = decodedHeight };
+        var decoder = new SizedDecoder
+        {
+            OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = decodedWidth, DecodedHeight = decodedHeight,
+            OriginalGate = new SemaphoreSlim(0),
+        };
         var (presenter, _) = Create(decoder, "a.jpg");
         _viewer.DpiScale = dpi;
         await presenter.PresentAsync(0);
@@ -658,7 +662,10 @@ public sealed class ZoomDetailTests : IDisposable
 
         _viewer.SetZoom(zoom);
         Assert.Equal(6720 * zoom / dpi, _viewer.ImageWidth, 6); // preview on screen: its own original size
-        await WhenOriginalShownAsync(presenter);
+        var load = presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        decoder.OriginalGate.Release();
+        await load!;
 
         Assert.Equal((decodedWidth, decodedHeight), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
         Assert.Equal(decodedWidth * zoom / dpi, _viewer.ImageWidth, 6);
