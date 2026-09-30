@@ -136,9 +136,12 @@ public sealed class DngContainerReader : IRawContainerReader
             }
 
             bool isPreview = false;
-            if (jpegOffset is { } jo && jpegLength is { } jl && TiffHeaderNavigator.IsRangeInFile(jo, jl, source.Length))
+            if (jpegOffset is { } jo && jpegLength is { } jl && TiffHeaderNavigator.StartsWithSoi(source, jo, jl))
             {
-                previews.Add(new EmbeddedPreview(previews.Count, jo, jl, EmbeddedPreviewKind.Jpeg, width, height, PreviewColorSpace.Unknown));
+                int previewWidth = width;
+                int previewHeight = height;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jo, jl, ref previewWidth, ref previewHeight);
+                previews.Add(new EmbeddedPreview(previews.Count, jo, jl, EmbeddedPreviewKind.Jpeg, previewWidth, previewHeight, PreviewColorSpace.Unknown));
                 isPreview = true;
             }
             else if (compression is 6 or 7 &&

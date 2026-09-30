@@ -95,14 +95,21 @@ public sealed class NefContainerReader : IRawContainerReader
                         makerNoteOffset ??= exifTag.ValueOrOffset;
                 }
 
-                if (exifPixelWidth == 0)
-                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out exifPixelWidth, out exifPixelHeight);
+                if (exifPixelWidth == 0 &&
+                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out int pixelWidth, out int pixelHeight))
+                {
+                    exifPixelWidth = pixelWidth;
+                    exifPixelHeight = pixelHeight;
+                }
             }
 
             bool isPreview = false;
             if (TiffHeaderNavigator.TryReadJpegInterchange(source, entries, littleEndian, out long jpegOffset, out long jpegLength))
             {
-                AddPreview(previews, jpegOffset, jpegLength, width, height);
+                int previewWidth = width;
+                int previewHeight = height;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jpegOffset, jpegLength, ref previewWidth, ref previewHeight);
+                AddPreview(previews, jpegOffset, jpegLength, previewWidth, previewHeight);
                 isPreview = true;
             }
             else if (compression is 6 or 7 &&

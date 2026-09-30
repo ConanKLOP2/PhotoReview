@@ -127,15 +127,18 @@ public sealed class OrfContainerReader : IRawContainerReader
                 sensorHeight = ifdHeight;
             }
 
-            if (jpegOffset is > 0 && jpegLength is > 0 && jpegOffset + jpegLength <= source.Length)
+            if (jpegOffset is > 0 && jpegLength is > 0 && TiffHeaderNavigator.StartsWithSoi(source, jpegOffset.Value, jpegLength.Value))
             {
+                int previewWidth = ifdWidth;
+                int previewHeight = ifdHeight;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jpegOffset.Value, jpegLength.Value, ref previewWidth, ref previewHeight);
                 previews.Add(new EmbeddedPreview(
                     Index: previews.Count,
                     Offset: jpegOffset.Value,
                     Length: jpegLength.Value,
                     Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: ifdWidth,
-                    Height: ifdHeight,
+                    Width: previewWidth,
+                    Height: previewHeight,
                     ColorSpace: PreviewColorSpace.Unknown));
             }
 

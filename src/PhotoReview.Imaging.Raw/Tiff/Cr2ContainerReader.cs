@@ -106,13 +106,16 @@ public sealed class Cr2ContainerReader : IRawContainerReader
             else if (TiffHeaderNavigator.TryReadJpegInterchange(source, entries, littleEndian, out long jpegOffset, out long jpegLength))
             {
                 // Secondary preview / thumbnail (IFD1, etc.)
+                int previewWidth = ifdWidth;
+                int previewHeight = ifdHeight;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jpegOffset, jpegLength, ref previewWidth, ref previewHeight);
                 previews.Add(new EmbeddedPreview(
                     Index: previews.Count,
                     Offset: jpegOffset,
                     Length: jpegLength,
                     Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: ifdWidth,
-                    Height: ifdHeight,
+                    Width: previewWidth,
+                    Height: previewHeight,
                     ColorSpace: PreviewColorSpace.Unknown));
             }
 
