@@ -1,4 +1,5 @@
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.Imaging.Tests.Raw;
@@ -158,7 +159,7 @@ public sealed class LibRawFullDecodeGateTests
         var p2 = h.Start("p2", SourceReadPriority.Preload);
         h.AwaitQueued(1);
 
-        Assert.Throws<LibRawBusyException>(() => h.Gate.Enter(SourceReadPriority.Preload, new CancellationTokenSource(Bound).Token));
+        Assert.Throws<DecoderBusyException>(() => h.Gate.Enter(SourceReadPriority.Preload, new CancellationTokenSource(Bound).Token));
 
         Assert.Equal(2, h.Gate.QueuedPreloads);
         // A viewer is never refused because preloads are queued.
@@ -171,9 +172,46 @@ public sealed class LibRawFullDecodeGateTests
     }
 
     [Fact]
-    public void LibRawBusyException_IsNotSupported_SoTheDecodeChainSkipsTheFile()
+    public async Task Enter_PreloadWaiterThatSawThreeDecodesFinish_IsPromotedAheadOfNewerViewers()
     {
-        Assert.IsAssignableFrom<NotSupportedException>(new LibRawBusyException());
+        using var h = new Harness(maxQueuedPreloads: 2);
+        var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None);
+        var preload = h.Start("p", SourceReadPriority.Preload);
+        h.AwaitQueued(1);
+        var v1 = h.Start("v1", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+        var v2 = h.Start("v2", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+        var v3 = h.Start("v3", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+        var v4 = h.Start("v4", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+
+        running.Dispose(); // completion 1: the viewer lane keeps priority while the preload is young
+        foreach (var entry in new[] { v1, v2, preload, v3, v4 }) entry.Release.Release();
+        await Task.WhenAll([v1.Task, v2.Task, preload.Task, v3.Task, v4.Task]).WaitAsync(Bound);
+
+        // v1 and v2 finish (completions 2 and 3): the preload has now aged out and goes before v3/v4.
+        Assert.Equal(["v1", "v2", "p", "v3", "v4"], h.Order);
+    }
+
+    [Fact]
+    public async Task Enter_PreloadWaiterBelowTheAgingBound_StillYieldsToViewers()
+    {
+        using var h = new Harness(maxQueuedPreloads: 2);
+        var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None);
+        var preload = h.Start("p", SourceReadPriority.Preload);
+        h.AwaitQueued(1);
+        var v1 = h.Start("v1", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+        var v2 = h.Start("v2", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+
+        running.Dispose();
+        foreach (var entry in new[] { v1, v2, preload }) entry.Release.Release();
+        await Task.WhenAll([v1.Task, v2.Task, preload.Task]).WaitAsync(Bound);
+
+        Assert.Equal(["v1", "v2", "p"], h.Order); // only 2 completions before the preload's turn: not aged yet
     }
 
     [Fact]
@@ -204,7 +242,7 @@ public sealed class LibRawFullDecodeGateTests
             var queued = h.Start("p", SourceReadPriority.Preload);
             queuedTask = queued.Task;
             h.AwaitQueued(1);
-            Assert.Throws<LibRawBusyException>(() => h.Gate.Enter(SourceReadPriority.Preload, new CancellationTokenSource(Bound).Token));
+            Assert.Throws<DecoderBusyException>(() => h.Gate.Enter(SourceReadPriority.Preload, new CancellationTokenSource(Bound).Token));
             queued.Release.Release();
         }
 

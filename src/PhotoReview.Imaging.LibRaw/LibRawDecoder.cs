@@ -13,7 +13,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 {
     private const int MaxThumbnailBytes = 32 << 20;
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
-    /// <summary>Viewer decodes jump ahead of queued preloads; at most this many preload decodes may wait (extra ones are skipped with <see cref="LibRawBusyException"/>).</summary>
+    /// <summary>Viewer decodes jump ahead of queued preloads; at most this many preload decodes may wait (extra ones are skipped with <see cref="DecoderBusyException"/>).</summary>
     internal const int MaxQueuedPreloadDecodes = 2;
     private static readonly FullDecodeGate s_fullDecodeGate = new(MaxQueuedPreloadDecodes);
     private readonly Action<string>? _stageObserver;

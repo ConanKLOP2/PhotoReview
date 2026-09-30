@@ -5,6 +5,7 @@ using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Catalog;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Preload;
 
@@ -503,6 +504,8 @@ public sealed class PreloadScheduler : IDisposable
         Cached,
         Superseded,
         Failed,
+        /// <summary>The decoder refused the background decode because its queue is full: transient, retried by a later pass.</summary>
+        Busy,
     }
 
     private static async Task DrainWorkersAsync(IEnumerable<Task> workers)
@@ -573,7 +576,8 @@ public sealed class PreloadScheduler : IDisposable
     }
 
     /// <returns><see cref="PreloadOutcome.Superseded"/> when the item was dropped (see <see cref="IsStillWanted"/>),
-    /// <see cref="PreloadOutcome.Cached"/> when its preview is in the RAM cache afterwards, otherwise
+    /// <see cref="PreloadOutcome.Cached"/> when its preview is in the RAM cache afterwards, <see cref="PreloadOutcome.Busy"/> when the
+    /// decoder refused the work for now (retry later), otherwise
     /// <see cref="PreloadOutcome.Failed"/>.</returns>
     private async Task<PreloadOutcome> PreloadOneAsync(int index, string path, ImageCacheKey key, CancellationToken cancellationToken)
     {
@@ -631,6 +635,14 @@ public sealed class PreloadScheduler : IDisposable
                     PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, kind, stopwatch.Elapsed.TotalMilliseconds);
                 }
                 return isHit ? PreloadOutcome.Cached : PreloadOutcome.Failed;
+            }
+            catch (DecoderBusyException)
+            {
+                // Not a failure: the decoder's bounded queue was full. Leave the path retryable (ForgetUnlessFailed forgets it).
+                stopwatch.Stop();
+                _log.Info($"Preload deferred, decoder busy: {path}");
+                if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "busy", stopwatch.Elapsed.TotalMilliseconds);
+                return PreloadOutcome.Busy;
             }
             catch (IOException ex)
             {
