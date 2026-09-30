@@ -639,6 +639,219 @@ public sealed class ZoomDetailTests : IDisposable
         Assert.Equal(600, _viewer.ImageHeight, 6);
     }
 
+    // ---- R4: the decoded original is shown with ITS OWN size (ADR 0008 amendment) ----------------------
+
+    // Reader (camera-visible) 6720x4480 vs LibRaw 6744x4502 (larger) and Canon R6 style 1 px smaller.
+    [Theory]
+    [InlineData(6744, 4502, 1.0, 1.0)]
+    [InlineData(6744, 4502, 2.0, 1.25)]
+    [InlineData(6744, 4502, 0.5, 1.5)]
+    [InlineData(6719, 4479, 1.0, 1.0)]
+    [InlineData(6719, 4479, 3.0, 1.25)]
+    public async Task OriginalSwap_ShowsDecodedSizeTimesZoomOverDpi_NotThePreviewsSize(int decodedWidth, int decodedHeight, double zoom, double dpi)
+    {
+        var decoder = new SizedDecoder
+        {
+            OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = decodedWidth, DecodedHeight = decodedHeight,
+            OriginalGate = new SemaphoreSlim(0),
+        };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        _viewer.DpiScale = dpi;
+        await presenter.PresentAsync(0);
+        Assert.Equal((6720, 4480), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+
+        _viewer.SetZoom(zoom);
+        Assert.Equal(6720 * zoom / dpi, _viewer.ImageWidth, 6); // preview on screen: its own original size
+        var load = presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        decoder.OriginalGate.Release();
+        await load!;
+
+        Assert.Equal((decodedWidth, decodedHeight), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+        Assert.Equal(decodedWidth * zoom / dpi, _viewer.ImageWidth, 6);
+        Assert.Equal(decodedHeight * zoom / dpi, _viewer.ImageHeight, 6);
+        Assert.Equal(zoom, _viewer.Zoom, 9); // the user's percent is kept, only the original dimensions change
+        Assert.Equal((int)Math.Round(zoom * 100), _viewer.DisplayZoomPercent);
+        var held = presenter.ZoomDetail.HeldOriginal!;
+        Assert.Equal((decodedWidth, decodedHeight), (held.PixelWidth, held.PixelHeight));
+    }
+
+    [Fact]
+    public async Task BackToFit_RevertsToThePreviewsOriginalSize_AndZoomingAgainReusesTheDecodedSize()
+    {
+        var decoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = 6744, DecodedHeight = 4502 };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+        var preview = _sink.Current;
+        _viewer.SetZoom(1.0);
+        await WhenOriginalShownAsync(presenter);
+        Assert.Equal(6744, presenter.CurrentOriginalWidth);
+
+        _viewer.ResetFit(1500, 1000);
+
+        Assert.Same(preview, _sink.Current);
+        Assert.Equal((6720, 4480), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+        Assert.Equal((6720, 4480), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+        Assert.Equal(1500.0 / 6720, _viewer.FitZoom, 9); // Fit is laid out from the preview's size, as before the swap
+
+        _viewer.SetZoom(1.0);
+
+        Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+        Assert.Equal(1, decoder.OriginalDecodes); // held original re-shown, no second decode
+        Assert.Equal((6744, 4502), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+        Assert.Equal(6744, _viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public async Task OriginalSwap_OfAnOriginalWithThePreviewsSize_RaisesNoSizeSwapAndNoLayoutChange()
+    {
+        var decoder = new SizedDecoder { OriginalGate = new SemaphoreSlim(0) };
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+        _viewer.SetZoom(2.0);
+        var swapping = 0;
+        _viewer.SourceSizeSwapping += (_, _) => swapping++;
+        var load = presenter.ZoomDetail.PendingLoad;
+        decoder.OriginalGate.Release();
+        await load!;
+
+        Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+        Assert.Equal(0, swapping);
+        Assert.Equal(12000, _viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public async Task SupersededOriginalFinishingLate_DoesNotChangeTheCurrentImagesSize()
+    {
+        var decoder = new SizedDecoder { DecodedWidth = 6032, DecodedHeight = 4032 };
+        using var gateA = new SemaphoreSlim(0);
+        decoder.GateByName["a.jpg"] = gateA;
+        var (presenter, _) = Create(decoder, "a.jpg", "b.jpg");
+        await presenter.PresentAsync(0);
+        _viewer.SetZoom(1.0);
+        var load = presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+
+        _viewer.ResetFit(1500, 1000); // back to Fit, then on to the next image while a's decode is still running
+        await presenter.PresentAsync(1);
+        var currentBefore = _sink.Current;
+        gateA.Release();
+        await load!;
+
+        Assert.Same(currentBefore, _sink.Current);
+        Assert.Equal((6000, 4000), (presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight));
+        Assert.Equal((6000, 4000), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+        Assert.Null(presenter.ZoomDetail.HeldOriginal);
+    }
+
+    [Fact]
+    public async Task RawFullDecode_NeverChangesThePreviewsRecordedDimensions()
+    {
+        var rawPath = Path.Combine(_tempDir, "dims.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var previewDecoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480 };
+        var rawDecoder = new SizedDecoder { OriginalWidth = 6720, OriginalHeight = 4480, DecodedWidth = 6744, DecodedHeight = 4502 };
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: previewDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+            Assert.Equal(6744, presenter.CurrentOriginalWidth);
+
+            var key = service.GetCurrentCacheKey(rawPath);
+            Assert.True(service.TryGetKnownOriginalDimensions(key, out var known));
+            Assert.Equal((6720, 4480), known);
+            Assert.Equal((6720, 4480), await service.GetOriginalDimensionsAsync(rawPath, key));
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    // ---- ViewerState.SwapSourceSize -------------------------------------------------------------------
+
+    [Fact]
+    public void SwapSourceSize_KeepsTheZoomPercent_AndRaisesSwappingBeforeTheSizeChanges()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.SetZoom(2.0);
+        int? widthSeenBySwapping = null;
+        viewer.SourceSizeSwapping += (_, _) => widthSeenBySwapping = viewer.SourcePixelWidth;
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(6720, widthSeenBySwapping);
+        Assert.Equal(2.0, viewer.Zoom, 9);
+        Assert.Equal(6744 * 2.0, viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public void SwapSourceSize_InFit_ChangesSizeSilently()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.ResetFit(1500, 1000);
+        var swapping = 0;
+        viewer.SourceSizeSwapping += (_, _) => swapping++;
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(0, swapping);
+        Assert.Equal(6744, viewer.SourcePixelWidth);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SwapSourceSize_AfterFitWidthOrHeight_KeepsTheFittedDimensionFillingTheViewport(bool width)
+    {
+        var viewer = new ViewerState { DpiScale = 1.25 };
+        viewer.SetSourceSize(6720, 4480);
+        viewer.UpdateViewport(1500, 1000, force: true);
+        if (width) viewer.ZoomToFitWidth(); else viewer.ZoomToFitHeight();
+        Assert.Equal(width ? 1500 : 1000, width ? viewer.ImageWidth : viewer.ImageHeight, 6);
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(width ? 1500 : 1000, width ? viewer.ImageWidth : viewer.ImageHeight, 6);
+    }
+
+    [Fact]
+    public void SwapSourceSize_AfterAFitWidthThenAnExplicitZoom_KeepsThatZoomPercent()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.UpdateViewport(1500, 1000, force: true);
+        viewer.ZoomToFitWidth();
+        viewer.SetZoom(0.5); // the user moved on: no longer a Fit-width zoom
+
+        viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(0.5, viewer.Zoom, 9);
+        Assert.Equal(6744 * 0.5, viewer.ImageWidth, 6);
+    }
+
+    [Fact]
+    public void SetSourceSize_ForANewImage_NeverRaisesSwapping()
+    {
+        var viewer = new ViewerState();
+        viewer.SetSourceSize(6720, 4480);
+        viewer.SetZoom(2.0);
+        var swapping = 0;
+        viewer.SourceSizeSwapping += (_, _) => swapping++;
+
+        viewer.SetSourceSize(4000, 6000);
+
+        Assert.Equal(0, swapping);
+    }
+
     // ---- helpers --------------------------------------------------------------------------------
 
     /// <summary>
@@ -694,7 +907,11 @@ public sealed class ZoomDetailTests : IDisposable
             _catalog, _clock, service, _thumbnailCache, new NullPreload(), _compare, new FileHashService(),
             _metrics, () => _settings, _sessionStore, _sink);
         // Mirrors MainViewModel + MainViewModelCompositionRoot wiring.
-        _sink.OnImageChanged = () => _viewer.SetSourceSize(presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight);
+        _sink.OnImageChanged = () =>
+        {
+            if (presenter.IsSameSourceSwap) _viewer.SwapSourceSize(presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight);
+            else _viewer.SetSourceSize(presenter.CurrentOriginalWidth, presenter.CurrentOriginalHeight);
+        };
         _viewer.ZoomModeChanged += (_, _) => presenter.SetViewerZoom(_viewer.EffectiveZoom);
         return presenter;
     }
@@ -720,6 +937,9 @@ public sealed class ZoomDetailTests : IDisposable
         public int OriginalWidth { get; init; } = 6000;
         public int OriginalHeight { get; init; } = 4000;
         public int PreviewWidth { get; init; } = 600;
+        /// <summary>Size of the full decode when it differs from the reader's size (RAW: LibRaw sensor area); 0 = same.</summary>
+        public int DecodedWidth { get; init; }
+        public int DecodedHeight { get; init; }
         public SemaphoreSlim? OriginalGate { get; init; }
         public bool FailOriginal { get; init; }
         public Dictionary<string, SemaphoreSlim> GateByName { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -732,7 +952,9 @@ public sealed class ZoomDetailTests : IDisposable
                 Interlocked.Increment(ref _originalDecodes);
                 (GateByName.TryGetValue(Path.GetFileName(request.Path), out var gate) ? gate : OriginalGate)?.Wait();
                 if (FailOriginal) throw new InvalidOperationException("original decode failed");
-                return new SizedImage(OriginalWidth, OriginalHeight, OriginalWidth, OriginalHeight, downscaled: false);
+                var w = DecodedWidth > 0 ? DecodedWidth : OriginalWidth;
+                var h = DecodedHeight > 0 ? DecodedHeight : OriginalHeight;
+                return new SizedImage(w, h, w, h, downscaled: false);
             }
             return new SizedImage(PreviewWidth, PreviewWidth * OriginalHeight / OriginalWidth, OriginalWidth, OriginalHeight, downscaled: true);
         }

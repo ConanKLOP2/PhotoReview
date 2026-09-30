@@ -122,6 +122,13 @@ public sealed class ImagePresenter
     /// </summary>
     private void ShowZoomDetailImage(object image, int w, int h)
     {
+        IsSameSourceSwap = true; // read synchronously by the sink's image-changed callback (ViewerState.SwapSourceSize)
+        try { ShowZoomDetailImageCore(image, w, h); }
+        finally { IsSameSourceSwap = false; }
+    }
+
+    private void ShowZoomDetailImageCore(object image, int w, int h)
+    {
         var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image);
         if (showingOriginal)
         {
@@ -146,9 +153,17 @@ public sealed class ImagePresenter
 
     /// <summary>
     /// Full-resolution (post-orientation) size of the source behind <see cref="CurrentImage"/>, whatever
-    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown.
+    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown. One size per displayed
+    /// bitmap: a full decode reports its own pixel size (ADR 0008 amendment).
     /// </summary>
     public int CurrentOriginalWidth { get; private set; }
+
+    /// <summary>
+    /// True only while the sink is told about a zoom-detail swap (preview <-> full decode of the SAME image): the new
+    /// <see cref="CurrentOriginalWidth"/>/<see cref="CurrentOriginalHeight"/> are the new bitmap's own size, which may
+    /// differ slightly from the previous one (RAW). The viewer then keeps its view anchored instead of treating it as a new image.
+    /// </summary>
+    public bool IsSameSourceSwap { get; private set; }
 
     /// <summary>See <see cref="CurrentOriginalWidth"/>.</summary>
     public int CurrentOriginalHeight { get; private set; }
@@ -193,7 +208,11 @@ public sealed class ImagePresenter
     /// <summary>
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
-    public async Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false)
+    public Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false) =>
+        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: false);
+
+    /// <param name="staleNotFoundRetried">True for the single re-present that follows a FileNotFound the file system contradicts (see the catch in this method).</param>
+    private async Task PresentCoreAsync(int index, bool allowCompare, string? pathOverride, bool includeCaptureGroupInCompare, bool staleNotFoundRetried)
     {
         if (index < 0 || index >= _catalog.Count) return;
         if (pathOverride is not null && _catalog.IndexOf(pathOverride) != index)
@@ -585,6 +604,24 @@ public sealed class ImagePresenter
         }
         catch (Exception ex) when (_clock.IsNavigationCurrent(token) && (ex is FileNotFoundException || ex is DirectoryNotFoundException))
         {
+            // A decode that is still in flight is shared by every request for the same key (path + length + mtime), so this
+            // FileNotFound may belong to an EARLIER state of the path: the file was moved away while that decode opened it and
+            // has come back since (Undo of the Move keeps length and mtime). Trust the file system, not the joined failure: a
+            // file that is on disk again is presented once more (the failed shared decode is gone by now, so this starts a
+            // fresh one) instead of being dropped from the catalog.
+            if (!staleNotFoundRetried)
+            {
+                var recheck = await StatOffUiThreadAsync(path, CancellationToken.None);
+                if (!_clock.IsNavigationCurrent(token)) return;
+                if (recheck.Outcome == StatOutcome.Found)
+                {
+                    if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file failure ignored (file exists again) token={token} path={path}");
+                    var retryIndex = _catalog.IndexOf(path);
+                    if (retryIndex >= 0) await PresentCoreAsync(retryIndex, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: true);
+                    return;
+                }
+            }
+
             if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file token={token} path={path}");
             await RemoveMissingCatalogItemAsync(path, index, token);
         }
