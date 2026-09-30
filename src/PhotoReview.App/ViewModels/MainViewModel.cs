@@ -1144,7 +1144,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public string ExifText => _presenter.CurrentPhotoInfo is { } info
         ? ExifFormatter.Format(Settings.ExifInfoFields, info.FileName, info.Width, info.Height, info.Exif,
             _catalog.Current?.LastWriteUtc, // ModifiedDate: catalog entry from the folder scan, no extra disk read
-            System.Globalization.CultureInfo.CurrentCulture) // display text: user's number/date format
+            System.Globalization.CultureInfo.CurrentCulture, // display text: user's number/date format
+            info.RawPreviewWidth, info.RawPreviewHeight)
         : string.Empty;
 
     /// <summary>

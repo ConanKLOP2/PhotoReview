@@ -145,6 +145,29 @@ public sealed class ExifLineViewModelTests : IDisposable
         Assert.False(vm.IsExifLineVisible);
     }
 
+    [Fact(DisplayName = "Q-RAW-03: the line adds the embedded RAW preview size only while such an image is presented")]
+    public async Task LineShowsRawPreviewSize_OnlyForAnEmbeddedPreviewImage()
+    {
+        var folder = Path.Combine(_tempDir, "rawalbum");
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "n.jpg"), ValidPngBytes); // no IRawPreviewInfo
+        File.WriteAllBytes(Path.Combine(folder, "p.jpg"), ValidPngBytes); // decodes to an embedded RAW preview
+        var vm = CreateViewModel(new ExifDecoder(_ => null, path =>
+            Path.GetFileName(path).StartsWith('p') ? (1620, 1080) : (0, 0)));
+        vm.Settings = new AppSettings { LoadingMode = LoadingMode.Preview, ShowExifInfo = true,
+            ExifInfoFields = ExifInfoFields.FileName | ExifInfoFields.Dimensions };
+
+        await vm.OpenFolderAsync(folder);
+        Assert.Equal("n.jpg · 6000×4000", vm.ExifText);
+
+        await vm.NextAsync();
+        Assert.Equal("p.jpg · 6000×4000 · Bản xem trước RAW 1620×1080", vm.ExifText);
+        Assert.True(vm.IsExifLineVisible);
+
+        vm.Settings.ShowExifInfo = false; // settings unchanged: the line (and so the label) is hidden with it
+        Assert.False(vm.IsExifLineVisible);
+    }
+
     private MainViewModel CreateViewModel(IImageDecoder decoder)
     {
         MainViewModel? vm = null;
@@ -175,17 +198,34 @@ public sealed class ExifLineViewModelTests : IDisposable
         return vm;
     }
 
-    private sealed class ExifDecoder(Func<string, ExifSummary?> exifFor) : IImageDecoder
+    private sealed class ExifDecoder(Func<string, ExifSummary?> exifFor, Func<string, (int Width, int Height)>? previewFor = null) : IImageDecoder
     {
         public IDecodedImage Decode(DecodeRequest request)
         {
             var pixels = new byte[4 * 3 * 4];
             var bitmap = BitmapSource.Create(4, 3, 96, 96, PixelFormats.Bgr32, null, pixels, 16);
             bitmap.Freeze();
-            return new WpfDecodedImage(bitmap, downscaled: true, originalWidth: 6000, originalHeight: 4000, exif: exifFor(request.Path));
+            var image = new WpfDecodedImage(bitmap, downscaled: true, originalWidth: 6000, originalHeight: 4000, exif: exifFor(request.Path));
+            return previewFor?.Invoke(request.Path) is { Width: > 0 } size ? new PreviewImage(image, size.Width, size.Height) : image;
         }
 
         public ImageInfo ReadInfo(string path) => new(6000, 4000);
+    }
+
+    /// <summary>A RAW's embedded-JPEG image: <see cref="IRawPreviewInfo"/> over a plain decoded image.</summary>
+    private sealed class PreviewImage(WpfDecodedImage inner, int previewWidth, int previewHeight) : IDecodedImage, IRawPreviewInfo
+    {
+        public int PixelWidth => inner.PixelWidth;
+        public int PixelHeight => inner.PixelHeight;
+        public bool Downscaled => inner.Downscaled;
+        public int Orientation => inner.Orientation;
+        public long EstimatedBytes => inner.EstimatedBytes;
+        public object PlatformImage => inner.PlatformImage;
+        public int OriginalWidth => inner.OriginalWidth;
+        public int OriginalHeight => inner.OriginalHeight;
+        public ExifSummary? Exif => inner.Exif;
+        public int EmbeddedPreviewWidth => previewWidth;
+        public int EmbeddedPreviewHeight => previewHeight;
     }
 
     private sealed class ForwardingFolderLoadSink(Func<IFolderLoadSink> getSink) : IFolderLoadSink

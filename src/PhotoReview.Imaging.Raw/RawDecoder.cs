@@ -83,6 +83,7 @@ public sealed class RawDecoder : IImageDecoder
             IDecodedImage decoded;
             long previewBytesRead = 0;
             long fallbackThumbnailBytesRead = 0;
+            var fromJpegPreview = true;
             if (preview == null || preview.Length <= 0)
             {
                 // A valid RAW without an embedded JPEG (e.g. Leica M8 DNG): every format may use the preview fallback
@@ -93,7 +94,7 @@ public sealed class RawDecoder : IImageDecoder
                         new InvalidDataException($"No embedded preview found in RAW file: {request.Path}"),
                         () => Tr.ImageErrorRawNoPreview);
 
-                decoded = DecodeWithoutPreview(request, containerInfo, out fallbackThumbnailBytesRead);
+                decoded = DecodeWithoutPreview(request, containerInfo, out fallbackThumbnailBytesRead, out fromJpegPreview);
             }
             else
             {
@@ -127,7 +128,10 @@ public sealed class RawDecoder : IImageDecoder
                 actualBackend: decoded.ActualBackend,
                 // LibRaw's native thumbnail path does not expose exact stream read counts. Include the returned JPEG
                 // payload as an estimate; any additional LibRaw metadata I/O is not represented here.
-                sourceBytesRead: checked(headerSource.TotalBytesRead + previewBytesRead + fallbackThumbnailBytesRead));
+                sourceBytesRead: checked(headerSource.TotalBytesRead + previewBytesRead + fallbackThumbnailBytesRead),
+                // The inner decode's original size is the JPEG's own (orientation-applied) size, whatever box it was decoded into.
+                embeddedPreviewWidth: fromJpegPreview ? decoded.OriginalWidth : 0,
+                embeddedPreviewHeight: fromJpegPreview ? decoded.OriginalHeight : 0);
         }
     }
 
@@ -164,9 +168,10 @@ public sealed class RawDecoder : IImageDecoder
         }
     }
 
-    private IDecodedImage DecodeWithoutPreview(DecodeRequest request, RawContainerInfo containerInfo, out long bytesRead)
+    private IDecodedImage DecodeWithoutPreview(DecodeRequest request, RawContainerInfo containerInfo, out long bytesRead, out bool isJpegPreview)
     {
         bytesRead = 0;
+        isJpegPreview = true;
         if (_previewFallback is not null)
         {
             var thumbnailRequest = new DecodeRequest(
@@ -187,6 +192,7 @@ public sealed class RawDecoder : IImageDecoder
             }
         }
 
+        isJpegPreview = false; // the LibRaw full decode: pixels are the sensor's, not a preview
         var decoded = _noPreviewDecoder!.Decode(request);
         var file = new FileInfo(request.Path);
         bytesRead = file.Exists ? file.Length : 0; // a full decode reads the whole file
@@ -265,7 +271,7 @@ public sealed class RawDecoder : IImageDecoder
 
     private readonly record struct RawInfoKey(string Path, long Length, long LastWriteUtcTicks);
 
-    private sealed class RawDecodedImage : IDecodedImage, ISourceReadMetrics
+    private sealed class RawDecodedImage : IDecodedImage, ISourceReadMetrics, IRawPreviewInfo
     {
         private readonly IDecodedImage _inner;
 
@@ -280,6 +286,8 @@ public sealed class RawDecoder : IImageDecoder
         public int OriginalWidth { get; }
         public int OriginalHeight { get; }
         public ExifSummary? Exif { get; }
+        public int EmbeddedPreviewWidth { get; }
+        public int EmbeddedPreviewHeight { get; }
 
         public RawDecodedImage(
             IDecodedImage inner,
@@ -289,8 +297,12 @@ public sealed class RawDecoder : IImageDecoder
             int orientation,
             ExifSummary? exif,
             DecoderBackend actualBackend,
-            long sourceBytesRead)
+            long sourceBytesRead,
+            int embeddedPreviewWidth,
+            int embeddedPreviewHeight)
         {
+            EmbeddedPreviewWidth = embeddedPreviewWidth;
+            EmbeddedPreviewHeight = embeddedPreviewHeight;
             _inner = inner;
             OriginalWidth = sensorWidth;
             OriginalHeight = sensorHeight;

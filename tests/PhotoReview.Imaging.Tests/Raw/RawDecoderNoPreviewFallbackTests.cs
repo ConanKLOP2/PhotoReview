@@ -108,6 +108,37 @@ public sealed class RawDecoderNoPreviewFallbackTests
     }
 
     [Fact]
+    public void Decode_EmbeddedPreview_ExposesTheJpegsOwnSizeEvenWhenDownscaledIntoTheBox()
+    {
+        using var temp = new TempRoot("raw-preview-info");
+        var jpeg = RealJpeg(temp, 640, 480);
+        var path = temp.File("preview.dng", SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: jpeg));
+
+        var decoded = new RawDecoder(new WpfBitmapImageDecoder())
+            .Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
+
+        Assert.True(decoded.PixelWidth < 640, "the box must have downscaled the bitmap");
+        var info = Assert.IsAssignableFrom<IRawPreviewInfo>(decoded);
+        Assert.Equal((640, 480), (info.EmbeddedPreviewWidth, info.EmbeddedPreviewHeight));
+    }
+
+    [Fact]
+    public void Decode_FallbackThumbnailJpeg_ExposesItsSizeButTheFullDecodeDoesNot()
+    {
+        using var temp = new TempRoot("raw-preview-info-fallback");
+        var path = WriteRawWithoutPreview(temp, "nopreview.dng");
+        var jpeg = RealJpeg(temp, 96, 64);
+
+        var thumb = (IRawPreviewInfo)new RawDecoder(new WpfBitmapImageDecoder(), previewFallback: new RecordingFallback(jpeg))
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+        Assert.Equal((96, 64), (thumb.EmbeddedPreviewWidth, thumb.EmbeddedPreviewHeight));
+
+        var full = (IRawPreviewInfo)new RawDecoder(new WpfBitmapImageDecoder(), noPreviewDecoder: new RecordingFullDecoder(jpeg))
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+        Assert.Equal((0, 0), (full.EmbeddedPreviewWidth, full.EmbeddedPreviewHeight)); // pixels are the sensor's, not a preview
+    }
+
+    [Fact]
     public void Decode_NoEmbeddedPreviewAndFallbackThumbnailEmpty_FailsWithTypedError()
     {
         using var temp = new TempRoot("raw-no-preview-badthumb");

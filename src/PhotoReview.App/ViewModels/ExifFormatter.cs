@@ -24,8 +24,10 @@ public static class ExifFormatter
     /// <param name="exif">EXIF read during the decode; null = none (e.g. an older cache entry).</param>
     /// <param name="modifiedUtc">File's last-write time (catalog entry, no extra disk read); null = unknown.</param>
     /// <param name="provider">Number/date format; defaults to <see cref="CultureInfo.CurrentCulture"/>.</param>
+    /// <param name="rawPreviewWidth">Q-RAW-03: pixel width of the embedded RAW preview being shown; 0 = not a RAW preview.</param>
+    /// <param name="rawPreviewHeight">See <paramref name="rawPreviewWidth"/>.</param>
     public static string Format(ExifInfoFields fields, string? fileName, int width, int height, ExifSummary? exif,
-        DateTime? modifiedUtc = null, IFormatProvider? provider = null)
+        DateTime? modifiedUtc = null, IFormatProvider? provider = null, int rawPreviewWidth = 0, int rawPreviewHeight = 0)
     {
         provider ??= CultureInfo.CurrentCulture;
         var parts = new List<string>(10);
@@ -38,6 +40,9 @@ public static class ExifFormatter
             parts.Add(Tr.ExifModified(FormatDateTime(modified.ToLocalTime(), provider)));
         if (fields.HasFlag(ExifInfoFields.Dimensions) && width > 0 && height > 0)
             parts.Add(Tr.ExifDimensions(width.ToString(provider), height.ToString(provider)));
+        // Part of the dimensions info: the preview's own size beside the sensor size (Q-RAW-03).
+        if (fields.HasFlag(ExifInfoFields.Dimensions) && rawPreviewWidth > 0 && rawPreviewHeight > 0)
+            parts.Add(Tr.OverlayRawPreview(rawPreviewWidth.ToString(provider), rawPreviewHeight.ToString(provider)));
         if (fields.HasFlag(ExifInfoFields.Camera) && CameraText(exif?.CameraMake, exif?.CameraModel) is { } camera)
             parts.Add(camera);
         if (fields.HasFlag(ExifInfoFields.Lens) && exif?.LensModel is { } lens)

@@ -110,10 +110,33 @@ public sealed class ImagePresenter
         // feat/image-crossfade: ZoomDetailLoader upgrades the SAME image's bitmap (zoom-triggered full-resolution
         // decode) -- never a file change, so no path is passed (UpdateCurrentImage's isFileChange stays false).
         _zoomDetail = new ZoomDetailLoader(_previewService, _clock,
-            (image, w, h) => UpdateCurrentImage(image, w, h), _uiScheduler);
+            ShowZoomDetailImage, _uiScheduler);
     }
 
     private readonly ZoomDetailLoader _zoomDetail;
+    private PhotoInfo? _infoWhileOriginalShown; // the preview's PhotoInfo, kept while the full decode replaces it
+
+    /// <summary>
+    /// ZoomDetailLoader swapped the displayed bitmap. Q-RAW-03: while the full-resolution original is shown the
+    /// info line must not say "RAW preview"; swapping back to the preview restores it.
+    /// </summary>
+    private void ShowZoomDetailImage(object image, int w, int h)
+    {
+        var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image);
+        if (showingOriginal)
+        {
+            // Always reassigned (null for a non-RAW photo) so a value left by an earlier photo can never be restored.
+            _infoWhileOriginalShown = CurrentPhotoInfo is { RawPreviewWidth: > 0 } current ? current : null;
+            if (_infoWhileOriginalShown is not null)
+                CurrentPhotoInfo = _infoWhileOriginalShown with { RawPreviewWidth = 0, RawPreviewHeight = 0 };
+        }
+        else if (_infoWhileOriginalShown is { } preview)
+        {
+            if (CurrentPhotoInfo is not null) CurrentPhotoInfo = preview;
+            _infoWhileOriginalShown = null;
+        }
+        UpdateCurrentImage(image, w, h);
+    }
 
     public ReviewCatalog Catalog => _catalog;
     public GenerationClock Clock => _clock;
@@ -760,11 +783,17 @@ public sealed class ImagePresenter
 }
 
 /// <summary>Input of the photo information line (see <see cref="ImagePresenter.CurrentPhotoInfo"/>).</summary>
-public sealed record PhotoInfo(string FileName, int Width, int Height, PhotoReview.Imaging.Metadata.ExifSummary? Exif)
+/// <param name="RawPreviewWidth">Q-RAW-03: pixel width of the embedded RAW JPEG preview while THAT is the displayed image; 0 = none
+/// (non-RAW, a cache-restored image that cannot tell, or the full decode is shown).</param>
+/// <param name="RawPreviewHeight">See <paramref name="RawPreviewWidth"/>.</param>
+public sealed record PhotoInfo(string FileName, int Width, int Height, PhotoReview.Imaging.Metadata.ExifSummary? Exif,
+    int RawPreviewWidth = 0, int RawPreviewHeight = 0)
 {
     public static PhotoInfo From(string path, PhotoReview.Imaging.Decoding.IDecodedImage image)
     {
         ArgumentNullException.ThrowIfNull(image);
-        return new PhotoInfo(Path.GetFileName(path), image.OriginalWidth, image.OriginalHeight, image.Exif);
+        var preview = image as PhotoReview.Imaging.Decoding.IRawPreviewInfo;
+        return new PhotoInfo(Path.GetFileName(path), image.OriginalWidth, image.OriginalHeight, image.Exif,
+            preview?.EmbeddedPreviewWidth ?? 0, preview?.EmbeddedPreviewHeight ?? 0);
     }
 }

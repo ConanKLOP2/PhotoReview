@@ -42,3 +42,17 @@ public interface ISourceReadMetrics
     /// <summary>Logical source bytes consumed to produce this decoded image.</summary>
     long SourceBytesRead { get; }
 }
+
+/// <summary>
+/// Optional: implemented by a RAW image whose pixels come from the file's embedded JPEG preview (Q-RAW-03: the photo
+/// information line then shows the preview's own size next to the sensor size). Not persisted in the preview disk
+/// cache, so an image restored from it does not implement this (the label is omitted rather than guessed).
+/// </summary>
+public interface IRawPreviewInfo
+{
+    /// <summary>Full pixel width of the embedded JPEG the image was decoded from (after EXIF orientation); 0 = not a preview.</summary>
+    int EmbeddedPreviewWidth { get; }
+
+    /// <summary>See <see cref="EmbeddedPreviewWidth"/>.</summary>
+    int EmbeddedPreviewHeight { get; }
+}

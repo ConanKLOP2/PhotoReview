@@ -380,6 +380,52 @@ public sealed class ZoomDetailTests : IDisposable
         }
     }
 
+    [Fact(DisplayName = "Q-RAW-03: the RAW preview size is in the photo info while the preview shows, gone while the full decode shows, back on zoom-out")]
+    public async Task RawPreviewSize_FollowsWhichImageIsDisplayed()
+    {
+        var rawPath = Path.Combine(_tempDir, "info.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: new SizedDecoder(), isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+            Assert.Equal((2000, 1333), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+            Assert.Equal((6000, 4000), (presenter.CurrentPhotoInfo.Width, presenter.CurrentPhotoInfo.Height)); // sensor size stays
+
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+            Assert.Equal((0, 0), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+            Assert.Equal((6000, 4000), (presenter.CurrentPhotoInfo.Width, presenter.CurrentPhotoInfo.Height));
+
+            _viewer.ResetFit(1280, 720);
+            Assert.False(presenter.ZoomDetail.IsShowingOriginal);
+            Assert.Equal((2000, 1333), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact(DisplayName = "Q-RAW-03: a non-RAW photo never gets a preview size, and a stale one is not restored after a zoom swap")]
+    public async Task NonRawPhoto_NeverHasARawPreviewSize()
+    {
+        var decoder = new SizedDecoder();
+        var (presenter, _) = Create(decoder, "a.jpg");
+        await presenter.PresentAsync(0);
+        Assert.Equal(0, presenter.CurrentPhotoInfo!.RawPreviewWidth);
+
+        _viewer.SetZoom(2.0);
+        await WhenOriginalShownAsync(presenter);
+        Assert.Equal(0, presenter.CurrentPhotoInfo!.RawPreviewWidth);
+        _viewer.ResetFit(1280, 720);
+        Assert.Equal(0, presenter.CurrentPhotoInfo!.RawPreviewWidth);
+    }
+
     [Fact]
     public async Task RawOriginalMode_FullDecodeDisabled_NeverDecodesAgain()
     {
@@ -698,14 +744,17 @@ public sealed class ZoomDetailTests : IDisposable
     private sealed class EmbeddedRawDecoder(bool downscaled = true) : IImageDecoder
     {
         public IDecodedImage Decode(DecodeRequest request) => downscaled
-            ? new SizedImage(2000, 1333, 6000, 4000, downscaled: true)
+            ? new SizedImage(2000, 1333, 6000, 4000, downscaled: true, embeddedPreviewWidth: 2000, embeddedPreviewHeight: 1333)
             : new SizedImage(6000, 4000, 6000, 4000, downscaled: false);
 
         public ImageInfo ReadInfo(string path) => new(6000, 4000);
     }
 
-    private sealed class SizedImage(int width, int height, int originalWidth, int originalHeight, bool downscaled) : IDecodedImage
+    private sealed class SizedImage(int width, int height, int originalWidth, int originalHeight, bool downscaled,
+        int embeddedPreviewWidth = 0, int embeddedPreviewHeight = 0) : IDecodedImage, IRawPreviewInfo
     {
+        public int EmbeddedPreviewWidth => embeddedPreviewWidth;
+        public int EmbeddedPreviewHeight => embeddedPreviewHeight;
         public int PixelWidth => width;
         public int PixelHeight => height;
         public bool Downscaled => downscaled;
