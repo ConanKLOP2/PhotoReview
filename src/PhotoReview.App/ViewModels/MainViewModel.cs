@@ -303,7 +303,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         get
         {
             var configured = Settings.Shortcuts.ToggleCaptureMember;
-            return PhotoReview.App.Services.ShortcutKeyName.TryParse(configured, out _)
+            // The store's key-name validator (WPF-backed in the app): this class must not depend on System.Windows (Rule 6).
+            return !string.IsNullOrWhiteSpace(configured) && _settingsStore.KeyNames.IsValidKeyName(configured)
                 ? Tr.MainCapturePairBadgeTooltipBound(configured.Trim())
                 : Tr.MainCapturePairBadgeTooltipUnbound;
         }

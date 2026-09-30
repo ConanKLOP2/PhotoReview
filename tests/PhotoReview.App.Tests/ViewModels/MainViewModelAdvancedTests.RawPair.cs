@@ -61,9 +61,9 @@ public sealed partial class MainViewModelAdvancedTests
     }
 
     [Theory]
-    [InlineData("Escape")]
-    [InlineData("NotAKey")]
-    public void CapturePairBadgeToolTip_WithAnUnusableKey_IsTheUnboundHint(string configured)
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CapturePairBadgeToolTip_WithABlankKey_IsTheUnboundHint(string configured)
     {
         _settings.Shortcuts.ToggleCaptureMember = configured;
         var (vm, _) = CreateViewModel();
