@@ -133,6 +133,9 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         LibRawNativeMethods.LibRawSetOutputColor(raw, 1); // sRGB
         LibRawNativeMethods.LibRawSetOutputBps(raw, 8);
         LibRawNativeMethods.LibRawSetNoAutoBright(raw, 1);
+        // As-shot white balance, like the embedded JPEG preview; without it LibRaw applies its daylight multipliers and the zoom
+        // decode looks off-white-balance. Falls back to the daylight default if the struct layout does not match the verified one.
+        LibRawNativeMethods.TrySetUseCameraWb(raw, 1, 8, 1);
         CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
         _stageObserver?.Invoke("unpacked");
         cancellationToken.ThrowIfCancellationRequested();
@@ -144,7 +147,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (imagePointer == IntPtr.Zero)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw CreateDecodeException(imageError, "create decoded image");
+            throw CreateFailure(imageError, "create decoded image");
         }
         using var image = new SafeLibRawImageHandle(imagePointer);
 
@@ -203,9 +206,18 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (errorCode != 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw CreateDecodeException(errorCode, operation);
+            throw CreateFailure(errorCode, operation);
         }
     }
+
+    private const int LibRawUnsufficientMemory = -100007; // LIBRAW_UNSUFFICIENT_MEMORY
+    private const int ErrnoNoMemory = 12;                 // LibRaw returns positive errno values from unpack/process for libc failures
+
+    /// <summary>Insufficient memory is a resource failure of a healthy file, not corrupt data: same exception as the managed OutOfMemoryException path in Decode.</summary>
+    internal static Exception CreateFailure(int errorCode, string operation) =>
+        errorCode is LibRawUnsufficientMemory or ErrnoNoMemory
+            ? new InvalidOperationException("Not enough memory to decode this RAW image.")
+            : CreateDecodeException(errorCode, operation);
 
     private static InvalidDataException CreateDecodeException(int errorCode, string operation) =>
         new($"LibRaw could not {operation}: {LibRawNativeMethods.FormatError(errorCode)}");

@@ -62,6 +62,34 @@ internal static class LibRawNativeMethods
     [DllImport(LibraryName, EntryPoint = "libraw_set_no_auto_bright", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawSetNoAutoBright(SafeLibRawHandle handle, int value);
 
+    // LibRaw's C API has no setter for use_camera_wb. It is a plain int in libraw_output_params_t at a fixed offset of the
+    // libraw_data_t that libraw_init returns. Offsets below are for LibRaw 0.22.x x64 and were measured on the pinned libraw.dll
+    // by writing sentinel values through libraw_set_output_color/_output_bps/_no_auto_bright and locating them. Within the struct
+    // (libraw_types.h) use_camera_wb sits two ints before output_color, output_bps 40 bytes after it, no_auto_bright 96 after it.
+    private const int OutputColorOffset = 5392;
+    private const int UseCameraWbOffset = OutputColorOffset - 2 * sizeof(int);
+    private const int OutputBpsOffset = OutputColorOffset + 40;
+    private const int NoAutoBrightOffset = OutputColorOffset + 96;
+
+    /// <summary>
+    /// Enables the camera's as-shot white balance (LibRaw itself falls back to auto white balance when the file carries none).
+    /// Call after the output_color/output_bps/no_auto_bright setters: it writes only when those three values read back at their
+    /// expected offsets, so a LibRaw build with another struct layout is never poked; returns false then.
+    /// </summary>
+    internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int expectedOutputColor, int expectedOutputBps, int expectedNoAutoBright)
+    {
+        var pointer = handle.DangerousGetHandle();
+        if (Marshal.ReadInt32(pointer, OutputColorOffset) != expectedOutputColor ||
+            Marshal.ReadInt32(pointer, OutputBpsOffset) != expectedOutputBps ||
+            Marshal.ReadInt32(pointer, NoAutoBrightOffset) != expectedNoAutoBright)
+            return false;
+        Marshal.WriteInt32(pointer, UseCameraWbOffset, 1);
+        return true;
+    }
+
+    /// <summary>Reads use_camera_wb back (test seam); only meaningful for the pinned layout.</summary>
+    internal static int ReadUseCameraWb(SafeLibRawHandle handle) => Marshal.ReadInt32(handle.DangerousGetHandle(), UseCameraWbOffset);
+
     [DllImport(LibraryName, EntryPoint = "libraw_strerror", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern IntPtr LibRawStrError(int errorCode);
 
