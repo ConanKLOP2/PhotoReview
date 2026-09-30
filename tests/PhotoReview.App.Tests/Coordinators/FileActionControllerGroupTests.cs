@@ -200,6 +200,32 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
+    public async Task GroupRecycle_RemovedCapture_EvictsTheCachesOfEveryMemberNotOnlyTheSource()
+    {
+        var (_, jpeg, raw, xmp, _) = LoadPairBetweenTwoPhotos(withXmp: true);
+        var controller = NewController();
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Equal([jpeg], _sink.Removed);
+        Assert.Contains(raw, _sink.Evicted);
+        Assert.Contains(xmp!, _sink.Evicted);
+        Assert.DoesNotContain(jpeg, _sink.Evicted);
+    }
+
+    [Fact]
+    public async Task SingleFileRecycle_EvictsNoExtraPaths()
+    {
+        var plain = Make("plain.jpg");
+        _catalog.Reset([new CatalogEntry(plain), new CatalogEntry(Make("other.jpg"))]);
+        var controller = NewController();
+
+        await controller.RecycleAsync(null, plain);
+
+        Assert.Empty(_sink.Evicted);
+    }
+
+    [Fact]
     public async Task GroupRecycle_GroupUnchangedWhileTheConfirmationIsOpen_StillRecyclesBothMembers()
     {
         var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
@@ -681,7 +707,10 @@ public sealed class FileActionControllerGroupTests : IDisposable
         public Func<Task>? PresentTask { get; set; }
         public void SetStatusText(string status) => LastStatus = status;
         public void ShowLateActionStatus(string status) => LateStatuses.Add(status);
-        public void OnCatalogChanged(string? removedPath) { }
+        public void OnCatalogChanged(string? removedPath) => Removed.Add(removedPath);
+        public List<string?> Removed { get; } = [];
+        public List<string> Evicted { get; } = [];
+        public void EvictCachedPaths(IReadOnlyList<string> paths) => Evicted.AddRange(paths);
         public Task PresentAsync(int index)
         {
             Presented.Add(index);

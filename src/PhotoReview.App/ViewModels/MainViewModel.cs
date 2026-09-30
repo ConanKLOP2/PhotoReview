@@ -1067,6 +1067,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _compare.Clear();
     }
 
+    void IFileActionSink.EvictCachedPaths(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths) _presenter.EvictCachedPath(path);
+    }
+
     async Task IFileActionSink.PresentAsync(int index)
     {
         await _presenter.PresentAsync(index);

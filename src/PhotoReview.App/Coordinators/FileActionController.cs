@@ -233,6 +233,9 @@ public sealed class FileActionController
         {
             nextIndex = _catalog.Remove(source);
             _sink.OnCatalogChanged(source);
+            // A capture leaves the catalog as a whole: its partner members' cached previews go with it, not only the source's.
+            if (group is not null)
+                _sink.EvictCachedPaths(group.Paths.Where(path => !string.Equals(path, source, StringComparison.OrdinalIgnoreCase)).ToArray());
 
             // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
             if (nextIndex >= 0)
