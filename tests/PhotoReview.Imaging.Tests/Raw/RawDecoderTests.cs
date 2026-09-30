@@ -1,6 +1,7 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
@@ -316,6 +317,33 @@ public sealed class RawDecoderTests
         var truncatedPreviewReader = new TrackingSourceReader(truncated);
         var truncatedPreviewDecoder = new RawDecoder(new WpfBitmapImageDecoder(truncatedPreviewReader), truncatedPreviewReader);
         Assert.Throws<InvalidDataException>(() => truncatedPreviewDecoder.Decode(new DecodeRequest("broken.dng", DecodeBox.Unbounded)));
+    }
+
+    [Fact]
+    public void Decode_UnsupportedRawContainer_CarriesTheLocalizedUnsupportedSentence()
+    {
+        var reader = new TrackingSourceReader([0x49, 0x49, 0x2A]);
+        var decoder = new RawDecoder(new WpfBitmapImageDecoder(reader), reader);
+
+        var ex = Assert.ThrowsAny<NotSupportedException>(() => decoder.Decode(new DecodeRequest("broken.dng", DecodeBox.Unbounded)));
+
+        Assert.True(UserFacingError.IsLocalized(ex));
+        Assert.Equal(Tr.ImageErrorRawUnsupported, UserFacingError.Describe(ex));
+    }
+
+    [Fact]
+    public void Decode_MalformedRawContainer_CarriesTheLocalizedCorruptSentenceAndKeepsItsType()
+    {
+        // A valid TIFF signature in a file too short to hold a container: the registered reader rejects it as malformed.
+        var bytes = new byte[12];
+        bytes[0] = 0x49; bytes[1] = 0x49; bytes[2] = 0x2A; bytes[3] = 0x00;
+        var reader = new TrackingSourceReader(bytes);
+        var decoder = new RawDecoder(new WpfBitmapImageDecoder(reader), reader);
+
+        var ex = Assert.Throws<InvalidDataException>(() => decoder.Decode(new DecodeRequest("broken.dng", DecodeBox.Unbounded)));
+
+        Assert.True(UserFacingError.IsLocalized(ex));
+        Assert.Equal(Tr.ImageErrorRawCorrupt, UserFacingError.Describe(ex));
     }
 
     [Fact]

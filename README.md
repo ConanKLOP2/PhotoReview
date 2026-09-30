@@ -39,6 +39,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 **Releasing:** CI tags every merge to `master` (`v2.0.N`) and then automatically creates a **draft** GitHub Release for that tag (framework-dependent zip, exe SHA256, generated notes). Drafts are invisible to the public: review one under Releases and press **Publish** to release it. Delete drafts you do not want. You can also run the **Release** workflow by hand (Actions → Release → Run workflow) for an existing tag that has no release yet.
 
+**Downgrade note (camera RAW release):** this release writes JPEG+RAW capture actions to the operation journal as one line that lists every file of the capture. An older build only understands the first file of such a line. Before going back to an older build, open **Recovery** and resolve any unfinished Move/Copy/Delete of a JPEG+RAW capture first; a new build repairs lines an older build rewrote the next time it starts (see `docs/adr/0003-journal-startup.md`, "Older builds"), but it cannot recover a journal the older build already compacted.
+
 Note: `Microsoft.CodeAnalysis.CSharp` (Localization generator, `Directory.Packages.props`) must not be newer than the compiler in the installed .NET SDK; upgrade it only together with the SDK.
 
 ### Benchmarks

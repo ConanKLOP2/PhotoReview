@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Caching;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
@@ -217,8 +218,18 @@ public sealed class RawDecoder : IImageDecoder
             var ext = Path.GetExtension(path);
             var probeSpan = headerSource.Read(0, RawContainerLimits.InitialProbeLength(headerSource.Length));
             var reader = _registry.FindReader(probeSpan, ext)
-                ?? throw new NotSupportedException($"Unsupported RAW format: {ext}");
-            var info = reader.Read(headerSource, CancellationToken.None);
+                ?? throw UserFacingError.Localized(new NotSupportedException($"Unsupported RAW format: {ext}"), () => Tr.ImageErrorRawUnsupported);
+            RawContainerInfo info;
+            try
+            {
+                info = reader.Read(headerSource, CancellationToken.None);
+            }
+            catch (InvalidDataException ex) when (!UserFacingError.IsLocalized(ex))
+            {
+                // A container the reader rejects as malformed: same exception type for callers, localized sentence for the UI.
+                UserFacingError.Localized(ex, () => Tr.ImageErrorRawCorrupt);
+                throw;
+            }
 
             var current = new FileInfo(path);
             if (exists && (!current.Exists || current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks))
