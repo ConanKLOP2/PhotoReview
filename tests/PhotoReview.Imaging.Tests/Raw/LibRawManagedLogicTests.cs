@@ -242,4 +242,54 @@ public sealed class LibRawManagedLogicTests
         Assert.Empty(fake.Calls); // not even the sentinel/setter traffic: the gate runs before any write
         Assert.Equal((0, 0, 0, 0), fake.Snapshot());
     }
+
+    private static string Long(string root) => root + new string('a', LibRawDecoder.LongPathThreshold) + @"\photo.cr2";
+
+    [Fact]
+    public void ToExtendedLengthPath_LongDrivePath_GetsTheExtendedPrefix()
+    {
+        var path = Long(@"C:\photos\");
+
+        Assert.Equal(@"\\?\" + path, LibRawDecoder.ToExtendedLengthPath(path));
+    }
+
+    [Fact]
+    public void ToExtendedLengthPath_LongUncPath_BecomesTheUncExtendedForm()
+    {
+        var path = Long(@"\\server\share\dir\");
+
+        Assert.Equal(@"\\?\UNC\server\share\dir\" + new string('a', LibRawDecoder.LongPathThreshold) + @"\photo.cr2", LibRawDecoder.ToExtendedLengthPath(path));
+    }
+
+    [Fact]
+    public void ToExtendedLengthPath_DotSegmentsAndForwardSlashes_AreNormalisedBecauseExtendedPathsDoNotDoIt()
+    {
+        var path = @"C:\photos\x\..\" + new string('b', LibRawDecoder.LongPathThreshold) + "/photo.cr2";
+
+        Assert.Equal(@"\\?\C:\photos\" + new string('b', LibRawDecoder.LongPathThreshold) + @"\photo.cr2", LibRawDecoder.ToExtendedLengthPath(path));
+    }
+
+    [Theory]
+    [InlineData(@"C:\photos\short.cr2")]
+    [InlineData(@"relative\dir\photo.cr2")]
+    public void ToExtendedLengthPath_ShortOrRelativePath_IsLeftAlone(string path)
+    {
+        Assert.Null(LibRawDecoder.ToExtendedLengthPath(path));
+    }
+
+    [Fact]
+    public void ToExtendedLengthPath_ShortPathJustBelowTheThreshold_IsLeftAlone()
+    {
+        var path = @"C:\" + new string('a', LibRawDecoder.LongPathThreshold - 8) + ".cr2";
+        Assert.Equal(LibRawDecoder.LongPathThreshold - 1, path.Length);
+
+        Assert.Null(LibRawDecoder.ToExtendedLengthPath(path));
+    }
+
+    [Fact]
+    public void ToExtendedLengthPath_AlreadyExtendedOrDevicePath_IsLeftAlone()
+    {
+        Assert.Null(LibRawDecoder.ToExtendedLengthPath(@"\\?\" + Long(@"C:\photos\")));
+        Assert.Null(LibRawDecoder.ToExtendedLengthPath(@"\\.\" + Long(@"C:\photos\")));
+    }
 }

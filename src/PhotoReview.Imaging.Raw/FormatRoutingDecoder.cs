@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 using PhotoReview.Imaging.Decoding;
 
@@ -53,6 +54,12 @@ public sealed class FormatRoutingDecoder : IImageDecoder
         return _standardDecoder.Decode(request);
     }
 
-    private static NotSupportedException RawDisabled(string path) =>
-        new($"RAW support is disabled; cannot decode '{System.IO.Path.GetFileName(path)}'.");
+    // English message for logs/type-based control flow; the UI shows the localized sentence (UserFacingError.Describe).
+    private static NotSupportedException RawDisabled(string path)
+    {
+        var fileName = System.IO.Path.GetFileName(path);
+        return UserFacingError.Localized(
+            new NotSupportedException($"RAW support is disabled; cannot decode '{fileName}'."),
+            () => Tr.ImageErrorRawDisabled(fileName));
+    }
 }

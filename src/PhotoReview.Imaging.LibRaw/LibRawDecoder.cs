@@ -49,7 +49,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         using var cancellationState = new CancellationState(cancellationToken);
         using var raw = CreateHandle();
         LibRawNativeMethods.LibRawSetProgressHandler(raw, CancellationCallback, cancellationState.Pointer);
-        CheckResult(LibRawNativeMethods.LibRawOpenWFile(raw, path), "open RAW file", cancellationToken);
+        OpenFile(raw, path, cancellationToken);
         CheckResult(LibRawNativeMethods.LibRawUnpackThumb(raw), "unpack embedded thumbnail", cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -96,7 +96,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         using var handle = CreateHandle();
-        CheckResult(LibRawNativeMethods.LibRawOpenWFile(handle, path), "open RAW file");
+        OpenFile(handle, path, CancellationToken.None);
         CheckResult(LibRawNativeMethods.LibRawAdjustSizesInfoOnly(handle), "read RAW dimensions");
         // adjust_sizes_info_only applies the container flip to iwidth/iheight (a portrait file reports height > width),
         // exactly the size Decode returns, so the orientation is already folded in: report it as 1.
@@ -205,11 +205,48 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     {
         if (request.Bytes is not { } bytes)
         {
-            CheckResult(LibRawNativeMethods.LibRawOpenWFile(handle, request.Path), "open RAW file", cancellationToken);
+            OpenFile(handle, request.Path, cancellationToken);
             return;
         }
 
         CheckResult(LibRawNativeMethods.LibRawOpenBuffer(handle, (IntPtr)bufferPin.Pointer, checked((nuint)bytes.Length)), "open RAW buffer", cancellationToken);
+    }
+
+    private const int LibRawIoError = -100009; // LIBRAW_IO_ERROR
+
+    /// <summary>Paths this long (below MAX_PATH = 260 minus room for a file name) are retried in extended-length form when libraw_open_wfile fails.</summary>
+    internal const int LongPathThreshold = 248;
+
+    /// <summary>
+    /// Opens <paramref name="path"/> with libraw_open_wfile. That call fails with LIBRAW_IO_ERROR for paths beyond MAX_PATH even though the
+    /// .NET readers succeed, so a long path is retried once in its extended-length form; when that fails too the ORIGINAL error is reported.
+    /// </summary>
+    private static void OpenFile(SafeLibRawHandle handle, string path, CancellationToken cancellationToken)
+    {
+        var code = LibRawNativeMethods.LibRawOpenWFile(handle, path);
+        if (code == LibRawIoError && ToExtendedLengthPath(path) is { } extended && LibRawNativeMethods.LibRawOpenWFile(handle, extended) == 0) return;
+        CheckResult(code, "open RAW file", cancellationToken);
+    }
+
+    /// <summary>
+    /// The extended-length form of a long fully qualified path (<c>\\?\C:\...</c>; UNC paths become <c>\\?\UNC\server\share\...</c>), or null
+    /// when the path is shorter than <see cref="LongPathThreshold"/>, already extended/device, relative, or cannot be normalised.
+    /// </summary>
+    internal static string? ToExtendedLengthPath(string path)
+    {
+        if (path.Length < LongPathThreshold || path.StartsWith(@"\\?\", StringComparison.Ordinal) || path.StartsWith(@"\\.\", StringComparison.Ordinal)) return null;
+        string full;
+        try
+        {
+            if (!Path.IsPathFullyQualified(path)) return null;
+            full = Path.GetFullPath(path); // collapses "." / ".." and forward slashes, which extended-length paths do not do
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or System.Security.SecurityException)
+        {
+            return null;
+        }
+
+        return full.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\UNC\" + full[2..] : @"\\?\" + full;
     }
 
     private static int CheckCancellation(IntPtr data, int stage, int iteration, int expected)

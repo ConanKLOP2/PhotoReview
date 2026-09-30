@@ -61,6 +61,24 @@ public sealed class FormatRoutingDecoderTests
     }
 
     [Fact]
+    public void Routing_RawExtensionWhenDisabled_CarriesALocalizedUiSentenceNamingTheFile()
+    {
+        var (router, _, _, _) = Create(rawEnabled: false);
+
+        var decode = Assert.Throws<NotSupportedException>(() => router.Decode(new DecodeRequest(@"C:aw dir\photo.NEF", DecodeBox.Unbounded)));
+        var info = Assert.Throws<NotSupportedException>(() => router.ReadInfo(@"C:aw dir\photo.NEF"));
+
+        foreach (var error in new[] { decode, info })
+        {
+            Assert.True(PhotoReview.Core.Localization.UserFacingError.IsLocalized(error));
+            var sentence = PhotoReview.Core.Localization.UserFacingError.Describe(error);
+            Assert.Equal(PhotoReview.Core.Localization.Tr.ImageErrorRawDisabled("photo.NEF"), sentence);
+            Assert.Contains("photo.NEF", sentence, StringComparison.Ordinal);
+            Assert.DoesNotContain("RAW support is disabled", sentence, StringComparison.Ordinal); // not the English log text
+        }
+    }
+
+    [Fact]
     public void Routing_SettingToggledAtRuntime_IsReevaluatedOnEveryCall()
     {
         var (router, _, raw, state) = Create(rawEnabled: false);
