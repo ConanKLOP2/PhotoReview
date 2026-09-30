@@ -62,33 +62,58 @@ internal static class LibRawNativeMethods
     [DllImport(LibraryName, EntryPoint = "libraw_set_no_auto_bright", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void LibRawSetNoAutoBright(SafeLibRawHandle handle, int value);
 
-    // LibRaw's C API has no setter for use_camera_wb. It is a plain int in libraw_output_params_t at a fixed offset of the
-    // libraw_data_t that libraw_init returns. Offsets below are for LibRaw 0.22.x x64 and were measured on the pinned libraw.dll
-    // by writing sentinel values through libraw_set_output_color/_output_bps/_no_auto_bright and locating them. Within the struct
-    // (libraw_types.h) use_camera_wb sits two ints before output_color, output_bps 40 bytes after it, no_auto_bright 96 after it.
-    private const int OutputColorOffset = 5392;
-    private const int UseCameraWbOffset = OutputColorOffset - 2 * sizeof(int);
-    private const int OutputBpsOffset = OutputColorOffset + 40;
-    private const int NoAutoBrightOffset = OutputColorOffset + 96;
+    /// <summary>Byte offsets, from the libraw_data_t pointer libraw_init returns, of the libraw_output_params_t fields the white-balance write depends on.</summary>
+    internal readonly record struct WhiteBalanceLayout(int OutputColor, int OutputBps, int NoAutoBright, int UseCameraWb);
+
+    // LibRaw's C API has no setter for use_camera_wb (only libraw_set_user_mul, which is not equivalent: it would double-apply
+    // the camera WB to Nikon sRAW, skips LibRaw's auto-WB fallback for files without camera multipliers and ignores the CIFF
+    // white patch). use_camera_wb is a plain int in libraw_output_params_t. Layout for LibRaw 0.22.x, x64 MSVC, derived from
+    // libraw_types.h of 0.22.2 (ints 4 B, double 8 B, pointers 8 B, no packing pragma):
+    //   offsetof(libraw_data_t, params)              = 5232
+    //   offsetof(libraw_output_params_t, use_camera_wb) = 152, output_color = 160, output_bps = 200, no_auto_bright = 256
+    //   => use_camera_wb 5232 + 152 = 5384, output_color 5392, output_bps 5432, no_auto_bright 5488.
+    // (Verified independently by locating sentinels written through libraw_set_output_color/_output_bps/_no_auto_bright.)
+    internal static readonly WhiteBalanceLayout PinnedWhiteBalanceLayout = new(OutputColor: 5392, OutputBps: 5432, NoAutoBright: 5488, UseCameraWb: 5384);
+
+    private const int SentinelOutputColor = 0x5EA10C01;
+    private const int SentinelOutputBps = 0x5EA10C02;
+    private const int SentinelNoAutoBright = 0x5EA10C03;
 
     /// <summary>
-    /// Enables the camera's as-shot white balance (LibRaw itself falls back to auto white balance when the file carries none).
-    /// Call after the output_color/output_bps/no_auto_bright setters: it writes only when those three values read back at their
-    /// expected offsets, so a LibRaw build with another struct layout is never poked; returns false then.
+    /// Enables the camera's as-shot white balance (LibRaw itself falls back to auto white balance when the file carries none) and applies
+    /// the given output settings. Fails closed, before any raw memory write, unless <paramref name="versionPinned"/> reports the pinned
+    /// LibRaw runtime; then proves the layout by writing distinctive sentinels through the supported setters and reading them back at
+    /// the expected offsets. Only after that is use_camera_wb written and read back. Returns false (LibRaw's daylight default stays) on any mismatch.
+    /// The output settings are always applied, whatever the result.
     /// </summary>
-    internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int expectedOutputColor, int expectedOutputBps, int expectedNoAutoBright)
+    internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright,
+        Func<bool> versionPinned, WhiteBalanceLayout layout)
     {
+        if (!versionPinned()) return false;
         var pointer = handle.DangerousGetHandle();
-        if (Marshal.ReadInt32(pointer, OutputColorOffset) != expectedOutputColor ||
-            Marshal.ReadInt32(pointer, OutputBpsOffset) != expectedOutputBps ||
-            Marshal.ReadInt32(pointer, NoAutoBrightOffset) != expectedNoAutoBright)
-            return false;
-        Marshal.WriteInt32(pointer, UseCameraWbOffset, 1);
-        return true;
+        LibRawSetOutputColor(handle, SentinelOutputColor);
+        LibRawSetOutputBps(handle, SentinelOutputBps);
+        LibRawSetNoAutoBright(handle, SentinelNoAutoBright);
+        var layoutMatches = Marshal.ReadInt32(pointer, layout.OutputColor) == SentinelOutputColor &&
+                            Marshal.ReadInt32(pointer, layout.OutputBps) == SentinelOutputBps &&
+                            Marshal.ReadInt32(pointer, layout.NoAutoBright) == SentinelNoAutoBright;
+        LibRawSetOutputColor(handle, outputColor);
+        LibRawSetOutputBps(handle, outputBps);
+        LibRawSetNoAutoBright(handle, noAutoBright);
+        if (!layoutMatches) return false;
+        Marshal.WriteInt32(pointer, layout.UseCameraWb, 1);
+        return Marshal.ReadInt32(pointer, layout.UseCameraWb) == 1;
     }
 
+    /// <summary>Production entry point: pinned-version gate (<see cref="LibRawAvailability.Probe"/>) and the pinned layout.</summary>
+    internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright) =>
+        TrySetUseCameraWb(handle, outputColor, outputBps, noAutoBright, () => LibRawAvailability.Probe(out _), PinnedWhiteBalanceLayout);
+
+    /// <summary>Reads an int at a byte offset of the libraw_data_t (test seam).</summary>
+    internal static int ReadInt32(SafeLibRawHandle handle, int offset) => Marshal.ReadInt32(handle.DangerousGetHandle(), offset);
+
     /// <summary>Reads use_camera_wb back (test seam); only meaningful for the pinned layout.</summary>
-    internal static int ReadUseCameraWb(SafeLibRawHandle handle) => Marshal.ReadInt32(handle.DangerousGetHandle(), UseCameraWbOffset);
+    internal static int ReadUseCameraWb(SafeLibRawHandle handle) => ReadInt32(handle, PinnedWhiteBalanceLayout.UseCameraWb);
 
     [DllImport(LibraryName, EntryPoint = "libraw_strerror", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern IntPtr LibRawStrError(int errorCode);
