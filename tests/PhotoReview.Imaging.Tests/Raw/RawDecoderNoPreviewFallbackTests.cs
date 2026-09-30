@@ -153,8 +153,8 @@ public sealed class RawDecoderNoPreviewFallbackTests
     [Trait("Category", "Native")]
     public void Decode_CorpusLeicaDngWithLibRaw_ProducesAnImage()
     {
-        var path = Path.Combine(CorpusDir, LeicaDng);
-        if (!File.Exists(path) || !LibRawAvailability.Probe(out _)) return;
+        var path = RawCorpus.TryGetFile(LeicaDng);
+        if (path is null || !RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
 
         var decoded = new RawDecoder(new WpfBitmapImageDecoder(), previewFallback: new LibRawThumbnailFallback(),
                 noPreviewDecoder: new LibRawDecoder())

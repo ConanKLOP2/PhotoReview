@@ -118,12 +118,13 @@ public sealed class RawOrientationTests
     public static TheoryData<string> CorpusFiles()
     {
         var data = new TheoryData<string>();
-        if (!Directory.Exists(CorpusDir)) return data;
+        if (!RawCorpus.RequireDirectory()) return data;
         foreach (var file in Directory.GetFiles(CorpusDir).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
         {
             if (PhotoReview.Core.Catalog.ImageFileTypes.RawExtensions.Contains(Path.GetExtension(file)))
                 data.Add(Path.GetFileName(file));
         }
+        RawCorpus.RequireNonEmpty(data.Count, "RAW");
         return data;
     }
 

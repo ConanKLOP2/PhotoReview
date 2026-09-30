@@ -106,7 +106,7 @@ public sealed class OrfExifMagicTests
     [Trait("Category", "Native")]
     public void CorpusOrfFiles_ExposeExif()
     {
-        if (!Directory.Exists(CorpusDir)) return;
+        if (!RawCorpus.RequireDirectory()) return;
 
         var files = Directory.GetFiles(CorpusDir, "*.orf");
         foreach (var file in files)

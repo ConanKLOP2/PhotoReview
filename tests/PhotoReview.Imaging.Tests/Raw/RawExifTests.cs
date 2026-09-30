@@ -35,7 +35,7 @@ public sealed class RawExifTests
     [Trait("Category", "Native")]
     public void CorpusSamples_ExifSummaryMatchesSurvey()
     {
-        if (!Directory.Exists(CorpusDir)) return;
+        if (!RawCorpus.RequireDirectory()) return;
 
         var registry = new RawContainerReaderRegistry();
         var files = Directory.GetFiles(CorpusDir, "*.*");

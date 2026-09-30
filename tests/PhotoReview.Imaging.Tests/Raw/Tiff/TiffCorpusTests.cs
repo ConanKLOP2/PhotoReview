@@ -15,7 +15,7 @@ public sealed class TiffCorpusTests
     [Fact]
     public void AllCorpusTiffSamples_CanBeParsed()
     {
-        if (!Directory.Exists(CorpusDir)) return;
+        if (!RawCorpus.RequireDirectory()) return;
 
         var registry = new RawContainerReaderRegistry();
         var files = Directory.GetFiles(CorpusDir, "*.*");
@@ -59,10 +59,7 @@ public sealed class TiffCorpusTests
 
     private static IEnumerable<string> CorpusFiles(params string[] extensions)
     {
-        if (!Directory.Exists(CorpusDir)) return [];
-        return Directory.GetFiles(CorpusDir)
-            .Where(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
-            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
+        return RawCorpus.Files(extensions);
     }
 
     private static RawContainerInfo ReadContainer(string file)
@@ -120,7 +117,7 @@ public sealed class TiffCorpusTests
     [Fact]
     public void PentaxK7DngCorpus_LossyPreviewIsChosenOverLosslessSensorStripAndCropSetsSensorSize()
     {
-        var file = CorpusFiles(".dng").FirstOrDefault(f => Path.GetFileName(f).Contains("K-7", StringComparison.Ordinal));
+        var file = RawCorpus.TryGetFirst("*.dng", "K-7");
         if (file is null) return;
 
         var info = ReadContainer(file);
@@ -142,7 +139,7 @@ public sealed class TiffCorpusTests
     [InlineData("Z 7", 8256, 5504, 76188)]
     public void NefCorpus_SensorSizeIsActiveAreaOfFullSizeJpegAndMakerNotePreviewIsListed(string model, int width, int height, long makerNotePreviewOffset)
     {
-        var file = CorpusFiles(".nef").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        var file = RawCorpus.TryGetFirst("*.nef", model);
         if (file is null) return;
 
         var info = ReadContainer(file);
@@ -163,7 +160,7 @@ public sealed class TiffCorpusTests
     [InlineData("NEX-6", 4912, 3264)]
     public void ArwCorpus_SensorSizeIsActiveAreaNotMaskedRawIfd(string model, int width, int height)
     {
-        var file = CorpusFiles(".arw").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        var file = RawCorpus.TryGetFirst("*.arw", model);
         if (file is null) return;
 
         var info = ReadContainer(file);
@@ -221,7 +218,7 @@ public sealed class TiffCorpusTests
     [InlineData("sRAW", 2592, 1728)]
     public void Cr2Corpus_SensorSizeIsTheImageSizeNotTheIfd0PreviewSize(string model, int width, int height)
     {
-        var file = CorpusFiles(".cr2").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        var file = RawCorpus.TryGetFirst("*.cr2", model);
         if (file is null) return;
 
         var info = ReadContainer(file);
@@ -235,7 +232,7 @@ public sealed class TiffCorpusTests
     [InlineData("GF1", 4000, 3000)]
     public void Rw2Corpus_SensorSizeExcludesMaskedBorders(string model, int width, int height)
     {
-        var file = CorpusFiles(".rw2").FirstOrDefault(f => Path.GetFileName(f).Contains(model, StringComparison.Ordinal));
+        var file = RawCorpus.TryGetFirst("*.rw2", model);
         if (file is null) return;
 
         var info = ReadContainer(file);

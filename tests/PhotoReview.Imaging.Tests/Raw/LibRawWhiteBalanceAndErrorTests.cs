@@ -37,7 +37,7 @@ public sealed class LibRawWhiteBalanceAndErrorTests
     [Fact]
     public void TrySetUseCameraWb_AfterOutputSetters_SetsTheFlagAndRefusesAMismatchedLayout()
     {
-        if (!LibRawAvailability.Probe(out _)) return;
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason)) return;
         using var handle = new SafeLibRawHandle(LibRawNativeMethods.LibRawInit(0));
         LibRawNativeMethods.LibRawSetOutputColor(handle, 1);
         LibRawNativeMethods.LibRawSetOutputBps(handle, 8);
@@ -55,7 +55,7 @@ public sealed class LibRawWhiteBalanceAndErrorTests
     [Fact]
     public void Decode_UsesCameraWhiteBalance_NotLibRawDaylightDefaults()
     {
-        if (!LibRawAvailability.Probe(out _) || !File.Exists(SamplePath)) return;
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) || RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is null) return;
 
         var daylight = RedToBlueRatio(NativeDecodeMeans(useCameraWb: false));
         var camera = RedToBlueRatio(NativeDecodeMeans(useCameraWb: true));

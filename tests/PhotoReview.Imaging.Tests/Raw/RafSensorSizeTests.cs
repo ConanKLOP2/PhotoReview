@@ -119,9 +119,7 @@ public sealed class RafSensorSizeTests
     [InlineData("X100V", 6240, 4160)]
     public void Corpus_RafReportsRawSizeNotEmbeddedJpegSize(string camera, int width, int height)
     {
-        var file = Directory.Exists(CorpusDir)
-            ? Directory.GetFiles(CorpusDir, "*.RAF").FirstOrDefault(f => Path.GetFileName(f).Contains(camera, StringComparison.Ordinal))
-            : null;
+        var file = RawCorpus.TryGetFirst("*.RAF", camera);
         if (file is null) return;
 
         using var fs = File.OpenRead(file);

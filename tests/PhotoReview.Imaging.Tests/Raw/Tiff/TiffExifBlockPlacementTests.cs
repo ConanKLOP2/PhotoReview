@@ -86,7 +86,7 @@ public sealed class TiffExifBlockPlacementTests
     [Fact]
     public void CorpusTiffSamples_ExifSummaryEqualsFixed128KiBWindowParse()
     {
-        if (!Directory.Exists(CorpusDir)) return;
+        if (!RawCorpus.RequireDirectory()) return;
 
         var registry = new RawContainerReaderRegistry();
         int compared = 0;

@@ -33,7 +33,7 @@ public sealed class Cr3BmffHardeningTests
     [Trait("Category", "Native")]
     public void Read_RealCanonCr3Corpus_ReturnsPrvwPreviewFirstThenThumbnail()
     {
-        if (!Directory.Exists(CorpusDir)) return;
+        if (!RawCorpus.RequireDirectory()) return;
 
         var files = Directory.GetFiles(CorpusDir, "*.cr3");
         Assert.NotEmpty(files);

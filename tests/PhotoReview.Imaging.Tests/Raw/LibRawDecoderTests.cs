@@ -37,7 +37,7 @@ public sealed class LibRawDecoderTests
         {
             if (strictFullCorpus || !string.IsNullOrWhiteSpace(selectedSample))
                 throw new DirectoryNotFoundException($"LibRaw corpus is required but missing: {CorpusDirectory}");
-            return;
+            if (!RawCorpus.RequireDirectory()) return;
         }
 
         var allRawFiles = Directory.GetFiles(CorpusDirectory)
@@ -121,12 +121,12 @@ public sealed class LibRawDecoderTests
     [Trait("Category", "Native")]
     public void ReadJpegThumbnail_OrfCorpusSamples_FallsBackToDecodablePreview()
     {
-        if (!Directory.Exists(CorpusDirectory)) return;
+        if (!RawCorpus.RequireDirectory()) return;
         var files = Directory.GetFiles(CorpusDirectory)
             .Where(path => Path.GetExtension(path).Equals(".orf", StringComparison.OrdinalIgnoreCase))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (files.Length == 0) return;
+        if (!RawCorpus.RequireNonEmpty(files.Length, "*.orf")) return;
 
         Assert.Equal(3, files.Length);
         var fallback = new LibRawTestPreviewFallback();
@@ -147,8 +147,8 @@ public sealed class LibRawDecoderTests
     [Trait("Category", "Native")]
     public void ReadJpegThumbnail_RepeatedOrfExtraction_DoesNotContinuouslyGrowPrivateBytes()
     {
-        var path = Path.Combine(CorpusDirectory, "Olympus - E-P3 - 16bit (4_3).ORF");
-        if (!File.Exists(path)) return;
+        var path = RawCorpus.TryGetFile("Olympus - E-P3 - 16bit (4_3).ORF");
+        if (path is null) return;
 
         using var memorySampler = new PrivateMemorySampler();
         long afterWarmup = 0;
@@ -175,8 +175,8 @@ public sealed class LibRawDecoderTests
     [Trait("Category", "Native")]
     public void Decode_Repeated200Times_DoesNotContinuouslyGrowPrivateBytes()
     {
-        var path = Path.Combine(CorpusDirectory, "Canon - EOS 7D - sRAW2 (sRAW) (3_2).CR2");
-        if (!File.Exists(path)) return;
+        var path = RawCorpus.TryGetFile("Canon - EOS 7D - sRAW2 (sRAW) (3_2).CR2");
+        if (path is null) return;
 
         var decoder = new LibRawDecoder();
         using var memorySampler = new PrivateMemorySampler();
@@ -220,8 +220,8 @@ public sealed class LibRawDecoderTests
     [InlineData("Nikon - D40X - 12bit 12bit compressed (Lossy (type 1)) (3_2).NEF")]
     public void ReadInfo_PortraitRewrittenCorpusFile_MatchesDecodedOrientedDimensions(string fileName)
     {
-        var source = Path.Combine(CorpusDirectory, fileName);
-        if (!File.Exists(source)) return; // corpus files are gitignored and optional
+        var source = RawCorpus.TryGetFile(fileName);
+        if (source is null) return;
         var bytes = File.ReadAllBytes(source);
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         var info = new PhotoReview.Imaging.Raw.RawContainerReaderRegistry()

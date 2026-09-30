@@ -13,7 +13,7 @@ public sealed class Cr3AndRafCorpusTests
     [Fact]
     public void AllCorpusCr3AndRafSamples_CanBeParsed()
     {
-        if (!Directory.Exists(CorpusDir)) return;
+        if (!RawCorpus.RequireDirectory()) return;
 
         var registry = new RawContainerReaderRegistry();
         var files = Directory.GetFiles(CorpusDir, "*.*");

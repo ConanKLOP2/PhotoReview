@@ -90,9 +90,7 @@ public sealed class DngPrimaryIfdTests
     [InlineData("iPhone", 4032, 3024)]
     public void Corpus_DngSizesAreUnchanged(string camera, int width, int height)
     {
-        var file = Directory.Exists(CorpusDir)
-            ? Directory.GetFiles(CorpusDir, "*.dng").FirstOrDefault(f => Path.GetFileName(f).Contains(camera, StringComparison.Ordinal))
-            : null;
+        var file = RawCorpus.TryGetFirst("*.dng", camera);
         if (file is null) return;
 
         using var fs = File.OpenRead(file);

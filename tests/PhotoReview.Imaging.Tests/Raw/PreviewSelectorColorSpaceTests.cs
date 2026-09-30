@@ -152,8 +152,8 @@ public sealed class PreviewSelectorColorSpaceTests
     [InlineData("Panasonic - DC-GH5 - 1_1.RW2")]
     public void Corpus_KnownAdobeRgbSample_IsDetectedWhetherOrNotTheContainerDeclaresTheSize(string fileName)
     {
-        var path = Path.Combine(CorpusDir, fileName);
-        if (!File.Exists(path)) return;
+        var path = RawCorpus.TryGetFile(fileName);
+        if (path is null) return;
 
         using var source = new SourceRawHeaderSource(path, PhysicalSourceReader.Instance, SourceReadPriority.Viewer);
         var probe = source.Read(0, RawContainerLimits.InitialProbeLength(source.Length));
@@ -171,8 +171,8 @@ public sealed class PreviewSelectorColorSpaceTests
     [Fact]
     public void Corpus_SrgbSamples_AreNotFlaggedAdobeRgb()
     {
-        var path = Path.Combine(CorpusDir, "Canon - EOS 5D Mark IV - RAW (3_2).CR2");
-        if (!File.Exists(path)) return;
+        var path = RawCorpus.TryGetFile("Canon - EOS 5D Mark IV - RAW (3_2).CR2");
+        if (path is null) return;
 
         using var source = new SourceRawHeaderSource(path, PhysicalSourceReader.Instance, SourceReadPriority.Viewer);
         var probe = source.Read(0, RawContainerLimits.InitialProbeLength(source.Length));
