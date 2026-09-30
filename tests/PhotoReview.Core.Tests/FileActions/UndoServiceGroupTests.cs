@@ -324,6 +324,68 @@ public sealed class UndoServiceGroupTests
         Assert.False(_fs.FileExists(Xmp));
     }
 
+    /// <summary>A group Delete that failed part-way and journaled its Failed line (also appended to the journal, like the real service does).</summary>
+    private JournalEntry RegisterFailedDelete(JournalGroupMember[] all, JournalGroupMember[] completed)
+    {
+        var entry = new JournalEntry("delete-group", FileOperationType.Recycle, JournalState.Failed, all[0].Source, null, all[0].Size, Stamp,
+            Stamp, Error: "boom", GroupId: "g", GroupMembers: all);
+        _journal.Append(entry);
+        _undo.RegisterGroup(new CaptureGroupActionResult(false, false, FileOperationType.Recycle, "g", entry,
+            all.Select(member => new CaptureGroupMemberResult(member, completed.Contains(member), false, completed.Contains(member) ? null : "boom",
+                SourceExists: !completed.Contains(member))).ToArray(), "boom"));
+        return entry;
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWhereEveryMemberWasRecycled_ClosesTheFailedLineSoRecoveryOffersNoRetry()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg, raw]);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Empty(_journal.ReadFailedOperations()); // otherwise Retry would recycle the files the user just restored
+        Assert.Empty(_journal.ReadPendingAndFailedOperations());
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeletePartWay_RestoredMemberLeavesTheFailedLineAndTheOtherStaysRetryable()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg]); // the JPEG reached the bin, the RAW never left the disk
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(Jpeg));
+        var stillFailed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal([raw], stillFailed.GroupMembers);
+        // Recovery would retry only the RAW; the restored JPEG is no longer part of the retry.
+        var check = new RecoveryFileCheck(_fs).Check(stillFailed);
+        Assert.Equal(RecoveryVerdict.CanRetry, check.Verdict);
+        Assert.Equal([Raw], check.GroupMembers!.Select(item => item.Member.Source));
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWithPermanentMember_OnlyTheRestoredMembersLeaveTheFailedLine()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3, permanent: true);
+        RegisterFailedDelete([jpeg, raw, xmp], [jpeg, xmp]);
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        var stillFailed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal([raw, xmp], stillFailed.GroupMembers);
+    }
+
     [Fact]
     public void RegisterGroup_FailedWithNothingCompletedOrNotRecycle_RegistersNothing()
     {
