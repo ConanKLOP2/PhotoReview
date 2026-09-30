@@ -50,8 +50,8 @@ public sealed class RecoveryRetryService
     /// confirmation). An entry journaled <see cref="JournalErrors.CancelledByUser"/> is otherwise refused: a retry would
     /// complete exactly what the user cancelled.
     /// </param>
-    public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, CancellationToken ct = default,
-        bool confirmedFinishCancelled = false)
+    public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, bool confirmedFinishCancelled = false,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(failed);
         if (!confirmedFinishCancelled && string.Equals(failed.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
