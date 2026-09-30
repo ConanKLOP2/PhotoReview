@@ -284,10 +284,16 @@ public sealed class RawDecoder : IImageDecoder
     /// that reports resource exhaustion (E_OUTOFMEMORY, ERROR_NOT_ENOUGH_MEMORY, ERROR_NO_SYSTEM_RESOURCES,
     /// ERROR_COMMITMENT_LIMIT): that is transient, and a smaller preview would be cached as if it were the photo.
     /// </summary>
-    private static bool IsRecoverablePreviewFailure(Exception ex) =>
-        ex is System.Runtime.InteropServices.COMException com
+    private static bool IsRecoverablePreviewFailure(Exception ex)
+    {
+        // WicDirectDecoder rewraps a COMException from the ICC colour transform as NotSupportedException(inner: com):
+        // the HRESULT of a directly wrapped COM failure decides, so resource exhaustion is never taken for "unsupported".
+        if (ex.InnerException is System.Runtime.InteropServices.COMException inner && IsResourceExhaustion(inner.HResult))
+            return false;
+        return ex is System.Runtime.InteropServices.COMException com
             ? !IsResourceExhaustion(com.HResult)
             : ex is InvalidDataException or System.IO.FileFormatException or NotSupportedException;
+    }
 
     private static bool IsResourceExhaustion(int hresult) =>
         unchecked((uint)hresult) is 0x8007000E or 0x80070008 or 0x800705AA or 0x800705AF;
@@ -295,8 +301,11 @@ public sealed class RawDecoder : IImageDecoder
     /// <summary>The failure says the preview's data is damaged (not missing a component, not transient).</summary>
     private static bool IsCorruptDataFailure(Exception ex) =>
         ex is InvalidDataException or System.IO.FileFormatException
-        || (ex is System.Runtime.InteropServices.COMException com
-            && unchecked((uint)com.HResult) is 0x88982F60 /* WINCODEC_ERR_BADIMAGE */ or 0x88982F61 /* BADHEADER */ or 0x88982F07 /* UNKNOWNIMAGEFORMAT */);
+        || (ex is System.Runtime.InteropServices.COMException com && IsCorruptHResult(com.HResult))
+        || (ex.InnerException is System.Runtime.InteropServices.COMException inner && IsCorruptHResult(inner.HResult));
+
+    private static bool IsCorruptHResult(int hresult) =>
+        unchecked((uint)hresult) is 0x88982F60 /* WINCODEC_ERR_BADIMAGE */ or 0x88982F61 /* BADHEADER */ or 0x88982F07 /* UNKNOWNIMAGEFORMAT */;
 
     /// <summary>A preview shorter than this on its long side is a thumbnail, not something to show as the photo.</summary>
     private const int MinUsefulFallbackLongSide = 1000;

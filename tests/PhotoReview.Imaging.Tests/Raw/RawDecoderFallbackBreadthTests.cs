@@ -302,6 +302,35 @@ public sealed class RawDecoderFallbackBreadthTests
     }
 
     [Theory]
+    [InlineData(unchecked((int)0x8007000E))] // E_OUTOFMEMORY
+    [InlineData(unchecked((int)0x800705AA))] // ERROR_NO_SYSTEM_RESOURCES
+    public void Decode_ResourceExhaustionWrappedInNotSupported_PropagatesInsteadOfReturningTheNextPreview(int hresult)
+    {
+        // WicDirectDecoder rewraps an ICC-transform COMException as NotSupportedException(inner: com).
+        using var temp = new TempRoot("raw-wrapped-exhaustion");
+        var (path, info, good) = TwoPreviews(temp);
+        var full = new RecordingFullDecoder(good);
+        var wrapped = new NotSupportedException("icc", new HResultComException(hresult));
+
+        Assert.Throws<NotSupportedException>(() =>
+            NewDecoder(info, new SelectiveDecoder(wrapped), full).Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        Assert.Equal(0, full.CallCount);
+    }
+
+    [Fact]
+    public void Decode_WicBadImageWrappedInNotSupportedAndOnlyAThumbnailRemains_TheThumbnailIsAccepted()
+    {
+        using var temp = new TempRoot("raw-thumb-wrapped-badimage");
+        var (path, info, _) = BadPlusThumbnail(temp);
+        var wrapped = new NotSupportedException("icc", new HResultComException(unchecked((int)0x88982F60)));
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(wrapped)).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal((160, 120), (decoded.PixelWidth, decoded.PixelHeight));
+    }
+
+    [Theory]
     [InlineData(nameof(COMException))]
     [InlineData(nameof(NotSupportedException))]
     public void Decode_NonCorruptFailureOfBigPreviewAndOnlyAThumbnailRemains_TheThumbnailIsNotAcceptedSoTheFailurePropagates(string kind)
