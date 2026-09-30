@@ -25,13 +25,15 @@ public sealed class LibRawFullDecodeGateTests
             for (var i = 0; i < count; i++) Assert.True(_queued.Wait(Bound), "waiter never queued");
         }
 
-        /// <summary>Starts a thread that enters the gate, records its name, then holds the slot until released.</summary>
-        internal (Task Task, SemaphoreSlim Release) Start(string name, SourceReadPriority priority, CancellationToken token = default)
+        /// <summary>Starts a thread that enters the gate, records its name, then holds the slot until released.
+        /// <paramref name="worked"/> = the lease did real decode work (see <see cref="FullDecodeGate.Lease.MarkWorked"/>) before it is released.</summary>
+        internal (Task Task, SemaphoreSlim Release) Start(string name, SourceReadPriority priority, CancellationToken token = default, bool worked = true)
         {
             var release = new SemaphoreSlim(0);
             var task = Task.Factory.StartNew(() =>
             {
                 using var lease = Gate.Enter(priority, token);
+                if (worked) lease.MarkWorked();
                 lock (Order) Order.Add(name);
                 Assert.True(release.Wait(Bound));
             }, TaskCreationOptions.LongRunning);
@@ -187,6 +189,7 @@ public sealed class LibRawFullDecodeGateTests
         var v4 = h.Start("v4", SourceReadPriority.Viewer);
         h.AwaitQueued(1);
 
+        running.MarkWorked();
         running.Dispose(); // completion 1: the viewer lane keeps priority while the preload is young
         foreach (var entry in new[] { v1, v2, preload, v3, v4 }) entry.Release.Release();
         await Task.WhenAll([v1.Task, v2.Task, preload.Task, v3.Task, v4.Task]).WaitAsync(Bound);
@@ -207,11 +210,70 @@ public sealed class LibRawFullDecodeGateTests
         var v2 = h.Start("v2", SourceReadPriority.Viewer);
         h.AwaitQueued(1);
 
+        running.MarkWorked();
         running.Dispose();
         foreach (var entry in new[] { v1, v2, preload }) entry.Release.Release();
         await Task.WhenAll([v1.Task, v2.Task, preload.Task]).WaitAsync(Bound);
 
         Assert.Equal(["v1", "v2", "p"], h.Order); // only 2 completions before the preload's turn: not aged yet
+    }
+
+    [Fact]
+    public async Task Enter_FailedLeasesThatDidNoWork_DoNotAgeAQueuedPreload()
+    {
+        using var h = new Harness(maxQueuedPreloads: 2);
+        var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None); // never marked worked: e.g. a memory-guard refusal
+        var preload = h.Start("p", SourceReadPriority.Preload, worked: false);
+        h.AwaitQueued(1);
+        var viewers = new[] { "v1", "v2", "v3", "v4" }.Select(n => { var e = h.Start(n, SourceReadPriority.Viewer, worked: false); h.AwaitQueued(1); return e; }).ToArray();
+
+        running.Dispose();
+        foreach (var entry in viewers.Append(preload)) entry.Release.Release();
+        await Task.WhenAll(viewers.Select(v => v.Task).Append(preload.Task)).WaitAsync(Bound);
+
+        Assert.Equal(["v1", "v2", "v3", "v4", "p"], h.Order); // four instant failures are not "three completions": no promotion
+    }
+
+    [Fact]
+    public async Task Enter_TwoOverdueSlowPreloads_ArePromotedOneAtATimeWithAViewerServedBetween()
+    {
+        using var h = new Harness(maxQueuedPreloads: 2);
+        var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None);
+        var p1 = h.Start("p1", SourceReadPriority.Preload);
+        h.AwaitQueued(1);
+        var p2 = h.Start("p2", SourceReadPriority.Preload);
+        h.AwaitQueued(1);
+        var viewers = new[] { "v1", "v2", "v3", "v4" }.Select(n => { var e = h.Start(n, SourceReadPriority.Viewer); h.AwaitQueued(1); return e; }).ToArray();
+
+        running.MarkWorked();
+        running.Dispose();
+        foreach (var entry in viewers.Append(p1).Append(p2)) entry.Release.Release();
+        await Task.WhenAll(viewers.Select(v => v.Task).Append(p1.Task).Append(p2.Task)).WaitAsync(Bound);
+
+        // Both preloads were stamped at completion 0. p1 ages out after three worked completions; p2 must then age again
+        // (a promotion moves the baseline) instead of following right behind, so v3/v4 are served first.
+        Assert.Equal(["v1", "v2", "p1", "v3", "v4", "p2"], h.Order);
+    }
+
+    [Fact]
+    public async Task Lease_MarkedWorkedButDisposedTwice_CountsOneCompletion()
+    {
+        using var h = new Harness(maxQueuedPreloads: 2);
+        var running = h.Gate.Enter(SourceReadPriority.Viewer, CancellationToken.None);
+        var p = h.Start("p", SourceReadPriority.Preload);
+        h.AwaitQueued(1);
+        var v1 = h.Start("v1", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+        var v2 = h.Start("v2", SourceReadPriority.Viewer);
+        h.AwaitQueued(1);
+
+        running.MarkWorked();
+        running.Dispose();
+        running.Dispose(); // a second disposal must not advance the clock a second time
+        foreach (var entry in new[] { v1, v2, p }) entry.Release.Release();
+        await Task.WhenAll([v1.Task, v2.Task, p.Task]).WaitAsync(Bound);
+
+        Assert.Equal(["v1", "v2", "p"], h.Order); // completions 1 (running), 2 (v1): the preload is not yet aged at v2's turn
     }
 
     [Fact]

@@ -6,8 +6,11 @@ namespace PhotoReview.Imaging.LibRaw;
 /// <summary>
 /// Single-slot gate serialising LibRaw full decodes (each holds hundreds of MB), with two lanes: waiting
 /// <see cref="SourceReadPriority.Viewer"/> decodes are served before waiting <see cref="SourceReadPriority.Preload"/> decodes,
-/// except that a preload waiter which has seen <c>maxPreloadAgeCompletions</c> decodes finish since it queued is promoted
-/// ahead of newer viewer waiters (aging: a user paging through RAWs must not starve queued preloads forever). A running decode is never interrupted, the number of queued preload
+/// except that a preload waiter which has seen <c>maxPreloadAgeCompletions</c> decodes FINISH since it queued (and since the last
+/// preload promotion) is promoted ahead of newer viewer waiters (aging: a user paging through RAWs must not starve queued preloads
+/// forever). Only leases marked with <see cref="Lease.MarkWorked"/> (a decode that really started unpacking) advance that clock, so
+/// instant failures (memory refusal, corrupt file, cancelled open) cannot promote a preload without any real work in between, and at
+/// most ONE preload is promoted per <c>maxPreloadAgeCompletions</c> worked completions. A running decode is never interrupted, the number of queued preload
 /// waiters is bounded (extra preload requests fail fast so worker threads are released instead of piling up), and a
 /// queued waiter is cancellable without disturbing the slot. Every acquisition returns a lease that releases exactly once.
 /// </summary>
@@ -19,7 +22,8 @@ internal sealed class FullDecodeGate
     private readonly int _maxQueuedPreloads;
     private readonly Action<SourceReadPriority>? _waiterQueued;
     private readonly int _maxPreloadAgeCompletions;
-    private long _completions; // decodes finished so far (lease disposals); the aging clock, no wall time involved
+    private long _completions; // decodes that really ran (worked lease disposals); the aging clock, no wall time involved
+    private long _lastPromotionCompletion; // value of _completions at the last aged preload promotion: the aging baseline for the next waiter
     private bool _busy;
 
     internal const int DefaultMaxPreloadAgeCompletions = 3;
@@ -87,18 +91,22 @@ internal sealed class FullDecodeGate
         return new Lease(this);
     }
 
-    private void Release()
+    private void Release(bool worked)
     {
         lock (_sync)
         {
-            _completions++;
+            if (worked) _completions++;
             ReleaseLocked();
         }
     }
 
     private void ReleaseLocked()
     {
-        var preloadIsOverdue = _preloadQueue.First is { } oldest && _completions - oldest.Value.EnqueuedAtCompletion >= _maxPreloadAgeCompletions;
+        // One promotion per N worked completions: a promotion moves the baseline, so the other queued preload (stamped at almost the
+        // same completion) has to age again instead of following right behind.
+        var preloadIsOverdue = _preloadQueue.First is { } oldest &&
+            _completions - Math.Max(oldest.Value.EnqueuedAtCompletion, _lastPromotionCompletion) >= _maxPreloadAgeCompletions;
+        if (preloadIsOverdue) _lastPromotionCompletion = _completions;
         var next = preloadIsOverdue
             ? Dequeue(_preloadQueue)
             : Dequeue(_viewerQueue) ?? Dequeue(_preloadQueue);
@@ -133,9 +141,13 @@ internal sealed class FullDecodeGate
     internal sealed class Lease : IDisposable
     {
         private FullDecodeGate? _gate;
+        private int _worked;
 
         internal Lease(FullDecodeGate gate) => _gate = gate;
 
-        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
+        /// <summary>Declares that this lease really ran a decode (past the memory guard, unpack started): its disposal then advances the aging clock.</summary>
+        internal void MarkWorked() => Volatile.Write(ref _worked, 1);
+
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release(Volatile.Read(ref _worked) != 0);
     }
 }
