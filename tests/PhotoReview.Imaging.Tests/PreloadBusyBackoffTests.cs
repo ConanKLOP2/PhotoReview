@@ -66,4 +66,33 @@ public sealed class PreloadBusyBackoffTests
         Assert.Equal([1, 2, 3], new[] { backoff.NoteBusy(Path, Key(1)), backoff.NoteBusy(Path, Key(1)), backoff.NoteBusy(Path, Key(1)) });
         Assert.Equal(1, backoff.NoteBusy(@"C:\busy\b.cr2", Key(1)));
     }
+
+    [Fact]
+    public void RecordSuccess_AfterTheRetryCap_ClearsTheCapSoThePathIsNotSkipped()
+    {
+        var backoff = new PreloadBusyBackoff();
+        for (var busy = 0; busy < PreloadBusyBackoff.MaxRetries + 1; busy++)
+        {
+            backoff.BeginPass();
+            backoff.NoteBusy(Path, Key(1));
+        }
+        for (var pass = 0; pass < 50; pass++) backoff.BeginPass();
+        Assert.True(backoff.ShouldSkip(Path, Key(1)));
+
+        backoff.RecordSuccess(Path);
+
+        Assert.False(backoff.ShouldSkip(Path, Key(1)));
+        Assert.Equal(1, backoff.NoteBusy(Path, Key(1))); // the count restarted
+    }
+
+    [Fact]
+    public void Clear_DropsTheStateOfEveryPath()
+    {
+        var backoff = new PreloadBusyBackoff();
+        for (var busy = 0; busy < PreloadBusyBackoff.MaxRetries + 1; busy++) backoff.NoteBusy(Path, Key(1));
+
+        backoff.Clear();
+
+        Assert.False(backoff.ShouldSkip(Path, Key(1)));
+    }
 }

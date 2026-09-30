@@ -89,4 +89,31 @@ public sealed class JournalTransactionTests
     {
         public DateTime UtcNow { get; } = utcNow;
     }
+
+    [Fact]
+    public void ReadLatestEntry_StaleReconcileFailedAfterCommittedRetry_ReturnsTheCommittedLine()
+    {
+        var journal = new OperationJournal(Paths, new InMemoryFileSystem(), new FixedClock(Stamp));
+        var failed = new JournalEntry("op", FileOperationType.Move, JournalState.Failed,
+            @"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp, Stamp, Error: "x", ErrorCode: JournalErrors.PendingUnconfirmed);
+        var committed = failed with { State = JournalState.Committed, Error = null, ErrorCode = null };
+        journal.Append(failed);
+        journal.Append(committed);
+        journal.Append(failed); // another process's reconcile verdict from a stale snapshot
+
+        Assert.Equal(committed, journal.ReadLatestEntry("op"));
+    }
+
+    [Fact]
+    public void ReadLatestEntry_NonReconcileFailedAfterCommitted_StillWins()
+    {
+        var journal = new OperationJournal(Paths, new InMemoryFileSystem(), new FixedClock(Stamp));
+        var committed = new JournalEntry("op", FileOperationType.Move, JournalState.Committed,
+            @"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp, Stamp);
+        var failed = committed with { State = JournalState.Failed, Error = "io", ErrorCode = null };
+        journal.Append(committed);
+        journal.Append(failed);
+
+        Assert.Equal(failed, journal.ReadLatestEntry("op"));
+    }
 }

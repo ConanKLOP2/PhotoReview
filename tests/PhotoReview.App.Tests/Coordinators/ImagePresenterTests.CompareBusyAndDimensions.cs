@@ -44,6 +44,13 @@ public sealed partial class ImagePresenterTests
         public ImageInfo ReadInfo(string path) => throw new InvalidDataException("no sensor size and no preview size");
     }
 
+    private sealed class BuggyInfoDecoder : IImageDecoder
+    {
+        private readonly WpfBitmapImageDecoder _inner = new();
+        public IDecodedImage Decode(DecodeRequest request) => _inner.Decode(request);
+        public ImageInfo ReadInfo(string path) => throw new ArgumentException("decoder bug");
+    }
+
     private PreviewImageService CreateServiceWith(IImageDecoder decoder) => new(
         _metrics,
         () => false,
@@ -118,5 +125,21 @@ public sealed partial class ImagePresenterTests
         Assert.False(presenter.StatusNeedsAttention);
         Assert.Equal(StatusFormatter.Ready(0, 1, new FileInfo(file).Length, "unknown-size.png"), presenter.StatusText); // no "WxH"
         Assert.NotNull(presenter.CurrentPhotoInfo);
+    }
+
+    [Fact]
+    public async Task PresentAsync_DimensionLookupThrowsUnexpectedBug_IsNotHiddenAsReadyStatus()
+    {
+        var file = CreateFakeImageFile("buggy-size.png");
+        _catalog.Reset([file]);
+        var service = CreateServiceWith(new BuggyInfoDecoder());
+        var presenter = new ImagePresenter(
+            _catalog, _clock, service, _thumbnailCache, _preloadController, _compareViewModel, _hashService, _metrics,
+            () => _settings, _sessionStore, _sink, fileSystem: null, getSession: () => null,
+            onPresentedHook: _ => service.ClearCache());
+
+        await presenter.PresentAsync(0).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotEqual(StatusFormatter.Ready(0, 1, new FileInfo(file).Length, "buggy-size.png"), presenter.StatusText);
     }
 }

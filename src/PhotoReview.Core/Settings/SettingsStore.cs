@@ -107,7 +107,9 @@ public sealed class SettingsStore
                 _current = loaded;
                 // Write the repaired settings back once so the start-up dialog does not repeat on every launch (the repairs
                 // are recomputed from the file on each Load). Save raises Changed itself; only the default file is rewritten.
-                if (LastLoadRepairs.Count > 0 && path is null && TryPersistRepairs(loaded)) return _current;
+                // A file from a NEWER build is never rewritten: Save would drop its unknown fields and stamp the older version.
+                if (LastLoadRepairs.Count > 0 && path is null && loaded.ConfigVersion <= AppSettings.CurrentConfigVersion
+                    && TryPersistRepairs(loaded)) return _current;
                 Changed?.Invoke(this, _current);
                 return _current;
             }

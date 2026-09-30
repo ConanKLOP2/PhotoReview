@@ -624,14 +624,18 @@ public sealed class OperationJournal
         }
     }
 
-    /// <summary>The most recent journal line of <paramref name="id"/> (null when there is none), read under the journal lock.</summary>
+    /// <summary>The effective latest journal line of <paramref name="id"/> (null when there is none; a stale reconcile Failed after Committed is skipped), read under the journal lock.</summary>
     internal JournalEntry? ReadLatestEntry(string id)
     {
         ArgumentNullException.ThrowIfNull(id);
         lock (_gate)
         {
             JournalEntry? latest = null;
-            ReadEntries(entry => { if (string.Equals(entry.Id, id, StringComparison.Ordinal)) latest = entry; });
+            // Same latest-line rule as ComputeLatestEntries/AppendIfLatestIs: a stale reconcile Failed after Committed is not the state.
+            ReadEntries(entry =>
+            {
+                if (string.Equals(entry.Id, id, StringComparison.Ordinal) && !IsStaleReconcileAfterCommitted(entry, latest)) latest = entry;
+            });
             return latest;
         }
     }

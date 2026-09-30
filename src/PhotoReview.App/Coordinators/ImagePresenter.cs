@@ -788,12 +788,6 @@ public sealed class ImagePresenter
     private readonly record struct StatResult(StatOutcome Outcome, FileStat? Stat, Exception? Error);
 
     /// <summary>
-    /// Q-R29 option C: <see cref="StatNow"/> on <see cref="StatWorker"/>, never on the calling (UI)
-    /// thread. Cancelled without touching the disk when <paramref name="cancellationToken"/> fires before the stat
-    /// starts (the navigation was superseded while it waited). The caller resumes on its own context and must
-    /// re-check its navigation token before using the result.
-    /// </summary>
-    /// <summary>
     /// The original dimensions for the status line, or null when the lookup fails (e.g. a RAW whose header sizes are all
     /// unknown): the image is already on screen, so a failed lookup must not turn into an error status for a viewable file.
     /// </summary>
@@ -803,7 +797,11 @@ public sealed class ImagePresenter
         {
             return await _previewService.GetOriginalDimensionsAsync(path, currentKey);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // The expected header-read failures only (I/O, unsupported/corrupt/undecodable file, busy decoder); a bug such as a
+        // NullReferenceException must surface instead of being turned into "dimensions unknown".
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FormatException
+            or InvalidOperationException or InvalidDataException or System.Runtime.InteropServices.ExternalException
+            or PhotoReview.Imaging.Decoding.DecoderBusyException)
         {
             if (AppLog.Enabled) AppLog.Info($"ShowImage original dimensions unknown path={path}: {ex.GetType().Name}: {ex.Message}");
             return null;
@@ -831,6 +829,12 @@ public sealed class ImagePresenter
         }
     }
 
+    /// <summary>
+    /// Q-R29 option C: <see cref="StatNow"/> on <see cref="StatWorker"/>, never on the calling (UI)
+    /// thread. Cancelled without touching the disk when <paramref name="cancellationToken"/> fires before the stat
+    /// starts (the navigation was superseded while it waited). The caller resumes on its own context and must
+    /// re-check its navigation token before using the result.
+    /// </summary>
     private Task<StatResult> StatOffUiThreadAsync(string path, CancellationToken cancellationToken) =>
         StatWorker.RunAsync(() => StatNow(path), cancellationToken);
 

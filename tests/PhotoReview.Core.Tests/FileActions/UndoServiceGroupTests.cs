@@ -625,4 +625,31 @@ public sealed class UndoServiceGroupTests
             return true;
         }
     }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteStaleReconcileFailedAfterForeignCommit_SettleAppendsNoLine()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3);
+        RegisterFailedDelete([jpeg, raw, xmp], [jpeg, raw, xmp]);
+        _bin.FailFor = Raw;
+        await _undo.UndoLastAsync();
+        // Another process retried the delete (Committed) and a stale reconcile Failed landed after it.
+        var retry = new JournalEntry("delete-group", FileOperationType.Recycle, JournalState.Committed, xmp.Source, null, 3, Stamp, Stamp,
+            GroupId: "g", GroupMembers: [xmp]);
+        _journal.Append(retry);
+        _journal.Append(retry with { State = JournalState.Failed, Error = "stale", ErrorCode = JournalErrors.PendingUnconfirmed });
+        _bin.FailFor = null;
+        var before = DeleteGroupLines();
+
+        var second = await _undo.UndoLastAsync();
+
+        Assert.True(second.Succeeded, second.ErrorMessage);
+        Assert.Equal(before, DeleteGroupLines()); // the settle must not re-anchor on the stale Failed line
+    }
+
+    private int DeleteGroupLines() =>
+        _fs.ReadAllText(new AppPaths(@"C:\Users\test\AppData\Local").JournalFile)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries).Count(line => line.Contains("delete-group", StringComparison.Ordinal));
 }
