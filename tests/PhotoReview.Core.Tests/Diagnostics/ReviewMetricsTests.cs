@@ -91,6 +91,25 @@ public sealed class ReviewMetricsTests
     }
 
     [Fact]
+    public void FullDecodeSubset_LetsAConsumerDeriveTheOrdinaryDecodeAverage()
+    {
+        var metrics = new ReviewMetrics();
+        metrics.RecordSourceRead(1_000, 40);
+        metrics.RecordSourceRead(2_000, 60);
+        metrics.RecordSourceRead(24_000_000, 1_500, includeInDecodeEwma: false);
+        metrics.RecordSourceRead(24_000_000, 2_500, includeInDecodeEwma: false);
+
+        var snapshot = metrics.Snapshot();
+        var ordinaryReads = snapshot.SourceReads - snapshot.FullDecodeReads;
+        var ordinaryAverage = (snapshot.DecodeMilliseconds - snapshot.FullDecodeMilliseconds) / (double)ordinaryReads;
+        var fullAverage = snapshot.FullDecodeMilliseconds / (double)snapshot.FullDecodeReads;
+
+        Assert.Equal(50.0, ordinaryAverage, 6);
+        Assert.Equal(2_000.0, fullAverage, 6);
+        Assert.True(snapshot.FullDecodeReads <= snapshot.SourceReads && snapshot.FullDecodeMilliseconds <= snapshot.DecodeMilliseconds);
+    }
+
+    [Fact]
     public void ConcurrentRecordingIsThreadSafe()
     {
         var metrics = new ReviewMetrics();

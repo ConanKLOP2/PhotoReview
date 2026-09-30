@@ -167,6 +167,7 @@ public sealed class ReviewCatalog
         }
         _entries.Clear();
         _entries.AddRange(fresh);
+        _rawPairMode = RawPairMode.Separate; // plain paths never form capture groups: forget the previous mode too
         CurrentIndex = _entries.Count > 0 ? 0 : -1;
         InvalidateIndex();
     }
@@ -195,6 +196,9 @@ public sealed class ReviewCatalog
         AssertOwnerThread();
         var index = IndexOf(path);
         if (index < 0) return false;
+        // A capture-group entry is found by any member path, but the stat belongs to ONE file: stamping the entry's own
+        // (representative) path with another member's length/time would make it look changed on the next comparison.
+        if (!string.Equals(_entries[index].Path, path, StringComparison.OrdinalIgnoreCase)) return false;
         _entries[index] = _entries[index].WithMetadata(length, lastWriteUtc, width, height);
         return true;
     }
