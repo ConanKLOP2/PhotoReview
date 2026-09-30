@@ -35,7 +35,10 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         _configureAfterOpen = configureAfterOpen;
     }
 
-    /// <summary>Extracts LibRaw's embedded JPEG thumbnail without demosaicing the sensor image.</summary>
+    /// <summary>
+    /// Extracts LibRaw's embedded JPEG thumbnail without demosaicing the sensor image. Deliberately NOT behind the full-decode gate:
+    /// no demosaic runs, memory is bounded by the thumbnail (at most <see cref="MaxThumbnailBytes"/>) so parallel extraction is cheap.
+    /// </summary>
     public static byte[] ReadJpegThumbnail(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -52,7 +55,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (thumbnailPointer == IntPtr.Zero)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            throw CreateDecodeException(thumbnailError, "create embedded JPEG thumbnail");
+            throw CreateThumbnailFailure(thumbnailError);
         }
 
         using var thumbnail = new SafeLibRawImageHandle(thumbnailPointer);
@@ -161,16 +164,16 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         using var image = new SafeLibRawImageHandle(imagePointer);
 
         var header = Marshal.PtrToStructure<ProcessedImageHeader>(image.DangerousGetHandle());
-        if (header.Type != LibRawNativeMethods.ImageBitmap || header.Width == 0 || header.Height == 0 || header.Colors != 3 || header.Bits != 8)
+        if (header.Type != LibRawNativeMethods.ImageBitmap || header.Width == 0 || header.Height == 0 || !RgbBgraResampler.IsSupportedChannelCount(header.Colors) || header.Bits != 8)
             throw new InvalidDataException("LibRaw returned an unsupported processed image format.");
 
-        var rgbLength = RgbBgraResampler.ValidateSourceLength(header.Width, header.Height, header.DataSize);
+        var rgbLength = RgbBgraResampler.ValidateSourceLength(header.Width, header.Height, header.DataSize, header.Colors);
         var (targetWidth, targetHeight) = request.Box.Fit(header.Width, header.Height);
         var pixels = new byte[RgbBgraResampler.ValidateTargetLength(targetWidth, targetHeight)];
         unsafe
         {
             var source = new ReadOnlySpan<byte>((byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset), rgbLength);
-            RgbBgraResampler.Resize(source, header.Width, header.Height, pixels, targetWidth, targetHeight, cancellationToken);
+            RgbBgraResampler.Resize(source, header.Width, header.Height, pixels, targetWidth, targetHeight, cancellationToken, header.Colors);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -239,6 +242,9 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         errorCode is LibRawUnsufficientMemory or ErrnoNoMemory
             ? new InvalidOperationException("Not enough memory to decode this RAW image.")
             : CreateDecodeException(errorCode, operation);
+
+    /// <summary>Maps a make_mem_thumb failure like every other native failure: out of memory is a resource error, not a corrupt file.</summary>
+    internal static Exception CreateThumbnailFailure(int errorCode) => CreateFailure(errorCode, "create embedded JPEG thumbnail");
 
     private static InvalidDataException CreateDecodeException(int errorCode, string operation) =>
         new($"LibRaw could not {operation}: {LibRawNativeMethods.FormatError(errorCode)}");
