@@ -212,17 +212,13 @@ public sealed class SettingsRobustnessTests : IDisposable
     [InlineData("\"Fullscreen\": null", "Fullscreen", "F11")]
     public void Load_BlankMandatoryShortcut_ResetToDefault(string field, string property, string expected)
     {
-        var s = LoadJson("{\"ConfigVersion\":3,\"Shortcuts\":{" + field + "}}");
+        Directory.CreateDirectory(Path.GetDirectoryName(_paths.ConfigFile)!);
+        File.WriteAllBytes(_paths.ConfigFile, new UTF8Encoding(false).GetBytes("{\"ConfigVersion\":3,\"Shortcuts\":{" + field + "}}"));
+        var store = NewStore(); // one Load: the repair is written back, so a second Load would report nothing
+        var s = store.Load();
 
         Assert.Equal(expected, typeof(ShortcutMappings).GetProperty(property)!.GetValue(s.Shortcuts));
-        Assert.Contains(nameof(AppSettings.Shortcuts), NewStoreLoadRepairs());
-    }
-
-    private IReadOnlyList<string> NewStoreLoadRepairs()
-    {
-        var store = NewStore();
-        store.Load();
-        return store.LastLoadRepairs;
+        Assert.Contains(nameof(AppSettings.Shortcuts), store.LastLoadRepairs);
     }
 
     [Fact(DisplayName = "Actions with null name/shortcut/destination and null entries load as usable actions")]

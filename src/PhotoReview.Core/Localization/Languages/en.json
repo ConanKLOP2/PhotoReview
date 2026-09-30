@@ -878,5 +878,6 @@
   "recovery.retryConfirmCancelledPermanent": "You cancelled this {operation} earlier. Retrying will FINISH it for {count} file(s); {permanentCount} of them are on drives without a Recycle Bin and will be deleted PERMANENTLY. This cannot be undone. Continue?",
   "main.capturePair.badge.tooltipBound": "Press {key} to switch between the JPEG and the RAW of this capture.",
   "main.capturePair.badge.tooltipUnbound": "No key is assigned to switch between the JPEG and the RAW. Assign one in Settings > Shortcuts (\"Switch JPEG / RAW member\"), or use Compare.",
-  "settings.rawPairMode.shortcutHint": "In the stacked modes only one file of a pair is shown. To see the other one, assign a key to \"Switch JPEG / RAW member\" under Shortcuts (no key is assigned by default), or open Compare."
+  "settings.rawPairMode.shortcutHint": "In the stacked modes only one file of a pair is shown. To see the other one, assign a key to \"Switch JPEG / RAW member\" under Shortcuts (no key is assigned by default), or open Compare.",
+  "settings.load.shortcutDisabled": "The shortcut for {name} conflicted with another action and was turned off. You can assign it again in Settings > Shortcuts."
 }
