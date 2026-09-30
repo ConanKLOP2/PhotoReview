@@ -66,6 +66,11 @@ public sealed class ImagePresenter
 
     private readonly IUiScheduler? _uiScheduler;
 
+    // Waits before the single retry of a compare decode the LibRaw gate refused (DecoderBusyException). Injectable so tests
+    // never depend on wall-clock time.
+    private readonly Func<TimeSpan, CancellationToken, Task> _busyRetryDelay;
+    private static readonly TimeSpan BusyRetryDelay = TimeSpan.FromMilliseconds(250);
+
     /// <summary>
     /// PR-B: lets <c>MainWindow</c> hook <c>WpfPresentationSink.ApplyInitialViewModeOverride</c> to
     /// <c>PointerInputController.ApplyInitialViewAsync</c> after the pointer controller (which owns the surface) is
@@ -89,8 +94,10 @@ public sealed class ImagePresenter
         Func<SessionState?>? getSession = null,
         Action<string>? onPresentedHook = null,
         SessionWriter? sessionWriter = null,
-        IUiScheduler? uiScheduler = null)
+        IUiScheduler? uiScheduler = null,
+        Func<TimeSpan, CancellationToken, Task>? busyRetryDelay = null)
     {
+        _busyRetryDelay = busyRetryDelay ?? Task.Delay;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _previewService = previewService ?? throw new ArgumentNullException(nameof(previewService));
@@ -242,6 +249,7 @@ public sealed class ImagePresenter
         // has not started yet (a started one finishes and stays cached), and let preload re-center and
         // track direction/key rate now rather than only after this image is presented.
         var viewerDecodeCts = new CancellationTokenSource();
+        var viewerDecodeToken = viewerDecodeCts.Token; // read now: a later navigation disposes the source
         var supersededCts = Interlocked.Exchange(ref _viewerDecodeCts, viewerDecodeCts);
         if (supersededCts is not null)
         {
@@ -507,11 +515,7 @@ public sealed class ImagePresenter
                         pair.Value,
                         token,
                         t => _clock.IsNavigationCurrent(t),
-                        async p =>
-                        {
-                            var prev = await _previewService.GetPreviewAsync(p);
-                            return prev.PlatformImage;
-                        },
+                        p => LoadComparePreviewAsync(p, viewerDecodeToken),
                         p => _hashService.GetAsync(p),
                         compareSizeEnabled: settings.CompareSizeEnabled,
                         compareHashEnabled: settings.CompareHashEnabled,
@@ -563,9 +567,9 @@ public sealed class ImagePresenter
                 long perfDims = perf && settings.LoadingMode != LoadingMode.Original ? Stopwatch.GetTimestamp() : 0;
                 if (perfDims != 0) PhotoReviewPerf.Log.PostStart(token, "dims");
 
-                var original = settings.LoadingMode == LoadingMode.Original
-                    ? (Width: image.PixelWidth, Height: image.PixelHeight)
-                    : await _previewService.GetOriginalDimensionsAsync(path, currentKey);
+                (int Width, int Height)? original = settings.LoadingMode == LoadingMode.Original
+                    ? (image.PixelWidth, image.PixelHeight)
+                    : await TryGetOriginalDimensionsAsync(path, currentKey);
 
                 if (perfDims != 0) PhotoReviewPerf.Log.PostEnd(token, "dims", PhotoReviewPerf.Ms(perfDims));
 
@@ -583,7 +587,10 @@ public sealed class ImagePresenter
                     _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
                 }
 
-                UpdateStatus(StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, original.Width, original.Height, Path.GetFileName(path)));
+                // Unknown dimensions (the lookup failed for a file that is shown fine): the status line just omits them.
+                UpdateStatus(original is { } size
+                    ? StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, size.Width, size.Height, Path.GetFileName(path))
+                    : StatusFormatter.Ready(index, _catalog.Count, currentInfo.Length, Path.GetFileName(path)));
             }
 
             // 7. Cập nhật status, lưu session, ghi metric Presented
@@ -786,6 +793,44 @@ public sealed class ImagePresenter
     /// starts (the navigation was superseded while it waited). The caller resumes on its own context and must
     /// re-check its navigation token before using the result.
     /// </summary>
+    /// <summary>
+    /// The original dimensions for the status line, or null when the lookup fails (e.g. a RAW whose header sizes are all
+    /// unknown): the image is already on screen, so a failed lookup must not turn into an error status for a viewable file.
+    /// </summary>
+    private async Task<(int Width, int Height)?> TryGetOriginalDimensionsAsync(string path, ImageCacheKey currentKey)
+    {
+        try
+        {
+            return await _previewService.GetOriginalDimensionsAsync(path, currentKey);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (AppLog.Enabled) AppLog.Info($"ShowImage original dimensions unknown path={path}: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A compare member's preview at viewer priority (the pair is on screen, so it must not fail-fast like a preload does). A
+    /// <see cref="PhotoReview.Imaging.Decoding.DecoderBusyException"/> (possibly inherited from a preload decode this request
+    /// joined) is retried once after a short, cancellable pause; a second one propagates.
+    /// </summary>
+    private async Task<object?> LoadComparePreviewAsync(string path, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var preview = await _previewService.GetViewerPreviewAsync(path, _previewService.GetCurrentCacheKey(path), cancellationToken);
+                return preview.PlatformImage;
+            }
+            catch (PhotoReview.Imaging.Decoding.DecoderBusyException) when (attempt == 0)
+            {
+                await _busyRetryDelay(BusyRetryDelay, cancellationToken);
+            }
+        }
+    }
+
     private Task<StatResult> StatOffUiThreadAsync(string path, CancellationToken cancellationToken) =>
         StatWorker.RunAsync(() => StatNow(path), cancellationToken);
 
