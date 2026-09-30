@@ -104,6 +104,33 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Navigating_AfterFitWidthWithKeepZoom_ForgetsThePreviousImagesFitAxis()
+    {
+        var decoder = new SizedDecoder();
+        decoder.Sizes["a.jpg"] = (6000, 4000, 6000, 4000);
+        decoder.Sizes["b.jpg"] = (6000, 4000, 6000, 4000); // same size as A: only the new-image flag can tell them apart
+        var vm = CreateViewModel(decoder, "a.jpg", "b.jpg");
+        try
+        {
+            await vm.Presenter.PresentAsync(0);
+            _viewer.DpiScale = 1.0;
+            _viewer.ApplyInitialViewMode(InitialViewMode.FitWidth, 1200, 800);
+            var fitWidthZoom = _viewer.Zoom;
+            Assert.Equal(1200.0 / 6000, fitWidthZoom, 6);
+
+            await vm.NextAsync(); // KeepZoomAcrossImages: the zoom is kept, no ApplyInitialViewMode
+            _viewer.SwapSourceSize(6016, 4016); // B's original arrives
+
+            Assert.Equal(fitWidthZoom, _viewer.Zoom, 9); // not refitted against A's viewport
+        }
+        finally
+        {
+            decoder.OriginalGate.Release();
+            decoder.NextGate.Release();
+        }
+    }
+
     private IImageDecoder? _rawFullDecoder;
     private readonly ScriptedDialogService _dialog = new();
 
