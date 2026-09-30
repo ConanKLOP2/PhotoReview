@@ -180,7 +180,7 @@ public sealed class LibRawDecoderTests
 
         var decoder = new LibRawDecoder();
         using var memorySampler = new PrivateMemorySampler();
-        long afterWarmup = 0;
+        var samples = new List<long>();
         for (var index = 0; index < 200; index++)
         {
             _ = DecodeCorpusSample(decoder, path);
@@ -188,17 +188,30 @@ public sealed class LibRawDecoderTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            // Baseline after 100 decodes, not 20: earlier tests in the same process (corpus decodes, WIC) leave the native
-            // and managed heaps still settling, which inflated a 20-decode baseline by 50-100 MB. A real per-decode leak
-            // (an unclosed LibRaw handle keeps tens of MB each time) still exceeds the budget within the remaining 100.
-            if (index == 99) afterWarmup = memorySampler.CurrentPrivateBytes;
+            samples.Add(memorySampler.CurrentPrivateBytes);
         }
 
-        var finalPrivateBytes = memorySampler.CurrentPrivateBytes;
-        var growth = finalPrivateBytes - afterWarmup;
-        Console.WriteLine($"LibRaw 200 decodes: after warmup={afterWarmup}; final={finalPrivateBytes}; "
-            + $"growth={growth}; peak={memorySampler.PeakPrivateBytes}");
-        Assert.InRange(growth, long.MinValue, 32L * 1024 * 1024);
+        // Private bytes of a process decoding 20-70 MB rasters are bimodal after a full GC: a sample lands at ~80 MB or at
+        // ~135-215 MB depending on whether the native heap was trimmed at that moment (measured over identical runs, also
+        // on the commit before the RAW work: growth from -103 MB to +91 MB between two single samples, or between the
+        // lowest samples of two windows). A single before/after difference, or a window minimum, is therefore noise.
+        // A real per-decode leak (an unclosed LibRaw handle keeps tens of MB each time; an injected 8 MB/decode leak
+        // gave +784 MB here) raises the whole distribution: compare the MEDIAN of the last six samples (decodes 150-200)
+        // with the median of six after warm-up (decodes 50-100). Noise between the two medians was -4 to +104 MB over 5 runs
+        // (the two heap modes are ~120 MB apart), so the budget is 192 MB: it catches a leak of about 2 MB per decode or
+        // more (an unclosed LibRaw handle is tens of MB per decode) but cannot see a 1 MB/decode one. Not a precision tool.
+        var warmMedian = Median(samples.Skip(4).Take(6));
+        var lateMedian = Median(samples.Skip(14));
+        var growth = lateMedian - warmMedian;
+        Console.WriteLine($"LibRaw 200 decodes: samples(MB)=[{string.Join(", ", samples.Select(sample => sample / (1024 * 1024)))}]; "
+            + $"median decodes 50-100={warmMedian}; median decodes 150-200={lateMedian}; growth={growth}; peak={memorySampler.PeakPrivateBytes}");
+        Assert.InRange(growth, long.MinValue, 192L * 1024 * 1024);
+    }
+
+    private static long Median(IEnumerable<long> values)
+    {
+        var sorted = values.OrderBy(value => value).ToArray();
+        return (sorted[(sorted.Length - 1) / 2] + sorted[sorted.Length / 2]) / 2;
     }
 
     [Theory]
