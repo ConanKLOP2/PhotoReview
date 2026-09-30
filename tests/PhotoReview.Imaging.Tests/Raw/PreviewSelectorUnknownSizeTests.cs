@@ -68,6 +68,18 @@ public sealed class PreviewSelectorUnknownSizeTests
     }
 
     [Fact]
+    public void SelectPreview_Unbounded_HugeUnknownSizeJpeg_NeverOutranksAKnownPreviewOfAtLeast1000Pixels()
+    {
+        // 7 MB unknown scored 28M (bytes * 4) against 1620x1080 = 1.7M: the unknown entry used to win, fail to decode and
+        // leave the viewer with nothing. A known viewable preview always ranks first.
+        var (source, known, unknown) = Build(1620, 1080, unknownLength: 7_000_000);
+
+        var chosen = PreviewSelector.SelectPreview(source, [known, unknown], DecodeBox.Unbounded, 1);
+
+        Assert.Equal(known.Offset, chosen!.Offset);
+    }
+
+    [Fact]
     public void SelectPreview_TwoUnknownSizeJpegs_PicksTheLargerByBytes()
     {
         var (source, _, unknown) = Build(160, 120, unknownLength: 300_000);

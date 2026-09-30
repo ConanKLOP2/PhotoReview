@@ -57,9 +57,12 @@ public sealed class RafContainerReader : IRawContainerReader
         var exifBlocks = new List<ExifBlock>();
         int orientation = 1;
 
-        // A missing, truncated or header-overlapping JPEG only costs the preview: the CFA size is still readable and the
+        // A missing, truncated, header-overlapping or non-JPEG (no SOI) range only costs the preview: the CFA size is still readable and the
         // no-preview LibRaw fallback can decode the raw data, so the container itself is kept.
-        bool previewRangeValid = jpegOffset >= PointerTableEnd && jpegLength > 0 && (long)jpegOffset + jpegLength <= source.Length;
+        // The range must also start with a JPEG SOI (FFD8), like every other reader requires (a zero-filled pointer or
+        // garbage there is not a preview).
+        bool previewRangeValid = jpegOffset >= PointerTableEnd && jpegLength >= 2 && (long)jpegOffset + jpegLength <= source.Length
+            && source.Read(jpegOffset, 2) is [0xFF, 0xD8];
         if (previewRangeValid)
         {
             previews.Add(new EmbeddedPreview(

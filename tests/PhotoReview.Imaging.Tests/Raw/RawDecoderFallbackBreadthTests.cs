@@ -102,6 +102,55 @@ public sealed class RawDecoderFallbackBreadthTests
         Assert.Equal(0, full.CallCount);
     }
 
+    [Fact]
+    public void Decode_ChosenPreviewFailsWithoutAnyLibRaw_NextBestPreviewIsStillDecoded()
+    {
+        // No LibRaw (noPreviewDecoder null, no thumbnail fallback): trying the next-best JPEG needs no native code.
+        using var temp = new TempRoot("raw-next-best-nolibraw");
+        var (path, info, _) = TwoPreviews(temp);
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(new InvalidDataException("bad")), noPreview: null)
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal((320, 240), (decoded.PixelWidth, decoded.PixelHeight));
+    }
+
+    [Fact]
+    public void Decode_EveryPreviewFailsWithoutAnyLibRaw_TheFirstFailurePropagates()
+    {
+        using var temp = new TempRoot("raw-all-fail-nolibraw");
+        var path = temp.File("bad.dng", [.. new byte[PreviewAt], .. BadPreview]);
+        var bad = new EmbeddedPreview(0, PreviewAt, BadPreview.Length, EmbeddedPreviewKind.Jpeg, 4000, 3000, PreviewColorSpace.Srgb);
+        var info = new RawContainerInfo(RawFormat.Dng, 4000, 3000, 1, [bad], []);
+
+        Assert.Throws<InvalidDataException>(() => NewDecoder(info, new SelectiveDecoder(new InvalidDataException("bad")))
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+    }
+
+    private sealed class ThrowingFallback(Exception failure) : IRawPreviewFallback
+    {
+        public ReadOnlyMemory<byte> ReadJpegThumbnail(string path, RawFormat format) => throw failure;
+    }
+
+    [Theory]
+    [MemberData(nameof(RecoverableFailures))]
+    public void Decode_NoPreviewAndThumbnailFallbackRejected_UsesTheFullDecodeForEveryRecoverableFailure(string kind)
+    {
+        using var temp = new TempRoot("raw-nopreview-thumb-rejected");
+        var good = Jpeg(temp, 48, 32);
+        var path = temp.File("none.dng", new byte[PreviewAt]);
+        var info = new RawContainerInfo(RawFormat.Dng, 4000, 3000, 1, [], []);
+        var full = new RecordingFullDecoder(good);
+        var decoder = new RawDecoder(new WpfBitmapImageDecoder(),
+            registry: new RawContainerReaderRegistry([new FixedContainerReader(info)]),
+            previewFallback: new ThrowingFallback(Make(kind)), noPreviewDecoder: full);
+
+        var decoded = decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal(1, full.CallCount);
+        Assert.Equal((48, 32), (decoded.PixelWidth, decoded.PixelHeight));
+    }
+
     [Theory]
     [MemberData(nameof(RecoverableFailures))]
     public void Decode_EveryPreviewFails_UsesTheFullDecodeForAnyFormat(string kind)
@@ -140,8 +189,11 @@ public sealed class RawDecoderFallbackBreadthTests
     [Fact]
     public void Decode_PreviewFailsWithoutAnyFallback_KeepsTheOriginalException()
     {
+        // Only one preview exists, so no next-best candidate and no last resort: the original failure stands.
         using var temp = new TempRoot("raw-no-lastresort");
-        var (path, info, _) = TwoPreviews(temp);
+        var path = temp.File("bad.dng", [.. new byte[PreviewAt], .. BadPreview]);
+        var bad = new EmbeddedPreview(0, PreviewAt, BadPreview.Length, EmbeddedPreviewKind.Jpeg, 4000, 3000, PreviewColorSpace.Srgb);
+        var info = new RawContainerInfo(RawFormat.Dng, 4000, 3000, 1, [bad], []);
         var failure = new NotSupportedException("original");
 
         var thrown = Assert.Throws<NotSupportedException>(() =>

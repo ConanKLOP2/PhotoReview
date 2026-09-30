@@ -63,6 +63,30 @@ public sealed class Cr3ExifMergeTests
     }
 
     [Fact]
+    public void TryReadExif_Cr3WhereCmt1AndCmt2DatesDiffer_PrefersTheCaptureTimeOfCmt2()
+    {
+        // BuildCameraTiff has DateTime 2019:05:06 (0x0132); BuildExposureTiff has DateTimeOriginal 2020:01:02 (0x9003).
+        var (source, info) = Layout(cmt2IsExif: true);
+
+        var exif = RawExif.TryReadExif(source, info);
+
+        Assert.Equal(new DateTime(2020, 1, 2, 3, 4, 5), exif!.DateTaken);
+    }
+
+    [Fact]
+    public void TryReadExif_Cmt2WithoutDate_KeepsTheCmt1Date()
+    {
+        byte[] cmt1 = BuildCameraTiff();
+        var t = new TiffBytes(true, 128).Header(8).Ifd(8, 0, Short(0x8827, 100));
+        byte[] cmt2 = t.ToArray();
+        var source = new InMemoryRawHeaderSource([.. cmt1, .. cmt2]);
+
+        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, cmt1.Length, true), new ExifBlock(cmt1.Length, cmt2.Length, true, true)));
+
+        Assert.Equal(new DateTime(2019, 5, 6, 7, 8, 9), exif!.DateTaken);
+    }
+
+    [Fact]
     public void TryReadExif_Cmt2WithoutIfdIsExifFlag_DoesNotReadExposure()
     {
         var (source, info) = Layout(cmt2IsExif: false);
