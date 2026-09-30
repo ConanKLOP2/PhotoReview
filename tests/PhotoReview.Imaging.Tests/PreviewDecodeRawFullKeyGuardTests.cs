@@ -4,7 +4,6 @@ using PhotoReview.Core.Diagnostics;
 namespace PhotoReview.Imaging.Tests;
 
 /// <summary>The preview decode path must refuse a RawFullDecode key in Release too, or its read would silently feed the decode EWMA.</summary>
-[Trait("Category", "Slow")]
 public sealed class PreviewDecodeRawFullKeyGuardTests
 {
     [Fact]
