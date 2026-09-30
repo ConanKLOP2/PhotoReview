@@ -73,12 +73,12 @@ public partial class App : System.Windows.Application, IDisposable
             () => sp.GetRequiredService<SettingsStore>().Current.JournalDurability,
             liveOperations: sp.GetRequiredService<ILiveOperationRegistry>(),
             compactionFiles: new PhysicalJournalCompactionFiles()));
-        services.AddSingleton<RecoveryRetryService>(sp => new RecoveryRetryService(
+        services.AddSingleton<RecoveryRetryService>(sp => Composition.ServiceFactories.CreateRecoveryRetryService(
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<IRecycleBin>(),
-            () => sp.GetRequiredService<SettingsStore>().Current.AllowPermanentDeleteWithoutRecycleBin));
+            sp.GetRequiredService<SettingsStore>()));
         services.AddSingleton<FileHashService>(sp => new FileHashService(
             sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
         services.AddSingleton<FileActionService>(sp => new FileActionService(
@@ -119,9 +119,6 @@ public partial class App : System.Windows.Application, IDisposable
             var sourceReader = sp.GetRequiredService<ISourceReader>();
             var settingsStore = sp.GetRequiredService<SettingsStore>();
             var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
-            IRawPreviewFallback? rawPreviewFallback = LibRawAvailability.Probe(out _)
-                ? new Composition.LibRawPreviewFallback()
-                : null;
             return new ImageDecoderFactory(
                 Composition.DecoderProviders.Create(sourceReader,
                     () => settingsStore.Current.RawSupportEnabled || settingsStore.Current.DecoderBackend == PhotoReview.Core.Model.DecoderBackend.LibRaw),
@@ -129,10 +126,7 @@ public partial class App : System.Windows.Application, IDisposable
                 sp.GetService<ReviewMetrics>(),
                 (_, standardDecoder) => new FormatRoutingDecoder(
                     standardDecoder,
-                    new RawDecoder(standardDecoder, sourceReader, sourceBytesCache: sourceBytesCache,
-                        previewFallback: rawPreviewFallback,
-                        // A RAW with no embedded JPEG (Leica M8 DNG, some phone DNGs) is decoded by LibRaw instead of failing.
-                        noPreviewDecoder: rawPreviewFallback is null ? null : new LibRawDecoder()),
+                    Composition.ServiceFactories.CreateRawDecoder(standardDecoder, sourceReader, sourceBytesCache),
                     () => settingsStore.Current.RawSupportEnabled));
         });
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
