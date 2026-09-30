@@ -163,7 +163,7 @@ public sealed class OrfContainerReader : IRawContainerReader
     /// <summary>
     /// Olympus/OM System MakerNote. Offsets stored inside the note (CameraSettings pointer 0x2020 and the
     /// PreviewImageStart/ThumbnailImage values) are relative to the start of the MakerNote ("OLYMPUS\0" or
-    /// "OM SYSTEM\0"), not to the file. Notes without a known signature are treated as plain TIFF-style
+    /// "OM SYSTEM\0"), not to the file. Legacy "OLYMP\0" notes (IFD at +8) use file-absolute offsets. Notes without a known signature are treated as plain TIFF-style
     /// directories in the file's byte order with file-absolute offsets.
     /// </summary>
     private static void ParseOlympusMakerNote(IRawHeaderSource source, long noteOffset, bool fileLittleEndian, List<EmbeddedPreview> previews)
@@ -189,6 +189,12 @@ public sealed class OrfContainerReader : IRawContainerReader
             noteLittleEndian = header[8] == (byte)'I' && header[9] == (byte)'I';
             ifdStart = noteOffset + 12;
             offsetBase = noteOffset;
+        }
+
+        else if (header[..6].SequenceEqual("OLYMP\0"u8))
+        {
+            // Legacy (pre-2010) note: "OLYMP\0" + 2 version bytes, IFD at +8, file byte order and file-absolute offsets.
+            ifdStart = noteOffset + 8;
         }
 
         var entries = TiffHeaderNavigator.ReadIfdEntries(source, ifdStart, noteLittleEndian, out _);
