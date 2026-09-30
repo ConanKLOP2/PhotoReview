@@ -152,6 +152,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     /// </summary>
     public event EventHandler<ImageChangingEventArgs>? ImageChanging;
 
+    private string? _lastNotifiedImagePath;
+
     /// <summary>
     /// The presenter replaced the displayed bitmap (thumbnail, preview or full-resolution decode):
     /// size the viewer from the source's original dimensions, then refresh bindings.
@@ -159,8 +161,13 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public void NotifyCurrentImageChanged(bool isFileChange = false)
     {
         if (isFileChange) ImageChanging?.Invoke(this, new ImageChangingEventArgs(isFileChange));
+        // "New image" is a change of the presented file, NOT the fade decision: no fade is played for the first image after a
+        // folder open, while Compare is visible, or for a clear, yet those are new images whose Fit axis must be forgotten.
+        var shownPath = _presenter.CurrentPresentedPath;
+        var newImage = !string.Equals(shownPath, _lastNotifiedImagePath, StringComparison.OrdinalIgnoreCase);
+        _lastNotifiedImagePath = shownPath;
         if (_presenter.IsSameSourceSwap) _viewerState.SwapSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
-        else _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight, newImage: isFileChange);
+        else _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight, newImage: newImage);
         NotifyNavigationStateChanged();
     }
 
