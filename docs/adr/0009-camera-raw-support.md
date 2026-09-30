@@ -16,6 +16,7 @@ PhotoReview previously listed common camera RAW extensions without a dependable 
 - Convert Adobe RGB embedded previews through WIC using the bundled CC0 Adobe-compatible profile where the preview is tagged Adobe RGB and does not contain an ICC profile.
 - Expose pairing as a setting. Keep `RawPairMode.Separate` as the default: pair-action handling is implemented, but the user waived RAW-62's real-machine navigation/zoom/pair-undo/RAM check. No real-machine acceptance is claimed; grouping remains an explicit opt-in.
 - Keep RAW failure reporting explicit; do not route malformed or unsupported RAW bytes through an unrelated raster decoder.
+- LibRaw is the only full-decode backend (a WIC RAW full decoder was probed in the survey and removed as unused, `54a1b1c6`); LibRaw decodes run one at a time process-wide. It is also the last resort for an ORF whose embedded JPEG the Windows decoder rejects (thumbnail API) and for a RAW with no usable embedded JPEG. When RAW support is disabled, `FormatRoutingDecoder` refuses RAW extensions with `NotSupportedException`.
 
 ## Consequences
 

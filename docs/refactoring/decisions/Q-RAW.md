@@ -14,7 +14,7 @@ Implementation decision: [ADR 0009 — Camera RAW support](../../adr/0009-camera
 | ID | Decision |
 |---|---|
 | Q-RAW-01 | B — embedded preview for review; full decode only when zoom needs more pixels |
-| Q-RAW-02 | A — LibRaw native backend (fetched + SHA-pinned like turbojpeg.dll); WIC RAW codec still probed by RAW-30 |
+| Q-RAW-02 | A — LibRaw native backend (fetched + SHA-pinned like turbojpeg.dll); RAW-30 probed the WIC RAW codec for the survey only (2 of 23 files fully decoded); the WIC full decoder was removed as unused |
 | Q-RAW-03 | A — 100 % zoom = sensor visible size (ADR 0008); preview size shown separately in the overlay |
 | Q-RAW-04 | Settings option `RawPairMode` (Separate / Group–show JPG / Group–show RAW); same folder + same base name; `.xmp` follows the pair; default remains Separate because RAW-62's real-machine check was waived by the user |
 | Q-RAW-05 | A — CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 (PEF/NRW reserved) |

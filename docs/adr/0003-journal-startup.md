@@ -128,3 +128,12 @@ assert journal consistency.
   OS text without code); the localized "rollback incomplete" note is only part of the result message shown to the user.
 - A group Undo retried after it already restored some members itself, when nothing is pending any more, is an idempotent
   success and closes its earlier `Failed` lines with `Committed` (skipped if another writer touched them).
+- A group line whose member list holds a null element or a member with a missing/blank `Source` is quarantined by the
+  parser (`JournalLineParser.HasValidGroupMembers`, `80492486`): it is dropped like any other malformed line, because a
+  blank `Source` would make every later file check throw out of reconcile/Recovery. Whether compaction keeps such a
+  line verbatim: NOT VERIFIED.
+- `Committed` with a missing member becomes `Failed` (a Recovery item) in one case: the downgrade guard above re-checks a
+  `Committed` verdict of a line an older build settled against EVERY member on disk.
+- Outcome-line contract (`JournalTransaction`): `Fail` and `DismissRolledBack` return the appended record, or `null` when
+  nothing was due (never Prepared and not a retry) or when a retry's append was skipped because another writer had
+  superseded the entry (`Superseded`); `RecoveryRetryService` reports a superseded retry as "already handled" (`Superseded: true`) instead of a failure.
