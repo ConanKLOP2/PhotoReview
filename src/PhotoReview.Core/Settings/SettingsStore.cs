@@ -99,7 +99,11 @@ public sealed class SettingsStore
                     _log.Warn("config.json had invalid values, reset to defaults: " + string.Join(", ", LastLoadRepairs));
                 var disabledShortcuts = SettingsNormalizer.DisableConflictingOptionalShortcuts(loaded);
                 if (disabledShortcuts.Count > 0)
+                {
                     _log.Info("Optional shortcuts disabled because their key is already bound: " + string.Join(", ", disabledShortcuts));
+                    // Surface it too (the startup dialog lists LastLoadRepairs): the user must not silently lose a shortcut.
+                    LastLoadRepairs = [.. LastLoadRepairs, .. disabledShortcuts.Select(name => "Shortcuts." + name)];
+                }
                 _current = loaded;
                 Changed?.Invoke(this, _current);
                 return _current;
