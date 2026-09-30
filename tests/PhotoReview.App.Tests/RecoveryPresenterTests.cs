@@ -180,4 +180,17 @@ public sealed class RecoveryPresenterTests
         Assert.Equal(Tr.RecoveryGroupRetryConfirm(RecoveryPresenter.OperationText(FileOperationType.Move), 2),
             RecoveryPresenter.RetryConfirmText(entry, null, allowPermanentDelete: true));
     }
+
+    [Fact]
+    public void RetryConfirmText_EntryCancelledByTheUser_SaysRetryFinishesTheCancelledOperation()
+    {
+        var entry = new JournalEntry("g", FileOperationType.Copy, JournalState.Failed, @"C:.jpg", @"C:\o.jpg", 1, Stamp, Stamp,
+            ErrorCode: JournalErrors.CancelledByUser, GroupId: "c",
+            GroupMembers: [new(@"C:.jpg", @"C:\o.jpg", 1, Stamp), new(@"C:.cr2", @"C:\o.cr2", 1, Stamp)]);
+
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresenter.OperationText(FileOperationType.Copy), 2),
+            RecoveryPresenter.RetryConfirmText(entry, null, allowPermanentDelete: false));
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresenter.OperationText(FileOperationType.Copy), 1),
+            RecoveryPresenter.RetryConfirmText(entry with { GroupId = null, GroupMembers = null }, null, allowPermanentDelete: false));
+    }
 }

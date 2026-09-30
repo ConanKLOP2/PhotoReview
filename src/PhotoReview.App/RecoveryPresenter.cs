@@ -182,6 +182,9 @@ internal static class RecoveryPresenter
     public static string RetryConfirmText(JournalEntry entry, RecoveryCheckResult? check, bool allowPermanentDelete)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        // The user cancelled this operation: a retry finishes it, so say exactly that (the retry service refuses otherwise).
+        if (string.Equals(entry.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
+            return Tr.RecoveryRetryConfirmCancelled(OperationText(entry.Type), entry.GroupMembers is { Count: > 0 } cancelled ? cancelled.Count : 1);
         if (entry.GroupMembers is not { Count: > 0 } members)
             return Tr.DialogConfirmRetryMessage(OperationText(entry.Type), Path.GetFileName(entry.Source));
         if (entry.Type == FileOperationType.Recycle && entry.Undo == true)

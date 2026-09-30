@@ -77,7 +77,7 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         if (journal is null) return;
 
         var entries = journal.ReadPendingAndFailedOperations().ToList(); // R2-F-17: one journal pass
-        Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is not null ? entry => retryService.RetryMoveOrCopyAsync(entry) : null;
+        Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is not null ? entry => retryService.RetryMoveOrCopyAsync(entry, confirmedFinishCancelled: true) : null; // the window confirms a cancelled entry explicitly first
         var window = new RecoveryWindow(entries, retry, dismissed => journal.Dismiss(dismissed), serviceProvider.GetService<IFileSystem>(),
             () => serviceProvider.GetService<SettingsStore>()?.Current.AllowPermanentDeleteWithoutRecycleBin == true)
         {

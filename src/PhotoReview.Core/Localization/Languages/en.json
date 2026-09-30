@@ -866,5 +866,8 @@
   "status.lateDeletedPartlyPermanently": "{fileName} was moved to the Recycle Bin after you left its folder, except {permanentFiles}, which could not go to the Recycle Bin and was deleted permanently.",
   "recovery.group.onDisk": "Still on disk",
   "recovery.group.retryConfirmPermanent": "Retry {operation} for {count} capture-group members? {permanentCount} of them are on drives without a Recycle Bin and will be deleted PERMANENTLY. This cannot be undone. Completed members will be skipped.",
-  "recovery.group.retryConfirmRestore": "Restore capture-group members from the Recycle Bin (up to {count})? Members that are already back will be skipped."
+  "recovery.group.retryConfirmRestore": "Restore capture-group members from the Recycle Bin (up to {count})? Members that are already back will be skipped.",
+  "core.journal.cancelledByUser": "The operation was cancelled before it finished.",
+  "core.recovery.cancelledNeedsConfirm": "You cancelled this operation earlier. Retrying would finish it, so it needs an explicit confirmation in the Recovery window. Nothing was changed.",
+  "recovery.retryConfirmCancelled": "You cancelled this {operation} earlier. Retrying will FINISH it for {count} file(s). Continue?"
 }

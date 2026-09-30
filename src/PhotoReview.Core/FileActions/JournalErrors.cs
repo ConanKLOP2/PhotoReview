@@ -34,6 +34,13 @@ public static class JournalErrors
     /// </summary>
     public const string MoveSourceNotRemoved = "MoveSourceNotRemoved";
 
+    /// <summary>
+    /// The user cancelled the operation (OperationCanceledException) and its compensation could not restore everything, so the
+    /// entry stays as a Failed Recovery item. A retry would FINISH what the user cancelled, so Recovery asks for an explicit
+    /// confirmation first (<see cref="RecoveryRetryService"/>).
+    /// </summary>
+    public const string CancelledByUser = "CancelledByUser";
+
     private static readonly FrozenDictionary<string, string> s_keys = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [MoveSourceNotRemoved] = TrKeys.CoreFileActionMoveSourceNotRemoved,
@@ -42,6 +49,7 @@ public static class JournalErrors
         [VerifySizeChanged] = TrKeys.CoreFileActionVerifyFailedSizeChanged,
         [RetryVerifyFailed] = TrKeys.CoreRecoveryVerifyFailed,
         [DestinationOutsideSource] = TrKeys.CoreFileActionDestinationOutsideSource,
+        [CancelledByUser] = TrKeys.CoreJournalCancelledByUser,
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>True when <paramref name="code"/> is a code this build knows how to describe.</summary>
@@ -69,10 +77,13 @@ public static class JournalErrors
 
     /// <summary>
     /// The (code, text) pair to persist for a failure: a <see cref="JournalCodedException"/> is stored as its code
-    /// plus English text; any other exception keeps its own message (OS text) with no code.
+    /// plus English text; a cancellation is stored as <see cref="CancelledByUser"/>; any other exception keeps its own
+    /// message (OS text) with no code.
     /// </summary>
     internal static (string? Code, string Text) ForJournal(Exception ex) =>
-        ex is JournalCodedException coded && IsKnown(coded.Code) ? (coded.Code, EnglishText(coded.Code)) : (null, ex.Message);
+        ex is JournalCodedException coded && IsKnown(coded.Code) ? (coded.Code, EnglishText(coded.Code))
+        : ex is OperationCanceledException ? (CancelledByUser, EnglishText(CancelledByUser))
+        : (null, ex.Message);
 
     private static string Text(Localizer localizer, string code)
     {
