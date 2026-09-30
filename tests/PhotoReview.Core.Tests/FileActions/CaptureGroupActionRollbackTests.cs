@@ -100,6 +100,31 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.True(fs.FileExists(Raw));
     }
 
+    [Theory]
+    [InlineData("raw")]                                                  // SMALLER than the 8-byte source: the old size rule would call it a partial copy
+    [InlineData("foreign file, longer than the raw source")]
+    public async Task ExecuteGroupAsync_ForeignFileAppearsBeforeMoveAndMoveReportsDestinationExists_ForeignFileSurvivesAndIsConflict(string foreignContent)
+    {
+        var (fs, journal) = CreateWorld();
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Raw) return null;
+            fs.AddFile(destination, foreignContent, Stamp); // created by someone else between the pre-check and the Move
+            return InMemoryFileSystem.DestinationExistsException(destination);
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(foreignContent.Length, fs.GetFileStat(MovedRaw)!.Length); // never deleted
+        Assert.True(fs.FileExists(Raw));
+        var rawMember = Assert.Single(result.Members, member => member.Member.Source == Raw);
+        Assert.False(rawMember.Completed);
+        Assert.True(rawMember.Conflict);
+        var failed = Assert.Single(journal.ReadFailedOperations()); // Recovery handles it: not dismissed as "rolled back"
+        Assert.Equal(JournalState.Failed, failed.State);
+    }
+
     [Fact]
     public async Task ExecuteGroupAsync_MoveFailsPartialDestinationButSourceChanged_PartialIsLeftAlone()
     {

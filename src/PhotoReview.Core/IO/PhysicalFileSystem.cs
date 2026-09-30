@@ -53,7 +53,7 @@ public sealed class PhysicalFileSystem : IFileSystem
             File.Copy(source, destination);
             return true;
         }
-        catch (IOException ex) when ((ex.HResult & 0xFFFF) is 80 or 183 && (ex.HResult & 0x7FFF0000) == 0x70000)
+        catch (IOException ex) when (FileSystemErrors.IsDestinationExists(ex))
         {
             return false;
         }

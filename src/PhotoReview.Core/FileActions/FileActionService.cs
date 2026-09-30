@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
@@ -200,10 +201,20 @@ public sealed class FileActionService
                     // A cross-volume Move is copy + delete: a failure in between can leave a partial destination. It is only ours
                     // to clean when nothing was at the destination right before this member's Move started.
                     inFlightDestinationIsOurs = _fileSystem.GetFileStat(member.Destination!) is null;
-                    if (_moveOverride is not null)
-                        await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
-                    else
-                        await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        if (_moveOverride is not null)
+                            await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                        else
+                            await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception moveEx) when (FileSystemErrors.IsDestinationExists(moveEx))
+                    {
+                        // "Destination exists" is raised before the move touches anything: the file there appeared after our
+                        // pre-check (someone else's) and is never ours to delete, whatever its size.
+                        inFlightDestinationIsOurs = false;
+                        throw;
+                    }
                     VerifyGroupMove(member);
                 }
                 else if (member.Permanent)
