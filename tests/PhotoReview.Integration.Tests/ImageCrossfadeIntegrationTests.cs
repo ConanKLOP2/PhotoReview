@@ -85,6 +85,10 @@ public sealed class ImageCrossfadeIntegrationTests
             // miss a fade that genuinely ran -- it is driven by the same per-frame property-changed
             // notification that updates the visual, not by this test's own poll cadence.
             using var opacityWatch = WatchForOpacityDrop(window.OutgoingImage);
+            // Same reasoning for the layer's visibility: the whole fade can start and finish between two polls, so a
+            // point-in-time 'is it Visible right now' check is racy on a loaded runner. Record that it became Visible and
+            // what it showed at that moment from the value-changed notification instead.
+            using var visibilityWatch = WatchForTransientVisible(window.OutgoingImage);
 
             // Fire-and-forget, then poll with a bound: never await the navigation task directly -- if it were
             // ever to hang (a real bug, or extreme contention from other processes on a shared machine), an
@@ -92,8 +96,8 @@ public sealed class ImageCrossfadeIntegrationTests
             _ = window.ViewModel.NextAsync();
             Assert.True(await StaTestHost.WaitForAsync(() => presented.Count > 1, PresentTimeout), "Second image never presented");
 
-            Assert.Equal(Visibility.Visible, window.OutgoingImage.Visibility);
-            Assert.Same(outgoingBitmap, window.OutgoingImage.Source); // froze the OUTGOING frame, not the new one
+            Assert.True(visibilityWatch.EverVisible(), "The outgoing layer never became visible.");
+            Assert.Same(outgoingBitmap, visibilityWatch.SourceWhenFirstVisible); // froze the OUTGOING frame, not the new one
             Assert.True(await StaTestHost.WaitForAsync(() => window.OutgoingImage.Visibility == Visibility.Collapsed, FadeTimeout), "The fade never completed (OnImageFadeCompleted).");
             Assert.True(opacityWatch.EverDropped, "The fade animation never started.");
             Assert.Null(window.OutgoingImage.Source); // released once the fade completes
@@ -172,16 +176,25 @@ public sealed class ImageCrossfadeIntegrationTests
         private readonly Image _image;
         private readonly EventHandler _handler;
         private bool _everVisible;
+        private System.Windows.Media.ImageSource? _sourceWhenFirstVisible;
 
         public VisibilityWatch(Image image)
         {
             _image = image;
             _everVisible = image.Visibility == Visibility.Visible;
-            _handler = (_, _) => { if (_image.Visibility == Visibility.Visible) _everVisible = true; };
+            _sourceWhenFirstVisible = _everVisible ? image.Source : null;
+            _handler = (_, _) =>
+            {
+                if (_image.Visibility != Visibility.Visible || _everVisible) return;
+                _everVisible = true;
+                _sourceWhenFirstVisible = _image.Source;
+            };
             Descriptor.AddValueChanged(_image, _handler);
         }
 
         public bool EverVisible() => _everVisible;
+
+        public System.Windows.Media.ImageSource? SourceWhenFirstVisible => _sourceWhenFirstVisible;
 
         public void Dispose() => Descriptor.RemoveValueChanged(_image, _handler);
     }
