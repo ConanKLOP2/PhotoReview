@@ -160,7 +160,10 @@ public sealed class LibRawDecoderTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            if (index == 19) afterWarmup = memorySampler.CurrentPrivateBytes;
+            // Baseline after 100 decodes, not 20: earlier tests in the same process (corpus decodes, WIC) leave the native
+            // and managed heaps still settling, which inflated a 20-decode baseline by 50-100 MB. A real per-decode leak
+            // (an unclosed LibRaw handle keeps tens of MB each time) still exceeds the budget within the remaining 100.
+            if (index == 99) afterWarmup = memorySampler.CurrentPrivateBytes;
         }
 
         var growth = memorySampler.CurrentPrivateBytes - afterWarmup;
@@ -185,7 +188,10 @@ public sealed class LibRawDecoderTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            if (index == 19) afterWarmup = memorySampler.CurrentPrivateBytes;
+            // Baseline after 100 decodes, not 20: earlier tests in the same process (corpus decodes, WIC) leave the native
+            // and managed heaps still settling, which inflated a 20-decode baseline by 50-100 MB. A real per-decode leak
+            // (an unclosed LibRaw handle keeps tens of MB each time) still exceeds the budget within the remaining 100.
+            if (index == 99) afterWarmup = memorySampler.CurrentPrivateBytes;
         }
 
         var finalPrivateBytes = memorySampler.CurrentPrivateBytes;
