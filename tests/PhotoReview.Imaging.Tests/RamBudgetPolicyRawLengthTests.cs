@@ -72,8 +72,9 @@ public sealed class RamBudgetPolicyRawLengthTests
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         Assert.True(unbounded > 0 && bounded > 0);
-        // One path-extension string per entry would be >= 3 MB here; anything under 4 KB is constant overhead.
-        Assert.True(allocated < 4096, $"allocated {allocated} bytes for 200k entry visits");
+        // One path-extension string per entry would be >= 3 MB here. The budget is 64 KB, not a few KB: the first hot loop over
+        // 100k entries triggers tiered-JIT/OSR work that allocates a few KB on this thread (8 KB seen), which is constant cost.
+        Assert.True(allocated < 64 * 1024, $"allocated {allocated} bytes for 200k entry visits");
     }
 
     [Fact]
