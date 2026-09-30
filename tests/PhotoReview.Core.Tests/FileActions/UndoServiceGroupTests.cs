@@ -387,6 +387,60 @@ public sealed class UndoServiceGroupTests
     }
 
     [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteUndoFailsAfterRestoringSomeMembers_RestoredMemberLeavesTheFailedLine()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg, raw]); // both reached the bin
+        _bin.FailFor = Raw; // restoring the JPEG works, the RAW then fails
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(Jpeg));
+        // A fresh Recovery window must not offer a retry that would recycle the JPEG the undo just restored.
+        var stillFailed = Assert.Single(_journal.ReadFailedOperations(), entry => entry.Id == "delete-group");
+        Assert.Equal([raw], stillFailed.GroupMembers);
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWhereTheRecycledMemberWasRestoredByHand_SettlesTheFailedLineAndReportsAlreadyHandled()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg]); // the JPEG reached the bin, the RAW never left the disk
+        _fs.AddFile(Jpeg, "jpeg", Stamp); // the user restored it from the bin by hand
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(Tr.CoreRecoveryAlreadyHandled, result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal(0, _bin.RestoreCalls);
+        var stillFailed = Assert.Single(_journal.ReadFailedOperations(), entry => entry.Id == "delete-group");
+        Assert.Equal([raw], stillFailed.GroupMembers); // a retry would recycle only the RAW, never the restored JPEG
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteSettleAppendThrowsUnexpectedException_UndoStillReportsSuccess()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg, raw]);
+        // The undo's own Prepared and Committed lines are appended first; the settle is the third append.
+        var appends = 0;
+        _fs.OpenAppendHook = _ => ++appends >= 3 ? new InvalidOperationException("simulated journal failure") : null;
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(Jpeg));
+        Assert.True(_fs.FileExists(Raw));
+        _fs.OpenAppendHook = null;
+        Assert.DoesNotContain(_journal.ReadFailedOperations(), entry => entry.Undo == true); // no Failed line after the undo's Committed
+    }
+
+    [Fact]
     public async Task UndoLastAsync_FailedGroupDeleteWhereTheRecycledMemberWasRestoredAndEdited_RestoresNothingAndRecoveryOffersNoRetry()
     {
         var jpeg = Member(Jpeg, null, 4);

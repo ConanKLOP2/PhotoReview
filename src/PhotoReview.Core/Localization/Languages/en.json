@@ -877,5 +877,6 @@
   "status.lateGroupPartiallyProcessed": "{fileName}: the action failed part-way after you left its folder; {done} of {total} file(s) were already processed. Ctrl+Z restores what went to the Recycle Bin; check Recovery for the rest.",
   "main.capturePair.badge.tooltipBound": "Press {key} to switch between the JPG and the RAW of this capture.",
   "main.capturePair.badge.tooltipUnbound": "No key is assigned to switch between the JPG and the RAW. Assign one in Settings > Shortcuts (\"Switch JPEG / RAW member\"), or use Compare.",
-  "settings.rawPairMode.shortcutHint": "In the stacked modes only one file of a pair is shown. To see the other one, assign a key to \"Switch JPEG / RAW member\" under Shortcuts (no key is assigned by default), or open Compare."
+  "settings.rawPairMode.shortcutHint": "In the stacked modes only one file of a pair is shown. To see the other one, assign a key to \"Switch JPEG / RAW member\" under Shortcuts (no key is assigned by default), or open Compare.",
+  "recovery.retryConfirmCancelledPermanent": "You cancelled this {operation} earlier. Retrying will FINISH it for {count} file(s); {permanentCount} of them are on drives without a Recycle Bin and will be deleted PERMANENTLY. This cannot be undone. Continue?"
 }

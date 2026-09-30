@@ -442,7 +442,7 @@ public sealed class UndoService
                 var committed = failed with { State = JournalState.Committed, TimestampUtc = _clock.UtcNow, Error = null, ErrorCode = null };
                 _ = _journal.AppendIfUnchangedSince(failed, [], committed);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (IsNonCritical(ex))
             {
                 // The undo itself is complete; a journal that cannot be written only leaves the old Recovery item to be dismissed.
             }
@@ -475,11 +475,15 @@ public sealed class UndoService
                 };
             _ = _journal.AppendIfUnchangedSince(failed, [], replacement);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (IsNonCritical(ex))
         {
-            // The undo itself is complete; a journal that cannot be written only leaves the old Recovery item to be dismissed.
+            // The undo itself is complete; a journal that cannot be written (or read) only leaves the old Recovery item to be
+            // dismissed. Core has no logger, so the failure is deliberately swallowed here, never turned into a failed undo.
         }
     }
+
+    /// <summary>Best-effort journal settling must never fail a finished undo: anything but out-of-memory/cancellation is swallowed.</summary>
+    private static bool IsNonCritical(Exception ex) => ex is not (OutOfMemoryException or OperationCanceledException);
 
     private void DropGroupUndo(IReadOnlyList<JournalGroupMember> members)
     {
@@ -538,6 +542,7 @@ public sealed class UndoService
                     return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),
                         RestoredPaths: RestoredInOrder(members, restored));
                 }
+                // The catch below settles the Failed Delete line for members the user put back by hand (restored is non-empty).
                 throw new IOException(Tr.CoreRecoveryAlreadyHandled);
             }
             var undoMembers = members.Where(member => !member.Permanent).Select(member => member with { }).ToArray();
@@ -571,6 +576,8 @@ public sealed class UndoService
         catch (Exception ex)
         {
             RememberPartialUndo(action, restoredByThisUndo, tx?.Fail(ex, out _));
+            // Members that did come back (now or earlier) must not stay on the Failed Delete line a fresh Recovery would retry.
+            if (restored.Count > 0) SettleFailedDeleteLine(action, restored);
             return new UndoResult(false, FileOperationType.Recycle, action.Source, null, Tr.CoreUndoFailed(ex.Message),
                 RestoredPaths: restored.Count > 0 ? restored.ToArray() : null);
         }

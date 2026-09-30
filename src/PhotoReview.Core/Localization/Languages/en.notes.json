@@ -669,5 +669,6 @@
   "status.lateGroupPartiallyProcessed": "Late status when a capture-group Delete failed part-way and the user had already switched folder. {fileName} = the file the action was started on, {done} = members already recycled/deleted, {total} = number of members in the capture.",
   "main.capturePair.badge.tooltipBound": "Tooltip of the JPG+RAW badge when the 'Switch JPEG / RAW member' shortcut is assigned. {key} = the configured key name.",
   "main.capturePair.badge.tooltipUnbound": "Tooltip of the JPG+RAW badge when no usable key is assigned to the 'Switch JPEG / RAW member' shortcut (it has no default key).",
-  "settings.rawPairMode.shortcutHint": "Tooltip of the JPG+RAW pair-mode combo box in Settings: how to reach the hidden member of a stacked pair."
+  "settings.rawPairMode.shortcutHint": "Tooltip of the JPG+RAW pair-mode combo box in Settings: how to reach the hidden member of a stacked pair.",
+  "recovery.retryConfirmCancelledPermanent": "Recovery window confirmation before retrying a cancelled capture-group Delete when some pending members are journaled as permanent deletes. {operation} = operation name, {count} = number of files, {permanentCount} = pending members deleted permanently; must say the retry finishes the cancelled operation AND that the permanent deletion cannot be undone."
 }

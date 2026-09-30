@@ -869,5 +869,6 @@
   "status.lateGroupPartiallyProcessed": "{fileName}: thao tác dừng giữa chừng sau khi bạn rời thư mục này; {done}/{total} tệp đã được xử lý. Ctrl+Z khôi phục các tệp đã vào Thùng rác; xem Khôi phục cho phần còn lại.",
   "main.capturePair.badge.tooltipBound": "Nhấn {key} để chuyển giữa ảnh JPG và RAW của bộ ảnh này.",
   "main.capturePair.badge.tooltipUnbound": "Chưa gán phím để chuyển giữa JPG và RAW. Hãy gán phím trong Cài đặt > Phím tắt (\"Chuyển giữa ảnh JPEG và RAW\"), hoặc dùng So sánh.",
-  "settings.rawPairMode.shortcutHint": "Ở chế độ gộp chỉ hiện một tệp của mỗi cặp. Để xem tệp còn lại, hãy gán phím cho \"Chuyển giữa ảnh JPEG và RAW\" trong mục Phím tắt (mặc định chưa có phím), hoặc mở So sánh."
+  "settings.rawPairMode.shortcutHint": "Ở chế độ gộp chỉ hiện một tệp của mỗi cặp. Để xem tệp còn lại, hãy gán phím cho \"Chuyển giữa ảnh JPEG và RAW\" trong mục Phím tắt (mặc định chưa có phím), hoặc mở So sánh.",
+  "recovery.retryConfirmCancelledPermanent": "Bạn đã hủy {operation} này trước đó. Thử lại sẽ HOÀN TẤT thao tác cho {count} tệp; {permanentCount} tệp nằm trên ổ không có Thùng rác sẽ bị XÓA VĨNH VIỄN, không thể hoàn tác. Tiếp tục?"
 }

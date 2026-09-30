@@ -182,6 +182,37 @@ public sealed class RecoveryPresenterTests
     }
 
     [Fact]
+    public void RetryConfirmText_CancelledGroupDeleteWithPendingPermanentMemberAndSettingOn_WarnsItIsPermanent()
+    {
+        var jpeg = new JournalGroupMember(@"C:.jpg", null, 1, Stamp);
+        var raw = new JournalGroupMember(@"E:.cr2", null, 1, Stamp, Permanent: true);
+        var entry = GroupDelete(false, jpeg, raw) with { ErrorCode = JournalErrors.CancelledByUser };
+        var check = CheckOf(entry, (jpeg, RecoveryVerdict.NotRecycled), (raw, RecoveryVerdict.NotRecycled));
+
+        var text = RecoveryPresenter.RetryConfirmText(entry, check, allowPermanentDelete: true);
+
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelledPermanent(RecoveryPresenter.OperationText(FileOperationType.Recycle), 2, 1), text);
+        // Setting off, or the permanent member already gone: the plain cancelled wording.
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresenter.OperationText(FileOperationType.Recycle), 2),
+            RecoveryPresenter.RetryConfirmText(entry, check, allowPermanentDelete: false));
+        var goneCheck = CheckOf(entry, (jpeg, RecoveryVerdict.NotRecycled), (raw, RecoveryVerdict.PermanentlyDeleted));
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresenter.OperationText(FileOperationType.Recycle), 2),
+            RecoveryPresenter.RetryConfirmText(entry, goneCheck, allowPermanentDelete: true));
+    }
+
+    [Fact]
+    public void RetryConfirmText_CancelledGroupDeleteWithoutPermanentMembers_KeepsTheCancelledWording()
+    {
+        var jpeg = new JournalGroupMember(@"C:.jpg", null, 1, Stamp);
+        var raw = new JournalGroupMember(@"C:.cr2", null, 1, Stamp);
+        var entry = GroupDelete(false, jpeg, raw) with { ErrorCode = JournalErrors.CancelledByUser };
+        var check = CheckOf(entry, (jpeg, RecoveryVerdict.NotRecycled), (raw, RecoveryVerdict.NotRecycled));
+
+        Assert.Equal(Tr.RecoveryRetryConfirmCancelled(RecoveryPresenter.OperationText(FileOperationType.Recycle), 2),
+            RecoveryPresenter.RetryConfirmText(entry, check, allowPermanentDelete: true));
+    }
+
+    [Fact]
     public void RetryConfirmText_EntryCancelledByTheUser_SaysRetryFinishesTheCancelledOperation()
     {
         var entry = new JournalEntry("g", FileOperationType.Copy, JournalState.Failed, @"C:.jpg", @"C:\o.jpg", 1, Stamp, Stamp,

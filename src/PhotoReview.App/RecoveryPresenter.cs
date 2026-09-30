@@ -184,22 +184,37 @@ internal static class RecoveryPresenter
         ArgumentNullException.ThrowIfNull(entry);
         // The user cancelled this operation: a retry finishes it, so say exactly that (the retry service refuses otherwise).
         if (string.Equals(entry.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
-            return Tr.RecoveryRetryConfirmCancelled(OperationText(entry.Type), entry.GroupMembers is { Count: > 0 } cancelled ? cancelled.Count : 1);
+        {
+            var cancelledCount = entry.GroupMembers is { Count: > 0 } cancelled ? cancelled.Count : 1;
+            // A cancelled group Delete can still retry members journaled Permanent: the warning must not be lost.
+            var cancelledPermanent = entry.GroupMembers is { Count: > 0 } cancelledMembers
+                && entry.Type == FileOperationType.Recycle && entry.Undo != true && allowPermanentDelete
+                ? PendingPermanentCount(cancelledMembers, check)
+                : 0;
+            return cancelledPermanent > 0
+                ? Tr.RecoveryRetryConfirmCancelledPermanent(OperationText(entry.Type), cancelledCount, cancelledPermanent)
+                : Tr.RecoveryRetryConfirmCancelled(OperationText(entry.Type), cancelledCount);
+        }
         if (entry.GroupMembers is not { Count: > 0 } members)
             return Tr.DialogConfirmRetryMessage(OperationText(entry.Type), Path.GetFileName(entry.Source));
         if (entry.Type == FileOperationType.Recycle && entry.Undo == true)
             return Tr.RecoveryGroupRetryConfirmRestore(members.Count);
         if (entry.Type == FileOperationType.Recycle && allowPermanentDelete)
         {
-            // The members the retry deletes: the ones still on disk (NotRecycled). Without a check result assume all.
-            var pending = check?.GroupMembers is { } checks
-                ? checks.Where(item => item.Verdict == RecoveryVerdict.NotRecycled).Select(item => item.Member)
-                : members;
-            var permanent = pending.Count(member => member.Permanent);
+            var permanent = PendingPermanentCount(members, check);
             if (permanent > 0)
                 return Tr.RecoveryGroupRetryConfirmPermanent(OperationText(entry.Type), members.Count, permanent);
         }
         return Tr.RecoveryGroupRetryConfirm(OperationText(entry.Type), members.Count);
+    }
+
+    /// <summary>Members a Delete retry deletes permanently: the ones still on disk (NotRecycled); without a check result all count.</summary>
+    private static int PendingPermanentCount(IReadOnlyList<JournalGroupMember> members, RecoveryCheckResult? check)
+    {
+        var pending = check?.GroupMembers is { } checks
+            ? checks.Where(item => item.Verdict == RecoveryVerdict.NotRecycled).Select(item => item.Member)
+            : members;
+        return pending.Count(member => member.Permanent);
     }
 
     public static string OperationText(FileOperationType type) => type switch
