@@ -189,6 +189,8 @@
   "dialog.clearCache.title": "ShowConfirmation caption (Yes/No MessageBox; button captions come from Windows).",
   "dialog.confirmAction.message": "ShowConfirmation text.",
   "dialog.confirmAction.title": "ShowConfirmation caption for actions with Confirm=true.",
+  "dialog.confirmGroupPermanentDelete.message": "ShowConfirmation text before permanently deleting members of a JPG+RAW capture; {fileName} = capture name, {count} = members in the capture, {permanentCount} = members on drives without a Recycle Bin; must say it cannot be undone.",
+  "dialog.confirmGroupRecycle.message": "ShowConfirmation text before recycling a whole JPG+RAW capture; {fileName} = capture name, {count} = number of files sent to the Recycle Bin.",
   "dialog.confirmRetry.message": "MessageBox text (Yes/No).",
   "dialog.confirmRetry.title": "MessageBox caption.",
   "dialog.exportTranslation.failed.title": "MessageBox caption when 'Export strings to translate' cannot write the file; the body is the Windows error message.",

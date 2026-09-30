@@ -197,7 +197,6 @@
   "dialog.confirmAction.message": "Run action '{actionName}' on the current image?",
   "dialog.confirmAction.title": "Confirm action",
   "dialog.confirmRetry.message": "Retry {operation} for {fileName}?",
-  "dialog.confirmRetry.group": "Retry {operation} for {count} capture-group members? Completed members will be skipped.",
   "dialog.confirmGroupPermanentDelete.message": "Permanently delete {permanentCount} of {count} files in capture '{fileName}'? This cannot be undone.",
   "dialog.confirmGroupRecycle.message": "Send all {count} files in capture '{fileName}' to the Recycle Bin?",
   "dialog.confirmRetry.title": "Confirm retry",

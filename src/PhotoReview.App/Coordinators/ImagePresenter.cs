@@ -186,6 +186,7 @@ public sealed class ImagePresenter
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
         var path = pathOverride ?? _catalog.PathAt(index);
+        var previousNavigationPath = _currentNavigationPath;
         _currentNavigationPath = path;
 
         // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
@@ -435,7 +436,9 @@ public sealed class ImagePresenter
 
             // 6. Compare (qua CompareViewModel) hoặc lấy dimension (Original thì lấy từ ảnh)
             long perfCompare = perf ? Stopwatch.GetTimestamp() : 0;
-            var pair = GetComparePair(path, includeCaptureGroupInCompare);
+            // While compare is open every presentation (Next/Previous/undo, not only the toggle) compares the capture pair,
+            // otherwise navigation drops the pair yet leaves compare visible.
+            var pair = GetComparePair(path, includeCaptureGroupInCompare || _compareViewModel.IsVisible);
 
             if (perf)
             {
@@ -565,6 +568,13 @@ public sealed class ImagePresenter
         catch (Exception ex) when (_clock.IsNavigationCurrent(token))
         {
             AppLog.Error($"ShowImage failed token={token} index={index} path={path}", ex);
+            // A failed member switch (e.g. the RAW of a JPG+RAW capture) leaves the previous member on screen: keep the
+            // presented path (badge, file actions) on what is really shown. A different entry keeps the new path.
+            if (previousNavigationPath is not null && !string.Equals(previousNavigationPath, path, StringComparison.OrdinalIgnoreCase)
+                && _catalog.IndexOf(previousNavigationPath) == index)
+            {
+                _currentNavigationPath = previousNavigationPath;
+            }
             CurrentPhotoInfo = null;
             UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)), needsAttention: true);
         }

@@ -216,9 +216,14 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     public string StatusText
     {
-        get => _isRawDecodeIndicatorVisible
-            ? StatusFormatter.DecodingRaw()
-            : string.IsNullOrEmpty(_statusText) ? _presenter.StatusText : _statusText;
+        get
+        {
+            // The zoom-decode indicator only replaces the plain index/name line: an action/error status (event text or a
+            // presenter error) must stay readable during a slow RAW decode.
+            if (!string.IsNullOrEmpty(_statusText)) return _statusText;
+            if (_isRawDecodeIndicatorVisible && !_presenter.StatusNeedsAttention) return StatusFormatter.DecodingRaw();
+            return _presenter.StatusText;
+        }
         set
         {
             SetProperty(ref _statusText, value);
@@ -726,42 +731,46 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var previousMode = _settingsStore.Current.LoadingMode;
         var previousBackend = _settingsStore.Current.DecoderBackend;
         var previousRawSupport = _settingsStore.Current.RawSupportEnabled;
+        var previousPairMode = _settingsStore.Current.RawPairMode;
         var changed = _dialogService.ShowSettings();
-        if (changed)
+        if (!changed) return;
+
+        UpdateFolderTitle();
+        InfoOverlay.Refresh();
+        _viewerState.ScalingQuality = Settings.ScalingQuality;
+        _viewerState.ZoomStep = Settings.KeyboardZoomStepPercent / 100.0; // Q-R41
+        NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
+        var newMode = _settingsStore.Current.LoadingMode;
+        var newBackend = _settingsStore.Current.DecoderBackend;
+        var newRawSupport = _settingsStore.Current.RawSupportEnabled;
+        // RAW support decides which files the catalog lists (and whether RAW paths can be decoded at all), and the pair mode
+        // (read only while a folder loads) decides how JPG+RAW captures are grouped: reload the open folder at the current
+        // file so no listed entry is left that the decoder now refuses and no stale grouping stays. The pair mode is
+        // irrelevant while RAW support is off.
+        var reloadFolder = (previousRawSupport != newRawSupport
+                || (newRawSupport && previousPairMode != _settingsStore.Current.RawPairMode))
+            && _currentSession?.Folder is { Length: > 0 };
+        if (reloadFolder || previousMode != newMode || previousBackend != newBackend)
         {
-            // RAW support decides which files the catalog lists (and whether RAW paths can be decoded at all): reload the
-            // open folder at the current file so no listed entry is left that the decoder now refuses.
-            if (previousRawSupport != _settingsStore.Current.RawSupportEnabled && _currentSession?.Folder is { Length: > 0 } rawFolder)
+            _preloadController?.Cancel();
+            if (previousBackend != newBackend)
             {
-                _preloadController?.Cancel();
+                _previewService?.ClearCache();
+                // R2-F-16: the directory delete must not run on the UI thread (the RAM cache above is already cleared).
+                var previewService = _previewService;
+                if (previewService is not null) _ = Task.Run(previewService.ClearDisk);
+                _preloadController?.ClearPreloadedKeys();
+            }
+            if (reloadFolder)
+            {
                 _previewService?.ClearCache();
                 _preloadController?.ClearPreloadedKeys();
-                _ = OpenFolderAsync(rawFolder, _catalog.Current?.Path);
-                return;
+                // OpenFolderAsync presents the reloaded folder itself: no separate PresentAsync (would double-present).
+                _ = OpenFolderAsync(_currentSession!.Folder, _catalog.Current?.Path);
             }
-
-            UpdateFolderTitle();
-            InfoOverlay.Refresh();
-            _viewerState.ScalingQuality = Settings.ScalingQuality;
-            _viewerState.ZoomStep = Settings.KeyboardZoomStepPercent / 100.0; // Q-R41
-            NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
-            var newMode = _settingsStore.Current.LoadingMode;
-            var newBackend = _settingsStore.Current.DecoderBackend;
-            if (previousMode != newMode || previousBackend != newBackend)
+            else if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
             {
-                _preloadController?.Cancel();
-                if (previousBackend != newBackend)
-                {
-                    _previewService?.ClearCache();
-                    // R2-F-16: the directory delete must not run on the UI thread (the RAM cache above is already cleared).
-                    var previewService = _previewService;
-                    if (previewService is not null) _ = Task.Run(previewService.ClearDisk);
-                    _preloadController?.ClearPreloadedKeys();
-                }
-                if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
-                {
-                    _ = _presenter.PresentAsync(_catalog.CurrentIndex);
-                }
+                _ = _presenter.PresentAsync(_catalog.CurrentIndex);
             }
         }
     }

@@ -196,7 +196,6 @@
   "dialog.confirmAction.message": "Thực hiện hành động '{actionName}' trên ảnh hiện tại?",
   "dialog.confirmAction.title": "Xác nhận hành động",
   "dialog.confirmRetry.message": "Thử lại {operation} cho {fileName}?",
-  "dialog.confirmRetry.group": "Thử lại {operation} cho {count} tệp trong nhóm ảnh? Các tệp đã hoàn tất sẽ được bỏ qua.",
   "dialog.confirmGroupPermanentDelete.message": "Xóa vĩnh viễn {permanentCount} trong {count} tệp của ảnh '{fileName}'? Không thể hoàn tác.",
   "dialog.confirmGroupRecycle.message": "Đưa toàn bộ {count} tệp trong ảnh '{fileName}' vào Thùng rác?",
   "dialog.confirmRetry.title": "Xác nhận thử lại",
