@@ -52,10 +52,13 @@ public sealed partial class MainViewModelAdvancedTests
         var badgeChanges = 0;
         vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.CapturePairBadge)) badgeChanges++; };
         _dialogService.OnShowSettings = () => { _settings.RawFullDecode = RawFullDecode.OnZoom; _settingsStore.Save(_settings); };
+        var generationBefore = vm.Presenter.Clock.CurrentNavigation;
 
         vm.ShowSettings();
         await vm.SettingsRefreshTask;
 
+        // A refresh that does nothing would also leave the member / compare state "kept": prove the image was presented again.
+        Assert.True(vm.Presenter.Clock.CurrentNavigation > generationBefore);
         if (compareOpen)
         {
             Assert.True(vm.Compare.IsVisible);
@@ -94,7 +97,31 @@ public sealed partial class MainViewModelAdvancedTests
         Assert.Equal(rawMember, ownership.InitialPath); // not the entry's representative JPEG
     }
 
-    private sealed class RecordingOwnership : PhotoReview.Core.Instance.IFolderOwnership
+    [Fact]
+    public async Task ShowSettings_RawSupportTurnedOffWhileRawMemberShown_ReloadsAtTheJpegMember()
+    {
+        var vm = await OpenRawFolderAsync("raw_reload_off", RawPairMode.PreferJpeg);
+        var jpeg = CreateImageFile(_tempDir, "reload-off.jpg");
+        var rawMember = CreateImageFile(_tempDir, "reload-off-member.jpg", DifferentPngBytes);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = new CaptureGroup(jpeg, rawMember) }], RawPairMode.PreferJpeg);
+        await vm.Presenter.PresentAsync(0);
+        await vm.ToggleCaptureGroupMemberAsync();
+        Assert.Equal(rawMember, vm.Presenter.CurrentPresentedPath);
+        var ownership = new RecordingOwnership();
+        vm.FolderOwnership = ownership;
+        _dialogService.OnShowSettings = () =>
+        {
+            _settings.RawSupportEnabled = false;
+            _settingsStore.Save(_settings);
+        };
+
+        vm.ShowSettings();
+        await vm.SettingsRefreshTask;
+
+        Assert.Equal(jpeg, ownership.InitialPath); // the RAW member is no longer listed after the reload
+    }
+
+    private sealed class RecordingOwnership: PhotoReview.Core.Instance.IFolderOwnership
     {
         public string? InitialPath { get; private set; }
 

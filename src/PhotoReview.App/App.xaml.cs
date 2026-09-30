@@ -368,7 +368,7 @@ public partial class App : System.Windows.Application, IDisposable
         {
             _services.GetRequiredService<IDialogService>().ShowMessage(
                 PhotoReview.Core.Localization.Tr.AppTitle,
-                PhotoReview.Core.Localization.Tr.SettingsLoadRepaired(string.Join(", ", store.LastLoadRepairs)));
+                PhotoReview.Core.Settings.SettingsLoadRepairText.Build(store.LastLoadRepairs));
         }
     }
 

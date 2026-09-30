@@ -840,7 +840,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             while (_fileActionGate.IsHeld) await _fileActionGate.WhenReleasedAsync();
             // Read after the wait: the action may have moved the current photo, or the user may have opened another folder.
             if (_isClosed || _currentSession?.Folder is not { Length: > 0 } folder) return;
-            await OpenFolderAsync(folder, PresentedPathOfCurrentEntry() ?? _catalog.Current?.Path);
+            // The presented member is only a valid start when the reloaded catalog still lists it (RAW off drops RAW members).
+            var settings = _settingsStore.Current;
+            var initialPath = SettingsReloadPath.Choose(PresentedPathOfCurrentEntry(), _catalog.Current?.CaptureGroup,
+                _catalog.Current?.Path, settings.RawSupportEnabled, settings.RawPairMode);
+            await OpenFolderAsync(folder, initialPath);
         }
         catch (Exception ex)
         {
