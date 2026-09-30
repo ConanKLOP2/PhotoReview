@@ -299,6 +299,27 @@ public static class TiffHeaderNavigator
     }
 
     /// <summary>
+    /// False when the IFD carries a DNG DefaultScale (0xC61E: two RATIONALs, horizontal and vertical pixel scale) that is
+    /// not 1:1 (non-square pixels, or an unreadable/zero-denominator value). Absent means square.
+    /// </summary>
+    public static bool HasSquareDefaultScale(IRawHeaderSource source, IReadOnlyList<TiffEntry> entries, bool littleEndian)
+    {
+        if (!TryGetEntry(entries, 0xC61E, out var entry)) return true;
+        if (entry.Type != 5 || entry.Count < 2 || entry.ValueOrOffset < 8 || entry.ValueOrOffset > source.Length - 16) return false;
+
+        var span = source.Read(entry.ValueOrOffset, 16);
+        if (span.Length < 16) return false;
+        uint horizontalNumerator = TiffStructure.ReadU32(span, 0, littleEndian);
+        uint horizontalDenominator = TiffStructure.ReadU32(span, 4, littleEndian);
+        uint verticalNumerator = TiffStructure.ReadU32(span, 8, littleEndian);
+        uint verticalDenominator = TiffStructure.ReadU32(span, 12, littleEndian);
+        if (horizontalDenominator == 0 || verticalDenominator == 0 || horizontalNumerator == 0 || verticalNumerator == 0) return false;
+
+        // Equal ratios (h/hd == v/vd), cross-multiplied in 64 bits.
+        return (ulong)horizontalNumerator * verticalDenominator == (ulong)verticalNumerator * horizontalDenominator;
+    }
+
+    /// <summary>
     /// Picks the active sensor size: DefaultCropSize, else the Exif pixel size, else the raw IFD size. A candidate
     /// larger than the raw IFD in either direction is ignored (masked margins can only shrink the image).
     /// </summary>

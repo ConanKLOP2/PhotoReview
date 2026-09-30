@@ -168,10 +168,14 @@ public sealed class DngContainerReader : IRawContainerReader
             {
                 int candidateWidth = width;
                 int candidateHeight = height;
-                if (TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out int cropWidth, out int cropHeight))
+                // DefaultCropSize is honoured only when it fits inside the raw IFD (masked margins can only shrink the
+                // image, exactly as for ARW/NEF) and the pixels are square: DefaultScale != 1:1 means the displayed size
+                // is stretched by an amount the decoder may or may not apply, so the plain raw IFD size is the safer answer.
+                if (TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out int cropWidth, out int cropHeight) &&
+                    TiffHeaderNavigator.HasSquareDefaultScale(source, entries, littleEndian))
                 {
-                    candidateWidth = cropWidth;
-                    candidateHeight = cropHeight;
+                    (candidateWidth, candidateHeight) = TiffHeaderNavigator.ChooseActiveSensorSize(
+                        width, height, cropWidth, cropHeight, exifWidth: 0, exifHeight: 0);
                 }
 
                 int area = (int)Math.Min((long)candidateWidth * candidateHeight, int.MaxValue);
