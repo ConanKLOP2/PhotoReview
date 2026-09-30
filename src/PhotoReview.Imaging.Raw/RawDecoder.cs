@@ -188,8 +188,13 @@ public sealed class RawDecoder : IImageDecoder
     /// <summary>
     /// Decodes the chosen preview. When that fails with a recoverable error (corrupt/truncated/unsupported JPEG) the next-best
     /// preview is tried first (always: it needs no native code), then the ORF thumbnail fallback (an unsupported ORF preview
-    /// only, when one exists), then the full decode (when the no-preview decoder exists). Cancellation and out-of-memory
-    /// are never swallowed; when no step remains the first failure propagates unchanged.
+    /// only, when one exists), then the full decode (when the no-preview decoder exists). Cancellation, out-of-memory and
+    /// resource-exhaustion COM failures (a transient condition, see <see cref="IsRecoverablePreviewFailure"/>) are never
+    /// swallowed; when no step remains the first failure propagates unchanged.
+    /// A thumbnail-sized next-best preview (long side below <see cref="MinUsefulFallbackLongSide"/>) is never taken after a
+    /// LARGER preview failed, unless the failure proves the data corrupt (<see cref="IsCorruptDataFailure"/>) and every
+    /// remaining preview is that small: thumbnails are a last resort for corrupt data, not a silent answer to transient or
+    /// unsupported-component errors (those go on to the full decode, or propagate).
     /// </summary>
     private IDecodedImage DecodePreviewWithFallbacks(
         DecodeRequest request,
@@ -212,6 +217,7 @@ public sealed class RawDecoder : IImageDecoder
         Exception? lastFailure = null;
         var tried = new List<long>();
         long failedBytes = 0;
+        int largestFailedLongSide = 0;
         EmbeddedPreview? current = chosen;
         while (current is not null && tried.Count < MaxPreviewAttempts)
         {
@@ -227,7 +233,8 @@ public sealed class RawDecoder : IImageDecoder
                 firstFailure ??= System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
                 lastFailure = ex;
                 failedBytes = checked(failedBytes + Math.Min(current.Length, RawContainerLimits.MaxPreviewBytes));
-                current = SelectNextPreview(headerSource, containerInfo, request, tried);
+                largestFailedLongSide = Math.Max(largestFailedLongSide, LongSide(current));
+                current = SelectNextPreview(headerSource, containerInfo, request, tried, largestFailedLongSide, IsCorruptDataFailure(ex));
             }
         }
 
@@ -264,18 +271,53 @@ public sealed class RawDecoder : IImageDecoder
         return full;
     }
 
-    /// <summary>Corrupt, truncated or unsupported preview data; never cancellation, out-of-memory or plain I/O errors.</summary>
+    /// <summary>
+    /// Corrupt, truncated or unsupported preview data; never cancellation, out-of-memory, plain I/O errors or a COM failure
+    /// that reports resource exhaustion (E_OUTOFMEMORY, ERROR_NOT_ENOUGH_MEMORY, ERROR_NO_SYSTEM_RESOURCES,
+    /// ERROR_COMMITMENT_LIMIT): that is transient, and a smaller preview would be cached as if it were the photo.
+    /// </summary>
     private static bool IsRecoverablePreviewFailure(Exception ex) =>
-        ex is InvalidDataException or System.IO.FileFormatException or NotSupportedException or System.Runtime.InteropServices.COMException;
+        ex is System.Runtime.InteropServices.COMException com
+            ? !IsResourceExhaustion(com.HResult)
+            : ex is InvalidDataException or System.IO.FileFormatException or NotSupportedException;
 
-    private static EmbeddedPreview? SelectNextPreview(IRawHeaderSource headerSource, RawContainerInfo containerInfo, DecodeRequest request, List<long> triedOffsets)
+    private static bool IsResourceExhaustion(int hresult) =>
+        unchecked((uint)hresult) is 0x8007000E or 0x80070008 or 0x800705AA or 0x800705AF;
+
+    /// <summary>The failure says the preview's data is damaged (not missing a component, not transient).</summary>
+    private static bool IsCorruptDataFailure(Exception ex) =>
+        ex is InvalidDataException or System.IO.FileFormatException
+        || (ex is System.Runtime.InteropServices.COMException com
+            && unchecked((uint)com.HResult) is 0x88982F60 /* WINCODEC_ERR_BADIMAGE */ or 0x88982F61 /* BADHEADER */ or 0x88982F07 /* UNKNOWNIMAGEFORMAT */);
+
+    /// <summary>A preview shorter than this on its long side is a thumbnail, not something to show as the photo.</summary>
+    private const int MinUsefulFallbackLongSide = 1000;
+
+    private static int LongSide(EmbeddedPreview p) => Math.Max(p.Width, p.Height);
+
+    private static EmbeddedPreview? SelectNextPreview(
+        IRawHeaderSource headerSource, RawContainerInfo containerInfo, DecodeRequest request, List<long> triedOffsets,
+        int largestFailedLongSide, bool failureIsCorruptData)
     {
         var remaining = containerInfo.Previews
             .Where(p => p.Kind == EmbeddedPreviewKind.Jpeg && p.Length > 0 && !triedOffsets.Contains(p.Offset))
             .ToList();
-        return remaining.Count == 0
-            ? null
-            : PreviewSelector.SelectPreview(headerSource, remaining, request.Box, containerInfo.Orientation);
+        if (remaining.Count == 0) return null;
+
+        // Previews of unknown size (0) cannot be told apart from real photos, so they are never treated as thumbnails.
+        bool IsThumbnail(EmbeddedPreview p) => LongSide(p) is > 0 and < MinUsefulFallbackLongSide;
+        if (largestFailedLongSide > 0)
+        {
+            // A preview failed: prefer any remaining non-thumbnail; a thumbnail SMALLER than the failed preview only when
+            // everything left is one and the failure proves the data corrupt.
+            var usable = remaining.Where(p => !IsThumbnail(p) || LongSide(p) >= largestFailedLongSide).ToList();
+            if (usable.Count > 0)
+                remaining = usable;
+            else if (!failureIsCorruptData)
+                return null;
+        }
+
+        return PreviewSelector.SelectPreview(headerSource, remaining, request.Box, containerInfo.Orientation);
     }
 
     private IDecodedImage DecodePreview(DecodeRequest request, RawContainerInfo containerInfo, RawInfoKey key, EmbeddedPreview preview, out long previewBytesRead)

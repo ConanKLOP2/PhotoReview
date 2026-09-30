@@ -61,10 +61,10 @@ public sealed class RawDecoderFallbackBreadthTests
     /// <summary>File = 64 zero bytes + bad preview + good preview; the container declares the bad one larger so it is chosen first.</summary>
     private static (string Path, RawContainerInfo Info, byte[] Good) TwoPreviews(TempRoot temp)
     {
-        var good = Jpeg(temp, 320, 240);
+        var good = Jpeg(temp, 1200, 900);
         var path = temp.File("two.dng", [.. new byte[PreviewAt], .. BadPreview, .. good]);
         var bad = new EmbeddedPreview(0, PreviewAt, BadPreview.Length, EmbeddedPreviewKind.Jpeg, 4000, 3000, PreviewColorSpace.Srgb);
-        var ok = new EmbeddedPreview(1, PreviewAt + BadPreview.Length, good.Length, EmbeddedPreviewKind.Jpeg, 320, 240, PreviewColorSpace.Srgb);
+        var ok = new EmbeddedPreview(1, PreviewAt + BadPreview.Length, good.Length, EmbeddedPreviewKind.Jpeg, 1200, 900, PreviewColorSpace.Srgb);
         return (path, new RawContainerInfo(RawFormat.Dng, 6000, 4000, 1, [bad, ok], []), good);
     }
 
@@ -98,7 +98,7 @@ public sealed class RawDecoderFallbackBreadthTests
 
         var decoded = NewDecoder(info, new SelectiveDecoder(Make(kind)), full).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
 
-        Assert.Equal((320, 240), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.Equal((1200, 900), (decoded.PixelWidth, decoded.PixelHeight));
         Assert.Equal(0, full.CallCount);
     }
 
@@ -112,7 +112,7 @@ public sealed class RawDecoderFallbackBreadthTests
         var decoded = NewDecoder(info, new SelectiveDecoder(new InvalidDataException("bad")), noPreview: null)
             .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
 
-        Assert.Equal((320, 240), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.Equal((1200, 900), (decoded.PixelWidth, decoded.PixelHeight));
     }
 
     [Fact]
@@ -184,6 +184,91 @@ public sealed class RawDecoderFallbackBreadthTests
 
         Assert.IsType(failureType, thrown);
         Assert.Equal(0, full.CallCount);
+    }
+
+    private sealed class HResultComException(int hresult) : COMException("wic failure", hresult);
+
+    [Theory]
+    [InlineData(unchecked((int)0x8007000E))] // E_OUTOFMEMORY
+    [InlineData(unchecked((int)0x80070008))] // ERROR_NOT_ENOUGH_MEMORY
+    [InlineData(unchecked((int)0x800705AA))] // ERROR_NO_SYSTEM_RESOURCES
+    [InlineData(unchecked((int)0x800705AF))] // ERROR_COMMITMENT_LIMIT
+    public void Decode_ResourceExhaustionFromBigPreview_PropagatesInsteadOfReturningTheNextPreview(int hresult)
+    {
+        using var temp = new TempRoot("raw-resource-exhaustion");
+        var (path, info, good) = TwoPreviews(temp);
+        var full = new RecordingFullDecoder(good);
+
+        var thrown = Assert.Throws<HResultComException>(() =>
+            NewDecoder(info, new SelectiveDecoder(new HResultComException(hresult)), full).Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        Assert.Equal(hresult, thrown.HResult);
+        Assert.Equal(0, full.CallCount);
+    }
+
+    /// <summary>File = 64 zero bytes + bad 4000x3000 preview + a real 160x120 thumbnail JPEG (the only remaining preview).</summary>
+    private static (string Path, RawContainerInfo Info, byte[] Thumb) BadPlusThumbnail(TempRoot temp)
+    {
+        var thumb = Jpeg(temp, 160, 120);
+        var path = temp.File("thumb.dng", [.. new byte[PreviewAt], .. BadPreview, .. thumb]);
+        var bad = new EmbeddedPreview(0, PreviewAt, BadPreview.Length, EmbeddedPreviewKind.Jpeg, 4000, 3000, PreviewColorSpace.Srgb);
+        var small = new EmbeddedPreview(1, PreviewAt + BadPreview.Length, thumb.Length, EmbeddedPreviewKind.Jpeg, 160, 120, PreviewColorSpace.Srgb);
+        return (path, new RawContainerInfo(RawFormat.Dng, 6000, 4000, 1, [bad, small], []), thumb);
+    }
+
+    [Theory]
+    [InlineData(nameof(InvalidDataException))]
+    [InlineData(nameof(FileFormatException))]
+    public void Decode_CorruptBigPreviewAndOnlyAThumbnailRemains_TheThumbnailIsAcceptedAsLastResort(string kind)
+    {
+        using var temp = new TempRoot("raw-thumb-last-resort");
+        var (path, info, _) = BadPlusThumbnail(temp);
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(Make(kind))).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal((160, 120), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.True(decoded.Downscaled);
+    }
+
+    [Fact]
+    public void Decode_WicBadImageFromBigPreviewAndOnlyAThumbnailRemains_TheThumbnailIsAccepted()
+    {
+        using var temp = new TempRoot("raw-thumb-badimage");
+        var (path, info, _) = BadPlusThumbnail(temp);
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(new HResultComException(unchecked((int)0x88982F60)))) // WINCODEC_ERR_BADIMAGE
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal((160, 120), (decoded.PixelWidth, decoded.PixelHeight));
+    }
+
+    [Theory]
+    [InlineData(nameof(COMException))]
+    [InlineData(nameof(NotSupportedException))]
+    public void Decode_NonCorruptFailureOfBigPreviewAndOnlyAThumbnailRemains_TheThumbnailIsNotAcceptedSoTheFailurePropagates(string kind)
+    {
+        using var temp = new TempRoot("raw-thumb-rejected");
+        var (path, info, _) = BadPlusThumbnail(temp);
+        var failure = kind == nameof(COMException) ? new HResultComException(unchecked((int)0x88982F50)) : Make(kind); // WINCODEC_ERR_COMPONENTNOTFOUND
+
+        var thrown = Assert.ThrowsAny<Exception>(() =>
+            NewDecoder(info, new SelectiveDecoder(failure)).Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        Assert.Same(failure, thrown);
+    }
+
+    [Fact]
+    public void Decode_NonCorruptFailureOfBigPreviewAndOnlyAThumbnailRemains_TheFullDecodeIsUsedInstead()
+    {
+        using var temp = new TempRoot("raw-thumb-rejected-full");
+        var (path, info, _) = BadPlusThumbnail(temp);
+        var full = new RecordingFullDecoder(Jpeg(temp, 640, 480));
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(new HResultComException(unchecked((int)0x88982F50))), full)
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal(1, full.CallCount);
+        Assert.Equal((640, 480), (decoded.PixelWidth, decoded.PixelHeight));
     }
 
     [Fact]
