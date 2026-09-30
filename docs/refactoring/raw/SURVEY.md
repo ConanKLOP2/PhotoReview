@@ -99,7 +99,7 @@ The Native probe ran once against each of the 23 pinned corpus samples on Window
 | RW2 | 3 | 0 | 0 | 3 |
 | **Total** | **23** | **2** | **1** | **20** |
 
-The two full DNG results were 320×240 and 4672×3104. The preview-only DNG result matched its embedded preview dimensions and was rejected. The other 20 samples could not be fully decoded by WIC on this machine. `WicRawFullDecoder` treats this probe as an optional backend; Q-RAW-02 remains decided as LibRaw for reliable full decoding.
+The two full DNG results were 320×240 and 4672×3104. The preview-only DNG result matched its embedded preview dimensions and was rejected. The other 20 samples could not be fully decoded by WIC on this machine. The WIC RAW full decoder built on this probe was removed as unused; Q-RAW-02 remains decided as LibRaw for reliable full decoding.
 
 ### ORF embedded-preview fallback (2026-09-29)
 
