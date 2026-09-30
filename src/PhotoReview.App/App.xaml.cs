@@ -77,7 +77,8 @@ public partial class App : System.Windows.Application, IDisposable
             sp.GetRequiredService<OperationJournal>(),
             sp.GetRequiredService<IFileSystem>(),
             sp.GetRequiredService<IClock>(),
-            sp.GetRequiredService<IRecycleBin>()));
+            sp.GetRequiredService<IRecycleBin>(),
+            () => sp.GetRequiredService<SettingsStore>().Current.AllowPermanentDeleteWithoutRecycleBin));
         services.AddSingleton<FileHashService>(sp => new FileHashService(
             sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
         services.AddSingleton<FileActionService>(sp => new FileActionService(

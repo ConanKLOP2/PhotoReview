@@ -182,12 +182,37 @@ public sealed class RecoveryRecycleGroupTests
         _bin.NoBinPaths.Add(Raw);
         var failed = FailedGroup(Member(Jpg), Member(Raw, permanent: true));
         _journal.Append(failed);
+        var service = new RecoveryRetryService(_journal, _fs, new FixedClock(Stamp.AddMinutes(2)), _bin, () => true);
 
-        var result = await _service.RetryMoveOrCopyAsync(failed);
+        var result = await service.RetryMoveOrCopyAsync(failed);
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Equal([Jpg], _bin.Recycled);
         Assert.Equal([Raw], _bin.PermanentlyDeleted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task Retry_MemberJournaledPermanentButSettingNowOff_IsRefusedBeforeAnyMutation(bool? setting)
+    {
+        _fs.AddFile(Jpg, new string('j', 10), Stamp);
+        _fs.AddFile(Raw, new string('r', 10), Stamp);
+        _bin.NoBinPaths.Add(Raw);
+        var failed = FailedGroup(Member(Jpg), Member(Raw, permanent: true));
+        _journal.Append(failed);
+        var service = new RecoveryRetryService(_journal, _fs, new FixedClock(Stamp.AddMinutes(2)), _bin,
+            setting is null ? null : () => setting.Value);
+
+        var result = await service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Tr.CoreRecycleUnsupportedDrive("a.cr2"), result.Message);
+        Assert.Empty(_bin.Recycled);
+        Assert.Empty(_bin.PermanentlyDeleted);
+        Assert.True(_fs.FileExists(Jpg));
+        Assert.True(_fs.FileExists(Raw));
+        Assert.Single(_journal.ReadFailedOperations()); // still the one Failed line, nothing new journaled
     }
 
     [Fact]

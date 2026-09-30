@@ -26,8 +26,14 @@ public sealed class RecoveryRetryService
     private readonly IClock _clock;
     private readonly IRecycleBin? _recycleBin;
 
-    public RecoveryRetryService(OperationJournal journal, IFileSystem fileSystem, IClock clock, IRecycleBin? recycleBin = null)
+    private readonly Func<bool>? _allowPermanentDelete;
+
+    /// <param name="allowPermanentDelete">Current value of the permanent-delete-without-Recycle-Bin setting (Q-R8), read at retry
+    /// time. Null = not allowed: a group Delete retry never permanently deletes a journaled-Permanent member unless the setting is on now.</param>
+    public RecoveryRetryService(OperationJournal journal, IFileSystem fileSystem, IClock clock, IRecycleBin? recycleBin = null,
+        Func<bool>? allowPermanentDelete = null)
     {
+        _allowPermanentDelete = allowPermanentDelete;
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -93,6 +99,10 @@ public sealed class RecoveryRetryService
         if (pending.Length == 0) return new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
         if (failed.Type == FileOperationType.Recycle && _recycleBin is null)
             return new(false, Tr.CoreRecoveryOnlyMoveCopy, null);
+        // Same rule as the first run (FileActionService): permanent deletion needs the setting; refuse before anything is mutated.
+        if (failed.Type == FileOperationType.Recycle && failed.Undo != true && _allowPermanentDelete?.Invoke() != true
+            && pending.FirstOrDefault(item => item.Member.Permanent) is { } permanentItem)
+            return new(false, Tr.CoreRecycleUnsupportedDrive(Path.GetFileName(permanentItem.Member.Source)), null);
         try
         {
             foreach (var item in pending)
