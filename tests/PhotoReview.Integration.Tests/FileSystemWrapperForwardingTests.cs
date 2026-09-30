@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using PhotoReview.Benchmarking;
 using PhotoReview.Core.Abstractions;
@@ -27,34 +28,95 @@ public sealed class FileSystemWrapperForwardingTests
         }
     }
 
-    public static TheoryData<string> Wrappers => ["CountingFileSystem", "SlowLinkFileSystem"];
-
-    private static IFileSystem Wrap(string kind, IFileSystem inner) => kind switch
+    // Real file systems and test doubles, not decorators in the forwarding sense: excluded by name.
+    // PhysicalFileSystem / InMemoryFileSystem implement the primitive themselves; CrashPointFileSystem (a test project type, listed
+    // here in case it moves into a product assembly) wraps an InMemoryFileSystem only to inject crashes.
+    private static readonly HashSet<string> NotDecorators = new(StringComparer.Ordinal)
     {
-        "CountingFileSystem" => new CountingFileSystem(inner, new ReviewMetrics()),
-        _ => new SlowLinkFileSystem(inner, TimeSpan.Zero, bandwidth: null),
+        "PhysicalFileSystem", "InMemoryFileSystem", "CrashPointFileSystem",
     };
 
-    [Theory]
-    [MemberData(nameof(Wrappers))]
-    public void CreateNewPrimitives_AreForwardedToTheInnerFileSystem(string kind)
+    /// <summary>Every product (non-test) PhotoReview assembly reachable from this test project, loaded.</summary>
+    private static List<Assembly> ProductAssemblies()
     {
-        var inner = DispatchProxy.Create<IFileSystem, RecordingProxy>();
-        var calls = ((RecordingProxy)(object)inner).Calls;
-        var wrapper = Wrap(kind, inner);
+        var result = new List<Assembly>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<Assembly>([typeof(FileSystemWrapperForwardingTests).Assembly]);
+        while (pending.Count > 0)
+        {
+            foreach (var reference in pending.Pop().GetReferencedAssemblies())
+            {
+                var name = reference.Name;
+                if (name is null || !name.StartsWith("PhotoReview", StringComparison.Ordinal)
+                    || name.EndsWith(".Tests", StringComparison.Ordinal) || name.StartsWith("PhotoReview.TestSupport", StringComparison.Ordinal)
+                    || !seen.Add(name)) continue;
+                Assembly assembly;
+                try { assembly = Assembly.Load(reference); }
+                catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or BadImageFormatException) { continue; }
+                pending.Push(assembly);
+                result.Add(assembly);
+            }
+        }
+
+        return result;
+    }
+
+    private static IEnumerable<Type> SafeTypes(Assembly assembly)
+    {
+        try { return assembly.GetTypes(); }
+        catch (ReflectionTypeLoadException ex) { return ex.Types.OfType<Type>(); }
+    }
+
+    /// <summary>Concrete IFileSystem implementations that take another IFileSystem in a constructor (decorators), product assemblies only.</summary>
+    private static List<(Type Type, ConstructorInfo Constructor)> DiscoverDecorators() =>
+        ProductAssemblies()
+            .SelectMany(SafeTypes)
+            .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(IFileSystem).IsAssignableFrom(type) && !NotDecorators.Contains(type.Name))
+            .Select(type => (Type: type, Constructor: type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .FirstOrDefault(ctor => ctor.GetParameters().Any(p => p.ParameterType == typeof(IFileSystem)))))
+            .Where(entry => entry.Constructor is not null)
+            .Select(entry => (entry.Type, entry.Constructor!))
+            .ToList();
+
+    private static object Create(ConstructorInfo constructor, IFileSystem inner)
+    {
+        var arguments = constructor.GetParameters().Select(parameter =>
+            parameter.ParameterType == typeof(IFileSystem) ? inner
+            : parameter.HasDefaultValue ? parameter.DefaultValue
+            : parameter.ParameterType.IsValueType ? Activator.CreateInstance(parameter.ParameterType)
+            : parameter.ParameterType.GetConstructor(Type.EmptyTypes) is not null ? Activator.CreateInstance(parameter.ParameterType)
+            : null).ToArray();
+        return constructor.Invoke(arguments);
+    }
+
+    [Fact]
+    public void EveryFileSystemDecorator_ForwardsTheCreateNewPrimitivesToTheInnerFileSystem()
+    {
+        var decorators = DiscoverDecorators();
+        // Sanity: discovery must find the decorators known today, or the reflection (not the decorators) is broken.
+        Assert.Contains(decorators, entry => entry.Type == typeof(CountingFileSystem));
+        Assert.Contains(decorators, entry => entry.Type == typeof(SlowLinkFileSystem));
         // Every current and future "TryXxxNew(source, destination)" primitive of the interface (TryCopyNew today).
         var primitives = typeof(IFileSystem).GetMethods()
             .Where(method => method.Name.StartsWith("Try", StringComparison.Ordinal) && method.Name.EndsWith("New", StringComparison.Ordinal))
             .ToArray();
         Assert.NotEmpty(primitives);
 
-        foreach (var primitive in primitives)
+        var failures = new List<string>();
+        foreach (var (type, constructor) in decorators)
         {
-            calls.Clear();
-
-            primitive.Invoke(wrapper, [@"C:\a.jpg", @"C:\b.jpg"]);
-
-            Assert.Equal([primitive.Name], calls); // exactly one forwarded call: no FileExists + Copy emulation behind the wrapper
+            var inner = DispatchProxy.Create<IFileSystem, RecordingProxy>();
+            var calls = ((RecordingProxy)(object)inner).Calls;
+            var wrapper = Create(constructor, inner);
+            foreach (var primitive in primitives)
+            {
+                calls.Clear();
+                primitive.Invoke(wrapper, [@"C:\a.jpg", @"C:\b.jpg"]);
+                // Exactly one forwarded call: no FileExists + Copy emulation behind the wrapper.
+                if (!calls.SequenceEqual([primitive.Name])) failures.Add($"{type.FullName}.{primitive.Name} -> inner calls [{string.Join(", ", calls)}]");
+            }
         }
+
+        Assert.True(failures.Count == 0, "IFileSystem decorators that do not forward the create-new primitive to their inner file system: " + string.Join("; ", failures));
     }
 }

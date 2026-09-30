@@ -22,6 +22,9 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     /// <summary>Free slots of the single-slot gate that serialises LibRaw decodes (test seam).</summary>
     internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.SlotsAvailable;
 
+    /// <summary>Test seam: decodes currently waiting for the full-decode slot (both lanes).</summary>
+    internal static int FullDecodeQueuedWaiters => s_fullDecodeGate.QueuedViewers + s_fullDecodeGate.QueuedPreloads;
+
     public LibRawDecoder() { }
 
     /// <summary>Test seam: <paramref name="stageObserver"/> is told "opened", "unpacked" and "processed" as each native stage completes.</summary>

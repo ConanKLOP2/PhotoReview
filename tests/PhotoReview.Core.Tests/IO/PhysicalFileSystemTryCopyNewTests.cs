@@ -28,6 +28,7 @@ public sealed class PhysicalFileSystemTryCopyNewTests
     }
 
     [Fact]
+    [Trait("Category", "Native")] // changes a real ACL: a killed test host would leave a Deny ACE behind (the finally restores it otherwise)
     [SupportedOSPlatform("windows")]
     public void TryCopyNew_DestinationFolderDeniesCreatingFiles_ThrowsAccessDeniedAndCreatesNothing()
     {
