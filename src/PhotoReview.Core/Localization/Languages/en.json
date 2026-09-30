@@ -867,5 +867,8 @@
   "status.groupChangedDuringConfirm": "{fileName}: the capture changed while the confirmation was open, so nothing was changed. Try again.",
   "dialog.confirmCompareGroupRecycle.message": "'{fileName}' is part of a JPG+RAW capture: this will also send its paired file(s) to the Recycle Bin. Files: {files}. Continue?",
   "dialog.confirmCompareGroupMove.message": "'{fileName}' is part of a JPG+RAW capture: this will also move its paired file(s). Files: {files}. Continue?",
-  "status.lateGroupPartiallyProcessed": "{fileName}: the action failed part-way after you left its folder; {done} of {total} file(s) were already processed. Ctrl+Z restores what went to the Recycle Bin; check Recovery for the rest."
+  "status.lateGroupPartiallyProcessed": "{fileName}: the action failed part-way after you left its folder; {done} of {total} file(s) were already processed. Ctrl+Z restores what went to the Recycle Bin; check Recovery for the rest.",
+  "main.capturePair.badge.tooltipBound": "Press {key} to switch between the JPG and the RAW of this capture.",
+  "main.capturePair.badge.tooltipUnbound": "No key is assigned to switch between the JPG and the RAW. Assign one in Settings > Shortcuts (\"Switch JPEG / RAW member\"), or use Compare.",
+  "settings.rawPairMode.shortcutHint": "In the stacked modes only one file of a pair is shown. To see the other one, assign a key to \"Switch JPEG / RAW member\" under Shortcuts (no key is assigned by default), or open Compare."
 }

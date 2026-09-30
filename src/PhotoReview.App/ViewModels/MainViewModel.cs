@@ -294,6 +294,21 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    /// <summary>
+    /// Tooltip of the JPG+RAW badge: how to reach the other member. The "Switch JPEG / RAW member" shortcut has no default key
+    /// (owner decision), so without a usable binding the tooltip says where to assign one.
+    /// </summary>
+    public string CapturePairBadgeToolTip
+    {
+        get
+        {
+            var configured = Settings.Shortcuts.ToggleCaptureMember;
+            return PhotoReview.App.Services.ShortcutKeyName.TryParse(configured, out _)
+                ? Tr.MainCapturePairBadgeTooltipBound(configured.Trim())
+                : Tr.MainCapturePairBadgeTooltipUnbound;
+        }
+    }
+
     public async Task ToggleCaptureGroupMemberAsync()
     {
         await WaitForPendingExplorerOrderAsync();
@@ -745,6 +760,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _viewerState.ScalingQuality = Settings.ScalingQuality;
         _viewerState.ZoomStep = Settings.KeyboardZoomStepPercent / 100.0; // Q-R41
         NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
+        OnPropertyChanged(nameof(CapturePairBadgeToolTip)); // the Switch JPEG / RAW member shortcut may have been (un)assigned
         var newMode = _settingsStore.Current.LoadingMode;
         var newBackend = _settingsStore.Current.DecoderBackend;
         var newRawSupport = _settingsStore.Current.RawSupportEnabled;
@@ -916,6 +932,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(SkippedWarningText));
         InfoOverlay.Refresh();
         OnPropertyChanged(nameof(CapturePairBadge));
+        OnPropertyChanged(nameof(CapturePairBadgeToolTip));
         // StatusText is event text (last action); it switches language with the next update.
         NotifyExifLineChanged();
     }
