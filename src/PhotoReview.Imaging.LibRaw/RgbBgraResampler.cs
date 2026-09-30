@@ -1,4 +1,7 @@
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.LibRaw;
 
@@ -44,6 +47,66 @@ internal static class RgbBgraResampler
             BoxAverage(rgb, sourceWidth, sourceHeight, bgra, targetWidth, targetHeight, channels, cancellationToken);
         else
             Bilinear(rgb, sourceWidth, sourceHeight, bgra, targetWidth, targetHeight, channels, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resamples the decoder's packed source (<paramref name="channels"/> = 3 RGB or 1 gray) into a temporary unmanaged BGRA buffer. No managed
+    /// array: a full-size 100 MP target would be a 400 MB LOH object that lingers until the next gen-2 GC. The caller frees the source
+    /// buffer, then calls <see cref="ToBitmap"/> (which copies, as BitmapSource.Create always does; a WriteableBitmap holds two native buffers
+    /// too, measured) and disposes the buffer. Peak of the bitmap step: target + WPF copy, never source + target + copy.
+    /// </summary>
+    internal static unsafe BgraBuffer ResizeToBuffer(ReadOnlySpan<byte> rgb, int sourceWidth, int sourceHeight,
+        int targetWidth, int targetHeight, int channels, CancellationToken cancellationToken)
+    {
+        var buffer = new BgraBuffer(targetWidth, targetHeight);
+        try
+        {
+            Resize(rgb, sourceWidth, sourceHeight, buffer.AsSpan(), targetWidth, targetHeight, cancellationToken, channels);
+            return buffer;
+        }
+        catch
+        {
+            buffer.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Copies the buffer into a frozen Bgr32 <see cref="BitmapSource"/>; the buffer stays owned by the caller. <paramref name="beforeCopy"/> runs right before the copy (test seam).</summary>
+    internal static BitmapSource ToBitmap(BgraBuffer buffer, Action? beforeCopy = null)
+    {
+        beforeCopy?.Invoke();
+        var bitmap = BitmapSource.Create(buffer.Width, buffer.Height, 96, 96, PixelFormats.Bgr32, null, buffer.Pointer, buffer.Length, buffer.Stride);
+        if (bitmap.CanFreeze) bitmap.Freeze();
+        return bitmap;
+    }
+
+    /// <summary>Unmanaged BGRA pixel buffer (4 bytes per pixel, stride = width x 4), freed on dispose.</summary>
+    internal sealed unsafe class BgraBuffer : IDisposable
+    {
+        private void* _pointer;
+
+        internal BgraBuffer(int width, int height)
+        {
+            Width = width;
+            Height = height;
+            Stride = checked(width * 4);
+            Length = checked(Stride * height);
+            _pointer = NativeMemory.Alloc((nuint)Length);
+        }
+
+        internal int Width { get; }
+        internal int Height { get; }
+        internal int Stride { get; }
+        internal int Length { get; }
+        internal IntPtr Pointer => (IntPtr)_pointer;
+        internal Span<byte> AsSpan() => new(_pointer, Length);
+
+        public void Dispose()
+        {
+            var pointer = _pointer;
+            _pointer = null;
+            if (pointer != null) NativeMemory.Free(pointer);
+        }
     }
 
     // Source layout is <channels> bytes per pixel: R,G,B for 3; a single gray value for 1 (green/blue offsets collapse to 0).

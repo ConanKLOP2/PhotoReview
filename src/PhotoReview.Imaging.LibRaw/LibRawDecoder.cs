@@ -195,54 +195,87 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         }
     }
 
+    /// <summary>Test seam: (total available, current load) of the memory the pre-decode headroom check compares against; the GC's reading by default.</summary>
+    internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = DecodeMemoryGuard.ReadGcMemoryInfo;
+
     private WpfDecodedImage DecodeCore(DecodeRequest request, CancellationToken cancellationToken)
     {
         using var cancellationState = new CancellationState(cancellationToken);
         // libraw_open_buffer stores a pointer into the caller's buffer (no copy) that unpack/process read later, so the
         // pin must outlive the LibRaw handle: declared before `raw` so it is released after libraw_close.
         using var bufferPin = request.Bytes is { } bytes ? bytes.Pin() : default;
-        using var raw = CreateHandle();
-        LibRawNativeMethods.LibRawSetProgressHandler(raw, CancellationCallback, cancellationState.Pointer);
-        // The parameters must be set BEFORE libraw_open: identify() adopts the embedded camera matrix (rgb_cam) only when
-        // use_camera_wb is already set at open time (identify.cpp: use_camera_matrix & (use_camera_wb|dng_version ? 1 : 0 | 2)), and some
-        // makers (Olympus ORF, Pentax PEF, Leaf) read it while parsing. Setting it afterwards leaves those files on LibRaw's generic matrix.
-        if (!_configureAfterOpen) ConfigureOutput(raw);
-        OpenSource(raw, request, bufferPin, cancellationToken);
-        _stageObserver?.Invoke("opened");
-        if (_configureAfterOpen) ConfigureOutput(raw);
-        CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
-        _stageObserver?.Invoke("unpacked");
-        cancellationToken.ThrowIfCancellationRequested();
-        CheckResult(LibRawNativeMethods.LibRawDcrawProcess(raw), "process RAW data", cancellationToken);
-        _stageObserver?.Invoke("processed");
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var imagePointer = LibRawNativeMethods.LibRawDcrawMakeMemImage(raw, out var imageError);
-        if (imagePointer == IntPtr.Zero)
+        SafeLibRawImageHandle image;
+        ProcessedImageHeader header;
+        // The LibRaw handle (its 16-bit working image is 8 B/px) is closed as soon as the 8-bit RGB buffer exists, i.e. BEFORE the
+        // managed/WPF bitmap is allocated, so the two never coexist at the decode's peak.
+        using (var raw = CreateHandle())
         {
+            LibRawNativeMethods.LibRawSetProgressHandler(raw, CancellationCallback, cancellationState.Pointer);
+            // The parameters must be set BEFORE libraw_open: identify() adopts the embedded camera matrix (rgb_cam) only when
+            // use_camera_wb is already set at open time (identify.cpp: use_camera_matrix & (use_camera_wb|dng_version ? 1 : 0 | 2)), and some
+            // makers (Olympus ORF, Pentax PEF, Leaf) read it while parsing. Setting it afterwards leaves those files on LibRaw's generic matrix.
+            if (!_configureAfterOpen) ConfigureOutput(raw);
+            OpenSource(raw, request, bufferPin, cancellationToken);
+            _stageObserver?.Invoke("opened");
+            if (_configureAfterOpen) ConfigureOutput(raw);
+            EnsureMemoryHeadroom(raw, request);
+            CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
+            _stageObserver?.Invoke("unpacked");
             cancellationToken.ThrowIfCancellationRequested();
-            throw CreateFailure(imageError, "create decoded image");
+            CheckResult(LibRawNativeMethods.LibRawDcrawProcess(raw), "process RAW data", cancellationToken);
+            _stageObserver?.Invoke("processed");
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var imagePointer = LibRawNativeMethods.LibRawDcrawMakeMemImage(raw, out var imageError);
+            if (imagePointer == IntPtr.Zero)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw CreateFailure(imageError, "create decoded image");
+            }
+
+            image = new SafeLibRawImageHandle(imagePointer);
+            header = Marshal.PtrToStructure<ProcessedImageHeader>(imagePointer);
         }
-        using var image = new SafeLibRawImageHandle(imagePointer);
+        _stageObserver?.Invoke("handle-closed"); // LibRaw working image freed before any bitmap memory is allocated
 
-        var header = Marshal.PtrToStructure<ProcessedImageHeader>(image.DangerousGetHandle());
-        if (header.Type != LibRawNativeMethods.ImageBitmap || header.Width == 0 || header.Height == 0 || !RgbBgraResampler.IsSupportedChannelCount(header.Colors) || header.Bits != 8)
-            throw new InvalidDataException("LibRaw returned an unsupported processed image format.");
-
-        var rgbLength = RgbBgraResampler.ValidateSourceLength(header.Width, header.Height, header.DataSize, header.Colors);
-        var (targetWidth, targetHeight) = request.Box.Fit(header.Width, header.Height);
-        var pixels = new byte[RgbBgraResampler.ValidateTargetLength(targetWidth, targetHeight)];
-        unsafe
+        using (image)
         {
-            var source = new ReadOnlySpan<byte>((byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset), rgbLength);
-            RgbBgraResampler.Resize(source, header.Width, header.Height, pixels, targetWidth, targetHeight, cancellationToken, header.Colors);
-        }
+            if (header.Type != LibRawNativeMethods.ImageBitmap || header.Width == 0 || header.Height == 0 || !RgbBgraResampler.IsSupportedChannelCount(header.Colors) || header.Bits != 8)
+                throw new InvalidDataException("LibRaw returned an unsupported processed image format.");
 
-        cancellationToken.ThrowIfCancellationRequested();
-        var bitmap = BitmapSource.Create(targetWidth, targetHeight, 96, 96, PixelFormats.Bgr32, null, pixels, targetWidth * 4);
-        var downscaled = targetWidth < header.Width || targetHeight < header.Height;
-        return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
-            originalWidth: header.Width, originalHeight: header.Height);
+            var rgbLength = RgbBgraResampler.ValidateSourceLength(header.Width, header.Height, header.DataSize, header.Colors);
+            var (targetWidth, targetHeight) = request.Box.Fit(header.Width, header.Height);
+            _ = RgbBgraResampler.ValidateTargetLength(targetWidth, targetHeight);
+            using var pixels = SourceToBuffer(image, header, rgbLength, targetWidth, targetHeight, cancellationToken);
+            // The RGB buffer is freed as soon as the BGRA pixels exist, before WPF copies them into the bitmap.
+            image.Dispose();
+            // Reported at the moment WPF starts copying: "source-released" proves LibRaw's RGB buffer is already freed then.
+            var bitmap = RgbBgraResampler.ToBitmap(pixels, () => _stageObserver?.Invoke(image.IsClosed ? "source-released" : "source-held"));
+            _stageObserver?.Invoke("bitmap-created");
+
+            var downscaled = targetWidth < header.Width || targetHeight < header.Height;
+            return new WpfDecodedImage(bitmap, downscaled, actualBackend: DecoderBackend.LibRaw,
+                originalWidth: header.Width, originalHeight: header.Height);
+        }
+    }
+
+    private static unsafe RgbBgraResampler.BgraBuffer SourceToBuffer(SafeLibRawImageHandle image, ProcessedImageHeader header, int rgbLength,
+        int targetWidth, int targetHeight, CancellationToken cancellationToken)
+    {
+        var source = new ReadOnlySpan<byte>((byte*)IntPtr.Add(image.DangerousGetHandle(), ProcessedImageHeader.DataOffset), rgbLength);
+        return RgbBgraResampler.ResizeToBuffer(source, header.Width, header.Height, targetWidth, targetHeight, header.Colors, cancellationToken);
+    }
+
+    /// <summary>Refuses a decode whose estimated peak (see <see cref="DecodeMemoryGuard"/>) exceeds the available memory headroom, before anything big is allocated.</summary>
+    private void EnsureMemoryHeadroom(SafeLibRawHandle raw, DecodeRequest request)
+    {
+        var width = LibRawNativeMethods.LibRawGetIWidth(raw);
+        var height = LibRawNativeMethods.LibRawGetIHeight(raw);
+        if (width <= 0 || height <= 0) return; // unknown size: nothing to estimate from
+        var (targetWidth, targetHeight) = request.Box.Fit(width, height);
+        var (total, load) = MemoryInfo();
+        if (!DecodeMemoryGuard.HasHeadroom(DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight), total, load))
+            throw new InvalidOperationException("Not enough memory to decode this RAW image.");
     }
 
     private void ConfigureOutput(SafeLibRawHandle raw)

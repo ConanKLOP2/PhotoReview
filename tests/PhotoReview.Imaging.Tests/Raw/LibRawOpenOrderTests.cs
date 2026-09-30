@@ -39,7 +39,7 @@ public sealed class LibRawOpenOrderTests
 
         _ = new LibRawDecoder(stages.Add).Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
 
-        Assert.Equal(["configured", "opened", "unpacked", "processed"], stages);
+        Assert.Equal(["configured", "opened", "unpacked", "processed", "handle-closed", "source-released", "bitmap-created"], stages);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class LibRawOpenOrderTests
 
         _ = new LibRawDecoder(stages.Add, configureAfterOpen: true).Decode(new DecodeRequest(path, new DecodeBox(160, 120)));
 
-        Assert.Equal(["opened", "configured", "unpacked", "processed"], stages);
+        Assert.Equal(["opened", "configured", "unpacked", "processed", "handle-closed", "source-released", "bitmap-created"], stages);
     }
 
     [Fact]
@@ -69,6 +69,20 @@ public sealed class LibRawOpenOrderTests
 
         Assert.True(Math.Abs(before.RG / after.RG - 1) > 0.01 || Math.Abs(before.BG / after.BG - 1) > 0.01,
             $"{fileName}: open-time {before} vs after-open {after}");
+    }
+
+    [Fact]
+    public void Decode_NotEnoughHeadroom_IsRefusedBeforeUnpackAsInvalidOperation()
+    {
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
+            RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
+        var stages = new List<string>();
+        var decoder = new LibRawDecoder(stages.Add) { MemoryInfo = () => (TotalAvailable: 1_000_000, Load: 0) };
+
+        var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        Assert.Contains("memory", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["configured", "opened"], stages); // refused before unpack/process: nothing big was allocated
     }
 
     private static (double RG, double BG) Ratios(IDecodedImage image)
