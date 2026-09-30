@@ -162,6 +162,7 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         _viewer.SetZoom(1.0);
         var load = vm.Presenter.ZoomDetail.PendingLoad;
         Assert.NotNull(load);
+        full.Gate.Release();
         await load!;
 
         Assert.Equal(1, full.Decodes);
@@ -174,7 +175,10 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         var (vm, _, full) = CreateRawViewModel(LoadingMode.Preview, RawFullDecode.OnZoom);
         await vm.Presenter.PresentAsync(0);
         _viewer.SetZoom(1.0);
-        await vm.Presenter.ZoomDetail.PendingLoad!;
+        var firstLoad = vm.Presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(firstLoad);
+        full.Gate.Release();
+        await firstLoad!;
         Assert.NotNull(vm.Presenter.ZoomDetail.HeldOriginal);
         Assert.Equal(1, full.Decodes);
 
@@ -239,7 +243,10 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         _viewer.SourceSizeSwapping += (_, _) => swapWidths.Add(_viewer.SourcePixelWidth);
 
         _viewer.SetZoom(1.0);
-        await vm.Presenter.ZoomDetail.PendingLoad!;
+        var load = vm.Presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        full.Gate.Release();
+        await load!;
 
         Assert.Equal(1, full.Decodes);
         Assert.Equal([6000], swapWidths);
@@ -264,8 +271,11 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
     {
         private int _decodes;
         public int Decodes => Volatile.Read(ref _decodes);
+        /// <summary>Holds every decode until released, so the test can observe the in-flight load (an instant decode could finish before PendingLoad is read).</summary>
+        public SemaphoreSlim Gate { get; } = new(0);
         public IDecodedImage Decode(DecodeRequest request)
         {
+            Gate.Wait();
             Interlocked.Increment(ref _decodes);
             return new SizedImage(6016, 4016, 6016, 4016, downscaled: false);
         }
