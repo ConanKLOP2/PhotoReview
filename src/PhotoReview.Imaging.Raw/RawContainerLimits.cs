@@ -14,6 +14,13 @@ public static class RawContainerLimits
     /// <summary>Maximum nesting depth for ISO-BMFF box structures (e.g. CR3).</summary>
     public const int MaxBoxDepth = 16;
 
+    /// <summary>
+    /// Largest embedded preview (bytes) a RAW decode will read into memory (128 MiB). Real previews are 10 KB to a few MB
+    /// (a full-size JpgFromRaw is at most ~30 MB); a container declaring more is treated as corrupt before anything is allocated,
+    /// so a hostile length cannot reserve up to the file size. The LibRaw thumbnail fallback has its own 32 MiB cap.
+    /// </summary>
+    public const int MaxPreviewBytes = 128 << 20;
+
     /// <summary>Hard cap on total bytes that may be read from the header (8 MB).</summary>
     public const int MaxHeaderBytes = 8 << 20;
 

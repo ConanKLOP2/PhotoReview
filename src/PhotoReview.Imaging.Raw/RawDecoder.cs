@@ -22,6 +22,9 @@ namespace PhotoReview.Imaging.Raw;
 public sealed class RawDecoder : IImageDecoder
 {
     private const int MaxFallbackThumbnailBytes = 32 << 20;
+
+    /// <summary>A JPEG whose long side is at most this many pixels is a thumbnail, never a viewable photo.</summary>
+    private const int MaxThumbnailLongSide = 256;
     private readonly IImageDecoder _innerDecoder;
     private readonly ISourceReader _sourceReader;
     private readonly RawContainerReaderRegistry _registry;
@@ -116,7 +119,10 @@ public sealed class RawDecoder : IImageDecoder
                 (sensorW, sensorH) = (sensorH, sensorW);
             }
 
-            bool downscaled = decoded.Downscaled || (decoded.PixelWidth < sensorW || decoded.PixelHeight < sensorH);
+            // A thumbnail-sized JPEG is never the photo: even when the container declares no sensor size (so the size
+            // comparison cannot tell), mark it downscaled so the viewer zoom recovers the real pixels.
+            bool tinyPreview = fromJpegPreview && Math.Max(decoded.OriginalWidth, decoded.OriginalHeight) <= MaxThumbnailLongSide;
+            bool downscaled = decoded.Downscaled || tinyPreview || (decoded.PixelWidth < sensorW || decoded.PixelHeight < sensorH);
 
             return new RawDecodedImage(
                 decoded,
@@ -139,15 +145,25 @@ public sealed class RawDecoder : IImageDecoder
     {
         fallbackThumbnailBytesRead = 0;
         // Read and cache ONLY the preview byte range. Never route a RAW file through the whole-file byte cache.
-        if (preview.Length > int.MaxValue)
-            throw new InvalidDataException($"Embedded preview is too large: {preview.Length} bytes.");
-        var fileInfo = new FileInfo(request.Path);
-        var previewBytes = _sourceBytesCache is not null && fileInfo.Exists && _sourceBytesCache.CanCacheRange(preview.Length)
-            ? _sourceBytesCache.GetOrReadRange(request.Path, fileInfo.Length, fileInfo.LastWriteTimeUtc.Ticks,
-                preview.Offset, (int)preview.Length, request.Priority)
-            : ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, request.Priority);
-        if (preview.ColorSpace == PreviewColorSpace.AdobeRgb)
-            previewBytes = RawJpegIccProfile.EnsureAdobeRgbProfile(previewBytes);
+        byte[] previewBytes;
+        try
+        {
+            if (preview.Length > RawContainerLimits.MaxPreviewBytes)
+                throw new InvalidDataException($"Embedded preview is too large: {preview.Length} bytes (limit {RawContainerLimits.MaxPreviewBytes}).");
+            var fileInfo = new FileInfo(request.Path);
+            previewBytes = _sourceBytesCache is not null && fileInfo.Exists && _sourceBytesCache.CanCacheRange(preview.Length)
+                ? _sourceBytesCache.GetOrReadRange(request.Path, fileInfo.Length, fileInfo.LastWriteTimeUtc.Ticks,
+                    preview.Offset, (int)preview.Length, request.Priority)
+                : ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, request.Priority);
+            if (preview.ColorSpace == PreviewColorSpace.AdobeRgb)
+                previewBytes = RawJpegIccProfile.EnsureAdobeRgbProfile(previewBytes);
+        }
+        catch (InvalidDataException ex) when (!UserFacingError.IsLocalized(ex))
+        {
+            // Oversized/garbled preview or a non-JPEG tagged Adobe RGB: same type for callers, localized "corrupt" sentence for the UI.
+            UserFacingError.Localized(ex, () => Tr.ImageErrorRawCorrupt);
+            throw;
+        }
 
         // Inner decode with preview bytes and container orientation
         var innerRequest = new DecodeRequest(
@@ -164,7 +180,7 @@ public sealed class RawDecoder : IImageDecoder
         }
         catch (NotSupportedException) when (containerInfo.Format == RawFormat.Orf && _previewFallback is not null)
         {
-            return DecodeFallbackThumbnail(request.Path, containerInfo.Format, innerRequest, out fallbackThumbnailBytesRead);
+            return DecodeFallbackThumbnail(request.Path, containerInfo.Format, innerRequest, () => Tr.ImageErrorRawCorrupt, out fallbackThumbnailBytesRead);
         }
     }
 
@@ -183,7 +199,7 @@ public sealed class RawDecoder : IImageDecoder
                 sourceOrientation: containerInfo.Orientation);
             try
             {
-                return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, out bytesRead);
+                return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawNoPreview, out bytesRead);
             }
             // The thumbnail is missing or not a JPEG (e.g. Leica M8 DNG stores a bitmap): fall through to the full decode.
             catch (Exception ex) when (_noPreviewDecoder is not null && ex is InvalidDataException or NotSupportedException)
@@ -199,11 +215,12 @@ public sealed class RawDecoder : IImageDecoder
         return decoded;
     }
 
-    private IDecodedImage DecodeFallbackThumbnail(string path, RawFormat format, DecodeRequest innerRequest, out long thumbnailBytesRead)
+    private IDecodedImage DecodeFallbackThumbnail(string path, RawFormat format, DecodeRequest innerRequest, Func<string> invalidThumbnailText, out long thumbnailBytesRead)
     {
         var thumbnailBytes = _previewFallback!.ReadJpegThumbnail(path, format);
         if (thumbnailBytes.Length <= 0 || thumbnailBytes.Length > MaxFallbackThumbnailBytes)
-            throw new InvalidDataException($"RAW fallback thumbnail size is invalid: {thumbnailBytes.Length} bytes.");
+            throw UserFacingError.Localized(
+                new InvalidDataException($"RAW fallback thumbnail size is invalid: {thumbnailBytes.Length} bytes."), invalidThumbnailText);
 
         thumbnailBytesRead = thumbnailBytes.Length;
         return _innerDecoder.Decode(innerRequest with { Bytes = thumbnailBytes });

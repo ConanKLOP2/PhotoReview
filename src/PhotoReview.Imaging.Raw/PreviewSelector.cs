@@ -1,3 +1,4 @@
+using System.IO;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Raw;
@@ -105,7 +106,21 @@ public static class PreviewSelector
         if (preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        if (TryReadJpegFrame(source, preview.Offset, preview.Length, out int width, out int height, out var colorSpace))
+        bool resolved;
+        int width = 0;
+        int height = 0;
+        var colorSpace = PreviewColorSpace.Unknown;
+        try
+        {
+            resolved = TryReadJpegFrame(source, preview.Offset, preview.Length, out width, out height, out colorSpace);
+        }
+        catch (InvalidDataException)
+        {
+            // Exhausted header budget or unreadable range: the dimensions stay unknown instead of failing the decode.
+            resolved = false;
+        }
+
+        if (resolved)
         {
             return preview with
             {
@@ -139,7 +154,17 @@ public static class PreviewSelector
             || preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out var colorSpace);
+        var colorSpace = PreviewColorSpace.Unknown;
+        try
+        {
+            WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out colorSpace);
+        }
+        catch (InvalidDataException)
+        {
+            // Exhausted header budget: the colour space stays unknown instead of failing the decode.
+            return preview;
+        }
+
         return colorSpace != PreviewColorSpace.Unknown ? preview with { ColorSpace = colorSpace } : preview;
     }
 
