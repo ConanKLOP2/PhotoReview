@@ -31,6 +31,8 @@ public sealed class PreloadScheduler : IDisposable
     private readonly NavigationPace _pace;
     // Q-R17: measured preview sizes behind the whole-folder estimate.
     private readonly PreviewSizeSampler _sizes = new();
+    // Paths the decoder refused as busy: cooldown (in order passes) + retry cap, see PreloadBusyBackoff.
+    private readonly PreloadBusyBackoff _busyBackoff = new();
     // Concurrent preload decodes allowed to start while a viewer decode is running.
     private readonly int _viewerBusyWorkerLimit = Math.Max(2, Environment.ProcessorCount / 3);
     // Q-R29 option C-2: above this observed source-read wall time (ms, DecodeMillisecondsEwma), the link is
@@ -329,6 +331,7 @@ public sealed class PreloadScheduler : IDisposable
                 if (seenVersion != currentVersion || shape != seenShape || calibrated != seenCalibrated)
                 {
                     order?.Dispose();
+                    _busyBackoff.BeginPass();
                     var center = Volatile.Read(ref _preloadCenter);
                     var box = CurrentBox(entries, center);
                     var measured = _sizes.MeanBytes(box);
@@ -421,6 +424,8 @@ public sealed class PreloadScheduler : IDisposable
                         continue;
                     }
                     if (_target.TryGetCachedPreview(key)) continue;
+                    // Busy recently (decoder queue full): not retried on every order rebuild, see PreloadBusyBackoff.
+                    if (_busyBackoff.ShouldSkip(path, key)) continue;
                     queued.Add(path);
                     headroom.DecodeQueuedSinceCheck = true;
                     var work = PreloadOneAsync(order.Current, path, key, cancellationToken);
@@ -640,7 +645,9 @@ public sealed class PreloadScheduler : IDisposable
             {
                 // Not a failure: the decoder's bounded queue was full. Leave the path retryable (ForgetUnlessFailed forgets it).
                 stopwatch.Stop();
-                _log.Info($"Preload deferred, decoder busy: {path}");
+                // The first busy of a path is worth one Info line; repeats (bounded by PreloadBusyBackoff) only go to the debugger.
+                if (_busyBackoff.NoteBusy(path, key) == 1) _log.Info($"Preload deferred, decoder busy: {path}");
+                else Debug.WriteLine($"Preload deferred again, decoder busy: {path}");
                 if (perf) PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, "busy", stopwatch.Elapsed.TotalMilliseconds);
                 return PreloadOutcome.Busy;
             }
