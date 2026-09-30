@@ -92,6 +92,21 @@ public sealed class RafPreviewRangeTests
     }
 
     [Fact]
+    public void Read_JpegRangeWithoutSoi_DropsThePreviewButKeepsTheContainerAndCfaSize()
+    {
+        // Offset 160 is inside the file but the bytes there are not a JPEG (SyntheticRawBuilder leaves them zero-filled
+        // in the region this test patches): a pointer table that points at zeros must not yield a preview.
+        var data = Build(160, 32, Full, (0x0111, 4000, 6000));
+        data.AsSpan(160, 32).Clear();
+
+        var info = Read(data);
+
+        Assert.Empty(info.Previews);
+        Assert.Empty(info.ExifBlocks);
+        Assert.Equal((6000, 4000), (info.SensorWidth, info.SensorHeight));
+    }
+
+    [Fact]
     public void Read_NoCroppedRecord_UsesRawImageSizeRecord0x0121()
     {
         var info = Read(Build(160, 10, Full, (0x0121, 4000, 6032)));
