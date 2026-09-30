@@ -89,7 +89,9 @@ public sealed class RawDecoder : IImageDecoder
                 // (LibRaw thumbnail) and, when that yields no JPEG, the full-decode fallback, instead of failing.
                 // Without either, the original error stands.
                 if (_previewFallback is null && _noPreviewDecoder is null)
-                    throw new InvalidDataException($"No embedded preview found in RAW file: {request.Path}");
+                    throw UserFacingError.Localized(
+                        new InvalidDataException($"No embedded preview found in RAW file: {request.Path}"),
+                        () => Tr.ImageErrorRawNoPreview);
 
                 decoded = DecodeWithoutPreview(request, containerInfo, out fallbackThumbnailBytesRead);
             }

@@ -53,8 +53,12 @@ public sealed class RawDecoderNoPreviewFallbackTests
         using var temp = new TempRoot("raw-no-preview-nofallback");
         var path = WriteRawWithoutPreview(temp, "nopreview.dng");
 
-        Assert.Throws<InvalidDataException>(() =>
+        var ex = Assert.Throws<InvalidDataException>(() =>
             new RawDecoder(new WpfBitmapImageDecoder()).Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        // Not "corrupt": the file is valid, it just carries no JPEG preview, so it gets its own localized sentence.
+        Assert.True(PhotoReview.Core.Localization.UserFacingError.IsLocalized(ex));
+        Assert.Equal(PhotoReview.Core.Localization.Tr.ImageErrorRawNoPreview, PhotoReview.Core.Localization.UserFacingError.Describe(ex));
     }
 
     [Fact]
