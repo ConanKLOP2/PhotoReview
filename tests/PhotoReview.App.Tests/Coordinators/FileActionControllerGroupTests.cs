@@ -235,6 +235,31 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
+    public async Task UndoGroupMove_FailedThenRetried_FoldsTheMembersBackIntoOneGroupedEntry()
+    {
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var failRaw = true;
+        var controller = NewController(undoMoveOverride: (source, destination) =>
+        {
+            if (failRaw && source.EndsWith(".cr2", StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated undo failure");
+            File.Move(source, destination);
+            return Task.CompletedTask;
+        });
+        await controller.RunActionAsync(0, null, jpeg);
+        var first = await controller.UndoLastAsync(_root);
+        Assert.False(first!.Succeeded);
+        Assert.Null(_catalog.Entries[1].CaptureGroup);
+
+        failRaw = false;
+        var retry = await controller.UndoLastAsync(_root);
+
+        Assert.True(retry!.Succeeded);
+        Assert.Equal([before, jpeg, after], _catalog.Paths); // one entry for the pair, not two standalone ones
+        Assert.NotNull(_catalog.Entries[1].CaptureGroup);
+        Assert.Equal(raw, _catalog.Entries[1].CaptureGroup!.RawPath);
+    }
+
+    [Fact]
     public async Task UndoGroupRecycle_FailingMidWay_WhenTheOnlyCaptureWasRemoved_PresentsTheRestoredEntry()
     {
         var jpeg = Make("only.jpg");

@@ -369,9 +369,11 @@ public sealed class FileActionController
     /// A capture (<paramref name="restoredPaths"/>) returns as one grouped entry at that same position; sidecars never
     /// become entries.
     /// </summary>
-    private void InsertRestoredMove(string source, IReadOnlyList<string>? restoredPaths)
+    private void InsertRestoredMove(string source, IReadOnlyList<string>? restoredPaths, bool keepPosition = false)
     {
-        var position = TakeMovePosition(source);
+        // A partly failed undo keeps the remembered position (and its group): the retry that restores the rest must still
+        // find the group to fold the members back into one entry.
+        var position = keepPosition ? PeekMovePosition(source) : TakeMovePosition(source);
 
         int index;
         if (position is not null && position.PreviousPath is null) index = 0;
@@ -383,6 +385,8 @@ public sealed class FileActionController
         else
             _catalog.Restore(source, index);
     }
+
+    private MovePosition? PeekMovePosition(string source) => _movePositions.GetValueOrDefault(source);
 
     /// <summary>Returns and forgets the remembered position of <paramref name="source"/> (and of every member of its capture).</summary>
     private MovePosition? TakeMovePosition(string source)
@@ -450,7 +454,7 @@ public sealed class FileActionController
                     // undone action removed the last capture) nothing is on screen: present the restored entry, otherwise
                     // keep showing the current photo.
                     var wasEmpty = _catalog.Count == 0;
-                    InsertRestoredMove(result.Source, inFolder);
+                    InsertRestoredMove(result.Source, inFolder, keepPosition: true);
                     _sink.OnCatalogChanged(null);
                     if (wasEmpty && _catalog.Count > 0)
                     {

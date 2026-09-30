@@ -44,7 +44,11 @@
     <!-- Always run the script: it hashes libraw.dll and the source package against native/*.sha256 (about 5 MB, fast), does nothing when
          every pin matches (no network), and re-fetches when the DLL is missing, stale or wrong. A named mutex inside the script
          serializes the AnyCPU and x64 configurations that MSBuild may build concurrently. -->
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;" />
+    <!-- The Exec is unconditional so a stale DLL is caught, but a failed run (offline, source package not present in this
+         checkout) must not break a build whose DLL is still usable: it is a warning here; LibRawAvailability and
+         tools/verify-release.ps1 still fail closed on a missing or wrong DLL. -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(FetchLibRawScriptPath)&quot;"
+          ContinueOnError="WarnAndContinue" Condition="!Exists('$(LibRawDllPath)') or '$(LibRawFetchOnEveryBuild)' != 'false'" />
   </Target>
 
 </Project>

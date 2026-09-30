@@ -725,9 +725,21 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         if (_dialogService is null) return;
         var previousMode = _settingsStore.Current.LoadingMode;
         var previousBackend = _settingsStore.Current.DecoderBackend;
+        var previousRawSupport = _settingsStore.Current.RawSupportEnabled;
         var changed = _dialogService.ShowSettings();
         if (changed)
         {
+            // RAW support decides which files the catalog lists (and whether RAW paths can be decoded at all): reload the
+            // open folder at the current file so no listed entry is left that the decoder now refuses.
+            if (previousRawSupport != _settingsStore.Current.RawSupportEnabled && _currentSession?.Folder is { Length: > 0 } rawFolder)
+            {
+                _preloadController?.Cancel();
+                _previewService?.ClearCache();
+                _preloadController?.ClearPreloadedKeys();
+                _ = OpenFolderAsync(rawFolder, _catalog.Current?.Path);
+                return;
+            }
+
             UpdateFolderTitle();
             InfoOverlay.Refresh();
             _viewerState.ScalingQuality = Settings.ScalingQuality;
