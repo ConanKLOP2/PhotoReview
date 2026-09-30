@@ -1,0 +1,93 @@
+name: RAW corpus tests (manual)
+
+# Manual only (Actions > "RAW corpus tests (manual)" > Run workflow). The regular CI never fetches the RAW sample
+# corpus (23 files, ~590 MB, CC0 from raw.pixls.us), so every test that needs a real camera file returns early there.
+# This workflow fetches the corpus (SHA-256 pinned and licence-checked by tools/fetch-raw-samples.ps1), runs the
+# Imaging tests in STRICT mode (a missing corpus file or libraw.dll FAILS the test instead of skipping it) and
+# includes the Category=Native tests. GitHub only offers "Run workflow" once this file exists on the default branch.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: raw-corpus-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  raw-corpus-tests:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      # Corpus tests fail (not skip) when a sample or libraw.dll is missing.
+      PHOTOREVIEW_RAW_CORPUS_STRICT: "1"
+      PHOTOREVIEW_LIBRAW_STRICT_CORPUS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Cache .NET SDK
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\hostedtoolcache\windows\dotnet
+          key: ${{ runner.os }}-dotnet-sdk-${{ hashFiles('global.json') }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/nuget.config') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # The corpus is keyed on the manifest: a changed sample list re-downloads, otherwise the cache is restored and the
+      # fetch script only verifies the pinned hashes of the files already there.
+      - name: Cache RAW corpus
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tests/Fixtures/raw-corpus
+          key: raw-corpus-${{ hashFiles('tools/raw-samples.txt') }}
+
+      - name: Fetch native binaries
+        shell: powershell
+        run: ./tools/fetch-native.ps1
+
+      - name: Fetch LibRaw native binary
+        shell: powershell
+        run: ./tools/fetch-libraw.ps1
+
+      - name: Fetch RAW sample corpus
+        shell: powershell
+        run: ./tools/fetch-raw-samples.ps1
+
+      # Belt and braces: every manifest row must have its file, otherwise the strict run below would only notice
+      # the tests that happen to ask for the missing sample.
+      - name: Verify the corpus is complete
+        shell: powershell
+        run: |
+          $rows = @(Get-Content -LiteralPath tools/raw-samples.txt | Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') })
+          $files = @(Get-ChildItem -LiteralPath tests/Fixtures/raw-corpus -File -ErrorAction Stop)
+          Write-Host "Manifest rows: $($rows.Count); corpus files: $($files.Count)"
+          if ($files.Count -lt $rows.Count) { Write-Error "Corpus incomplete: $($files.Count) files for $($rows.Count) manifest rows."; exit 1 }
+
+      - name: Restore
+        run: dotnet restore tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj
+
+      - name: Build Release
+        run: dotnet build tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-restore
+
+      # Everything except Manual: includes Category=Native (the LibRaw runtime tests) and the strict corpus tests.
+      - name: Run Imaging tests (strict corpus, incl. Native)
+        shell: pwsh
+        run: dotnet test tests/PhotoReview.Imaging.Tests/PhotoReview.Imaging.Tests.csproj -c Release --no-build --filter "Category!=Manual" --logger trx --results-directory TestResults --blame-hang --blame-hang-timeout 300s --blame-hang-dump-type none
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: raw-corpus-test-results
+          path: TestResults
+          if-no-files-found: ignore

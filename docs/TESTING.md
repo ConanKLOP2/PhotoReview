@@ -21,3 +21,7 @@ Detail behind [`AGENTS.md` > Tests](../AGENTS.md#tests): categories, parallel lo
 ## Timing tests
 
 Never assert a wall-clock budget in a gated test: a full parallel run on a shared runner makes it flake (`GroupEntries` 10k paths: 4-7 ms alone, 27-65 ms inside the full `Core.Tests` run). Guard hot paths with a deterministic proxy instead (`GC.GetAllocatedBytesForCurrentThread()` bound, operation counts) and keep stopwatch numbers in a `Category=Manual` report test (example: `CaptureGroupBuilderTests`).
+
+## RAW corpus tests (manual CI)
+
+The regular CI never fetches the RAW sample corpus (`tools/fetch-raw-samples.ps1`, 23 CC0 files, ~590 MB), so tests that need a real camera file return early there. Run the manual workflow **RAW corpus tests (manual)** (`.github/workflows/raw-corpus.yml`, Actions > Run workflow; the file must exist on the default branch) to fetch the corpus and run `Imaging.Tests` (including `Category=Native`) with `PHOTOREVIEW_RAW_CORPUS_STRICT=1` and `PHOTOREVIEW_LIBRAW_STRICT_CORPUS=1`: a missing sample or `libraw.dll` then fails the test instead of skipping it. Locally, set the same variables after `fetch-raw-samples.ps1` to reproduce.
