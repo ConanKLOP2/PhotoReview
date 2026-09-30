@@ -1,0 +1,257 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using PhotoReview.App.Coordinators;
+using PhotoReview.App.Services;
+using PhotoReview.App.ViewModels;
+using PhotoReview.Core;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
+using PhotoReview.Core.Diagnostics;
+using PhotoReview.Core.FileActions;
+using PhotoReview.Core.IO;
+using PhotoReview.Core.Model;
+using PhotoReview.Core.Session;
+using PhotoReview.Core.Settings;
+using PhotoReview.Imaging;
+using PhotoReview.Imaging.Caching;
+using PhotoReview.Imaging.Decoding;
+using Xunit;
+
+namespace PhotoReview.App.Tests.ViewModels;
+
+/// <summary>
+/// R4 (ADR 0008 amendment): the REAL <see cref="MainViewModel"/> + <see cref="ImagePresenter"/> + <see cref="ZoomDetailLoader"/>
+/// wired the way production wires them (the presentation sink feeds <see cref="MainViewModel.NotifyCurrentImageChanged"/>).
+/// A decoded original whose pixel size differs from the preview size must go through <see cref="ViewerState.SwapSourceSize"/>
+/// (zoom kept, <see cref="ViewerState.SourceSizeSwapping"/> before the size change); a new image must go through
+/// <see cref="ViewerState.SetSourceSize"/> and never raise the swapping event.
+/// </summary>
+[Trait("Category", "HotPath")]
+public sealed class MainViewModelZoomSwapTests : IDisposable
+{
+    private readonly string _tempDir;
+    private readonly ReviewCatalog _catalog = new();
+    private readonly ViewerState _viewer = new();
+    private readonly ThumbnailCache _thumbnailCache;
+    private readonly SettingsStore _settingsStore;
+    private readonly SessionStore _sessionStore;
+    private readonly AppSettings _settings = new() { LoadingMode = LoadingMode.Preview, Actions = ReviewAction.Defaults() };
+
+    public MainViewModelZoomSwapTests()
+    {
+        _tempDir = Path.Combine(Path.GetTempPath(), "PhotoReview_MainVM_ZoomSwap_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_tempDir);
+        var appPaths = new AppPaths(_tempDir);
+        var fileSystem = new PhysicalFileSystem();
+        _sessionStore = new SessionStore(appPaths, fileSystem);
+        _settingsStore = new SettingsStore(appPaths, fileSystem, new NullLog());
+        _settingsStore.Save(_settings);
+        _thumbnailCache = new ThumbnailCache(
+            diskDirectory: Path.Combine(_tempDir, "thumbs"), maxRamBytes: 16 * 1024 * 1024, persistNewThumbnails: false);
+    }
+
+    public void Dispose()
+    {
+        _thumbnailCache.Dispose();
+        try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch { }
+    }
+
+    // Preview 6720x4480 (camera-visible) vs LibRaw 6744x4502 (larger) and 1 px smaller; then the next image.
+    [Theory]
+    [InlineData(6744, 4502, 2.0)]
+    [InlineData(6719, 4479, 1.0)]
+    public async Task DecodedOriginalArriving_WhileZoomed_SwapsTheSourceSizeThroughTheViewModel_AndTheNextImageDoesNot(
+        int decodedWidth, int decodedHeight, double zoom)
+    {
+        var decoder = new SizedDecoder();
+        decoder.Sizes["a.jpg"] = (6720, 4480, decodedWidth, decodedHeight);
+        decoder.Sizes["b.jpg"] = (6000, 4000, 6000, 4000);
+        var vm = CreateViewModel(decoder, "a.jpg", "b.jpg");
+        try
+        {
+            await vm.Presenter.PresentAsync(0);
+            Assert.Equal((6720, 4480), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+
+            var swappingSeenWidths = new List<int>();
+            _viewer.SourceSizeSwapping += (_, _) => swappingSeenWidths.Add(_viewer.SourcePixelWidth);
+            _viewer.SetZoom(zoom); // leaves Fit: the ViewModel asks the presenter for the full-resolution decode
+            var load = vm.Presenter.ZoomDetail.PendingLoad;
+            Assert.NotNull(load);
+            Assert.Empty(swappingSeenWidths);
+
+            decoder.OriginalGate.Release();
+            await load!;
+
+            // (1) raised exactly once, while the layout still had the preview size
+            Assert.Equal([6720], swappingSeenWidths);
+            // (2) the decoded original own size is now the source size; the user zoom factor is untouched
+            Assert.Equal((decodedWidth, decodedHeight), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+            Assert.Equal(zoom, _viewer.Zoom, 9);
+            Assert.False(_viewer.IsFit);
+
+            // (3) the next image is a new image: SetSourceSize path, no swapping event
+            await vm.NextAsync();
+            Assert.Equal((6000, 4000), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+            Assert.Single(swappingSeenWidths);
+        }
+        finally
+        {
+            decoder.OriginalGate.Release();
+            decoder.NextGate.Release();
+        }
+    }
+
+    private MainViewModel CreateViewModel(IImageDecoder decoder, params string[] names)
+    {
+        var paths = new List<string>();
+        foreach (var name in names)
+        {
+            var path = Path.Combine(_tempDir, name);
+            File.WriteAllBytes(path, [0xFF, 0xD8, 0xFF, 0xD9]);
+            paths.Add(path);
+        }
+        _catalog.Reset(paths);
+
+        var metrics = new ReviewMetrics();
+        var clock = new GenerationClock();
+        var compare = new CompareViewModel();
+        var hashService = new FileHashService();
+        var fileSystem = new PhysicalFileSystem();
+        var previewService = new PreviewImageService(
+            metrics,
+            () => false,
+            () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024,
+            disableDiskCacheOverride: true,
+            decoder: decoder,
+            currentBackend: () => DecoderBackend.Wpf);
+        var preload = new NullPreload();
+        var sink = new VmSink();
+
+        MainViewModel? vm = null;
+        var presenter = new ImagePresenter(
+            _catalog, clock, previewService, _thumbnailCache, preload, compare, hashService, metrics,
+            () => _settings, _sessionStore, sink, fileSystem, getSession: () => vm?.Session);
+        var coordinator = new FolderLoadCoordinator(
+            _catalog, clock, new NoExplorerOrder(), fileSystem, _sessionStore, _settingsStore, new NullFolderSink());
+        var appPaths = new AppPaths(_tempDir);
+        var journal = new OperationJournal(appPaths, fileSystem, new SystemClock());
+        var recycleBin = new NullRecycleBin();
+        var fileActions = new FileActionService(journal, fileSystem, new SystemClock(), recycleBin);
+        var undo = new UndoService(journal, fileSystem, recycleBin, fileActions);
+
+        vm = new MainViewModel(
+            _catalog, clock, coordinator, presenter, _viewer, compare, _settingsStore, _sessionStore, fileSystem,
+            fileActions, undo, new NullDialogService(), hashService, previewService, _thumbnailCache,
+            new SessionWriter(_sessionStore, FileLog.Default), preloadController: preload);
+
+        // Production wiring (MainViewModelCompositionRoot): the sink feeds the real MainViewModel.NotifyCurrentImageChanged.
+        sink.OnSetCurrentImage = isFileChange => vm.NotifyCurrentImageChanged(isFileChange);
+        return vm;
+    }
+
+    /// <summary>Preview = downscaled 600 px wide; unbounded box = the full decode (own size, gated per image).</summary>
+    private sealed class SizedDecoder : IImageDecoder
+    {
+        public Dictionary<string, (int OriginalWidth, int OriginalHeight, int DecodedWidth, int DecodedHeight)> Sizes { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        public SemaphoreSlim OriginalGate { get; } = new(0);
+        public SemaphoreSlim NextGate { get; } = new(0);
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            var name = Path.GetFileName(request.Path);
+            var (ow, oh, dw, dh) = Sizes[name];
+            if (request.Box.IsUnbounded)
+            {
+                (name == "a.jpg" ? OriginalGate : NextGate).Wait();
+                return new SizedImage(dw, dh, dw, dh, downscaled: false);
+            }
+            return new SizedImage(600, 600 * oh / ow, ow, oh, downscaled: true);
+        }
+
+        public ImageInfo ReadInfo(string path)
+        {
+            var (ow, oh, _, _) = Sizes[Path.GetFileName(path)];
+            return new ImageInfo(ow, oh);
+        }
+    }
+
+    private sealed class SizedImage(int width, int height, int originalWidth, int originalHeight, bool downscaled) : IDecodedImage
+    {
+        public int PixelWidth => width;
+        public int PixelHeight => height;
+        public bool Downscaled => downscaled;
+        public int Orientation => 1;
+        public long EstimatedBytes => (long)width * height * 4;
+        public object PlatformImage { get; } = new object();
+        public int OriginalWidth => originalWidth;
+        public int OriginalHeight => originalHeight;
+    }
+
+    private sealed class VmSink : IPresentationSink
+    {
+        public Action<bool>? OnSetCurrentImage { get; set; }
+        public void SetCurrentImage(object? image, bool isFileChange = false) => OnSetCurrentImage?.Invoke(isFileChange);
+        public void SetStatusText(string status) { }
+        public void ApplyInitialViewMode() { }
+        public void OnPresented(string path) { }
+        public void TracePresented(long token, string kind, long assignedTimestamp) { }
+    }
+
+    private sealed class NullPreload : IPreloadController
+    {
+        public Task PreloadAroundAsync(int center) => Task.CompletedTask;
+        public bool TryConsumePreloadedKey(ImageCacheKey key) => false;
+        public void Cancel() { }
+        public void RemovePreloadedKeysForPath(string normalizedPath) { }
+        public void ClearPreloadedKeys() { }
+    }
+
+    private sealed class NoExplorerOrder : IExplorerOrderProvider
+    {
+        public Task<ExplorerViewSnapshot> TryGetSnapshotAsync(string folder, TimeSpan timeout, CancellationToken cancellationToken) =>
+            Task.FromResult(new ExplorerViewSnapshot(folder, [], [], ExplorerGroupState.None, ExplorerOrderStatus.NativeViewUnavailable, null, DateTime.UtcNow));
+
+        public Task<ExplorerViewSnapshot> TryGetSnapshotProgressiveAsync(string folder, TimeSpan timeout,
+            IProgress<ExplorerQueryProgress>? progress = null, int progressInterval = 16, CancellationToken cancellationToken = default) =>
+            TryGetSnapshotAsync(folder, timeout, cancellationToken);
+
+        public void Dispose() { }
+    }
+
+    private sealed class NullFolderSink : IFolderLoadSink
+    {
+        public void ResetCaches() { }
+        public void OnCatalogReady(string folder, int count, SessionState session) { }
+        public Task PresentAsync(int index, long presentationGeneration) => Task.CompletedTask;
+        public void OnEmpty(string folder, SessionState session) { }
+        public void OnEmptyWithSubfolders(string folder, SessionState session, int subfolderCount) { }
+        public void OnOrderApplied(int count, int currentIndex, bool currentKept) { }
+        public void OnFailed(string folder, Exception exception) { }
+        public Task OnUnreadableRemovedAsync(IReadOnlyList<string> removedPaths, bool currentRemoved) => Task.CompletedTask;
+    }
+
+    private sealed class NullRecycleBin : IRecycleBin
+    {
+        public void SendToRecycleBin(string path) { }
+        public bool TryRestore(string path, long expectedSize, DateTime expectedLastWriteUtc) => false;
+    }
+
+    private sealed class NullDialogService : IDialogService
+    {
+        public bool ShowConfirmation(string title, string message) => false;
+        public void ShowMessage(string title, string message) { }
+        public void ShowError(string title, string message) { }
+        public string? PickFolder(string? initialFolder = null) => null;
+        public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
+        public void ShowRecovery() { }
+        public void ShowDiagnostics() { }
+        public bool ShowSettings() => false;
+        public void ShowBenchmark(string? folder = null) { }
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
+    }
+}
