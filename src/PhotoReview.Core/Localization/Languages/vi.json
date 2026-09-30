@@ -858,5 +858,6 @@
   "status.lateDeletedPartlyPermanently": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp, trừ {permanentFiles}: không thể vào Thùng rác nên đã bị xóa vĩnh viễn.",
   "status.groupChangedDuringConfirm": "{fileName}: bộ ảnh đã thay đổi trong lúc hộp xác nhận đang mở nên chưa có gì bị thay đổi. Hãy thử lại.",
   "dialog.confirmCompareGroupRecycle.message": "'{fileName}' thuộc một bộ ảnh JPG+RAW: thao tác này cũng sẽ đưa (các) tệp đi kèm vào Thùng rác. Tệp: {files}. Tiếp tục?",
-  "dialog.confirmCompareGroupMove.message": "'{fileName}' thuộc một bộ ảnh JPG+RAW: thao tác này cũng sẽ di chuyển (các) tệp đi kèm. Tệp: {files}. Tiếp tục?"
+  "dialog.confirmCompareGroupMove.message": "'{fileName}' thuộc một bộ ảnh JPG+RAW: thao tác này cũng sẽ di chuyển (các) tệp đi kèm. Tệp: {files}. Tiếp tục?",
+  "status.lateGroupPartiallyProcessed": "{fileName}: thao tác dừng giữa chừng sau khi bạn rời thư mục này; {done}/{total} tệp đã được xử lý. Ctrl+Z khôi phục các tệp đã vào Thùng rác; xem Khôi phục cho phần còn lại."
 }

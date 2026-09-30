@@ -136,9 +136,13 @@ public sealed class FileActionController
         && _fileActionService is not null
         && _fileActionService.LacksRecycleBin(source);
 
+    // The "companion file was missing" warning the last core run wrote (null when none): Move-to/Copy-to appends it to its own status.
+    private string? _lastPartnerMissingWarning;
+
     /// <returns>True when the file operation succeeded and the folder is still the current one.</returns>
     private async Task<bool> ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
     {
+        _lastPartnerMissingWarning = null;
         if (_catalog.Count == 0) return false;
         if (_fileActionService is null) return false;
 
@@ -287,6 +291,13 @@ public sealed class FileActionController
                     }
                 }
                 else if (singleResult!.Succeeded) ReportLateCompletion(singleResult);
+                if (groupResult is { Succeeded: false } && operation == FileOperationType.Recycle
+                    && groupResult.Members.Count(member => member.Completed) is var processed and > 0)
+                {
+                    // A Delete that failed part-way after the folder switch: some members are already in the Recycle Bin
+                    // (registered for Undo above) or were deleted for good; the user is not looking at this folder any more.
+                    _sink.ShowLateActionStatus(Tr.StatusLateGroupPartiallyProcessed(Path.GetFileName(source), processed, groupResult.Members.Count));
+                }
                 return false;
             }
 
@@ -307,6 +318,7 @@ public sealed class FileActionController
                     if (_clock.IsFolderCurrent(folderGen))
                     {
                         var missing = Tr.StatusGroupPartnerMissing(Path.GetFileName(source), string.Join(", ", skipped.Select(Path.GetFileName)));
+                        _lastPartnerMissingWarning = missing;
                         _sink.SetStatusText(isRemove && _catalog.Count == 0 ? StatusFormatter.AllImagesProcessed() + " " + missing : missing);
                     }
                 }
@@ -344,13 +356,16 @@ public sealed class FileActionController
                 {
                     // No member state at all (preflight refused it, or the gate was busy): nothing changed on disk, so the
                     // whole capture goes back as the one grouped entry it was. Otherwise exactly the image members still on
-                    // disk return (re-forming the group when all of them are). RestoreMembers keeps CurrentIndex on the
+                    // disk return (re-forming the group when all of them are) -- and a member whose state could not be read
+                    // (a stat threw) also returns, like the single-file path restores unconditionally: dropping it would hide
+                    // a file that may well still be there until the next reload, and the presenter's RemoveOrDegrade heals a
+                    // truly missing one on the next present. RestoreMembers keeps CurrentIndex on the
                     // photo the presenter is showing, like Restore does for a single file.
                     var imagePaths = group!.ImagePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
                     IEnumerable<string> available = groupResult.Members.Count == 0
                         ? group.ImagePaths
                         : groupResult.Members.Where(member => imagePaths.Contains(member.Member.Source)
-                                && member.StateKnown && member.SourceExists)
+                                && (!member.StateKnown || member.SourceExists))
                             .Select(member => member.Member.Source);
                     _catalog.RestoreMembers(available, sourceIndex, group);
                     _sink.OnCatalogChanged(null);
@@ -490,6 +505,7 @@ public sealed class FileActionController
                 }
             }
 
+            if (!_clock.IsFolderCurrent(folderGen)) return result; // a status about the old folder must not overwrite the new folder's line
             _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.NothingToUndo());
             return result;
         }
@@ -524,6 +540,8 @@ public sealed class FileActionController
                 await _sink.PresentAsync(idx);
             }
 
+            // The present awaited: the folder may have changed meanwhile, and the restored path must not become the new folder's session/status.
+            if (!_clock.IsFolderCurrent(folderGen)) return result;
             _sink.UpdateSessionPath(result.Source);
         }
 
@@ -609,7 +627,9 @@ public sealed class FileActionController
         if (_catalog.Count > 0)
         {
             var fileName = Path.GetFileName(source);
-            _sink.SetStatusText(isMove ? Tr.StatusMovedToFolder(fileName, folder) : Tr.StatusCopiedToFolder(fileName, folder));
+            var done = isMove ? Tr.StatusMovedToFolder(fileName, folder) : Tr.StatusCopiedToFolder(fileName, folder);
+            // Keep the "companion file was missing" warning the core step wrote instead of overwriting it.
+            _sink.SetStatusText(_lastPartnerMissingWarning is { } warning ? done + " " + warning : done);
         }
     }
 

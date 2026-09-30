@@ -45,14 +45,14 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     private FileActionController NewController(AppSettings? settings = null, Func<string, string, Task>? undoMoveOverride = null, string moveDestination = "Sorted",
-        RecordingDialog? dialog = null)
+        RecordingDialog? dialog = null, IFileSystem? fileSystem = null)
     {
         settings ??= new AppSettings();
         settings.Actions =
         [
             new ReviewAction { Name = "MoveToSub", Operation = FileOperationType.Move, Destination = moveDestination },
         ];
-        var fs = new PhysicalFileSystem();
+        var fs = fileSystem ?? new PhysicalFileSystem();
         var journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
         var fileActions = new FileActionService(journal, fs, new SystemClock(), _bin);
         var undo = new UndoService(journal, fs, _bin, fileActions, undoMoveOverride);
@@ -163,6 +163,40 @@ public sealed class FileActionControllerGroupTests : IDisposable
 
         Assert.Empty(_dialog.Confirmations);
         Assert.Equal(2, _bin.Recycled.Count);
+    }
+
+    [Fact]
+    public async Task GroupRecycle_FailingPartWayWithAnUnreadableMemberState_StillReturnsThatMemberToTheCatalog()
+    {
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var fs = new ThrowingStatFileSystem(new PhysicalFileSystem());
+        _bin.FailSendFor = raw;
+        _bin.OnSendFailure = () => fs.ThrowStatFor = raw; // from now on the RAW state cannot be read (StateKnown = false)
+        var controller = NewController(fileSystem: fs);
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Equal([jpeg], _bin.Recycled);
+        Assert.True(File.Exists(raw));
+        Assert.Contains(raw, _catalog.Paths); // not dropped until a reload
+        Assert.Contains(before, _catalog.Paths);
+        Assert.Contains(after, _catalog.Paths);
+    }
+
+    [Fact]
+    public async Task MoveToFolder_PartnerVanishedExternally_KeepsTheCompanionMissingWarningInTheStatus()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        File.Delete(raw);
+        var destination = Path.Combine(_root, "Dest");
+        Directory.CreateDirectory(destination);
+        var controller = NewController(new AppSettings { MoveCopyReuseLastFolder = true, LastMoveToFolder = destination });
+
+        await controller.MoveOrCopyToFolderAsync(FileOperationType.Move, forcePicker: false, () => (null, jpeg));
+
+        Assert.True(File.Exists(Path.Combine(destination, "pair.jpg")));
+        Assert.Contains(Tr.StatusGroupPartnerMissing("pair.jpg", "pair.cr2"), _sink.LastStatus, StringComparison.Ordinal);
+        Assert.Contains(Tr.StatusMovedToFolder("pair.jpg", destination), _sink.LastStatus, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -567,6 +601,8 @@ public sealed class FileActionControllerGroupTests : IDisposable
         public bool FitsAll { get; set; } = true;
         public string? FailRestoreFor { get; set; }
         public string? FailSendFor { get; set; }
+        /// <summary>Runs right before the simulated recycle failure is thrown.</summary>
+        public Action? OnSendFailure { get; set; }
 
         public HashSet<string> NoBinExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -576,7 +612,11 @@ public sealed class FileActionControllerGroupTests : IDisposable
         public void SendToRecycleBin(string path)
         {
             if (!CanRecycle(path)) throw new IOException("no bin");
-            if (string.Equals(path, FailSendFor, StringComparison.OrdinalIgnoreCase)) throw new IOException("simulated recycle failure");
+            if (string.Equals(path, FailSendFor, StringComparison.OrdinalIgnoreCase))
+            {
+                OnSendFailure?.Invoke();
+                throw new IOException("simulated recycle failure");
+            }
             Recycled.Add(path);
             File.Delete(path);
         }
@@ -594,6 +634,17 @@ public sealed class FileActionControllerGroupTests : IDisposable
             File.SetLastWriteTimeUtc(originalPath, expectedLastWriteUtc);
             return true;
         }
+    }
+
+    /// <summary>A file system whose stat throws for one path once armed (the state probe after a failed action cannot read it).</summary>
+    private sealed class ThrowingStatFileSystem(IFileSystem inner) : ViewModels.MainViewModelFileActionTests.DelegatingFileSystem(inner)
+    {
+        public string? ThrowStatFor { get; set; }
+
+        public override FileStat? GetFileStat(string path) =>
+            string.Equals(path, ThrowStatFor, StringComparison.OrdinalIgnoreCase)
+                ? throw new IOException("simulated stat failure")
+                : base.GetFileStat(path);
     }
 
     private sealed class RecordingDialog(bool response) : IDialogService
