@@ -13,12 +13,14 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
 {
     private const int MaxThumbnailBytes = 32 << 20;
     private static readonly LibRawNativeMethods.ProgressCallback CancellationCallback = CheckCancellation;
-    private static readonly SemaphoreSlim s_fullDecodeGate = new(1, 1);
+    /// <summary>Viewer decodes jump ahead of queued preloads; at most this many preload decodes may wait (extra ones are skipped with <see cref="LibRawBusyException"/>).</summary>
+    internal const int MaxQueuedPreloadDecodes = 2;
+    private static readonly FullDecodeGate s_fullDecodeGate = new(MaxQueuedPreloadDecodes);
     private readonly Action<string>? _stageObserver;
     private readonly bool _configureAfterOpen;
 
     /// <summary>Free slots of the single-slot gate that serialises LibRaw decodes (test seam).</summary>
-    internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.CurrentCount;
+    internal static int FullDecodeSlotsAvailable => s_fullDecodeGate.SlotsAvailable;
 
     public LibRawDecoder() { }
 
@@ -118,7 +120,8 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         // holds LibRaw's working image plus its 8-bit RGB output (3 B/px) at once (several hundred MB for a 60-100 MP
         // sensor; a full-size request adds the managed BGRA copy, 4 B/px). Serialise every decode so parallel callers
         // (e.g. LibRaw as the general backend, preload workers) cannot exhaust memory together.
-        s_fullDecodeGate.Wait(cancellationToken);
+        // The gate is priority aware and cancellable (see FullDecodeGate): a viewer decode is served before queued preloads.
+        using var slot = s_fullDecodeGate.Enter(request.Priority, cancellationToken);
         try
         {
             return DecodeCore(request, cancellationToken);
@@ -126,10 +129,6 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         catch (OutOfMemoryException ex)
         {
             throw new InvalidOperationException("Not enough memory to decode this RAW image.", ex);
-        }
-        finally
-        {
-            s_fullDecodeGate.Release();
         }
     }
 
