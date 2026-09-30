@@ -300,6 +300,8 @@ public sealed class PreloadScheduler : IDisposable
         var seenBox = DecodeBox.Unbounded;
         var seenCalibrated = false;
         var seenWholeFolder = false;
+        // The O(n) folder estimate only changes with the snapshot, the box or the calibration, not with every navigation.
+        var estimateCache = new FolderEstimateCache();
         var orderCenter = 0;
         IEnumerator<int>? order = null;
         var examinedSinceYield = 0;
@@ -329,7 +331,7 @@ public sealed class PreloadScheduler : IDisposable
                     var center = Volatile.Read(ref _preloadCenter);
                     var box = CurrentBox(entries, center);
                     var measured = _sizes.MeanBytes(box);
-                    var estimated = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, box, measured);
+                    var estimated = estimateCache.GetOrCompute(entries, box, measured);
                     var wholeFolder = RamBudgetPolicy.ShouldPreloadWholeFolderEstimate(estimated,
                         _options.FullFolderThresholdBytes, _memoryProbe, _options.ReserveBytes, _options.MemoryLoadLimit);
                     if (_log.Enabled)

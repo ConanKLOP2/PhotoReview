@@ -19,10 +19,19 @@ public static class ImageFileTypes
         ".jpg", ".jpeg"
     };
 
-    public static IReadOnlySet<string> RawExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> s_rawExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
     };
+
+    public static IReadOnlySet<string> RawExtensions => s_rawExtensions;
+
+    /// <summary>True when <paramref name="path"/> has a RAW extension. Allocation-free (the extension is tested as a span), for per-entry loops over large catalogs.</summary>
+    public static bool IsRawPath(ReadOnlySpan<char> path) =>
+        s_rawExtensions.GetAlternateLookup<ReadOnlySpan<char>>().Contains(Path.GetExtension(path));
+
+    /// <inheritdoc cref="IsRawPath(ReadOnlySpan{char})"/>
+    public static bool IsRawPath(string? path) => path is not null && IsRawPath(path.AsSpan());
 
     public static bool IsSupported(string path) => IsSupported(path, rawEnabled: false);
 

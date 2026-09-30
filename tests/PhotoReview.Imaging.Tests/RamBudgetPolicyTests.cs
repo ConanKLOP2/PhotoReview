@@ -54,13 +54,13 @@ public sealed class RamBudgetPolicyTests
     }
 
     [Fact]
-    public void RawOriginalEstimateWithoutDimensionsDoesNotUseCompressedFileLength()
+    public void RawOriginalEstimateWithoutDimensionsScalesTheCompressedFileLengthByTheDocumentedFactor()
     {
         var small = new CatalogEntry("small.cr3").WithMetadata(1_000, DateTime.UnixEpoch);
         var large = new CatalogEntry("large.cr3").WithMetadata(100_000_000, DateTime.UnixEpoch);
 
-        Assert.Equal(long.MaxValue, RamBudgetPolicy.EstimateFolderPreviewBytes([small], DecodeBox.Unbounded));
-        Assert.Equal(long.MaxValue, RamBudgetPolicy.EstimateFolderPreviewBytes([large], DecodeBox.Unbounded));
+        Assert.Equal(1_000 * 6L, RamBudgetPolicy.EstimateFolderPreviewBytes([small], DecodeBox.Unbounded));
+        Assert.Equal(100_000_000 * 6L, RamBudgetPolicy.EstimateFolderPreviewBytes([large], DecodeBox.Unbounded));
     }
 
     [Fact]

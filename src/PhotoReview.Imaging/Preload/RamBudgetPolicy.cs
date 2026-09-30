@@ -23,6 +23,15 @@ public static class RamBudgetPolicy
     /// <summary>Per-axis upper bound of an embedded RAW preview relative to the container's sensor size (Canon sRAW/mRAW: 2).</summary>
     public const int RawPreviewSensorSizeFactor = 2;
 
+    /// <summary>
+    /// Decoded RAW preview bytes per compressed RAW byte, used when the catalog knows a RAW file's length but not its dimensions
+    /// (CatalogEntry.Width/Height are not populated in production). A decoded preview is 4 bytes/pixel; camera RAW files hold roughly
+    /// 0.7 (small/compressed) to 2+ (lossless/uncompressed) bytes per sensor pixel and the preview has at most the sensor's pixel count
+    /// (Canon sRAW previews are the exception, see <see cref="RawPreviewSensorSizeFactor"/>), so 4 / 0.7 ~ 6 never under-counts a
+    /// normal RAW. Replaced by the measured mean once previews were really decoded.
+    /// </summary>
+    public const double RawCompressedToPreviewFactor = 6;
+
     /// <summary>Largest share of physical RAM a single in-memory cache budget may claim (IMG-11).</summary>
     public const double MaxPhysicalMemoryShare = 0.5;
 
@@ -257,9 +266,11 @@ public static class RamBudgetPolicy
     }
 
     /// <summary>
-    /// Estimates the decoded preview cost from known per-file dimensions. RAW entries without parsed dimensions
-    /// use the bounded decode-box ceiling, or disable whole-folder preload in unbounded mode rather than deriving
-    /// a decoded size from the compressed RAW file length.
+    /// Estimates the decoded preview cost of a folder. With a measured mean (previews already decoded at this box) every entry costs the
+    /// same, so the catalog is not visited at all (O(1)). Otherwise each entry uses its known dimensions, the decode-box ceiling, or
+    /// its compressed length (x <see cref="JpegExpansionFactor"/> for other formats, x <see cref="RawCompressedToPreviewFactor"/> for RAW);
+    /// a RAW without a known length in an unbounded box disables whole-folder preload (<see cref="long.MaxValue"/>). The per-entry loop
+    /// does not allocate (the extension is tested as a span).
     /// </summary>
     public static long EstimateFolderPreviewBytes(IReadOnlyList<CatalogEntry> entries, DecodeBox targetBox,
         double? measuredMeanPreviewBytes = null)
@@ -267,30 +278,33 @@ public static class RamBudgetPolicy
         ArgumentNullException.ThrowIfNull(entries);
         var bounded = targetBox.Width > 0 && targetBox.Height > 0;
         var boxBound = bounded ? (double)targetBox.Width * targetBox.Height * DefaultAverageBytesPerPixel : 0;
+        if (measuredMeanPreviewBytes is > 0)
+        {
+            // The measured mean of previews really decoded at this box is the calibration (same rule as the scalar
+            // overload): it also covers 16-bit / 8-byte-per-pixel images that the 4-byte geometry would underestimate.
+            var measured = measuredMeanPreviewBytes.Value;
+            var calibrated = measured * MeasuredPreviewMargin;
+            // Capped at the 4-byte box bound, unless the images already measure above it (16-bit pixels).
+            if (bounded && measured <= boxBound) calibrated = Math.Min(calibrated, boxBound);
+            var all = Math.Ceiling(entries.Count * calibrated);
+            return all >= long.MaxValue ? long.MaxValue : (long)all;
+        }
+
         double total = 0;
         foreach (var entry in entries)
         {
             var width = entry.Width.GetValueOrDefault();
             var height = entry.Height.GetValueOrDefault();
-            var isRaw = ImageFileTypes.RawExtensions.Contains(Path.GetExtension(entry.Path));
+            var isRaw = ImageFileTypes.IsRawPath(entry.Path);
             double estimate;
-            if (measuredMeanPreviewBytes is > 0)
-            {
-                // The measured mean of previews really decoded at this box is the calibration (same rule as the scalar
-                // overload): it also covers 16-bit / 8-byte-per-pixel images that the 4-byte geometry would underestimate.
-                var measured = measuredMeanPreviewBytes.Value;
-                estimate = measured * MeasuredPreviewMargin;
-                // Capped at the 4-byte box bound, unless the images already measure above it (16-bit pixels).
-                if (bounded && measured <= boxBound) estimate = Math.Min(estimate, boxBound);
-            }
-            else if (width > 0 && height > 0 && (bounded || isRaw))
+            if (width > 0 && height > 0 && (bounded || isRaw))
             {
                 if (isRaw)
                 {
                     // The container gives the SENSOR size, but the decoded image is the embedded JPEG, which can be larger:
                     // Canon 7D sRAW2 has a 2592x1728 sensor and a 5184x3456 preview (4x the pixels). Assume the preview may be
                     // up to twice the sensor size per axis; a bounded box caps this anyway, so it only matters below the box
-                    // and in Original mode. Measured means (branch above) replace this once previews were really decoded.
+                    // and in Original mode. Measured means (above) replace this once previews were really decoded.
                     width = checked(width * RawPreviewSensorSizeFactor);
                     height = checked(height * RawPreviewSensorSizeFactor);
                 }
@@ -306,7 +320,9 @@ public static class RamBudgetPolicy
             }
             else if (isRaw)
             {
-                return long.MaxValue;
+                // Unbounded box without dimensions (the production case): the RAW's compressed size scaled by a documented factor.
+                if (entry.Length.GetValueOrDefault() <= 0) return long.MaxValue;
+                estimate = entry.Length.GetValueOrDefault() * RawCompressedToPreviewFactor;
             }
             else
             {
@@ -342,5 +358,31 @@ public static class RamBudgetPolicy
     {
         public const long MemoryReserveBytes = 2L * 1024 * 1024 * 1024;
         public const double PreloadMemoryLoadLimit = 0.80;
+    }
+}
+
+/// <summary>
+/// Remembers the last folder estimate for one catalog snapshot: the scheduler rebuilds its order on every navigation, but the
+/// estimate only changes with the snapshot (by reference), the decode box (mode) or the calibration (measured mean).
+/// </summary>
+internal sealed class FolderEstimateCache
+{
+    private IReadOnlyList<CatalogEntry>? _entries;
+    private DecodeBox _box;
+    private double? _measured;
+    private long _estimate;
+
+    /// <summary>How many times the estimate was really computed (test seam).</summary>
+    internal int ComputeCount { get; private set; }
+
+    internal long GetOrCompute(IReadOnlyList<CatalogEntry> entries, DecodeBox box, double? measuredMeanPreviewBytes)
+    {
+        if (ReferenceEquals(_entries, entries) && _box == box && _measured == measuredMeanPreviewBytes) return _estimate;
+        _estimate = RamBudgetPolicy.EstimateFolderPreviewBytes(entries, box, measuredMeanPreviewBytes);
+        _entries = entries;
+        _box = box;
+        _measured = measuredMeanPreviewBytes;
+        ComputeCount++;
+        return _estimate;
     }
 }
