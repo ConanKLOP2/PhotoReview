@@ -160,10 +160,9 @@ public sealed class LibRawDecoderTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            // Baseline after 100 decodes, not 20: earlier tests in the same process (corpus decodes, WIC) leave the native
-            // and managed heaps still settling, which inflated a 20-decode baseline by 50-100 MB. A real per-decode leak
-            // (an unclosed LibRaw handle keeps tens of MB each time) still exceeds the budget within the remaining 100.
-            if (index == 99) afterWarmup = memorySampler.CurrentPrivateBytes;
+            // Baseline after 50 extractions, final reading after 100: the 50 that remain must not grow private bytes. (The
+            // baseline used to be taken on the LAST iteration, so growth was always ~0 and the test could never fail.)
+            if (index == 49) afterWarmup = memorySampler.CurrentPrivateBytes;
         }
 
         var growth = memorySampler.CurrentPrivateBytes - afterWarmup;
@@ -292,7 +291,8 @@ public sealed class LibRawDecoderTests
             _timer = new Timer(_ => Sample(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(50));
         }
 
-        internal long CurrentPrivateBytes => Interlocked.Read(ref _currentPrivateBytes);
+        // Fresh reading on demand: the 50 ms timer alone can lag the GC the test just forced.
+        internal long CurrentPrivateBytes { get { Sample(); return Interlocked.Read(ref _currentPrivateBytes); } }
         internal long PeakPrivateBytes => Interlocked.Read(ref _peakPrivateBytes);
 
         private void Sample()
