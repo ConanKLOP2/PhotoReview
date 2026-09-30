@@ -24,14 +24,28 @@ public sealed class SourceRawHeaderSource : IRawHeaderSource, IDisposable
         ArgumentNullException.ThrowIfNull(sourceReader);
 
         _stream = sourceReader.OpenSource(path, priority, BlockSize);
-        _length = _stream.Length;
+        _length = LengthOrDispose(_stream);
     }
 
     public SourceRawHeaderSource(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
         _stream = stream;
-        _length = stream.Length;
+        _length = LengthOrDispose(stream);
+    }
+
+    /// <summary>The stream length; the stream is disposed first when reading it throws, so a failed constructor leaks no handle.</summary>
+    private static long LengthOrDispose(Stream stream)
+    {
+        try
+        {
+            return stream.Length;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -109,13 +123,22 @@ public sealed class SourceRawHeaderSource : IRawHeaderSource, IDisposable
         }
 
         var block = new byte[bytesToRead];
-        _stream.Position = blockStartOffset;
         int totalRead = 0;
-        while (totalRead < bytesToRead)
+        try
         {
-            int read = _stream.Read(block, totalRead, bytesToRead - totalRead);
-            if (read == 0) break;
-            totalRead += read;
+            _stream.Position = blockStartOffset;
+            while (totalRead < bytesToRead)
+            {
+                int read = _stream.Read(block, totalRead, bytesToRead - totalRead);
+                if (read == 0) break;
+                totalRead += read;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+            // Keeps the "InvalidDataException only" contract of IRawHeaderSource (RawExif and the readers catch that type);
+            // RawDecoder unwraps the inner I/O error so the user still sees a real I/O failure, not "corrupt RAW".
+            throw new InvalidDataException($"Unable to read RAW header block at {blockStartOffset}: {ex.Message}", ex);
         }
 
         if (totalRead != bytesToRead)

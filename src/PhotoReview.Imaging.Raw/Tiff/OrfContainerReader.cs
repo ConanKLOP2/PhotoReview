@@ -44,8 +44,10 @@ public sealed class OrfContainerReader : IRawContainerReader
             throw new InvalidDataException("File too short for ORF container.");
 
         var headerSpan = source.Read(0, 16);
-        bool littleEndian = headerSpan[0] == 0x49 && headerSpan[1] == 0x49;
-        uint ifd0Offset = TiffStructure.ReadU32(headerSpan, 4, littleEndian);
+        // Accepted magics: 42 (plain TIFF), 'RO' 0x4F52 (IIRO/MMOR) and 'SR' 0x5352 (IIRS); anything else is not an ORF.
+        if (!TiffStructure.TryReadHeader(headerSpan, out bool littleEndian, out ushort magic, out uint ifd0Offset) ||
+            magic is not (42 or 0x4F52 or 0x5352))
+            throw new InvalidDataException("Invalid ORF header.");
 
         int orientation = 1;
         int sensorWidth = 0;
@@ -83,12 +85,12 @@ public sealed class OrfContainerReader : IRawContainerReader
 
                     case 0x0100:
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                            ifdWidth = (int)w;
+                            ifdWidth = TiffHeaderNavigator.ClampToInt(w);
                         break;
 
                     case 0x0101:
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                            ifdHeight = (int)h;
+                            ifdHeight = TiffHeaderNavigator.ClampToInt(h);
                         break;
 
                     case 0x0201:
@@ -127,15 +129,18 @@ public sealed class OrfContainerReader : IRawContainerReader
                 sensorHeight = ifdHeight;
             }
 
-            if (jpegOffset is > 0 && jpegLength is > 0 && jpegOffset + jpegLength <= source.Length)
+            if (jpegOffset is > 0 && jpegLength is > 0 && TiffHeaderNavigator.StartsWithSoi(source, jpegOffset.Value, jpegLength.Value))
             {
+                int previewWidth = ifdWidth;
+                int previewHeight = ifdHeight;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jpegOffset.Value, jpegLength.Value, ref previewWidth, ref previewHeight);
                 previews.Add(new EmbeddedPreview(
                     Index: previews.Count,
                     Offset: jpegOffset.Value,
                     Length: jpegLength.Value,
                     Kind: EmbeddedPreviewKind.Jpeg,
-                    Width: ifdWidth,
-                    Height: ifdHeight,
+                    Width: previewWidth,
+                    Height: previewHeight,
                     ColorSpace: PreviewColorSpace.Unknown));
             }
 

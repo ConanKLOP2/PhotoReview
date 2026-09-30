@@ -487,11 +487,12 @@ public sealed class RawDecoderTests
     public void RawDecoder_DoesNotUseOrfFallbackForOtherFormats()
     {
         var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(320, 240);
-        var invalidPreview = new byte[] { 0x13, 0x37, 0x00, 0x00 };
+        // SOI-headed (so the container reader accepts it as a preview) but undecodable for the inner decoder.
+        var invalidPreview = new byte[] { 0xFF, 0xD8, 0x00, 0x00 };
         var dng = SyntheticRawBuilder.BuildTiff(littleEndian: true, jpegBytes: invalidPreview);
         var reader = new TrackingSourceReader(dng);
         var fallback = new TestRawPreviewFallback(jpeg);
-        var inner = new FallbackAwareDecoder(new WpfBitmapImageDecoder());
+        var inner = new FallbackAwareDecoder(new AlwaysNotSupportedDecoder());
         var decoder = new RawDecoder(inner, reader, previewFallback: fallback);
 
         Assert.Throws<NotSupportedException>(() => decoder.Decode(new DecodeRequest("test.dng", DecodeBox.Unbounded)));
@@ -556,6 +557,13 @@ public sealed class RawDecoderTests
             LastFormat = format;
             return thumbnailBytes;
         }
+    }
+
+    private sealed class AlwaysNotSupportedDecoder : IImageDecoder
+    {
+        public ImageInfo ReadInfo(string path) => throw new NotSupportedException();
+
+        public IDecodedImage Decode(DecodeRequest request) => throw new NotSupportedException("No imaging component suitable to complete this operation was found.");
     }
 
     private sealed class FallbackAwareDecoder(IImageDecoder jpegDecoder) : IImageDecoder

@@ -245,7 +245,8 @@ public static class TiffHeaderNavigator
     }
 
     /// <summary>
-    /// Reads the pixel size stored in an Exif IFD (PixelXDimension 0xA002 / PixelYDimension 0xA003).
+    /// Reads the pixel size stored in an Exif IFD (PixelXDimension 0xA002 / PixelYDimension 0xA003). Both outputs are 0 unless
+    /// the method returns true.
     /// </summary>
     public static bool TryReadExifPixelDimensions(
         IRawHeaderSource source,
@@ -256,16 +257,22 @@ public static class TiffHeaderNavigator
     {
         width = 0;
         height = 0;
+        int foundWidth = 0;
+        int foundHeight = 0;
         var entries = ReadIfdEntries(source, exifIfdOffset, littleEndian, out _);
         foreach (var entry in entries)
         {
             if (entry.Tag == 0xA002 && ReadTagUnsigned(source, entry, littleEndian) is { } w and > 0 and <= int.MaxValue)
-                width = (int)w;
+                foundWidth = (int)w;
             else if (entry.Tag == 0xA003 && ReadTagUnsigned(source, entry, littleEndian) is { } h and > 0 and <= int.MaxValue)
-                height = (int)h;
+                foundHeight = (int)h;
         }
 
-        return width > 0 && height > 0;
+        // Out-params are only assigned on success: a width-only Exif IFD must not leave a half-set size behind.
+        if (foundWidth <= 0 || foundHeight <= 0) return false;
+        width = foundWidth;
+        height = foundHeight;
+        return true;
     }
 
     /// <summary>
@@ -289,6 +296,27 @@ public static class TiffHeaderNavigator
         width = (int)crop[0];
         height = (int)crop[1];
         return true;
+    }
+
+    /// <summary>
+    /// False when the IFD carries a DNG DefaultScale (0xC61E: two RATIONALs, horizontal and vertical pixel scale) that is
+    /// not 1:1 (non-square pixels, or an unreadable/zero-denominator value). Absent means square.
+    /// </summary>
+    public static bool HasSquareDefaultScale(IRawHeaderSource source, IReadOnlyList<TiffEntry> entries, bool littleEndian)
+    {
+        if (!TryGetEntry(entries, 0xC61E, out var entry)) return true;
+        if (entry.Type != 5 || entry.Count < 2 || entry.ValueOrOffset < 8 || entry.ValueOrOffset > source.Length - 16) return false;
+
+        var span = source.Read(entry.ValueOrOffset, 16);
+        if (span.Length < 16) return false;
+        uint horizontalNumerator = TiffStructure.ReadU32(span, 0, littleEndian);
+        uint horizontalDenominator = TiffStructure.ReadU32(span, 4, littleEndian);
+        uint verticalNumerator = TiffStructure.ReadU32(span, 8, littleEndian);
+        uint verticalDenominator = TiffStructure.ReadU32(span, 12, littleEndian);
+        if (horizontalDenominator == 0 || verticalDenominator == 0 || horizontalNumerator == 0 || verticalNumerator == 0) return false;
+
+        // Equal ratios (h/hd == v/vd), cross-multiplied in 64 bits.
+        return (ulong)horizontalNumerator * verticalDenominator == (ulong)verticalNumerator * horizontalDenominator;
     }
 
     /// <summary>
@@ -336,14 +364,34 @@ public static class TiffHeaderNavigator
             ReadTagValue(source, entries, 0x0202, littleEndian) is not { } bytes)
             return false;
 
-        if (!IsRangeInFile(start, bytes, source.Length)) return false;
+        if (!IsRangeInFile(start, bytes, source.Length) || !StartsWithSoi(source, start, bytes)) return false;
 
         offset = start;
         length = bytes;
         return true;
     }
 
-    private static int ClampToInt(long? value) => value is > 0 ? (int)Math.Min(value.Value, int.MaxValue) : 0;
+    /// <summary>True when the byte range starts with the JPEG SOI marker (FFD8); a zero-padded or garbage pointer is not a preview.</summary>
+    public static bool StartsWithSoi(IRawHeaderSource source, long offset, long length) =>
+        length >= 4 && IsRangeInFile(offset, length, source.Length) && source.Read(offset, 2) is [0xFF, 0xD8];
+
+    /// <summary>
+    /// A declared IFD ImageWidth/ImageLength is only a hint for an embedded JPEG. When both are declared, the JPEG's own
+    /// frame header is consulted and, if it is readable and disagrees, its size wins (a bogus IFD size must not win the
+    /// "largest preview" choice). Undeclared sizes stay 0 so <see cref="PreviewSelector"/> resolves them lazily.
+    /// </summary>
+    public static void ReconcileJpegSize(IRawHeaderSource source, long offset, long length, ref int width, ref int height)
+    {
+        if (width <= 0 || height <= 0) return;
+        if (PreviewSelector.TryReadJpegFrame(source, offset, length, out int frameWidth, out int frameHeight, out _))
+        {
+            width = frameWidth;
+            height = frameHeight;
+        }
+    }
+
+    /// <summary>Positive values clamped to <see cref="int.MaxValue"/>; null, zero and negative yield 0 (never wraps to a negative int).</summary>
+    public static int ClampToInt(long? value) => value is > 0 ? (int)Math.Min(value.Value, int.MaxValue) : 0;
 
     private static long? ReadArrayItem(ReadOnlySpan<byte> item, ushort type, bool littleEndian)
     {

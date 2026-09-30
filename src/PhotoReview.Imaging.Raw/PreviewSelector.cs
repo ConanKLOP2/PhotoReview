@@ -1,3 +1,4 @@
+using System.IO;
 using PhotoReview.Imaging.Decoding;
 
 namespace PhotoReview.Imaging.Raw;
@@ -15,21 +16,58 @@ public static class PreviewSelector
     private const int MaxJpegSegments = 512;
 
     /// <summary>
+    /// A preview whose pixel size could not be determined (lossless/arithmetic-coded frame, truncated header) would score an area
+    /// of 0 and always lose to any tiny known thumbnail, even when it is by far the largest JPEG in the file. Its size is
+    /// therefore estimated from its byte length at this many pixels per byte (about 0.25 byte per pixel, the compression of a
+    /// typical camera JPEG), which keeps it comparable with known areas: a 4 MB unknown-size JPEG outranks a 160x120 thumbnail
+    /// but not a known 6000x4000 preview. Used only as a ranking score, never reported as dimensions.
+    /// </summary>
+    private const long UnknownAreaPerByte = 4;
+
+    /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
+    private const int MaxFillBytes = 64 * 1024;
+
+    /// <summary>
     /// Selects the best embedded preview matching <paramref name="requestBox"/> and <paramref name="orientation"/>.
     /// </summary>
     public static EmbeddedPreview? SelectPreview(
         IRawHeaderSource source,
         IReadOnlyList<EmbeddedPreview> previews,
         DecodeBox requestBox,
-        int orientation)
+        int orientation) =>
+        SelectPreview(source, previews, requestBox, orientation, out _);
+
+    /// <summary>
+    /// As above; <paramref name="resolvedPreviews"/> is <paramref name="previews"/> with every preview whose JPEG header was
+    /// walked during the selection replaced by its resolved copy (dimensions, colour space, <see cref="EmbeddedPreview.HeaderResolved"/>),
+    /// in the same order. A caller that caches the container info stores this list so the walk is never repeated.
+    /// The dimension walk and the colour-space lookup share ONE pass over the JPEG header.
+    /// </summary>
+    public static EmbeddedPreview? SelectPreview(
+        IRawHeaderSource source,
+        IReadOnlyList<EmbeddedPreview> previews,
+        DecodeBox requestBox,
+        int orientation,
+        out IReadOnlyList<EmbeddedPreview> resolvedPreviews)
     {
-        var chosen = SelectPreviewCore(source, previews, requestBox, orientation);
-        return chosen is { Kind: EmbeddedPreviewKind.Jpeg } ? ResolveColorSpace(source, chosen) : chosen;
+        var state = previews is null ? [] : previews.ToList();
+        var chosen = SelectPreviewCore(source, state, requestBox, orientation);
+        if (chosen is { Kind: EmbeddedPreviewKind.Jpeg })
+            chosen = ResolveColorSpace(source, chosen, state);
+        resolvedPreviews = state;
+        return chosen;
+    }
+
+    private static void Replace(List<EmbeddedPreview> state, EmbeddedPreview original, EmbeddedPreview resolved)
+    {
+        if (ReferenceEquals(original, resolved)) return;
+        int index = state.FindIndex(p => ReferenceEquals(p, original));
+        if (index >= 0) state[index] = resolved;
     }
 
     private static EmbeddedPreview? SelectPreviewCore(
         IRawHeaderSource source,
-        IReadOnlyList<EmbeddedPreview> previews,
+        List<EmbeddedPreview> previews,
         DecodeBox requestBox,
         int orientation)
     {
@@ -46,7 +84,7 @@ public static class PreviewSelector
 
         if (jpegPreviews.Count == 1)
         {
-            return ResolveDimensions(source, jpegPreviews[0]);
+            return ResolveDimensions(source, jpegPreviews[0], previews);
         }
 
         // Resolve dimensions for candidates (largest byte length first)
@@ -54,7 +92,7 @@ public static class PreviewSelector
         var resolved = new List<EmbeddedPreview>(jpegPreviews.Count);
         foreach (var p in jpegPreviews.OrderByDescending(p => p.Length))
         {
-            resolved.Add(ResolveDimensions(source, p));
+            resolved.Add(ResolveDimensions(source, p, previews));
         }
 
         bool isTransposed = ExifOrientation.IsTransposed(orientation);
@@ -62,7 +100,7 @@ public static class PreviewSelector
         // If requestBox is unbounded (or <= 0), pick largest
         if (requestBox.IsUnbounded || (requestBox.Width <= 0 && requestBox.Height <= 0))
         {
-            return resolved.OrderByDescending(p => (long)p.Width * p.Height).ThenByDescending(p => p.Length).First();
+            return resolved.OrderByDescending(Score).ThenByDescending(p => p.Length).First();
         }
 
         int reqW = requestBox.Width;
@@ -83,7 +121,7 @@ public static class PreviewSelector
                     return visH >= reqH;
                 return true;
             })
-            .OrderBy(p => (long)p.Width * p.Height)
+            .OrderBy(Score)
             .ThenBy(p => p.Length)
             .ToList();
 
@@ -91,28 +129,53 @@ public static class PreviewSelector
             return candidates[0];
 
         // Else largest available preview
-        return resolved.OrderByDescending(p => (long)p.Width * p.Height).ThenByDescending(p => p.Length).First();
+        return resolved.OrderByDescending(Score).ThenByDescending(p => p.Length).First();
     }
 
-    private static EmbeddedPreview ResolveDimensions(IRawHeaderSource source, EmbeddedPreview preview)
+    /// <summary>Pixel area when known, else an estimate from the byte length (see <see cref="UnknownAreaPerByte"/>).</summary>
+    private static long Score(EmbeddedPreview preview) =>
+        preview.Width > 0 && preview.Height > 0
+            ? (long)preview.Width * preview.Height
+            : preview.Length <= 0 ? 0 : preview.Length * UnknownAreaPerByte;
+
+    private static EmbeddedPreview ResolveDimensions(IRawHeaderSource source, EmbeddedPreview preview, List<EmbeddedPreview> state)
     {
-        if (preview.Width > 0 && preview.Height > 0)
+        if (preview.HeaderResolved || (preview.Width > 0 && preview.Height > 0))
             return preview;
 
         if (preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        if (TryReadJpegFrame(source, preview.Offset, preview.Length, out int width, out int height, out var colorSpace))
+        bool resolved = false;
+        bool walked = true;
+        int width = 0;
+        int height = 0;
+        var colorSpace = PreviewColorSpace.Unknown;
+        try
         {
-            return preview with
-            {
-                Width = width,
-                Height = height,
-                ColorSpace = colorSpace != PreviewColorSpace.Unknown ? colorSpace : preview.ColorSpace
-            };
+            resolved = TryReadJpegFrame(source, preview.Offset, preview.Length, out width, out height, out colorSpace);
+        }
+        catch (InvalidDataException)
+        {
+            // Exhausted header budget or unreadable range: the dimensions stay unknown instead of failing the decode.
+            walked = false;
         }
 
-        return preview;
+        // Even when the frame size cannot be read (lossless/arithmetic frame), the walk has looked at every APP1 before the
+        // frame header, so a colour space it found is final and the preview is marked resolved. A failed walk (I/O or budget
+        // exhaustion) leaves the preview untouched so a later call may try again.
+        if (!walked)
+            return preview;
+
+        var result = preview with
+        {
+            Width = resolved ? width : preview.Width,
+            Height = resolved ? height : preview.Height,
+            ColorSpace = colorSpace != PreviewColorSpace.Unknown ? colorSpace : preview.ColorSpace,
+            HeaderResolved = true,
+        };
+        Replace(state, preview, result);
+        return result;
     }
 
     /// <summary>
@@ -130,14 +193,30 @@ public static class PreviewSelector
     /// EXIF interoperability marker is still looked up. Same bounded per-segment walk, stopping at the frame header
     /// (the EXIF APP1 precedes it), so no extra full-JPEG read happens.
     /// </summary>
-    private static EmbeddedPreview ResolveColorSpace(IRawHeaderSource source, EmbeddedPreview preview)
+    private static EmbeddedPreview ResolveColorSpace(IRawHeaderSource source, EmbeddedPreview preview, List<EmbeddedPreview> state)
     {
-        if (preview.ColorSpace != PreviewColorSpace.Unknown
+        if (preview.HeaderResolved || preview.ColorSpace != PreviewColorSpace.Unknown
             || preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out var colorSpace);
-        return colorSpace != PreviewColorSpace.Unknown ? preview with { ColorSpace = colorSpace } : preview;
+        var colorSpace = PreviewColorSpace.Unknown;
+        try
+        {
+            WalkJpeg(source, preview.Offset, preview.Length, needFrame: false, out _, out _, out colorSpace);
+        }
+        catch (InvalidDataException)
+        {
+            // Exhausted header budget: the colour space stays unknown instead of failing the decode.
+            return preview;
+        }
+
+        var result = preview with
+        {
+            ColorSpace = colorSpace != PreviewColorSpace.Unknown ? colorSpace : preview.ColorSpace,
+            HeaderResolved = true,
+        };
+        Replace(state, preview, result);
+        return result;
     }
 
     private static bool WalkJpeg(IRawHeaderSource source, long offset, long length, bool needFrame, out int width, out int height, out PreviewColorSpace colorSpace)
@@ -152,13 +231,22 @@ public static class PreviewSelector
         if (end - offset < 4 || source.Read(offset, 2) is not [0xFF, 0xD8]) return false;
 
         long pos = offset + 2;
+        int fillBytes = 0;
         for (int segment = 0; segment < MaxJpegSegments && pos + 4 <= end; segment++)
         {
             var head = source.Read(pos, 4);
             if (head[0] != 0xFF) break;
 
             byte marker = head[1];
-            if (marker == 0xFF) { pos++; continue; } // fill byte
+            if (marker == 0xFF)
+            {
+                // Fill byte: does not consume a segment iteration (only the separate fill cap bounds it).
+                if (++fillBytes > MaxFillBytes) break;
+                pos++;
+                segment--;
+                continue;
+            }
+            fillBytes = 0;
             if (marker == 0x00 || marker is 0xDA or 0xD9) break; // stuffed / SOS / EOI
             if (marker == 0x01 || marker is >= 0xD0 and <= 0xD8) { pos += 2; continue; } // standalone markers
 

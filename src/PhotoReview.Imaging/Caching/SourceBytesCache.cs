@@ -106,6 +106,17 @@ public sealed class SourceBytesCache
     }
 
     /// <summary>
+    /// Returns the cached bytes of this exact range without reading anything; false when the range is not (or no longer)
+    /// cached. Lets a caller tell a cache hit (0 source bytes read) from a real read when accounting source I/O.
+    /// </summary>
+    public bool TryGetRange(string path, long length, long lastWriteUtcTicks, long offset, int count, out byte[] bytes)
+    {
+        bytes = [];
+        if (offset < 0 || count <= 0 || offset > length || count > length - offset) return false;
+        return _cache.TryGet(CreateRangeKey(path, length, lastWriteUtcTicks, offset, count), out bytes!);
+    }
+
+    /// <summary>
     /// Read-ahead entry point: caches the file's bytes unless this cache could never keep them (see <see cref="CanCache"/>),
     /// in which case nothing is read at all. Returns whether the file is (now) cached. Same threading rules as <see cref="GetOrRead(string)"/>.
     /// </summary>

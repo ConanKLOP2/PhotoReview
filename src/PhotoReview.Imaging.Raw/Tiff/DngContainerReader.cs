@@ -47,10 +47,14 @@ public sealed class DngContainerReader : IRawContainerReader
 
         // Step 1: Scan IFD chain and collect SubIFDs
         long currentIfdOffset = ifd0Offset;
-        while (currentIfdOffset > 0 && allIfdOffsets.Count < RawContainerLimits.MaxIfdCount)
+        // The IFD chain and the SubIFDs are capped separately: many SubIFDs must not stop the IFD1+ chain early.
+        int chainCount = 0;
+        int subIfdCount = 0;
+        while (currentIfdOffset > 0 && chainCount < RawContainerLimits.MaxIfdCount)
         {
             ct.ThrowIfCancellationRequested();
             if (!visited.Add(currentIfdOffset)) break;
+            chainCount++;
 
             var entries = TiffHeaderNavigator.ReadIfdEntries(source, currentIfdOffset, littleEndian, out uint nextIfdOffset);
             foreach (var entry in entries)
@@ -60,8 +64,11 @@ public sealed class DngContainerReader : IRawContainerReader
                     var subs = TiffHeaderNavigator.ReadTagUnsignedArray(source, entry, littleEndian);
                     foreach (var s in subs)
                     {
-                        if (s > 0 && !allIfdOffsets.Contains(s))
+                        if (s > 0 && subIfdCount < RawContainerLimits.MaxIfdCount && !allIfdOffsets.Contains(s))
+                        {
                             allIfdOffsets.Add(s);
+                            subIfdCount++;
+                        }
                     }
                 }
             }
@@ -136,9 +143,12 @@ public sealed class DngContainerReader : IRawContainerReader
             }
 
             bool isPreview = false;
-            if (jpegOffset is { } jo && jpegLength is { } jl && TiffHeaderNavigator.IsRangeInFile(jo, jl, source.Length))
+            if (jpegOffset is { } jo && jpegLength is { } jl && TiffHeaderNavigator.StartsWithSoi(source, jo, jl))
             {
-                previews.Add(new EmbeddedPreview(previews.Count, jo, jl, EmbeddedPreviewKind.Jpeg, width, height, PreviewColorSpace.Unknown));
+                int previewWidth = width;
+                int previewHeight = height;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jo, jl, ref previewWidth, ref previewHeight);
+                previews.Add(new EmbeddedPreview(previews.Count, jo, jl, EmbeddedPreviewKind.Jpeg, previewWidth, previewHeight, PreviewColorSpace.Unknown));
                 isPreview = true;
             }
             else if (compression is 6 or 7 &&
@@ -165,10 +175,14 @@ public sealed class DngContainerReader : IRawContainerReader
             {
                 int candidateWidth = width;
                 int candidateHeight = height;
-                if (TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out int cropWidth, out int cropHeight))
+                // DefaultCropSize is honoured only when it fits inside the raw IFD (masked margins can only shrink the
+                // image, exactly as for ARW/NEF) and the pixels are square: DefaultScale != 1:1 means the displayed size
+                // is stretched by an amount the decoder may or may not apply, so the plain raw IFD size is the safer answer.
+                if (TiffHeaderNavigator.TryReadDefaultCropSize(source, entries, littleEndian, out int cropWidth, out int cropHeight) &&
+                    TiffHeaderNavigator.HasSquareDefaultScale(source, entries, littleEndian))
                 {
-                    candidateWidth = cropWidth;
-                    candidateHeight = cropHeight;
+                    (candidateWidth, candidateHeight) = TiffHeaderNavigator.ChooseActiveSensorSize(
+                        width, height, cropWidth, cropHeight, exifWidth: 0, exifHeight: 0);
                 }
 
                 int area = (int)Math.Min((long)candidateWidth * candidateHeight, int.MaxValue);

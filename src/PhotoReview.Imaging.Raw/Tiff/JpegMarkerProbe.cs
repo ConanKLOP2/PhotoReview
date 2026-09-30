@@ -8,6 +8,9 @@ internal static class JpegMarkerProbe
 {
     private const int MaxSegments = 512;
 
+    /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
+    private const int MaxFillBytes = 64 * 1024;
+
     /// <summary>
     /// True when the range starts with SOI and its first frame header is baseline, extended sequential or
     /// progressive (SOF0/1/2). Lossless (SOF3), arithmetic/hierarchical frames and truncated data return false.
@@ -22,13 +25,22 @@ internal static class JpegMarkerProbe
         if (source.Read(offset, 2) is not [0xFF, 0xD8]) return false;
 
         long pos = offset + 2;
+        int fillBytes = 0;
         for (int segment = 0; segment < MaxSegments && pos + 4 <= end; segment++)
         {
             var head = source.Read(pos, 4);
             if (head[0] != 0xFF) return false;
 
             byte marker = head[1];
-            if (marker == 0xFF) { pos++; continue; } // fill byte
+            if (marker == 0xFF)
+            {
+                // Fill byte: does not consume a segment iteration (only the separate fill cap bounds it).
+                if (++fillBytes > MaxFillBytes) return false;
+                pos++;
+                segment--;
+                continue;
+            }
+            fillBytes = 0;
             if (marker == 0x00 || marker is 0xDA or 0xD9) return false; // stuffed / SOS / EOI before any frame header
             if (marker == 0x01 || marker is >= 0xD0 and <= 0xD8) { pos += 2; continue; } // standalone markers
 
@@ -41,6 +53,7 @@ internal static class JpegMarkerProbe
                 if (marker > 0xC2 || segmentLength < 8 || pos + 9 > end) return false;
 
                 var frame = source.Read(pos + 4, 5); // precision, height (2), width (2)
+                if (frame[0] != 8) return false; // 12-bit (SOF1) and other precisions cannot be decoded as a preview
                 height = (frame[1] << 8) | frame[2];
                 width = (frame[3] << 8) | frame[4];
                 return width > 0 && height > 0;

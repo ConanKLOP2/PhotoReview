@@ -13,6 +13,18 @@ namespace PhotoReview.Imaging.Tests.Raw;
 [Trait("Category", "HotPath")]
 public sealed class PreviewSelectorJpegFrameTests
 {
+    private sealed class CountingSource(IRawHeaderSource inner) : IRawHeaderSource
+    {
+        public int ReadCount { get; private set; }
+        public long Length => inner.Length;
+
+        public ReadOnlySpan<byte> Read(long offset, int count)
+        {
+            ReadCount++;
+            return inner.Read(offset, count);
+        }
+    }
+
     private static byte[] AppSegment(byte marker, int payloadLength, byte fill = 0x11)
     {
         var segment = new byte[payloadLength + 4];
@@ -56,13 +68,14 @@ public sealed class PreviewSelectorJpegFrameTests
     [Fact]
     public void TryReadJpegFrame_ReadsOnlySegmentHeadersAndTheFrameNotTheWholeRange()
     {
-        var jpeg = FujiShapedJpeg(6000, 4000);
+        // 300 KB of trailing scan data after the headers: the walk must never touch it.
+        var jpeg = FujiShapedJpeg(6000, 4000).Concat(new byte[300_000]).ToArray();
         var source = new InMemoryRawHeaderSource(jpeg);
 
         Assert.True(PreviewSelector.TryReadJpegFrame(source, 0, jpeg.Length, out _, out _, out _));
 
-        // Only the APP1 payload (colour-space scan) plus a few header reads: the 20 KB APP2 is skipped, not read.
-        Assert.True(source.TotalBytesRead < 70_000, $"Read {source.TotalBytesRead} bytes.");
+        // The SOF sits just past 64 KiB, so at most the first two 64 KB blocks are charged (the budget counts blocks).
+        Assert.True(source.TotalBytesRead <= 2L * SourceRawHeaderSource.BlockSize, $"Read {source.TotalBytesRead} bytes.");
     }
 
     [Fact]
@@ -128,11 +141,12 @@ public sealed class PreviewSelectorJpegFrameTests
     {
         var padding = Enumerable.Range(0, 600).Select(_ => AppSegment(0xE2, 4)).ToArray();
         var jpeg = JpegWithLeadingSegments(640, 480, padding);
-        var source = new InMemoryRawHeaderSource(jpeg);
+        var source = new CountingSource(new InMemoryRawHeaderSource(jpeg));
 
         Assert.False(PreviewSelector.TryReadJpegFrame(source, 0, jpeg.Length, out _, out _, out _));
 
-        Assert.True(source.TotalBytesRead < 512 * 5, $"Read {source.TotalBytesRead} bytes.");
+        // One 4-byte header read per visited segment: the walk stops at the segment cap instead of following all 600.
+        Assert.True(source.ReadCount <= 520, $"{source.ReadCount} reads.");
     }
 
     [Theory]

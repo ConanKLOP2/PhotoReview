@@ -65,13 +65,41 @@ public sealed class RawHeaderHostileInputTests
     }
 
     [Fact]
-    public void InMemoryRawHeaderSource_Read_CumulativeReadsBeyondBudget_ThrowInvalidData()
+    public void InMemoryRawHeaderSource_Read_NewBlocksBeyondBudget_ThrowInvalidData()
+    {
+        var source = new InMemoryRawHeaderSource(new byte[RawContainerLimits.MaxHeaderBytes + SourceRawHeaderSource.BlockSize]);
+
+        source.Read(0, RawContainerLimits.MaxHeaderBytes);
+
+        Assert.Throws<InvalidDataException>(() => source.Read(RawContainerLimits.MaxHeaderBytes, 1));
+    }
+
+    [Fact]
+    public void InMemoryRawHeaderSource_Read_AlreadyTouchedBlocks_AreFreeLikeTheProductionSource()
     {
         var source = new InMemoryRawHeaderSource(new byte[RawContainerLimits.MaxHeaderBytes]);
 
         source.Read(0, RawContainerLimits.MaxHeaderBytes);
+        source.Read(0, 1);
+        source.Read(RawContainerLimits.MaxHeaderBytes - 10, 10);
 
-        Assert.Throws<InvalidDataException>(() => source.Read(0, 1));
+        Assert.Equal(RawContainerLimits.MaxHeaderBytes, source.TotalBytesRead);
+    }
+
+    [Fact]
+    public void InMemoryRawHeaderSource_TotalBytesRead_MatchesSourceRawHeaderSourceForTheSameReads()
+    {
+        var bytes = new byte[300_000];
+        var memory = new InMemoryRawHeaderSource(bytes);
+        using var stream = new SourceRawHeaderSource(new MemoryStream(bytes));
+
+        foreach (var (offset, count) in new[] { (0L, 8), (100L, 4), (70_000L, 10), (65_530L, 20), (299_990L, 10) })
+        {
+            memory.Read(offset, count);
+            stream.Read(offset, count);
+        }
+
+        Assert.Equal(stream.TotalBytesRead, memory.TotalBytesRead);
     }
 
     // ---------------------------------------------------------------- TiffStructure
@@ -177,7 +205,8 @@ public sealed class RawHeaderHostileInputTests
 
         var selected = PreviewSelector.SelectPreview(source, [preview], DecodeBox.Unbounded, orientation: 1);
 
-        Assert.Equal(preview, selected);
+        // The walk found no frame header, so the size stays unknown; the preview comes back marked as looked-up.
+        Assert.Equal(preview with { HeaderResolved = true }, selected);
     }
 
     // ---------------------------------------------------------------- helpers

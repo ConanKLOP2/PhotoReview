@@ -94,7 +94,7 @@ public sealed class RawContractsAndHeaderSourceTests
     {
         Assert.Equal(64, RawContainerLimits.MaxIfdCount);
         Assert.Equal(4096, RawContainerLimits.MaxEntriesPerIfd);
-        Assert.Equal(16, RawContainerLimits.MaxBoxDepth);
+        Assert.Equal(128 << 20, RawContainerLimits.MaxPreviewBytes);
         Assert.Equal(8 << 20, RawContainerLimits.MaxHeaderBytes);
     }
 

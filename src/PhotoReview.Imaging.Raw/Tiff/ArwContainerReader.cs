@@ -80,13 +80,22 @@ public sealed class ArwContainerReader : IRawContainerReader
                         makerNoteOffset ??= exifTag.ValueOrOffset;
                 }
 
-                if (exifPixelWidth == 0)
-                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out exifPixelWidth, out exifPixelHeight);
+                if (exifPixelWidth == 0 &&
+                    TiffHeaderNavigator.TryReadExifPixelDimensions(source, exifOffset, littleEndian, out int pixelWidth, out int pixelHeight))
+                {
+                    exifPixelWidth = pixelWidth;
+                    exifPixelHeight = pixelHeight;
+                }
             }
 
             bool isPreview = TiffHeaderNavigator.TryReadJpegInterchange(source, entries, littleEndian, out long jpegOffset, out long jpegLength);
             if (isPreview)
-                AddPreview(previews, jpegOffset, jpegLength, width, height);
+            {
+                int previewWidth = width;
+                int previewHeight = height;
+                TiffHeaderNavigator.ReconcileJpegSize(source, jpegOffset, jpegLength, ref previewWidth, ref previewHeight);
+                AddPreview(previews, jpegOffset, jpegLength, previewWidth, previewHeight);
+            }
 
             // The sensor size is the largest IFD that is not a JPEG preview (Sony raw SubIFD).
             long area = (long)width * height;

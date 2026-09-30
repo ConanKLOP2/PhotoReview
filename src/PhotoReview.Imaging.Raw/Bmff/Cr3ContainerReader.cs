@@ -247,17 +247,20 @@ public sealed class Cr3ContainerReader : IRawContainerReader
                         && ifd0 >= 8 && ifd0 <= child.PayloadSize - 2) // IFD0 must lie inside the CMT1 payload
                     {
                         var entries = TiffHeaderNavigator.ReadIfdEntries(source, child.PayloadOffset + ifd0, little, out _);
-                        foreach (var e in entries)
+                        // The CMT1 TIFF is a standalone block: its entries must lie inside the payload, and its out-of-line
+                        // offsets are relative to the payload start, not to the file.
+                        int maxEntries = (int)Math.Max(0, (child.PayloadSize - ifd0 - 2) / 12);
+                        foreach (var e in entries.Take(maxEntries))
                         {
-                            if (e.Tag == 0x0112 && TiffHeaderNavigator.ReadTagUnsigned(source, e, little) is { } orient)
+                            if (e.Tag == 0x0112 && ReadCmt1Value(source, child, e, little) is { } orient)
                             {
                                 if (orient is >= 1 and <= 8) orientation = (int)orient;
                             }
-                            else if (e.Tag == 0x0100 && TiffHeaderNavigator.ReadTagUnsigned(source, e, little) is { } w)
+                            else if (e.Tag == 0x0100 && ReadCmt1Value(source, child, e, little) is { } w)
                             {
                                 if (w is > 0 and <= int.MaxValue) sensorWidth = (int)w;
                             }
-                            else if (e.Tag == 0x0101 && TiffHeaderNavigator.ReadTagUnsigned(source, e, little) is { } h)
+                            else if (e.Tag == 0x0101 && ReadCmt1Value(source, child, e, little) is { } h)
                             {
                                 if (h is > 0 and <= int.MaxValue) sensorHeight = (int)h;
                             }
@@ -267,7 +270,8 @@ public sealed class Cr3ContainerReader : IRawContainerReader
             }
             else if (child.Type == "CMT2")
             {
-                exifBlocks.Add(new ExifBlock(child.PayloadOffset, child.PayloadSize, IsTiffHeader: true));
+                // CMT2 IFD0 holds the exposure fields directly (Exif IFD without a 0x8769 pointer).
+                exifBlocks.Add(new ExifBlock(child.PayloadOffset, child.PayloadSize, IsTiffHeader: true, IfdIsExif: true));
             }
             else if (child.Type == "THMB" &&
                 TryReadHeaderedJpeg(source, child, sizeFieldOffset: 8, widthOffset: 4, heightOffset: 6) is { } thumb)
@@ -275,6 +279,23 @@ public sealed class Cr3ContainerReader : IRawContainerReader
                 previews.Thumb.Add(thumb);
             }
         }
+    }
+
+    /// <summary>
+    /// First unsigned value of a CMT1 IFD entry. Inline values are used as they are; an out-of-line value is located
+    /// relative to the start of the CMT1 payload and ignored (null) unless it lies fully inside that payload.
+    /// </summary>
+    private static long? ReadCmt1Value(IRawHeaderSource source, in BmffBoxNavigator.BmffBox cmt1, in TiffHeaderNavigator.TiffEntry entry, bool littleEndian)
+    {
+        int typeSize = TiffStructure.TypeSize(entry.Type);
+        if (typeSize == 0 || entry.Count == 0) return null;
+        if ((long)typeSize * entry.Count <= 4)
+            return TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian);
+
+        if (entry.ValueOrOffset > cmt1.PayloadSize - typeSize) return null;
+        long absolute = cmt1.PayloadOffset + entry.ValueOrOffset;
+        if (absolute > uint.MaxValue) return null;
+        return TiffHeaderNavigator.ReadTagUnsigned(source, entry with { ValueOrOffset = (uint)absolute }, littleEndian);
     }
 
     private static void ParseTrackForJpegPreview(

@@ -6,8 +6,8 @@ namespace PhotoReview.Imaging.Raw.Bmff;
 
 /// <summary>
 /// Parser and walker for ISO-BMFF (ISO base media file format) boxes.
-/// Hostile-input safe: checked arithmetic, box recursion depth cap (<see cref="RawContainerLimits.MaxBoxDepth"/>),
-/// and bounds checking against container length.
+/// Hostile-input safe: checked arithmetic, a cap on the children returned per box (<see cref="MaxChildBoxes"/>; the
+/// CR3 reader walks a fixed, shallow moov/uuid/trak path rather than recursing) and bounds checking against container length.
 /// </summary>
 public static class BmffBoxNavigator
 {
@@ -26,8 +26,10 @@ public static class BmffBoxNavigator
     /// Reads the next box header at <paramref name="offset"/>.
     /// Returns true if a valid box header was read; false on EOF or invalid structure
     /// (including sizes that would extend past the source, which are compared without overflow).
+    /// A size of 0 means "to the end of the enclosing container": <paramref name="containerEnd"/> (default: the end of the
+    /// source, i.e. a top-level box); <see cref="ReadChildBoxes"/> passes the parent's payload end.
     /// </summary>
-    public static bool TryReadBox(IRawHeaderSource source, long offset, out BmffBox box)
+    public static bool TryReadBox(IRawHeaderSource source, long offset, out BmffBox box, long containerEnd = -1)
     {
         box = default;
         long length = source.Length;
@@ -53,9 +55,10 @@ public static class BmffBoxNavigator
             totalSize = (long)largeSize;
             headerSize = 16;
         }
-        else if (size32 == 0) // Extends to EOF
+        else if (size32 == 0) // Extends to the end of the enclosing container (EOF for a top-level box)
         {
-            totalSize = length - offset;
+            long end = containerEnd >= 0 ? Math.Min(containerEnd, length) : length;
+            totalSize = end - offset;
         }
 
         // totalSize > length - offset is the overflow-free form of offset + totalSize > length.
@@ -101,7 +104,7 @@ public static class BmffBoxNavigator
 
         while (limit - current >= 8 && list.Count < MaxChildBoxes)
         {
-            if (!TryReadBox(source, current, out var child))
+            if (!TryReadBox(source, current, out var child, limit))
                 break;
 
             if (child.TotalSize <= 0 || child.TotalSize > limit - current)

@@ -22,13 +22,16 @@ namespace PhotoReview.Imaging.Raw;
 public sealed class RawDecoder : IImageDecoder
 {
     private const int MaxFallbackThumbnailBytes = 32 << 20;
+
+    /// <summary>A JPEG whose long side is at most this many pixels is a thumbnail, never a viewable photo.</summary>
+    private const int MaxThumbnailLongSide = 256;
     private readonly IImageDecoder _innerDecoder;
     private readonly ISourceReader _sourceReader;
     private readonly RawContainerReaderRegistry _registry;
     private readonly SourceBytesCache? _sourceBytesCache;
     private readonly IRawPreviewFallback? _previewFallback;
     private readonly IImageDecoder? _noPreviewDecoder; // full-decode last resort for a RAW with no usable JPEG (e.g. LibRaw)
-    private readonly BoundedLruCache<RawInfoKey, RawContainerInfo> _containerInfoCache = new(256, _ => 1);
+    private readonly BoundedLruCache<RawInfoKey, CachedRaw> _containerInfoCache = new(256, _ => 1);
 
     public RawDecoder(
         IImageDecoder innerDecoder,
@@ -50,15 +53,16 @@ public sealed class RawDecoder : IImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var info = GetContainerInfo(path, SourceReadPriority.Viewer, out var headerSource);
+        var cached = GetContainerInfo(path, SourceReadPriority.Viewer, out var headerSource, out var key);
         using (headerSource)
         {
-
+            var info = cached.Info;
             int sensorW = info.SensorWidth;
             int sensorH = info.SensorHeight;
             if (sensorW <= 0 || sensorH <= 0)
             {
-                var bestPreview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation);
+                var bestPreview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation, out var resolved);
+                RememberResolvedPreviews(key, cached, resolved);
                 if (bestPreview != null && bestPreview.Width > 0 && bestPreview.Height > 0)
                 {
                     sensorW = bestPreview.Width;
@@ -74,15 +78,36 @@ public sealed class RawDecoder : IImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
-        var containerInfo = GetContainerInfo(request.Path, request.Priority, out var headerSource);
+        var cached = GetContainerInfo(request.Path, request.Priority, out var headerSource, out var key);
         using (headerSource)
         {
-            var exif = RawExif.TryReadExif(headerSource, containerInfo);
+            var containerInfo = cached.Info;
 
-            var preview = PreviewSelector.SelectPreview(headerSource, containerInfo.Previews, request.Box, containerInfo.Orientation);
+            // The EXIF summary is part of what the cache remembers for this file identity (same key as the container info):
+            // a repeated decode neither re-reads nor re-parses up to 4 MiB of EXIF block. A read that failed part-way
+            // (incomplete) is never remembered as "no EXIF".
+            ExifSummary? exif;
+            if (cached.ExifRead)
+            {
+                exif = cached.Exif;
+            }
+            else
+            {
+                exif = RawExif.TryReadExif(headerSource, containerInfo, out bool exifComplete);
+                if (exifComplete)
+                {
+                    cached = cached with { Exif = exif, ExifRead = true };
+                    _containerInfoCache.Set(key, cached);
+                }
+            }
+
+            var preview = PreviewSelector.SelectPreview(headerSource, containerInfo.Previews, request.Box, containerInfo.Orientation, out var resolvedPreviews);
+            cached = RememberResolvedPreviews(key, cached, resolvedPreviews);
+            containerInfo = cached.Info;
             IDecodedImage decoded;
             long previewBytesRead = 0;
             long fallbackThumbnailBytesRead = 0;
+            long fullDecodeBytesRead = 0;
             var fromJpegPreview = true;
             if (preview == null || preview.Length <= 0)
             {
@@ -95,11 +120,17 @@ public sealed class RawDecoder : IImageDecoder
                         () => Tr.ImageErrorRawNoPreview);
 
                 decoded = DecodeWithoutPreview(request, containerInfo, out fallbackThumbnailBytesRead, out fromJpegPreview);
+                if (!fromJpegPreview)
+                {
+                    // A full decode reads the whole file, header included: count it once, not on top of the header bytes.
+                    fullDecodeBytesRead = fallbackThumbnailBytesRead;
+                    fallbackThumbnailBytesRead = 0;
+                }
             }
             else
             {
-                previewBytesRead = preview.Length;
-                decoded = DecodePreview(request, containerInfo, preview, out fallbackThumbnailBytesRead);
+                decoded = DecodePreviewWithFallbacks(request, containerInfo, key, headerSource, preview,
+                    out previewBytesRead, out fallbackThumbnailBytesRead, out fullDecodeBytesRead, out fromJpegPreview);
             }
 
             int sensorW = containerInfo.SensorWidth;
@@ -116,7 +147,10 @@ public sealed class RawDecoder : IImageDecoder
                 (sensorW, sensorH) = (sensorH, sensorW);
             }
 
-            bool downscaled = decoded.Downscaled || (decoded.PixelWidth < sensorW || decoded.PixelHeight < sensorH);
+            // A thumbnail-sized JPEG is never the photo: even when the container declares no sensor size (so the size
+            // comparison cannot tell), mark it downscaled so the viewer zoom recovers the real pixels.
+            bool tinyPreview = fromJpegPreview && Math.Max(decoded.OriginalWidth, decoded.OriginalHeight) <= MaxThumbnailLongSide;
+            bool downscaled = decoded.Downscaled || tinyPreview || (decoded.PixelWidth < sensorW || decoded.PixelHeight < sensorH);
 
             return new RawDecodedImage(
                 decoded,
@@ -128,26 +162,160 @@ public sealed class RawDecoder : IImageDecoder
                 actualBackend: decoded.ActualBackend,
                 // LibRaw's native thumbnail path does not expose exact stream read counts. Include the returned JPEG
                 // payload as an estimate; any additional LibRaw metadata I/O is not represented here.
-                sourceBytesRead: checked(headerSource.TotalBytesRead + previewBytesRead + fallbackThumbnailBytesRead),
+                sourceBytesRead: fromJpegPreview || fullDecodeBytesRead <= 0
+                    ? checked(headerSource.TotalBytesRead + previewBytesRead + fallbackThumbnailBytesRead)
+                    : checked(fullDecodeBytesRead + previewBytesRead),
                 // The inner decode's original size is the JPEG's own (orientation-applied) size, whatever box it was decoded into.
                 embeddedPreviewWidth: fromJpegPreview ? decoded.OriginalWidth : 0,
                 embeddedPreviewHeight: fromJpegPreview ? decoded.OriginalHeight : 0);
         }
     }
 
-    private IDecodedImage DecodePreview(DecodeRequest request, RawContainerInfo containerInfo, EmbeddedPreview preview, out long fallbackThumbnailBytesRead)
+    /// <summary>Most previews one decode will try (the chosen one plus next-best candidates) before the last-resort full decode.</summary>
+    private const int MaxPreviewAttempts = 4;
+
+    /// <summary>
+    /// Decodes the chosen preview. When that fails with a recoverable error (corrupt/truncated/unsupported JPEG) and a last
+    /// resort exists (the no-preview full decoder, or the ORF thumbnail fallback), the next-best preview is tried first, then
+    /// the ORF thumbnail fallback (an unsupported ORF preview only), then the full decode. Cancellation and out-of-memory
+    /// are never swallowed; with no last resort the original failure propagates unchanged.
+    /// </summary>
+    private IDecodedImage DecodePreviewWithFallbacks(
+        DecodeRequest request,
+        RawContainerInfo containerInfo,
+        RawInfoKey key,
+        IRawHeaderSource headerSource,
+        EmbeddedPreview chosen,
+        out long previewBytesRead,
+        out long fallbackThumbnailBytesRead,
+        out long fullDecodeBytesRead,
+        out bool fromJpegPreview)
     {
+        previewBytesRead = 0;
         fallbackThumbnailBytesRead = 0;
+        fullDecodeBytesRead = 0;
+        fromJpegPreview = true;
+
+        bool orfThumbnailPossible = containerInfo.Format == RawFormat.Orf && _previewFallback is not null;
+        if (_noPreviewDecoder is null && !orfThumbnailPossible)
+            return DecodePreview(request, containerInfo, key, chosen, out previewBytesRead);
+
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? firstFailure = null;
+        Exception? lastFailure = null;
+        var tried = new List<long>();
+        long failedBytes = 0;
+        EmbeddedPreview? current = chosen;
+        while (current is not null && tried.Count < MaxPreviewAttempts)
+        {
+            tried.Add(current.Offset);
+            try
+            {
+                var decoded = DecodePreview(request, containerInfo, key, current, out long read);
+                previewBytesRead = checked(read + failedBytes);
+                return decoded;
+            }
+            catch (Exception ex) when (IsRecoverablePreviewFailure(ex))
+            {
+                firstFailure ??= System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                lastFailure = ex;
+                failedBytes = checked(failedBytes + Math.Min(current.Length, RawContainerLimits.MaxPreviewBytes));
+                current = SelectNextPreview(headerSource, containerInfo, request, tried);
+            }
+        }
+
+        if (orfThumbnailPossible && lastFailure is NotSupportedException)
+        {
+            var thumbnailRequest = new DecodeRequest(
+                path: request.Path,
+                box: request.Box,
+                applyOrientation: request.ApplyOrientation,
+                bytes: ReadOnlyMemory<byte>.Empty,
+                priority: request.Priority,
+                sourceOrientation: containerInfo.Orientation);
+            try
+            {
+                return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawCorrupt, out fallbackThumbnailBytesRead);
+            }
+            catch (Exception ex) when (_noPreviewDecoder is not null && IsRecoverablePreviewFailure(ex))
+            {
+                fallbackThumbnailBytesRead = 0;
+            }
+        }
+
+        if (_noPreviewDecoder is null)
+        {
+            firstFailure!.Throw();
+            throw lastFailure!; // unreachable: Throw() never returns
+        }
+
+        fromJpegPreview = false; // the LibRaw full decode: pixels are the sensor's, not a preview
+        var full = _noPreviewDecoder.Decode(request);
+        var file = new FileInfo(request.Path);
+        fullDecodeBytesRead = file.Exists ? file.Length : 0;
+        previewBytesRead = failedBytes;
+        return full;
+    }
+
+    /// <summary>Corrupt, truncated or unsupported preview data; never cancellation, out-of-memory or plain I/O errors.</summary>
+    private static bool IsRecoverablePreviewFailure(Exception ex) =>
+        ex is InvalidDataException or System.IO.FileFormatException or NotSupportedException or System.Runtime.InteropServices.COMException;
+
+    private static EmbeddedPreview? SelectNextPreview(IRawHeaderSource headerSource, RawContainerInfo containerInfo, DecodeRequest request, List<long> triedOffsets)
+    {
+        var remaining = containerInfo.Previews
+            .Where(p => p.Kind == EmbeddedPreviewKind.Jpeg && p.Length > 0 && !triedOffsets.Contains(p.Offset))
+            .ToList();
+        return remaining.Count == 0
+            ? null
+            : PreviewSelector.SelectPreview(headerSource, remaining, request.Box, containerInfo.Orientation);
+    }
+
+    private IDecodedImage DecodePreview(DecodeRequest request, RawContainerInfo containerInfo, RawInfoKey key, EmbeddedPreview preview, out long previewBytesRead)
+    {
+        previewBytesRead = 0;
         // Read and cache ONLY the preview byte range. Never route a RAW file through the whole-file byte cache.
-        if (preview.Length > int.MaxValue)
-            throw new InvalidDataException($"Embedded preview is too large: {preview.Length} bytes.");
-        var fileInfo = new FileInfo(request.Path);
-        var previewBytes = _sourceBytesCache is not null && fileInfo.Exists && _sourceBytesCache.CanCacheRange(preview.Length)
-            ? _sourceBytesCache.GetOrReadRange(request.Path, fileInfo.Length, fileInfo.LastWriteTimeUtc.Ticks,
-                preview.Offset, (int)preview.Length, request.Priority)
-            : ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, request.Priority);
-        if (preview.ColorSpace == PreviewColorSpace.AdobeRgb)
-            previewBytes = RawJpegIccProfile.EnsureAdobeRgbProfile(previewBytes);
+        byte[] previewBytes;
+        try
+        {
+            if (preview.Length > RawContainerLimits.MaxPreviewBytes)
+                throw new InvalidDataException($"Embedded preview is too large: {preview.Length} bytes (limit {RawContainerLimits.MaxPreviewBytes}).");
+            var fileInfo = new FileInfo(request.Path);
+            if (fileInfo.Exists && (fileInfo.Length != key.Length || fileInfo.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks))
+            {
+                // The preview offsets come from a container info keyed by another file state: never read with them.
+                _containerInfoCache.Remove(key);
+                throw ChangedWhileReading(request.Path);
+            }
+
+            if (_sourceBytesCache is not null && fileInfo.Exists && _sourceBytesCache.CanCacheRange(preview.Length))
+            {
+                // A range-cache hit reads nothing from the source; only a miss counts the preview bytes.
+                if (_sourceBytesCache.TryGetRange(request.Path, fileInfo.Length, fileInfo.LastWriteTimeUtc.Ticks,
+                        preview.Offset, (int)preview.Length, out var cachedRange))
+                {
+                    previewBytes = cachedRange;
+                }
+                else
+                {
+                    previewBytes = _sourceBytesCache.GetOrReadRange(request.Path, fileInfo.Length, fileInfo.LastWriteTimeUtc.Ticks,
+                        preview.Offset, (int)preview.Length, request.Priority);
+                    previewBytesRead = preview.Length;
+                }
+            }
+            else
+            {
+                previewBytes = ReadPreviewRange(request.Path, preview.Offset, (int)preview.Length, key.Length, request.Priority);
+                previewBytesRead = preview.Length;
+            }
+            if (preview.ColorSpace == PreviewColorSpace.AdobeRgb)
+                previewBytes = RawJpegIccProfile.EnsureAdobeRgbProfile(previewBytes);
+        }
+        catch (InvalidDataException ex) when (!UserFacingError.IsLocalized(ex))
+        {
+            // Oversized/garbled preview or a non-JPEG tagged Adobe RGB: same type for callers, localized "corrupt" sentence for the UI.
+            UserFacingError.Localized(ex, () => Tr.ImageErrorRawCorrupt);
+            throw;
+        }
 
         // Inner decode with preview bytes and container orientation
         var innerRequest = new DecodeRequest(
@@ -158,14 +326,7 @@ public sealed class RawDecoder : IImageDecoder
             priority: request.Priority,
             sourceOrientation: containerInfo.Orientation);
 
-        try
-        {
-            return _innerDecoder.Decode(innerRequest);
-        }
-        catch (NotSupportedException) when (containerInfo.Format == RawFormat.Orf && _previewFallback is not null)
-        {
-            return DecodeFallbackThumbnail(request.Path, containerInfo.Format, innerRequest, out fallbackThumbnailBytesRead);
-        }
+        return _innerDecoder.Decode(innerRequest);
     }
 
     private IDecodedImage DecodeWithoutPreview(DecodeRequest request, RawContainerInfo containerInfo, out long bytesRead, out bool isJpegPreview)
@@ -183,7 +344,7 @@ public sealed class RawDecoder : IImageDecoder
                 sourceOrientation: containerInfo.Orientation);
             try
             {
-                return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, out bytesRead);
+                return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawNoPreview, out bytesRead);
             }
             // The thumbnail is missing or not a JPEG (e.g. Leica M8 DNG stores a bitmap): fall through to the full decode.
             catch (Exception ex) when (_noPreviewDecoder is not null && ex is InvalidDataException or NotSupportedException)
@@ -199,29 +360,59 @@ public sealed class RawDecoder : IImageDecoder
         return decoded;
     }
 
-    private IDecodedImage DecodeFallbackThumbnail(string path, RawFormat format, DecodeRequest innerRequest, out long thumbnailBytesRead)
+    private IDecodedImage DecodeFallbackThumbnail(string path, RawFormat format, DecodeRequest innerRequest, Func<string> invalidThumbnailText, out long thumbnailBytesRead)
     {
         var thumbnailBytes = _previewFallback!.ReadJpegThumbnail(path, format);
         if (thumbnailBytes.Length <= 0 || thumbnailBytes.Length > MaxFallbackThumbnailBytes)
-            throw new InvalidDataException($"RAW fallback thumbnail size is invalid: {thumbnailBytes.Length} bytes.");
+            throw UserFacingError.Localized(
+                new InvalidDataException($"RAW fallback thumbnail size is invalid: {thumbnailBytes.Length} bytes."), invalidThumbnailText);
 
         thumbnailBytesRead = thumbnailBytes.Length;
         return _innerDecoder.Decode(innerRequest with { Bytes = thumbnailBytes });
     }
 
-    private RawContainerInfo GetContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource)
+    /// <summary>
+    /// Stores <paramref name="resolved"/> (the previews with the dimensions and colour space a selection just read from the JPEG
+    /// headers) in the cache entry of <paramref name="key"/> when anything changed, and returns the updated entry.
+    /// </summary>
+    private CachedRaw RememberResolvedPreviews(RawInfoKey key, CachedRaw cached, IReadOnlyList<EmbeddedPreview> resolved)
     {
+        var current = cached.Info.Previews;
+        bool changed = resolved.Count != current.Count;
+        for (int i = 0; !changed && i < current.Count; i++)
+            changed = !ReferenceEquals(current[i], resolved[i]);
+        if (!changed) return cached;
+
+        var updated = cached with { Info = cached.Info with { Previews = resolved.ToArray() } };
+        _containerInfoCache.Set(key, updated);
+        return updated;
+    }
+
+    private CachedRaw GetContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource, out RawInfoKey key)
+    {
+        // The identity (length, write time) is taken from a stat BEFORE the file is opened and must still hold after the
+        // container was parsed, and the opened stream must have that same length: a file replaced (rename) at any point in
+        // between can then never have its old identity cached for the new bytes (or the other way round).
+        // Injectable source readers also support virtual/test paths with no physical FileInfo: no stat checks for those.
+        var before = new FileInfo(path);
+        var exists = before.Exists;
+        long statLength = exists ? before.Length : -1;
+        long lastWriteUtcTicks = exists ? before.LastWriteTimeUtc.Ticks : 0;
+
         headerSource = new SourceRawHeaderSource(path, _sourceReader, priority);
         try
         {
-            var file = new FileInfo(path);
-            var exists = file.Exists;
-            // Injectable source readers also support virtual/test paths with no physical FileInfo.
             var sourceLength = headerSource.Length;
-            var lastWriteUtcTicks = exists ? file.LastWriteTimeUtc.Ticks : 0;
+            if (exists && sourceLength != statLength)
+                throw ChangedWhileReading(path);
+
             var fullPath = Path.GetFullPath(path).ToUpperInvariant();
-            var key = new RawInfoKey(fullPath, sourceLength, lastWriteUtcTicks);
-            if (_containerInfoCache.TryGet(key, out var cached)) return cached;
+            key = new RawInfoKey(fullPath, sourceLength, lastWriteUtcTicks);
+            if (_containerInfoCache.TryGet(key, out var cached))
+            {
+                ThrowIfStatChanged(path, exists, statLength, lastWriteUtcTicks);
+                return cached;
+            }
 
             var ext = Path.GetExtension(path);
             var probeSpan = headerSource.Read(0, RawContainerLimits.InitialProbeLength(headerSource.Length));
@@ -239,11 +430,17 @@ public sealed class RawDecoder : IImageDecoder
                 throw;
             }
 
-            var current = new FileInfo(path);
-            if (exists && (!current.Exists || current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks))
-                throw new IOException($"RAW source changed while reading its container: {path}");
-            _containerInfoCache.Set(key, info);
-            return info;
+            ThrowIfStatChanged(path, exists, statLength, lastWriteUtcTicks);
+            var entry = new CachedRaw(info, null, false);
+            _containerInfoCache.Set(key, entry);
+            return entry;
+        }
+        catch (InvalidDataException ex) when (ex.InnerException is IOException or ObjectDisposedException)
+        {
+            // The header source reports I/O failures as InvalidDataException(inner); a disk/share error is not a corrupt RAW.
+            headerSource.Dispose();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException ?? ex).Throw();
+            throw;
         }
         catch
         {
@@ -252,10 +449,24 @@ public sealed class RawDecoder : IImageDecoder
         }
     }
 
-    private byte[] ReadPreviewRange(string path, long offset, int count, SourceReadPriority priority)
+    private static IOException ChangedWhileReading(string path) =>
+        UserFacingError.Localized(new IOException($"RAW source changed while reading: {path}"), () => Tr.ErrIoFileChangedWhileReading(path));
+
+    /// <summary>Throws when a fresh stat of <paramref name="path"/> no longer equals the identity the container info was keyed with.</summary>
+    private static void ThrowIfStatChanged(string path, bool existedBefore, long expectedLength, long expectedLastWriteTicks)
+    {
+        if (!existedBefore) return;
+        var current = new FileInfo(path);
+        if (!current.Exists || current.Length != expectedLength || current.LastWriteTimeUtc.Ticks != expectedLastWriteTicks)
+            throw ChangedWhileReading(path);
+    }
+
+    private byte[] ReadPreviewRange(string path, long offset, int count, long expectedLength, SourceReadPriority priority)
     {
         var bytes = new byte[count];
         using var stream = _sourceReader.OpenSource(path, priority);
+        if (stream.Length != expectedLength)
+            throw ChangedWhileReading(path); // not the file the container info (and its preview offsets) describe
         stream.Seek(offset, SeekOrigin.Begin);
         var totalRead = 0;
         while (totalRead < bytes.Length)
@@ -270,6 +481,9 @@ public sealed class RawDecoder : IImageDecoder
     }
 
     private readonly record struct RawInfoKey(string Path, long Length, long LastWriteUtcTicks);
+
+    /// <summary>What is remembered per file identity: the container info (with preview headers resolved as decodes need them) and the EXIF summary once read.</summary>
+    private sealed record CachedRaw(RawContainerInfo Info, ExifSummary? Exif, bool ExifRead);
 
     private sealed class RawDecodedImage : IDecodedImage, ISourceReadMetrics, IRawPreviewInfo
     {

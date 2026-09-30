@@ -13,13 +13,17 @@ namespace PhotoReview.Imaging.Raw.Raf;
 /// Embedded JPEG contains its own EXIF APP1 with camera/orientation metadata.
 /// Offset 92/96: CFA header offset/length (uint32 big-endian) holding records (tag u16, size u16, data; big-endian):
 /// 0x0100 = RawImageFullSize (height, width incl. masked margins), 0x0111 = RawImageCroppedSize (height, width).
-/// The sensor size is the cropped size, else the full size. LibRaw derives its own margins and reports a slightly
+/// 0x0121 = RawImageSize (height, width; LibRaw's parse_fuji stores it as the image height/width, widening 4284 to 4287).
+/// The sensor size is the cropped size, else 0x0121 (when it fits the full readout), else the full size. LibRaw derives its own margins and reports a slightly
 /// different size (X-T2: LibRaw 6032x4032, cropped record 6000x4000, full record 6160x4032); this reader reports the
 /// camera-declared cropped size, which is within a few percent of LibRaw and is never the embedded JPEG size.
 /// </summary>
 public sealed class RafContainerReader : IRawContainerReader
 {
     public RawFormat Format => RawFormat.Raf;
+
+    /// <summary>End of the fixed pointer table (JPEG offset/length at 84/88, CFA header offset/length at 92/96): a JPEG may not start inside it.</summary>
+    private const int PointerTableEnd = 100;
 
     // A hostile CFA header length must not force a large read or an unbounded record walk.
     private const int MaxCfaHeaderBytes = 64 * 1024;
@@ -49,32 +53,33 @@ public sealed class RafContainerReader : IRawContainerReader
         uint jpegOffset = BinaryPrimitives.ReadUInt32BigEndian(headerSpan.Slice(84, 4));
         uint jpegLength = BinaryPrimitives.ReadUInt32BigEndian(headerSpan.Slice(88, 4));
 
-        if (jpegOffset == 0 || jpegLength == 0 || (long)jpegOffset + jpegLength > source.Length)
-            throw new InvalidDataException("Invalid embedded JPEG range in RAF header.");
+        var previews = new List<EmbeddedPreview>();
+        var exifBlocks = new List<ExifBlock>();
+        int orientation = 1;
 
-        var previews = new List<EmbeddedPreview>
+        // A missing, truncated or header-overlapping JPEG only costs the preview: the CFA size is still readable and the
+        // no-preview LibRaw fallback can decode the raw data, so the container itself is kept.
+        bool previewRangeValid = jpegOffset >= PointerTableEnd && jpegLength > 0 && (long)jpegOffset + jpegLength <= source.Length;
+        if (previewRangeValid)
         {
-            new(
+            previews.Add(new EmbeddedPreview(
                 Index: 0,
                 Offset: jpegOffset,
                 Length: jpegLength,
                 Kind: EmbeddedPreviewKind.Jpeg,
                 Width: 0,
                 Height: 0,
-                ColorSpace: PreviewColorSpace.Unknown)
-        };
+                ColorSpace: PreviewColorSpace.Unknown));
 
-        // EXIF block inside embedded JPEG APP1
-        long exifLength = Math.Min(jpegLength, 128 * 1024);
-        var exifBlocks = new List<ExifBlock>
-        {
-            new(jpegOffset, exifLength, IsTiffHeader: false)
-        };
+            // EXIF block inside embedded JPEG APP1
+            long exifLength = Math.Min(jpegLength, 128 * 1024);
+            exifBlocks.Add(new ExifBlock(jpegOffset, exifLength, IsTiffHeader: false));
+
+            // RAF has no orientation of its own: the camera writes it into the embedded JPEG's EXIF.
+            orientation = ExifParser.TryReadOrientationFromJpeg(source.Read(jpegOffset, (int)exifLength)) ?? 1;
+        }
 
         var (sensorWidth, sensorHeight) = ReadCfaSize(source);
-
-        // RAF has no orientation of its own: the camera writes it into the embedded JPEG's EXIF.
-        int orientation = ExifParser.TryReadOrientationFromJpeg(source.Read(jpegOffset, (int)exifLength)) ?? 1;
 
         return new RawContainerInfo(
             RawFormat.Raf,
@@ -101,6 +106,7 @@ public sealed class RafContainerReader : IRawContainerReader
         uint count = BinaryPrimitives.ReadUInt32BigEndian(cfa[..4]);
         (int Width, int Height) full = (0, 0);
         (int Width, int Height) cropped = (0, 0);
+        (int Width, int Height) imageSize = (0, 0);
         int position = 4;
         for (uint i = 0; i < Math.Min(count, MaxCfaRecords) && position + 4 <= cfa.Length; i++)
         {
@@ -109,22 +115,27 @@ public sealed class RafContainerReader : IRawContainerReader
             int data = position + 4;
             if (data + size > cfa.Length) break;
 
-            if (size >= 4 && tag is 0x0100 or 0x0111)
+            if (size >= 4 && tag is 0x0100 or 0x0111 or 0x0121)
             {
                 int height = BinaryPrimitives.ReadUInt16BigEndian(cfa.Slice(data, 2));
                 int width = BinaryPrimitives.ReadUInt16BigEndian(cfa.Slice(data + 2, 2));
+                if (tag == 0x0121 && width == 4284) width += 3; // LibRaw parse_fuji special case
                 if (width > 0 && height > 0)
                 {
                     if (tag == 0x0100) full = (width, height);
-                    else cropped = (width, height);
+                    else if (tag == 0x0111) cropped = (width, height);
+                    else imageSize = (width, height);
                 }
             }
 
             position = data + size;
         }
 
-        // The cropped size can only shrink the full readout; ignore it when it claims more.
-        bool croppedFits = cropped.Width > 0 && (full.Width == 0 || (cropped.Width <= full.Width && cropped.Height <= full.Height));
-        return croppedFits ? cropped : full;
+        // A cropped or image size can only shrink the full readout; ignore one that claims more.
+        bool Fits((int Width, int Height) size) =>
+            size.Width > 0 && (full.Width == 0 || (size.Width <= full.Width && size.Height <= full.Height));
+
+        if (Fits(cropped)) return cropped;
+        return Fits(imageSize) ? imageSize : full;
     }
 }
