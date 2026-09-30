@@ -44,7 +44,7 @@ public static class TiffStructure
     {
         1 or 2 or 6 or 7 => 1, // BYTE, ASCII, SBYTE, UNDEFINED
         3 or 8 => 2,           // SHORT, SSHORT
-        4 or 9 or 11 => 4,     // LONG, SLONG, FLOAT
+        4 or 9 or 11 or 13 => 4, // LONG, SLONG, FLOAT, IFD (TIFF Tech Note 1: SubIFD pointers may be type IFD)
         5 or 10 or 12 => 8,    // RATIONAL, SRATIONAL, DOUBLE
         _ => 0,
     };
@@ -111,7 +111,7 @@ public static class TiffStructure
     {
         1 when value.Length >= 1 => value[0],
         3 when value.Length >= 2 => ReadU16(value, 0, littleEndian),
-        4 when value.Length >= 4 => ReadU32(value, 0, littleEndian),
+        4 or 13 when value.Length >= 4 => ReadU32(value, 0, littleEndian),
         8 when value.Length >= 2 => (short)ReadU16(value, 0, littleEndian),
         9 when value.Length >= 4 => (int)ReadU32(value, 0, littleEndian),
         _ => null,
