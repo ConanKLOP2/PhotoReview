@@ -60,7 +60,7 @@ Keep the machine, fixtures, viewport, mode, and cache state consistent when comp
 
 ### File Associations (Optional)
 
-Register "Open with" for every extension in `ImageFileTypes` (including `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.raf`, `.orf` and `.rw2`); the uninstall script removes the registered extensions:
+Register "Open with" for the seven raster extensions (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); the uninstall script removes exactly these seven. Camera RAW extensions are not registered: with Camera RAW support enabled in Settings, open RAW files by dragging them onto the window or by opening their folder.
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\path\to\PhotoReview.App.exe'
@@ -149,7 +149,7 @@ Giữ nguyên máy, fixture, viewport, mode và trạng thái cache khi so sánh
 
 ### File association (tùy chọn)
 
-Đăng ký Open With cho mọi đuôi trong `ImageFileTypes` (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này:
+Đăng ký Open With cho bảy đuôi ảnh thường (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.tif`, `.tiff`); script gỡ đăng ký xóa đúng bảy đuôi này. Các đuôi Camera RAW không được đăng ký: khi đã bật hỗ trợ Camera RAW trong Cài đặt, hãy mở tệp RAW bằng cách kéo thả vào cửa sổ hoặc mở thư mục chứa chúng:
 
 ```powershell
 .\deploy\install-photo-review-association.ps1 -ExePath 'C:\duong-dan\PhotoReview.App.exe'
