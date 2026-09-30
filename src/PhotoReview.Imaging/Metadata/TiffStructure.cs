@@ -13,6 +13,9 @@ public static class TiffStructure
     public const int MaxIfdEntries = 4096;
     public const int MaxAsciiBytes = 256;
 
+    /// <summary>Longest out-of-line non-ASCII value (array or UNDEFINED blob) returned by <see cref="TryGetValueSpan"/>, in bytes.</summary>
+    public const int MaxValueBytes = 4096;
+
     /// <summary>
     /// Reads TIFF header (byte order and first IFD offset).
     /// Returns true if header is valid; otherwise false.
@@ -70,7 +73,11 @@ public static class TiffStructure
     }
 
     /// <summary>
-    /// Reads entry's value span (inline or from offset) within a TIFF byte span.
+    /// Reads entry's value span (inline or from offset) within a TIFF byte span. The span covers the whole value:
+    /// every element of an array, and all bytes of an ASCII (up to <see cref="MaxAsciiBytes"/>) or UNDEFINED
+    /// (up to <see cref="MaxValueBytes"/>) value. A text or UNDEFINED value that runs past the end of the block is rejected; an
+    /// array is cut to the whole elements that exist. False when not even one element / byte is
+    /// readable. Callers that want a scalar read the first element of the span.
     /// </summary>
     public static bool TryGetValueSpan(ReadOnlySpan<byte> tiff, int entryOffset, ushort type, uint count, bool littleEndian, out ReadOnlySpan<byte> value)
     {
@@ -84,11 +91,24 @@ public static class TiffStructure
             value = tiff.Slice(entryOffset + 8, (int)total);
             return true;
         }
-        if (type == 2) total = Math.Min(total, MaxAsciiBytes);
-        else total = size;
-
         var offset = ReadU32(tiff, entryOffset + 8, littleEndian);
-        if (offset > (uint)tiff.Length || total > tiff.Length - offset) return false;
+        if (offset >= (uint)tiff.Length) return false;
+
+        long available = tiff.Length - offset;
+        total = Math.Min(total, type == 2 ? MaxAsciiBytes : MaxValueBytes);
+        // Text/blobs must lie fully inside the block (a value running past its end is skipped, as before); a numeric array is
+        // cut to the whole elements that exist so its first element stays readable.
+        if (type is 2 or 7)
+        {
+            if (total > available) return false;
+        }
+        else
+        {
+            total = Math.Min(total, available / size * size);
+        }
+
+        if (total < size) return false;
+
         value = tiff.Slice((int)offset, (int)total);
         return true;
     }
