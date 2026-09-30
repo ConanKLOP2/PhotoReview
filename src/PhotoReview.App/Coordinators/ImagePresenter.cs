@@ -195,6 +195,7 @@ public sealed class ImagePresenter
     {
         _currentNavigationPath = null;
         CurrentPhotoInfo = null;
+        _infoWhileOriginalShown = null;
         _zoomDetail.Reset();
         UpdateCurrentImage(null);
         _compareViewModel.Clear();
@@ -264,6 +265,7 @@ public sealed class ImagePresenter
         // Q-R29 option C: the stat below is awaited off the UI thread, so this navigation is "in progress" from here on:
         // the photo information line must not keep describing the previous image meanwhile (it is set again below).
         CurrentPhotoInfo = null;
+        _infoWhileOriginalShown = null; // the previous photo's preview info must never be restored onto this one
 
         if (AppLog.Enabled)
             AppLog.Info($"ShowImage start index={index} count={_catalog.Count} token={token} path={path}");
@@ -685,6 +687,7 @@ public sealed class ImagePresenter
             if (_catalog.Count == 0)
             {
                 CurrentPhotoInfo = null;
+                _infoWhileOriginalShown = null;
                 _zoomDetail.Reset();
                 UpdateCurrentImage(null);
                 _compareViewModel.Clear();

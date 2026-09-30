@@ -438,6 +438,41 @@ public sealed class ZoomDetailTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RawPreviewInfo_OfAnEarlierPhoto_IsNeverShownForTheNextPhotoWhoseFullDecodeFellBackToTheEmbeddedJpeg()
+    {
+        var pathA = Path.Combine(_tempDir, "a.cr2");
+        var pathB = Path.Combine(_tempDir, "b.cr2");
+        File.WriteAllBytes(pathA, [0x49, 0x49, 0x2A, 0x00]);
+        File.WriteAllBytes(pathB, [0x49, 0x49, 0x2A, 0x00]);
+        // A gets a true full decode; B's "full" decode falls back to its embedded JPEG (still a RAW preview).
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: new FullForNamesDecoder("a.cr2"), isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [pathA, pathB]);
+            await presenter.PresentAsync(0);
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+            Assert.Equal("a.cr2", presenter.CurrentPhotoInfo!.FileName);
+            Assert.Equal(0, presenter.CurrentPhotoInfo.RawPreviewWidth); // the full decode of A is on screen
+
+            await presenter.PresentAsync(1);
+            _viewer.ResetFit(1280, 720);
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter); // B's held original is the embedded JPEG
+
+            Assert.Equal("b.cr2", presenter.CurrentPhotoInfo!.FileName);
+            Assert.Equal(2000, presenter.CurrentPhotoInfo.RawPreviewWidth);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
     [Fact(DisplayName = "Q-RAW-03: a non-RAW photo never gets a preview size, and a stale one is not restored after a zoom swap")]
     public async Task NonRawPhoto_NeverHasARawPreviewSize()
     {
@@ -995,6 +1030,16 @@ public sealed class ZoomDetailTests : IDisposable
         public IDecodedImage Decode(DecodeRequest request) => downscaled
             ? new SizedImage(2000, 1333, 6000, 4000, downscaled: true, embeddedPreviewWidth: 2000, embeddedPreviewHeight: 1333)
             : new SizedImage(6000, 4000, 6000, 4000, downscaled: false);
+
+        public ImageInfo ReadInfo(string path) => new(6000, 4000);
+    }
+
+    private sealed class FullForNamesDecoder(params string[] fullNames) : IImageDecoder
+    {
+        public IDecodedImage Decode(DecodeRequest request) =>
+            fullNames.Contains(Path.GetFileName(request.Path), StringComparer.OrdinalIgnoreCase)
+                ? new SizedImage(6000, 4000, 6000, 4000, downscaled: false)
+                : new SizedImage(6000, 4000, 6000, 4000, downscaled: false, embeddedPreviewWidth: 2000, embeddedPreviewHeight: 1333);
 
         public ImageInfo ReadInfo(string path) => new(6000, 4000);
     }
