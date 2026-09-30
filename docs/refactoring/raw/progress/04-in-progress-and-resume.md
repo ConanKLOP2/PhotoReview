@@ -31,9 +31,9 @@ Integration 771 passed; Imaging 1267 of 1268 (the failing one is the memory guar
 ### 2.1 OC14 CI flake (root cause not found)
 - Test: `OC14_FileActionDuringUndo...` failed once on CI (total+1 assertion, expected 2, actual 1) on a commit that changed no
   App code. A rerun passed; 25 of 25 local runs passed.
-- An agent (workflow run `wf_88e3099b-97d`) is investigating in the worktree
+- An agent (workflow run `wf_88e3099b-97d`) was investigating and was STOPPED MANUALLY on the user's request (it, and the CPU-load helper processes it had started, were killed) in the worktree
   `D:/MyProject/PhotoReview/.claude/worktrees/wf_88e3099b-97d-4`, branch `worktree-wf_88e3099b-97d-4` (git shows it at
-  `f8730c11`, locked). It had uncommitted changes; its result is NOT integrated. Inspect that worktree before deleting it.
+  `f8730c11`, locked). It had uncommitted changes (a temporary stress test, TMP_Stress_OC14); its result is NOT integrated and the root cause is still unknown. Inspect that worktree before deleting it.
 - Treat the flake as an open risk: a red CI on the App suite may be this, so rerun once before investigating.
 
 ### 2.2 Manual corpus workflow never run
