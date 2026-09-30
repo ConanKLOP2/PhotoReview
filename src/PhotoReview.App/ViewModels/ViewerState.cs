@@ -200,11 +200,25 @@ public sealed partial class ViewerState : ObservableObject
     {
     }
 
-    /// <summary>Sets the original (post-orientation) pixel size of the image currently displayed.</summary>
-    public void SetSourceSize(int width, int height)
+    /// <summary>
+    /// Sets the original (post-orientation) pixel size of the image currently displayed. The Fit-width/Fit-height axis
+    /// of the previous image is forgotten when <paramref name="newImage"/> is true or the size changed: with
+    /// <see cref="AppSettings.KeepZoomAcrossImages"/> the zoom survives navigation, and a later <see cref="SwapSourceSize"/> of
+    /// the NEW image must not recompute "fit width" against the previous image's viewport.
+    /// </summary>
+    public void SetSourceSize(int width, int height, bool newImage = false)
     {
-        SourcePixelWidth = Math.Max(0, width);
-        SourcePixelHeight = Math.Max(0, height);
+        width = Math.Max(0, width);
+        height = Math.Max(0, height);
+        if (newImage || width != SourcePixelWidth || height != SourcePixelHeight) ClearFitAxis();
+        SourcePixelWidth = width;
+        SourcePixelHeight = height;
+    }
+
+    private void ClearFitAxis()
+    {
+        _fitAxis = FitAxis.None;
+        _fitAxisViewport = 0;
     }
 
     /// <summary>
@@ -228,11 +242,15 @@ public sealed partial class ViewerState : ObservableObject
         }
 
         SourceSizeSwapping?.Invoke(this, EventArgs.Empty);
+        var axis = _fitAxis; // SetSourceSize forgets it (a size change); a swap of the SAME image keeps it
+        var axisViewport = _fitAxisViewport;
         SetSourceSize(width, height);
-        var fitZoom = _fitAxis switch
+        _fitAxis = axis;
+        _fitAxisViewport = axisViewport;
+        var fitZoom = axis switch
         {
-            FitAxis.Width => _fitAxisViewport * NormalizeDpi(DpiScale) / width,
-            FitAxis.Height => _fitAxisViewport * NormalizeDpi(DpiScale) / height,
+            FitAxis.Width => axisViewport * NormalizeDpi(DpiScale) / width,
+            FitAxis.Height => axisViewport * NormalizeDpi(DpiScale) / height,
             _ => 0.0,
         };
         if (double.IsFinite(fitZoom) && fitZoom > 0) Zoom = Math.Clamp(fitZoom, MinZoom, MaxZoom);

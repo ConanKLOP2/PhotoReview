@@ -160,7 +160,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         if (isFileChange) ImageChanging?.Invoke(this, new ImageChangingEventArgs(isFileChange));
         if (_presenter.IsSameSourceSwap) _viewerState.SwapSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
-        else _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
+        else _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight, newImage: isFileChange);
         NotifyNavigationStateChanged();
     }
 
@@ -294,6 +294,22 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         }
     }
 
+    /// <summary>
+    /// Tooltip of the JPG+RAW badge: how to reach the other member. The "Switch JPEG / RAW member" shortcut has no default key
+    /// (owner decision), so without a usable binding the tooltip says where to assign one.
+    /// </summary>
+    public string CapturePairBadgeToolTip
+    {
+        get
+        {
+            var configured = Settings.Shortcuts.ToggleCaptureMember;
+            // The store's key-name validator (WPF-backed in the app): this class must not depend on System.Windows (Rule 6).
+            return !string.IsNullOrWhiteSpace(configured) && _settingsStore.KeyNames.IsValidKeyName(configured)
+                ? Tr.MainCapturePairBadgeTooltipBound(configured.Trim())
+                : Tr.MainCapturePairBadgeTooltipUnbound;
+        }
+    }
+
     public async Task ToggleCaptureGroupMemberAsync()
     {
         await WaitForPendingExplorerOrderAsync();
@@ -337,6 +353,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
 
     /// <summary>Latest folder load, including its Explorer-order apply/ignore; completes when the order is settled (tests await it instead of a wall-clock window).</summary>
     internal Task FolderLoadTask { get; private set; } = Task.CompletedTask;
+
+    /// <summary>The re-present of the current image started by the last <see cref="ShowSettings"/> (test seam).</summary>
+    internal Task SettingsRefreshTask { get; private set; } = Task.CompletedTask;
 
     /// <summary>AR16: the latest load's background readability probe (unreadable files removed and reported); tests await it.</summary>
     internal Task ReadabilityProbeTask => _folderCoordinator.ReadabilityProbe;
@@ -733,6 +752,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var previousBackend = _settingsStore.Current.DecoderBackend;
         var previousRawSupport = _settingsStore.Current.RawSupportEnabled;
         var previousPairMode = _settingsStore.Current.RawPairMode;
+        var previousRawFullDecode = _settingsStore.Current.RawFullDecode;
         var changed = _dialogService.ShowSettings();
         if (!changed) return;
 
@@ -741,6 +761,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         _viewerState.ScalingQuality = Settings.ScalingQuality;
         _viewerState.ZoomStep = Settings.KeyboardZoomStepPercent / 100.0; // Q-R41
         NotifyExifLineChanged(); // ShowExifInfo / ExifInfoFields may have changed
+        OnPropertyChanged(nameof(CapturePairBadgeToolTip)); // the Switch JPEG / RAW member shortcut may have been (un)assigned
         var newMode = _settingsStore.Current.LoadingMode;
         var newBackend = _settingsStore.Current.DecoderBackend;
         var newRawSupport = _settingsStore.Current.RawSupportEnabled;
@@ -751,7 +772,10 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var reloadFolder = (previousRawSupport != newRawSupport
                 || (newRawSupport && previousPairMode != _settingsStore.Current.RawPairMode))
             && _currentSession?.Folder is { Length: > 0 };
-        if (reloadFolder || previousMode != newMode || previousBackend != newBackend)
+        // The RAW full-decode setting is read when the zoom target is armed (ZoomDetailLoader.OnPreviewPresented), so the open
+        // image must be re-presented (cheap: RAM-cached preview, no folder reload) for Never <-> OnZoom to apply to it.
+        var rawFullDecodeChanged = previousRawFullDecode != _settingsStore.Current.RawFullDecode;
+        if (reloadFolder || previousMode != newMode || previousBackend != newBackend || rawFullDecodeChanged)
         {
             _preloadController?.Cancel();
             if (previousBackend != newBackend)
@@ -767,12 +791,35 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 _previewService?.ClearCache();
                 _preloadController?.ClearPreloadedKeys();
                 // OpenFolderAsync presents the reloaded folder itself: no separate PresentAsync (would double-present).
-                _ = OpenFolderAsync(_currentSession!.Folder, _catalog.Current?.Path);
+                SettingsRefreshTask = ReloadFolderAfterSettingsAsync();
             }
             else if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
             {
-                _ = _presenter.PresentAsync(_catalog.CurrentIndex);
+                // Drop an armed target / held full decode made under the old setting before the image is presented again.
+                _presenter.ZoomDetail.Reset();
+                SettingsRefreshTask = _presenter.PresentAsync(_catalog.CurrentIndex);
             }
+        }
+    }
+
+    /// <summary>
+    /// The settings-triggered reload of the open folder. A file action that is still running must finish first: a Move that
+    /// completed after a reload would take the "moved after you left its folder" path although the folder is the same one.
+    /// Completes synchronously (the load starts immediately) when no file action holds the gate. The task is always observed:
+    /// a failure is logged instead of surfacing as an unobserved exception.
+    /// </summary>
+    private async Task ReloadFolderAfterSettingsAsync()
+    {
+        try
+        {
+            while (_fileActionGate.IsHeld) await _fileActionGate.WhenReleasedAsync();
+            // Read after the wait: the action may have moved the current photo, or the user may have opened another folder.
+            if (_isClosed || _currentSession?.Folder is not { Length: > 0 } folder) return;
+            await OpenFolderAsync(folder, _catalog.Current?.Path);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Reloading the folder after a settings change failed", ex);
         }
     }
 
@@ -886,6 +933,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         OnPropertyChanged(nameof(SkippedWarningText));
         InfoOverlay.Refresh();
         OnPropertyChanged(nameof(CapturePairBadge));
+        OnPropertyChanged(nameof(CapturePairBadgeToolTip));
         // StatusText is event text (last action); it switches language with the next update.
         NotifyExifLineChanged();
     }
@@ -1056,6 +1104,11 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
             _presenter.EvictCachedPath(removedPath);
         }
         _compare.Clear();
+    }
+
+    void IFileActionSink.EvictCachedPaths(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths) _presenter.EvictCachedPath(path);
     }
 
     async Task IFileActionSink.PresentAsync(int index)

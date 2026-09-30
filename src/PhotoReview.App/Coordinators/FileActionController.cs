@@ -81,7 +81,9 @@ public sealed class FileActionController
 
         // Q-R8: a permanent delete gets its own explicit confirmation (in the core step), which replaces the generic one.
         var permanentPrompt = action.Operation == FileOperationType.Recycle && WillAskPermanentDelete(compareSelectedPath ?? currentPath);
-        if (action.Confirm && _dialogService is not null && !permanentPrompt)
+        // A capture that gets its own confirmation in the core step (which already names the files) must not be asked twice.
+        var groupPrompt = WillAskGroupConfirmation(action.Operation, compareSelectedPath, compareSelectedPath ?? currentPath);
+        if (action.Confirm && _dialogService is not null && !permanentPrompt && !groupPrompt)
         {
             // R7-4: the dialog runs a nested dispatcher loop (a forwarded open can switch the folder meanwhile),
             // so re-check state afterwards like the permanent-delete prompt does.
@@ -129,6 +131,22 @@ public sealed class FileActionController
         await ExecuteFileActionCoreAsync(Tr.ActionRecycleName, FileOperationType.Recycle, null, compareSelectedPath, currentPath);
     }
 
+    /// <summary>
+    /// True when <see cref="ExecuteFileActionCoreAsync"/> will show its own confirmation for the capture behind
+    /// <paramref name="source"/>: a Recycle with "confirm before delete" on or a member without a Recycle Bin (permanent), or any
+    /// Recycle/Move started from a Compare selection (Q-RAW-COMPARE-GROUP). Keep in step with the prompt condition there.
+    /// </summary>
+    private bool WillAskGroupConfirmation(FileOperationType operation, string? compareSelectedPath, string? source)
+    {
+        if (string.IsNullOrEmpty(source) || _fileActionService is null || _fileSystem is null) return false;
+        if (_catalog.Find(source)?.CaptureGroup is not { } group) return false;
+        if (compareSelectedPath is not null && operation is FileOperationType.Recycle or FileOperationType.Move) return true;
+        if (operation != FileOperationType.Recycle) return false;
+        var settings = _getSettings();
+        return settings.ConfirmBeforeDelete
+            || (settings.AllowPermanentDeleteWithoutRecycleBin && group.Paths.Any(_fileActionService.LacksRecycleBin));
+    }
+
     /// <summary>Q-R8: the setting is on and <paramref name="source"/> is on a drive without a Recycle Bin, so Recycle would delete permanently.</summary>
     private bool WillAskPermanentDelete(string? source) =>
         !string.IsNullOrEmpty(source)
@@ -136,9 +154,13 @@ public sealed class FileActionController
         && _fileActionService is not null
         && _fileActionService.LacksRecycleBin(source);
 
+    // The "companion file was missing" warning the last core run wrote (null when none): Move-to/Copy-to appends it to its own status.
+    private string? _lastPartnerMissingWarning;
+
     /// <returns>True when the file operation succeeded and the folder is still the current one.</returns>
     private async Task<bool> ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
     {
+        _lastPartnerMissingWarning = null;
         if (_catalog.Count == 0) return false;
         if (_fileActionService is null) return false;
 
@@ -172,21 +194,42 @@ public sealed class FileActionController
             && _getSettings().AllowPermanentDeleteWithoutRecycleBin
             ? selectedGroup.Paths.Where(_fileActionService.LacksRecycleBin).ToArray()
             : [];
-        if (selectedGroup is not null && operation == FileOperationType.Recycle
-            && (_getSettings().ConfirmBeforeDelete || permanentGroupPaths.Length > 0))
+        // Q-RAW-COMPARE-GROUP: with Compare open the selected file is ONE member but Delete/Move act on the WHOLE capture, so
+        // the user must always be told (and asked), regardless of ConfirmBeforeDelete.
+        var fromCompareGroup = compareSelectedPath is not null && selectedGroup is not null
+            && operation is FileOperationType.Recycle or FileOperationType.Move;
+        if (selectedGroup is not null
+            && ((operation == FileOperationType.Recycle && (_getSettings().ConfirmBeforeDelete || permanentGroupPaths.Length > 0))
+                || fromCompareGroup))
         {
             var folderBeforeGroupDialog = _clock.CurrentFolder;
-            var prompt = permanentGroupPaths.Length > 0
-                ? Tr.DialogConfirmGroupPermanentDeleteMessage(Path.GetFileName(source), permanentGroupPaths.Length, selectedGroup.Paths.Count)
-                : Tr.DialogConfirmGroupRecycleMessage(Path.GetFileName(source), selectedGroup.Paths.Count);
-            var title = permanentGroupPaths.Length > 0 ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
+            var memberNames = string.Join(", ", selectedGroup.Paths.Select(Path.GetFileName));
+            string prompt;
+            if (operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0)
+                prompt = Tr.DialogConfirmGroupPermanentDeleteMessage(Path.GetFileName(source), permanentGroupPaths.Length, selectedGroup.Paths.Count);
+            else if (fromCompareGroup)
+                prompt = operation == FileOperationType.Move
+                    ? Tr.DialogConfirmCompareGroupMoveMessage(Path.GetFileName(source), memberNames)
+                    : Tr.DialogConfirmCompareGroupRecycleMessage(Path.GetFileName(source), memberNames);
+            else
+                prompt = Tr.DialogConfirmGroupRecycleMessage(Path.GetFileName(source), selectedGroup.Paths.Count);
+            var title = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0
+                ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
             if (_dialogService is null || !_dialogService.ShowConfirmation(title, prompt)) return false;
             if (_clock.CurrentFolder != folderBeforeGroupDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
-            allowPermanent = permanentGroupPaths.Length > 0;
+            allowPermanent = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0;
+        }
+
+        // The confirmations above run nested dispatcher loops: the entry may have been degraded to a standalone survivor
+        // (readability probe / RemoveOrDegrade) or regrouped meanwhile. Never act on files that are no longer shown together.
+        var group = _catalog.Find(source)?.CaptureGroup;
+        if (!Equals(group, selectedGroup))
+        {
+            _sink.SetStatusText(Tr.StatusGroupChangedDuringConfirm(Path.GetFileName(source)));
+            return false;
         }
 
         var sourceIndex = _catalog.IndexOf(source);
-        var group = selectedGroup;
         var isRemove = operation is FileOperationType.Move or FileOperationType.Recycle;
         // Only a Move/Recycle takes the file out of the catalog and re-presents the next photo (which also restarts
         // preload). A Copy changes nothing on screen and nothing would restart what StopForAction/Cancel stopped, so it
@@ -208,6 +251,9 @@ public sealed class FileActionController
         {
             nextIndex = _catalog.Remove(source);
             _sink.OnCatalogChanged(source);
+            // A capture leaves the catalog as a whole: its partner members' cached previews go with it, not only the source's.
+            if (group is not null)
+                _sink.EvictCachedPaths(group.Paths.Where(path => !string.Equals(path, source, StringComparison.OrdinalIgnoreCase)).ToArray());
 
             // INV-3: Trình diễn ảnh tiếp theo TRƯỚC KHI thao tác file hoàn thành, không await
             if (nextIndex >= 0)
@@ -266,6 +312,13 @@ public sealed class FileActionController
                     }
                 }
                 else if (singleResult!.Succeeded) ReportLateCompletion(singleResult);
+                if (groupResult is { Succeeded: false } && operation == FileOperationType.Recycle
+                    && groupResult.Members.Count(member => member.Completed) is var processed and > 0)
+                {
+                    // A Delete that failed part-way after the folder switch: some members are already in the Recycle Bin
+                    // (registered for Undo above) or were deleted for good; the user is not looking at this folder any more.
+                    _sink.ShowLateActionStatus(Tr.StatusLateGroupPartiallyProcessed(Path.GetFileName(source), processed, groupResult.Members.Count));
+                }
                 return false;
             }
 
@@ -286,6 +339,7 @@ public sealed class FileActionController
                     if (_clock.IsFolderCurrent(folderGen))
                     {
                         var missing = Tr.StatusGroupPartnerMissing(Path.GetFileName(source), string.Join(", ", skipped.Select(Path.GetFileName)));
+                        _lastPartnerMissingWarning = missing;
                         _sink.SetStatusText(isRemove && _catalog.Count == 0 ? StatusFormatter.AllImagesProcessed() + " " + missing : missing);
                     }
                 }
@@ -323,13 +377,16 @@ public sealed class FileActionController
                 {
                     // No member state at all (preflight refused it, or the gate was busy): nothing changed on disk, so the
                     // whole capture goes back as the one grouped entry it was. Otherwise exactly the image members still on
-                    // disk return (re-forming the group when all of them are). RestoreMembers keeps CurrentIndex on the
+                    // disk return (re-forming the group when all of them are) -- and a member whose state could not be read
+                    // (a stat threw) also returns, like the single-file path restores unconditionally: dropping it would hide
+                    // a file that may well still be there until the next reload, and the presenter's RemoveOrDegrade heals a
+                    // truly missing one on the next present. RestoreMembers keeps CurrentIndex on the
                     // photo the presenter is showing, like Restore does for a single file.
                     var imagePaths = group!.ImagePaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
                     IEnumerable<string> available = groupResult.Members.Count == 0
                         ? group.ImagePaths
                         : groupResult.Members.Where(member => imagePaths.Contains(member.Member.Source)
-                                && member.StateKnown && member.SourceExists)
+                                && (!member.StateKnown || member.SourceExists))
                             .Select(member => member.Member.Source);
                     _catalog.RestoreMembers(available, sourceIndex, group);
                     _sink.OnCatalogChanged(null);
@@ -469,6 +526,7 @@ public sealed class FileActionController
                 }
             }
 
+            if (!_clock.IsFolderCurrent(folderGen)) return result; // a status about the old folder must not overwrite the new folder's line
             _sink.SetStatusText(result.ErrorMessage ?? StatusFormatter.NothingToUndo());
             return result;
         }
@@ -503,6 +561,8 @@ public sealed class FileActionController
                 await _sink.PresentAsync(idx);
             }
 
+            // The present awaited: the folder may have changed meanwhile, and the restored path must not become the new folder's session/status.
+            if (!_clock.IsFolderCurrent(folderGen)) return result;
             _sink.UpdateSessionPath(result.Source);
         }
 
@@ -588,7 +648,9 @@ public sealed class FileActionController
         if (_catalog.Count > 0)
         {
             var fileName = Path.GetFileName(source);
-            _sink.SetStatusText(isMove ? Tr.StatusMovedToFolder(fileName, folder) : Tr.StatusCopiedToFolder(fileName, folder));
+            var done = isMove ? Tr.StatusMovedToFolder(fileName, folder) : Tr.StatusCopiedToFolder(fileName, folder);
+            // Keep the "companion file was missing" warning the core step wrote instead of overwriting it.
+            _sink.SetStatusText(_lastPartnerMissingWarning is { } warning ? done + " " + warning : done);
         }
     }
 

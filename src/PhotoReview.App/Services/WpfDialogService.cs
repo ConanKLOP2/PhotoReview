@@ -112,8 +112,8 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
 
     public void ShowBenchmark(string? folder = null)
     {
-        var rawEnabled = serviceProvider.GetService<SettingsStore>()?.Current.RawSupportEnabled ?? false;
-        var window = new BenchmarkWindow(folder, rawEnabled)
+        // RAW files are not benchmarked (the executor has no RAW-routed decoder), whatever RawSupportEnabled says.
+        var window = new BenchmarkWindow(folder)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };

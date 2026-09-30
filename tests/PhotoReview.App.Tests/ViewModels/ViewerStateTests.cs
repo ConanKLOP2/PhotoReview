@@ -258,6 +258,46 @@ public sealed class ViewerStateTests
     }
 
     [Fact]
+    public void SwapSourceSize_AfterFitWidthOnPreviousImageAndSizeChange_KeepsZoomInsteadOfRefittingAgainstStaleViewport()
+    {
+        var state = new ViewerState { DpiScale = 1.0 };
+        state.SetSourceSize(2000, 4000);
+        state.ApplyInitialViewMode(InitialViewMode.FitWidth, 1000, 2000);
+        Assert.Equal(0.5, state.Zoom, 6);
+
+        state.SetSourceSize(3000, 2000); // navigate to B (KeepZoomAcrossImages: zoom survives, ApplyInitialViewMode never runs)
+        state.SwapSourceSize(3010, 2007); // B's RAW original arrives
+
+        Assert.Equal(0.5, state.Zoom, 6); // not 1000 / 3010
+    }
+
+    [Fact]
+    public void SwapSourceSize_AfterFitWidthOnPreviousImageAndSameSizedNewImage_KeepsZoom()
+    {
+        var state = new ViewerState { DpiScale = 1.0 };
+        state.SetSourceSize(2000, 4000);
+        state.ApplyInitialViewMode(InitialViewMode.FitWidth, 1000, 2000);
+
+        state.SetSourceSize(2000, 4000, newImage: true); // same dimensions, different image
+        state.SwapSourceSize(2010, 4020);
+
+        Assert.Equal(0.5, state.Zoom, 6);
+    }
+
+    [Fact]
+    public void SwapSourceSize_SameImageAfterFitWidth_StillRefitsAndSameSizeSetKeepsTheAxis()
+    {
+        var state = new ViewerState { DpiScale = 1.0 };
+        state.SetSourceSize(2000, 4000);
+        state.ApplyInitialViewMode(InitialViewMode.FitWidth, 1000, 2000);
+
+        state.SetSourceSize(2000, 4000); // thumbnail -> preview of the same image: no new image
+        state.SwapSourceSize(2010, 4020);
+
+        Assert.Equal(1000.0 / 2010, state.Zoom, 6); // the fitted width still fills the viewport
+    }
+
+    [Fact]
     public void ApplyInitialViewMode_FitHeight_ZoomsToFitHeightAfterRefreshingViewport()
     {
         var state = new ViewerState();

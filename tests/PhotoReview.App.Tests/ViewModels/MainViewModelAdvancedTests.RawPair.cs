@@ -40,6 +40,58 @@ public sealed partial class MainViewModelAdvancedTests
     }
 
     [Fact]
+    public void CapturePairBadgeToolTip_WithoutABoundKey_SaysWhereToAssignOne()
+    {
+        var (vm, _) = CreateViewModel();
+
+        Assert.Equal(string.Empty, _settings.Shortcuts.ToggleCaptureMember); // no default key (owner decision)
+        Assert.Equal(Tr.MainCapturePairBadgeTooltipUnbound, vm.CapturePairBadgeToolTip);
+    }
+
+    [Theory]
+    [InlineData("F4")]
+    [InlineData(" J ")]
+    public void CapturePairBadgeToolTip_WithABoundKey_NamesTheKey(string configured)
+    {
+        _settings.Shortcuts.ToggleCaptureMember = configured;
+        var (vm, _) = CreateViewModel();
+
+        Assert.Equal(Tr.MainCapturePairBadgeTooltipBound(configured.Trim()), vm.CapturePairBadgeToolTip);
+        Assert.Contains(configured.Trim(), vm.CapturePairBadgeToolTip, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CapturePairBadgeToolTip_WithABlankKey_IsTheUnboundHint(string configured)
+    {
+        _settings.Shortcuts.ToggleCaptureMember = configured;
+        var (vm, _) = CreateViewModel();
+
+        Assert.Equal(Tr.MainCapturePairBadgeTooltipUnbound, vm.CapturePairBadgeToolTip);
+    }
+
+    [Fact]
+    public void CapturePairBadgeToolTip_AfterSettingsAssignTheKey_IsRefreshed()
+    {
+        var (vm, _) = CreateViewModel();
+        var before = vm.CapturePairBadgeToolTip;
+        var changed = 0;
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.CapturePairBadgeToolTip)) changed++; };
+        _dialogService.OnShowSettings = () =>
+        {
+            _settings.Shortcuts.ToggleCaptureMember = "F4";
+            _settingsStore.Save(_settings);
+        };
+
+        vm.ShowSettings();
+
+        Assert.True(changed > 0);
+        Assert.NotEqual(before, vm.CapturePairBadgeToolTip);
+        Assert.Equal(Tr.MainCapturePairBadgeTooltipBound("F4"), vm.CapturePairBadgeToolTip);
+    }
+
+    [Fact]
     public void CapturePairBadge_WithoutCapturePair_IsEmpty()
     {
         var plain = CreateImageFile(_tempDir, "plain.jpg");

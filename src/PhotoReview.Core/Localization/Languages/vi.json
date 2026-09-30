@@ -862,5 +862,12 @@
   "core.journal.cancelledByUser": "Thao tác đã bị hủy trước khi hoàn tất.",
   "core.recovery.cancelledNeedsConfirm": "Bạn đã hủy thao tác này trước đó. Thử lại sẽ hoàn tất nó, nên cần xác nhận rõ ràng trong cửa sổ Khôi phục. Chưa có gì bị thay đổi.",
   "recovery.retryConfirmCancelled": "Bạn đã hủy {operation} này trước đó. Thử lại sẽ HOÀN TẤT thao tác cho {count} tệp. Tiếp tục?",
-  "image.error.rawDisabled": "Hỗ trợ RAW đang tắt trong Cài đặt nên không thể hiển thị {fileName}."
+  "image.error.rawDisabled": "Hỗ trợ RAW đang tắt trong Cài đặt nên không thể hiển thị {fileName}.",
+  "status.groupChangedDuringConfirm": "{fileName}: bộ ảnh đã thay đổi trong lúc hộp xác nhận đang mở nên chưa có gì bị thay đổi. Hãy thử lại.",
+  "dialog.confirmCompareGroupRecycle.message": "'{fileName}' thuộc một bộ ảnh JPG+RAW: thao tác này cũng sẽ đưa (các) tệp đi kèm vào Thùng rác. Tệp: {files}. Tiếp tục?",
+  "dialog.confirmCompareGroupMove.message": "'{fileName}' thuộc một bộ ảnh JPG+RAW: thao tác này cũng sẽ di chuyển (các) tệp đi kèm. Tệp: {files}. Tiếp tục?",
+  "status.lateGroupPartiallyProcessed": "{fileName}: thao tác dừng giữa chừng sau khi bạn rời thư mục này; {done}/{total} tệp đã được xử lý. Ctrl+Z khôi phục các tệp đã vào Thùng rác; xem Khôi phục cho phần còn lại.",
+  "main.capturePair.badge.tooltipBound": "Nhấn {key} để chuyển giữa ảnh JPG và RAW của bộ ảnh này.",
+  "main.capturePair.badge.tooltipUnbound": "Chưa gán phím để chuyển giữa JPG và RAW. Hãy gán phím trong Cài đặt > Phím tắt (\"Chuyển giữa ảnh JPEG và RAW\"), hoặc dùng So sánh.",
+  "settings.rawPairMode.shortcutHint": "Ở chế độ gộp chỉ hiện một tệp của mỗi cặp. Để xem tệp còn lại, hãy gán phím cho \"Chuyển giữa ảnh JPEG và RAW\" trong mục Phím tắt (mặc định chưa có phím), hoặc mở So sánh."
 }

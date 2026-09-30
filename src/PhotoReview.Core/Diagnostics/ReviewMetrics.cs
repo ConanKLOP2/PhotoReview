@@ -182,9 +182,17 @@ public sealed record ReviewMetricsSnapshot(long CacheHits, long CacheMisses, lon
 {
     public long PreloadHits { get; init; }
     public long InflightJoins { get; init; }
-    /// <summary>Subset of <see cref="SourceReads"/> that were full-resolution decodes (excluded from the decode EWMA).</summary>
+    /// <summary>
+    /// A SUBSET of <see cref="SourceReads"/>, not an addition to it: every source read is counted in <see cref="SourceReads"/>,
+    /// and the ones recorded with <c>includeInDecodeEwma: false</c> (full-resolution, e.g. RAW, decodes) are counted here as well.
+    /// <c>SourceReads - FullDecodeReads</c> is therefore the number of ordinary (preview) decodes, always non-negative.
+    /// </summary>
     public long FullDecodeReads { get; init; }
-    /// <summary>Subset of <see cref="DecodeMilliseconds"/> spent in full-resolution decodes.</summary>
+    /// <summary>
+    /// A SUBSET of <see cref="DecodeMilliseconds"/>: the time of the reads counted in <see cref="FullDecodeReads"/>, which is
+    /// also part of <see cref="DecodeMilliseconds"/>. The mean ordinary decode time is
+    /// <c>(DecodeMilliseconds - FullDecodeMilliseconds) / (SourceReads - FullDecodeReads)</c>.
+    /// </summary>
     public long FullDecodeMilliseconds { get; init; }
     public long DiskCacheHits { get; init; }
     public long QueueWaitMilliseconds { get; init; }

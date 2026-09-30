@@ -68,6 +68,56 @@ public sealed partial class MainViewModelAdvancedTests
     }
 
     [Fact]
+    public async Task ShowSettings_ReloadWhileAFileActionIsInFlight_WaitsForTheActionThenReloads()
+    {
+        var vm = await OpenRawFolderAsync("raw_reload_gate", RawPairMode.Separate);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _recycleBin.SendGate = gate.Task;
+        var recycle = vm.RecycleAsync(); // the current photo goes to the bin on a pool thread, blocked on the gate
+        var loadBefore = vm.FolderLoadTask;
+        _dialogService.OnShowSettings = () =>
+        {
+            _settings.RawPairMode = RawPairMode.PreferJpeg;
+            _settingsStore.Save(_settings);
+        };
+
+        vm.ShowSettings();
+
+        Assert.Same(loadBefore, vm.FolderLoadTask); // no reload while the action runs (it would make the action "late")
+        gate.SetResult();
+        await recycle;
+        await vm.SettingsRefreshTask;
+        Assert.NotSame(loadBefore, vm.FolderLoadTask);
+        await vm.FolderLoadTask;
+        Assert.Equal(1, vm.TotalFiles); // reloaded from disk after the recycle: only the RAW is left
+    }
+
+    [Fact]
+    public async Task ShowSettings_ReloadFailure_IsObservedAndDoesNotFaultTheRefreshTask()
+    {
+        var vm = await OpenRawFolderAsync("raw_reload_fail", RawPairMode.Separate);
+        vm.FolderOwnership = new ThrowingOwnership();
+        _dialogService.OnShowSettings = () =>
+        {
+            _settings.RawPairMode = RawPairMode.PreferJpeg;
+            _settingsStore.Save(_settings);
+        };
+
+        vm.ShowSettings();
+
+        await vm.SettingsRefreshTask; // would rethrow if the failure were left unobserved
+        Assert.True(vm.SettingsRefreshTask.IsCompletedSuccessfully);
+    }
+
+    private sealed class ThrowingOwnership : PhotoReview.Core.Instance.IFolderOwnership
+    {
+        public Task<PhotoReview.Core.Instance.FolderOpenDecision> BeforeOpenAsync(string folder, string? initialPath, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("ownership check failed");
+        public void OnFolderShown(string folder) { }
+        public void AfterOpen(string folder, string? shownFolder) { }
+    }
+
+    [Fact]
     public async Task ShowSettings_WhenRawPairModeChangedWhileRawIsOff_DoesNotReload()
     {
         var vm = await OpenRawFolderAsync("raw_pair_off", RawPairMode.Separate, rawSupport: false);

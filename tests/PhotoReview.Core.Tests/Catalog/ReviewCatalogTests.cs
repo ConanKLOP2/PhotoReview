@@ -19,6 +19,62 @@ public class ReviewCatalogTests
         Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
     }
 
+    [Fact]
+    public void Reset_PathsOverload_ForgetsThePreviousPairMode()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+
+        catalog.Reset([@"C:\photos\before.jpg", @"C:\photos\after.jpg"]); // plain paths: Separate again
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1, group);
+
+        Assert.Equal([@"C:\photos\before.jpg", @"C:\photos\p.jpg", @"C:\photos\p.cr2", @"C:\photos\after.jpg"], catalog.Paths);
+        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+    }
+
+    [Fact]
+    public void Reset_EntriesOverload_ForgetsThePreviousPairMode()
+    {
+        var catalog = PairCatalog(RawPairMode.PreferJpeg);
+        var group = new CaptureGroup(@"C:\photos\p.jpg", @"C:\photos\p.cr2");
+
+        catalog.Reset([new CatalogEntry(@"C:\photos\before.jpg"), new CatalogEntry(@"C:\photos\after.jpg")]);
+        catalog.RestoreMembers([@"C:\photos\p.jpg", @"C:\photos\p.cr2"], 1, group);
+
+        Assert.Equal(4, catalog.Count);
+        Assert.All(catalog.Entries, entry => Assert.Null(entry.CaptureGroup));
+    }
+
+    [Fact]
+    public void UpdateMetadata_PathOfANonRepresentativeMember_IsANoOp()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([new CatalogEntry(@"C:\photos\p.jpg"), new CatalogEntry(@"C:\photos\p.cr2")], RawPairMode.PreferJpeg);
+        var stamp = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc);
+
+        var applied = catalog.UpdateMetadata(@"C:\photos\p.cr2", 99, stamp, 6000, 4000); // the RAW: not the entry's own file
+
+        Assert.False(applied);
+        var entry = Assert.Single(catalog.Entries);
+        Assert.Null(entry.Length);
+        Assert.Null(entry.LastWriteUtc);
+        Assert.Null(entry.Width);
+    }
+
+    [Fact]
+    public void UpdateMetadata_PathOfTheRepresentative_StampsTheGroupEntry()
+    {
+        var catalog = new ReviewCatalog();
+        catalog.Reset([new CatalogEntry(@"C:\photos\p.jpg"), new CatalogEntry(@"C:\photos\p.cr2")], RawPairMode.PreferJpeg);
+        var stamp = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc);
+
+        var applied = catalog.UpdateMetadata(@"C:\photos\P.JPG", 7, stamp);
+
+        Assert.True(applied);
+        Assert.Equal(7, catalog.Entries[0].Length);
+        Assert.NotNull(catalog.Entries[0].CaptureGroup);
+    }
+
     private static ReviewCatalog PairCatalog(RawPairMode mode)
     {
         var catalog = new ReviewCatalog();

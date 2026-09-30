@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoReview.App.Coordinators;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Imaging;
 using PhotoReview.Imaging.Caching;
 using PhotoReview.Imaging.Decoding;
@@ -49,6 +50,48 @@ public sealed partial class ImagePresenterTests
         }
 
         public ImageInfo ReadInfo(string path) => _inner.ReadInfo(path);
+    }
+
+    /// <summary>A member whose first decode fails with FileNotFound (stale, the file is on disk) and whose retry fails with a generic error.</summary>
+    private sealed class StaleThenBrokenDecoder(string memberPath) : IImageDecoder
+    {
+        private readonly WpfBitmapImageDecoder _inner = new();
+        private int _memberCalls;
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            if (!string.Equals(request.Path, memberPath, StringComparison.OrdinalIgnoreCase)) return _inner.Decode(request);
+            throw Interlocked.Increment(ref _memberCalls) == 1
+                ? new FileNotFoundException("stale", request.Path)
+                : new InvalidOperationException("broken member");
+        }
+
+        public ImageInfo ReadInfo(string path) => _inner.ReadInfo(path);
+    }
+
+    [Fact(DisplayName = "A generic failure of the retry pass after a stale FileNotFound restores the member that is really on screen")]
+    public async Task PresentAsync_StaleNotFoundRetryThenGenericFailure_KeepsThePresentedPathOnTheMemberOnScreen()
+    {
+        var jpeg = CreateFakeImageFile("pair-shown.jpg");
+        var member = CreateFakeImageFile("pair-shown-member.png");
+        var service = new PreviewImageService(
+            _metrics,
+            () => false,
+            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)),
+            capacityBytes: 64 * 1024 * 1024,
+            currentBackend: () => DecoderBackend.Wpf,
+            disableDiskCacheOverride: true,
+            decoder: new StaleThenBrokenDecoder(member));
+        var presenter = new ImagePresenter(
+            _catalog, _clock, service, _thumbnailCache, _preloadController, _compareViewModel, _hashService, _metrics,
+            () => _settings, _sessionStore, _sink, fileSystem: null, getSession: () => null);
+        _catalog.Reset([new CatalogEntry(jpeg) { CaptureGroup = new CaptureGroup(jpeg, member) }], RawPairMode.Separate);
+        await presenter.PresentAsync(0);
+        Assert.Equal(jpeg, presenter.CurrentPresentedPath);
+
+        await presenter.PresentAsync(0, allowCompare: false, pathOverride: member);
+
+        Assert.Equal(jpeg, presenter.CurrentPresentedPath); // the JPEG is still what is displayed
     }
 
     [Fact(DisplayName = "OC14: joining an in-flight decode that failed while the file was away does not drop the restored photo")]

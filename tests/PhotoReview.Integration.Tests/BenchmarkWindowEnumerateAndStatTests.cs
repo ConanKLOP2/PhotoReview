@@ -43,6 +43,20 @@ public sealed class BenchmarkWindowEnumerateAndStatTests : IDisposable
         Assert.Equal(expectedOrder.OrderBy(p => p, StringComparer.Ordinal), files.OrderBy(p => p, StringComparer.Ordinal));
     }
 
+    [Fact(DisplayName = "Camera RAW files are never benchmarked: the executor has no RAW-routed decoder, so they would fail or measure WIC")]
+    public void EnumerateAndStat_RawFilesInFolder_AreExcluded()
+    {
+        var dir = _root.Dir("rawmix");
+        File.WriteAllBytes(Path.Combine(dir, "a.jpg"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(dir, "b.cr2"), [1, 2, 3, 4]);
+        File.WriteAllBytes(Path.Combine(dir, "c.nef"), [1, 2, 3, 4, 5]);
+
+        var (files, totalSourceBytes) = BenchmarkWindow.EnumerateAndStat(dir, imageLimit: 0);
+
+        Assert.Equal([Path.Combine(dir, "a.jpg")], files);
+        Assert.Equal(3, totalSourceBytes);
+    }
+
     [Fact(DisplayName = "An image-count cap keeps only the first N supported files and the stat pass only covers those")]
     public void EnumerateAndStat_ImageLimit_CapsFilesAndTotalBytes()
     {

@@ -129,7 +129,10 @@ public sealed class ImagePresenter
 
     private void ShowZoomDetailImageCore(object image, int w, int h)
     {
-        var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image);
+        // Decided from the shown bitmap itself, not from "the held original is shown": a held original that is still the
+        // embedded JPEG (a full decode that fell back to it) is still a RAW preview and keeps its info line.
+        var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image)
+            && held is not PhotoReview.Imaging.Decoding.IRawPreviewInfo { EmbeddedPreviewWidth: > 0 };
         if (showingOriginal)
         {
             // Always reassigned (null for a non-RAW photo) so a value left by an earlier photo can never be restored.
@@ -209,10 +212,13 @@ public sealed class ImagePresenter
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
     public Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false) =>
-        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: false);
+        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: false, originalPreviousNavigationPath: null);
 
     /// <param name="staleNotFoundRetried">True for the single re-present that follows a FileNotFound the file system contradicts (see the catch in this method).</param>
-    private async Task PresentCoreAsync(int index, bool allowCompare, string? pathOverride, bool includeCaptureGroupInCompare, bool staleNotFoundRetried)
+    /// <param name="originalPreviousNavigationPath">Only for that retry: the path that was really on screen before the FIRST attempt,
+    /// so a later generic failure restores the member that is shown instead of the retried (failed) member's own path.</param>
+    private async Task PresentCoreAsync(int index, bool allowCompare, string? pathOverride, bool includeCaptureGroupInCompare, bool staleNotFoundRetried,
+        string? originalPreviousNavigationPath)
     {
         if (index < 0 || index >= _catalog.Count) return;
         if (pathOverride is not null && _catalog.IndexOf(pathOverride) != index)
@@ -228,7 +234,7 @@ public sealed class ImagePresenter
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
         var path = pathOverride ?? _catalog.PathAt(index);
-        var previousNavigationPath = _currentNavigationPath;
+        var previousNavigationPath = staleNotFoundRetried ? originalPreviousNavigationPath : _currentNavigationPath;
         _currentNavigationPath = path;
 
         // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
@@ -617,7 +623,8 @@ public sealed class ImagePresenter
                 {
                     if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file failure ignored (file exists again) token={token} path={path}");
                     var retryIndex = _catalog.IndexOf(path);
-                    if (retryIndex >= 0) await PresentCoreAsync(retryIndex, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: true);
+                    if (retryIndex >= 0) await PresentCoreAsync(retryIndex, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: true,
+                        originalPreviousNavigationPath: previousNavigationPath);
                     return;
                 }
             }

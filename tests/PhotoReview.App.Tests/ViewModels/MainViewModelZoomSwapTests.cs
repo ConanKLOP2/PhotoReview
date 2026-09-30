@@ -104,6 +104,199 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Navigating_AfterFitWidthWithKeepZoom_ForgetsThePreviousImagesFitAxis()
+    {
+        var decoder = new SizedDecoder();
+        decoder.Sizes["a.jpg"] = (6000, 4000, 6000, 4000);
+        decoder.Sizes["b.jpg"] = (6000, 4000, 6000, 4000); // same size as A: only the new-image flag can tell them apart
+        var vm = CreateViewModel(decoder, "a.jpg", "b.jpg");
+        try
+        {
+            await vm.Presenter.PresentAsync(0);
+            _viewer.DpiScale = 1.0;
+            _viewer.ApplyInitialViewMode(InitialViewMode.FitWidth, 1200, 800);
+            var fitWidthZoom = _viewer.Zoom;
+            Assert.Equal(1200.0 / 6000, fitWidthZoom, 6);
+
+            await vm.NextAsync(); // KeepZoomAcrossImages: the zoom is kept, no ApplyInitialViewMode
+            _viewer.SwapSourceSize(6016, 4016); // B's original arrives
+
+            Assert.Equal(fitWidthZoom, _viewer.Zoom, 9); // not refitted against A's viewport
+        }
+        finally
+        {
+            decoder.OriginalGate.Release();
+            decoder.NextGate.Release();
+        }
+    }
+
+    private IImageDecoder? _rawFullDecoder;
+    private readonly ScriptedDialogService _dialog = new();
+
+    // ---- RawFullDecode setting changes apply to the open image (items 1-2) ---------------------
+
+    private (MainViewModel Vm, RawEmbeddedDecoder Embedded, RawFullDecoderFake Full) CreateRawViewModel(LoadingMode mode, RawFullDecode setting)
+    {
+        _settings.LoadingMode = mode;
+        _settings.RawFullDecode = setting;
+        _settingsStore.Save(_settings);
+        var embedded = new RawEmbeddedDecoder();
+        var full = new RawFullDecoderFake();
+        _rawFullDecoder = full;
+        return (CreateViewModel(embedded, "raw.cr2"), embedded, full);
+    }
+
+    [Fact]
+    public async Task ShowSettings_RawFullDecodeNeverToOnZoom_OriginalMode_ZoomStartsOneFullDecode()
+    {
+        var (vm, _, full) = CreateRawViewModel(LoadingMode.Original, RawFullDecode.Never);
+        await vm.Presenter.PresentAsync(0);
+        _viewer.SetZoom(1.0);
+        Assert.Null(vm.Presenter.ZoomDetail.PendingLoad); // Never: nothing armed
+
+        _dialog.OnShowSettings = () => { _settings.RawFullDecode = RawFullDecode.OnZoom; _settingsStore.Save(_settings); };
+        vm.ShowSettings();
+        await vm.SettingsRefreshTask;
+        _viewer.ResetFit(1280, 720);
+        _viewer.SetZoom(1.0);
+        var load = vm.Presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        full.Gate.Release();
+        await load!;
+
+        Assert.Equal(1, full.Decodes);
+        Assert.NotNull(vm.Presenter.ZoomDetail.HeldOriginal);
+    }
+
+    [Fact]
+    public async Task ShowSettings_RawFullDecodeOnZoomToNever_DropsHeldOriginalAndNeverDecodesOrSwapsAgain()
+    {
+        var (vm, _, full) = CreateRawViewModel(LoadingMode.Preview, RawFullDecode.OnZoom);
+        await vm.Presenter.PresentAsync(0);
+        _viewer.SetZoom(1.0);
+        var firstLoad = vm.Presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(firstLoad);
+        full.Gate.Release();
+        await firstLoad!;
+        Assert.NotNull(vm.Presenter.ZoomDetail.HeldOriginal);
+        Assert.Equal(1, full.Decodes);
+
+        _dialog.OnShowSettings = () => { _settings.RawFullDecode = RawFullDecode.Never; _settingsStore.Save(_settings); };
+        vm.ShowSettings();
+        await vm.SettingsRefreshTask;
+        var swaps = 0;
+        _viewer.SourceSizeSwapping += (_, _) => swaps++;
+        _viewer.SetZoom(1.0);
+        _viewer.SetZoom(2.0);
+
+        Assert.Null(vm.Presenter.ZoomDetail.HeldOriginal);
+        Assert.False(vm.Presenter.ZoomDetail.IsShowingOriginal);
+        Assert.Null(vm.Presenter.ZoomDetail.PendingLoad);
+        Assert.Equal(1, full.Decodes);
+        Assert.Equal(0, swaps);
+    }
+
+    [Fact]
+    public async Task ShowSettings_RawFullDecodeOnZoomToNever_WhileTargetArmedButNotDecoded_DropsTheTarget()
+    {
+        var (vm, _, full) = CreateRawViewModel(LoadingMode.Preview, RawFullDecode.OnZoom);
+        await vm.Presenter.PresentAsync(0); // target armed, still at Fit
+
+        _dialog.OnShowSettings = () => { _settings.RawFullDecode = RawFullDecode.Never; _settingsStore.Save(_settings); };
+        vm.ShowSettings();
+        await vm.SettingsRefreshTask;
+        _viewer.SetZoom(1.0);
+
+        Assert.Null(vm.Presenter.ZoomDetail.PendingLoad);
+        Assert.Equal(0, full.Decodes);
+    }
+
+    [Theory]
+    [InlineData(LoadingMode.Preview)]
+    [InlineData(LoadingMode.Original)]
+    public async Task RawZoom_FullDecodeNever_NeverDecodesNorSwapsTheSourceSize(LoadingMode mode)
+    {
+        var (vm, embedded, full) = CreateRawViewModel(mode, RawFullDecode.Never);
+        await vm.Presenter.PresentAsync(0);
+        var decodesAfterPresent = embedded.Decodes;
+        var swaps = 0;
+        _viewer.SourceSizeSwapping += (_, _) => swaps++;
+        var size = (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight);
+
+        _viewer.SetZoom(1.0);
+
+        Assert.Null(vm.Presenter.ZoomDetail.PendingLoad);
+        Assert.Equal(0, full.Decodes);
+        Assert.Equal(decodesAfterPresent, embedded.Decodes); // no wasted re-decode of the embedded JPEG
+        Assert.Equal(0, swaps);
+        Assert.Equal((6000, 4000), size);
+        Assert.Equal(size, (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight)); // layout unchanged
+    }
+
+    [Fact]
+    public async Task RawZoom_PreviewModeFullDecodeOnZoom_ArmsAndSwapsTheSourceSizeOnce()
+    {
+        var (vm, _, full) = CreateRawViewModel(LoadingMode.Preview, RawFullDecode.OnZoom);
+        await vm.Presenter.PresentAsync(0);
+        var swapWidths = new List<int>();
+        _viewer.SourceSizeSwapping += (_, _) => swapWidths.Add(_viewer.SourcePixelWidth);
+
+        _viewer.SetZoom(1.0);
+        var load = vm.Presenter.ZoomDetail.PendingLoad;
+        Assert.NotNull(load);
+        full.Gate.Release();
+        await load!;
+
+        Assert.Equal(1, full.Decodes);
+        Assert.Equal([6000], swapWidths);
+        Assert.Equal((6016, 4016), (_viewer.SourcePixelWidth, _viewer.SourcePixelHeight));
+    }
+
+    /// <summary>A RAW's ordinary decode: always the 2000 px embedded JPEG of a 6000x4000 sensor, whatever the box.</summary>
+    private sealed class RawEmbeddedDecoder : IImageDecoder
+    {
+        private int _decodes;
+        public int Decodes => Volatile.Read(ref _decodes);
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            Interlocked.Increment(ref _decodes);
+            return new SizedImage(2000, 1333, 6000, 4000, downscaled: true);
+        }
+        public ImageInfo ReadInfo(string path) => new(6000, 4000);
+    }
+
+    /// <summary>The RAW full decoder: 6016x4016 (LibRaw sensor area, differs from the camera-visible size).</summary>
+    private sealed class RawFullDecoderFake : IImageDecoder
+    {
+        private int _decodes;
+        public int Decodes => Volatile.Read(ref _decodes);
+        /// <summary>Holds every decode until released, so the test can observe the in-flight load (an instant decode could finish before PendingLoad is read).</summary>
+        public SemaphoreSlim Gate { get; } = new(0);
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            Gate.Wait();
+            Interlocked.Increment(ref _decodes);
+            return new SizedImage(6016, 4016, 6016, 4016, downscaled: false);
+        }
+        public ImageInfo ReadInfo(string path) => new(6000, 4000);
+    }
+
+    private sealed class ScriptedDialogService : IDialogService
+    {
+        public Action? OnShowSettings { get; set; }
+        public bool ShowConfirmation(string title, string message) => false;
+        public void ShowMessage(string title, string message) { }
+        public void ShowError(string title, string message) { }
+        public string? PickFolder(string? initialFolder = null) => null;
+        public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
+        public void ShowRecovery() { }
+        public void ShowDiagnostics() { }
+        public bool ShowSettings() { OnShowSettings?.Invoke(); return OnShowSettings is not null; }
+        public void ShowBenchmark(string? folder = null) { }
+        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
+    }
+
     private MainViewModel CreateViewModel(IImageDecoder decoder, params string[] names)
     {
         var paths = new List<string>();
@@ -122,12 +315,14 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
         var fileSystem = new PhysicalFileSystem();
         var previewService = new PreviewImageService(
             metrics,
-            () => false,
+            () => _settings.LoadingMode == LoadingMode.Original,
             () => new DecodeBox(1920, 1080),
             capacityBytes: 512L * 1024 * 1024,
             disableDiskCacheOverride: true,
             decoder: decoder,
-            currentBackend: () => DecoderBackend.Wpf);
+            currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: _rawFullDecoder,
+            isRawFullDecodeEnabled: () => _settings.RawFullDecode == RawFullDecode.OnZoom);
         var preload = new NullPreload();
         var sink = new VmSink();
 
@@ -145,7 +340,7 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
 
         vm = new MainViewModel(
             _catalog, clock, coordinator, presenter, _viewer, compare, _settingsStore, _sessionStore, fileSystem,
-            fileActions, undo, new NullDialogService(), hashService, previewService, _thumbnailCache,
+            fileActions, undo, _dialog, hashService, previewService, _thumbnailCache,
             new SessionWriter(_sessionStore, FileLog.Default), preloadController: preload);
 
         // Production wiring (MainViewModelCompositionRoot): the sink feeds the real MainViewModel.NotifyCurrentImageChanged.
@@ -239,19 +434,5 @@ public sealed class MainViewModelZoomSwapTests : IDisposable
     {
         public void SendToRecycleBin(string path) { }
         public bool TryRestore(string path, long expectedSize, DateTime expectedLastWriteUtc) => false;
-    }
-
-    private sealed class NullDialogService : IDialogService
-    {
-        public bool ShowConfirmation(string title, string message) => false;
-        public void ShowMessage(string title, string message) { }
-        public void ShowError(string title, string message) { }
-        public string? PickFolder(string? initialFolder = null) => null;
-        public bool ShowBatchReview(IReadOnlyList<string> paths) => false;
-        public void ShowRecovery() { }
-        public void ShowDiagnostics() { }
-        public bool ShowSettings() => false;
-        public void ShowBenchmark(string? folder = null) { }
-        public void ShowSkippedFiles(IReadOnlyList<SkippedEntry> entries) { }
     }
 }

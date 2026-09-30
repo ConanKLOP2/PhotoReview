@@ -108,9 +108,16 @@ public sealed class ZoomDetailLoader
         ArgumentNullException.ThrowIfNull(preview);
         Reset();
         if (!preview.Downscaled) return; // already full resolution
-        // An Original-mode key is full resolution for ordinary images, but a RAW's "original" is only its embedded JPEG
-        // (Downscaled while smaller than the sensor): offer the full decode when the RAW full decoder will serve it.
-        if (key.IsOriginal && !_previewService.IsRawFullDecodeRequest(path)) return;
+        // A RAW's shown image is only its embedded JPEG (Downscaled while smaller than the sensor). The only thing that can
+        // serve more pixels is the RAW full decoder: when it is not in use (RawFullDecode = Never, or RAW disabled) never arm
+        // a target in ANY loading mode -- the ordinary decoder would just re-decode the same embedded JPEG (wasted work) and
+        // report its own smaller size, shrinking the layout at the same zoom percent. RAW zoom then magnifies the shown image.
+        if (!_previewService.IsRawFullDecodeRequest(path))
+        {
+            if (ImageFileTypes.RawExtensions.Contains(System.IO.Path.GetExtension(path))) return;
+            // Original-mode key of an ordinary image is already full resolution.
+            if (key.IsOriginal) return;
+        }
         _target = new Target(token, path, key, preview.PlatformImage, preview.PixelWidth, preview.OriginalWidth, preview.OriginalHeight);
         Update();
     }

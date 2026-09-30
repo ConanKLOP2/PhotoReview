@@ -652,11 +652,15 @@ public sealed partial class MainViewModelAdvancedTests : IDisposable
     {
         public List<string> RecycledPaths { get; } = [];
 
+        /// <summary>When set, SendToRecycleBin blocks until it completes (an action that is "in flight").</summary>
+        public Task? SendGate { get; set; }
+
         /// <summary>Paths whose recycling fails with an I/O error (a locked file), to exercise partial batch failure.</summary>
         public HashSet<string> FailingPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public void SendToRecycleBin(string path)
         {
+            SendGate?.GetAwaiter().GetResult();
             if (FailingPaths.Contains(path)) throw new IOException("locked by another process");
             RecycledPaths.Add(path);
             if (File.Exists(path)) File.Delete(path);

@@ -411,6 +411,33 @@ public sealed class ZoomDetailTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RawPreviewSize_WhenTheHeldOriginalIsStillTheEmbeddedJpeg_StaysInThePhotoInfo()
+    {
+        var rawPath = Path.Combine(_tempDir, "info-embedded.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        // The "full" decoder fell back to the embedded JPEG: the held original still is the RAW preview.
+        var service = new PreviewImageService(_metrics, () => false, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: new EmbeddedRawDecoder(), currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: new EmbeddedRawDecoder(), isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+
+            Assert.True(presenter.ZoomDetail.IsShowingOriginal);
+            Assert.Equal((2000, 1333), (presenter.CurrentPhotoInfo!.RawPreviewWidth, presenter.CurrentPhotoInfo.RawPreviewHeight));
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
     [Fact(DisplayName = "Q-RAW-03: a non-RAW photo never gets a preview size, and a stale one is not restored after a zoom swap")]
     public async Task NonRawPhoto_NeverHasARawPreviewSize()
     {

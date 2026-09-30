@@ -29,13 +29,11 @@ public partial class BenchmarkWindow : Window, IDisposable
 
     private readonly ObservableCollection<BenchmarkResultRow> _rows = [];
     private readonly List<BenchmarkProfileItem> _profileItems = [.. BenchmarkProfiles.All.Select(p => new BenchmarkProfileItem(p))];
-    private readonly bool _rawEnabled;
     private CancellationTokenSource? _cts;
     private string? _lastReport;
 
-    public BenchmarkWindow(string? initialFolder, bool rawEnabled = false)
+    public BenchmarkWindow(string? initialFolder)
     {
-        _rawEnabled = rawEnabled;
         InitializeComponent();
         DarkTitleBarChrome.Apply(this);
         FolderText.Text = initialFolder ?? Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
@@ -137,9 +135,11 @@ public partial class BenchmarkWindow : Window, IDisposable
     /// <see cref="Directory.EnumerateFiles(string, string, System.IO.SearchOption)"/> has no cancellation overload,
     /// so <paramref name="cancellationToken"/> is polled every <see cref="EnumerationCancellationCheckInterval"/>
     /// entries instead -- Cancel/Close can interrupt a slow scan instead of only the profile run that used to
-    /// follow it. A test seam for the actual production logic.
+    /// follow it. A test seam for the actual production logic. Camera RAW files are never listed even with RAW support on:
+    /// the benchmark executor builds its <c>PreviewImageService</c> without the RAW-routed decoder, so a RAW would fail or
+    /// measure the WIC fallback instead of the real RAW path.
     /// </summary>
-    internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, bool rawEnabled = false, CancellationToken cancellationToken = default)
+    internal static (string[] Files, long TotalSourceBytes) EnumerateAndStat(string folder, int imageLimit, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(folder)) throw new DirectoryNotFoundException(folder);
         var supported = new List<string>();
@@ -147,7 +147,7 @@ public partial class BenchmarkWindow : Window, IDisposable
         foreach (var path in Directory.EnumerateFiles(folder, "*.*", System.IO.SearchOption.TopDirectoryOnly))
         {
             if (++seen % EnumerationCancellationCheckInterval == 0) cancellationToken.ThrowIfCancellationRequested();
-            if (ImageFileTypes.IsSupported(path, rawEnabled)) supported.Add(path);
+            if (ImageFileTypes.IsSupported(path, rawEnabled: false)) supported.Add(path);
         }
         cancellationToken.ThrowIfCancellationRequested();
         // perf(bench-window): cap to the first N files in the same (enumeration) order as before this change,
@@ -165,7 +165,6 @@ public partial class BenchmarkWindow : Window, IDisposable
         // ahead of the generic IOException/UnauthorizedAccessException clause below to keep its own message.
         var folder = FolderText.Text;
         var imageLimit = ImageLimit;
-        var rawEnabled = _rawEnabled;
         // Created before the scan (not after, as before this change) so Cancel/Close can interrupt a slow
         // enumeration too, not only the profile run that used to follow it.
         _cts = new CancellationTokenSource();
@@ -182,7 +181,7 @@ public partial class BenchmarkWindow : Window, IDisposable
             long totalSourceBytes;
             try
             {
-                (files, totalSourceBytes) = await Task.Run(() => EnumerateAndStat(folder, imageLimit, rawEnabled, runToken), runToken);
+                (files, totalSourceBytes) = await Task.Run(() => EnumerateAndStat(folder, imageLimit, runToken), runToken);
             }
             catch (DirectoryNotFoundException) { StatusText.Text = Tr.BenchmarkStatusFolderMissing; return; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
