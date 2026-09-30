@@ -15,6 +15,15 @@ public static class PreviewSelector
 {
     private const int MaxJpegSegments = 512;
 
+    /// <summary>
+    /// A preview whose pixel size could not be determined (lossless/arithmetic-coded frame, truncated header) would score an area
+    /// of 0 and always lose to any tiny known thumbnail, even when it is by far the largest JPEG in the file. Its size is
+    /// therefore estimated from its byte length at this many pixels per byte (about 0.25 byte per pixel, the compression of a
+    /// typical camera JPEG), which keeps it comparable with known areas: a 4 MB unknown-size JPEG outranks a 160x120 thumbnail
+    /// but not a known 6000x4000 preview. Used only as a ranking score, never reported as dimensions.
+    /// </summary>
+    private const long UnknownAreaPerByte = 4;
+
     /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
     private const int MaxFillBytes = 64 * 1024;
 
@@ -66,7 +75,7 @@ public static class PreviewSelector
         // If requestBox is unbounded (or <= 0), pick largest
         if (requestBox.IsUnbounded || (requestBox.Width <= 0 && requestBox.Height <= 0))
         {
-            return resolved.OrderByDescending(p => (long)p.Width * p.Height).ThenByDescending(p => p.Length).First();
+            return resolved.OrderByDescending(Score).ThenByDescending(p => p.Length).First();
         }
 
         int reqW = requestBox.Width;
@@ -87,7 +96,7 @@ public static class PreviewSelector
                     return visH >= reqH;
                 return true;
             })
-            .OrderBy(p => (long)p.Width * p.Height)
+            .OrderBy(Score)
             .ThenBy(p => p.Length)
             .ToList();
 
@@ -95,8 +104,14 @@ public static class PreviewSelector
             return candidates[0];
 
         // Else largest available preview
-        return resolved.OrderByDescending(p => (long)p.Width * p.Height).ThenByDescending(p => p.Length).First();
+        return resolved.OrderByDescending(Score).ThenByDescending(p => p.Length).First();
     }
+
+    /// <summary>Pixel area when known, else an estimate from the byte length (see <see cref="UnknownAreaPerByte"/>).</summary>
+    private static long Score(EmbeddedPreview preview) =>
+        preview.Width > 0 && preview.Height > 0
+            ? (long)preview.Width * preview.Height
+            : preview.Length <= 0 ? 0 : preview.Length * UnknownAreaPerByte;
 
     private static EmbeddedPreview ResolveDimensions(IRawHeaderSource source, EmbeddedPreview preview)
     {
