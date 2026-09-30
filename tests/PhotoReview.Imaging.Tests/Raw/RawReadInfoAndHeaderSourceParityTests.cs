@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.IO;
+using PhotoReview.Core.Localization;
 using PhotoReview.Imaging.Raw;
 using PhotoReview.Imaging.Decoding;
 using PhotoReview.TestSupport;
@@ -24,7 +26,41 @@ public sealed class RawReadInfoAndHeaderSourceParityTests
         data[92] = data[93] = data[94] = data[95] = 0;
         var path = temp.File("nosize.raf", data);
 
-        Assert.Throws<InvalidDataException>(() => new RawDecoder(new WpfBitmapImageDecoder()).ReadInfo(path));
+        var ex = Assert.Throws<InvalidDataException>(() => new RawDecoder(new WpfBitmapImageDecoder()).ReadInfo(path));
+
+        // Pin the REASON (the 0x0 rule in RawDecoder.ReadInfo), not just the exception type any malformed RAF would also throw.
+        Assert.Contains("declares no image size", ex.Message, StringComparison.Ordinal);
+        Assert.True(UserFacingError.IsLocalized(ex));
+        Assert.Equal(Tr.ImageErrorRawCorrupt, UserFacingError.Describe(ex));
+    }
+
+    /// <summary>The synthetic RAF with its JPEG pointers zeroed (no preview) and a real CFA header declaring <paramref name="width"/> x <paramref name="height"/>.</summary>
+    private static byte[] RafWithoutPreviewAndCfaSize(ushort width, ushort height)
+    {
+        var raf = SyntheticRawBuilder.BuildRaf().ToList();
+        uint cfaOffset = (uint)raf.Count;
+        var cfa = new List<byte>();
+        cfa.AddRange(BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness(1u))); // one record
+        foreach (var value in new ushort[] { 0x0111, 4, height, width })
+            cfa.AddRange(BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness(value)));
+        raf.AddRange(cfa);
+        var bytes = raf.ToArray();
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(84), 0);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(88), 0);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(92), cfaOffset);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes.AsSpan(96), (uint)cfa.Count);
+        return bytes;
+    }
+
+    [Fact]
+    public void ReadInfo_RealRafBytesWithCfaSizeButNoPreview_ReturnsTheCfaSize()
+    {
+        using var temp = new TempRoot("raw-readinfo-real-raf");
+        var path = temp.File("cfa-only.raf", RafWithoutPreviewAndCfaSize(6000, 4000));
+
+        var info = new RawDecoder(new WpfBitmapImageDecoder()).ReadInfo(path);
+
+        Assert.Equal((6000, 4000), (info.Width, info.Height));
     }
 
     [Fact]
@@ -57,7 +93,7 @@ public sealed class RawReadInfoAndHeaderSourceParityTests
         using var stream = new MemoryStream(bytes);
         using var production = new SourceRawHeaderSource(stream);
 
-        // Charge 127 blocks (just under the 128-block budget) then attempt a read spanning 3 untouched blocks.
+        // Charge 126 blocks (MaxHeaderBytes / Block = 128, minus 2; two under the budget) then attempt a read spanning 3 untouched blocks.
         int blocksBefore = (RawContainerLimits.MaxHeaderBytes / Block) - 2;
         _ = memory.Read(0, blocksBefore * Block);
         _ = production.Read(0, blocksBefore * Block);
