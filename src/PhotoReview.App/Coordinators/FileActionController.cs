@@ -172,17 +172,30 @@ public sealed class FileActionController
             && _getSettings().AllowPermanentDeleteWithoutRecycleBin
             ? selectedGroup.Paths.Where(_fileActionService.LacksRecycleBin).ToArray()
             : [];
-        if (selectedGroup is not null && operation == FileOperationType.Recycle
-            && (_getSettings().ConfirmBeforeDelete || permanentGroupPaths.Length > 0))
+        // Q-RAW-COMPARE-GROUP: with Compare open the selected file is ONE member but Delete/Move act on the WHOLE capture, so
+        // the user must always be told (and asked), regardless of ConfirmBeforeDelete.
+        var fromCompareGroup = compareSelectedPath is not null && selectedGroup is not null
+            && operation is FileOperationType.Recycle or FileOperationType.Move;
+        if (selectedGroup is not null
+            && ((operation == FileOperationType.Recycle && (_getSettings().ConfirmBeforeDelete || permanentGroupPaths.Length > 0))
+                || fromCompareGroup))
         {
             var folderBeforeGroupDialog = _clock.CurrentFolder;
-            var prompt = permanentGroupPaths.Length > 0
-                ? Tr.DialogConfirmGroupPermanentDeleteMessage(Path.GetFileName(source), permanentGroupPaths.Length, selectedGroup.Paths.Count)
-                : Tr.DialogConfirmGroupRecycleMessage(Path.GetFileName(source), selectedGroup.Paths.Count);
-            var title = permanentGroupPaths.Length > 0 ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
+            var memberNames = string.Join(", ", selectedGroup.Paths.Select(Path.GetFileName));
+            string prompt;
+            if (operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0)
+                prompt = Tr.DialogConfirmGroupPermanentDeleteMessage(Path.GetFileName(source), permanentGroupPaths.Length, selectedGroup.Paths.Count);
+            else if (fromCompareGroup)
+                prompt = operation == FileOperationType.Move
+                    ? Tr.DialogConfirmCompareGroupMoveMessage(Path.GetFileName(source), memberNames)
+                    : Tr.DialogConfirmCompareGroupRecycleMessage(Path.GetFileName(source), memberNames);
+            else
+                prompt = Tr.DialogConfirmGroupRecycleMessage(Path.GetFileName(source), selectedGroup.Paths.Count);
+            var title = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0
+                ? Tr.DialogConfirmPermanentDeleteTitle : Tr.DialogConfirmActionTitle;
             if (_dialogService is null || !_dialogService.ShowConfirmation(title, prompt)) return false;
             if (_clock.CurrentFolder != folderBeforeGroupDialog || _fileActionService.IsBusy || _catalog.IndexOf(source) < 0) return false;
-            allowPermanent = permanentGroupPaths.Length > 0;
+            allowPermanent = operation == FileOperationType.Recycle && permanentGroupPaths.Length > 0;
         }
 
         // The confirmations above run nested dispatcher loops: the entry may have been degraded to a standalone survivor

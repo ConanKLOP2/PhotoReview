@@ -864,5 +864,7 @@
   "core.groupAction.rollbackFailed": "{message} In addition, {count} file(s) that were already processed could not be put back automatically; check Recovery.",
   "core.undo.groupPartiallyRestored": "Restored {restored} of {total} files. Could not restore (deleted permanently): {names}",
   "status.lateDeletedPartlyPermanently": "{fileName} was moved to the Recycle Bin after you left its folder, except {permanentFiles}, which could not go to the Recycle Bin and was deleted permanently.",
-  "status.groupChangedDuringConfirm": "{fileName}: the capture changed while the confirmation was open, so nothing was changed. Try again."
+  "status.groupChangedDuringConfirm": "{fileName}: the capture changed while the confirmation was open, so nothing was changed. Try again.",
+  "dialog.confirmCompareGroupRecycle.message": "'{fileName}' is part of a JPG+RAW capture: this will also send its paired file(s) to the Recycle Bin. Files: {files}. Continue?",
+  "dialog.confirmCompareGroupMove.message": "'{fileName}' is part of a JPG+RAW capture: this will also move its paired file(s). Files: {files}. Continue?"
 }

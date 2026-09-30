@@ -44,7 +44,8 @@ public sealed class FileActionControllerGroupTests : IDisposable
         return path;
     }
 
-    private FileActionController NewController(AppSettings? settings = null, Func<string, string, Task>? undoMoveOverride = null, string moveDestination = "Sorted")
+    private FileActionController NewController(AppSettings? settings = null, Func<string, string, Task>? undoMoveOverride = null, string moveDestination = "Sorted",
+        RecordingDialog? dialog = null)
     {
         settings ??= new AppSettings();
         settings.Actions =
@@ -56,7 +57,7 @@ public sealed class FileActionControllerGroupTests : IDisposable
         var fileActions = new FileActionService(journal, fs, new SystemClock(), _bin);
         var undo = new UndoService(journal, fs, _bin, fileActions, undoMoveOverride);
         return new FileActionController(
-            _catalog, _clock, fileActions, undo, _dialog, preloadController: null,
+            _catalog, _clock, fileActions, undo, dialog ?? _dialog, preloadController: null,
             ManagedNaturalComparer.Instance, () => settings, _sink, fileSystem: fs);
     }
 
@@ -107,6 +108,61 @@ public sealed class FileActionControllerGroupTests : IDisposable
         Assert.Equal([before, jpeg, after], _catalog.Paths);
         Assert.Null(_catalog.Find(jpeg)!.CaptureGroup);
         Assert.Equal(Tr.StatusGroupChangedDuringConfirm("pair.jpg"), _sink.LastStatus);
+    }
+
+    [Fact]
+    public async Task GroupRecycle_FromCompareSelection_AlwaysAsksAndNamesBothFiles_EvenWithConfirmBeforeDeleteOff()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(new AppSettings { ConfirmBeforeDelete = false });
+
+        await controller.RecycleAsync(raw, jpeg); // Compare is open with the RAW member selected
+
+        var (_, message) = Assert.Single(_dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmCompareGroupRecycleMessage("pair.cr2", "pair.jpg, pair.cr2"), message);
+        Assert.Equal(2, _bin.Recycled.Count);
+    }
+
+    [Fact]
+    public async Task GroupRecycle_FromCompareSelectionDeclined_DeletesNothingAndKeepsTheEntry()
+    {
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var dialog = new RecordingDialog(response: false);
+        var controller = NewController(new AppSettings(), dialog: dialog);
+
+        await controller.RecycleAsync(raw, jpeg);
+
+        Assert.Single(dialog.Confirmations);
+        Assert.Empty(_bin.Recycled);
+        Assert.True(File.Exists(jpeg) && File.Exists(raw));
+        Assert.Equal([before, jpeg, after], _catalog.Paths);
+    }
+
+    [Fact]
+    public async Task GroupMove_FromCompareSelection_AsksAndNamesBothFiles_DeclinedMovesNothing()
+    {
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var dialog = new RecordingDialog(response: false);
+        var controller = NewController(dialog: dialog);
+
+        await controller.RunActionAsync(0, raw, jpeg);
+
+        var (_, message) = Assert.Single(dialog.Confirmations);
+        Assert.Equal(Tr.DialogConfirmCompareGroupMoveMessage("pair.cr2", "pair.jpg, pair.cr2"), message);
+        Assert.True(File.Exists(jpeg) && File.Exists(raw));
+        Assert.Equal([before, jpeg, after], _catalog.Paths);
+    }
+
+    [Fact]
+    public async Task GroupRecycle_WithoutCompare_StillNeedsNoPromptWhenConfirmBeforeDeleteIsOff()
+    {
+        var (_, jpeg, _, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(new AppSettings { ConfirmBeforeDelete = false });
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Empty(_dialog.Confirmations);
+        Assert.Equal(2, _bin.Recycled.Count);
     }
 
     [Fact]
