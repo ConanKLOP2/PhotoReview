@@ -774,7 +774,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 _previewService?.ClearCache();
                 _preloadController?.ClearPreloadedKeys();
                 // OpenFolderAsync presents the reloaded folder itself: no separate PresentAsync (would double-present).
-                _ = OpenFolderAsync(_currentSession!.Folder, _catalog.Current?.Path);
+                SettingsRefreshTask = ReloadFolderAfterSettingsAsync();
             }
             else if (_catalog.CurrentIndex >= 0 && _catalog.CurrentIndex < _catalog.Count)
             {
@@ -782,6 +782,27 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
                 _presenter.ZoomDetail.Reset();
                 SettingsRefreshTask = _presenter.PresentAsync(_catalog.CurrentIndex);
             }
+        }
+    }
+
+    /// <summary>
+    /// The settings-triggered reload of the open folder. A file action that is still running must finish first: a Move that
+    /// completed after a reload would take the "moved after you left its folder" path although the folder is the same one.
+    /// Completes synchronously (the load starts immediately) when no file action holds the gate. The task is always observed:
+    /// a failure is logged instead of surfacing as an unobserved exception.
+    /// </summary>
+    private async Task ReloadFolderAfterSettingsAsync()
+    {
+        try
+        {
+            while (_fileActionGate.IsHeld) await _fileActionGate.WhenReleasedAsync();
+            // Read after the wait: the action may have moved the current photo, or the user may have opened another folder.
+            if (_isClosed || _currentSession?.Folder is not { Length: > 0 } folder) return;
+            await OpenFolderAsync(folder, _catalog.Current?.Path);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Reloading the folder after a settings change failed", ex);
         }
     }
 
