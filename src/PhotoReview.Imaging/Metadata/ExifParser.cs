@@ -32,7 +32,7 @@ public static class ExifParser
     private const int MaxAsciiBytes = 256;
 
     /// <summary>Reads the EXIF summary of a JPEG; null for a non-JPEG, no/corrupt EXIF, or no usable field.</summary>
-    public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg) => TryParseTiffBlock(FindExifTiffBlock(jpeg));
+    public static ExifSummary? TryParseJpeg(ReadOnlySpan<byte> jpeg) => TryParseGuarded(FindExifTiffBlock(jpeg), allowOlympusRawMagic: false);
 
     /// <summary>
     /// Reads the EXIF summary from an already-located Exif TIFF block (the bytes after "Exif\0\0" in the first
@@ -41,13 +41,18 @@ public static class ExifParser
     /// EXIF, or no usable field; never throws. Lets a caller that already walked the JPEG markers itself (to
     /// avoid a second walk over the same header bytes) reuse this parser without going through
     /// <see cref="TryParseJpeg"/>'s own <see cref="FindExifTiffBlock"/> walk.
+    /// A whole-file TIFF block of an Olympus ORF ("IIRO"/"IIRS"/"MMOR": magic 0x4F52 or 0x5352 instead of 42) is
+    /// accepted here too, because the RAW pipeline hands ORF blocks to this method; <see cref="TryParseJpeg"/> stays strict.
     /// </summary>
-    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock)
+    public static ExifSummary? TryParseTiffBlock(ReadOnlySpan<byte> tiffBlock) =>
+        TryParseGuarded(tiffBlock, allowOlympusRawMagic: true);
+
+    private static ExifSummary? TryParseGuarded(ReadOnlySpan<byte> tiffBlock, bool allowOlympusRawMagic)
     {
         if (tiffBlock.IsEmpty) return null;
         try
         {
-            return TryParseTiff(tiffBlock);
+            return TryParseTiff(tiffBlock, allowOlympusRawMagic);
         }
         catch (Exception ex) when (ex is ArgumentException or IndexOutOfRangeException or OverflowException or DecoderFallbackException)
         {
@@ -119,14 +124,16 @@ public static class ExifParser
     }
 
     /// <summary>Parses a TIFF-structured EXIF block ("II*\0" / "MM\0*" header).</summary>
-    internal static ExifSummary? TryParseTiff(ReadOnlySpan<byte> tiff)
+    internal static ExifSummary? TryParseTiff(ReadOnlySpan<byte> tiff, bool allowOlympusRawMagic = false)
     {
         if (tiff.Length < 8) return null;
         bool little;
         if (tiff[0] == (byte)'I' && tiff[1] == (byte)'I') little = true;
         else if (tiff[0] == (byte)'M' && tiff[1] == (byte)'M') little = false;
         else return null;
-        if (TiffStructure.ReadU16(tiff, 2, little) != 42) return null;
+        ushort magic = TiffStructure.ReadU16(tiff, 2, little);
+        // Olympus ORF replaces 42 with 'RO' (0x4F52) or 'SR' (0x5352) but is otherwise plain TIFF.
+        if (magic != 42 && !(allowOlympusRawMagic && magic is 0x4F52 or 0x5352)) return null;
 
         var values = new RawValues();
         var ifd0 = TiffStructure.ReadU32(tiff, 4, little);
