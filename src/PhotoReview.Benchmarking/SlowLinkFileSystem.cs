@@ -41,6 +41,9 @@ public sealed class SlowLinkFileSystem : IFileSystem
     // copies or deletes across the simulated link) -- forwarded untouched, same as CountingFileSystem.
     public void Move(string source, string destination) => _inner.Move(source, destination);
     public void Copy(string source, string destination) => _inner.Copy(source, destination);
+    // Forwarded, not left to the interface default (exists-check + Copy, not atomic): the ownership proof of a create-new copy
+    // must hold behind this decorator too.
+    public bool TryCopyNew(string source, string destination) => _inner.TryCopyNew(source, destination);
     public void Delete(string path) => _inner.Delete(path);
 
     public Stream OpenReadShared(string path, int bufferSize = 65536)

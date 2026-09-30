@@ -1,5 +1,6 @@
 using System.IO;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.IO;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
 
@@ -200,10 +201,20 @@ public sealed class FileActionService
                     // A cross-volume Move is copy + delete: a failure in between can leave a partial destination. It is only ours
                     // to clean when nothing was at the destination right before this member's Move started.
                     inFlightDestinationIsOurs = _fileSystem.GetFileStat(member.Destination!) is null;
-                    if (_moveOverride is not null)
-                        await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
-                    else
-                        await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        if (_moveOverride is not null)
+                            await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                        else
+                            await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception moveEx) when (FileSystemErrors.IsDestinationExists(moveEx))
+                    {
+                        // "Destination exists" is raised before the move touches anything: the file there appeared after our
+                        // pre-check (someone else's) and is never ours to delete, whatever its size.
+                        inFlightDestinationIsOurs = false;
+                        throw;
+                    }
                     VerifyGroupMove(member);
                 }
                 else if (member.Permanent)
@@ -230,33 +241,47 @@ public sealed class FileActionService
         }
         catch (Exception ex)
         {
-            // Compensate first (the outcome decides what the journal says), then inspect the real state.
-            var stuck = 0;
-            if (tx is { IsPrepared: true } && request.Operation is FileOperationType.Move or FileOperationType.Copy)
+            try
             {
-                stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
-                    ? RemoveCreatedCopies(done, inFlight, inFlightDestinationIsOurs)
-                    : RestoreMovedMembers(done, inFlight, inFlightDestinationIsOurs)).ConfigureAwait(false);
+                // Compensate first (the outcome decides what the journal says), then inspect the real state.
+                var stuck = 0;
+                if (tx is { IsPrepared: true } && request.Operation is FileOperationType.Move or FileOperationType.Copy)
+                {
+                    stuck = await Task.Run(() => request.Operation == FileOperationType.Copy
+                        ? RemoveCreatedCopies(done, inFlight, inFlightDestinationIsOurs)
+                        : RestoreMovedMembers(done, inFlight, inFlightDestinationIsOurs)).ConfigureAwait(false);
+                }
+
+                var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
+                // Only the message shown to the user carries the (localized) rollback note; the journal always keeps the ORIGINAL
+                // failure (invariant code + English text, so Recovery can localize it).
+                var message = stuck > 0 ? Tr.CoreGroupActionRollbackFailed(ex.Message, stuck) : ex.Message;
+
+                // Fully rolled back = every member is provably back in its original state (source untouched, nothing at the
+                // destination). Nothing is left to retry, so it is not a Recovery item (an unconditional Failed record would
+                // offer "retry" for an operation the user cancelled that left the disk unchanged).
+                var rolledBack = stuck == 0 && states.Length > 0 && tx is { IsPrepared: true }
+                    && request.Operation is FileOperationType.Move or FileOperationType.Copy
+                    && states.All(state => state is { StateKnown: true, Completed: false, Conflict: false, SourceExists: true, DestinationExists: false });
+                string? journalError = null;
+                var failed = rolledBack ? tx!.DismissRolledBack(out journalError) : tx?.Fail(ex, out journalError);
+                return new(false, false, request.Operation, groupId, failed, states, message,
+                    JournalPersisted: journalError is null,
+                    JournalError: journalError,
+                    PermanentlyDeleted: request.Operation == FileOperationType.Recycle && states.Any(member => member.Completed && member.Member.Permanent),
+                    SkippedMissing: missingSources.Count > 0 ? missingSources : null);
             }
-
-            var states = manifest.Select(member => InspectGroupMember(request.Operation, member, ex.Message)).ToArray();
-            // Only the message shown to the user carries the (localized) rollback note; the journal always keeps the ORIGINAL
-            // failure (invariant code + English text, so Recovery can localize it).
-            var message = stuck > 0 ? Tr.CoreGroupActionRollbackFailed(ex.Message, stuck) : ex.Message;
-
-            // Fully rolled back = every member is provably back in its original state (source untouched, nothing at the
-            // destination). Nothing is left to retry, so it is not a Recovery item (an unconditional Failed record would
-            // offer "retry" for an operation the user cancelled that left the disk unchanged).
-            var rolledBack = stuck == 0 && states.Length > 0 && tx is { IsPrepared: true }
-                && request.Operation is FileOperationType.Move or FileOperationType.Copy
-                && states.All(state => state is { StateKnown: true, Completed: false, Conflict: false, SourceExists: true, DestinationExists: false });
-            string? journalError = null;
-            var failed = rolledBack ? tx!.DismissRolledBack(out journalError) : tx?.Fail(ex, out journalError);
-            return new(false, false, request.Operation, groupId, failed, states, message,
-                JournalPersisted: journalError is null,
-                JournalError: journalError,
-                PermanentlyDeleted: request.Operation == FileOperationType.Recycle && states.Any(member => member.Completed && member.Member.Permanent),
-                SkippedMissing: missingSources.Count > 0 ? missingSources : null);
+            catch (Exception compensationFailure) when (compensationFailure is not OutOfMemoryException)
+            {
+                // The compensation or the state inspection itself failed with a type it does not expect (a fake, a filter driver, ...).
+                // It must not escape to the caller: no outcome line is written, so the Prepared line stays and startup reconcile judges
+                // the disk later; every member is reported as not completed with an unproven state (never as cleanly rolled back).
+                var unknown = manifest.Select(member => new CaptureGroupMemberResult(member, false, true, ex.Message, StateKnown: false)).ToArray();
+                return new(false, false, request.Operation, groupId, null, unknown,
+                    Tr.CoreGroupActionRollbackFailed(ex.Message, manifest.Count),
+                    PermanentlyDeleted: false,
+                    SkippedMissing: missingSources.Count > 0 ? missingSources : null);
+            }
         }
         finally
         {

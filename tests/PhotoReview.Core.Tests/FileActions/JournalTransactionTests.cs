@@ -49,6 +49,42 @@ public sealed class JournalTransactionTests
         Assert.Equal("op", Assert.Single(journal.ReadFailedOperations()).Id);
     }
 
+    [Fact]
+    public void Fail_OutcomeAppendThrows_ReturnsNullAndReportsTheJournalError()
+    {
+        var fs = new InMemoryFileSystem();
+        var journal = new OperationJournal(Paths, fs, new FixedClock(Stamp));
+        var prepared = new JournalEntry("op", FileOperationType.Move, JournalState.Prepared,
+            @"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp, Stamp);
+        using var tx = new JournalTransaction(journal, new FixedClock(Stamp), prepared);
+        tx.Begin();
+        fs.OpenAppendHook = _ => new IOException("disk full"); // only the outcome line fails
+
+        var result = tx.Fail(new IOException("boom"), out var journalError);
+
+        Assert.Null(result); // no record was written: a caller must not treat it as a journaled Failed line
+        Assert.NotNull(journalError);
+        fs.OpenAppendHook = null;
+        Assert.Equal("op", Assert.Single(journal.ReadPendingOperations()).Id); // still only Prepared: reconcile will judge it
+    }
+
+    [Fact]
+    public void DismissRolledBack_OutcomeAppendThrows_ReturnsNullAndReportsTheJournalError()
+    {
+        var fs = new InMemoryFileSystem();
+        var journal = new OperationJournal(Paths, fs, new FixedClock(Stamp));
+        var prepared = new JournalEntry("op", FileOperationType.Move, JournalState.Prepared,
+            @"C:\photos\a.jpg", @"C:\selected\a.jpg", 10, Stamp, Stamp);
+        using var tx = new JournalTransaction(journal, new FixedClock(Stamp), prepared);
+        tx.Begin();
+        fs.OpenAppendHook = _ => new IOException("disk full");
+
+        var result = tx.DismissRolledBack(out var journalError);
+
+        Assert.Null(result);
+        Assert.NotNull(journalError);
+    }
+
     private sealed class FixedClock(DateTime utcNow) : IClock
     {
         public DateTime UtcNow { get; } = utcNow;

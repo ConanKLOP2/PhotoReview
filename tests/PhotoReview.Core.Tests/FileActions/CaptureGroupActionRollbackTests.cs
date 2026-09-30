@@ -100,6 +100,31 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.True(fs.FileExists(Raw));
     }
 
+    [Theory]
+    [InlineData("raw")]                                                  // SMALLER than the 8-byte source: the old size rule would call it a partial copy
+    [InlineData("foreign file, longer than the raw source")]
+    public async Task ExecuteGroupAsync_ForeignFileAppearsBeforeMoveAndMoveReportsDestinationExists_ForeignFileSurvivesAndIsConflict(string foreignContent)
+    {
+        var (fs, journal) = CreateWorld();
+        fs.MoveHook = (source, destination) =>
+        {
+            if (source != Raw) return null;
+            fs.AddFile(destination, foreignContent, Stamp); // created by someone else between the pre-check and the Move
+            return InMemoryFileSystem.DestinationExistsException(destination);
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(foreignContent.Length, fs.GetFileStat(MovedRaw)!.Length); // never deleted
+        Assert.True(fs.FileExists(Raw));
+        var rawMember = Assert.Single(result.Members, member => member.Member.Source == Raw);
+        Assert.False(rawMember.Completed);
+        Assert.True(rawMember.Conflict);
+        var failed = Assert.Single(journal.ReadFailedOperations()); // Recovery handles it: not dismissed as "rolled back"
+        Assert.Equal(JournalState.Failed, failed.State);
+    }
+
     [Fact]
     public async Task ExecuteGroupAsync_MoveFailsPartialDestinationButSourceChanged_PartialIsLeftAlone()
     {
@@ -284,6 +309,52 @@ public sealed class CaptureGroupActionRollbackTests
     }
 
     [Fact]
+    public async Task ExecuteGroupAsync_CopyCancelledAndRollbackLeavesACopy_JournalsTheCancellationCode()
+    {
+        var (fs, journal) = CreateWorld();
+        using var cts = new CancellationTokenSource();
+        fs.CopyHook = (source, _) =>
+        {
+            if (source == Jpeg) cts.Cancel(); // the user cancels while the first member is being copied
+            return null;
+        };
+        fs.DeleteHook = path => string.Equals(path, MovedJpeg, StringComparison.OrdinalIgnoreCase)
+            ? new IOException("simulated undeletable copy") : null; // the rollback cannot remove the first copy
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Copy), cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.True(fs.FileExists(MovedJpeg)); // left behind: it needs Recovery
+        var failed = Assert.Single(journal.ReadFailedOperations());
+        Assert.Equal(JournalErrors.CancelledByUser, failed.ErrorCode);
+        Assert.Equal(JournalErrors.EnglishText(JournalErrors.CancelledByUser), failed.Error);
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_CopyCancelledMidWay_RemovesOnlyTheCopiesThisOperationMade()
+    {
+        var (fs, journal) = CreateWorld();
+        using var cts = new CancellationTokenSource();
+        // A pre-existing unrelated file in the destination folder, and a copy of the first member.
+        fs.AddFile(@"C:\photos\selected\other.jpg", "someone else's", Stamp);
+        fs.CopyHook = (source, _) =>
+        {
+            if (source == Jpeg) cts.Cancel();
+            return null;
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Copy), cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.False(fs.FileExists(MovedJpeg)); // our copy is gone
+        Assert.False(fs.FileExists(MovedRaw));
+        Assert.True(fs.FileExists(@"C:\photos\selected\other.jpg")); // never ours
+        Assert.True(fs.FileExists(Jpeg));
+        Assert.True(fs.FileExists(Raw));
+        AssertFullyRolledBackAndNotRetryable(journal, result);
+    }
+
+    [Fact]
     public async Task ExecuteGroupAsync_CopyLeavesPartialFile_PartialFileIsDeleted()
     {
         var (fs, journal) = CreateWorld();
@@ -405,6 +476,32 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.False(result.Succeeded);
         Assert.Equal(0, bin.RecycleCalls);
         Assert.True(fs.FileExists(@"C:\photos\a.xmp"));
+    }
+
+    [Fact]
+    public async Task ExecuteGroupAsync_CompensationThrowsUnexpectedExceptionType_DoesNotEscapeAndLeavesPreparedForReconcile()
+    {
+        var (fs, journal) = CreateWorld();
+        fs.MoveHook = (source, _) =>
+        {
+            if (source == Raw) return new IOException("simulated second-member failure");
+            // The rollback of the first (already moved) member blows up with a type the compensation does not expect.
+            if (source == MovedJpeg) return new InvalidOperationException("simulated unexpected fault");
+            return null;
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move)); // must not throw
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.Rejected);
+        Assert.Equal(Tr.CoreGroupActionRollbackFailed("simulated second-member failure", 2), result.Error);
+        Assert.All(result.Members, member => Assert.False(member.Completed));
+        Assert.Contains(result.Members, member => member.Conflict); // state could not be proven: never reported as cleanly rolled back
+        // No outcome line was written: the Prepared line stays, so startup reconcile judges the disk later.
+        Assert.Equal(JournalState.Prepared, Assert.Single(journal.ReadPendingOperations()).State);
+        Assert.Empty(journal.ReadFailedOperations());
+        Assert.False(fs.FileExists(Jpeg)); // the JPEG really is still in the destination folder
+        Assert.True(fs.FileExists(MovedJpeg));
     }
 
     private sealed class FixedClock : IClock

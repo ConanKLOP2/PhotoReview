@@ -366,15 +366,11 @@ public sealed class OperationJournal
         // Perf (CORE-08): a compact-written Recycle/Copy line cannot be a Move, so skip its JSON parse. The exact
         // token never occurs inside a string value (there quotes are escaped as \"), so a Move line is never skipped.
         if (line.IsEmpty || IsRecycleOrCopyLine(line)) return null;
-        try
-        {
-            var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-            return entry is { Type: FileOperationType.Move, State: JournalState.Committed } ? entry : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        // Same acceptance rule as every other reader (JournalLineParser.Accept, which also swallows malformed JSON): a line
+        // whose group members are unusable (null element, blank Source) is quarantined here too, so it can never reach Undo
+        // or compaction as a Committed Move.
+        var entry = JournalLineParser.TryParse(line);
+        return entry is { Type: FileOperationType.Move, State: JournalState.Committed } ? entry : null;
     }
 
     private static bool IsRecycleOrCopyLine(ReadOnlySpan<byte> line) =>
@@ -409,16 +405,17 @@ public sealed class OperationJournal
         ReadEntries(entry =>
         {
             if (groupHistory is not null && entry.GroupMembers is { Count: > 0 } members) groupHistory[entry.Id] = (entry.GroupId, members);
-            // FA-01 (cross-process residue): another process's reconcile judged this operation from a stale snapshot and its
-            // Failed landed after the owner's Committed (the recheck-then-append window cannot be closed without a file lock).
-            // A reconcile verdict can only ever follow Prepared, so after Committed it is stale and must not win.
-            if (entry.State == JournalState.Failed && IsReconcileCode(entry.ErrorCode)
-                && latest.TryGetValue(entry.Id, out var previous) && previous.State == JournalState.Committed)
-                return;
-            latest[entry.Id] = entry;
+            if (!IsStaleReconcileAfterCommitted(entry, latest.GetValueOrDefault(entry.Id))) latest[entry.Id] = entry;
         });
         return latest;
     }
+
+    // FA-01 (cross-process residue): another process's reconcile judged this operation from a stale snapshot and its
+    // Failed landed after the owner's Committed (the recheck-then-append window cannot be closed without a file lock).
+    // A reconcile verdict can only ever follow Prepared, so after Committed it is stale and must not win. ONE rule for every
+    // reader of "the latest line of an Id" (ComputeLatestEntries, AppendIfLatestIs).
+    private static bool IsStaleReconcileAfterCommitted(JournalEntry entry, JournalEntry? previous) =>
+        entry.State == JournalState.Failed && IsReconcileCode(entry.ErrorCode) && previous?.State == JournalState.Committed;
 
     internal static bool IsReconcileCode(string? code) =>
         code is JournalErrors.PendingUnconfirmed or JournalErrors.SourceStillExistsAfterRecovery;
@@ -540,7 +537,13 @@ public sealed class OperationJournal
         lock (_gate)
         {
             JournalEntry? current = null;
-            ReadEntries(entry => { if (string.Equals(entry.Id, expected.Id, StringComparison.Ordinal)) current = entry; });
+            // Same latest-line rule as ComputeLatestEntries (which produced `expected`): a stale reconcile Failed after a
+            // Committed line is not the current state, otherwise the downgrade repair would be skipped for such an Id.
+            ReadEntries(entry =>
+            {
+                if (string.Equals(entry.Id, expected.Id, StringComparison.Ordinal) && !IsStaleReconcileAfterCommitted(entry, current))
+                    current = entry;
+            });
             if (current is null || !current.Equals(expected)) return false;
             Append(outcome);
             return true;

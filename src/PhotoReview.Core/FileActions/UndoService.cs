@@ -36,7 +36,7 @@ public sealed class UndoService
     private sealed record PartialGroupUndo(object Action, IReadOnlyList<JournalEntry> FailedEntries);
 
     private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc, bool Permanent = false,
-        IReadOnlyList<JournalGroupMember>? GroupMembers = null);
+        IReadOnlyList<JournalGroupMember>? GroupMembers = null, JournalEntry? FailedEntry = null);
 
     public UndoService(
         OperationJournal journal,
@@ -147,7 +147,9 @@ public sealed class UndoService
             // One permanent member (e.g. an XMP) must not disable undo of the JPEG/RAW that reached the Recycle Bin.
             _lastUndoAction = new UndoActionRecord(result.Operation, result.Entry?.Source ?? members[0].Source, result.Entry?.Destination ?? members[0].Destination,
                 result.Entry?.Size ?? members[0].Size, result.Entry?.LastWriteUtc ?? members[0].LastWriteUtc,
-                result.Operation == FileOperationType.Recycle && members.All(member => member.Permanent), members);
+                result.Operation == FileOperationType.Recycle && members.All(member => member.Permanent), members,
+                // The Failed Recovery line of a part-way group Delete: a successful undo must stop it offering to delete again.
+                FailedEntry: !result.Succeeded && result.Entry is { State: JournalState.Failed, GroupMembers: { Count: > 0 } } failedEntry ? failedEntry : null);
     }
 
     /// <summary>
@@ -379,17 +381,21 @@ public sealed class UndoService
                 Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
             tx = new JournalTransaction(_journal, _clock, prepared);
             await tx.BeginAsync().ConfigureAwait(false);
-            foreach (var member in pending)
+            // Whole loop on the pool (directory creation, moves and verification stats), same order as before.
+            await Task.Run(async () =>
             {
-                var folder = Path.GetDirectoryName(member.Destination!);
-                if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
-                if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
-                else await Task.Run(() => _fileSystem.Move(member.Source, member.Destination!)).ConfigureAwait(false);
-                if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
-                    throw new IOException(JournalErrors.VerifySizeChanged);
-                restored.Add(member.Destination!);
-                restoredByThisUndo++;
-            }
+                foreach (var member in pending)
+                {
+                    var folder = Path.GetDirectoryName(member.Destination!);
+                    if (!string.IsNullOrEmpty(folder)) _fileSystem.CreateDirectory(folder);
+                    if (_moveOverride is not null) await _moveOverride(member.Source, member.Destination!).ConfigureAwait(false);
+                    else _fileSystem.Move(member.Source, member.Destination!);
+                    if (_fileSystem.FileExists(member.Source) || _fileSystem.GetFileStat(member.Destination!)?.Length != member.Size)
+                        throw new IOException(JournalErrors.VerifySizeChanged);
+                    restored.Add(member.Destination!);
+                    restoredByThisUndo++;
+                }
+            }).ConfigureAwait(false);
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
             // A retry that really restored the remaining members completes the earlier partial undo: close its Failed lines.
@@ -444,6 +450,37 @@ public sealed class UndoService
         return true;
     }
 
+    /// <summary>
+    /// A group Delete that failed part-way left a Failed line that Recovery offers to retry (recycle the members still on
+    /// disk). Once Ctrl+Z restored members, retrying would delete them again, so they leave that line: it is replaced (same
+    /// Id, appended only while it is still the latest line) by a Failed line with the members that were NOT restored, or by
+    /// a terminal Dismissed line when nothing is left. Best effort like <see cref="ResolvePartialUndo"/>.
+    /// </summary>
+    private void SettleFailedDeleteLine(UndoActionRecord action, IReadOnlyCollection<string> restored)
+    {
+        if (action.FailedEntry is not { GroupMembers: { Count: > 0 } original } failed) return;
+        try
+        {
+            var remaining = original.Where(member => !restored.Contains(member.Source, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var replacement = remaining.Length == 0
+                ? failed with { State = JournalState.Dismissed, TimestampUtc = _clock.UtcNow, Error = null, ErrorCode = null }
+                : failed with
+                {
+                    TimestampUtc = _clock.UtcNow,
+                    Source = remaining[0].Source,
+                    Destination = remaining[0].Destination,
+                    Size = remaining[0].Size,
+                    LastWriteUtc = remaining[0].LastWriteUtc,
+                    GroupMembers = remaining,
+                };
+            _ = _journal.AppendIfUnchangedSince(failed, [], replacement);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The undo itself is complete; a journal that cannot be written only leaves the old Recovery item to be dismissed.
+        }
+    }
+
     private void DropGroupUndo(IReadOnlyList<JournalGroupMember> members)
     {
         foreach (var member in members)
@@ -496,8 +533,11 @@ public sealed class UndoService
             {
                 _lastUndoAction = null;
                 if (ResolvePartialUndo(action))
+                {
+                    SettleFailedDeleteLine(action, restored);
                     return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),
                         RestoredPaths: RestoredInOrder(members, restored));
+                }
                 throw new IOException(Tr.CoreRecoveryAlreadyHandled);
             }
             var undoMembers = members.Where(member => !member.Permanent).Select(member => member with { }).ToArray();
@@ -506,17 +546,23 @@ public sealed class UndoService
                 Undo: true, GroupId: Guid.NewGuid().ToString("N"), GroupMembers: undoMembers);
             tx = new JournalTransaction(_journal, _clock, prepared);
             await tx.BeginAsync().ConfigureAwait(false);
-            foreach (var member in pending)
+            // On the pool: BeginAsync completes synchronously in Fast journal mode, so without this the (slow, bin-enumerating)
+            // restore would run on the caller's (UI) thread. Awaited, so `restored` is safely read after it, also on failure.
+            await Task.Run(() =>
             {
-                if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
-                    throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
-                if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
-                restored.Add(member.Source);
-                restoredByThisUndo++;
-            }
+                foreach (var member in pending)
+                {
+                    if (!_recycleBin.TryRestore(member.Source, member.Size, member.LastWriteUtc))
+                        throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                    if (!_fileSystem.FileExists(member.Source)) throw new IOException(Tr.CoreUndoRecycleRestoreFailed(Path.GetFileName(member.Source)));
+                    restored.Add(member.Source);
+                    restoredByThisUndo++;
+                }
+            }).ConfigureAwait(false);
             tx.MarkMutationCompleted();
             _ = tx.Commit(out _);
             _ = ResolvePartialUndo(action);
+            SettleFailedDeleteLine(action, restored);
             _lastUndoAction = null;
             // Partly restorable capture: success for what came back, plus a message naming what cannot (a warning, not an error).
             return new UndoResult(true, FileOperationType.Recycle, action.Source, null, UnrecoverableNote(members, restored, unrecoverable),

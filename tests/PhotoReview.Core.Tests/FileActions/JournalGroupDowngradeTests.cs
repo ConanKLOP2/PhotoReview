@@ -92,6 +92,29 @@ public sealed class JournalGroupDowngradeTests
     }
 
     [Fact]
+    public void Reconcile_StaleReconcileFailedFollowsOlderBuildCommitted_StillRepairsTheGroupLine()
+    {
+        var fileSystem = new InMemoryFileSystem();
+        fileSystem.AddFile(@"C:\selected.jpg", new string('j', 10), Stamp); // the RAW never moved
+        fileSystem.AddFile(@"C:\photos.cr2", new string('r', 100), Stamp);
+        var journal = NewJournal(fileSystem);
+        journal.Append(GroupPrepared());
+        journal.Append(OlderBuildOutcome(GroupPrepared(), JournalState.Committed));
+        // FA-01 residue: another process's reconcile verdict landed after the Committed line; it is stale and ignored by readers.
+        journal.Append(OlderBuildOutcome(GroupPrepared(), JournalState.Failed) with
+        {
+            ErrorCode = JournalErrors.PendingUnconfirmed,
+            TimestampUtc = Stamp.AddSeconds(45),
+        });
+
+        journal.ReconcilePendingOperations();
+
+        var failed = Assert.Single(journal.ReadFailedOperations());
+        Assert.Equal(Members, failed.GroupMembers); // repaired: the members are back on the newest line
+        Assert.Equal(OperationJournal.SettledByOlderBuildText, failed.Error);
+    }
+
+    [Fact]
     public void Reconcile_DowngradeRepair_IsAppliedOnce()
     {
         var fileSystem = new InMemoryFileSystem();

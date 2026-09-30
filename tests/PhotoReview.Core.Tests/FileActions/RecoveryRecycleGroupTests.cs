@@ -110,6 +110,29 @@ public sealed class RecoveryRecycleGroupTests
     }
 
     [Fact]
+    public void Retry_GroupRecycle_RunsTheBinCallsOffTheCallerThread()
+    {
+        _fs.AddFile(Jpg, new string('j', 10), Stamp);
+        _fs.AddFile(Raw, new string('r', 10), Stamp);
+        var failed = FailedGroup(Member(Jpg), Member(Raw));
+        _journal.Append(failed);
+        RecoveryRetryResult? result = null;
+        var callerThread = 0;
+        // A blocked dedicated thread (like an awaiting UI thread): work left on the caller thread would run here.
+        var thread = new Thread(() =>
+        {
+            callerThread = Environment.CurrentManagedThreadId;
+            result = _service.RetryMoveOrCopyAsync(failed).GetAwaiter().GetResult();
+        });
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(60)));
+
+        Assert.True(result!.Succeeded, result.Message);
+        Assert.Equal(2, _bin.ThreadIds.Count);
+        Assert.All(_bin.ThreadIds, id => Assert.NotEqual(callerThread, id));
+    }
+
+    [Fact]
     public async Task Retry_BinFitsEachMemberButNotTheirSum_IsRefusedAndNothingIsRecycled()
     {
         _fs.AddFile(Jpg, new string('j', 10), Stamp);
@@ -240,8 +263,11 @@ public sealed class RecoveryRecycleGroupTests
         public List<string> PermanentlyDeleted { get; } = [];
         public HashSet<string> NoBinPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        public List<int> ThreadIds { get; } = [];
+
         public void SendToRecycleBin(string path)
         {
+            ThreadIds.Add(Environment.CurrentManagedThreadId);
             Recycled.Add(path);
             fs.Delete(path);
         }

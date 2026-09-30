@@ -45,9 +45,17 @@ public sealed class RecoveryRetryService
     /// mutation (possibly a large cross-drive copy), verification and the final journal append run on the thread
     /// pool so a UI caller stays responsive (CORE-06).
     /// </summary>
-    public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, CancellationToken ct = default)
+    /// <param name="confirmedFinishCancelled">
+    /// True only when the user explicitly confirmed "finish the operation I cancelled" (the Recovery window's dedicated
+    /// confirmation). An entry journaled <see cref="JournalErrors.CancelledByUser"/> is otherwise refused: a retry would
+    /// complete exactly what the user cancelled.
+    /// </param>
+    public async Task<RecoveryRetryResult> RetryMoveOrCopyAsync(JournalEntry failed, bool confirmedFinishCancelled = false,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(failed);
+        if (!confirmedFinishCancelled && string.Equals(failed.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
+            return new(false, Tr.CoreRecoveryCancelledNeedsConfirm, null);
 
         if (failed.GroupMembers is { Count: > 0 })
             return await RetryGroupAsync(failed, ct).ConfigureAwait(false);

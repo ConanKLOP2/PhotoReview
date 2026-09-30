@@ -47,6 +47,69 @@ public sealed class UndoServiceGroupTests
             PermanentlyDeleted: members.Any(member => member.Permanent));
     }
 
+    /// <summary>
+    /// Runs <paramref name="undoCall"/> from a dedicated blocked thread (like a UI thread that awaits): with the Fast journal
+    /// BeginAsync completes synchronously, so any file work not moved to the pool would run on THIS thread.
+    /// </summary>
+    private static UndoResult RunOnDedicatedThread(Func<Task<UndoResult>> undoCall, out int callerThreadId)
+    {
+        UndoResult? result = null;
+        Exception? failure = null;
+        var id = 0;
+        var thread = new Thread(() =>
+        {
+            id = Environment.CurrentManagedThreadId;
+            try { result = undoCall().GetAwaiter().GetResult(); }
+            catch (Exception ex) { failure = ex; }
+        });
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(60)));
+        if (failure is not null) throw failure;
+        callerThreadId = id;
+        return result!;
+    }
+
+    [Fact]
+    public void UndoLastAsync_GroupRecycle_RestoresOffTheCallerThreadInOrder()
+    {
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+
+        var result = RunOnDedicatedThread(() => _undo.UndoLastAsync(), out var callerThread);
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Equal([Jpeg, Raw], _bin.RestoreOrder);
+        Assert.All(_bin.RestoreThreadIds, id => Assert.NotEqual(callerThread, id));
+    }
+
+    [Fact]
+    public void UndoLastAsync_GroupRecyclePartialRestoreOffTheCallerThread_StillReportsRestoredPaths()
+    {
+        _bin.FailFor = Raw;
+        RegisterRecycle(Member(Jpeg, null, 4), Member(Raw, null, 8));
+
+        var result = RunOnDedicatedThread(() => _undo.UndoLastAsync(), out var callerThread);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal([Jpeg], result.RestoredPaths);
+        Assert.Equal([Jpeg, Raw], _bin.RestoreOrder);
+        Assert.All(_bin.RestoreThreadIds, id => Assert.NotEqual(callerThread, id));
+    }
+
+    [Fact]
+    public void UndoLastAsync_GroupMove_MovesBackOffTheCallerThread()
+    {
+        _fs.AddFile(MovedJpeg, "jpeg", Stamp);
+        _fs.AddFile(MovedRaw, "raw data", Stamp);
+        RegisterMove(Member(Jpeg, MovedJpeg, 4), Member(Raw, MovedRaw, 8));
+
+        var result = RunOnDedicatedThread(() => _undo.UndoLastAsync(), out var callerThread);
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        var moves = _fs.Events.Where(item => item.Kind == "move").ToArray();
+        Assert.Equal([MovedJpeg, MovedRaw], moves.Select(item => item.Path));
+        Assert.All(moves, item => Assert.NotEqual(callerThread, item.ThreadId));
+    }
+
     [Fact]
     public async Task UndoLastAsync_GroupMoveAlreadyRestoredExternally_ClearsTheActionSoItDoesNotRepeat()
     {
@@ -261,6 +324,90 @@ public sealed class UndoServiceGroupTests
         Assert.False(_fs.FileExists(Xmp));
     }
 
+    /// <summary>A group Delete that failed part-way and journaled its Failed line (also appended to the journal, like the real service does).</summary>
+    private JournalEntry RegisterFailedDelete(JournalGroupMember[] all, JournalGroupMember[] completed)
+    {
+        var entry = new JournalEntry("delete-group", FileOperationType.Recycle, JournalState.Failed, all[0].Source, null, all[0].Size, Stamp,
+            Stamp, Error: "boom", GroupId: "g", GroupMembers: all);
+        _journal.Append(entry);
+        _undo.RegisterGroup(new CaptureGroupActionResult(false, false, FileOperationType.Recycle, "g", entry,
+            all.Select(member => new CaptureGroupMemberResult(member, completed.Contains(member), false, completed.Contains(member) ? null : "boom",
+                SourceExists: !completed.Contains(member))).ToArray(), "boom"));
+        return entry;
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWhereEveryMemberWasRecycled_ClosesTheFailedLineSoRecoveryOffersNoRetry()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg, raw]);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.Empty(_journal.ReadFailedOperations()); // otherwise Retry would recycle the files the user just restored
+        Assert.Empty(_journal.ReadPendingAndFailedOperations());
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeletePartWay_RestoredMemberLeavesTheFailedLineAndTheOtherStaysRetryable()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg]); // the JPEG reached the bin, the RAW never left the disk
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(Jpeg));
+        var stillFailed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal([raw], stillFailed.GroupMembers);
+        // Recovery would retry only the RAW; the restored JPEG is no longer part of the retry.
+        var check = new RecoveryFileCheck(_fs).Check(stillFailed);
+        Assert.Equal(RecoveryVerdict.CanRetry, check.Verdict);
+        Assert.Equal([Raw], check.GroupMembers!.Select(item => item.Member.Source));
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWithPermanentMember_OnlyTheRestoredMembersLeaveTheFailedLine()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3, permanent: true);
+        RegisterFailedDelete([jpeg, raw, xmp], [jpeg, xmp]);
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        var stillFailed = Assert.Single(_journal.ReadFailedOperations());
+        Assert.Equal([raw, xmp], stillFailed.GroupMembers);
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteWhereTheRecycledMemberWasRestoredAndEdited_RestoresNothingAndRecoveryOffersNoRetry()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var entry = RegisterFailedDelete([jpeg, raw], [jpeg]);
+        _fs.AddFile(Jpeg, "jpeg", Stamp.AddHours(2)); // put back by hand, then edited: same size, other write time
+        _fs.AddFile(Raw, "raw data", Stamp);
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, _bin.RestoreCalls);
+        Assert.Equal(entry, Assert.Single(_journal.ReadFailedOperations())); // the line is untouched: nothing was undone
+        // Recovery must not offer a retry that would recycle the edited JPEG.
+        var check = new RecoveryFileCheck(_fs).Check(entry);
+        Assert.NotEqual(RecoveryVerdict.CanRetry, check.Verdict);
+        var retry = await new RecoveryRetryService(_journal, _fs, new FixedClock(), _bin).RetryMoveOrCopyAsync(entry);
+        Assert.False(retry.Succeeded);
+        Assert.True(_fs.FileExists(Jpeg)); // the edited file is still there (the fake bin would have thrown on SendToRecycleBin)
+    }
+
     [Fact]
     public void RegisterGroup_FailedWithNothingCompletedOrNotRecycle_RegistersNothing()
     {
@@ -310,10 +457,14 @@ public sealed class UndoServiceGroupTests
     {
         public int RestoreCalls { get; private set; }
         public string? FailFor { get; set; }
+        public List<string> RestoreOrder { get; } = [];
+        public List<int> RestoreThreadIds { get; } = [];
         public void SendToRecycleBin(string path) => throw new NotSupportedException();
         public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
         {
             RestoreCalls++;
+            RestoreOrder.Add(originalPath);
+            RestoreThreadIds.Add(Environment.CurrentManagedThreadId);
             if (string.Equals(originalPath, FailFor, StringComparison.OrdinalIgnoreCase)) return false;
             fs.AddFile(originalPath, new string('x', checked((int)expectedSize)), expectedLastWriteUtc);
             return true;

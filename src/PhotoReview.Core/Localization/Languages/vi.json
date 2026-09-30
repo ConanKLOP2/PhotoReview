@@ -855,5 +855,11 @@
   "status.groupPartnerMissing": "{fileName}: (các) tệp đi kèm không còn trên đĩa ({missing}), nên thao tác được áp dụng cho các tệp còn lại.",
   "core.groupAction.rollbackFailed": "{message} Ngoài ra, {count} tệp đã được xử lý không thể tự đưa về chỗ cũ; hãy kiểm tra Phục hồi.",
   "core.undo.groupPartiallyRestored": "Đã khôi phục {restored}/{total} tệp. Không thể khôi phục (đã xóa vĩnh viễn): {names}",
-  "status.lateDeletedPartlyPermanently": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp, trừ {permanentFiles}: không thể vào Thùng rác nên đã bị xóa vĩnh viễn."
+  "status.lateDeletedPartlyPermanently": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp, trừ {permanentFiles}: không thể vào Thùng rác nên đã bị xóa vĩnh viễn.",
+  "recovery.group.onDisk": "Vẫn còn trên đĩa",
+  "recovery.group.retryConfirmPermanent": "Thử lại {operation} cho {count} tệp trong nhóm ảnh? {permanentCount} tệp nằm trên ổ không có Thùng rác sẽ bị XÓA VĨNH VIỄN, không thể hoàn tác. Các tệp đã hoàn tất sẽ được bỏ qua.",
+  "recovery.group.retryConfirmRestore": "Khôi phục các tệp của nhóm ảnh từ Thùng rác (tối đa {count} tệp)? Các tệp đã có lại sẽ được bỏ qua.",
+  "core.journal.cancelledByUser": "Thao tác đã bị hủy trước khi hoàn tất.",
+  "core.recovery.cancelledNeedsConfirm": "Bạn đã hủy thao tác này trước đó. Thử lại sẽ hoàn tất nó, nên cần xác nhận rõ ràng trong cửa sổ Khôi phục. Chưa có gì bị thay đổi.",
+  "recovery.retryConfirmCancelled": "Bạn đã hủy {operation} này trước đó. Thử lại sẽ HOÀN TẤT thao tác cho {count} tệp. Tiếp tục?"
 }

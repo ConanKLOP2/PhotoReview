@@ -152,6 +152,56 @@ internal static class RecoveryPresenter
         new(title, check.Path, Tr.RecoveryDetailStatus(PathStatusText(check.Status)), PathStatusBrush(check.Status),
             NowText(check), JournalText(entry), folderMissingNote ? Tr.RecoveryDetailFolderMissing : null);
 
+    /// <summary>Status line of one capture-group member in the details panel.</summary>
+    public static string GroupStatusText(RecoveryVerdict verdict, JournalGroupMember member,
+        RecoveryPathCheck source, RecoveryPathCheck? destination)
+    {
+        var state = verdict switch
+        {
+            RecoveryVerdict.AlreadyDone => Tr.RecoveryGroupExists,
+            RecoveryVerdict.CanRetry => Tr.RecoveryGroupSourceStatus,
+            // The file is still at its original path (the delete never reached it) - not "missing".
+            RecoveryVerdict.NotRecycled => Tr.RecoveryGroupOnDisk,
+            RecoveryVerdict.RecycleUnverifiable => Tr.RecoveryGroupMissing,
+            RecoveryVerdict.SourceChanged or RecoveryVerdict.DestinationChanged => Tr.RecoveryGroupChanged,
+            RecoveryVerdict.Conflict => Tr.RecoveryGroupConflict,
+            RecoveryVerdict.Lost => Tr.RecoveryGroupLost,
+            RecoveryVerdict.Unknown => Tr.RecoveryGroupUnreadable,
+            _ => VerdictText(verdict),
+        };
+        if (member.Destination is null) return state;
+        return $"{state} · {Tr.RecoveryDetailSource}: {PathStatusText(source.Status)}"
+            + $" · {Tr.RecoveryDetailDestination}: {PathStatusText(destination?.Status ?? RecoveryPathStatus.Missing)}";
+    }
+
+    /// <summary>
+    /// Confirmation text of the Retry button. A group Delete retry that will delete members PERMANENTLY (journaled Permanent, on
+    /// a drive without a Recycle Bin, allowed by the current setting) says so explicitly, like the first-run confirmation
+    /// does; a retried Undo of a Delete restores from the Recycle Bin and is worded that way.
+    /// </summary>
+    public static string RetryConfirmText(JournalEntry entry, RecoveryCheckResult? check, bool allowPermanentDelete)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        // The user cancelled this operation: a retry finishes it, so say exactly that (the retry service refuses otherwise).
+        if (string.Equals(entry.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
+            return Tr.RecoveryRetryConfirmCancelled(OperationText(entry.Type), entry.GroupMembers is { Count: > 0 } cancelled ? cancelled.Count : 1);
+        if (entry.GroupMembers is not { Count: > 0 } members)
+            return Tr.DialogConfirmRetryMessage(OperationText(entry.Type), Path.GetFileName(entry.Source));
+        if (entry.Type == FileOperationType.Recycle && entry.Undo == true)
+            return Tr.RecoveryGroupRetryConfirmRestore(members.Count);
+        if (entry.Type == FileOperationType.Recycle && allowPermanentDelete)
+        {
+            // The members the retry deletes: the ones still on disk (NotRecycled). Without a check result assume all.
+            var pending = check?.GroupMembers is { } checks
+                ? checks.Where(item => item.Verdict == RecoveryVerdict.NotRecycled).Select(item => item.Member)
+                : members;
+            var permanent = pending.Count(member => member.Permanent);
+            if (permanent > 0)
+                return Tr.RecoveryGroupRetryConfirmPermanent(OperationText(entry.Type), members.Count, permanent);
+        }
+        return Tr.RecoveryGroupRetryConfirm(OperationText(entry.Type), members.Count);
+    }
+
     public static string OperationText(FileOperationType type) => type switch
     {
         FileOperationType.Move => Tr.EnumFileOperationMove,
