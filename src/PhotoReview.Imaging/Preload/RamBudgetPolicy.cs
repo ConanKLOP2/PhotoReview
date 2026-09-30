@@ -20,6 +20,9 @@ public static class RamBudgetPolicy
     public const double PngExpansionFactor = 3;
     public const double DefaultAverageBytesPerPixel = 4;
 
+    /// <summary>Per-axis upper bound of an embedded RAW preview relative to the container's sensor size (Canon sRAW/mRAW: 2).</summary>
+    public const int RawPreviewSensorSizeFactor = 2;
+
     /// <summary>Largest share of physical RAM a single in-memory cache budget may claim (IMG-11).</summary>
     public const double MaxPhysicalMemoryShare = 0.5;
 
@@ -282,6 +285,16 @@ public static class RamBudgetPolicy
             }
             else if (width > 0 && height > 0 && (bounded || isRaw))
             {
+                if (isRaw)
+                {
+                    // The container gives the SENSOR size, but the decoded image is the embedded JPEG, which can be larger:
+                    // Canon 7D sRAW2 has a 2592x1728 sensor and a 5184x3456 preview (4x the pixels). Assume the preview may be
+                    // up to twice the sensor size per axis; a bounded box caps this anyway, so it only matters below the box
+                    // and in Original mode. Measured means (branch above) replace this once previews were really decoded.
+                    width = checked(width * RawPreviewSensorSizeFactor);
+                    height = checked(height * RawPreviewSensorSizeFactor);
+                }
+
                 var scale = Math.Min(1d, Math.Min(
                     targetBox.Width > 0 ? targetBox.Width / (double)width : 1d,
                     targetBox.Height > 0 ? targetBox.Height / (double)height : 1d));
