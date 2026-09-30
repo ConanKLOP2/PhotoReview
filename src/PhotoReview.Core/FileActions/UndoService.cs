@@ -36,7 +36,12 @@ public sealed class UndoService
     private sealed record PartialGroupUndo(object Action, IReadOnlyList<JournalEntry> FailedEntries);
 
     private sealed record UndoActionRecord(FileOperationType Operation, string Source, string? Destination, long Size, DateTime LastWriteUtc, bool Permanent = false,
-        IReadOnlyList<JournalGroupMember>? GroupMembers = null, JournalEntry? FailedEntry = null);
+        IReadOnlyList<JournalGroupMember>? GroupMembers = null, JournalEntry? FailedEntry = null)
+    {
+        /// <summary>The latest Failed line this action put in the journal for its Id: starts as <see cref="FailedEntry"/> and is
+        /// replaced by every settle append, so later settles anchor on the line that is really the latest.</summary>
+        public JournalEntry? CurrentFailedEntry { get; set; } = FailedEntry;
+    }
 
     public UndoService(
         OperationJournal journal,
@@ -458,22 +463,18 @@ public sealed class UndoService
     /// </summary>
     private void SettleFailedDeleteLine(UndoActionRecord action, IReadOnlyCollection<string> restored)
     {
-        if (action.FailedEntry is not { GroupMembers: { Count: > 0 } original } failed) return;
         try
         {
-            var remaining = original.Where(member => !restored.Contains(member.Source, StringComparer.OrdinalIgnoreCase)).ToArray();
-            var replacement = remaining.Length == 0
-                ? failed with { State = JournalState.Dismissed, TimestampUtc = _clock.UtcNow, Error = null, ErrorCode = null }
-                : failed with
-                {
-                    TimestampUtc = _clock.UtcNow,
-                    Source = remaining[0].Source,
-                    Destination = remaining[0].Destination,
-                    Size = remaining[0].Size,
-                    LastWriteUtc = remaining[0].LastWriteUtc,
-                    GroupMembers = remaining,
-                };
-            _ = _journal.AppendIfUnchangedSince(failed, [], replacement);
+            if (action.CurrentFailedEntry is not { State: JournalState.Failed } anchor) return;
+            if (TrySettleFrom(action, anchor, restored)) return;
+            // Another writer appended a line for this Id since our last one (the append is anchored on the latest line we know).
+            // Re-anchor only when that newer line is still a Failed line over a subset of this action's members; anything else
+            // (terminal, a retry in flight, unrelated members) is not ours to overwrite.
+            var latest = _journal.ReadLatestEntry(anchor.Id);
+            if (latest is not { State: JournalState.Failed, GroupMembers: { Count: > 0 } latestMembers } || latest == anchor) return;
+            if (action.FailedEntry?.GroupMembers is not { Count: > 0 } original) return;
+            if (!latestMembers.All(member => original.Any(o => string.Equals(o.Source, member.Source, StringComparison.OrdinalIgnoreCase)))) return;
+            _ = TrySettleFrom(action, latest, restored);
         }
         catch (Exception ex) when (IsNonCritical(ex))
         {
@@ -482,8 +483,31 @@ public sealed class UndoService
         }
     }
 
-    /// <summary>Best-effort journal settling must never fail a finished undo: anything but out-of-memory/cancellation is swallowed.</summary>
-    private static bool IsNonCritical(Exception ex) => ex is not (OutOfMemoryException or OperationCanceledException);
+    /// <summary>Appends the replacement of <paramref name="anchor"/> (only while it is the latest line of its Id) and, on success,
+    /// makes it the action's new latest line so later settles anchor on it.</summary>
+    private bool TrySettleFrom(UndoActionRecord action, JournalEntry anchor, IReadOnlyCollection<string> restored)
+    {
+        if (anchor.GroupMembers is not { Count: > 0 } members) return false;
+        var remaining = members.Where(member => !restored.Contains(member.Source, StringComparer.OrdinalIgnoreCase)).ToArray();
+        var replacement = remaining.Length == 0
+            ? anchor with { State = JournalState.Dismissed, TimestampUtc = _clock.UtcNow, Error = null, ErrorCode = null }
+            : anchor with
+            {
+                TimestampUtc = _clock.UtcNow,
+                Source = remaining[0].Source,
+                Destination = remaining[0].Destination,
+                Size = remaining[0].Size,
+                LastWriteUtc = remaining[0].LastWriteUtc,
+                GroupMembers = remaining,
+            };
+        if (!_journal.AppendIfUnchangedSince(anchor, [], replacement)) return false;
+        action.CurrentFailedEntry = replacement;
+        return true;
+    }
+
+    /// <summary>Best-effort journal settling must never change the outcome of a finished undo: everything but out-of-memory is
+    /// swallowed, a cancellation included (it means "settle skipped", not "undo failed").</summary>
+    private static bool IsNonCritical(Exception ex) => ex is not OutOfMemoryException;
 
     private void DropGroupUndo(IReadOnlyList<JournalGroupMember> members)
     {

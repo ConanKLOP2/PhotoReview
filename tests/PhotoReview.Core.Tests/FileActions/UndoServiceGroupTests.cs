@@ -501,6 +501,107 @@ public sealed class UndoServiceGroupTests
         Assert.Equal(0, _bin.RestoreCalls);
     }
 
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteUndoFailsThenRetrySucceeds_LeavesNoRetryableFailedLine()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3);
+        RegisterFailedDelete([jpeg, raw, xmp], [jpeg, raw, xmp]); // all three reached the bin
+        _bin.FailFor = Raw; // the JPEG comes back, the RAW fails
+
+        var first = await _undo.UndoLastAsync();
+
+        Assert.False(first.Succeeded);
+        Assert.Equal([raw, xmp], Assert.Single(_journal.ReadFailedOperations(), entry => entry.Id == "delete-group").GroupMembers);
+
+        _bin.FailFor = null;
+        var second = await _undo.UndoLastAsync();
+
+        Assert.True(second.Succeeded, second.ErrorMessage);
+        Assert.True(_fs.FileExists(Jpeg));
+        Assert.True(_fs.FileExists(Raw));
+        Assert.True(_fs.FileExists(Xmp));
+        // Every member is back: a fresh Recovery window must not offer "retry delete" on live files.
+        Assert.DoesNotContain(_journal.ReadFailedOperations(), entry => entry.Id == "delete-group");
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteNewerForeignLineAppearedBeforeSettle_SettleSkipsAndKeepsTheNewerLine()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3);
+        RegisterFailedDelete([jpeg, raw, xmp], [jpeg, raw, xmp]);
+        _bin.FailFor = Raw;
+        await _undo.UndoLastAsync();
+        // Another writer (a second process sharing the journal) appends a newer line for the same Id, about other members.
+        var foreign = Member(@"C:\photos\other.jpg", null, 5);
+        var newer = new JournalEntry("delete-group", FileOperationType.Recycle, JournalState.Failed, foreign.Source, null, 5, Stamp, Stamp,
+            Error: "other writer", GroupId: "g", GroupMembers: [foreign]);
+        _journal.Append(newer);
+        _bin.FailFor = null;
+
+        var second = await _undo.UndoLastAsync();
+
+        Assert.True(second.Succeeded, second.ErrorMessage);
+        Assert.Equal(newer, Assert.Single(_journal.ReadFailedOperations(), entry => entry.Id == "delete-group")); // not overwritten
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteNewerLineIsASubsetOfTheMembers_SettleReanchorsOnItAndClosesIt()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        var xmp = Member(Xmp, null, 3);
+        RegisterFailedDelete([jpeg, raw, xmp], [jpeg, raw, xmp]);
+        _bin.FailFor = Raw;
+        await _undo.UndoLastAsync();
+        var newer = new JournalEntry("delete-group", FileOperationType.Recycle, JournalState.Failed, xmp.Source, null, 3, Stamp, Stamp,
+            Error: "other writer", GroupId: "g", GroupMembers: [xmp]);
+        _journal.Append(newer);
+        _bin.FailFor = null;
+
+        var second = await _undo.UndoLastAsync();
+
+        Assert.True(second.Succeeded, second.ErrorMessage);
+        Assert.DoesNotContain(_journal.ReadFailedOperations(), entry => entry.Id == "delete-group");
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteSettleAppendCancelled_UndoStillSucceedsAndClearsTheAction()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg, raw]);
+        var appends = 0;
+        _fs.OpenAppendHook = _ => ++appends >= 3 ? new OperationCanceledException() : null; // Prepared, Committed, then the settle
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.False(_undo.HasLastAction);
+        _fs.OpenAppendHook = null;
+        Assert.DoesNotContain(_journal.ReadFailedOperations(), entry => entry.Undo == true); // no tx.Fail after the Commit
+    }
+
+    [Fact]
+    public async Task UndoLastAsync_FailedGroupDeleteCatchPathSettleCancelled_ReturnsTheFailedResultInsteadOfThrowing()
+    {
+        var jpeg = Member(Jpeg, null, 4);
+        var raw = Member(Raw, null, 8);
+        RegisterFailedDelete([jpeg, raw], [jpeg, raw]);
+        _bin.FailFor = Raw;
+        var appends = 0;
+        // Prepared, the undo's own Failed line, then the catch-path settle.
+        _fs.OpenAppendHook = _ => ++appends >= 3 ? new OperationCanceledException() : null;
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Equal([Jpeg], result.RestoredPaths);
+    }
+
     private sealed class FixedClock : IClock
     {
         public DateTime UtcNow => Stamp;
