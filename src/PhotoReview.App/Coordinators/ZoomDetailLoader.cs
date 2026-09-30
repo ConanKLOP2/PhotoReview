@@ -24,7 +24,8 @@ namespace PhotoReview.App.Coordinators;
 /// preview RAM/disk caches for the same reason (<see cref="PreviewImageService.DecodeOriginalAsync"/>).</para>
 /// <para>Fit keeps showing the preview; the held original is re-shown without a new decode if the
 /// user zooms again on the same image. Previews that are already full size (Original loading mode,
-/// or a source smaller than the decode box) never trigger a decode.</para>
+/// or a source smaller than the decode box) never trigger a decode -- except a RAW in Original mode, whose
+/// embedded JPEG is still below sensor size when the RAW full decode is enabled.</para>
 /// <para>ADR 0005: UI-affine like the rest of the App layer -- no <c>ConfigureAwait(false)</c>; the
 /// continuation after the decode runs on the UI thread and re-checks the navigation token.</para>
 /// </remarks>
@@ -103,7 +104,10 @@ public sealed class ZoomDetailLoader
     {
         ArgumentNullException.ThrowIfNull(preview);
         Reset();
-        if (key.IsOriginal || !preview.Downscaled) return; // already full resolution
+        if (!preview.Downscaled) return; // already full resolution
+        // An Original-mode key is full resolution for ordinary images, but a RAW's "original" is only its embedded JPEG
+        // (Downscaled while smaller than the sensor): offer the full decode when the RAW full decoder will serve it.
+        if (key.IsOriginal && !_previewService.IsRawFullDecodeRequest(path)) return;
         _target = new Target(token, path, key, preview.PlatformImage, preview.PixelWidth, preview.OriginalWidth, preview.OriginalHeight);
         Update();
     }

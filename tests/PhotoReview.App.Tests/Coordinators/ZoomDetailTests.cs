@@ -353,6 +353,88 @@ public sealed class ZoomDetailTests : IDisposable
     }
 
     [Fact]
+    public async Task RawOriginalMode_EmbeddedJpegBelowSensorSize_OffersTheFullDecodeOnZoom()
+    {
+        var rawPath = Path.Combine(_tempDir, "original-mode.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var embeddedJpegDecoder = new EmbeddedRawDecoder();
+        var rawDecoder = new SizedDecoder();
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: embeddedJpegDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+            await WhenOriginalShownAsync(presenter);
+
+            Assert.Equal(1, rawDecoder.OriginalDecodes);
+            Assert.Equal(6000, presenter.ZoomDetail.HeldOriginal!.PixelWidth);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawOriginalMode_FullDecodeDisabled_NeverDecodesAgain()
+    {
+        var rawPath = Path.Combine(_tempDir, "original-mode-off.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var embeddedJpegDecoder = new EmbeddedRawDecoder();
+        var rawDecoder = new SizedDecoder();
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: embeddedJpegDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => false);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+
+            Assert.Null(presenter.ZoomDetail.PendingLoad);
+            Assert.Equal(0, rawDecoder.OriginalDecodes);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RawOriginalMode_ImageAlreadyAtSensorSize_NeverDecodesAgain()
+    {
+        var rawPath = Path.Combine(_tempDir, "original-mode-full.cr2");
+        File.WriteAllBytes(rawPath, [0x49, 0x49, 0x2A, 0x00]);
+        var fullSizeDecoder = new EmbeddedRawDecoder(downscaled: false);
+        var rawDecoder = new SizedDecoder();
+        var service = new PreviewImageService(_metrics, () => true, () => new DecodeBox(1920, 1080),
+            capacityBytes: 512L * 1024 * 1024, disableDiskCacheOverride: true,
+            decoder: fullSizeDecoder, currentBackend: () => DecoderBackend.Wpf,
+            rawFullDecoder: rawDecoder, isRawFullDecodeEnabled: () => true);
+        try
+        {
+            var presenter = CreatePresenter(service, [rawPath]);
+            await presenter.PresentAsync(0);
+
+            _viewer.SetZoom(1.0);
+
+            Assert.Null(presenter.ZoomDetail.PendingLoad);
+            Assert.Equal(0, rawDecoder.OriginalDecodes);
+        }
+        finally
+        {
+            await service.ShutdownPersistWorkersAsync();
+        }
+    }
+
+    [Fact]
     public async Task RawOnZoom_SupersededLoadFinishingLate_DoesNotClearTheNewerLoadsIndicator()
     {
         var pathA = Path.Combine(_tempDir, "a.cr2");
@@ -610,6 +692,16 @@ public sealed class ZoomDetailTests : IDisposable
         }
 
         public ImageInfo ReadInfo(string path) => new(OriginalWidth, OriginalHeight);
+    }
+
+    /// <summary>A RAW's regular decode: the embedded JPEG (2000 px wide) of a 6000x4000 sensor, whatever the box.</summary>
+    private sealed class EmbeddedRawDecoder(bool downscaled = true) : IImageDecoder
+    {
+        public IDecodedImage Decode(DecodeRequest request) => downscaled
+            ? new SizedImage(2000, 1333, 6000, 4000, downscaled: true)
+            : new SizedImage(6000, 4000, 6000, 4000, downscaled: false);
+
+        public ImageInfo ReadInfo(string path) => new(6000, 4000);
     }
 
     private sealed class SizedImage(int width, int height, int originalWidth, int originalHeight, bool downscaled) : IDecodedImage
