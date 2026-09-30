@@ -11,9 +11,6 @@ public static class RawContainerLimits
     /// <summary>Maximum number of directory entries permitted per IFD.</summary>
     public const int MaxEntriesPerIfd = 4096;
 
-    /// <summary>Maximum nesting depth for ISO-BMFF box structures (e.g. CR3).</summary>
-    public const int MaxBoxDepth = 16;
-
     /// <summary>
     /// Largest embedded preview (bytes) a RAW decode will read into memory (128 MiB). Real previews are 10 KB to a few MB
     /// (a full-size JpgFromRaw is at most ~30 MB); a container declaring more is treated as corrupt before anything is allocated,

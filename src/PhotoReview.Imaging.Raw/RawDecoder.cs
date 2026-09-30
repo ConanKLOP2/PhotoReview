@@ -378,6 +378,13 @@ public sealed class RawDecoder : IImageDecoder
             _containerInfoCache.Set(key, info);
             return info;
         }
+        catch (InvalidDataException ex) when (ex.InnerException is IOException or ObjectDisposedException)
+        {
+            // The header source reports I/O failures as InvalidDataException(inner); a disk/share error is not a corrupt RAW.
+            headerSource.Dispose();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException ?? ex).Throw();
+            throw;
+        }
         catch
         {
             headerSource.Dispose();

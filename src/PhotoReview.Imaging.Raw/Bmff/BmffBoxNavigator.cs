@@ -6,8 +6,8 @@ namespace PhotoReview.Imaging.Raw.Bmff;
 
 /// <summary>
 /// Parser and walker for ISO-BMFF (ISO base media file format) boxes.
-/// Hostile-input safe: checked arithmetic, box recursion depth cap (<see cref="RawContainerLimits.MaxBoxDepth"/>),
-/// and bounds checking against container length.
+/// Hostile-input safe: checked arithmetic, a cap on the children returned per box (<see cref="MaxChildBoxes"/>; the
+/// CR3 reader walks a fixed, shallow moov/uuid/trak path rather than recursing) and bounds checking against container length.
 /// </summary>
 public static class BmffBoxNavigator
 {
