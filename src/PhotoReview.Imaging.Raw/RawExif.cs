@@ -20,7 +20,9 @@ public static class RawExif
     /// - For JPEG preview blocks (e.g. RAF/RW2 where <see cref="ExifBlock.IsTiffHeader"/> = false), reads the leading bytes and parses via <see cref="ExifParser.TryParseJpeg"/>.
     /// Summaries of several blocks are merged (first non-null value per field wins, in block order): a Canon CR3 has
     /// camera/date in CMT1 and the exposure fields in CMT2 (<see cref="ExifBlock.IfdIsExif"/>). Later blocks are only
-    /// read while the merged summary still lacks a field.
+    /// read while the merged summary still lacks a field. The one exception is the date: CMT1 carries only DateTime (0x0132,
+    /// the file change time) while CMT2 carries DateTimeOriginal (0x9003, the capture time), so a date taken from an
+    /// <see cref="ExifBlock.IfdIsExif"/> block replaces one that came from a block that is not.
     /// Returns null if no valid EXIF metadata is found or on corrupt input; never throws.
     /// </summary>
     public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo) =>
@@ -41,6 +43,7 @@ public static class RawExif
             return null;
 
         ExifSummary? merged = null;
+        bool dateFromExifIfd = false;
         foreach (var block in containerInfo.ExifBlocks)
         {
             if (block.Offset < 0 || block.Offset >= source.Length || block.Length <= 0)
@@ -69,7 +72,22 @@ public static class RawExif
 
             if (summary is not null && !summary.IsEmpty)
             {
-                merged = merged is null ? summary : Merge(merged, summary);
+                if (merged is null)
+                {
+                    merged = summary;
+                    dateFromExifIfd = block.IfdIsExif && summary.DateTaken is not null;
+                }
+                else
+                {
+                    bool preferLaterDate = block.IfdIsExif && !dateFromExifIfd && summary.DateTaken is not null;
+                    merged = Merge(merged, summary);
+                    if (preferLaterDate)
+                    {
+                        merged = merged with { DateTaken = summary.DateTaken };
+                        dateFromExifIfd = true;
+                    }
+                }
+
                 if (IsComplete(merged))
                     break;
             }
