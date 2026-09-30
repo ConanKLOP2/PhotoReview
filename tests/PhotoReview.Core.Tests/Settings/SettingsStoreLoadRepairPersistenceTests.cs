@@ -111,8 +111,12 @@ public sealed class SettingsStoreLoadRepairPersistenceTests
         _fs.WriteHook = _ => { writes++; return null; };
         var store = NewStore();
 
-        store.Load(other);
+        var loaded = store.Load(other);
 
+        // Not vacuous: the explicit file really was read and repaired (only then is "no write" a statement about the default file).
+        Assert.Contains("Shortcuts." + nameof(ShortcutMappings.ToggleKeepZoom), store.LastLoadRepairs);
+        Assert.Equal("", loaded.Shortcuts.ToggleKeepZoom);
+        Assert.Equal("K", Assert.Single(loaded.Actions).Shortcut);
         Assert.Equal(0, writes);
     }
 

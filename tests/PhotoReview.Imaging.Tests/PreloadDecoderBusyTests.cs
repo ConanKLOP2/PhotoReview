@@ -24,10 +24,11 @@ public sealed class PreloadDecoderBusyTests
         var target = new BusyTarget();
         using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log);
+            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log) { BusyNoted = _ => target.BusyWasRecorded() };
 
         var lifetime = scheduler.PreloadAroundAsync(0);
         await target.BlockedEntered.WaitAsync(TimeSpan.FromSeconds(10));
+        await target.BusyRecorded(1).WaitAsync(Bound); // the backoff stamped pass 1 before the next pass begins
         Assert.Equal(1, target.PreloadCount(BusyIndex));
         Assert.False(target.IsCached(BusyIndex));
 
@@ -53,17 +54,17 @@ public sealed class PreloadDecoderBusyTests
         var target = new BusyTarget(busyAttempts: int.MaxValue);
         using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, new RecordingLog());
+            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, new RecordingLog()) { BusyNoted = _ => target.BusyWasRecorded() };
         _ = scheduler.PreloadAroundAsync(0);
         await target.WaitForPassesAsync(1).WaitAsync(Bound);
-        await target.BusyThrown(1).WaitAsync(Bound);
+        await target.BusyRecorded(1).WaitAsync(Bound);
 
         var attemptsAfterPass = new List<int> { target.PreloadCount(BusyIndex) };
         for (var pass = 2; pass <= 5; pass++)
         {
             _ = scheduler.PreloadAroundAsync(0);
             await target.WaitForPassesAsync(pass).WaitAsync(Bound);
-            if (pass == 5) await target.BusyThrown(2).WaitAsync(Bound);
+            if (pass == 5) await target.BusyRecorded(2).WaitAsync(Bound);
             attemptsAfterPass.Add(target.PreloadCount(BusyIndex));
         }
 
@@ -79,11 +80,11 @@ public sealed class PreloadDecoderBusyTests
         var target = new BusyTarget(busyAttempts: int.MaxValue);
         using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
             new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
-            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log);
+            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, log) { BusyNoted = _ => target.BusyWasRecorded() };
         _ = scheduler.PreloadAroundAsync(0);
         await target.WaitForPassesAsync(1).WaitAsync(Bound);
         var expectedBusyAttempts = 1;
-        await target.BusyThrown(expectedBusyAttempts).WaitAsync(Bound);
+        await target.BusyRecorded(expectedBusyAttempts).WaitAsync(Bound);
 
         const int Passes = 1 + (PreloadBusyBackoff.MaxRetries + 3) * (PreloadBusyBackoff.CooldownPasses + 1);
         for (var pass = 2; pass <= Passes; pass++)
@@ -92,7 +93,7 @@ public sealed class PreloadDecoderBusyTests
             await target.WaitForPassesAsync(pass).WaitAsync(Bound);
             // A retry happens exactly every CooldownPasses + 1 passes until the cap (1 attempt + MaxRetries retries) is used up.
             if ((pass - 1) % (PreloadBusyBackoff.CooldownPasses + 1) == 0 && expectedBusyAttempts < PreloadBusyBackoff.MaxRetries + 1)
-                await target.BusyThrown(++expectedBusyAttempts).WaitAsync(Bound);
+                await target.BusyRecorded(++expectedBusyAttempts).WaitAsync(Bound);
         }
 
         target.ReleaseBlocked();
@@ -159,8 +160,11 @@ public sealed class PreloadDecoderBusyTests
         /// <summary>Completes once the scheduler loop examined the marker index in <paramref name="pass"/> order passes.</summary>
         public Task WaitForPassesAsync(int pass) => Waiter(ref _passes, _passWaiters, pass);
 
-        /// <summary>Completes once <paramref name="count"/> busy refusals were thrown.</summary>
-        public Task BusyThrown(int count) => Waiter(ref _busyThrown, _busyWaiters, count);
+        /// <summary>Completes once <paramref name="count"/> busy refusals were thrown AND recorded by the scheduler's backoff (NoteBusy ran).</summary>
+        public Task BusyRecorded(int count) => Waiter(ref _busyThrown, _busyWaiters, count);
+
+        /// <summary>Called by the scheduler's BusyNoted seam, i.e. after the backoff stamped the pass.</summary>
+        public void BusyWasRecorded() => Signal(ref _busyThrown, _busyWaiters);
 
         private void Signal(ref int counter, List<(int Threshold, TaskCompletionSource Signal)> waiters)
         {
@@ -187,7 +191,6 @@ public sealed class PreloadDecoderBusyTests
             var attempt = _preloads.AddOrUpdate(index, 1, (_, count) => count + 1);
             if (index == BusyIndex && attempt <= _busyAttempts)
             {
-                Signal(ref _busyThrown, _busyWaiters);
                 throw new DecoderBusyException();
             }
             if (index == BlockedIndex)

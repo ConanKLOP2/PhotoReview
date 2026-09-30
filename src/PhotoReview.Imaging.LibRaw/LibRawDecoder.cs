@@ -190,7 +190,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         using var slot = s_fullDecodeGate.Enter(request.Priority, cancellationToken);
         try
         {
-            return DecodeCore(request, slot, cancellationToken);
+            return CoreOverride is { } core ? core(request, slot, cancellationToken) : DecodeCore(request, slot, cancellationToken);
         }
         catch (OutOfMemoryException ex)
         {
@@ -221,8 +221,7 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
             OpenSource(raw, request, bufferPin, cancellationToken);
             _stageObserver?.Invoke("opened");
             if (_configureAfterOpen) ConfigureOutput(raw);
-            EnsureMemoryHeadroom(raw, request);
-            slot.MarkWorked(); // past the guard: real decode work starts, so this lease counts for the gate's preload aging
+            AdmitDecode(new NativeProbe(raw), request, slot);
             CheckResult(LibRawNativeMethods.LibRawUnpack(raw), "unpack RAW data", cancellationToken);
             _stageObserver?.Invoke("unpacked");
             cancellationToken.ThrowIfCancellationRequested();
@@ -271,18 +270,51 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
     }
 
     /// <summary>Refuses a decode whose estimated peak (see <see cref="DecodeMemoryGuard"/>) exceeds the available memory headroom, before anything big is allocated.</summary>
-    private void EnsureMemoryHeadroom(SafeLibRawHandle raw, DecodeRequest request)
+    private void EnsureMemoryHeadroom(ILibRawProbe raw, DecodeRequest request)
     {
-        var width = LibRawNativeMethods.LibRawGetIWidth(raw);
-        var height = LibRawNativeMethods.LibRawGetIHeight(raw);
+        var width = raw.Width;
+        var height = raw.Height;
         if (width <= 0 || height <= 0) return; // unknown size: nothing to estimate from
         var (targetWidth, targetHeight) = request.Box.Fit(width, height);
         var (total, load) = MemoryInfo();
-        var family = DecodeMemoryGuard.Classify(LibRawNativeMethods.TryGetDecoderName(raw), LibRawNativeMethods.TryGetRawStructure(raw));
-        var estimate = DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight,
-            LibRawNativeMethods.LibRawGetRawWidth(raw), LibRawNativeMethods.LibRawGetRawHeight(raw), family);
+        var family = DecodeMemoryGuard.Classify(raw.DecoderName, raw.Structure);
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight, raw.RawWidth, raw.RawHeight, family);
         if (!DecodeMemoryGuard.HasHeadroom(estimate, total, load))
             throw new InvalidOperationException("Not enough memory to decode this RAW image.");
+    }
+
+    /// <summary>Test seam: replaces the native decode body (DecodeCore) so the gate/lease handling of <see cref="Decode(DecodeRequest, CancellationToken)"/> can be exercised without LibRaw.</summary>
+    internal Func<DecodeRequest, FullDecodeGate.Lease, CancellationToken, IDecodedImage>? CoreOverride { get; init; }
+
+    /// <summary>What the pre-decode admission reads from the opened LibRaw handle (test seam: a fake stands in for the native handle).</summary>
+    internal interface ILibRawProbe
+    {
+        int Width { get; }
+        int Height { get; }
+        int RawWidth { get; }
+        int RawHeight { get; }
+        string? DecoderName { get; }
+        DecodeMemoryGuard.RawStructure? Structure { get; }
+    }
+
+    private sealed class NativeProbe(SafeLibRawHandle raw) : ILibRawProbe
+    {
+        public int Width => LibRawNativeMethods.LibRawGetIWidth(raw);
+        public int Height => LibRawNativeMethods.LibRawGetIHeight(raw);
+        public int RawWidth => LibRawNativeMethods.LibRawGetRawWidth(raw);
+        public int RawHeight => LibRawNativeMethods.LibRawGetRawHeight(raw);
+        public string? DecoderName => LibRawNativeMethods.TryGetDecoderName(raw);
+        public DecodeMemoryGuard.RawStructure? Structure => LibRawNativeMethods.TryGetRawStructure(raw);
+    }
+
+    /// <summary>
+    /// Memory guard, then (only when it passes) <see cref="FullDecodeGate.Lease.MarkWorked"/>: a refused decode is an instant failure that must
+    /// not age queued preloads. Internal so default-category tests pin the order and the inputs given to <see cref="DecodeMemoryGuard.Classify"/>.
+    /// </summary>
+    internal void AdmitDecode(ILibRawProbe raw, DecodeRequest request, FullDecodeGate.Lease slot)
+    {
+        EnsureMemoryHeadroom(raw, request);
+        slot.MarkWorked(); // past the guard: real decode work starts, so this lease counts for the gate's preload aging
     }
 
     private void ConfigureOutput(SafeLibRawHandle raw)
