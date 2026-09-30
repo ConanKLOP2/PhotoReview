@@ -93,6 +93,37 @@ public sealed class FileActionControllerGroupTests : IDisposable
     }
 
     [Fact]
+    public async Task GroupRecycle_EntryDegradedToStandaloneWhileTheConfirmationIsOpen_ActsOnNoFileAndSaysSo()
+    {
+        var (before, jpeg, raw, _, after) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(new AppSettings { ConfirmBeforeDelete = true });
+        // The readability probe / RemoveOrDegrade meanwhile finds the RAW unreadable: the entry becomes the standalone JPEG.
+        _dialog.OnConfirm = () => _catalog.RemovePaths([raw]);
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Empty(_bin.Recycled);
+        Assert.True(File.Exists(jpeg) && File.Exists(raw)); // the partner that is no longer shown was not touched either
+        Assert.Equal([before, jpeg, after], _catalog.Paths);
+        Assert.Null(_catalog.Find(jpeg)!.CaptureGroup);
+        Assert.Equal(Tr.StatusGroupChangedDuringConfirm("pair.jpg"), _sink.LastStatus);
+    }
+
+    [Fact]
+    public async Task GroupRecycle_GroupUnchangedWhileTheConfirmationIsOpen_StillRecyclesBothMembers()
+    {
+        var (_, jpeg, raw, _, _) = LoadPairBetweenTwoPhotos();
+        var controller = NewController(new AppSettings { ConfirmBeforeDelete = true });
+        _dialog.OnConfirm = () => { }; // the catalog is untouched
+
+        await controller.RecycleAsync(null, jpeg);
+
+        Assert.Equal(2, _bin.Recycled.Count);
+        Assert.Contains(jpeg, _bin.Recycled);
+        Assert.Contains(raw, _bin.Recycled);
+    }
+
+    [Fact]
     public async Task GroupRecycle_BinCannotHoldTheWholeCapture_RestoresGroupedEntryAndDeletesNothing()
     {
         var (before, jpeg, _, xmp, after) = LoadPairBetweenTwoPhotos(withXmp: true);
@@ -513,9 +544,13 @@ public sealed class FileActionControllerGroupTests : IDisposable
     {
         public List<(string Title, string Message)> Confirmations { get; } = [];
 
+        /// <summary>Runs while a confirmation is "open" (the real dialog runs a nested dispatcher loop, so the catalog can change meanwhile).</summary>
+        public Action? OnConfirm { get; set; }
+
         public bool ShowConfirmation(string title, string message)
         {
             Confirmations.Add((title, message));
+            OnConfirm?.Invoke();
             return response;
         }
 

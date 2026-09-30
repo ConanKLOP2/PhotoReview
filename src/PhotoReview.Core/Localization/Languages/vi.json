@@ -855,5 +855,6 @@
   "status.groupPartnerMissing": "{fileName}: (các) tệp đi kèm không còn trên đĩa ({missing}), nên thao tác được áp dụng cho các tệp còn lại.",
   "core.groupAction.rollbackFailed": "{message} Ngoài ra, {count} tệp đã được xử lý không thể tự đưa về chỗ cũ; hãy kiểm tra Recovery.",
   "core.undo.groupPartiallyRestored": "Đã khôi phục {restored}/{total} tệp. Không thể khôi phục (đã xóa vĩnh viễn): {names}",
-  "status.lateDeletedPartlyPermanently": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp, trừ {permanentFiles}: không thể vào Thùng rác nên đã bị xóa vĩnh viễn."
+  "status.lateDeletedPartlyPermanently": "Đã đưa {fileName} vào Thùng rác sau khi bạn rời thư mục chứa tệp, trừ {permanentFiles}: không thể vào Thùng rác nên đã bị xóa vĩnh viễn.",
+  "status.groupChangedDuringConfirm": "{fileName}: bộ ảnh đã thay đổi trong lúc hộp xác nhận đang mở nên chưa có gì bị thay đổi. Hãy thử lại."
 }

@@ -185,8 +185,16 @@ public sealed class FileActionController
             allowPermanent = permanentGroupPaths.Length > 0;
         }
 
+        // The confirmations above run nested dispatcher loops: the entry may have been degraded to a standalone survivor
+        // (readability probe / RemoveOrDegrade) or regrouped meanwhile. Never act on files that are no longer shown together.
+        var group = _catalog.Find(source)?.CaptureGroup;
+        if (!Equals(group, selectedGroup))
+        {
+            _sink.SetStatusText(Tr.StatusGroupChangedDuringConfirm(Path.GetFileName(source)));
+            return false;
+        }
+
         var sourceIndex = _catalog.IndexOf(source);
-        var group = selectedGroup;
         var isRemove = operation is FileOperationType.Move or FileOperationType.Recycle;
         // Only a Move/Recycle takes the file out of the catalog and re-presents the next photo (which also restarts
         // preload). A Copy changes nothing on screen and nothing would restart what StopForAction/Cancel stopped, so it
