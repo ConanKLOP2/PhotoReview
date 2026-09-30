@@ -10,6 +10,7 @@ namespace PhotoReview.Integration.Tests;
 /// tests observe whether the stub ran. A failed fetch (offline, source package missing from the checkout) must only warn: the DLL may
 /// still be usable, and LibRawAvailability / verify-release.ps1 fail closed on a missing or wrong one.
 /// </summary>
+[Trait("Category", "Integration")] // runs msbuild and a PowerShell stub (spawns processes): Integration per the TEST-OS architecture rule
 public sealed class LibRawBuildTargetTests : IDisposable
 {
     private readonly TempRoot _root = new("libraw-target");
