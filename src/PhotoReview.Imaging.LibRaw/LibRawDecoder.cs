@@ -274,7 +274,10 @@ public sealed class LibRawDecoder : ICancellableImageDecoder
         if (width <= 0 || height <= 0) return; // unknown size: nothing to estimate from
         var (targetWidth, targetHeight) = request.Box.Fit(width, height);
         var (total, load) = MemoryInfo();
-        if (!DecodeMemoryGuard.HasHeadroom(DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight), total, load))
+        var family = DecodeMemoryGuard.FamilyFromDecoderName(LibRawNativeMethods.TryGetDecoderName(raw));
+        var estimate = DecodeMemoryGuard.EstimatePeakBytes(width, height, targetWidth, targetHeight,
+            LibRawNativeMethods.LibRawGetRawWidth(raw), LibRawNativeMethods.LibRawGetRawHeight(raw), family);
+        if (!DecodeMemoryGuard.HasHeadroom(estimate, total, load))
             throw new InvalidOperationException("Not enough memory to decode this RAW image.");
     }
 

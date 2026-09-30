@@ -85,6 +85,38 @@ public sealed class LibRawOpenOrderTests
         Assert.Equal(["configured", "opened"], stages); // refused before unpack/process: nothing big was allocated
     }
 
+    [Fact]
+    public void Decode_HeadroomCoversOnlyTheWorkingImageAndBitmap_IsRefusedBecauseTheUnpackedRawBufferCounts()
+    {
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
+            RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
+        var size = new LibRawDecoder(null).ReadInfo(path);
+        // Exactly the old estimate (8 + 3 B/px + the full-size bitmap): it fits a total of that size only while the raw buffer is ignored.
+        var withoutRawBuffer = (long)size.Width * size.Height * (8 + 3 + 4);
+        var stages = new List<string>();
+        var decoder = new LibRawDecoder(stages.Add) { MemoryInfo = () => (TotalAvailable: withoutRawBuffer, Load: 0) };
+
+        var error = Assert.Throws<InvalidOperationException>(() => decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        Assert.Contains("memory", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["configured", "opened"], stages);
+    }
+
+    [Fact]
+    public void Decode_HeadroomCoversTheRawBufferToo_Decodes()
+    {
+        if (!RawCorpus.RequireNative(LibRawAvailability.Probe(out var reason), reason) ||
+            RawCorpus.TryGetFile("Canon - EOS 350D - RAW (3_2).CR2") is not { } path) return;
+        var size = new LibRawDecoder(null).ReadInfo(path);
+        // Generous: raw buffers are at most 2 B per sensor pixel for this Bayer file; the sensor is at most ~10% larger than the output.
+        var total = (long)size.Width * size.Height * (8 + 3 + 4 + 3);
+        var decoder = new LibRawDecoder(null) { MemoryInfo = () => (TotalAvailable: total, Load: 0) };
+
+        var decoded = decoder.Decode(new DecodeRequest(path, new DecodeBox(240, 180)));
+
+        Assert.Equal(DecoderBackend.LibRaw, decoded.ActualBackend);
+    }
+
     private static (double RG, double BG) Ratios(IDecodedImage image)
     {
         var bitmap = (BitmapSource)image.PlatformImage;
