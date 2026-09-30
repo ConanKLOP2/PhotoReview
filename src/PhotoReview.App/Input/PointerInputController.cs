@@ -62,6 +62,7 @@ internal sealed class PointerInputController
         _viewportVersion = viewportVersion ?? throw new ArgumentNullException(nameof(viewportVersion));
         _commands = commands ?? throw new ArgumentNullException(nameof(commands));
         _kineticFrameHandler = OnKineticFrame; // one delegate for += / -= (no allocation per glide)
+        _viewer.SourceSizeSwapping += OnSourceSizeSwapping;
     }
 
     /// <summary>Navigation stops a glide (a full-resolution swap of the same image does not).</summary>
@@ -150,9 +151,45 @@ internal sealed class PointerInputController
     private async Task ZoomToImagePointAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, Action applyZoom)
     {
         var version = _viewportVersion.Next();
-        applyZoom();
+        _zoomsAwaitingLayout++;
+        try
+        {
+            applyZoom();
+            await _surface.YieldToRenderAsync();
+            if (version != _viewportVersion.Current || !_surface.IsLoaded) return;
+            ScrollAnchorTo(anchor, viewportPoint);
+        }
+        finally { _zoomsAwaitingLayout--; }
+    }
+
+    // Zoom gestures between applying the zoom and placing the scroll (the layout is stale meanwhile).
+    private int _zoomsAwaitingLayout;
+
+    /// <summary>
+    /// ADR 0008 amendment (R4): the displayed bitmap of the same image was swapped for one of a slightly different size
+    /// (RAW full decode), so the element is about to be resized. Keep the image point at the viewport centre there,
+    /// so the content moves by at most a pixel or two instead of by (offset x size change), which is tens of pixels
+    /// at a deep zoom. Skipped while a zoom gesture is awaiting its own layout (it anchors after the final layout).
+    /// A newer viewport operation (zoom, navigation) supersedes the correction.
+    /// </summary>
+    private void OnSourceSizeSwapping(object? sender, EventArgs e)
+    {
+        if (_zoomsAwaitingLayout > 0 || !_surface.IsLoaded || _surface.ImageActualWidth <= 0 || _surface.ImageActualHeight <= 0) return;
+        var centre = ViewportCentre;
+        var anchor = CaptureZoomAnchor(centre); // layout still has the old size here
+        _ = AnchorAfterSwapAsync(anchor, centre, _viewportVersion.Current);
+    }
+
+    private async Task AnchorAfterSwapAsync(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint, long version)
+    {
         await _surface.YieldToRenderAsync();
         if (version != _viewportVersion.Current || !_surface.IsLoaded) return;
+        ScrollAnchorTo(anchor, viewportPoint);
+    }
+
+    /// <summary>After the layout settled: scrolls so image-fraction point <paramref name="anchor"/> sits at <paramref name="viewportPoint"/>.</summary>
+    private void ScrollAnchorTo(MainWindowHelpers.ZoomImagePoint anchor, Point viewportPoint)
+    {
         _surface.UpdateLayout();
 
         var imageOrigin = _surface.ImageOrigin;

@@ -208,15 +208,63 @@ public sealed partial class ViewerState : ObservableObject
     }
 
     /// <summary>
+    /// ADR 0008 amendment (R4): the bitmap behind the SAME image was replaced by one whose pixel size differs from the
+    /// one it replaces (a RAW's LibRaw decode is a few pixels larger/smaller than the camera-visible preview).
+    /// Original size becomes the new bitmap's own size, so 100 % stays exactly 1 pixel of what is shown, and the
+    /// user's zoom PERCENT is kept -- except a Fit-width/Fit-height zoom, which is recomputed for the new size so the
+    /// fitted dimension still fills the viewport exactly (no sliver, no scrollbar). Outside Fit,
+    /// <see cref="SourceSizeSwapping"/> is raised BEFORE the size changes so the view can anchor its scroll position.
+    /// A new image is not a swap: use <see cref="SetSourceSize"/>.
+    /// </summary>
+    public void SwapSourceSize(int width, int height)
+    {
+        width = Math.Max(0, width);
+        height = Math.Max(0, height);
+        if (width == SourcePixelWidth && height == SourcePixelHeight) return;
+        if (SourcePixelWidth <= 0 || SourcePixelHeight <= 0 || width <= 0 || height <= 0 || IsFit)
+        {
+            SetSourceSize(width, height);
+            return;
+        }
+
+        SourceSizeSwapping?.Invoke(this, EventArgs.Empty);
+        SetSourceSize(width, height);
+        var fitZoom = _fitAxis switch
+        {
+            FitAxis.Width => _fitAxisViewport * NormalizeDpi(DpiScale) / width,
+            FitAxis.Height => _fitAxisViewport * NormalizeDpi(DpiScale) / height,
+            _ => 0.0,
+        };
+        if (double.IsFinite(fitZoom) && fitZoom > 0) Zoom = Math.Clamp(fitZoom, MinZoom, MaxZoom);
+    }
+
+    /// <summary>
+    /// Raised by <see cref="SwapSourceSize"/> while zoomed, before the element size changes: the layout still shows the
+    /// old size, so a listener can capture the image point it wants to keep in place.
+    /// </summary>
+    public event EventHandler? SourceSizeSwapping;
+
+    private enum FitAxis { None, Width, Height }
+
+    // Set when the current zoom came from ZoomToFitWidth/ZoomToFitHeight (and not changed since): the viewport
+    // dimension (DIP) it filled, so SwapSourceSize can keep that dimension filled.
+    private FitAxis _fitAxis;
+    private double _fitAxisViewport;
+
+    /// <summary>
     /// Đặt mức zoom cụ thể và chuyển chế độ hiển thị sang None (tỉ lệ tự do không kẹp theo viewport).
     /// </summary>
-    public void SetZoom(double value)
+    public void SetZoom(double value) => SetZoomCore(value, FitAxis.None, 0);
+
+    private void SetZoomCore(double value, FitAxis axis, double axisViewport)
     {
         // NaN survives Math.Clamp and would poison Zoom, ImageWidth/Height and every later step.
         if (double.IsNaN(value)) return;
         Stretch = ViewerStretchMode.None;
         MaxImageWidth = double.PositiveInfinity;
         MaxImageHeight = double.PositiveInfinity;
+        _fitAxis = axis; // before Zoom/ZoomModeChanged: a held original may swap in synchronously from the event
+        _fitAxisViewport = axisViewport;
         Zoom = Math.Clamp(value, MinZoom, MaxZoom);
         ZoomModeChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -243,13 +291,13 @@ public sealed partial class ViewerState : ObservableObject
     /// <summary>Zooms so the image width exactly fills <see cref="MaxImageWidth"/> (<see cref="FitWidthZoom"/>); no-op when unknown.</summary>
     public void ZoomToFitWidth()
     {
-        if (FitWidthZoom > 0) SetZoom(FitWidthZoom);
+        if (FitWidthZoom > 0) SetZoomCore(FitWidthZoom, FitAxis.Width, MaxImageWidth);
     }
 
     /// <summary>Zooms so the image height exactly fills <see cref="MaxImageHeight"/> (<see cref="FitHeightZoom"/>); no-op when unknown.</summary>
     public void ZoomToFitHeight()
     {
-        if (FitHeightZoom > 0) SetZoom(FitHeightZoom);
+        if (FitHeightZoom > 0) SetZoomCore(FitHeightZoom, FitAxis.Height, MaxImageHeight);
     }
 
     /// <summary>
@@ -299,6 +347,7 @@ public sealed partial class ViewerState : ObservableObject
     /// </summary>
     public void ResetFit(double viewportWidth = 0, double viewportHeight = 0)
     {
+        _fitAxis = FitAxis.None;
         Zoom = 1.0;
         Stretch = ViewerStretchMode.Uniform;
         UpdateViewport(viewportWidth, viewportHeight, force: true);

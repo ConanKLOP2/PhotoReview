@@ -122,6 +122,13 @@ public sealed class ImagePresenter
     /// </summary>
     private void ShowZoomDetailImage(object image, int w, int h)
     {
+        IsSameSourceSwap = true; // read synchronously by the sink's image-changed callback (ViewerState.SwapSourceSize)
+        try { ShowZoomDetailImageCore(image, w, h); }
+        finally { IsSameSourceSwap = false; }
+    }
+
+    private void ShowZoomDetailImageCore(object image, int w, int h)
+    {
         var showingOriginal = _zoomDetail.HeldOriginal is { } held && ReferenceEquals(held.PlatformImage, image);
         if (showingOriginal)
         {
@@ -146,9 +153,17 @@ public sealed class ImagePresenter
 
     /// <summary>
     /// Full-resolution (post-orientation) size of the source behind <see cref="CurrentImage"/>, whatever
-    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown.
+    /// bitmap (thumbnail, preview, full decode) is displayed; 0 when unknown or nothing is shown. One size per displayed
+    /// bitmap: a full decode reports its own pixel size (ADR 0008 amendment).
     /// </summary>
     public int CurrentOriginalWidth { get; private set; }
+
+    /// <summary>
+    /// True only while the sink is told about a zoom-detail swap (preview <-> full decode of the SAME image): the new
+    /// <see cref="CurrentOriginalWidth"/>/<see cref="CurrentOriginalHeight"/> are the new bitmap's own size, which may
+    /// differ slightly from the previous one (RAW). The viewer then keeps its view anchored instead of treating it as a new image.
+    /// </summary>
+    public bool IsSameSourceSwap { get; private set; }
 
     /// <summary>See <see cref="CurrentOriginalWidth"/>.</summary>
     public int CurrentOriginalHeight { get; private set; }

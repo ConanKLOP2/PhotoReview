@@ -159,7 +159,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     public void NotifyCurrentImageChanged(bool isFileChange = false)
     {
         if (isFileChange) ImageChanging?.Invoke(this, new ImageChangingEventArgs(isFileChange));
-        _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
+        if (_presenter.IsSameSourceSwap) _viewerState.SwapSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
+        else _viewerState.SetSourceSize(_presenter.CurrentOriginalWidth, _presenter.CurrentOriginalHeight);
         NotifyNavigationStateChanged();
     }
 

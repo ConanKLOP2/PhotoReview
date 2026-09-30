@@ -542,6 +542,93 @@ public sealed class PointerInputControllerTests
         Assert.Equal(new Point(120, 80), _surface.ToImageElementCalls[^1]);
     }
 
+    // ---- R4: RAW zoom swap resizes the element by a few pixels; the view stays anchored (ADR 0008 amendment) ----
+
+    // Zoom, scroll offsets (inside the scroll range), decoded size (larger, and 1 px smaller like the Canon R6).
+    [Theory]
+    [InlineData(1.0, 3000, 2000, 6744, 4502)]
+    [InlineData(1.0, 5900, 3600, 6744, 4502)]
+    [InlineData(2.0, 9000, 6000, 6744, 4502)]
+    [InlineData(4.0, 20000, 10000, 6744, 4502)]
+    [InlineData(0.5, 1000, 800, 6744, 4502)]
+    [InlineData(1.0, 3000, 2000, 6719, 4479)]
+    [InlineData(2.0, 9000, 6000, 6719, 4479)]
+    public void SourceSizeSwap_KeepsTheViewportCentreOnTheSameImagePoint(double zoom, double offsetX, double offsetY, int newWidth, int newHeight)
+    {
+        _viewer.SetSourceSize(6720, 4480);
+        _viewer.SetZoom(zoom);
+        _surface.OriginFollowsScroll = true;
+        SetLayout(6720 * zoom, 4480 * zoom, offsetX, offsetY);
+        var (beforeX, beforeY) = CentreFractions();
+        _surface.HoldYields = true;
+
+        _viewer.SwapSourceSize(newWidth, newHeight); // the element is about to change size ...
+        SetLayout(newWidth * zoom, newHeight * zoom, offsetX, offsetY); // ... and the layout pass keeps the old offsets
+        _surface.ReleaseYields();
+
+        var (afterX, afterY) = CentreFractions();
+        Assert.Single(_surface.Scrolls);
+        // Within one device pixel of the same normalized image point (without the anchor the centre drifts by tens of pixels).
+        Assert.InRange(Math.Abs(afterX - beforeX) * _surface.ExtentWidth, 0, 1);
+        Assert.InRange(Math.Abs(afterY - beforeY) * _surface.ExtentHeight, 0, 1);
+    }
+
+    [Fact]
+    public void SourceSizeSwap_SupersededByALaterViewportOperation_DoesNotScroll()
+    {
+        _viewer.SetSourceSize(6720, 4480);
+        _viewer.SetZoom(1.0);
+        SetLayout(6720, 4480, 3000, 2000);
+        _surface.HoldYields = true;
+
+        _viewer.SwapSourceSize(6744, 4502);
+        _version.Next(); // e.g. a navigation or a zoom started while the swap waited for the render pass
+        _surface.ReleaseYields();
+
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    [Fact]
+    public async Task SourceSizeSwap_WhileAZoomAwaitsItsLayout_LeavesTheScrollToThatZoom()
+    {
+        _viewer.SetSourceSize(6720, 4480);
+        _viewer.SetZoom(1.0);
+        SetLayout(6720, 4480, 3000, 2000);
+        _surface.HoldYields = true;
+
+        var zoom = _controller.OnWheelAsync(120, ctrl: false, new Point(400, 300));
+        _viewer.SwapSourceSize(6744, 4502); // the decoded original lands between the zoom and its scroll placement
+        _surface.ReleaseYields();
+        await zoom;
+
+        Assert.Single(_surface.Scrolls); // only the wheel zoom's own anchored scroll
+    }
+
+    [Fact]
+    public void SourceSizeSwap_InFit_DoesNotTouchTheScroll()
+    {
+        _viewer.SetSourceSize(6720, 4480);
+        _viewer.ResetFit(800, 600);
+
+        _viewer.SwapSourceSize(6744, 4502);
+
+        Assert.Equal(0, _surface.YieldCount);
+        Assert.Empty(_surface.Scrolls);
+    }
+
+    private void SetLayout(double extentWidth, double extentHeight, double offsetX, double offsetY)
+    {
+        _surface.ExtentWidth = extentWidth;
+        _surface.ExtentHeight = extentHeight;
+        _surface.HorizontalOffset = offsetX;
+        _surface.VerticalOffset = offsetY;
+    }
+
+    /// <summary>The image point under the viewport centre as fractions of the element (what the user is looking at).</summary>
+    private (double X, double Y) CentreFractions() =>
+        ((_surface.HorizontalOffset + _surface.ViewportWidth / 2) / _surface.ExtentWidth,
+         (_surface.VerticalOffset + _surface.ViewportHeight / 2) / _surface.ExtentHeight);
+
     // ---- kinetic glide ----
 
     [Fact]
@@ -1015,7 +1102,10 @@ public sealed class PointerInputControllerTests
             _heldYields.Clear();
         }
 
-        public Point ImageOrigin => new(0, 0);
+        /// <summary>Real layout: the image element's origin moves opposite to the scroll offset (default: fixed at 0,0).</summary>
+        public bool OriginFollowsScroll { get; set; }
+
+        public Point ImageOrigin => OriginFollowsScroll ? new(-HorizontalOffset, -VerticalOffset) : new(0, 0);
 
         /// <summary>Every mouse/anchor point <see cref="PointerInputController"/> zoomed at (test seam for the keyboard-zoom-anchor tests).</summary>
         public List<Point> ToImageElementCalls { get; } = [];

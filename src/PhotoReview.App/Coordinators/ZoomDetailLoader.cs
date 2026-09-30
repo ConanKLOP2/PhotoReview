@@ -16,7 +16,8 @@ namespace PhotoReview.App.Coordinators;
 /// so a non-Fit zoom -- which is relative to original pixels, see <c>ViewerState</c> -- would otherwise
 /// just magnify the preview. The preview stays on screen (already at the right original-relative size)
 /// while the original decodes off the UI thread; the original then replaces it without any layout
-/// change, because the element size comes from the original dimensions, not from the bitmap.
+/// change for ordinary photos (the decoded size equals the preview's original size). A RAW's decode can differ by a few
+/// pixels: the original is then shown with its own pixel size and the viewer keeps the view anchored (ADR 0008 amendment).
 /// </summary>
 /// <remarks>
 /// <para>At most one original is held (the current image's) and it is released as soon as the
@@ -47,7 +48,9 @@ public sealed class ZoomDetailLoader
     private volatile bool _isRawDecodeIndicatorVisible;
 
     /// <param name="show">Displays a platform image with the given original dimensions (the presenter's
-    /// current-image update); always called with the preview's recorded original dimensions.</param>
+    /// current-image update). ADR 0008 amendment (R4): one Original size per displayed bitmap -- the preview
+    /// is shown with the preview's recorded original size, the held original with ITS OWN pixel size (a RAW's
+    /// LibRaw decode differs from the camera-visible size by a few pixels), so 100 % is exactly 1 shown pixel.</param>
     public ZoomDetailLoader(PreviewImageService previewService, GenerationClock clock, Action<object, int, int> show,
         IUiScheduler? uiScheduler = null)
     {
@@ -131,7 +134,7 @@ public sealed class ZoomDetailLoader
         {
             if (!_showingOriginal)
             {
-                _show(_original.PlatformImage, target.OriginalWidth, target.OriginalHeight);
+                _show(_original.PlatformImage, _original.PixelWidth, _original.PixelHeight);
                 _showingOriginal = true;
                 OriginalShown?.Invoke(target.Path);
             }
