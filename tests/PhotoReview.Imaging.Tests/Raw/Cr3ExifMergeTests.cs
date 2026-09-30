@@ -109,6 +109,46 @@ public sealed class Cr3ExifMergeTests
         Assert.Equal(800, exif!.Iso);
     }
 
+    /// <summary>TIFF whose IFD0 (read as the Exif IFD) holds only DateTimeOriginal; <paramref name="date"/> is "yyyy:MM:dd HH:mm:ss".</summary>
+    private static byte[] BuildDateOnlyExifTiff(string date)
+    {
+        var t = new TiffBytes(true, 128).Header(8).Ifd(8, 0, At(0x9003, 2, 20, 100));
+        t.Put(100, System.Text.Encoding.ASCII.GetBytes(date + "\0"));
+        return t.ToArray();
+    }
+
+    [Fact]
+    public void TryReadExif_TwoIfdIsExifBlocksFirstWithDate_TheFirstDateWins()
+    {
+        byte[] a = BuildDateOnlyExifTiff("2020:01:02 03:04:05");
+        byte[] b = BuildDateOnlyExifTiff("2021:06:07 08:09:10");
+        var source = new InMemoryRawHeaderSource([.. a, .. b]);
+
+        var exif = RawExif.TryReadExif(source, Info(new ExifBlock(0, a.Length, true, true), new ExifBlock(a.Length, b.Length, true, true)));
+
+        Assert.Equal(new DateTime(2020, 1, 2, 3, 4, 5), exif!.DateTaken);
+    }
+
+    [Fact]
+    public void TryReadExif_DatelessFirstBlockThenTwoIfdIsExifBlocksWithDates_TheFirstExifDateWins()
+    {
+        // The first block adopted (through Merge) a date from an IfdIsExif block: a later IfdIsExif block must not override it.
+        var cameraOnly = new TiffBytes(true, 128).Header(8).Ifd(8, 0, At(0x010F, 2, 6, 100));
+        cameraOnly.Put(100, "Canon\0"u8);
+        byte[] cam = cameraOnly.ToArray();
+        byte[] a = BuildDateOnlyExifTiff("2020:01:02 03:04:05");
+        byte[] b = BuildDateOnlyExifTiff("2021:06:07 08:09:10");
+        var source = new InMemoryRawHeaderSource([.. cam, .. a, .. b]);
+
+        var exif = RawExif.TryReadExif(source, Info(
+            new ExifBlock(0, cam.Length, true),
+            new ExifBlock(cam.Length, a.Length, true, true),
+            new ExifBlock(cam.Length + a.Length, b.Length, true, true)));
+
+        Assert.Equal("Canon", exif!.CameraMake);
+        Assert.Equal(new DateTime(2020, 1, 2, 3, 4, 5), exif.DateTaken);
+    }
+
     [Fact]
     public void TryReadExif_HostileSecondBlock_KeepsFirstSummary()
     {
