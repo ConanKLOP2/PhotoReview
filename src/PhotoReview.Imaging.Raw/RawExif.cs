@@ -23,11 +23,20 @@ public static class RawExif
     /// read while the merged summary still lacks a field.
     /// Returns null if no valid EXIF metadata is found or on corrupt input; never throws.
     /// </summary>
-    public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo)
+    public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo) =>
+        TryReadExif(source, containerInfo, out _);
+
+    /// <summary>
+    /// As <see cref="TryReadExif(IRawHeaderSource, RawContainerInfo)"/>; <paramref name="complete"/> is false when a block could
+    /// not be read (hostile data, exhausted header budget, I/O error), so a null result must not be remembered as "this file
+    /// has no EXIF".
+    /// </summary>
+    public static ExifSummary? TryReadExif(IRawHeaderSource source, RawContainerInfo containerInfo, out bool complete)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(containerInfo);
 
+        complete = true;
         if (containerInfo.ExifBlocks.Count == 0)
             return null;
 
@@ -54,6 +63,7 @@ public static class RawExif
             catch (InvalidDataException)
             {
                 // Hostile or truncated header data (or an exhausted read budget): documented as never throwing.
+                complete = false;
                 continue;
             }
 

@@ -31,7 +31,7 @@ public sealed class RawDecoder : IImageDecoder
     private readonly SourceBytesCache? _sourceBytesCache;
     private readonly IRawPreviewFallback? _previewFallback;
     private readonly IImageDecoder? _noPreviewDecoder; // full-decode last resort for a RAW with no usable JPEG (e.g. LibRaw)
-    private readonly BoundedLruCache<RawInfoKey, RawContainerInfo> _containerInfoCache = new(256, _ => 1);
+    private readonly BoundedLruCache<RawInfoKey, CachedRaw> _containerInfoCache = new(256, _ => 1);
 
     public RawDecoder(
         IImageDecoder innerDecoder,
@@ -53,15 +53,16 @@ public sealed class RawDecoder : IImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        var info = GetContainerInfo(path, SourceReadPriority.Viewer, out var headerSource);
+        var cached = GetContainerInfo(path, SourceReadPriority.Viewer, out var headerSource, out var key);
         using (headerSource)
         {
-
+            var info = cached.Info;
             int sensorW = info.SensorWidth;
             int sensorH = info.SensorHeight;
             if (sensorW <= 0 || sensorH <= 0)
             {
-                var bestPreview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation);
+                var bestPreview = PreviewSelector.SelectPreview(headerSource, info.Previews, DecodeBox.Unbounded, info.Orientation, out var resolved);
+                RememberResolvedPreviews(key, cached, resolved);
                 if (bestPreview != null && bestPreview.Width > 0 && bestPreview.Height > 0)
                 {
                     sensorW = bestPreview.Width;
@@ -77,12 +78,32 @@ public sealed class RawDecoder : IImageDecoder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
 
-        var containerInfo = GetContainerInfo(request.Path, request.Priority, out var headerSource);
+        var cached = GetContainerInfo(request.Path, request.Priority, out var headerSource, out var key);
         using (headerSource)
         {
-            var exif = RawExif.TryReadExif(headerSource, containerInfo);
+            var containerInfo = cached.Info;
 
-            var preview = PreviewSelector.SelectPreview(headerSource, containerInfo.Previews, request.Box, containerInfo.Orientation);
+            // The EXIF summary is part of what the cache remembers for this file identity (same key as the container info):
+            // a repeated decode neither re-reads nor re-parses up to 4 MiB of EXIF block. A read that failed part-way
+            // (incomplete) is never remembered as "no EXIF".
+            ExifSummary? exif;
+            if (cached.ExifRead)
+            {
+                exif = cached.Exif;
+            }
+            else
+            {
+                exif = RawExif.TryReadExif(headerSource, containerInfo, out bool exifComplete);
+                if (exifComplete)
+                {
+                    cached = cached with { Exif = exif, ExifRead = true };
+                    _containerInfoCache.Set(key, cached);
+                }
+            }
+
+            var preview = PreviewSelector.SelectPreview(headerSource, containerInfo.Previews, request.Box, containerInfo.Orientation, out var resolvedPreviews);
+            cached = RememberResolvedPreviews(key, cached, resolvedPreviews);
+            containerInfo = cached.Info;
             IDecodedImage decoded;
             long previewBytesRead = 0;
             long fallbackThumbnailBytesRead = 0;
@@ -342,7 +363,24 @@ public sealed class RawDecoder : IImageDecoder
         return _innerDecoder.Decode(innerRequest with { Bytes = thumbnailBytes });
     }
 
-    private RawContainerInfo GetContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource)
+    /// <summary>
+    /// Stores <paramref name="resolved"/> (the previews with the dimensions and colour space a selection just read from the JPEG
+    /// headers) in the cache entry of <paramref name="key"/> when anything changed, and returns the updated entry.
+    /// </summary>
+    private CachedRaw RememberResolvedPreviews(RawInfoKey key, CachedRaw cached, IReadOnlyList<EmbeddedPreview> resolved)
+    {
+        var current = cached.Info.Previews;
+        bool changed = resolved.Count != current.Count;
+        for (int i = 0; !changed && i < current.Count; i++)
+            changed = !ReferenceEquals(current[i], resolved[i]);
+        if (!changed) return cached;
+
+        var updated = cached with { Info = cached.Info with { Previews = resolved.ToArray() } };
+        _containerInfoCache.Set(key, updated);
+        return updated;
+    }
+
+    private CachedRaw GetContainerInfo(string path, SourceReadPriority priority, out SourceRawHeaderSource headerSource, out RawInfoKey key)
     {
         headerSource = new SourceRawHeaderSource(path, _sourceReader, priority);
         try
@@ -353,7 +391,7 @@ public sealed class RawDecoder : IImageDecoder
             var sourceLength = headerSource.Length;
             var lastWriteUtcTicks = exists ? file.LastWriteTimeUtc.Ticks : 0;
             var fullPath = Path.GetFullPath(path).ToUpperInvariant();
-            var key = new RawInfoKey(fullPath, sourceLength, lastWriteUtcTicks);
+            key = new RawInfoKey(fullPath, sourceLength, lastWriteUtcTicks);
             if (_containerInfoCache.TryGet(key, out var cached)) return cached;
 
             var ext = Path.GetExtension(path);
@@ -375,8 +413,9 @@ public sealed class RawDecoder : IImageDecoder
             var current = new FileInfo(path);
             if (exists && (!current.Exists || current.Length != key.Length || current.LastWriteTimeUtc.Ticks != key.LastWriteUtcTicks))
                 throw new IOException($"RAW source changed while reading its container: {path}");
-            _containerInfoCache.Set(key, info);
-            return info;
+            var entry = new CachedRaw(info, null, false);
+            _containerInfoCache.Set(key, entry);
+            return entry;
         }
         catch (InvalidDataException ex) when (ex.InnerException is IOException or ObjectDisposedException)
         {
@@ -410,6 +449,9 @@ public sealed class RawDecoder : IImageDecoder
     }
 
     private readonly record struct RawInfoKey(string Path, long Length, long LastWriteUtcTicks);
+
+    /// <summary>What is remembered per file identity: the container info (with preview headers resolved as decodes need them) and the EXIF summary once read.</summary>
+    private sealed record CachedRaw(RawContainerInfo Info, ExifSummary? Exif, bool ExifRead);
 
     private sealed class RawDecodedImage : IDecodedImage, ISourceReadMetrics, IRawPreviewInfo
     {

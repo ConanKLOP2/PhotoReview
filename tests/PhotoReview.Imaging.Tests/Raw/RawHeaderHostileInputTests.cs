@@ -205,7 +205,8 @@ public sealed class RawHeaderHostileInputTests
 
         var selected = PreviewSelector.SelectPreview(source, [preview], DecodeBox.Unbounded, orientation: 1);
 
-        Assert.Equal(preview, selected);
+        // The walk found no frame header, so the size stays unknown; the preview comes back marked as looked-up.
+        Assert.Equal(preview with { HeaderResolved = true }, selected);
     }
 
     // ---------------------------------------------------------------- helpers

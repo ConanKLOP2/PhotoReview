@@ -34,15 +34,40 @@ public static class PreviewSelector
         IRawHeaderSource source,
         IReadOnlyList<EmbeddedPreview> previews,
         DecodeBox requestBox,
-        int orientation)
+        int orientation) =>
+        SelectPreview(source, previews, requestBox, orientation, out _);
+
+    /// <summary>
+    /// As above; <paramref name="resolvedPreviews"/> is <paramref name="previews"/> with every preview whose JPEG header was
+    /// walked during the selection replaced by its resolved copy (dimensions, colour space, <see cref="EmbeddedPreview.HeaderResolved"/>),
+    /// in the same order. A caller that caches the container info stores this list so the walk is never repeated.
+    /// The dimension walk and the colour-space lookup share ONE pass over the JPEG header.
+    /// </summary>
+    public static EmbeddedPreview? SelectPreview(
+        IRawHeaderSource source,
+        IReadOnlyList<EmbeddedPreview> previews,
+        DecodeBox requestBox,
+        int orientation,
+        out IReadOnlyList<EmbeddedPreview> resolvedPreviews)
     {
-        var chosen = SelectPreviewCore(source, previews, requestBox, orientation);
-        return chosen is { Kind: EmbeddedPreviewKind.Jpeg } ? ResolveColorSpace(source, chosen) : chosen;
+        var state = previews is null ? [] : previews.ToList();
+        var chosen = SelectPreviewCore(source, state, requestBox, orientation);
+        if (chosen is { Kind: EmbeddedPreviewKind.Jpeg })
+            chosen = ResolveColorSpace(source, chosen, state);
+        resolvedPreviews = state;
+        return chosen;
+    }
+
+    private static void Replace(List<EmbeddedPreview> state, EmbeddedPreview original, EmbeddedPreview resolved)
+    {
+        if (ReferenceEquals(original, resolved)) return;
+        int index = state.FindIndex(p => ReferenceEquals(p, original));
+        if (index >= 0) state[index] = resolved;
     }
 
     private static EmbeddedPreview? SelectPreviewCore(
         IRawHeaderSource source,
-        IReadOnlyList<EmbeddedPreview> previews,
+        List<EmbeddedPreview> previews,
         DecodeBox requestBox,
         int orientation)
     {
@@ -59,7 +84,7 @@ public static class PreviewSelector
 
         if (jpegPreviews.Count == 1)
         {
-            return ResolveDimensions(source, jpegPreviews[0]);
+            return ResolveDimensions(source, jpegPreviews[0], previews);
         }
 
         // Resolve dimensions for candidates (largest byte length first)
@@ -67,7 +92,7 @@ public static class PreviewSelector
         var resolved = new List<EmbeddedPreview>(jpegPreviews.Count);
         foreach (var p in jpegPreviews.OrderByDescending(p => p.Length))
         {
-            resolved.Add(ResolveDimensions(source, p));
+            resolved.Add(ResolveDimensions(source, p, previews));
         }
 
         bool isTransposed = ExifOrientation.IsTransposed(orientation);
@@ -113,15 +138,16 @@ public static class PreviewSelector
             ? (long)preview.Width * preview.Height
             : preview.Length <= 0 ? 0 : preview.Length * UnknownAreaPerByte;
 
-    private static EmbeddedPreview ResolveDimensions(IRawHeaderSource source, EmbeddedPreview preview)
+    private static EmbeddedPreview ResolveDimensions(IRawHeaderSource source, EmbeddedPreview preview, List<EmbeddedPreview> state)
     {
-        if (preview.Width > 0 && preview.Height > 0)
+        if (preview.HeaderResolved || (preview.Width > 0 && preview.Height > 0))
             return preview;
 
         if (preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
-        bool resolved;
+        bool resolved = false;
+        bool walked = true;
         int width = 0;
         int height = 0;
         var colorSpace = PreviewColorSpace.Unknown;
@@ -132,20 +158,24 @@ public static class PreviewSelector
         catch (InvalidDataException)
         {
             // Exhausted header budget or unreadable range: the dimensions stay unknown instead of failing the decode.
-            resolved = false;
+            walked = false;
         }
 
-        if (resolved)
+        // Even when the frame size cannot be read (lossless/arithmetic frame), the walk has looked at every APP1 before the
+        // frame header, so a colour space it found is final and the preview is marked resolved. A failed walk (I/O or budget
+        // exhaustion) leaves the preview untouched so a later call may try again.
+        if (!walked)
+            return preview;
+
+        var result = preview with
         {
-            return preview with
-            {
-                Width = width,
-                Height = height,
-                ColorSpace = colorSpace != PreviewColorSpace.Unknown ? colorSpace : preview.ColorSpace
-            };
-        }
-
-        return preview;
+            Width = resolved ? width : preview.Width,
+            Height = resolved ? height : preview.Height,
+            ColorSpace = colorSpace != PreviewColorSpace.Unknown ? colorSpace : preview.ColorSpace,
+            HeaderResolved = true,
+        };
+        Replace(state, preview, result);
+        return result;
     }
 
     /// <summary>
@@ -163,9 +193,9 @@ public static class PreviewSelector
     /// EXIF interoperability marker is still looked up. Same bounded per-segment walk, stopping at the frame header
     /// (the EXIF APP1 precedes it), so no extra full-JPEG read happens.
     /// </summary>
-    private static EmbeddedPreview ResolveColorSpace(IRawHeaderSource source, EmbeddedPreview preview)
+    private static EmbeddedPreview ResolveColorSpace(IRawHeaderSource source, EmbeddedPreview preview, List<EmbeddedPreview> state)
     {
-        if (preview.ColorSpace != PreviewColorSpace.Unknown
+        if (preview.HeaderResolved || preview.ColorSpace != PreviewColorSpace.Unknown
             || preview.Offset < 0 || preview.Offset >= source.Length || preview.Length < 4)
             return preview;
 
@@ -180,7 +210,13 @@ public static class PreviewSelector
             return preview;
         }
 
-        return colorSpace != PreviewColorSpace.Unknown ? preview with { ColorSpace = colorSpace } : preview;
+        var result = preview with
+        {
+            ColorSpace = colorSpace != PreviewColorSpace.Unknown ? colorSpace : preview.ColorSpace,
+            HeaderResolved = true,
+        };
+        Replace(state, preview, result);
+        return result;
     }
 
     private static bool WalkJpeg(IRawHeaderSource source, long offset, long length, bool needFrame, out int width, out int height, out PreviewColorSpace colorSpace)
