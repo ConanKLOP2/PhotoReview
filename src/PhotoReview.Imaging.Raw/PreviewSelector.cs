@@ -19,10 +19,13 @@ public static class PreviewSelector
     /// A preview whose pixel size could not be determined (lossless/arithmetic-coded frame, truncated header) would score an area
     /// of 0 and always lose to any tiny known thumbnail, even when it is by far the largest JPEG in the file. Its size is
     /// therefore estimated from its byte length at this many pixels per byte (about 0.25 byte per pixel, the compression of a
-    /// typical camera JPEG), which keeps it comparable with known areas: a 4 MB unknown-size JPEG outranks a 160x120 thumbnail
-    /// but not a known 6000x4000 preview. Used only as a ranking score, never reported as dimensions.
+    /// typical camera JPEG), which keeps it comparable with known thumbnail areas: a 4 MB unknown-size JPEG outranks a 160x120 thumbnail
+    /// but never a known preview of at least <see cref="ViewablePreviewLongSide"/> pixels (see <see cref="Score"/>). Used only as a ranking score, never reported as dimensions.
     /// </summary>
     private const long UnknownAreaPerByte = 4;
+
+    /// <summary>A known-size preview with a long side of at least this many pixels is viewable and always outranks unknown-size entries.</summary>
+    private const int ViewablePreviewLongSide = 1000;
 
     /// <summary>Fill bytes (extra 0xFF before a marker) are skipped without using a segment iteration, up to this many in a row.</summary>
     private const int MaxFillBytes = 64 * 1024;
@@ -132,11 +135,25 @@ public static class PreviewSelector
         return resolved.OrderByDescending(Score).ThenByDescending(p => p.Length).First();
     }
 
-    /// <summary>Pixel area when known, else an estimate from the byte length (see <see cref="UnknownAreaPerByte"/>).</summary>
-    private static long Score(EmbeddedPreview preview) =>
-        preview.Width > 0 && preview.Height > 0
-            ? (long)preview.Width * preview.Height
-            : preview.Length <= 0 ? 0 : preview.Length * UnknownAreaPerByte;
+    /// <summary>
+    /// Ranking key (ordered by tier, then value). A known-size preview whose long side is at least
+    /// <see cref="ViewablePreviewLongSide"/> pixels is tier 1 and ranks by its pixel area. Everything else is tier 0:
+    /// a known tiny thumbnail ranks by its area and an unknown-size entry by an estimate from its byte length
+    /// (see <see cref="UnknownAreaPerByte"/>), so a large unknown-size JPEG still beats a tiny thumbnail and unknown-size
+    /// entries rank among themselves by bytes. An unknown-size entry can therefore never outrank a known viewable preview
+    /// (a 7 MB unknown entry used to score 28M against a known 6000x4000-class preview and was chosen even though it could
+    /// not be decoded).
+    /// </summary>
+    private static (int Tier, long Value) Score(EmbeddedPreview preview)
+    {
+        if (preview.Width > 0 && preview.Height > 0)
+        {
+            long area = (long)preview.Width * preview.Height;
+            return (Math.Max(preview.Width, preview.Height) >= ViewablePreviewLongSide ? 1 : 0, area);
+        }
+
+        return (0, preview.Length <= 0 ? 0 : preview.Length * UnknownAreaPerByte);
+    }
 
     private static EmbeddedPreview ResolveDimensions(IRawHeaderSource source, EmbeddedPreview preview, List<EmbeddedPreview> state)
     {
