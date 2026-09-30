@@ -49,6 +49,12 @@ public sealed class RawDecoder : IImageDecoder
         _previewFallback = previewFallback;
     }
 
+    /// <summary>
+    /// The original (sensor) size of the RAW: the container's sensor size, else the size of the best embedded preview.
+    /// Throws <see cref="InvalidDataException"/> when neither is known (for example a RAF whose JPEG range is invalid and whose
+    /// CFA header is absent): callers show the result as image dimensions and do not treat 0x0 as "unknown", so an unknown size
+    /// is an error here. <see cref="Decode"/> does not depend on this and still reaches the full-decode fallback.
+    /// </summary>
     public ImageInfo ReadInfo(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -69,6 +75,11 @@ public sealed class RawDecoder : IImageDecoder
                     sensorH = bestPreview.Height;
                 }
             }
+
+            if (sensorW <= 0 || sensorH <= 0)
+                throw UserFacingError.Localized(
+                    new InvalidDataException($"RAW file declares no image size (no sensor size and no sized preview): {path}"),
+                    () => Tr.ImageErrorRawCorrupt);
 
             return new ImageInfo(sensorW, sensorH, info.Orientation);
         }
@@ -175,10 +186,10 @@ public sealed class RawDecoder : IImageDecoder
     private const int MaxPreviewAttempts = 4;
 
     /// <summary>
-    /// Decodes the chosen preview. When that fails with a recoverable error (corrupt/truncated/unsupported JPEG) and a last
-    /// resort exists (the no-preview full decoder, or the ORF thumbnail fallback), the next-best preview is tried first, then
-    /// the ORF thumbnail fallback (an unsupported ORF preview only), then the full decode. Cancellation and out-of-memory
-    /// are never swallowed; with no last resort the original failure propagates unchanged.
+    /// Decodes the chosen preview. When that fails with a recoverable error (corrupt/truncated/unsupported JPEG) the next-best
+    /// preview is tried first (always: it needs no native code), then the ORF thumbnail fallback (an unsupported ORF preview
+    /// only, when one exists), then the full decode (when the no-preview decoder exists). Cancellation and out-of-memory
+    /// are never swallowed; when no step remains the first failure propagates unchanged.
     /// </summary>
     private IDecodedImage DecodePreviewWithFallbacks(
         DecodeRequest request,
@@ -197,9 +208,6 @@ public sealed class RawDecoder : IImageDecoder
         fromJpegPreview = true;
 
         bool orfThumbnailPossible = containerInfo.Format == RawFormat.Orf && _previewFallback is not null;
-        if (_noPreviewDecoder is null && !orfThumbnailPossible)
-            return DecodePreview(request, containerInfo, key, chosen, out previewBytesRead);
-
         System.Runtime.ExceptionServices.ExceptionDispatchInfo? firstFailure = null;
         Exception? lastFailure = null;
         var tried = new List<long>();
@@ -347,7 +355,7 @@ public sealed class RawDecoder : IImageDecoder
                 return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawNoPreview, out bytesRead);
             }
             // The thumbnail is missing or not a JPEG (e.g. Leica M8 DNG stores a bitmap): fall through to the full decode.
-            catch (Exception ex) when (_noPreviewDecoder is not null && ex is InvalidDataException or NotSupportedException)
+            catch (Exception ex) when (_noPreviewDecoder is not null && IsRecoverablePreviewFailure(ex))
             {
                 bytesRead = 0;
             }

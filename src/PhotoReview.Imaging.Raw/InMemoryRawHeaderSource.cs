@@ -55,20 +55,20 @@ public sealed class InMemoryRawHeaderSource : IRawHeaderSource
         long startBlock = offset / BlockSize;
         long endBlock = (offset + count - 1) / BlockSize;
 
-        // Charge the not-yet-touched blocks first (all or nothing, so a rejected read leaves the accounting unchanged).
-        long newBytes = 0;
+        // Charge block by block, exactly like SourceRawHeaderSource: a multi-block read that runs out of budget part-way
+        // keeps the blocks it already charged (they are touched and stay charged), so later reads of them are free.
         for (long block = startBlock; block <= endBlock; block++)
         {
-            if (!_touchedBlocks.Contains(block))
-                newBytes += Math.Min(BlockSize, _memory.Length - (block * BlockSize));
-        }
+            if (_touchedBlocks.Contains(block))
+                continue;
 
-        if (newBytes > RawContainerLimits.MaxHeaderBytes - _totalBytesRead)
-            throw new InvalidDataException($"RAW header read exceeded hard limit of {RawContainerLimits.MaxHeaderBytes} bytes.");
+            long blockBytes = Math.Min(BlockSize, _memory.Length - (block * BlockSize));
+            if (blockBytes > RawContainerLimits.MaxHeaderBytes - _totalBytesRead)
+                throw new InvalidDataException($"RAW header read exceeded hard limit of {RawContainerLimits.MaxHeaderBytes} bytes.");
 
-        for (long block = startBlock; block <= endBlock; block++)
             _touchedBlocks.Add(block);
-        _totalBytesRead += newBytes;
+            _totalBytesRead += blockBytes;
+        }
 
         return _memory.Span.Slice((int)offset, count);
     }
