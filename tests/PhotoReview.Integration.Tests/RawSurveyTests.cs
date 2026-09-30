@@ -53,8 +53,10 @@ public sealed class RawSurveyTests
 
         try
         {
-            var testJpeg = Path.Combine(tempDir, "sample.jpg");
-            CreateTestJpeg(testJpeg, 400, 300);
+            // Only RAW files are surveyed: the folder holds a synthetic DNG whose embedded preview is 400x300.
+            var testJpeg = Path.Combine(tempDir, "sample.dng");
+            File.WriteAllBytes(testJpeg, PhotoReview.Imaging.Tests.Raw.SyntheticRawBuilder.BuildTiff(
+                littleEndian: true, PhotoReview.Imaging.Tests.Raw.SyntheticRawBuilder.CreateMinimalJpeg(400, 300)));
 
             var exitCode = await RawSurvey.RunAsync(["--raw-survey", tempDir, "--markdown", mdPath]);
 
@@ -63,7 +65,7 @@ public sealed class RawSurveyTests
 
             var mdContent = await File.ReadAllTextAsync(mdPath);
             Assert.Contains("Camera RAW Survey", mdContent);
-            Assert.Contains("sample.jpg", mdContent);
+            Assert.Contains("sample.dng", mdContent);
             Assert.Contains("400×300", mdContent);
         }
         finally

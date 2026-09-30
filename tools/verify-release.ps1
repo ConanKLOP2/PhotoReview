@@ -27,6 +27,8 @@ $required = @(
     'LibRaw-LICENSE.CDDL',
     'LibRaw-SOURCE.zip',
     'LibRaw-NOTICE.txt',
+    # libjpeg-turbo's BSD/IJG/zlib notice and the other third-party notices ship only in this file.
+    'THIRD-PARTY-NOTICES.md',
     # Translation catalogs (ADR 0006): English is also embedded, but shipped files let users read/edit them.
     'Languages\en.json',
     'Languages\vi.json')
@@ -66,7 +68,8 @@ if ($actualLibRawPackageHash -ne $expectedLibRawPackageHash) {
 $legalMarkers = @(
     @{ File = 'LibRaw-LICENSE.LGPL'; Marker = 'GNU LESSER GENERAL PUBLIC LICENSE' },
     @{ File = 'LibRaw-LICENSE.CDDL'; Marker = 'COMMON DEVELOPMENT AND DISTRIBUTION LICENSE' },
-    @{ File = 'LibRaw-NOTICE.txt'; Marker = 'LibRaw 0.22.2' }
+    @{ File = 'LibRaw-NOTICE.txt'; Marker = 'LibRaw 0.22.2' },
+    @{ File = 'THIRD-PARTY-NOTICES.md'; Marker = 'libjpeg-turbo' }
 )
 foreach ($check in $legalMarkers) {
     $legalPath = Join-Path $resolved $check.File

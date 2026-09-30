@@ -222,6 +222,95 @@ public sealed class RawSurveyReportTests : IDisposable
         Assert.Contains("could not be surveyed", text, StringComparison.Ordinal);
     }
 
+    private string CorpusOf(string name, params string[] rawNames)
+    {
+        var dir = _root.Dir(name);
+        foreach (var file in rawNames) File.WriteAllBytes(Path.Combine(dir, file), SyntheticRawBuilder.BuildTiff(littleEndian: true));
+        return dir;
+    }
+
+    [Fact(DisplayName = "a size read that throws for one file (vanished/locked between scan steps) keeps every other row and marks that file failed")]
+    public async Task SurveyDirectoryAsync_SizeReadFailsForOneFile_KeepsTheOtherRows()
+    {
+        var dir = CorpusOf("stat-fails", "a.dng", "b.dng", "c.dng");
+
+        var summary = await RawSurvey.SurveyDirectoryAsync(dir, path =>
+            Path.GetFileName(path) == "b.dng" ? throw new FileNotFoundException("gone between scan steps") : RawSurvey.ReadFileLength(path));
+
+        Assert.Equal(["a.dng", "b.dng", "c.dng"], summary.Files.Select(f => f.FileName));
+        Assert.Contains("size:", summary.Files.Single(f => f.FileName == "b.dng").Error, StringComparison.Ordinal);
+        Assert.Equal(0, summary.Files.Single(f => f.FileName == "b.dng").FileSizeBytes);
+        Assert.All(summary.Files.Where(f => f.FileName != "b.dng"), f => { Assert.Null(f.Error); Assert.True(f.FileSizeBytes > 0); });
+    }
+
+    [Fact(DisplayName = "RunAsync still writes the markdown for the surveyed files when one file's stat fails, and exits 1")]
+    public async Task RunAsync_SizeReadFailsForOneFile_WritesReportAndExitsOne()
+    {
+        var dir = CorpusOf("stat-fails-run", "a.dng", "b.dng");
+        var md = Path.Combine(_root.Dir("stat-fails-out"), "out.md");
+
+        var exit = await RawSurvey.RunAsync(["--raw-survey", dir, "--markdown", md], path =>
+            Path.GetFileName(path) == "b.dng" ? throw new IOException("locked") : RawSurvey.ReadFileLength(path));
+
+        Assert.Equal(1, exit);
+        var text = await File.ReadAllTextAsync(md);
+        Assert.Contains("a.dng", text, StringComparison.Ordinal);
+        Assert.Contains("b.dng", text, StringComparison.Ordinal);
+        Assert.Contains("could not be surveyed", text, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "a valueless or repeated --markdown, an unknown flag or a stray token is rejected with usage (exit 2), not silently ignored")]
+    [InlineData("--markdown")]
+    [InlineData("-o")]
+    [InlineData("--markdwon", "out.md")]
+    [InlineData("stray")]
+    [InlineData("--markdown", "--other")]
+    [InlineData("--markdown", "a.md", "--markdown", "b.md")]
+    [InlineData("--markdown", "a.md", "extra")]
+    public async Task RunAsync_BadArguments_ExitTwoWithoutSurveying(params string[] extra)
+    {
+        var dir = CorpusOf("bad-args", "a.dng");
+
+        var exit = await RawSurvey.RunAsync([.. new[] { "--raw-survey", dir }, .. extra]);
+
+        Assert.Equal(2, exit);
+        Assert.False(RawSurvey.TryParseArgs([.. new[] { "--raw-survey", dir }, .. extra], out _, out _));
+    }
+
+    [Theory(DisplayName = "valid --markdown / -o arguments parse to the output path")]
+    [InlineData("--markdown")]
+    [InlineData("-o")]
+    public void TryParseArgs_ValidFlag_ReturnsPath(string flag)
+    {
+        Assert.True(RawSurvey.TryParseArgs(["--raw-survey", "dir", flag, "out.md"], out var path, out var error));
+        Assert.Equal("out.md", path);
+        Assert.Null(error);
+        Assert.True(RawSurvey.TryParseArgs(["--raw-survey", "dir"], out var none, out _));
+        Assert.Null(none);
+    }
+
+    [Fact(DisplayName = "only RAW extensions are surveyed: a .jpg/.jpeg in a mixed folder is ignored and cannot fail the run")]
+    public async Task SurveyDirectoryAsync_MixedFolder_SurveysOnlyRawFiles()
+    {
+        var dir = CorpusOf("mixed", "a.dng");
+        File.WriteAllBytes(Path.Combine(dir, "b.jpg"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(dir, "c.JPEG"), [1, 2, 3]);
+
+        var summary = await RawSurvey.SurveyDirectoryAsync(dir);
+
+        Assert.Equal(["a.dng"], summary.Files.Select(f => f.FileName));
+        Assert.Equal(0, await RawSurvey.RunAsync(["--raw-survey", dir]));
+    }
+
+    [Fact(DisplayName = "a folder holding only JPEGs surveys nothing and fails (not a silent success)")]
+    public async Task RunAsync_OnlyJpegs_ReturnsNonZero()
+    {
+        var dir = _root.Dir("jpegs-only");
+        File.WriteAllBytes(Path.Combine(dir, "a.jpg"), [1, 2, 3]);
+
+        Assert.Equal(1, await RawSurvey.RunAsync(["--raw-survey", dir]));
+    }
+
     [Fact(DisplayName = "surveying a folder with no files is a failure, not a silent success")]
     public async Task RunAsync_NoFiles_ReturnsNonZero()
     {

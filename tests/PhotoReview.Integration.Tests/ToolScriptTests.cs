@@ -450,7 +450,7 @@ public sealed class ToolScriptEncodingTests : IDisposable
         "PhotoReview.App.exe", "PhotoReview.App.dll", "PhotoReview.App.deps.json", "PhotoReview.App.runtimeconfig.json",
         "PhotoReview.Core.dll", "PhotoReview.Imaging.dll", "PhotoReview.Platform.Windows.dll", "PhotoReview.Benchmarking.dll",
         "PhotoReview.PerfAnalysis.dll", "PhotoReview.Imaging.TurboJpeg.dll", "PhotoReview.Imaging.LibRaw.dll", "turbojpeg.dll",
-        "libraw.dll", "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-SOURCE.zip", "LibRaw-NOTICE.txt",
+        "libraw.dll", "LibRaw-LICENSE.LGPL", "LibRaw-LICENSE.CDDL", "LibRaw-SOURCE.zip", "LibRaw-NOTICE.txt", "THIRD-PARTY-NOTICES.md",
         "Languages\\en.json", "Languages\\vi.json",
     ];
 
@@ -530,6 +530,59 @@ public sealed class FetchLibRawScriptTests : IDisposable
         Assert.False(File.Exists(Path.Combine(repo, "native", "x64", "libraw.dll")));
     }
 
+    // A closed local port: any attempt to download fails immediately, so a test that expects "no network" cannot pass by accident
+    // and a fallback attempt is observable ("Downloading ..." in the output) without touching the internet.
+    private const string UnreachableUrl = "https://127.0.0.1:1/LibRaw-0.22.2-Win64.zip";
+
+    private static readonly string[] CommittedPackageEntries = ["LibRaw-0.22.2/bin/libraw.dll", "LibRaw-0.22.2/LICENSE.LGPL", "LibRaw-0.22.2/LICENSE.CDDL"];
+
+    private (string Repo, string Script, string CommittedZip, byte[] Package) FakeRepoWithCommittedPackage(string name)
+    {
+        var package = BuildPackage((CommittedPackageEntries[0], Dll), (CommittedPackageEntries[1], [1]), (CommittedPackageEntries[2], [2]));
+        var (repo, script) = FakeRepo(name, Dll, package);
+        var licenseDir = Path.Combine(repo, "native", "libraw");
+        Directory.CreateDirectory(licenseDir);
+        File.WriteAllText(Path.Combine(licenseDir, "NOTICE.txt"), "notice");
+        var zip = Path.Combine(licenseDir, "LibRaw-0.22.2-Win64.zip");
+        File.WriteAllBytes(zip, package);
+        return (repo, script, zip, package);
+    }
+
+    [Fact(DisplayName = "fetch-libraw: a fresh checkout installs from the committed package without any download")]
+    public void FetchLibRaw_FreshCheckout_UsesCommittedPackageWithoutNetwork()
+    {
+        var (repo, script, _, _) = FakeRepoWithCommittedPackage("committed");
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-DownloadUrl", UnreachableUrl);
+
+        Assert.True(code == 0, output);
+        Assert.Equal(Dll, File.ReadAllBytes(Path.Combine(repo, "native", "x64", "libraw.dll")));
+        Assert.Contains("committed", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Downloading", output, StringComparison.Ordinal);
+        Assert.Equal(0, PowerShellRunner.Run("-File", script, "-Verify").ExitCode);
+
+        // Every pin now matches: the default mode is a no-op that never touches the network.
+        var again = PowerShellRunner.Run("-File", script, "-DownloadUrl", UnreachableUrl);
+        Assert.True(again.ExitCode == 0, again.Output);
+        Assert.Contains("PASS: LibRaw DLL", again.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Downloading", again.Output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "fetch-libraw: a committed package that fails its pin is not trusted; the script falls back to the download and fails closed")]
+    public void FetchLibRaw_TamperedCommittedPackage_FallsBackToDownloadAndFailsClosed()
+    {
+        var (repo, script, zip, _) = FakeRepoWithCommittedPackage("committed-tampered");
+        File.WriteAllBytes(zip, [1, 2, 3]); // not the pinned package (and not even a zip)
+
+        var (code, output) = PowerShellRunner.Run("-File", script, "-DownloadUrl", UnreachableUrl);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("does not match native/libraw.package.sha256", output, StringComparison.Ordinal);
+        Assert.Contains("Downloading", output, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(repo, "native", "x64", "libraw.dll")));
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(zip)); // the bad file is left alone, never installed over
+    }
+
     [Fact(DisplayName = "fetch-libraw: a pinned package with an entry escaping the extraction root is refused and writes nothing outside")]
     public void FetchLibRaw_ZipSlipEntry_IsRefused()
     {
@@ -604,7 +657,12 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         "Languages\\en.json", "Languages\\vi.json",
     ];
 
-    private (int ExitCode, string Output) Run(string lgpl, string cddl, string notice)
+    /// <param name="thirdParty">Content of THIRD-PARTY-NOTICES.md in the release folder; null omits the file.</param>
+    /// <param name="fullPass">
+    /// Also fakes the version step so a fully valid folder can reach the final PASS line: the stub project reports exactly the version
+    /// resource of a real, git-versioned assembly of this build, which is copied in as PhotoReview.App.dll.
+    /// </param>
+    private (int ExitCode, string Output) Run(string lgpl, string cddl, string notice, string? thirdParty = GoodThirdParty, bool fullPass = false)
     {
         var name = "repo-" + Guid.NewGuid().ToString("N");
         var repo = _root.Dir(name);
@@ -622,8 +680,23 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
         File.WriteAllText(Path.Combine(release, "LibRaw-LICENSE.LGPL"), lgpl);
         File.WriteAllText(Path.Combine(release, "LibRaw-LICENSE.CDDL"), cddl);
         File.WriteAllText(Path.Combine(release, "LibRaw-NOTICE.txt"), notice);
+        if (thirdParty is not null) File.WriteAllText(Path.Combine(release, "THIRD-PARTY-NOTICES.md"), thirdParty);
+        if (fullPass)
+        {
+            var assembly = typeof(PhotoReview.Benchmark.Cli.RawSurvey).Assembly.Location;
+            File.Copy(assembly, Path.Combine(release, "PhotoReview.App.dll"), overwrite: true);
+            var version = FileVersionInfo.GetVersionInfo(assembly);
+            var projectDir = Path.Combine(repo, "src", "PhotoReview.App");
+            Directory.CreateDirectory(projectDir);
+            File.WriteAllText(Path.Combine(projectDir, "PhotoReview.App.csproj"),
+                "<Project><PropertyGroup><FileVersion>" + version.FileVersion + "</FileVersion><InformationalVersion>" + version.ProductVersion +
+                "</InformationalVersion></PropertyGroup><Target Name=\"PhotoReviewComputeVersion\" /></Project>");
+        }
+
         return PowerShellRunner.Run("-File", Path.Combine(repo, "tools", "verify-release.ps1"), "-ReleaseDirectory", release);
     }
+
+    private const string GoodThirdParty = "# Third-Party Software Notices\n## libjpeg-turbo\nBSD-3-Clause / IJG License / zlib License";
 
     private const string GoodLgpl = "GNU LESSER GENERAL PUBLIC LICENSE Version 2.1";
     private const string GoodCddl = "COMMON DEVELOPMENT AND DISTRIBUTION LICENSE (CDDL) Version 1.0";
@@ -659,10 +732,40 @@ public sealed class VerifyReleaseLegalContentTests : IDisposable
     [Fact(DisplayName = "verify-release: correct legal files pass the content check")]
     public void VerifyRelease_GoodLegalFiles_PassContentCheck()
     {
-        var (_, output) = Run(GoodLgpl, GoodCddl, GoodNotice);
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, fullPass: true);
 
-        Assert.DoesNotContain("is empty", output, StringComparison.Ordinal);
-        Assert.DoesNotContain("does not contain the expected text", output, StringComparison.Ordinal);
+        Assert.True(code == 0, output);
+        Assert.Contains("PASS: release files present", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release: the same fully valid folder fails once one legal file is wrong (control for the passing case)")]
+    public void VerifyRelease_SameFolderWithWrongLegalFile_Fails()
+    {
+        var (code, output) = Run(GoodLgpl, "something else", GoodNotice, fullPass: true);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("LibRaw-LICENSE.CDDL does not contain the expected text", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("PASS: release files present", output, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "verify-release: a release folder without THIRD-PARTY-NOTICES.md fails and names it")]
+    public void VerifyRelease_MissingThirdPartyNotices_Fails()
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, thirdParty: null, fullPass: true);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("Missing release file(s): THIRD-PARTY-NOTICES.md", output, StringComparison.Ordinal);
+    }
+
+    [Theory(DisplayName = "verify-release: an empty THIRD-PARTY-NOTICES.md or one without the libjpeg-turbo notice fails")]
+    [InlineData("  ", "is empty")]
+    [InlineData("nothing relevant", "does not contain the expected text")]
+    public void VerifyRelease_BadThirdPartyNotices_Fails(string content, string expected)
+    {
+        var (code, output) = Run(GoodLgpl, GoodCddl, GoodNotice, thirdParty: content, fullPass: true);
+
+        Assert.NotEqual(0, code);
+        Assert.Contains("THIRD-PARTY-NOTICES.md " + expected, output, StringComparison.Ordinal);
     }
 }
 

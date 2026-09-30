@@ -53,11 +53,52 @@ internal static class RawSurvey
         string WicRawCodecInfo,
         IReadOnlyList<SurveyFileResult> Files);
 
-    public static async Task<int> RunAsync(string[] args)
+    internal const string Usage = "Usage: PhotoReview.Benchmark.Cli --raw-survey <directory> [--markdown <output.md>]";
+
+    /// <summary>
+    /// Validates <c>--raw-survey &lt;dir&gt; [--markdown|-o &lt;file&gt;]</c> (args[0] is the mode). A valueless <c>--markdown</c>, a repeated one or
+    /// any other token is an error: silently ignoring it would exit 0 without the report the caller asked for.
+    /// </summary>
+    internal static bool TryParseArgs(IReadOnlyList<string> args, out string? markdownPath, out string? error)
     {
-        if (args.Length < 2)
+        markdownPath = null;
+        error = null;
+        if (args.Count < 2 || string.IsNullOrWhiteSpace(args[1])) return false;
+        for (var i = 2; i < args.Count; i++)
         {
-            Console.Error.WriteLine("Usage: PhotoReview.Benchmark.Cli --raw-survey <directory> [--markdown <output.md>]");
+            if (args[i] is not ("--markdown" or "-o"))
+            {
+                error = $"Unexpected argument for --raw-survey: {args[i]}";
+                return false;
+            }
+
+            if (i + 1 >= args.Count || string.IsNullOrWhiteSpace(args[i + 1]) || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                error = $"{args[i]} needs an output file path";
+                return false;
+            }
+
+            if (markdownPath is not null)
+            {
+                error = "--markdown was given more than once";
+                return false;
+            }
+
+            markdownPath = args[++i];
+        }
+
+        return true;
+    }
+
+    /// <summary>Only RAW containers are surveyed: a .jpg/.jpeg in the folder is neither a RAW nor a RAW-container error source.</summary>
+    internal static bool IsSurveyable(string path) => RawFileTypes.IsRawExtension(path);
+
+    public static async Task<int> RunAsync(string[] args, Func<string, long>? readLength = null)
+    {
+        if (!TryParseArgs(args, out var markdownPath, out var argError))
+        {
+            if (argError is not null) Console.Error.WriteLine(argError);
+            Console.Error.WriteLine(Usage);
             return 2;
         }
 
@@ -68,19 +109,10 @@ internal static class RawSurvey
             return 2;
         }
 
-        string? markdownPath = null;
-        for (var i = 2; i < args.Length; i++)
-        {
-            if (args[i] is "--markdown" or "-o" && i + 1 < args.Length)
-            {
-                markdownPath = args[++i];
-            }
-        }
-
         SurveySummary summary;
         try
         {
-            summary = await SurveyDirectoryAsync(dir);
+            summary = await SurveyDirectoryAsync(dir, readLength);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -116,15 +148,13 @@ internal static class RawSurvey
     internal static int ComputeExitCode(SurveySummary summary) =>
         summary.Files.Count == 0 || summary.Files.Any(f => f.Error is not null) ? 1 : 0;
 
-    public static async Task<SurveySummary> SurveyDirectoryAsync(string dir)
-    {
-        var rawExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2", ".jpg", ".jpeg"
-        };
+    /// <summary>The size of a file in bytes; the seam lets tests make the stat fail for one file (it vanishes or is locked mid-survey).</summary>
+    internal static long ReadFileLength(string path) => new FileInfo(path).Length;
 
+    public static async Task<SurveySummary> SurveyDirectoryAsync(string dir, Func<string, long>? readLength = null)
+    {
         var files = Directory.EnumerateFiles(dir, "*", SearchOption.TopDirectoryOnly)
-            .Where(f => rawExts.Contains(Path.GetExtension(f)))
+            .Where(IsSurveyable)
             .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -134,17 +164,36 @@ internal static class RawSurvey
         var results = new List<SurveyFileResult>();
         foreach (var file in files)
         {
-            var res = await SurveyFileAsync(file);
+            // Safety net: whatever one file throws becomes that file's error row, so the report of the others is always written.
+            SurveyFileResult res;
+            try { res = await SurveyFileAsync(file, readLength); }
+            catch (Exception ex) when (RawDecoderBenchmark.IsMeasurementFailure(ex))
+            {
+                res = FailedFile(file, $"{ex.GetType().Name}: {ex.Message}");
+            }
+
             results.Add(res);
         }
 
         return new SurveySummary(windowsVersion, codecInfo, results);
     }
 
-    public static async Task<SurveyFileResult> SurveyFileAsync(string filePath)
+    private static SurveyFileResult FailedFile(string filePath, string error) =>
+        new(filePath, Path.GetFileName(filePath), FormatOf(filePath), 0, 1, 0, 0, [], false, 0, 0, 1, null, false, 0, 0, 0, null, false, "unknown", error);
+
+    private static string FormatOf(string filePath)
     {
-        var fi = new FileInfo(filePath);
-        var ext = fi.Extension.TrimStart('.').ToUpperInvariant();
+        var ext = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant();
+        return ext switch
+        {
+            "JPG" or "JPEG" => "JPEG",
+            _ => ext
+        };
+    }
+
+    public static async Task<SurveyFileResult> SurveyFileAsync(string filePath, Func<string, long>? readLength = null)
+    {
+        var ext = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant();
         var format = ext switch
         {
             "CR2" => "CR2",
@@ -161,13 +210,25 @@ internal static class RawSurvey
 
         IReadOnlyList<EmbeddedJpeg> embeddedJpegs = [];
         string? fileError = null;
+        // The size is read once, up front and failure-tolerant: a file that vanished or is locked between the scan steps must
+        // not abort the whole survey (and lose the report of every file already surveyed). Unknown size = 0 plus an error row.
+        long fileSize = 0;
+        try
+        {
+            fileSize = (readLength ?? ReadFileLength)(filePath);
+        }
+        catch (Exception ex) when (RawDecoderBenchmark.IsMeasurementFailure(ex))
+        {
+            fileError = $"size: {ex.GetType().Name}: {ex.Message}";
+        }
+
         try
         {
             embeddedJpegs = ScanEmbeddedJpegs(filePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            fileError = $"{ex.GetType().Name}: {ex.Message}";
+            fileError ??= $"{ex.GetType().Name}: {ex.Message}";
         }
 
         // Sensor size and orientation come from the RAW container readers (never from WIC: without a RAW codec WIC only sees the preview).
@@ -268,9 +329,9 @@ internal static class RawSurvey
 
         return new SurveyFileResult(
             filePath,
-            fi.Name,
+            Path.GetFileName(filePath),
             format,
-            fi.Length,
+            fileSize,
             containerOrient,
             sensorW,
             sensorH,

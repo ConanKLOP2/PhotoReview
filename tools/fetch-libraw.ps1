@@ -1,6 +1,8 @@
 # Fetches and verifies the pinned LibRaw 0.22.2 Windows x64 runtime (DLL, corresponding source package, notices).
 # PowerShell 5.1 compatible, idempotent, fail-closed:
-#   * default mode: if every pin already matches, do nothing (offline friendly); otherwise download, verify the PACKAGE
+#   * default mode: if every pin already matches, do nothing (offline friendly); otherwise install from the COMMITTED package
+#     native/libraw/LibRaw-0.22.2-Win64.zip when it matches its pin (no network); only when that file is missing or fails the
+#     pin is the official package downloaded (curl, HTTPS/TLS 1.2 only). Either way: verify the PACKAGE
 #     SHA-256 before extracting anything, expand with an entry-path guard, verify the DLL, then install atomically.
 #   * -Verify: fast read-only check (no network, no writes); exit 1 when any pin is missing/mismatched.
 #   * -PackagePath: use a local package instead of downloading (offline installs and tests); the same checks apply.
@@ -8,7 +10,9 @@
 [CmdletBinding()]
 param(
     [switch]$Verify,
-    [string]$PackagePath = ''
+    [string]$PackagePath = '',
+    # Fallback download location; overridable so tests can prove the fallback path without touching the network.
+    [string]$DownloadUrl = 'https://www.libraw.org/data/LibRaw-0.22.2-Win64.zip'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -108,13 +112,23 @@ try {
     $tempPackage = Join-Path ([IO.Path]::GetTempPath()) "LibRaw-0.22.2-Win64.$([guid]::NewGuid().ToString('N')).zip"
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
     try {
+        $useCommitted = $false
+        if (-not $PackagePath -and (Test-Path -LiteralPath $sourcePackage -PathType Leaf)) {
+            # Hash the committed package (a copy, so the file at $sourcePackage is never read while it may be replaced below).
+            Copy-Item -LiteralPath $sourcePackage -Destination $tempPackage -Force
+            if ((Get-Sha256 $tempPackage) -eq $expectedPackageHash) { $useCommitted = $true }
+            else { Write-Warning 'The committed LibRaw package does not match native/libraw.package.sha256; falling back to the official download.' }
+        }
         if ($PackagePath) {
             Copy-Item -LiteralPath $PackagePath -Destination $tempPackage -Force
         }
+        elseif ($useCommitted) {
+            Write-Host 'Using the committed LibRaw 0.22.2 package (no download).'
+        }
         else {
             Write-Host 'Downloading official LibRaw 0.22.2 Windows x64 package...'
-            curl.exe -sSL --fail --retry 3 --proto '=https' --proto-redir '=https' `
-                'https://www.libraw.org/data/LibRaw-0.22.2-Win64.zip' -o $tempPackage
+            curl.exe -sSL --fail --retry 3 --tlsv1.2 --proto '=https' --proto-redir '=https' `
+                $DownloadUrl -o $tempPackage
             if ($LASTEXITCODE -ne 0) { throw "LibRaw download failed (curl exit code $LASTEXITCODE)." }
         }
 

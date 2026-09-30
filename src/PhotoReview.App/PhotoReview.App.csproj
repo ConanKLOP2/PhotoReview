@@ -19,6 +19,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Legal: the third-party notices (libjpeg-turbo BSD/IJG/zlib, ICC profile, ...) must ship beside the exe; tools/verify-release.ps1 requires it. -->
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PhotoReview.Core\PhotoReview.Core.csproj" />
     <ProjectReference Include="..\PhotoReview.Benchmarking\PhotoReview.Benchmarking.csproj" />
     <ProjectReference Include="..\PhotoReview.Imaging\PhotoReview.Imaging.csproj" />
