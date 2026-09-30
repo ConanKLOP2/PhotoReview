@@ -120,6 +120,7 @@ public sealed class RawDecoder : IImageDecoder
             long fallbackThumbnailBytesRead = 0;
             long fullDecodeBytesRead = 0;
             var fromJpegPreview = true;
+            var degradedFallback = false;
             if (preview == null || preview.Length <= 0)
             {
                 // A valid RAW without an embedded JPEG (e.g. Leica M8 DNG): every format may use the preview fallback
@@ -141,7 +142,7 @@ public sealed class RawDecoder : IImageDecoder
             else
             {
                 decoded = DecodePreviewWithFallbacks(request, containerInfo, key, headerSource, preview,
-                    out previewBytesRead, out fallbackThumbnailBytesRead, out fullDecodeBytesRead, out fromJpegPreview);
+                    out previewBytesRead, out fallbackThumbnailBytesRead, out fullDecodeBytesRead, out fromJpegPreview, out degradedFallback);
             }
 
             int sensorW = containerInfo.SensorWidth;
@@ -178,7 +179,8 @@ public sealed class RawDecoder : IImageDecoder
                     : checked(fullDecodeBytesRead + previewBytesRead),
                 // The inner decode's original size is the JPEG's own (orientation-applied) size, whatever box it was decoded into.
                 embeddedPreviewWidth: fromJpegPreview ? decoded.OriginalWidth : 0,
-                embeddedPreviewHeight: fromJpegPreview ? decoded.OriginalHeight : 0);
+                embeddedPreviewHeight: fromJpegPreview ? decoded.OriginalHeight : 0,
+                isDegradedFallback: degradedFallback || decoded.IsDegradedFallback);
         }
     }
 
@@ -205,8 +207,10 @@ public sealed class RawDecoder : IImageDecoder
         out long previewBytesRead,
         out long fallbackThumbnailBytesRead,
         out long fullDecodeBytesRead,
-        out bool fromJpegPreview)
+        out bool fromJpegPreview,
+        out bool degradedFallback)
     {
+        degradedFallback = false;
         previewBytesRead = 0;
         fallbackThumbnailBytesRead = 0;
         fullDecodeBytesRead = 0;
@@ -226,6 +230,8 @@ public sealed class RawDecoder : IImageDecoder
             {
                 var decoded = DecodePreview(request, containerInfo, key, current, out long read);
                 previewBytesRead = checked(read + failedBytes);
+                // A next-best preview accepted after a larger one failed is not the best the container offers.
+                degradedFallback = tried.Count > 1;
                 return decoded;
             }
             catch (Exception ex) when (IsRecoverablePreviewFailure(ex))
@@ -249,7 +255,9 @@ public sealed class RawDecoder : IImageDecoder
                 sourceOrientation: containerInfo.Orientation);
             try
             {
-                return DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawCorrupt, out fallbackThumbnailBytesRead);
+                var thumbnail = DecodeFallbackThumbnail(request.Path, containerInfo.Format, thumbnailRequest, () => Tr.ImageErrorRawCorrupt, out fallbackThumbnailBytesRead);
+                degradedFallback = true; // the container's real previews failed to decode
+                return thumbnail;
             }
             catch (Exception ex) when (_noPreviewDecoder is not null && IsRecoverablePreviewFailure(ex))
             {
@@ -552,6 +560,7 @@ public sealed class RawDecoder : IImageDecoder
         public ExifSummary? Exif { get; }
         public int EmbeddedPreviewWidth { get; }
         public int EmbeddedPreviewHeight { get; }
+        public bool IsDegradedFallback { get; }
 
         public RawDecodedImage(
             IDecodedImage inner,
@@ -563,8 +572,10 @@ public sealed class RawDecoder : IImageDecoder
             DecoderBackend actualBackend,
             long sourceBytesRead,
             int embeddedPreviewWidth,
-            int embeddedPreviewHeight)
+            int embeddedPreviewHeight,
+            bool isDegradedFallback)
         {
+            IsDegradedFallback = isDegradedFallback;
             EmbeddedPreviewWidth = embeddedPreviewWidth;
             EmbeddedPreviewHeight = embeddedPreviewHeight;
             _inner = inner;

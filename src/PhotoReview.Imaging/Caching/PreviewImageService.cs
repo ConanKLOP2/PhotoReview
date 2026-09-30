@@ -552,8 +552,12 @@ public sealed class PreviewImageService : IPreloadTarget
         if (perf) perfT0 = Stopwatch.GetTimestamp();
         if (!key.MatchesCurrentSource()) throw UserFacingError.Localized(new IOException($"Image source changed during decode: {path}"), () => Tr.ErrIoSourceChangedDuringDecode(path));
         if (perf) PhotoReviewPerf.Log.Verify(perfNav, perfPathId, PhotoReviewPerf.Ms(perfT0));
-        lock (_cacheLifecycleGate)
-            if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
+        // A degraded fallback (a next-best RAW preview accepted after a larger one failed) is returned to the caller but
+        // never cached in RAM or on disk, so the next view retries the better source.
+        bool degraded = decodedImage.IsDegradedFallback;
+        if (!degraded)
+            lock (_cacheLifecycleGate)
+                if (cacheEpoch == _cacheEpoch) _cache.Set(key, decodedImage);
 
         // Perf: every decode through this method (viewer-triggered or preload-triggered -- both
         // share this same path, see IPreloadTarget.PreloadAsync) already knows the source's
@@ -578,7 +582,7 @@ public sealed class PreviewImageService : IPreloadTarget
         // records which backend actually produced the pixels (PreviewCacheFile.ReadResult.ActualBackend
         // above), so a disk-cache hit correctly reports the same ActualBackend a fresh fallback
         // decode would have.
-        if (cachePath is not null && sourceRead &&
+        if (cachePath is not null && sourceRead && !degraded &&
             decodedImage.Downscaled && decodedImage.PlatformImage is BitmapSource bmp)
             PersistToDiskCache(bmp, cachePath, cacheEpoch, decodedImage.ActualBackend, decodedImage.Orientation, decodedImage.OriginalWidth, decodedImage.OriginalHeight, decodedImage.Exif);
         stopwatch.Stop();

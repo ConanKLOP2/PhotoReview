@@ -103,6 +103,65 @@ public sealed class RawDecoderFallbackBreadthTests
     }
 
     [Fact]
+    public void Decode_NextBestPreviewAfterFailure_IsMarkedDegradedFallback()
+    {
+        using var temp = new TempRoot("raw-degraded-next-best");
+        var (path, info, _) = TwoPreviews(temp);
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(new InvalidDataException("bad"))).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal((1200, 900), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.True(decoded.IsDegradedFallback);
+    }
+
+    [Fact]
+    public void Decode_ThumbnailAfterCorruptLargerPreview_IsMarkedDegradedFallback()
+    {
+        using var temp = new TempRoot("raw-degraded-thumbnail");
+        var thumb = Jpeg(temp, 160, 120);
+        var path = temp.File("thumb.dng", [.. new byte[PreviewAt], .. BadPreview, .. thumb]);
+        var bad = new EmbeddedPreview(0, PreviewAt, BadPreview.Length, EmbeddedPreviewKind.Jpeg, 4000, 3000, PreviewColorSpace.Srgb);
+        var small = new EmbeddedPreview(1, PreviewAt + BadPreview.Length, thumb.Length, EmbeddedPreviewKind.Jpeg, 160, 120, PreviewColorSpace.Srgb);
+        var info = new RawContainerInfo(RawFormat.Dng, 6000, 4000, 1, [bad, small], []);
+
+        var decoded = NewDecoder(info, new SelectiveDecoder(new InvalidDataException("bad"))).Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.Equal((160, 120), (decoded.PixelWidth, decoded.PixelHeight));
+        Assert.True(decoded.IsDegradedFallback);
+    }
+
+    [Fact]
+    public void Decode_FirstChoicePreviewSucceeds_IsNotMarkedDegradedFallback()
+    {
+        using var temp = new TempRoot("raw-not-degraded");
+        // Only the larger preview is declared, and it decodes: the normal first-choice path.
+        var good = Jpeg(temp, 1200, 900);
+        var goodPath = temp.File("good.dng", [.. new byte[PreviewAt], .. good]);
+        var ok = new EmbeddedPreview(0, PreviewAt, good.Length, EmbeddedPreviewKind.Jpeg, 1200, 900, PreviewColorSpace.Srgb);
+
+        var decoded = NewDecoder(new RawContainerInfo(RawFormat.Dng, 6000, 4000, 1, [ok], []), new SelectiveDecoder(new InvalidDataException("bad")))
+            .Decode(new DecodeRequest(goodPath, DecodeBox.Unbounded));
+
+        Assert.True(decoded.Downscaled); // smaller than the sensor, yet genuinely the best preview
+        Assert.False(decoded.IsDegradedFallback);
+    }
+
+    [Fact]
+    public void Decode_FullDecodeAfterEveryPreviewFails_IsNotMarkedDegradedFallback()
+    {
+        using var temp = new TempRoot("raw-full-not-degraded");
+        var good = Jpeg(temp, 48, 32);
+        var path = temp.File("bad.dng", [.. new byte[PreviewAt], .. BadPreview]);
+        var bad = new EmbeddedPreview(0, PreviewAt, BadPreview.Length, EmbeddedPreviewKind.Jpeg, 4000, 3000, PreviewColorSpace.Srgb);
+
+        var decoded = NewDecoder(new RawContainerInfo(RawFormat.Dng, 4000, 3000, 1, [bad], []),
+                new SelectiveDecoder(new InvalidDataException("bad")), new RecordingFullDecoder(good))
+            .Decode(new DecodeRequest(path, DecodeBox.Unbounded));
+
+        Assert.False(decoded.IsDegradedFallback); // the LibRaw full decode is the genuine best available
+    }
+
+    [Fact]
     public void Decode_ChosenPreviewFailsWithoutAnyLibRaw_NextBestPreviewIsStillDecoded()
     {
         // No LibRaw (noPreviewDecoder null, no thumbnail fallback): trying the next-best JPEG needs no native code.

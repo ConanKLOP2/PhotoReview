@@ -34,6 +34,13 @@ public interface IDecodedImage
     /// source has no usable EXIF, the backend could not read it, or the image came from an older cache entry.
     /// </summary>
     PhotoReview.Imaging.Metadata.ExifSummary? Exif => null;
+
+    /// <summary>
+    /// True when this image is a next-best fallback accepted after a larger/better source failed to decode (e.g. a RAW's
+    /// smaller preview after the chosen one was corrupt). It is returned to the caller but must never be cached (RAM or
+    /// disk) so that a later view retries the better source.
+    /// </summary>
+    bool IsDegradedFallback => false;
 }
 
 /// <summary>Optional diagnostics for decoders that read only a range of a larger source file.</summary>
