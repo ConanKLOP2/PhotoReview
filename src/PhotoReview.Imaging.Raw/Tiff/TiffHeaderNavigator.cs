@@ -390,7 +390,8 @@ public static class TiffHeaderNavigator
         }
     }
 
-    private static int ClampToInt(long? value) => value is > 0 ? (int)Math.Min(value.Value, int.MaxValue) : 0;
+    /// <summary>Positive values clamped to <see cref="int.MaxValue"/>; null, zero and negative yield 0 (never wraps to a negative int).</summary>
+    public static int ClampToInt(long? value) => value is > 0 ? (int)Math.Min(value.Value, int.MaxValue) : 0;
 
     private static long? ReadArrayItem(ReadOnlySpan<byte> item, ushort type, bool littleEndian)
     {
