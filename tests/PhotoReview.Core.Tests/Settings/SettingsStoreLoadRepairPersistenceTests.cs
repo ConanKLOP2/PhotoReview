@@ -69,6 +69,26 @@ public sealed class SettingsStoreLoadRepairPersistenceTests
     }
 
     [Fact]
+    public void Load_ConfigFromNewerBuildWithRepair_IsNotRewrittenButRepairedInMemory()
+    {
+        var newer = """{"ConfigVersion":99,"FutureField":"keep me","Actions":[{"Name":"Mine","Shortcut":"K"}]}""";
+        _fs.AddFile(_paths.ConfigFile, newer);
+        var writes = 0;
+        _fs.WriteHook = _ => { writes++; return null; };
+        var store = NewStore();
+        var changed = 0;
+        store.Changed += (_, _) => changed++;
+
+        var loaded = store.Load();
+
+        Assert.Equal(0, writes);
+        Assert.Equal(newer, _fs.ReadAllText(_paths.ConfigFile));
+        Assert.Contains("Shortcuts." + nameof(ShortcutMappings.ToggleKeepZoom), store.LastLoadRepairs);
+        Assert.Equal("", loaded.Shortcuts.ToggleKeepZoom);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
     public void Load_ValidConfigWithoutRepairs_DoesNotRewriteTheFile()
     {
         _fs.AddFile(_paths.ConfigFile, """{"ConfigVersion":3}""");

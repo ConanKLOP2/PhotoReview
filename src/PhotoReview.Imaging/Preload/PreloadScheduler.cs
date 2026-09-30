@@ -158,7 +158,11 @@ public sealed class PreloadScheduler : IDisposable
     }
 
     /// <summary>Drops the warmed-key set (folder reload / cache clear).</summary>
-    public void ClearPreloadedKeys() { lock (_preloadedKeysGate) _preloadedKeys.Clear(); }
+    public void ClearPreloadedKeys()
+    {
+        lock (_preloadedKeysGate) _preloadedKeys.Clear();
+        _busyBackoff.Clear();
+    }
 
     /// <summary>Removes warmed keys for one normalized (full, upper-invariant) path.</summary>
     public void RemovePreloadedKeysForPath(string normalizedPath)
@@ -639,6 +643,7 @@ public sealed class PreloadScheduler : IDisposable
                     var kind = sourceRead ? "decoded" : isHit ? "hit" : "miss";
                     PhotoReviewPerf.Log.PreloadItem(slot, pathId, queueWaitMs, kind, stopwatch.Elapsed.TotalMilliseconds);
                 }
+                if (isHit) _busyBackoff.RecordSuccess(path);
                 return isHit ? PreloadOutcome.Cached : PreloadOutcome.Failed;
             }
             catch (DecoderBusyException)

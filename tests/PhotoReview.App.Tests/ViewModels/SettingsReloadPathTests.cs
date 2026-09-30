@@ -57,4 +57,18 @@ public sealed class SettingsReloadPathTests
     {
         Assert.Equal(Raw, SettingsReloadPath.Choose(Raw, null, Raw, false, RawPairMode.Separate));
     }
+
+    [Theory]
+    [InlineData(RawPairMode.PreferJpeg)]
+    [InlineData(RawPairMode.PreferRaw)]
+    public void Choose_NoPresentedPathRawEntryAndRawSupportOff_FallsBackToJpegMember(RawPairMode mode)
+    {
+        Assert.Equal(Jpeg, SettingsReloadPath.Choose(null, Group, Raw, rawEnabled: false, mode));
+    }
+
+    [Fact]
+    public void Choose_NoPresentedPathRawEntryAndRawSupportOn_KeepsTheEntryPath()
+    {
+        Assert.Equal(Raw, SettingsReloadPath.Choose(null, Group, Raw, rawEnabled: true, RawPairMode.PreferRaw));
+    }
 }

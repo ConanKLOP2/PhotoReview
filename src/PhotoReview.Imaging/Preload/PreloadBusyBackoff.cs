@@ -35,6 +35,18 @@ internal sealed class PreloadBusyBackoff
         }
     }
 
+    /// <summary>A preload of the path succeeded: its busy history no longer applies (the retry cap must not outlive a good decode).</summary>
+    internal void RecordSuccess(string path)
+    {
+        lock (_gate) _states.Remove(path);
+    }
+
+    /// <summary>Forgets every path (folder reload / cache clear): the entries would otherwise outlive the catalog they describe.</summary>
+    internal void Clear()
+    {
+        lock (_gate) _states.Clear();
+    }
+
     /// <summary>True while the path is cooling down after a busy outcome, or has used up its retries for this exact file.</summary>
     internal bool ShouldSkip(string path, ImageCacheKey key)
     {

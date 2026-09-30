@@ -16,15 +16,17 @@ internal static class SettingsReloadPath
     /// <param name="pairMode">The pair mode as it will be after the reload.</param>
     public static string? Choose(string? presentedPath, CaptureGroup? group, string? entryPath, bool rawEnabled, RawPairMode pairMode)
     {
-        if (presentedPath is null) return entryPath;
+        // No toggled member: the entry's representative (the RAW under PreferRaw) is the candidate, and the RAW-off rule applies to it too.
+        var candidate = presentedPath ?? entryPath;
+        if (candidate is null) return null;
         // Separate: each member is its own entry, so either path stays valid. PreferJpeg / PreferRaw: the group still
         // resolves both members to the one entry. Only RAW off removes the RAW member from the listing.
         _ = pairMode;
         if (!rawEnabled && group is not null
-            && string.Equals(presentedPath, group.RawPath, StringComparison.OrdinalIgnoreCase))
+            && string.Equals(candidate, group.RawPath, StringComparison.OrdinalIgnoreCase))
         {
             return group.JpegPath;
         }
-        return presentedPath;
+        return candidate;
     }
 }
