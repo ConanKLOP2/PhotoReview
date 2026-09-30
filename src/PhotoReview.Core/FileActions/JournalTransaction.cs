@@ -161,8 +161,8 @@ internal sealed class JournalTransaction : IDisposable
 
     /// <summary>
     /// Appends Failed for <paramref name="failure"/> when Prepared was written (or, for a retry, always). Returns the record
-    /// (null when none was due, or when a retry's append was skipped as <see cref="Superseded"/>) and the journal error
-    /// message if the append itself failed.
+    /// that was written; null when none was due, when a retry's append was skipped as <see cref="Superseded"/>, or when the
+    /// append itself failed (then <paramref name="journalError"/> carries the message and the Prepared line stays for reconcile).
     /// </summary>
     public JournalEntry? Fail(Exception failure, out string? journalError)
     {
@@ -208,6 +208,8 @@ internal sealed class JournalTransaction : IDisposable
         {
             ReleaseLiveMarker(); // only after the outcome line (see Commit)
         }
-        return Superseded ? null : failed; // documented contract: a skipped (superseded) append yields no record
+        // Documented contract: a record is returned only when its line really reached the journal; a skipped (superseded) or
+        // failed append yields none (the failure is in journalError), so callers never treat an unwritten line as journaled.
+        return Superseded || journalError is not null ? null : failed;
     }
 }

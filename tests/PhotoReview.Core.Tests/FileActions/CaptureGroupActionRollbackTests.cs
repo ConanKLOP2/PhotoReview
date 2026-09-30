@@ -432,6 +432,32 @@ public sealed class CaptureGroupActionRollbackTests
         Assert.True(fs.FileExists(@"C:\photos\a.xmp"));
     }
 
+    [Fact]
+    public async Task ExecuteGroupAsync_CompensationThrowsUnexpectedExceptionType_DoesNotEscapeAndLeavesPreparedForReconcile()
+    {
+        var (fs, journal) = CreateWorld();
+        fs.MoveHook = (source, _) =>
+        {
+            if (source == Raw) return new IOException("simulated second-member failure");
+            // The rollback of the first (already moved) member blows up with a type the compensation does not expect.
+            if (source == MovedJpeg) return new InvalidOperationException("simulated unexpected fault");
+            return null;
+        };
+
+        var result = await CreateService(fs, journal).ExecuteGroupAsync(Request(FileOperationType.Move)); // must not throw
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.Rejected);
+        Assert.Equal(Tr.CoreGroupActionRollbackFailed("simulated second-member failure", 2), result.Error);
+        Assert.All(result.Members, member => Assert.False(member.Completed));
+        Assert.Contains(result.Members, member => member.Conflict); // state could not be proven: never reported as cleanly rolled back
+        // No outcome line was written: the Prepared line stays, so startup reconcile judges the disk later.
+        Assert.Equal(JournalState.Prepared, Assert.Single(journal.ReadPendingOperations()).State);
+        Assert.Empty(journal.ReadFailedOperations());
+        Assert.False(fs.FileExists(Jpeg)); // the JPEG really is still in the destination folder
+        Assert.True(fs.FileExists(MovedJpeg));
+    }
+
     private sealed class FixedClock : IClock
     {
         public DateTime UtcNow => Stamp;
