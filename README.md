@@ -41,6 +41,8 @@ dotnet publish src/PhotoReview.App/PhotoReview.App.csproj -c Release --self-cont
 
 **Downgrade note (camera RAW release):** this release writes JPEG+RAW capture actions to the operation journal as one line that lists every file of the capture. An older build only understands the first file of such a line. Before going back to an older build, open **Recovery** and resolve any unfinished Move/Copy/Delete of a JPEG+RAW capture first; a new build repairs lines an older build rewrote the next time it starts (see `docs/adr/0003-journal-startup.md`, "Older builds"), but it cannot recover a journal the older build already compacted.
 
+**Upgrade note (camera RAW release):** camera RAW support is ON by default (`RawSupportEnabled`, RAW-70), so a `config.json` written by an older build, which has no such field, starts listing RAW files (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2) in opened folders after the upgrade. JPG+RAW pairing stays off by default (`RawPairMode` = Separate). To go back, turn off **Settings > Enable Camera RAW support**. The app shows no in-app notice for this: there is no persisted "seen once" mechanism for informational notices (the startup dialog for `LastLoadRepairs` is for repaired invalid values and would repeat on every launch until the config is saved).
+
 Note: `Microsoft.CodeAnalysis.CSharp` (Localization generator, `Directory.Packages.props`) must not be newer than the compiler in the installed .NET SDK; upgrade it only together with the SDK.
 
 ### Benchmarks

@@ -93,3 +93,7 @@ a RAW without a JPEG is shown on its own.
 **Recommendation: A for real files + C for unit tests** (synthetic TIFF/BMFF/RAF containers wrapping a
 FixtureGenerator JPEG, built in memory — these run in CI). The fetch script must verify the CC0 statement on
 the source page for each file and record it next to its hash. **Decided (2026-09-28, user):** A + C.
+
+## RAW-70 upgrade behaviour (2026-09-30)
+
+`RawSupportEnabled` defaults to `true` (owner's intended RAW-70 default, not changed). An old `config.json` without the field therefore starts listing RAW files on the first launch after upgrading. No in-app one-time notice was added: the repo has no persisted "notice already shown" state, and the existing startup dialog (`SettingsStore.LastLoadRepairs`) is for repaired invalid values and would repeat each launch until the config file is saved. The behaviour is documented in the README upgrade note instead; the switch is Settings > Enable Camera RAW support.
