@@ -570,9 +570,11 @@ public sealed class PreviewImageService : IPreloadTarget
         stopwatch.Stop();
         // key.Length is the stat already taken to build the cache key (validated above by
         // MatchesCurrentSource); reusing it avoids a redundant stat just for metrics.
+        // Invariant: this path decodes previews (Standard / RawPreview keys). RawFullDecode keys are only created by
+        // DecodeOriginalAsync, which records its own (EWMA-excluded) sample, so every read here belongs in the decode EWMA.
+        Debug.Assert(key.SourceKind != ImageSourceKind.RawFullDecode, "DecodeAndCache never handles RawFullDecode keys.");
         if (sourceRead)
-            _metrics.RecordSourceRead(GetSourceBytesRead(decodedImage, key), stopwatch.ElapsedMilliseconds,
-                includeInDecodeEwma: key.SourceKind != ImageSourceKind.RawFullDecode);
+            _metrics.RecordSourceRead(GetSourceBytesRead(decodedImage, key), stopwatch.ElapsedMilliseconds);
         return decodedImage;
     }
 
