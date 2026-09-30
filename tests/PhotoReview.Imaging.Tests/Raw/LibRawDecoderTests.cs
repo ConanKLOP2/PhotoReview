@@ -9,6 +9,9 @@ using System.Windows.Media.Imaging;
 
 namespace PhotoReview.Imaging.Tests.Raw;
 
+// Note: ReadJpegThumbnail_RepeatedOrfExtraction_* and Decode_Repeated200Times_* are process-wide memory guards: they sample the
+// private bytes of the whole test process, so they are noisy by design (bounded by a generous growth allowance and medians) and
+// rely on the collection below to keep other LibRaw decodes from running concurrently.
 [Collection(LibRawNativeDecodeGate.Name)]
 [Trait("Category", "Native")]
 public sealed class LibRawDecoderTests

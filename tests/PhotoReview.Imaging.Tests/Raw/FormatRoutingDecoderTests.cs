@@ -82,13 +82,14 @@ public sealed class FormatRoutingDecoderTests
         Assert.ThrowsAny<ArgumentException>(() => router.ReadInfo(" "));
     }
 
+    // Needs the real corpus, so it is Native: strict CI (PHOTOREVIEW_RAW_CORPUS_STRICT=1) fails when a sample is missing instead of passing vacuously.
     [Theory]
+    [Trait("Category", "Native")]
     [InlineData("Leica - M8 - 8bit 8bit uncompressed (3_2).DNG")]
     [InlineData("Canon - EOS 350D - RAW (3_2).CR2")]
     public void Routing_RealRawFileWithWpfChainWhenDisabled_FailsInsteadOfDecodingAThumbnail(string fileName)
     {
-        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../tests/Fixtures/raw-corpus", fileName));
-        if (!File.Exists(path)) return;
+        if (RawCorpus.TryGetFile(fileName) is not { } path) return;
         var wpf = new WpfBitmapImageDecoder();
         var router = new FormatRoutingDecoder(wpf, new RoutingProbeDecoder(), () => false);
 

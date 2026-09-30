@@ -1,3 +1,8 @@
+using System.IO;
+using System.Runtime.InteropServices;
+using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Model;
+using PhotoReview.Imaging.Decoding;
 using PhotoReview.Imaging.LibRaw;
 
 namespace PhotoReview.Imaging.Tests.Raw;
@@ -111,5 +116,130 @@ public sealed class LibRawManagedLogicTests
     public void ValidateSourceLength_UnsupportedChannelCount_ThrowsInvalidData()
     {
         Assert.Throws<System.IO.InvalidDataException>(() => RgbBgraResampler.ValidateSourceLength(10, 10, 1000, channels: 4));
+    }
+
+    [Theory]
+    [InlineData(-100007)] // LIBRAW_UNSUFFICIENT_MEMORY
+    [InlineData(12)]      // ENOMEM returned as a positive errno
+    public void CreateFailure_InsufficientMemory_IsInvalidOperationLikeManagedOutOfMemory(int code)
+    {
+        var ex = LibRawDecoder.CreateFailure(code, "unpack RAW data");
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.IsNotType<InvalidDataException>(ex);
+    }
+
+    [Theory]
+    [InlineData(-100008)] // LIBRAW_DATA_ERROR
+    [InlineData(-100009)] // LIBRAW_IO_ERROR
+    [InlineData(-2)]      // LIBRAW_FILE_UNSUPPORTED
+    public void CreateFailure_OtherCodes_StayInvalidData(int code)
+    {
+        Assert.IsType<InvalidDataException>(LibRawDecoder.CreateFailure(code, "unpack RAW data"));
+    }
+
+    [Theory]
+    [InlineData("0.22.2", true)]
+    [InlineData("0.22.0", true)]
+    [InlineData("0.22.9-Release", true)]
+    [InlineData("0.23.0", false)]
+    [InlineData("0.21.4", false)]
+    [InlineData("1.22.0", false)]
+    [InlineData("garbage", false)]
+    [InlineData("", false)]
+    public void CheckVersion_OnlyThePinnedMajorMinorPasses(string version, bool accepted)
+    {
+        var problem = LibRawAvailability.CheckVersion(version, "libraw.dll");
+
+        Assert.Equal(accepted, problem is null);
+        if (!accepted) Assert.Contains("libraw.dll", problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadJpegThumbnail_AndDecode_WithCancelledToken_ThrowOperationCanceledBeforeOpeningTheFile()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => LibRawDecoder.ReadJpegThumbnail(@"Z:\missing.orf", cts.Token));
+        Assert.Throws<OperationCanceledException>(() =>
+            new LibRawDecoder().Decode(new DecodeRequest(@"Z:\missing.cr2", DecodeBox.Unbounded), cts.Token));
+    }
+
+    // ---- white-balance layout proof over a fake memory block (the setters write where a LibRaw with the given layout would) ----
+
+    private const int BlockSize = 6000;
+
+    private static readonly LibRawNativeMethods.WhiteBalanceLayout Layout = LibRawNativeMethods.PinnedWhiteBalanceLayout;
+
+    private sealed unsafe class FakeLibRaw : IDisposable
+    {
+        private readonly LibRawNativeMethods.WhiteBalanceLayout _real;
+
+        internal FakeLibRaw(LibRawNativeMethods.WhiteBalanceLayout real)
+        {
+            _real = real;
+            Pointer = (IntPtr)NativeMemory.AllocZeroed(BlockSize);
+        }
+
+        internal IntPtr Pointer { get; }
+        internal List<string> Calls { get; } = [];
+        internal int Flag => Marshal.ReadInt32(Pointer, Layout.UseCameraWb);
+
+        internal (int Color, int Bps, int Bright, int Flag) Snapshot() =>
+            (Marshal.ReadInt32(Pointer, Layout.OutputColor), Marshal.ReadInt32(Pointer, Layout.OutputBps),
+                Marshal.ReadInt32(Pointer, Layout.NoAutoBright), Flag);
+
+        internal bool TrySet(Func<bool> versionPinned, LibRawNativeMethods.WhiteBalanceLayout assumed) =>
+            LibRawNativeMethods.TrySetUseCameraWb(Pointer,
+                value => { Calls.Add("color"); Marshal.WriteInt32(Pointer, _real.OutputColor, value); },
+                value => { Calls.Add("bps"); Marshal.WriteInt32(Pointer, _real.OutputBps, value); },
+                value => { Calls.Add("bright"); Marshal.WriteInt32(Pointer, _real.NoAutoBright, value); },
+                1, 8, 1, versionPinned, assumed);
+
+        public void Dispose() => NativeMemory.Free((void*)Pointer);
+    }
+
+    [Fact]
+    public void TrySetUseCameraWb_LayoutMatches_SetsFlagAndLeavesTheRealOutputSettings()
+    {
+        using var fake = new FakeLibRaw(Layout);
+
+        Assert.True(fake.TrySet(() => true, Layout));
+
+        Assert.Equal((1, 8, 1, 1), fake.Snapshot()); // the sentinels are gone, the real settings and the flag are in
+    }
+
+    [Theory]
+    [InlineData(4, 0, 0)]    // output_color read from the wrong place
+    [InlineData(0, -4, 0)]   // output_bps read from the wrong place
+    [InlineData(0, 0, 8)]    // no_auto_bright read from the wrong place
+    [InlineData(-8, -8, -8)] // a whole shifted block
+    public void TrySetUseCameraWb_WrongOffset_FailsClosedWithoutWritingTheFlag(int colorShift, int bpsShift, int brightShift)
+    {
+        using var fake = new FakeLibRaw(Layout);
+        var wrong = new LibRawNativeMethods.WhiteBalanceLayout(Layout.OutputColor + colorShift, Layout.OutputBps + bpsShift,
+            Layout.NoAutoBright + brightShift, Layout.UseCameraWb);
+
+        var applied = fake.TrySet(() => true, wrong);
+
+        Assert.False(applied);
+        Assert.Equal(0, fake.Flag);
+        // The output settings still reach LibRaw through the supported setters (daylight WB, sRGB, 8 bit).
+        Assert.Equal((1, 8, 1, 0), fake.Snapshot());
+    }
+
+    [Fact]
+    public void TrySetUseCameraWb_VersionNotPinned_TouchesNoMemoryAndCallsNoSetter()
+    {
+        using var fake = new FakeLibRaw(Layout);
+        var gateCalls = 0;
+
+        var applied = fake.TrySet(() => { gateCalls++; return false; }, Layout);
+
+        Assert.False(applied);
+        Assert.Equal(1, gateCalls);
+        Assert.Empty(fake.Calls); // not even the sentinel/setter traffic: the gate runs before any write
+        Assert.Equal((0, 0, 0, 0), fake.Snapshot());
     }
 }

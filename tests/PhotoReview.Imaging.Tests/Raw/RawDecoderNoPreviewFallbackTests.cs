@@ -12,6 +12,8 @@ namespace PhotoReview.Imaging.Tests.Raw;
 /// C3: a valid RAW with no embedded JPEG uses the preview fallback (then the full-decode fallback) for every format
 /// instead of failing with "No embedded preview".
 /// </summary>
+// Shares the collection of the other full-decoding LibRaw tests: the full-decode gate is process-wide.
+[Collection(LibRawNativeDecodeGate.Name)]
 public sealed class RawDecoderNoPreviewFallbackTests
 {
     private const string LeicaDng = "Leica - M8 - 8bit 8bit uncompressed (3_2).DNG";

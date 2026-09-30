@@ -93,19 +93,27 @@ internal static class LibRawNativeMethods
     /// The output settings are always applied, whatever the result.
     /// </summary>
     internal static bool TrySetUseCameraWb(SafeLibRawHandle handle, int outputColor, int outputBps, int noAutoBright,
-        Func<bool> versionPinned, WhiteBalanceLayout layout)
+        Func<bool> versionPinned, WhiteBalanceLayout layout) =>
+        TrySetUseCameraWb(handle.DangerousGetHandle(), value => LibRawSetOutputColor(handle, value), value => LibRawSetOutputBps(handle, value),
+            value => LibRawSetNoAutoBright(handle, value), outputColor, outputBps, noAutoBright, versionPinned, layout);
+
+    /// <summary>
+    /// The logic of <see cref="TrySetUseCameraWb(SafeLibRawHandle, int, int, int, Func{bool}, WhiteBalanceLayout)"/> over a raw block and the three
+    /// supported setters, so the layout proof can be tested with a fake memory block (no native library needed).
+    /// </summary>
+    internal static bool TrySetUseCameraWb(IntPtr pointer, Action<int> setOutputColor, Action<int> setOutputBps, Action<int> setNoAutoBright,
+        int outputColor, int outputBps, int noAutoBright, Func<bool> versionPinned, WhiteBalanceLayout layout)
     {
         if (!versionPinned()) return false;
-        var pointer = handle.DangerousGetHandle();
-        LibRawSetOutputColor(handle, SentinelOutputColor);
-        LibRawSetOutputBps(handle, SentinelOutputBps);
-        LibRawSetNoAutoBright(handle, SentinelNoAutoBright);
+        setOutputColor(SentinelOutputColor);
+        setOutputBps(SentinelOutputBps);
+        setNoAutoBright(SentinelNoAutoBright);
         var layoutMatches = Marshal.ReadInt32(pointer, layout.OutputColor) == SentinelOutputColor &&
                             Marshal.ReadInt32(pointer, layout.OutputBps) == SentinelOutputBps &&
                             Marshal.ReadInt32(pointer, layout.NoAutoBright) == SentinelNoAutoBright;
-        LibRawSetOutputColor(handle, outputColor);
-        LibRawSetOutputBps(handle, outputBps);
-        LibRawSetNoAutoBright(handle, noAutoBright);
+        setOutputColor(outputColor);
+        setOutputBps(outputBps);
+        setNoAutoBright(noAutoBright);
         if (!layoutMatches) return false;
         Marshal.WriteInt32(pointer, layout.UseCameraWb, 1);
         return Marshal.ReadInt32(pointer, layout.UseCameraWb) == 1;

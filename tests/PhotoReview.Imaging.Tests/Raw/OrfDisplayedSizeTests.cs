@@ -15,6 +15,8 @@ namespace PhotoReview.Imaging.Tests.Raw;
 /// E-M1 4608x3456, OM-1 5184x3888, E-P3 4032x3024) is smaller than both, as the embedded 3200x2400 preview shows: it is an exact
 /// isotropic downscale of that image.
 /// </summary>
+// Shares the collection of the other full-decoding LibRaw tests: the full-decode gate is process-wide.
+[Collection(LibRawNativeDecodeGate.Name)]
 public sealed class OrfDisplayedSizeTests
 {
     private static byte[] BuildOrf(uint width, uint height, bool littleEndian = true) =>
