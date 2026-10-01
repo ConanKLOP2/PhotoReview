@@ -27,11 +27,13 @@ public sealed class FileActionControllerOrderingTests : IDisposable
     private readonly UndoService _undo;
     private readonly FileActionController _controller;
     private readonly OperationJournal _journal;
+    private readonly FileActionService _fileActions;
+    private readonly PhysicalFileSystem _fs = new();
 
     public FileActionControllerOrderingTests()
     {
         Directory.CreateDirectory(_root);
-        var fs = new PhysicalFileSystem();
+        var fs = _fs;
         var bin = new NoBin();
         _journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
         var fileActions = new FileActionService(_journal, fs, new SystemClock(), bin, (source, destination) =>
@@ -40,6 +42,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
             File.Move(source, destination);
             return Task.CompletedTask;
         });
+        _fileActions = fileActions;
         _undo = new UndoService(_journal, fs, bin, fileActions);
         var settings = new AppSettings
         {
@@ -84,6 +87,40 @@ public sealed class FileActionControllerOrderingTests : IDisposable
 
         Assert.Equal(StatusFormatter.ActionFailed("MoveToSub", Tr.CoreFileActionDestinationExists(Path.Combine(_root, "Sorted", "a.jpg"))), _sink.LastStatus);
         Assert.Equal([a, b], _catalog.Paths); // INV-5: the photo is back
+    }
+
+    // RV-A09: the fire-and-forget present of the next photo writes "Ready" when it finishes; the final "Moved to" must come after it.
+    [Fact(DisplayName = "Move to folder: the next photo's present still running does not overwrite the final \"Moved to\" status")]
+    public async Task MoveToFolder_NextPresentStillRunning_FinalStatusIsMovedTo()
+    {
+        var a = Make("a.jpg");
+        var b = Make("b.jpg");
+        var dest = Path.Combine(_root, "Dest");
+        Directory.CreateDirectory(dest);
+        _catalog.Reset([a, b]);
+        var settings = new AppSettings { MoveCopyReuseLastFolder = true, LastMoveToFolder = dest };
+        var controller = new FileActionController(
+            _catalog, _clock, _fileActions, _undo, dialogService: null, _preload,
+            ManagedNaturalComparer.Instance, () => settings, _sink, fileSystem: _fs);
+        var movedTo = Tr.StatusMovedToFolder("a.jpg", dest);
+        var movedStatusWritten = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _sink.OnStatus = status =>
+        {
+            if (string.Equals(status, movedTo, StringComparison.Ordinal)) movedStatusWritten.TrySetResult();
+        };
+        _sink.HoldPresenter();
+
+        var run = controller.MoveOrCopyToFolderAsync(FileOperationType.Move, forcePicker: false, () => (null, a));
+
+        // Unfixed code publishes "Moved to" (and finishes) while the presenter is still held. Fixed code waits for the
+        // presenter first, so neither happens: the short window only decides which interleaving the presenter is released
+        // in; correct code passes whatever its length.
+        await Task.WhenAny(run, movedStatusWritten.Task, Task.Delay(TimeSpan.FromMilliseconds(300)));
+        _sink.ReleasePresenter();
+        await run.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(movedTo, _sink.LastStatus);
+        Assert.True(File.Exists(Path.Combine(dest, "a.jpg")));
     }
 
     [Fact(DisplayName = "A Copy does not invalidate the in-flight present or cancel preload")]
@@ -171,7 +208,12 @@ public sealed class FileActionControllerOrderingTests : IDisposable
     {
         private TaskCompletionSource? _gate;
         public string? LastStatus { get; private set; }
-        public void SetStatusText(string status) => LastStatus = status;
+        public Action<string>? OnStatus { get; set; }
+        public void SetStatusText(string status)
+        {
+            LastStatus = status;
+            OnStatus?.Invoke(status);
+        }
         public void ShowLateActionStatus(string status) { }
         public void OnCatalogChanged(string? removedPath) { }
         public void UpdateSessionPath(string currentPath) { }

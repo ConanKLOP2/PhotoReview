@@ -1177,6 +1177,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         StatusText = status;
     }
 
+    void IDuplicateCleanupSink.ShowLateActionStatus(string status) => ((IFileActionSink)this).ShowLateActionStatus(status);
+
     async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
     {
         await OpenFolderAsync(folder, initialPath);
