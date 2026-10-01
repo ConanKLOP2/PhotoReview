@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using PhotoReview.Imaging.Metadata;
 using PhotoReview.Imaging.Tests.Raw.Tiff;
 using Xunit;
@@ -25,6 +25,19 @@ public sealed class TiffStructureValueSpanTests
         bool ok = TiffStructure.TryGetValueSpan(tiff, Entry, type, count, true, out var span);
         value = ok ? span.ToArray() : [];
         return ok;
+    }
+
+    [Fact(DisplayName = "An entry whose offset field lies past the end of the block is rejected, not read from offset 0 (RV-I08)")]
+    public void EntryTruncatedBeforeItsOffsetField_ReturnsFalse()
+    {
+        var tiff = new byte[20];
+        "II"u8.CopyTo(tiff);
+        tiff[2] = 42;
+        tiff[14] = 0x34; tiff[15] = 0x12; // tag
+        tiff[16] = 4; // LONG
+        tiff[18] = 2; // count 2 -> 8 bytes, out of line; the 4-byte offset field would start at 22 (past the end)
+
+        Assert.False(TiffStructure.TryGetValueSpan(tiff, 14, 4, 2, true, out _));
     }
 
     [Fact]

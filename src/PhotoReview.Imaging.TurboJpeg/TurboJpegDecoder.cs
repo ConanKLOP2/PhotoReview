@@ -36,6 +36,24 @@ public sealed class TurboJpegDecoder : IImageDecoder
         new(1, 1)
     ];
 
+    /// <summary>
+    /// Memory seam for the output-size guard (total available, current load); production reads the GC's view of physical RAM /
+    /// the container limit, the same budget source LibRaw's DecodeMemoryGuard uses. Tests inject a small or large machine.
+    /// </summary>
+    internal Func<(long TotalAvailable, long Load)> MemoryInfo { get; init; } = MemoryHeadroom.ReadGcMemoryInfo;
+
+    /// <summary>Output buffers below this never consult the memory guard (no GC info query on the common, small decode).</summary>
+    internal const long GuardThresholdBytes = 128L * 1024 * 1024;
+
+    /// <summary>
+    /// Peak of an unscaled/scaled decode in units of the output buffer: the native BGRX scratch plus the WPF bitmap
+    /// BitmapSource.Create copies it into (the source bytes are already resident and counted in the memory load).
+    /// </summary>
+    internal const int OutputPeakFactor = 2;
+
+    /// <summary>Most scans a progressive JPEG may have (libjpeg-turbo's TJPARAM_SCANLIMIT); real files have about 10.</summary>
+    internal const int MaxProgressiveScans = 500;
+
     public IDecodedImage Decode(DecodeRequest request)
     {
         ReadOnlyMemory<byte> bytesMemory = LoadBytes(request);
@@ -51,7 +69,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
     }
 
-    private static WpfDecodedImage Decode(DecodeRequest request, ReadOnlyMemory<byte> bytesMemory)
+    private WpfDecodedImage Decode(DecodeRequest request, ReadOnlyMemory<byte> bytesMemory)
     {
         var bytes = bytesMemory.Span;
 
@@ -132,6 +150,7 @@ public sealed class TurboJpegDecoder : IImageDecoder
 
                 (int scaledW, int scaledH, int stride, int bufferLength) =
                     CalculateOutputBuffer(origW, origH, factor);
+                EnsureOutputFits(scaledW, scaledH, bufferLength);
 
                 // BGRX -> Bgr32: the opaque format WPF renders natively (JPEG has no alpha).
                 // Decode into native scratch memory: BitmapSource.Create copies it anyway, so a
@@ -262,7 +281,8 @@ public sealed class TurboJpegDecoder : IImageDecoder
             FileOptions.SequentialScan);
         var length = fs.Length;
         var buffer = new byte[(int)Math.Min(length, HeaderReadChunk)];
-        fs.ReadExactly(buffer);
+        int got = fs.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+        if (got < buffer.Length) Array.Resize(ref buffer, got); // file shrank since it was opened: work with what exists
         return GrowHeaderArea(fs, length, buffer, HeaderReadCap);
     }
 
@@ -299,12 +319,19 @@ public sealed class TurboJpegDecoder : IImageDecoder
     /// </summary>
     private static byte[] GrowHeaderArea(FileStream fs, long length, byte[] buffer, long? cap)
     {
-        var limit = cap.HasValue ? Math.Min(length, cap.Value) : length;
+        var limit = Math.Min(cap.HasValue ? Math.Min(length, cap.Value) : length, MaxSourceBytes);
         while (buffer.Length < length && buffer.Length < limit && HeaderNeedsMoreData(buffer))
         {
             var grown = new byte[(int)Math.Min(limit, (long)buffer.Length * 2)];
             buffer.CopyTo(grown, 0);
-            fs.ReadExactly(grown.AsSpan(buffer.Length));
+            int added = fs.ReadAtLeast(grown.AsSpan(buffer.Length), grown.Length - buffer.Length, throwOnEndOfStream: false);
+            if (buffer.Length + added < grown.Length)
+            {
+                // The file ended earlier than its reported length: stop with the bytes that exist.
+                Array.Resize(ref grown, buffer.Length + added);
+                return grown;
+            }
+
             buffer = grown;
         }
 
@@ -374,8 +401,29 @@ public sealed class TurboJpegDecoder : IImageDecoder
             bufferSize: 64 * 1024,
             FileOptions.SequentialScan);
 
-        byte[] buffer = new byte[fs.Length];
-        fs.ReadExactly(buffer);
+        return ReadAllBytes(fs);
+    }
+
+    /// <summary>Largest source TurboJpeg reads into one array; bigger files go to WIC, which streams (the caller's fallback).</summary>
+    internal const long MaxSourceBytes = int.MaxValue - 64;
+
+    /// <summary>
+    /// Reads the whole stream into one array sized from its length, tolerating a stream that yields less than it reported
+    /// (a file truncated between open and read): the short buffer is returned and the decode reports the damage, instead of
+    /// an EndOfStreamException that bypasses the fallback. One read on the happy path.
+    /// </summary>
+    internal static byte[] ReadAllBytes(Stream stream)
+    {
+        long length = stream.Length;
+        if (length > MaxSourceBytes)
+        {
+            throw UserFacingError.Localized(new NotSupportedException($"JPEG source is too large to read into memory: {length} bytes."),
+                () => Tr.ErrDecoderOutputTooLarge(0, 0, length));
+        }
+
+        var buffer = new byte[(int)length];
+        int total = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+        if (total < buffer.Length) Array.Resize(ref buffer, total);
         return buffer;
     }
 
@@ -421,8 +469,28 @@ public sealed class TurboJpegDecoder : IImageDecoder
         return ((int)width, (int)height, (int)stride, (int)bufferLength);
     }
 
+    /// <summary>
+    /// Refuses a decode whose output (see <see cref="OutputPeakFactor"/>) cannot fit into the RAM the process has left, before
+    /// anything big is allocated. Derived from the machine's memory like LibRaw's guard, not from a fixed pixel cap, so a
+    /// 100+ MP original that fits is still decoded.
+    /// </summary>
+    private void EnsureOutputFits(int width, int height, int bufferLength)
+    {
+        if (bufferLength < GuardThresholdBytes) return;
+        var (total, load) = MemoryInfo();
+        if (OutputHasHeadroom(bufferLength, total, load)) return;
+        throw UserFacingError.Localized(
+            new InvalidDataException($"TurboJPEG output dimensions are too large for the available memory: {width}x{height} ({bufferLength} bytes)."),
+            () => Tr.ErrDecoderOutputTooLarge(width, height, bufferLength));
+    }
+
+    internal static bool OutputHasHeadroom(long bufferLength, long totalAvailableBytes, long memoryLoadBytes) =>
+        MemoryHeadroom.HasHeadroom(bufferLength * OutputPeakFactor, totalAvailableBytes, memoryLoadBytes);
+
     private static void ConfigureStrictDecoding(Native.SafeTurboJpegHandle decompressor)
     {
+        // Bounds the work a hostile progressive JPEG can demand; an unsupported parameter just leaves the default (no limit).
+        _ = TurboJpegNative.tj3Set(decompressor, (int)TjParam.ScanLimit, MaxProgressiveScans);
         if (TurboJpegNative.tj3Set(decompressor, (int)TjParam.StopOnWarning, 1) != 0)
         {
             string? nativeErr = TurboJpegNative.GetErrorMessage(decompressor);
@@ -470,7 +538,13 @@ public sealed class TurboJpegDecoder : IImageDecoder
                 offset += 2;
                 continue;
             }
-            if (marker == 0xDA) return false; // SOS marker reached
+            if (marker == 0xDA)
+            {
+                // SOS marker reached. Its own header (component selectors, Ss/Se/Ah/Al) is part of what the decoder's header
+                // parse needs, so a buffer that ends inside it is "needs more data", not "header complete" (RV-I03).
+                if (offset + 4 > jpeg.Length || offset + 2 + ((jpeg[offset + 2] << 8) | jpeg[offset + 3]) > jpeg.Length) needsMoreData = true;
+                return false;
+            }
             if (offset + 4 > jpeg.Length) { needsMoreData = true; return false; }
 
             int length = (jpeg[offset + 2] << 8) | jpeg[offset + 3];
@@ -552,53 +626,6 @@ public sealed class TurboJpegDecoder : IImageDecoder
         }
     }
 
-    private static int ParseTiffOrientation(ReadOnlySpan<byte> tiff)
-    {
-        if (tiff.Length < 8) return 1;
-
-        bool isLittleEndian = tiff[0] == 'I' && tiff[1] == 'I';
-        bool isBigEndian = tiff[0] == 'M' && tiff[1] == 'M';
-        if (!isLittleEndian && !isBigEndian) return 1;
-
-        ushort magic = ReadUInt16(tiff, 2, isLittleEndian);
-        if (magic != 42) return 1;
-
-        uint ifd0Offset = ReadUInt32(tiff, 4, isLittleEndian);
-        if (ifd0Offset >= (uint)tiff.Length) return 1;
-
-        int ifdPos = (int)ifd0Offset;
-        ushort numEntries = ReadUInt16(tiff, ifdPos, isLittleEndian);
-        ifdPos += 2;
-
-        for (int i = 0; i < numEntries; i++)
-        {
-            int entryPos = ifdPos + i * 12;
-            if (entryPos + 12 > tiff.Length) break;
-
-            ushort tag = ReadUInt16(tiff, entryPos, isLittleEndian);
-            if (tag == 274) // EXIF Orientation
-            {
-                ushort val = ReadUInt16(tiff, entryPos + 8, isLittleEndian);
-                if (val is >= 1 and <= 8) return val;
-            }
-        }
-
-        return 1;
-    }
-
-    private static ushort ReadUInt16(ReadOnlySpan<byte> data, int pos, bool isLittleEndian)
-    {
-        if (pos + 2 > data.Length) return 0;
-        return isLittleEndian
-            ? (ushort)(data[pos] | (data[pos + 1] << 8))
-            : (ushort)((data[pos] << 8) | data[pos + 1]);
-    }
-
-    private static uint ReadUInt32(ReadOnlySpan<byte> data, int pos, bool isLittleEndian)
-    {
-        if (pos + 4 > data.Length) return 0;
-        return isLittleEndian
-            ? (uint)(data[pos] | (data[pos + 1] << 8) | (data[pos + 2] << 16) | (data[pos + 3] << 24))
-            : (uint)((data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3]);
-    }
+    /// <summary>Orientation of an Exif TIFF block (1 when absent/invalid): the one shared parser, so Decode and ReadInfo agree with ExifParser.</summary>
+    private static int ParseTiffOrientation(ReadOnlySpan<byte> tiff) => ExifParser.TryReadOrientation(tiff) ?? 1;
 }
