@@ -22,19 +22,27 @@ public sealed class AppSettingsTests
         Assert.Equal(LoadingMode.Fast, JsonSerializer.Deserialize<AppSettings>("{\"LoadingMode\":\"fast\"}")!.LoadingMode);
     }
 
+    private static AppSettings Loaded(string json)
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>(json)!;
+        SettingsNormalizer.Normalize(settings);
+        return settings;
+    }
+
     [Fact(DisplayName = "LoadingMode fallback on invalid values")]
     public void LoadingModeFallbackOnInvalid()
     {
-        Assert.Equal(LoadingMode.Fast, JsonSerializer.Deserialize<AppSettings>("{\"LoadingMode\":\"Nonsense\"}")!.LoadingMode);
-        Assert.Equal(LoadingMode.Fast, JsonSerializer.Deserialize<AppSettings>("{\"LoadingMode\":\"\"}")!.LoadingMode);
+        // RV-S01/RV-D2: the settings converter yields an undefined sentinel that Normalize resets to the AppSettings default.
+        Assert.Equal(LoadingMode.Preview, Loaded("{\"LoadingMode\":\"Nonsense\"}").LoadingMode);
+        Assert.Equal(LoadingMode.Preview, Loaded("{\"LoadingMode\":\"\"}").LoadingMode);
     }
 
-    [Fact(DisplayName = "DecoderBackend defaults to WicDirect (fastest, ADR 0001); unknown values fall back to Wpf")]
+    [Fact(DisplayName = "DecoderBackend defaults to WicDirect (fastest, ADR 0001); unknown values fall back to the default (WicDirect)")]
     public void DecoderBackendDefaultsToWicDirect()
     {
         Assert.Equal(DecoderBackend.WicDirect, new AppSettings().DecoderBackend);
         Assert.Equal(DecoderBackend.WicDirect, JsonSerializer.Deserialize<AppSettings>("{\"ConfigVersion\":1}")!.DecoderBackend);
-        Assert.Equal(DecoderBackend.Wpf, JsonSerializer.Deserialize<AppSettings>("{\"DecoderBackend\":\"Unknown\"}")!.DecoderBackend);
+        Assert.Equal(DecoderBackend.WicDirect, Loaded("{\"DecoderBackend\":\"Unknown\"}").DecoderBackend);
     }
 
     [Fact(DisplayName = "Source bytes cache is disabled by default")]
@@ -46,20 +54,20 @@ public sealed class AppSettingsTests
         Assert.Equal(ImageSortMode.Default, new AppSettings().ImageSortMode);
         Assert.Equal(ImageSortMode.SizeDescending, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"Size\"}")!.ImageSortMode);
         Assert.Equal(ImageSortMode.SizeAscending, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"sizeascending\"}")!.ImageSortMode);
-        Assert.Equal(ImageSortMode.Name, JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":\"Unknown\"}")!.ImageSortMode);
+        Assert.Equal(ImageSortMode.Default, Loaded("{\"ImageSortMode\":\"Unknown\"}").ImageSortMode);
     }
 
-    [Theory(DisplayName = "ImageSortMode Default/NameAscending/NameDescending load by name and by number; unknown falls back to Name")]
+    [Theory(DisplayName = "ImageSortMode Default/NameAscending/NameDescending load by name and by number; unknown falls back to the default")]
     [InlineData("\"Default\"", ImageSortMode.Default)]
     [InlineData("3", ImageSortMode.Default)]
     [InlineData("\"NameAscending\"", ImageSortMode.NameAscending)]
     [InlineData("4", ImageSortMode.NameAscending)]
     [InlineData("\"NameDescending\"", ImageSortMode.NameDescending)]
     [InlineData("5", ImageSortMode.NameDescending)]
-    [InlineData("\"Bogus\"", ImageSortMode.Name)]
+    [InlineData("\"Bogus\"", ImageSortMode.Default)]
     public void ImageSortModeNewValuesRoundTrip(string json, ImageSortMode expected)
     {
-        var loaded = JsonSerializer.Deserialize<AppSettings>("{\"ImageSortMode\":" + json + "}")!;
+        var loaded = Loaded("{\"ImageSortMode\":" + json + "}");
         Assert.Equal(expected, loaded.ImageSortMode);
         var again = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(loaded))!;
         Assert.Equal(expected, again.ImageSortMode);

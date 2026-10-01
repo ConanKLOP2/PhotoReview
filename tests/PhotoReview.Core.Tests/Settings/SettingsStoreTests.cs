@@ -288,6 +288,7 @@ public sealed class SettingsStoreTests
 
         var loaded = _store.Load();
         var expected = JsonSerializer.Deserialize<AppSettings>(json)!;
+        SettingsNormalizer.Normalize(expected); // RV-S01: an unknown LoadingMode is the undefined sentinel until normalised (Load does that)
         SettingsStore.Migrate(expected); // Load migrates v2 -> current (UiLanguage, ADR 0006); compare deserializers only
         // PR-B: DisableConflictingOptionalShortcuts (also run by Load) would disable ToggleKeepZoom's default "K" if
         // the fixture's action shortcut collided with it; "L" keeps this test about the reflection/source-gen byte

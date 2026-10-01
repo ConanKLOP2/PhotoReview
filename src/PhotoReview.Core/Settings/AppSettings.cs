@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PhotoReview.Core.Model;
 
 namespace PhotoReview.Core.Settings;
@@ -8,12 +9,16 @@ public class AppSettings
     public const int CurrentConfigVersion = 3;
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
     public InitialViewMode InitialViewMode { get; set; } = InitialViewMode.Fit;
+    [JsonConverter(typeof(SettingsEnumConverter<LoadingMode>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
     public LoadingMode LoadingMode { get; set; } = LoadingMode.Preview;
     public bool LoggingEnabled { get; set; }
+    [JsonConverter(typeof(SettingsEnumConverter<ImageSortMode>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
     public ImageSortMode ImageSortMode { get; set; } = ImageSortMode.Default;
     public bool CompareHashEnabled { get; set; } = true;
     public bool CompareSizeEnabled { get; set; } = true;
+    [JsonConverter(typeof(SettingsEnumConverter<ScalingQuality>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
     public ScalingQuality ScalingQuality { get; set; } = ScalingQuality.HighQuality;
+    [JsonConverter(typeof(SettingsEnumConverter<DecoderBackend>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
     public DecoderBackend DecoderBackend { get; set; } = DecoderBackend.WicDirect;
     /// <summary>Preview cache byte budget; only used when physical RAM is unknown (otherwise <see cref="ImageCacheRamPercent"/> wins).</summary>
     public long ImageCacheCapacityBytes { get; set; } = PerformanceOptions.ImageCacheCapacityBytes;
@@ -253,6 +258,7 @@ public class AppSettings
     public string ExternalEditorPath { get; set; } = string.Empty;
 
     /// <summary>How the kinetic glide is timed against the display refresh (smoother on irregular frame delivery).</summary>
+    [JsonConverter(typeof(SettingsEnumConverter<KineticGlideSmoothing>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
     public KineticGlideSmoothing KineticGlideSmoothing { get; set; } = KineticGlideSmoothing.Predict;
 
     /// <summary>
@@ -302,6 +308,7 @@ public class AppSettings
     /// setting). Default <see cref="KeyboardZoomAnchor.ViewportCentre"/>; absent in older configs also loads as
     /// <see cref="KeyboardZoomAnchor.ViewportCentre"/> (the property initializer is the deserialization default).
     /// </summary>
+    [JsonConverter(typeof(SettingsEnumConverter<KeyboardZoomAnchor>))] // RV-S01: unparsable -> undefined -> reset to the default + reported
     public KeyboardZoomAnchor KeyboardZoomAnchor { get; set; } = KeyboardZoomAnchor.ViewportCentre;
 
     // ---- Image change transition (PR-D feat/image-crossfade). Absent in older configs = these defaults; no migration step. ----

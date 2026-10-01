@@ -187,20 +187,94 @@ public sealed class SettingsStoreFailureTests
         Assert.Equal("Keep", Assert.Single(loaded.Actions).Name);
     }
 
-    [Fact(DisplayName = "A blank mandatory shortcut whose default is taken by an action is repaired and reported, and the clash surfaces in validation (not silently)")]
-    public void Load_BlankShortcutWhoseDefaultIsTaken_ClashIsReportedByValidation()
+    [Fact(DisplayName = "RV-S03: a blank mandatory shortcut whose default is taken by an action keeps the default and clears the action's key, reported")]
+    public void Load_BlankShortcutWhoseDefaultIsTaken_ActionShortcutIsClearedAndReported()
     {
         _fs.AddFile(_paths.ConfigFile, """
-            {"ConfigVersion":3,"Shortcuts":{"Next":""},
-             "Actions":[{"Name":"Mine","Shortcut":"Right"}]}
+            {"ConfigVersion":3,"Shortcuts":{"Previous":""},
+             "Actions":[{"Name":"Mine","Shortcut":"Left"},{"Name":"Other","Shortcut":"Z"}]}
             """);
         var store = NewStore();
 
         var loaded = store.Load();
 
+        Assert.Equal(new ShortcutMappings().Previous, loaded.Shortcuts.Previous); // navigation keeps working
+        Assert.Equal("", loaded.Actions[0].Shortcut);
+        Assert.Equal("Z", loaded.Actions[1].Shortcut); // unrelated actions are never touched
         Assert.Contains(nameof(AppSettings.Shortcuts), store.LastLoadRepairs);
-        Assert.Equal(new ShortcutMappings().Next, loaded.Shortcuts.Next);
-        Assert.Equal("Right", Assert.Single(loaded.Actions).Shortcut); // the user's action binding is never touched
-        Assert.NotNull(store.ValidateShortcuts(loaded)); // the settings dialog refuses to save until the user resolves it
+        Assert.Contains("Actions[0].Shortcut", store.LastLoadRepairs);
+        Assert.DoesNotContain("Actions[1].Shortcut", store.LastLoadRepairs);
+    }
+
+    [Fact(DisplayName = "RV-S03: an action blank in Name/Shortcut or sharing a key loads (not dropped) and is left for the settings dialog to reject")]
+    public void Load_BlankOrDuplicateActions_LoadAndValidatorFlagsThem()
+    {
+        _fs.AddFile(_paths.ConfigFile, """
+            {"ConfigVersion":3,
+             "Actions":[{"Name":"","Shortcut":"Q"},{"Name":"B","Shortcut":""},{"Name":"C","Shortcut":"W"},{"Name":"D","Shortcut":"W"}]}
+            """);
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        Assert.Equal(4, loaded.Actions.Count);
+        Assert.NotNull(store.ValidateShortcuts(loaded));
+    }
+
+    [Fact(DisplayName = "RV-S04: a Changed handler that throws IOException surfaces to the caller and does not make Load fall back to defaults")]
+    public void Load_ChangedHandlerThrowsIOException_KeepsLoadedValues()
+    {
+        _fs.AddFile(_paths.ConfigFile, """{"ConfigVersion":3,"ClickZoomPercent":150}""");
+        var store = NewStore();
+        EventHandler<AppSettings> broken = (_, _) => throw new IOException("handler bug");
+        store.Changed += broken;
+
+        Assert.Throws<IOException>(() => store.Load());
+
+        Assert.Equal(150, store.Current.ClickZoomPercent); // not the defaults
+        store.Changed -= broken;
+        store.Save(new AppSettings { ClickZoomPercent = 200 }); // _keepCorruptFile was not set: Save still writes the file
+        Assert.Equal(200, NewStore().Load().ClickZoomPercent);
+    }
+
+    public static TheoryData<string, string> UnparsableEnumCases()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var name in new[]
+        {
+            nameof(AppSettings.LoadingMode), nameof(AppSettings.ImageSortMode), nameof(AppSettings.ScalingQuality),
+            nameof(AppSettings.DecoderBackend), nameof(AppSettings.KeyboardZoomAnchor), nameof(AppSettings.KineticGlideSmoothing),
+        })
+        {
+            foreach (var literal in new[] { "\"garbage\"", "\"\"", "null", "42", "{}" })
+                data.Add(name, literal);
+        }
+        return data;
+    }
+
+    [Theory(DisplayName = "RV-S01: an unparsable enum value loads as the AppSettings default (not the zero member) and is reported")]
+    [MemberData(nameof(UnparsableEnumCases))]
+    public void Load_UnparsableEnum_ResetsToDefaultAndReports(string property, string jsonLiteral)
+    {
+        _fs.AddFile(_paths.ConfigFile, "{\"ConfigVersion\":3,\"" + property + "\":" + jsonLiteral + "}");
+        var store = NewStore();
+
+        var loaded = store.Load();
+
+        var prop = typeof(AppSettings).GetProperty(property)!;
+        Assert.Equal(prop.GetValue(new AppSettings()), prop.GetValue(loaded));
+        Assert.Contains(property, store.LastLoadRepairs);
+    }
+
+    [Fact(DisplayName = "RV-S01: a repaired enum is written back by its PascalCase name")]
+    public void Load_UnparsableEnum_IsPersistedAsName()
+    {
+        _fs.AddFile(_paths.ConfigFile, "{\"ConfigVersion\":3,\"LoadingMode\":\"garbage\"}");
+        NewStore().Load();
+
+        Assert.Contains("\"LoadingMode\": \"Preview\"", _fs.ReadAllText(_paths.ConfigFile), StringComparison.Ordinal);
+        var second = NewStore();
+        second.Load();
+        Assert.Empty(second.LastLoadRepairs);
     }
 }

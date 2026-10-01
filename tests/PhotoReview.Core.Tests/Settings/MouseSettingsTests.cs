@@ -192,7 +192,7 @@ public sealed class MouseSettingsTests
     [InlineData("\"Off\"", KineticGlideSmoothing.Off)]
     [InlineData("\"predict\"", KineticGlideSmoothing.Predict)]
     [InlineData("0", KineticGlideSmoothing.Off)]
-    [InlineData("\"Cadence60\"", KineticGlideSmoothing.Off)] // unknown text -> the enum's zero value (the original timing)
+    [InlineData("\"Cadence60\"", KineticGlideSmoothing.Predict)] // unknown text -> the AppSettings default (RV-D2 option A), reported
     public void Load_GlideSmoothingText_IsReadLeniently(string json, KineticGlideSmoothing expected)
     {
         _fileSystem.WriteAllTextAtomic(_appPaths.ConfigFile, $$"""{ "ConfigVersion": 3, "KineticGlideSmoothing": {{json}} }""");
