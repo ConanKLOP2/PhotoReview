@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace PhotoReview.Imaging.Raw.Tiff;
 
 /// <summary>
@@ -16,6 +18,21 @@ internal static class JpegMarkerProbe
     /// progressive (SOF0/1/2). Lossless (SOF3), arithmetic/hierarchical frames and truncated data return false.
     /// </summary>
     public static bool TryReadLossyFrame(IRawHeaderSource source, long offset, long length, out int width, out int height)
+    {
+        try
+        {
+            return WalkLossyFrame(source, offset, length, out width, out height);
+        }
+        catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
+        {
+            // Exhausted header budget: not a usable preview range, but the container must still parse.
+            width = 0;
+            height = 0;
+            return false;
+        }
+    }
+
+    private static bool WalkLossyFrame(IRawHeaderSource source, long offset, long length, out int width, out int height)
     {
         width = 0;
         height = 0;

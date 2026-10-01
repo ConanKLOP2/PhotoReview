@@ -385,10 +385,17 @@ public static class TiffHeaderNavigator
     public static void ReconcileJpegSize(IRawHeaderSource source, long offset, long length, ref int width, ref int height)
     {
         if (width <= 0 || height <= 0) return;
-        if (PreviewSelector.TryReadJpegFrame(source, offset, length, out int frameWidth, out int frameHeight, out _))
+        try
         {
-            width = frameWidth;
-            height = frameHeight;
+            if (PreviewSelector.TryReadJpegFrame(source, offset, length, out int frameWidth, out int frameHeight, out _))
+            {
+                width = frameWidth;
+                height = frameHeight;
+            }
+        }
+        catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
+        {
+            // Exhausted header budget: keep the IFD-declared size instead of failing the whole container.
         }
     }
 

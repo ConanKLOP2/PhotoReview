@@ -89,4 +89,30 @@ public sealed class PreviewSelectorUnknownSizeTests
 
         Assert.Equal(300_000, chosen!.Length);
     }
+
+    [Fact]
+    public void SelectPreview_ThreeUnknownSizePreviews_ResolvesAllSoTheChoiceUsesEveryPixelSize()
+    {
+        // The byte-largest candidate is NOT the pixel-largest one (heavier compression): stopping after the first walk
+        // would pick the wrong preview, so every unknown-size candidate is resolved and reported as resolved for the cache.
+        var jpegs = new byte[][]
+        {
+            [.. SyntheticRawBuilder.CreateMinimalJpeg(2000, 1500), .. new byte[5000]], // largest by bytes, 3 MP
+            [.. SyntheticRawBuilder.CreateMinimalJpeg(6000, 4000), .. new byte[1000]], // 24 MP, fewer bytes
+            SyntheticRawBuilder.CreateMinimalJpeg(160, 120),
+        };
+        var data = jpegs.SelectMany(j => j).ToArray();
+        var previews = new List<EmbeddedPreview>();
+        long offset = 0;
+        foreach (var j in jpegs)
+        {
+            previews.Add(new EmbeddedPreview(previews.Count, offset, j.Length, EmbeddedPreviewKind.Jpeg, 0, 0, PreviewColorSpace.Srgb));
+            offset += j.Length;
+        }
+
+        var chosen = PreviewSelector.SelectPreview(new InMemoryRawHeaderSource(data), previews, DecodeBox.Unbounded, 1, out var resolved);
+
+        Assert.Equal((6000, 4000), (chosen!.Width, chosen.Height));
+        Assert.All(resolved, p => Assert.True(p.HeaderResolved && p.Width > 0 && p.Height > 0));
+    }
 }

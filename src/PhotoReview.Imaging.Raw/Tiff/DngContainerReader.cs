@@ -105,13 +105,11 @@ public sealed class DngContainerReader : IRawContainerReader
                         break;
 
                     case 0x0100: // ImageWidth
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } w)
-                            width = (int)Math.Min(w, int.MaxValue);
+                        width = TiffHeaderNavigator.ClampToInt(TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian));
                         break;
 
                     case 0x0101: // ImageLength
-                        if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } h)
-                            height = (int)Math.Min(h, int.MaxValue);
+                        height = TiffHeaderNavigator.ClampToInt(TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian));
                         break;
 
                     case 0x0106: // PhotometricInterpretation: 32803 = CFA, 34892 = LinearRaw mark the raw image
@@ -120,8 +118,9 @@ public sealed class DngContainerReader : IRawContainerReader
                         break;
 
                     case 0x0103: // Compression: 1 = uncompressed, 6/7 = JPEG (7 is also lossless JPEG raw data)
+                        // Out of ushort range (or negative) is not a TIFF compression code: never truncate it onto 6/7.
                         if (TiffHeaderNavigator.ReadTagUnsigned(source, entry, littleEndian) is { } comp)
-                            compression = (ushort)comp;
+                            compression = comp is >= 0 and <= ushort.MaxValue ? (ushort)comp : (ushort)0;
                         break;
 
                     case 0x0112: // Orientation

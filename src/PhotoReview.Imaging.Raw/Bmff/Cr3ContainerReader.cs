@@ -361,9 +361,27 @@ public sealed class Cr3ContainerReader : IRawContainerReader
 
         // sampleSize <= Length - chunkOffset is the overflow-free form of chunkOffset + sampleSize <= Length.
         if (chunkOffset > 0 && sampleSize > 0 && chunkOffset < source.Length && sampleSize <= source.Length - chunkOffset
-            && HasSoi(source, chunkOffset))
+            && TryProbeTrackJpeg(source, chunkOffset, sampleSize, out int width, out int height))
         {
-            previews.Track.Add(NewJpeg(chunkOffset, sampleSize, 0, 0));
+            previews.Track.Add(NewJpeg(chunkOffset, sampleSize, width, height));
+        }
+    }
+
+    /// <summary>
+    /// A SOI alone is not enough: the CR3 raw track is a lossless JPEG (SOF3, tens of MB) that must not become a preview
+    /// candidate. Only a lossy (SOF0/1/2) frame passes; an unreadable/over-budget header means "not a preview".
+    /// </summary>
+    private static bool TryProbeTrackJpeg(IRawHeaderSource source, long offset, long length, out int width, out int height)
+    {
+        try
+        {
+            return JpegMarkerProbe.TryReadLossyFrame(source, offset, length, out width, out height);
+        }
+        catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
+        {
+            width = 0;
+            height = 0;
+            return false;
         }
     }
 }

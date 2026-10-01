@@ -185,9 +185,20 @@ public sealed class NefContainerReader : IRawContainerReader
         {
             int w = preview.Width;
             int h = preview.Height;
-            if ((w <= 0 || h <= 0) &&
-                !PreviewSelector.TryReadJpegFrame(source, preview.Offset, preview.Length, out w, out h, out _))
-                continue;
+            if (w <= 0 || h <= 0)
+            {
+                bool read;
+                try
+                {
+                    read = PreviewSelector.TryReadJpegFrame(source, preview.Offset, preview.Length, out w, out h, out _);
+                }
+                catch (InvalidDataException ex) when (!RawHeaderErrors.IsIoFailure(ex))
+                {
+                    continue; // exhausted header budget: this preview cannot confirm a full-size frame
+                }
+
+                if (!read) continue;
+            }
 
             int marginX = rawWidth - w;
             int marginY = rawHeight - h;
