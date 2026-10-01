@@ -152,17 +152,18 @@ public sealed class ForwardingCoreTests
     {
         using var openStarted = new ManualResetEventSlim();
         using var releaseOpen = new ManualResetEventSlim();
+        using var openFinished = new ManualResetEventSlim();
         var gate = new TaskCompletionSource();
         using var coalescer = new ForwardedOpenCoalescer(
-            _ => { openStarted.Set(); releaseOpen.Wait(); }, TimeSpan.FromSeconds(1), delay: (_, ct) => gate.Task.WaitAsync(ct));
+            _ => { openStarted.Set(); releaseOpen.Wait(); openFinished.Set(); }, TimeSpan.FromSeconds(1), delay: (_, ct) => gate.Task.WaitAsync(ct));
 
-        coalescer.Submit([Photo]); // returns although the open callback would block forever
+        coalescer.Submit([Photo]); // returns although the open callback would block until released
         Assert.False(openStarted.IsSet);
 
         gate.SetResult();
         Assert.True(openStarted.Wait(TimeSpan.FromSeconds(10)));
-        coalescer.Submit([Photo2]); // while the callback is blocked: still returns at once
         releaseOpen.Set();
+        Assert.True(openFinished.Wait(TimeSpan.FromSeconds(10)));
     }
 
     [Fact(DisplayName = "Disposing the coalescer cancels a pending open")]

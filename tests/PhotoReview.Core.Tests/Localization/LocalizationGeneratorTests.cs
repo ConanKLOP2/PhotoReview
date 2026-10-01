@@ -107,7 +107,7 @@ public sealed class LocalizationGeneratorTests
 
         Assert.Equal(["PRLOC007"], diagnostics.Select(d => d.Id).ToArray());
         Assert.Contains(@"C:\z\Languages\en.json", diagnostics.Single().GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
-        Assert.Empty(result.Results.SelectMany(r => r.Diagnostics).Where(d => d.Id == "CS8785"));
+        Assert.DoesNotContain(result.Results.SelectMany(r => r.Diagnostics), d => d.Id == "CS8785");
         var source = result.GeneratedTrees.Single().ToString();
         Assert.Contains("First", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Second", source, StringComparison.Ordinal);
@@ -123,7 +123,7 @@ public sealed class LocalizationGeneratorTests
 
         Assert.Contains("PRLOC003", Ids(result));
         Assert.Empty(result.CompileErrors.Where(d => d.Id != "CS0436").Select(d => d.ToString()));
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(result.Source!, @"public static string " + identifier + @"\b").Count);
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Count(result.Source!, "public static string " + identifier + " =>"));
         Assert.Contains("English: \"" + (identifier == "X" ? "plain" : "first") + "\"", result.Source, StringComparison.Ordinal);
     }
 
