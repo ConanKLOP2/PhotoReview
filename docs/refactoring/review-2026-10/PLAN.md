@@ -35,7 +35,7 @@ fixing every finding and adding the missing tests. When everything is DONE: one 
   strongest model only for the tasks marked **[strong]** (data safety, concurrency); a strong-model agent delegates
   its mutation checks and extra tests to `sonnet` sub-agents.
 
-## 2. Decisions needed from the user before the affected task starts
+## 2. Decisions (user chose option A for RV-D1..D5 on 2026-10-01)
 
 Each decision gets `decisions/RV-D<n>.md` (frontmatter + detail) and `tools/generate-open-decisions.ps1` in the PR
 that implements it. Recommended option first.
@@ -109,7 +109,7 @@ Status values: TODO · DECISION (waiting for RV-D*) · IN-PR (#n) · DONE · NOT
 
 | ID | Sev | Ev | Title | PR | Status |
 |---|---|---|---|---|---|
-| RV-C01 | MED | CONF | Move undo fails on FAT/exFAT destination (exact mtime compare) | 1 | DECISION (D1) |
+| RV-C01 | MED | CONF | Move undo fails on FAT/exFAT destination (exact mtime compare) | 1 | TODO (decided A) |
 | RV-C02 | LOW | CONF | Single Move/Copy cancelled before start leaves a Recovery item | 1 | TODO |
 | RV-C03 | LOW | PLAU | Single Copy failure leaves a partial destination | 1 | TODO |
 | RV-C04 | LOW | PLAU | Journal torn-tail repair runs once per process | 9 | TODO |
@@ -118,7 +118,7 @@ Status values: TODO · DECISION (waiting for RV-D*) · IN-PR (#n) · DONE · NOT
 | RV-C07 | LOW | PLAU | Single Move undo does not recreate the source folder | 1 | TODO |
 | RV-C08 | LOW | CONF | Recovery retries bypass the INV-4 gate | 1 | TODO |
 | RV-C09 | LOW | CONF | `ReviewCatalog.Remove` wrong `CurrentIndex` for a non-current removal | 9 | TODO |
-| RV-S01 | MED | CONF | Unknown enum in config loads as zero member, not the default | 2 | DECISION (D2) |
+| RV-S01 | MED | CONF | Unknown enum in config loads as zero member, not the default | 2 | TODO (decided A) |
 | RV-S02 | LOW | CONF | `DiagOptions` parses ints with the current culture | 9 | TODO |
 | RV-S03 | LOW | PLAU | Reset blank mandatory shortcut can collide with an action key | 2 | TODO |
 | RV-S04 | LOW | PLAU | A throwing `Changed` handler makes `Load` fall back to defaults | 2 | TODO |
@@ -127,16 +127,16 @@ Status values: TODO · DECISION (waiting for RV-D*) · IN-PR (#n) · DONE · NOT
 | RV-S07 | LOW | PLAU | `ImmediateUiScheduler` throws instead of returning a faulted task | 9 | TODO |
 | RV-A01 | MED | PLAU | `FileActionGate.RunQueuedAsync` runs work under the lock (re-entrancy breaks FIFO) | 5 | TODO |
 | RV-A02 | MED | PLAU | Fullscreen from a maximized window may keep the taskbar | 8 | TODO |
-| RV-A03 | MED | PLAU | Plain-key shortcuts ignore modifiers (Ctrl+Delete recycles) | 7 | DECISION (D3) |
+| RV-A03 | MED | PLAU | Plain-key shortcuts ignore modifiers (Ctrl+Delete recycles) | 7 | TODO (decided A) |
 | RV-A04 | LOW | CONF | Post-present stat failure leaves status "Loading" and skips session save | 7 | TODO |
 | RV-A05 | LOW | PLAU | Superseded folder load lets exceptions escape | 7 | TODO |
 | RV-A06 | LOW | CONF | Superseded load overwrites `ReadabilityProbe` | 7 | TODO |
 | RV-A07 | LOW | PLAU | Folder scan ignores cancellation | 7 | TODO |
 | RV-A08 | LOW | PLAU | Sibling navigation spins forever on direction 0 | 7 | TODO |
 | RV-A09 | LOW | PLAU | "Moved to…" status raced by the next present | 7 | TODO |
-| RV-A10 | LOW | PLAU | Duplicate batch silent when the folder changed | 7 | DECISION (D5) |
+| RV-A10 | LOW | PLAU | Duplicate batch silent when the folder changed | 7 | TODO (decided A) |
 | RV-A11 | LOW | CONF | `ViewerState._fitAxisViewport` goes stale | 8 | TODO |
-| RV-A12 | LOW | PLAU | Changing sort mode does not re-sort the open folder | 8 | DECISION (D4) |
+| RV-A12 | LOW | PLAU | Changing sort mode does not re-sort the open folder | 8 | TODO (decided A) |
 | RV-A13 | LOW | CONF | `BatchReviewWindow` stats every file on the UI thread | 8 | TODO |
 | RV-A14 | LOW | PLAU | `ShowRecovery` swallows a journal read error silently | 8 | TODO |
 | RV-A15 | LOW | CONF | `WindowPlacementService` leaves a temp file on write failure | 8 | TODO |
