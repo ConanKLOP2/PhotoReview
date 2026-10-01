@@ -82,6 +82,9 @@ public static class TiffStructure
     public static bool TryGetValueSpan(ReadOnlySpan<byte> tiff, int entryOffset, ushort type, uint count, bool littleEndian, out ReadOnlySpan<byte> value)
     {
         value = default;
+        // The 12-byte entry must lie fully inside the block: ReadU32 yields 0 for an unreadable offset field, which would
+        // otherwise make a truncated entry read its "value" from offset 0.
+        if (entryOffset < 0 || entryOffset > tiff.Length - 12) return false;
         var size = TypeSize(type);
         if (size == 0 || count == 0) return false;
         var total = (long)size * count;

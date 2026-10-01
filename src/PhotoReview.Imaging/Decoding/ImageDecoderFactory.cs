@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.Diagnostics;
 using PhotoReview.Core.Model;
@@ -17,7 +18,7 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
     private readonly Dictionary<DecoderBackend, Func<IImageDecoder>> _registry;
     // IMG-08: decoders are stateless/shareable, so build each backend's (primary + Wpf fallback +
     // FallbackImageDecoder) once instead of on every Create call.
-    private readonly ConcurrentDictionary<DecoderBackend, IImageDecoder> _created = new();
+    private readonly ConcurrentDictionary<DecoderBackend, Lazy<IImageDecoder>> _created = new();
     private readonly ILog _log;
     private readonly ReviewMetrics? _metrics;
     private readonly Func<DecoderBackend, IImageDecoder, IImageDecoder>? _decoderDecorator;
@@ -63,7 +64,10 @@ public sealed class ImageDecoderFactory : IImageDecoderFactory
 
     public bool IsRegistered(DecoderBackend backend) => _registry.ContainsKey(backend);
 
-    public IImageDecoder Create(DecoderBackend backend) => _created.GetOrAdd(backend, BuildDecoder);
+    // Lazy (ExecutionAndPublication): GetOrAdd alone may run the value factory on several threads and keep one result, which
+    // would build (and decorate) a decoder twice; the Lazy makes exactly one thread build it.
+    public IImageDecoder Create(DecoderBackend backend) =>
+        _created.GetOrAdd(backend, b => new Lazy<IImageDecoder>(() => BuildDecoder(b), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 
     private IImageDecoder BuildDecoder(DecoderBackend backend)
     {

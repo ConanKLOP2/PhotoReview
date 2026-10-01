@@ -217,6 +217,41 @@ public sealed class FactoryTests : IDisposable
         Assert.Equal(1, wicBuilds);
     }
 
+    [Fact(DisplayName = "ImageDecoderFactory.Create called from 16 threads at once builds the provider and decorates exactly once and shares one instance (RV-I07)")]
+    public void Create_Concurrent_BuildsAndDecoratesOnce()
+    {
+        const int threads = 16;
+        var providerRuns = 0;
+        var decoratorRuns = 0;
+        var factory = new ImageDecoderFactory(
+            new (DecoderBackend, Func<IImageDecoder>)[]
+            {
+                (DecoderBackend.Wpf, () => new WpfBitmapImageDecoder()),
+                (DecoderBackend.WicDirect, () => { System.Threading.Interlocked.Increment(ref providerRuns); System.Threading.Thread.SpinWait(2_000_000); return new WicDirectDecoder(); })
+            },
+            decoderDecorator: (_, decoder) => { System.Threading.Interlocked.Increment(ref decoratorRuns); return decoder; });
+
+        using var barrier = new System.Threading.Barrier(threads);
+        var results = new IImageDecoder[threads];
+        var workers = new System.Threading.Thread[threads];
+        for (var i = 0; i < threads; i++)
+        {
+            var index = i;
+            workers[i] = new System.Threading.Thread(() =>
+            {
+                barrier.SignalAndWait();
+                results[index] = factory.Create(DecoderBackend.WicDirect);
+            });
+            workers[i].Start();
+        }
+
+        foreach (var worker in workers) worker.Join();
+
+        Assert.Equal(1, providerRuns);
+        Assert.Equal(1, decoratorRuns);
+        Assert.All(results, r => Assert.Same(results[0], r));
+    }
+
     [Fact(DisplayName = "ImageDecoderFactory.IsRegistered reflects the providers passed to it (AR01)")]
     public void IsRegistered_ReflectsProviders()
     {

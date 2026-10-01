@@ -41,32 +41,8 @@ public sealed class JpegHeaderOracleTests
         return new(hasIcc, exif);
     }
 
-    /// <summary>Reference orientation: IFD0 entries in order, tag 0x0112 with a valid 1..8 value in the SHORT position.</summary>
-    private static int OracleOrientation(byte[]? tiff)
-    {
-        if (tiff is null || tiff.Length < 8) return 1;
-        bool le;
-        if (tiff[0] == 'I' && tiff[1] == 'I') le = true; else if (tiff[0] == 'M' && tiff[1] == 'M') le = false; else return 1;
-        int U16(int p) => p + 2 > tiff.Length ? 0 : le ? tiff[p] | (tiff[p + 1] << 8) : (tiff[p] << 8) | tiff[p + 1];
-        long U32(int p) => p + 4 > tiff.Length ? 0 : le
-            ? (uint)(tiff[p] | (tiff[p + 1] << 8) | (tiff[p + 2] << 16) | (tiff[p + 3] << 24))
-            : (uint)((tiff[p] << 24) | (tiff[p + 1] << 16) | (tiff[p + 2] << 8) | tiff[p + 3]);
-        if (U16(2) != 42) return 1;
-        var ifd = U32(4);
-        if (ifd >= tiff.Length) return 1;
-        var count = U16((int)ifd);
-        for (var n = 0; n < count; n++)
-        {
-            var e = (int)ifd + 2 + n * 12;
-            if (e + 12 > tiff.Length) break;
-            if (U16(e) == 0x0112)
-            {
-                var v = U16(e + 8);
-                if (v is >= 1 and <= 8) return v;
-            }
-        }
-        return 1;
-    }
+    /// <summary>Reference orientation: the shared IFD0 parser (RV-I04: TurboJpeg no longer has its own; its parity with this is pinned in OrientationParityTests). This test pins the marker walk that finds the TIFF block.</summary>
+    private static int OracleOrientation(byte[]? tiff) => tiff is null ? 1 : PhotoReview.Imaging.Metadata.ExifParser.TryReadOrientation(tiff) ?? 1;
 
     private static byte[] BuildHeader(Random rng)
     {
