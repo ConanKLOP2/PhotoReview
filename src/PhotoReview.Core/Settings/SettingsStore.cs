@@ -65,6 +65,7 @@ public sealed class SettingsStore
         var filePath = path ?? _appPaths.ConfigFile;
         LastLoadRepairs = [];
         _keepCorruptFile = false;
+        AppSettings? ready = null;
         try
         {
             if (_fileSystem.FileExists(filePath))
@@ -110,8 +111,7 @@ public sealed class SettingsStore
                 // A file from a NEWER build is never rewritten: Save would drop its unknown fields and stamp the older version.
                 if (LastLoadRepairs.Count > 0 && path is null && loaded.ConfigVersion <= AppSettings.CurrentConfigVersion
                     && TryPersistRepairs(loaded)) return _current;
-                Changed?.Invoke(this, _current);
-                return _current;
+                ready = _current; // RV-S04: Changed is raised after the try, so a throwing handler cannot be mistaken for an IO failure
             }
         }
         catch (JsonException ex)
@@ -138,6 +138,12 @@ public sealed class SettingsStore
             _current = new AppSettings();
             Changed?.Invoke(this, _current);
             return _current;
+        }
+
+        if (ready is not null)
+        {
+            Changed?.Invoke(this, ready);
+            return ready;
         }
 
         var settings = new AppSettings();

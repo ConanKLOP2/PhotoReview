@@ -15,6 +15,7 @@ public static class SettingsNormalizer
     {
         ArgumentNullException.ThrowIfNull(settings);
         var fixedNames = new List<string>();
+        HashSet<string>? pendingResetKeys = null;
 
         if (settings.ImageCacheCapacityBytes <= 0)
         {
@@ -118,14 +119,17 @@ public static class SettingsNormalizer
             // fail validation on the next Save, so it falls back to its default.
             var defaults = ShortcutMappings.Default();
             var resetShortcut = false;
+            var resetKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // defaults just restored for a blank mandatory shortcut
             foreach (var property in typeof(ShortcutMappings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
             {
                 if (property.PropertyType != typeof(string) || !property.CanWrite || ShortcutMappings.IsOptional(property.Name) || property.Name == nameof(ShortcutMappings.MoveToFolder2)) continue; // MoveToFolder2: legacy alias, ignored by the validator
                 if (!string.IsNullOrWhiteSpace((string?)property.GetValue(shortcuts))) continue;
                 property.SetValue(shortcuts, property.GetValue(defaults));
                 resetShortcut = true;
+                if (property.GetValue(defaults) is string restored) resetKeys.Add(ShortcutKeyCanonical.Canonicalize(restored));
             }
             if (resetShortcut) fixedNames.Add(nameof(AppSettings.Shortcuts));
+            if (resetKeys.Count > 0) pendingResetKeys = resetKeys;
             shortcuts.MoveToFolder2 ??= ""; // legacy alias nobody reads: only keep it non-null
             // Optional shortcuts: an explicit null in a hand-edited file means "disabled", like "".
             shortcuts.LastImage = shortcuts.LastImage?.Trim() ?? "";
@@ -139,6 +143,19 @@ public static class SettingsNormalizer
         }
 
         ShortcutKeyCanonical.CanonicalizeAll(settings); // Q-R25: Return/Enter, Prior/PageUp ... are one key
+
+        // RV-S03: a blank mandatory shortcut was reset to its default; if a user action already owns that key, navigation must
+        // keep working (actions are user-defined), so the ACTION's shortcut is cleared and reported instead of leaving a clash.
+        if (pendingResetKeys is not null && settings.Actions is { } boundActions)
+        {
+            for (var i = 0; i < boundActions.Count; i++)
+            {
+                var key = ShortcutKeyCanonical.Canonicalize(boundActions[i].Shortcut);
+                if (key.Length == 0 || !pendingResetKeys.Contains(key)) continue;
+                boundActions[i].Shortcut = "";
+                fixedNames.Add("Actions[" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]." + nameof(ReviewAction.Shortcut));
+            }
+        }
 
         // feat/mouse-zoom
         if (!Enum.IsDefined(settings.MouseWheelAction)) { settings.MouseWheelAction = MouseWheelAction.Zoom; fixedNames.Add(nameof(AppSettings.MouseWheelAction)); }
