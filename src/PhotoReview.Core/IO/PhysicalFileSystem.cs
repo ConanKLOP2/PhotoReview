@@ -53,7 +53,9 @@ public sealed class PhysicalFileSystem : IFileSystem
             File.Copy(source, destination);
             return true;
         }
-        catch (Exception ex) when (IsSwallowedAsDestinationExists(ex))
+        // A directory at the destination is not "a file already exists": some Windows builds also report it as 80 (others as
+        // access denied), so it is rethrown explicitly to keep the result independent of the OS build.
+        catch (Exception ex) when (IsSwallowedAsDestinationExists(ex) && !Directory.Exists(destination))
         {
             return false;
         }
