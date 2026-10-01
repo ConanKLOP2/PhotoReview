@@ -381,7 +381,8 @@ public sealed class FileActionService
                     continue;
                 }
 
-                if (destination.Length != member.Size || destination.LastWriteUtc != member.LastWriteUtc)
+                // RV-C01: destination-side compare, tolerant of a destination volume that rounds the write time (FAT 2 s).
+                if (!FileFingerprint.MatchesMovedDestination(destination, member.Size, member.LastWriteUtc))
                 {
                     stuck++;
                     continue;
@@ -430,8 +431,12 @@ public sealed class FileActionService
             var completed = operation == FileOperationType.Move
                 ? sourceStat is null && destination?.Length == member.Size
                 : destination?.Length == member.Size;
-            var conflict = !completed && (sourceStat is null || sourceStat.Length != member.Size
-                || sourceStat.LastWriteUtc != member.LastWriteUtc || destination is not null);
+            // A Move member the compensation put back made a round trip through the destination volume, which may have rounded
+            // its write time (RV-C01): tolerant compare. A Copy source never left its volume: exact.
+            var sourceUnchanged = sourceStat is not null && (operation == FileOperationType.Move
+                ? FileFingerprint.MatchesMovedDestination(sourceStat, member.Size, member.LastWriteUtc)
+                : sourceStat.Length == member.Size && sourceStat.LastWriteUtc == member.LastWriteUtc);
+            var conflict = !completed && (!sourceUnchanged || destination is not null);
             return new(member, completed, conflict, completed ? null : error,
                 SourceExists: sourceStat is not null, DestinationExists: destination is not null);
         }
@@ -467,6 +472,9 @@ public sealed class FileActionService
         long sourceSize = 0;
         var sourceLastWriteUtc = DateTime.MinValue;
         var permanent = false;
+        // RV-C03: true only while this Copy may have created its destination (raised inside the delegate right before the
+        // create-new copy; a TryCopyNew that found the destination taken touched nothing and resets it).
+        var copyDestinationIsOurs = false;
 
         try
         {
@@ -531,7 +539,18 @@ public sealed class FileActionService
 
                 if (request.Operation == FileOperationType.Copy)
                 {
-                    await Task.Run(() => _fileSystem.Copy(source, destinationPath), cancellationToken).ConfigureAwait(false);
+                    // Create-new copy (RV-C03): a file that appeared at the destination after the preflight is never
+                    // overwritten and never claimed as ours, so the failure cleanup below cannot delete it.
+                    var created = await Task.Run(() =>
+                    {
+                        copyDestinationIsOurs = true;
+                        return _fileSystem.TryCopyNew(source, destinationPath);
+                    }, cancellationToken).ConfigureAwait(false);
+                    if (!created)
+                    {
+                        copyDestinationIsOurs = false;
+                        throw new IOException(Tr.CoreFileActionDestinationExists(destinationPath));
+                    }
                 }
                 else
                 {
@@ -633,9 +652,21 @@ public sealed class FileActionService
         }
         catch (Exception ex)
         {
+            // RV-C03: a Copy cut short (disk full, ...) must not leave its partial file: Recovery would call the entry a
+            // Conflict and a retry would refuse "destination exists".
+            if (copyDestinationIsOurs && destinationPath is not null)
+                RemovePartialCopy(destinationPath, sourceSize);
+
             string? journalError = null;
-            _ = tx?.Fail(ex, out journalError);
             var mutationCompleted = tx?.MutationCompleted ?? false;
+            // RV-C02: cancelled before the mutation touched anything (Task.Run cancelled before its delegate ran): nothing is
+            // left to retry or recover, so the outcome is a terminal Dismissed line, not a Failed Recovery item (same rule
+            // as a fully rolled back group, ExecuteGroupAsync).
+            if (ex is OperationCanceledException && tx is { IsPrepared: true } && !mutationCompleted
+                && IsUntouched(request.Source, sourceSize, sourceLastWriteUtc, destinationPath))
+                _ = tx.DismissRolledBack(out journalError);
+            else
+                _ = tx?.Fail(ex, out journalError);
             // F3: only a Move that was journaled (Prepared) and then failed can have removed the source; ask the disk.
             var sourceRemoved = !mutationCompleted && request.Operation == FileOperationType.Move && tx is { IsPrepared: true }
                 && IsSourceGone(request.Source);
@@ -657,6 +688,41 @@ public sealed class FileActionService
         {
             tx?.Dispose(); // Q-R27 safety net: the live marker normally ends with Commit/Fail
             End();
+        }
+    }
+
+    /// <summary>
+    /// RV-C03: deletes the destination of a failed single Copy that this call created, only while it is provably incomplete
+    /// (strictly shorter than the source). A complete copy is left for Recovery to judge. Best effort: a file that cannot be
+    /// inspected or deleted stays (Recovery then shows the conflict).
+    /// </summary>
+    private void RemovePartialCopy(string destination, long sourceSize)
+    {
+        try
+        {
+            if (_fileSystem.GetFileStat(destination) is { } stat && stat.Length < sourceSize)
+                _fileSystem.Delete(destination);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Left in place; the Failed journal line still describes the operation. Any failure of this best-effort cleanup
+            // (a filter driver, ...) must not replace the original error nor skip the journal outcome.
+        }
+    }
+
+    /// <summary>RV-C02: true when the source is still exactly the preflight file (same volume: exact compare) and nothing is at
+    /// the destination. Any inspection error counts as "touched" (keeps the Failed Recovery line) and never escapes.</summary>
+    private bool IsUntouched(string source, long size, DateTime lastWriteUtc, string? destination)
+    {
+        try
+        {
+            var stat = _fileSystem.GetFileStat(source);
+            return stat is not null && stat.Length == size && stat.LastWriteUtc == lastWriteUtc
+                && (destination is null || !_fileSystem.FileExists(destination));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
         }
     }
 

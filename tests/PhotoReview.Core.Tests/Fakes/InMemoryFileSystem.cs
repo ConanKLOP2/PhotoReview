@@ -38,6 +38,18 @@ public sealed class InMemoryFileSystem : IFileSystem
     /// </summary>
     public bool MoveLeavesSource { get; set; }
 
+    /// <summary>
+    /// RV-C01: maps (destination path, source write time) to the write time the destination volume stores after a Move,
+    /// e.g. a FAT volume that rounds it to 2 s. Null = the stamp is kept exactly (NTFS).
+    /// </summary>
+    public Func<string, DateTime, DateTime>? StampOnMove { get; set; }
+
+    /// <summary>
+    /// RV-C03: when set, <see cref="Copy"/>/<see cref="TryCopyNew"/> write only the first N bytes of the source to the
+    /// (new) destination and then throw an <see cref="IOException"/>, like a copy cut short by a full disk.
+    /// </summary>
+    public int? CopyFailsAfterBytes { get; set; }
+
     /// <summary>Ordered trace of journal stream opens and file mutations (IO03 ordering/thread tests).</summary>
     public sealed record FsEvent(string Kind, bool Durable, int ThreadId, string Path);
     private readonly List<FsEvent> _events = [];
@@ -150,7 +162,7 @@ public sealed class InMemoryFileSystem : IFileSystem
             }
 
             _files[dstNorm] = bytes;
-            _fileWriteTimes[dstNorm] = writeTime;
+            _fileWriteTimes[dstNorm] = StampOnMove?.Invoke(destination, writeTime) ?? writeTime;
         }
     }
 
@@ -196,6 +208,13 @@ public sealed class InMemoryFileSystem : IFileSystem
             if (!string.IsNullOrEmpty(destDir) && !_directories.Contains(destDir) && !IsDriveRoot(destDir))
             {
                 throw new DirectoryNotFoundException($"Không tìm thấy thư mục đích: '{destDir}'.");
+            }
+
+            if (CopyFailsAfterBytes is { } written)
+            {
+                _files[dstNorm] = bytes.AsSpan(0, Math.Min(written, bytes.Length)).ToArray();
+                _fileWriteTimes[dstNorm] = DateTime.UtcNow;
+                throw new IOException("Simulated disk full during copy.");
             }
 
             _files[dstNorm] = (byte[])bytes.Clone();

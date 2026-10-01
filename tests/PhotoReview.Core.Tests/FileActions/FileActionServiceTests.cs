@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Threading.Tasks;
 using PhotoReview.Core.Abstractions;
 using PhotoReview.Core.FileActions;
@@ -503,5 +503,143 @@ public sealed class FileActionServiceTests
         Assert.False(_service.IsBusy);
         Assert.True(_service.TryBegin());
         _service.End();
+    }
+    // RV-C02: a Task.Run cancelled before its delegate starts leaves the disk untouched, so the operation is not a Recovery item.
+    [Theory]
+    [InlineData(FileOperationType.Move)]
+    [InlineData(FileOperationType.Copy)]
+    [InlineData(FileOperationType.Recycle)]
+    public async Task ExecuteAsync_CancelledBeforeStart_DismissesJournalEntry(FileOperationType operation)
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var result = await _service.ExecuteAsync(
+            new FileActionRequest(source, operation, operation == FileOperationType.Recycle ? null : "sel"), cts.Token);
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.SourceRemoved);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(@"C:\photos\sel\a.jpg"));
+        Assert.Empty(_recycleBin.RecycledPaths);
+        Assert.Empty(_journal.ReadPendingAndFailedOperations());
+        Assert.Empty(_journal.ReconcilePendingOperations()); // reconcile never resurrects it
+        Assert.Contains(_fs.ReadLines(@"C:\data\operations.jsonl"), line => line.Contains("Dismissed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MoveCancelledAfterMove_KeepsFailedEntry()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        // The move itself completed, then the cancellation surfaced: the file is at the destination, so this is NOT a no-op.
+        var service = new FileActionService(_journal, _fs, _clock, _recycleBin, (from, to) =>
+        {
+            _fs.Move(from, to);
+            throw new OperationCanceledException();
+        });
+
+        var result = await service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Move, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(result.SourceRemoved);
+        var failed = Assert.Single(_journal.ReadPendingAndFailedOperations());
+        Assert.Equal(JournalState.Failed, failed.State);
+        Assert.Equal(JournalErrors.CancelledByUser, failed.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopyCancelledAfterCompleteCopy_KeepsFailedEntry()
+    {
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        // The copy wrote every byte, then the cancellation surfaced: a complete copy is kept, so this is not a no-op.
+        _fs.CopyHook = (_, to) =>
+        {
+            _fs.AddFile(to, "hello photo");
+            return new OperationCanceledException();
+        };
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(destination));
+        var failed = Assert.Single(_journal.ReadPendingAndFailedOperations());
+        Assert.Equal(JournalErrors.CancelledByUser, failed.ErrorCode);
+    }
+
+    // RV-C03: a single Copy cut short (disk full) must not leave its partial file behind: Recovery would call it a Conflict and
+    // the retry would refuse with "destination exists".
+    [Fact]
+    public async Task ExecuteAsync_CopyFailsMidway_RemovesPartialDestination()
+    {
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        _fs.CopyFailsAfterBytes = 4;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(destination));
+        var failed = Assert.Single(_journal.ReadPendingAndFailedOperations());
+        Assert.Equal(JournalState.Failed, failed.State);
+        Assert.Equal(RecoveryVerdict.CanRetry, new RecoveryFileCheck(_fs).Check(failed).Verdict);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopyFailsAndPartialCleanupThrowsUnexpectedly_StillJournalsTheOriginalFailure()
+    {
+        var source = @"C:\photos\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        _fs.CopyFailsAfterBytes = 4;
+        // The cleanup is best effort: whatever it throws must not replace the copy failure or skip the journal outcome.
+        _fs.DeleteHook = _ => new InvalidOperationException("simulated filter driver failure");
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Simulated disk full during copy.", result.Error);
+        var failed = Assert.Single(_journal.ReadPendingAndFailedOperations());
+        Assert.Equal(JournalState.Failed, failed.State);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopyFails_DestinationExistedBefore_IsNotDeleted()
+    {
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        // Someone else's (shorter) file lands at the destination between the preflight and the copy: never ours to delete.
+        _fs.CopyHook = (_, to) =>
+        {
+            _fs.AddFile(to, "foreign");
+            return null;
+        };
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(destination));
+        Assert.Equal("foreign", _fs.ReadAllText(destination));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CopyFailsAfterCompleteCopy_KeepsCompleteDestination()
+    {
+        var source = @"C:\photos\a.jpg";
+        var destination = @"C:\photos\sel\a.jpg";
+        _fs.AddFile(source, "hello photo", new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc));
+        // Every byte was written before the failure: a complete copy is left for Recovery to judge, never deleted.
+        _fs.CopyFailsAfterBytes = 11;
+
+        var result = await _service.ExecuteAsync(new FileActionRequest(source, FileOperationType.Copy, "sel"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("hello photo", _fs.ReadAllText(destination));
     }
 }

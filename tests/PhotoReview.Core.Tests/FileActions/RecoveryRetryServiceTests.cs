@@ -312,6 +312,158 @@ public sealed class RecoveryRetryServiceTests
         Assert.NotEqual(callerThread, mutationThread);
     }
 
+    [Fact]
+    public async Task Retry_WhileFileActionInProgress_RefusesWithBusy()
+    {
+        // RV-C08: Recovery is a file action too (INV-4); only the modal window kept it from overlapping a running one.
+        var source = @"C:\photos\a.jpg";
+        var dest = @"C:\photos\sub\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var failed = new JournalEntry("op-busy", FileOperationType.Move, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+        _journal.Append(failed);
+        var gate = new FileActionService(_journal, _fs, _clock, new NoRecycle());
+        var service = new RecoveryRetryService(_journal, _fs, _clock, fileActionGate: gate);
+        Assert.True(gate.TryBegin()); // a Move is running
+        var stats = 0;
+        _fs.StatHook = _ => { Interlocked.Increment(ref stats); return null; };
+        var eventsBefore = _fs.Events.Count;
+
+        var busy = await service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(busy.Succeeded);
+        Assert.False(busy.Superseded);
+        Assert.Null(busy.Entry);
+        Assert.Equal(Core.Localization.Tr.CoreRecoveryBusy, busy.Message);
+        Assert.Equal(0, stats);
+        Assert.Equal(eventsBefore, _fs.Events.Count); // no journal append, no move
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(dest));
+        Assert.True(gate.IsBusy); // the running action still owns the gate
+
+        gate.End();
+        var retried = await service.RetryMoveOrCopyAsync(failed);
+        Assert.True(retried.Succeeded, retried.Message);
+        Assert.False(gate.IsBusy); // the retry released the gate it took
+    }
+
+    [Fact]
+    public async Task Retry_GroupWhileFileActionInProgress_RefusesWithBusy()
+    {
+        var gate = new FileActionService(_journal, _fs, _clock, new NoRecycle());
+        var service = new RecoveryRetryService(_journal, _fs, _clock, fileActionGate: gate);
+        var members = new[]
+        {
+            new JournalGroupMember(@"C:\photos\a.jpg", @"C:\photos\sub\a.jpg", 5, _clock.UtcNow),
+            new JournalGroupMember(@"C:\photos\a.cr2", @"C:\photos\sub\a.cr2", 5, _clock.UtcNow),
+        };
+        var failed = new JournalEntry("op-group", FileOperationType.Move, JournalState.Failed, members[0].Source,
+            members[0].Destination, 5, _clock.UtcNow, _clock.UtcNow, "Previous error", GroupId: "g", GroupMembers: members);
+        Assert.True(gate.TryBegin());
+        var stats = 0;
+        _fs.StatHook = _ => { Interlocked.Increment(ref stats); return null; };
+
+        var busy = await service.RetryMoveOrCopyAsync(failed);
+
+        Assert.Equal(Core.Localization.Tr.CoreRecoveryBusy, busy.Message);
+        Assert.Equal(0, stats);
+        Assert.True(gate.IsBusy);
+    }
+
+    [Fact]
+    public async Task RetryCopy_FailsMidway_RemovesPartialDestination()
+    {
+        // RV-C03: the retry's own partial copy must not stay behind (it would turn the entry into a Conflict).
+        var source = @"C:\photos\a.jpg";
+        var dest = @"C:\photos\sub\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var failed = new JournalEntry("op-copy-partial", FileOperationType.Copy, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+        _journal.Append(failed);
+        _fs.CopyFailsAfterBytes = 2;
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(dest));
+        Assert.NotNull(result.Entry);
+        Assert.Equal(RecoveryVerdict.CanRetry, new RecoveryFileCheck(_fs).Check(result.Entry).Verdict);
+    }
+
+    [Fact]
+    public async Task RetryGroupCopy_FailsMidway_RemovesPartialDestinationOfTheFailingMember()
+    {
+        var jpeg = @"C:\photos\a.jpg";
+        var raw = @"C:\photos\a.cr2";
+        _fs.WriteAllTextAtomic(jpeg, "12345");
+        _fs.WriteAllTextAtomic(raw, "1234567890");
+        var members = new[]
+        {
+            new JournalGroupMember(jpeg, @"C:\photos\sub\a.jpg", 5, _fs.GetFileStat(jpeg)!.LastWriteUtc),
+            new JournalGroupMember(raw, @"C:\photos\sub\a.cr2", 10, _fs.GetFileStat(raw)!.LastWriteUtc),
+        };
+        var failed = new JournalEntry("op-group-copy", FileOperationType.Copy, JournalState.Failed, jpeg, members[0].Destination,
+            5, members[0].LastWriteUtc, _clock.UtcNow, "Previous error", GroupId: "g", GroupMembers: members);
+        _journal.Append(failed);
+        _fs.CopyHook = (from, to) =>
+        {
+            _fs.CopyFailsAfterBytes = string.Equals(from, raw, StringComparison.OrdinalIgnoreCase) ? 3 : null;
+            return null;
+        };
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.False(_fs.FileExists(@"C:\photos\sub\a.cr2"));
+        Assert.True(_fs.FileExists(raw));
+    }
+
+    [Fact]
+    public async Task RetryCopy_FailsAndPartialCleanupThrowsUnexpectedly_ReportsTheOriginalFailure()
+    {
+        var source = @"C:\photos\a.jpg";
+        var dest = @"C:\photos\sub\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var failed = new JournalEntry("op-copy-cleanup", FileOperationType.Copy, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+        _journal.Append(failed);
+        _fs.CopyFailsAfterBytes = 2;
+        _fs.DeleteHook = _ => new InvalidOperationException("simulated filter driver failure");
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Simulated disk full during copy.", result.Message);
+        Assert.NotNull(result.Entry);
+        Assert.Equal(JournalState.Failed, result.Entry.State);
+    }
+
+    [Fact]
+    public async Task RetryCopy_ForeignFileAppearsAtDestination_IsNotDeleted()
+    {
+        var source = @"C:\photos\a.jpg";
+        var dest = @"C:\photos\sub\a.jpg";
+        _fs.WriteAllTextAtomic(source, "12345");
+        var stat = _fs.GetFileStat(source)!;
+        var failed = new JournalEntry("op-copy-foreign", FileOperationType.Copy, JournalState.Failed,
+            source, dest, stat.Length, stat.LastWriteUtc, _clock.UtcNow, "Previous error");
+        _journal.Append(failed);
+        _fs.CopyHook = (_, to) =>
+        {
+            _fs.AddFile(to, "xy"); // someone else's shorter file, after the pre-check
+            return null;
+        };
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("xy", _fs.ReadAllText(dest));
+    }
+
     [Fact(DisplayName = "Constructor validates null arguments")]
     public void Constructor_NullValidation()
     {
