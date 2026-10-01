@@ -157,10 +157,15 @@ public sealed class FileActionController
     // The "companion file was missing" warning the last core run wrote (null when none): Move-to/Copy-to appends it to its own status.
     private string? _lastPartnerMissingWarning;
 
+    // The fire-and-forget present of the next photo that the last core run started (null when none): Move-to awaits it
+    // before writing its final "Moved to" status, so the presenter's own "Ready" status cannot overwrite it (RV-A09).
+    private Task? _lastPresentTask;
+
     /// <returns>True when the file operation succeeded and the folder is still the current one.</returns>
     private async Task<bool> ExecuteFileActionCoreAsync(string actionName, FileOperationType operation, string? destination, string? compareSelectedPath, string? currentPath)
     {
         _lastPartnerMissingWarning = null;
+        _lastPresentTask = null;
         if (_catalog.Count == 0) return false;
         if (_fileActionService is null) return false;
 
@@ -259,6 +264,7 @@ public sealed class FileActionController
             if (nextIndex >= 0)
             {
                 presentTask = _sink.PresentAsync(nextIndex);
+                _lastPresentTask = presentTask;
             }
             else
             {
@@ -645,6 +651,17 @@ public sealed class FileActionController
         if (!await ExecuteFileActionCoreAsync(actionName, operation, folder, compareSelectedPath, currentPath)) return;
 
         if (!string.Equals(folder, lastFolder, StringComparison.OrdinalIgnoreCase)) _rememberFolder?.Invoke(operation, folder);
+
+        // RV-A09: wait for the next photo's present (it writes "Ready" when it finishes) so the final status is ours.
+        // Only this already-async action waits (the caller holds the file-action gate, as on every failure path above).
+        var presentStillRunning = _lastPresentTask;
+        var folderAfterAction = _clock.CurrentFolder;
+        if (presentStillRunning is not null)
+        {
+            await presentStillRunning;
+            if (!_clock.IsFolderCurrent(folderAfterAction)) return;
+        }
+
         if (_catalog.Count > 0)
         {
             var fileName = Path.GetFileName(source);

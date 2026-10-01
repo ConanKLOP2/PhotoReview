@@ -156,4 +156,68 @@ public sealed partial class ImagePresenterTests
         Assert.False(presenter.IsCompareVisible);
         Assert.Equal([f1, f2, flaky], _catalog.Paths);
     }
+
+    /// <summary>
+    /// Forwards to the real file system, except GetFileStat of one path answers normally once (the initial stat of the
+    /// present) and then reports "missing" (null) or throws on every later call (the post-present refresh stat).
+    /// Call-counted, so no timing or thread dependence.
+    /// </summary>
+    private sealed class StatFailsAfterFirstFileSystem(IFileSystem inner, string path, Exception? error) : IFileSystem
+    {
+        private int _calls;
+        public bool FileExists(string p) => inner.FileExists(p);
+        public bool DirectoryExists(string p) => inner.DirectoryExists(p);
+        public FileStat? GetFileStat(string p)
+        {
+            if (!string.Equals(p, path, StringComparison.OrdinalIgnoreCase) || System.Threading.Interlocked.Increment(ref _calls) == 1)
+            {
+                return inner.GetFileStat(p);
+            }
+
+            return error is null ? null : throw error;
+        }
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Copy(string source, string destination) => inner.Copy(source, destination);
+        public void Delete(string p) => inner.Delete(p);
+        public Stream OpenReadShared(string p, int bufferSize = 65536) => inner.OpenReadShared(p, bufferSize);
+        public Stream OpenAppendDurable(string p) => inner.OpenAppendDurable(p);
+        public Stream OpenAppend(string p, bool durable) => inner.OpenAppend(p, durable);
+        public void WriteAllTextAtomic(string p, string text, bool durable = true) => inner.WriteAllTextAtomic(p, text, durable);
+        public string ReadAllText(string p) => inner.ReadAllText(p);
+        public IEnumerable<string> ReadLines(string p) => inner.ReadLines(p);
+        public IEnumerable<string> EnumerateFiles(string directory, string pattern = "*") => inner.EnumerateFiles(directory, pattern);
+        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, string pattern = "*") => inner.EnumerateFilesWithStat(directory, pattern);
+        public IEnumerable<(string Path, FileStat? Stat)> EnumerateFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+            inner.EnumerateFilesWithStat(directory, include, onSkipped);
+        public bool TryProbeReadable(string p, out string? failure) => inner.TryProbeReadable(p, out failure);
+        public IEnumerable<(string Path, FileStat? Stat)> EnumerateReadableFilesWithStat(string directory, Func<string, bool> include, Action<SkippedEntry> onSkipped) =>
+            inner.EnumerateReadableFilesWithStat(directory, include, onSkipped);
+        public IEnumerable<string> EnumerateDirectories(string directory) => inner.EnumerateDirectories(directory);
+        public void CreateDirectory(string p) => inner.CreateDirectory(p);
+    }
+
+    // RV-A04: the post-present refresh stat failing must not leave the status on "Loading" or skip the session save.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PresentAsync_PostPresentStatFails_StatusIsReadyAndSessionSaved(bool statThrows)
+    {
+        var file = CreateFakeImageFile("shown.png");
+        _catalog.Reset([file]);
+        var fs = new StatFailsAfterFirstFileSystem(new PhysicalFileSystem(), file, statThrows ? new IOException("share hiccup") : null);
+        var session = new SessionState { Folder = _tempDir, CurrentPath = "" };
+        var presenter = new ImagePresenter(
+            _catalog, _clock, _previewService, _thumbnailCache, _preloadController, _compareViewModel, _hashService, _metrics,
+            () => _settings, _sessionStore, _sink, fileSystem: fs, getSession: () => session);
+
+        await presenter.PresentAsync(0);
+
+        var loading = PhotoReview.App.ViewModels.StatusFormatter.Loading(0, 1, new FileInfo(file).Length);
+        Assert.NotEmpty(_sink.Statuses);
+        Assert.NotEqual(loading, _sink.Statuses[^1]);
+        Assert.Contains(Path.GetFileName(file), _sink.Statuses[^1], StringComparison.Ordinal);
+        Assert.Equal(file, session.CurrentPath);
+        Assert.Equal(file, _sessionStore.Load(_tempDir).CurrentPath);
+        Assert.Equal([file], _catalog.Paths); // not removed under the user; the next present's initial stat handles it
+    }
 }

@@ -362,4 +362,91 @@ public sealed class ShortcutRouterTests
         var error = validator.ValidateShortcuts(new AppSettings());
         Assert.Null(error);
     }
+
+    // RV-A03 / RV-D3 = A: file-changing commands fire only with NO modifier.
+    public static TheoryData<Key> FileChangingKeys() => new()
+    {
+        Key.Delete, Key.Enter, Key.F3, Key.F4, Key.F5
+    };
+
+    [Theory]
+    [MemberData(nameof(FileChangingKeys))]
+    public void RecycleAndActions_WithAnyModifier_DoNotResolve(Key key)
+    {
+        var router = DefaultRouter();
+        Assert.NotNull(router.TryResolve(key, Key.None, ModifierKeys.None, false, hasImage: true));
+        foreach (var mods in new[] { ModifierKeys.Control, ModifierKeys.Shift, ModifierKeys.Control | ModifierKeys.Shift })
+        {
+            Assert.Null(router.TryResolve(key, Key.None, mods, false, hasImage: true));
+        }
+    }
+
+    [Fact]
+    public void NavigationZoomAndToggles_StillAcceptCtrl()
+    {
+        var router = DefaultRouter();
+        Assert.Equal(ReviewCommandType.Next, router.TryResolve(Key.Right, Key.None, ModifierKeys.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.Previous, router.TryResolve(Key.Left, Key.None, ModifierKeys.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomIn, router.TryResolve(Key.Add, Key.None, ModifierKeys.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ZoomOut, router.TryResolve(Key.Subtract, Key.None, ModifierKeys.Control, false, true)?.Type);
+        Assert.Equal(ReviewCommandType.ToggleFit, router.TryResolve(Key.F, Key.None, ModifierKeys.Control, false, true)?.Type);
+    }
+
+    [Fact]
+    public void MoveToFolder_ShiftForcesPicker_CtrlDoesNotResolve()
+    {
+        var router = DefaultRouter();
+        var shifted = router.TryResolve(Key.M, Key.None, ModifierKeys.Shift, false, hasImage: true);
+        Assert.Equal(ReviewCommandType.MoveToFolder, shifted?.Type);
+        Assert.True(shifted?.ForcePicker);
+        Assert.Null(router.TryResolve(Key.M, Key.None, ModifierKeys.Control, false, hasImage: true));
+    }
+
+    [Fact]
+    public void AltF4_ReportedAsKeySystem_DoesNotTriggerTheF4Action()
+    {
+        Assert.Null(DefaultRouter().TryResolve(Key.System, Key.F4, ModifierKeys.Alt, false, hasImage: true));
+    }
+
+    [Fact]
+    public void SameKeyOnActionAndRecycle_ActionWins()
+    {
+        var settings = new AppSettings();
+        settings.Shortcuts.SendToRecycleBin = "D5";
+        settings.Actions = [new ReviewAction { Name = "A", Shortcut = "D5", Operation = FileOperationType.Move, Destination = "X" }];
+        var cmd = new ShortcutRouter(settings).TryResolve(Key.D5, Key.None, ModifierKeys.None, false, hasImage: true);
+        Assert.Equal(ReviewCommandType.RunAction, cmd?.Type);
+        Assert.Equal(0, cmd?.ActionIndex);
+    }
+
+    [Theory]
+    [InlineData(Key.Delete)]
+    [InlineData(Key.Space)]
+    [InlineData(Key.F)]
+    [InlineData(Key.Add)]
+    [InlineData(Key.Subtract)]
+    [InlineData(Key.W)]
+    [InlineData(Key.H)]
+    [InlineData(Key.Right)]
+    [InlineData(Key.Left)]
+    [InlineData(Key.Enter)]
+    [InlineData(Key.F5)]
+    [InlineData(Key.M)]
+    [InlineData(Key.Y)]
+    [InlineData(Key.D3)]
+    public void ImageGroupCommands_WithoutImage_ReturnNull(Key key)
+    {
+        Assert.Null(DefaultRouter().TryResolve(key, Key.None, ModifierKeys.None, false, hasImage: false));
+    }
+
+    [Fact]
+    public void Compare_NothingToToggle_DoesNotFallThroughToALowerPriorityCommandOnTheSameKey()
+    {
+        var settings = new AppSettings();
+        settings.Shortcuts.Compare = "S";
+        settings.Shortcuts.Skip = "S";
+        var router = new ShortcutRouter(settings);
+        Assert.Null(router.TryResolve(Key.S, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: false, isCompareVisible: false));
+        Assert.Equal(ReviewCommandType.ToggleCompare, router.TryResolve(Key.S, Key.None, ModifierKeys.None, false, hasImage: true, hasComparePair: true)?.Type);
+    }
 }

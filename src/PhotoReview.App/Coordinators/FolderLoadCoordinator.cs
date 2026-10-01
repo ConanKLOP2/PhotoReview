@@ -67,8 +67,9 @@ public sealed class FolderLoadCoordinator : IDisposable
 
         _loadCts?.Cancel();
         _loadCts?.Dispose();
-        _loadCts = new CancellationTokenSource();
-        var loadToken = _loadCts.Token;
+        var thisLoadCts = new CancellationTokenSource();
+        _loadCts = thisLoadCts;
+        var loadToken = thisLoadCts.Token;
 
         var loadGeneration = _clock.NextFolder();
         // A superseded load's gate must not strand navigation that is waiting on it.
@@ -137,7 +138,13 @@ public sealed class FolderLoadCoordinator : IDisposable
                 // file. A listing interrupted part-way goes to `skipped` (this delegate runs on this
                 // one background task, so the list needs no lock).
                 var allScanned = _fileSystem.EnumerateFilesWithStat(folder,
-                    path => ImageFileTypes.IsSupported(path, rawEnabled) || (rawEnabled && string.Equals(Path.GetExtension(path), ".xmp", StringComparison.OrdinalIgnoreCase)), skipped.Add)
+                    path =>
+                    {
+                        // RV-A07: the predicate runs once per directory entry, so a superseded/closed load stops the
+                        // listing here instead of finishing a scan whose result is thrown away (single pass kept).
+                        loadToken.ThrowIfCancellationRequested();
+                        return ImageFileTypes.IsSupported(path, rawEnabled) || (rawEnabled && string.Equals(Path.GetExtension(path), ".xmp", StringComparison.OrdinalIgnoreCase));
+                    }, skipped.Add)
                     .ToList();
                 var sidecars = allScanned.Where(file => string.Equals(Path.GetExtension(file.Path), ".xmp", StringComparison.OrdinalIgnoreCase))
                     .Select(file => file.Path).ToArray();
@@ -320,12 +327,20 @@ public sealed class FolderLoadCoordinator : IDisposable
         {
             _sink.OnFailed(folder, ex);
         }
+        catch (Exception ex)
+        {
+            // RV-A05: this load was superseded (or closed) and then failed, e.g. a sink call threw. The newer load owns
+            // the UI, so nothing is reported to the user and the failure must not escape to the awaiting caller.
+            AppLog.Warn($"Superseded folder load failed in '{folder}': {ex.GetType().Name}: {ex.Message}");
+        }
         finally
         {
             // Applied, ignored, timed out, failed or superseded: in every case the order is settled
             // for this load, so gated navigation may proceed (it re-reads the catalog afterwards).
             pendingOrder?.TrySetResult();
-            if (probe is not null)
+            // RV-A06: only the load that is still current may publish its probe; a superseded one unwinding late
+            // would otherwise overwrite the newer load's task.
+            if (probe is not null && ReferenceEquals(_loadCts, thisLoadCts))
             {
                 // Runs on this (UI) context; it re-checks the load token when the probe completes.
                 _readabilityProbe = ApplyReadabilityProbeAsync(probe, folder, skipped, perf, loadToken);
