@@ -151,11 +151,13 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
     }
 
     /// <summary>Four identical files: a.jpg is kept, the three numbered copies are the batch.</summary>
+    private static readonly string[] BatchOfThreeNames = ["a.jpg", "a (1).jpg", "a (2).jpg", "a (3).jpg"];
+
     private (DuplicateCleanupController Controller, LateStatusSink Sink, GenerationClock Clock, HookedRecycleBin Bin) NewBatchOfThree()
     {
         var folder = Path.Combine(_root, "album");
         Directory.CreateDirectory(folder);
-        var files = new[] { "a.jpg", "a (1).jpg", "a (2).jpg", "a (3).jpg" }.Select(name => Path.Combine(folder, name)).ToArray();
+        var files = BatchOfThreeNames.Select(name => Path.Combine(folder, name)).ToArray();
         foreach (var file in files) File.WriteAllBytes(file, new byte[2048]);
         var catalog = new ReviewCatalog();
         catalog.Reset(files);
