@@ -64,6 +64,9 @@ public static class ForwardedPathProtocol
     {
         if (p.Length == 0 || p.Length > MaxPathChars) return false;
         foreach (var c in p) if (char.IsControl(c)) return false;
+        // RV-S05: NTFS allows unpaired UTF-16 surrogates in names, but they have no UTF-8 form: the strict encoder would
+        // throw from Encode (outside this shared contract). Such a path cannot be forwarded; the second instance opens it.
+        if (p.AsSpan().ContainsAnyInRange('\uD800', '\uDFFF') && !IsWellFormedUtf16(p)) return false;
         // Device / extended-length namespaces are never produced by Explorer's file association and would bypass normalisation.
         // Every spelling: "/" is a separator too, and the NT object prefix \??\ reaches the same namespaces.
         if (p.Length >= 3 && IsSep(p[0]) && (IsSep(p[1]) || p[1] == '?') && p[2] is '?' or '.') return false;
@@ -73,4 +76,14 @@ public static class ForwardedPathProtocol
     }
 
     private static bool IsSep(char c) => c is '\\' or '/';
+
+    private static bool IsWellFormedUtf16(string p)
+    {
+        for (var i = 0; i < p.Length;)
+        {
+            if (System.Text.Rune.DecodeFromUtf16(p.AsSpan(i), out _, out var consumed) != System.Buffers.OperationStatus.Done) return false;
+            i += consumed;
+        }
+        return true;
+    }
 }

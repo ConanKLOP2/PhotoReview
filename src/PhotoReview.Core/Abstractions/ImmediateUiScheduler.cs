@@ -16,8 +16,17 @@ public sealed class ImmediateUiScheduler : IUiScheduler
     public Task InvokeAsync(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        action();
-        return Task.CompletedTask;
+        // RV-S07: like Dispatcher.InvokeAsync(...).Task, a failing action faults the returned task instead of throwing at
+        // the call, so code that is correct against the real dispatcher behaves the same here (tests, CLI).
+        try
+        {
+            action();
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
     }
 
     public async ValueTask YieldAsync(CancellationToken cancellationToken = default)

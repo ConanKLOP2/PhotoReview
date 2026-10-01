@@ -87,7 +87,18 @@ public sealed class SessionStore
     public SessionState Load(string folder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
-        var path = GetPath(folder);
+        string path;
+        try
+        {
+            // RV-C05: a malformed folder string (embedded NUL, overlong) cannot name a session file: "no session", like
+            // SessionWriter.KeyOf treats the same exceptions. PathTooLongException is an IOException.
+            path = GetPath(folder);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException)
+        {
+            return new SessionState { Folder = folder };
+        }
+
         try
         {
             if (_fileSystem.FileExists(path))

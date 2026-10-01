@@ -116,6 +116,31 @@ public sealed class DiagOptionsTests : IDisposable
         Assert.Contains($"PRELOAD_WORKERS={expected}", DiagOptions.Describe());
     }
 
+    [Fact(DisplayName = "RV-S02: PHOTOREVIEW_DIAG_PRELOAD_WORKERS parses the same under an Arabic UI culture (culture-invariant)")]
+    public void ReadFromEnvironment_UnderArabicCulture_ParsesWorkers()
+    {
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        // An Arabic culture as ICU defines it: signs carry an ARABIC LETTER MARK (U+061C), so "+4" is not an integer
+        // in that culture although it is one in the invariant culture every diagnostic value is written in.
+        var arabic = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.GetCultureInfo("ar-SA").Clone();
+        arabic.NumberFormat.PositiveSign = "؜+";
+        arabic.NumberFormat.NegativeSign = "؜-";
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = arabic;
+            ClearAll();
+            Environment.SetEnvironmentVariable(PreloadWorkersVar, "+4");
+            DiagOptions.ResetForTests();
+
+            Assert.Equal(4, DiagOptions.PreloadWorkers);
+            Assert.Equal("PRELOAD_WORKERS=4", DiagOptions.Describe());
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
     [Theory(DisplayName = "PHOTOREVIEW_DIAG_PRELOAD_WORKERS rejects out-of-range or unparsable values")]
     [InlineData("-1")]
     [InlineData("17")]

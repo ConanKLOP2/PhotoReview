@@ -63,6 +63,31 @@ public sealed class SessionStoreTests
         Assert.Empty(loaded.Skipped);
     }
 
+    [Fact(DisplayName = "RV-C05: Load of a folder string with an embedded NUL returns no session instead of throwing")]
+    public void Load_FolderWithEmbeddedNul_ReturnsNoSession()
+    {
+        var store = CreateStore();
+        var folder = "C:\\photos\\bad\0name";
+
+        var loaded = store.Load(folder);
+
+        Assert.Equal(folder, loaded.Folder);
+        Assert.Null(loaded.CurrentPath);
+        Assert.Empty(loaded.Skipped);
+    }
+
+    [Fact(DisplayName = "RV-C05: Load of an overlong folder path returns no session instead of throwing")]
+    public void Load_OverlongPath_ReturnsNoSession()
+    {
+        var store = CreateStore();
+        var folder = @"C:\" + new string('a', 40_000);
+
+        var loaded = store.Load(folder);
+
+        Assert.Equal(folder, loaded.Folder);
+        Assert.Null(loaded.CurrentPath);
+    }
+
     [Fact(DisplayName = "Load returns default session state when JSON is corrupted")]
     public void Load_CorruptJson_ReturnsDefault()
     {
