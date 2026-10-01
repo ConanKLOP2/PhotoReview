@@ -92,6 +92,41 @@ public sealed class LocalizationGeneratorTests
         Assert.Empty(result.CompileErrors.Where(d => d.Id != "CS0436").Select(d => d.ToString()));
     }
 
+    [Fact(DisplayName = "RV-P07: two en.json files report PRLOC007 for the extra one and generate from the first by path, without crashing the generator")]
+    public void TwoCatalogs_ReportsDiagnosticAndUsesFirstByPath()
+    {
+        var compilation = CSharpCompilation.Create("GeneratorHarness", [], References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+        var driver = CSharpGeneratorDriver.Create(new TrGenerator())
+            .AddAdditionalTexts([
+                new MemoryText(@"C:\z\Languages\en.json", Catalog("\"second\": \"x\"")),
+                new MemoryText(@"C:\a\Languages\en.json", Catalog("\"first\": \"x\"")),
+            ])
+            .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        var result = driver.GetRunResult();
+
+        Assert.Equal(["PRLOC007"], diagnostics.Select(d => d.Id).ToArray());
+        Assert.Contains(@"C:\z\Languages\en.json", diagnostics.Single().GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Results.SelectMany(r => r.Diagnostics), d => d.Id == "CS8785");
+        var source = result.GeneratedTrees.Single().ToString();
+        Assert.Contains("First", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Second", source, StringComparison.Ordinal);
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error && d.Id != "CS0436" && d.Id != "PRLOC007").Select(d => d.ToString()));
+    }
+
+    [Theory(DisplayName = "RV-P07: identifier collisions between a plain key and a plural group, and between segment casings, are PRLOC003 and the first claimant is kept")]
+    [InlineData("{\"x\": \"plain\", \"x.one\": \"one\", \"x.other\": \"many\"}", "X")]
+    [InlineData("{\"a.b\": \"first\", \"a.B\": \"second\"}", "AB")]
+    public void IdentifierCollision_IsPrloc003_AndFirstClaimantKept(string json, string identifier)
+    {
+        var result = Run(json);
+
+        Assert.Contains("PRLOC003", Ids(result));
+        Assert.Empty(result.CompileErrors.Where(d => d.Id != "CS0436").Select(d => d.ToString()));
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Count(result.Source!, "public static string " + identifier + " =>"));
+        Assert.Contains("English: \"" + (identifier == "X" ? "plain" : "first") + "\"", result.Source, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "Awkward but valid text and placeholders (keywords, quotes, XML, line separators) generate compilable code")]
     public void AwkwardText_StillCompiles()
     {

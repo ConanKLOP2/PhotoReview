@@ -32,4 +32,8 @@ internal static class LocDiagnostics
     public static readonly DiagnosticDescriptor DuplicateKey = new(
         "PRLOC006", "Duplicate key", "Key '{0}' appears more than once",
         Category, DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor MultipleCatalogs = new(
+        "PRLOC007", "Several English catalogs", "'{0}' is an extra en.json: only '{1}' (first by path) is used to generate Tr",
+        Category, DiagnosticSeverity.Error, isEnabledByDefault: true);
 }

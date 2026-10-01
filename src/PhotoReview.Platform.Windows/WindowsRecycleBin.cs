@@ -17,6 +17,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private readonly ILog _log;
     private readonly IRecycleBinSettingsSource _settings;
     private readonly Action<string> _shellRecycle;
+    private readonly Func<string, long, DateTime, bool> _shellRestore;
 
     public WindowsRecycleBin(ILog? log = null)
         : this(log, WindowsRecycleBinSettingsSource.Instance)
@@ -24,11 +25,14 @@ public sealed class WindowsRecycleBin : IRecycleBin
     }
 
     /// <param name="shellRecycle">Test seam for the shell call, so refusal tests never reach the real Recycle Bin.</param>
-    internal WindowsRecycleBin(ILog? log, IRecycleBinSettingsSource settings, Action<string>? shellRecycle = null)
+    /// <param name="shellRestore">Test seam for the shell restore (bin enumeration + verb), so tests never touch the real Recycle Bin.</param>
+    internal WindowsRecycleBin(ILog? log, IRecycleBinSettingsSource settings, Action<string>? shellRecycle = null,
+        Func<string, long, DateTime, bool>? shellRestore = null)
     {
         _log = log ?? NullLog.Instance;
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _shellRecycle = shellRecycle ?? (path => FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin));
+        _shellRestore = shellRestore ?? RestoreViaShell;
     }
 
     public void SendToRecycleBin(string path)
@@ -82,9 +86,24 @@ public sealed class WindowsRecycleBin : IRecycleBin
             throw new IOException(PhotoReview.Core.Localization.Tr.CoreRecycleNotDeleted(Path.GetFileName(path)));
     }
 
+    /// <remarks>
+    /// Blocking and slow (enumerates the bin, may show shell UI): callers run it off the UI thread (UndoService / RecoveryRetryService).
+    /// RV-P02: a file already at <paramref name="originalPath"/> makes the shell Restore verb raise a modal replace/rename prompt, so
+    /// it is refused up front without any shell call (the caller reports the normal "restore failed").
+    /// </remarks>
     public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(originalPath);
+        if (File.Exists(originalPath))
+        {
+            _log.Warn($"Recycle Bin restore refused, a file already exists at the original path: {Path.GetFileName(originalPath)}");
+            return false;
+        }
+        return _shellRestore(originalPath, expectedSize, expectedLastWriteUtc);
+    }
+
+    private bool RestoreViaShell(string originalPath, long expectedSize, DateTime expectedLastWriteUtc)
+    {
         object? shell = null, recycle = null;
         try
         {
@@ -195,10 +214,6 @@ public sealed class WindowsRecycleBin : IRecycleBin
 }
 
 /// <summary>
-/// Decides whether the shell can really recycle a path (R2-F-05). Only local fixed drives have a Recycle Bin that
-/// <c>SHFileOperation</c> uses without warning; removable, network, optical, RAM and unknown volumes delete permanently.
-/// </summary>
-/// <summary>
 /// Which failures while reading ONE Recycle Bin item's shell properties skip that item instead of aborting the whole
 /// restore. The items are late-bound (<c>dynamic</c>), so a property the shell does not expose surfaces as a
 /// <see cref="Microsoft.CSharp.RuntimeBinder.RuntimeBinderException"/>, not a COM error.
@@ -209,6 +224,10 @@ internal static class RecycleItemFailure
         ex is COMException or InvalidCastException or FormatException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException;
 }
 
+/// <summary>
+/// Decides whether the shell can really recycle a path (R2-F-05). Only local fixed drives have a Recycle Bin that
+/// <c>SHFileOperation</c> uses without warning; removable, network, optical, RAM and unknown volumes delete permanently.
+/// </summary>
 internal static class RecycleEligibility
 {
     private const string ExtendedPrefix = @"\\?\";

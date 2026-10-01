@@ -33,9 +33,22 @@ public sealed class TrGenerator : IIncrementalGenerator
     {
         var catalogs = context.AdditionalTextsProvider
             .Where(static f => string.Equals(Path.GetFileName(f.Path), CatalogFileName, StringComparison.OrdinalIgnoreCase))
-            .Select(static (f, ct) => new CatalogInput(f.Path, f.GetText(ct)?.ToString()));
+            .Select(static (f, ct) => new CatalogInput(f.Path, f.GetText(ct)?.ToString()))
+            .Collect();
 
-        context.RegisterSourceOutput(catalogs, static (spc, input) => Execute(spc, input));
+        context.RegisterSourceOutput(catalogs, static (spc, inputs) =>
+        {
+            if (inputs.IsDefaultOrEmpty) return;
+            // RV-P07: one Tr.g.cs per compilation. A second en.json would add the same hint name twice (CS8785, generator crash),
+            // so the first by path order is used and every other one is reported.
+            var ordered = inputs.OrderBy(static i => i.Path, StringComparer.Ordinal).ToList();
+            for (var i = 1; i < ordered.Count; i++)
+            {
+                var location = Location.Create(ordered[i].Path, new TextSpan(0, 0), new LinePositionSpan(default, default));
+                spc.ReportDiagnostic(Diagnostic.Create(LocDiagnostics.MultipleCatalogs, location, ordered[i].Path, ordered[0].Path));
+            }
+            Execute(spc, ordered[0]);
+        });
     }
 
     private static void Execute(SourceProductionContext context, CatalogInput input)

@@ -492,4 +492,33 @@ public sealed class ExplorerOrderServiceSeamTests
         var final = await service.TryGetSnapshotAsync(Folder("done"), Long, CancellationToken.None).WaitAsync(HangGuard);
         Assert.Equal(ExplorerOrderStatus.Available, final.Status);
     }
+
+    [Fact(DisplayName = "RV-P04: a Prefetch that races Dispose (Dispose lands between the disposed check and the store) stores nothing and never throws")]
+    public async Task PrefetchRacingDispose_StoresNothing()
+    {
+        var service = Create((folder, _, _, token) => { token.ThrowIfCancellationRequested(); return Available(folder, "a.jpg"); });
+        service.BeforePrefetchStoreHook = service.Dispose;
+
+        var error = Record.Exception(() => service.Prefetch(Folder("race"), Long));
+
+        Assert.Null(error);
+        Assert.Null(service.PendingPrefetchCleanup);
+        var after = await service.TryGetSnapshotProgressiveAsync(Folder("race"), Long);
+        Assert.Equal(ExplorerOrderStatus.Canceled, after.Status);
+    }
+
+    [Fact(DisplayName = "RV-P04: the prefetch token source is released when its query ends, and later cancelling that prefetch never throws ObjectDisposedException")]
+    public async Task FinishedPrefetch_ReleasesTokenSource_AndLaterCancelIsSafe()
+    {
+        using var service = Create((folder, _, _, _) => Available(folder, "a.jpg"));
+        service.Prefetch(Folder("fin"), Long);
+        var cleanup = service.PendingPrefetchCleanup;
+        Assert.NotNull(cleanup);
+        await cleanup.WaitAsync(HangGuard); // the source is disposed by now
+
+        // A request for another folder cancels the (finished) prefetch: that must tolerate the disposed source.
+        var other = await service.TryGetSnapshotProgressiveAsync(Folder("other"), Long).WaitAsync(HangGuard);
+
+        Assert.Equal(ExplorerOrderStatus.Available, other.Status);
+    }
 }

@@ -27,4 +27,10 @@ public sealed class MemoryHeadroomTests
         Assert.False(WindowsMemoryProbe.EvaluateHeadroom(new MemorySnapshot(10, (ulong)(2 * Gb - 1)), 0.85, 2 * Gb));
         Assert.True(WindowsMemoryProbe.EvaluateHeadroom(new MemorySnapshot(10, (ulong)(2 * Gb)), 0.85, 2 * Gb));
     }
+
+    [Theory(DisplayName = "RV-P06: a negative reserve is treated as zero, not wrapped to a huge unsigned value that disables preload")]
+    [InlineData(-1L)]
+    [InlineData(long.MinValue)]
+    public void EvaluateHeadroom_NegativeReserve_TreatedAsZero(long reserve) =>
+        Assert.True(WindowsMemoryProbe.EvaluateHeadroom(new MemorySnapshot(10, (ulong)Gb), 0.85, reserve));
 }

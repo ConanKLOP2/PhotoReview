@@ -11,3 +11,4 @@ PRLOC003 | Localization | Error | Two keys map to the same generated identifier
 PRLOC004 | Localization | Error | Unbalanced braces or invalid placeholder in English text
 PRLOC005 | Localization | Error | Plural group without a .other entry
 PRLOC006 | Localization | Error | Duplicate key in the English catalog
+PRLOC007 | Localization | Error | More than one en.json catalog is passed to the generator

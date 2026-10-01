@@ -25,8 +25,22 @@ internal static class ExplorerWindowSelector
     {
         var inspected = 0;
         ExplorerViewSnapshot? firstFailure = null;
-        foreach (var window in windows)
+        using var enumerator = windows.GetEnumerator();
+        while (true)
         {
+            // RV-P03: the COM enumerator can fail in MoveNext itself (a window vanishing mid-walk). That cannot be
+            // resumed, so stop walking but keep what was already found instead of aborting the whole query.
+            TWindow window;
+            try
+            {
+                if (!enumerator.MoveNext()) break;
+                window = enumerator.Current;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                log.Error($"Explorer window enumeration failed after {inspected} window(s)", ex);
+                break;
+            }
             try
             {
                 inspected++;
