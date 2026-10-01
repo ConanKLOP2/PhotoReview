@@ -34,11 +34,12 @@ Written 2026-09-30 from the working session plus git history; where they disagre
 |---|---|---|---|
 | White-balance offset write | DONE, NOT VERIFIED on a real app | LibRaw zoom decode uses camera white balance, written by a verified struct offset with a read-back guard (`232c9005`). Least comfortable part: a LibRaw layout change breaks the offset; the read-back guard is meant to detect that | Any LibRaw version bump; first real-machine zoom check |
 | Cache-restored RAW has no preview label | Known limitation | `PhotoInfo.RawPreviewWidth/Height` is 0 for a cache-restored image because it cannot tell (doc comment in `ImagePresenter.cs`), so the "RAW preview WxH" text is absent there; the dimensions shown stay correct | When cache entries carry preview identity |
-| `OC14_FileActionDuringUndo...` CI flake | OPEN (investigation stopped manually) | Failed once on CI (expected 2, actual 1) on a commit that changed no App code; rerun passed; 25/25 local passes. Agent `oc14-flake` (branch `worktree-wf_88e3099b-97d-4`) was finding the root cause and was stopped manually; it had uncommitted changes and is NOT integrated | Agent result reviewed |
+| `OC14_FileActionDuringUndo...` CI flake | DONE 2026-10-01 (root cause: second stale FileNotFound dropped a restored file; see file 04 section 2.1). Older text: OPEN (investigation stopped manually) | Failed once on CI (expected 2, actual 1) on a commit that changed no App code; rerun passed; 25/25 local passes. Agent `oc14-flake` (branch `worktree-wf_88e3099b-97d-4`) was finding the root cause and was stopped manually; it had uncommitted changes and is NOT integrated | Agent result reviewed |
+| Strict corpus run (local) | DONE 2026-10-01 | 23 samples fetched with `tools/fetch-raw-samples.ps1`, SHA-256 verified; Imaging 1651/1651 with both strict variables set | Corpus changes |
 | Manual corpus workflow | NOT VERIFIED | `.github/workflows/raw-corpus.yml` (`4f6b0bde`) has never run: GitHub offers "Run workflow" only once the file is on `master`. Until then RAW corpus tests skip silently in CI | After the first merge to `master`, run it once |
 | Memory leak guard | DONE | `Decode_Repeated200Times_DoesNotContinuouslyGrowPrivateBytes` (Category=Native, not in CI) failed identically at `c1e5c452` (bimodal private bytes). The guard now compares medians with a 192 MB budget (`f8730c11`); an injected 8 MB/decode leak fails it, 1 MB/decode is below resolution | More machines |
 | SEC-01 junction tests | DONE (skip) | Real-junction tests skip when `%TEMP%` is under redirected AppData (Claude desktop app); they do not run there | Temp policy changes |
-| Last three test commits | NOT VERIFIED | `a18adf82`, `e4a88645`, `cd8ff26d` were pushed WITHOUT a full test run, at the user's explicit request | Next full run |
+| Last three test commits | DONE 2026-10-01: covered by the full gate at `c624d083` (was NOT VERIFIED) | `a18adf82`, `e4a88645`, `cd8ff26d` were pushed WITHOUT a full test run, at the user's explicit request | Next full run |
 | Human check on a running app | NOT VERIFIED | Only automated tests plus corpus cover the behaviour changes below; the RAW-62 real-machine check remains waived (ADR 0009) | Before merge |
 | Machine leftovers | Open | `C:\jxtmp`, `D:\tmp_ps.txt`, agent worktrees (`agent-*`, `wf_*`), scratch branches (`worktree-*`, `work/raw-direct`, `fix/pr241-*`, `chore/*`, `test/pr242-*`, `fix/raw-remaining-test-failures`); the RAW corpus (~590 MB) and `native/` binaries are untracked (never commit) | Delete once commits are on the branch |
 
@@ -65,6 +66,7 @@ Written 2026-09-30 from the working session plus git history; where they disagre
 
 ## Docs to update
 
+- 2026-10-01: the RAW-70 repair-dialog sentence in DECISIONS.md and the Vietnamese README are corrected (see file 05).
 - [DECISIONS.md](../DECISIONS.md) Q-RAW-02: still says RAW-30 probes WIC for the survey; the WIC full decoder was removed
   (`54a1b1c6`), so the WIC comparison is survey history only.
 - [SURVEY.md](../SURVEY.md): ORF rows show "Unsupported"; ORF EXIF magics and the RAF size logic were fixed after it was

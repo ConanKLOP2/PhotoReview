@@ -69,6 +69,48 @@ public sealed partial class ImagePresenterTests
         public ImageInfo ReadInfo(string path) => _inner.ReadInfo(path);
     }
 
+    /// <summary>Every decode of the member fails with FileNotFound although the file is on disk: failures that all joined an older failed decode.</summary>
+    private sealed class AlwaysStaleDecoder(string memberPath) : IImageDecoder
+    {
+        private readonly WpfBitmapImageDecoder _inner = new();
+        public int MemberCalls;
+
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            if (!string.Equals(request.Path, memberPath, StringComparison.OrdinalIgnoreCase)) return _inner.Decode(request);
+            Interlocked.Increment(ref MemberCalls);
+            throw new FileNotFoundException("stale", request.Path);
+        }
+
+        public ImageInfo ReadInfo(string path) => _inner.ReadInfo(path);
+    }
+
+    [Fact(DisplayName = "OC14 under load: repeated stale FileNotFound failures never drop a file that is on disk from the catalog")]
+    public async Task PresentAsync_StaleNotFoundKeepsFailingWhileTheFileExists_KeepsTheEntry()
+    {
+        var first = CreateFakeImageFile("first.png");
+        var restored = CreateFakeImageFile("restored.png");
+        var decoder = new AlwaysStaleDecoder(restored);
+        var service = new PreviewImageService(
+            _metrics,
+            () => false,
+            (Func<DecodeBox>)(() => new DecodeBox(1920, 0)),
+            capacityBytes: 64 * 1024 * 1024,
+            currentBackend: () => DecoderBackend.Wpf,
+            disableDiskCacheOverride: true,
+            decoder: decoder);
+        var presenter = new ImagePresenter(
+            _catalog, _clock, service, _thumbnailCache, _preloadController, _compareViewModel, _hashService, _metrics,
+            () => _settings, _sessionStore, _sink, fileSystem: null, getSession: () => null);
+        _catalog.Reset([first, restored]);
+
+        await presenter.PresentAsync(1).WithTimeout(Wait.DefaultTimeout, "the presentation");
+
+        Assert.True(File.Exists(restored));
+        Assert.Equal([first, restored], _catalog.Paths); // before the fix the second failure removed it without asking the file system
+        Assert.True(decoder.MemberCalls >= 2); // it was retried, not given up on at once
+    }
+
     [Fact(DisplayName = "A generic failure of the retry pass after a stale FileNotFound restores the member that is really on screen")]
     public async Task PresentAsync_StaleNotFoundRetryThenGenericFailure_KeepsThePresentedPathOnTheMemberOnScreen()
     {

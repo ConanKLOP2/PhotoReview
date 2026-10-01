@@ -1,6 +1,6 @@
 # RAW progress 04 - In progress and how to resume
 
-State as of 2026-09-30, checked with `git` and read-only `gh` at the time of writing. Where the session fact sheet and git
+State as of 2026-09-30 (sections 1 and 2 are refreshed for 2026-10-01 where marked), checked with `git` and read-only `gh` at the time of writing. Where the session fact sheet and git
 disagreed, git is used and the difference is stated.
 
 ## 1. Exact current state
@@ -9,13 +9,15 @@ disagreed, git is used and the difference is stated.
 |---|---|
 | PR | https://github.com/ConanKLOP2/PhotoReview/pull/239 (`feat/raw-support-integration` -> `master`), OPEN, mergeable per `gh` |
 | Draft flag | `gh` reports `isDraft: false` (the fact sheet said draft; trust `gh`, re-check before relying on it) |
-| Branch tip | `cd8ff26d` (also the tip of `origin/feat/raw-support-integration`, so all commits below are pushed) |
+| Branch tip | 2026-10-01: `7a5109fe` or newer on `origin/feat/raw-support-integration` (2026-09-30 it was `cd8ff26d`); everything is pushed |
 | Size | 120 commits in `origin/master..HEAD`; 29 commits in `c1e5c452..HEAD` (`c1e5c452` = tip at the start of the review work) |
-| Master drift | `origin/master` (`53c45d9d`) is 1 commit ahead of the merge-base `16ac0cd5`; master is NOT an ancestor of the branch, so a merge or rebase of master may be needed |
-| CI | Last two completed runs succeeded at `f8730c11` and `4f6b0bde`; the run for `cd8ff26d` (id 36714406524) was still `queued` at the time of writing, so CI at the tip is NOT VERIFIED |
+| Master drift | 2026-10-01: none (`git rev-list --count HEAD..origin/master` = 0). On 2026-09-30 master was 1 commit ahead |
+| CI | 2026-10-01: green at `1b92668f` and `7a5109fe` (`gh run list`). Full local gate green at `c624d083`, strict corpus run green (see file 05) |
 | Local-only work | No integration-branch commit is local-only; this docs series is committed in a scratch worktree and not pushed |
 
-### Pushed but not covered by a full test run
+### Pushed but not covered by a full test run (resolved 2026-10-01)
+
+Resolved: the full local gate (`verify-all.ps1 -All -Hidden`) ran green at `c624d083` and the strict corpus run is green; see [file 05](05-multi-agent-review-2026-10-01.md). History kept below.
 
 Commits after `4f6b0bde` were pushed without a full test run (explicit user request "push now, no more tests"):
 
@@ -28,7 +30,10 @@ Integration 771 passed; Imaging 1267 of 1268 (the failing one is the memory guar
 
 ## 2. In progress
 
-### 2.1 OC14 CI flake (root cause not found)
+### 2.1 OC14 CI flake (root cause found and fixed 2026-10-01)
+
+Root cause: `ImagePresenter` re-presents once after a FileNotFound that the file system contradicts (a Move followed by Undo reuses the same cache key and can join an older failed decode). Under CPU load the retry could fail the same way, and the second failure removed the restored photo without asking the file system again, so `TotalFiles` stayed at `total` instead of `total + 1`. Reproduced under load with 3000 iterations: 21 and 10 failures in two runs; with the fix 0 of 3000 under the same load (plain 3000 runs passed even before, which is why 25/25 local passes proved nothing). Fix: the stat is re-checked on every stale failure, up to `MaxStaleNotFoundRetries` (3); a file that is on disk is never dropped, it is reported like an unreadable file. Guard: `PresentAsync_StaleNotFoundKeepsFailingWhileTheFileExists_KeepsTheEntry` (fails without the fix). The diagnostic worktree `wf_88e3099b-97d-4` held only temporary logging and was removed; its branch was deleted. The history below describes the state before the fix.
+
 - Test: `OC14_FileActionDuringUndo...` failed once on CI (total+1 assertion, expected 2, actual 1) on a commit that changed no
   App code. A rerun passed; 25 of 25 local runs passed.
 - An agent (workflow run `wf_88e3099b-97d`) was investigating and was STOPPED MANUALLY on the user's request (it, and the CPU-load helper processes it had started, were killed) in the worktree

@@ -220,12 +220,15 @@ public sealed class ImagePresenter
     /// Điều phối hiển thị ảnh tại vị trí index chỉ định trong danh mục.
     /// </summary>
     public Task PresentAsync(int index, bool allowCompare = true, string? pathOverride = null, bool includeCaptureGroupInCompare = false) =>
-        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: false, originalPreviousNavigationPath: null);
+        PresentCoreAsync(index, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetries: 0, originalPreviousNavigationPath: null);
 
-    /// <param name="staleNotFoundRetried">True for the single re-present that follows a FileNotFound the file system contradicts (see the catch in this method).</param>
+    /// <summary>Re-presents after a stale FileNotFound are bounded: the file system is re-checked each time and a file that exists is kept.</summary>
+    private const int MaxStaleNotFoundRetries = 3;
+
+    /// <param name="staleNotFoundRetries">How many re-presents already followed a FileNotFound the file system contradicts (see the catch in this method); at most <see cref="MaxStaleNotFoundRetries"/>.</param>
     /// <param name="originalPreviousNavigationPath">Only for that retry: the path that was really on screen before the FIRST attempt,
     /// so a later generic failure restores the member that is shown instead of the retried (failed) member's own path.</param>
-    private async Task PresentCoreAsync(int index, bool allowCompare, string? pathOverride, bool includeCaptureGroupInCompare, bool staleNotFoundRetried,
+    private async Task PresentCoreAsync(int index, bool allowCompare, string? pathOverride, bool includeCaptureGroupInCompare, int staleNotFoundRetries,
         string? originalPreviousNavigationPath)
     {
         if (index < 0 || index >= _catalog.Count) return;
@@ -242,7 +245,7 @@ public sealed class ImagePresenter
         var token = _clock.NextNavigation();
         _catalog.SetCurrent(index);
         var path = pathOverride ?? _catalog.PathAt(index);
-        var previousNavigationPath = staleNotFoundRetried ? originalPreviousNavigationPath : _currentNavigationPath;
+        var previousNavigationPath = staleNotFoundRetries > 0 ? originalPreviousNavigationPath : _currentNavigationPath;
         _currentNavigationPath = path;
 
         // perf(preload): this navigation supersedes the previous one -- drop its viewer decode if it
@@ -624,15 +627,25 @@ public sealed class ImagePresenter
             // has come back since (Undo of the Move keeps length and mtime). Trust the file system, not the joined failure: a
             // file that is on disk again is presented once more (the failed shared decode is gone by now, so this starts a
             // fresh one) instead of being dropped from the catalog.
-            if (!staleNotFoundRetried)
             {
                 var recheck = await StatOffUiThreadAsync(path, CancellationToken.None);
                 if (!_clock.IsNavigationCurrent(token)) return;
+                if (recheck.Outcome == StatOutcome.Found && staleNotFoundRetries >= MaxStaleNotFoundRetries)
+                {
+                    // Under load the retry can join yet another failure from before the file came back. A file that is on disk is
+                    // never dropped from the catalog: report it like an unreadable file and let the user present it again.
+                    AppLog.Error($"ShowImage stale-file failures persisted while the file exists token={token} path={path}", ex);
+                    CurrentPhotoInfo = null;
+                    UpdateCurrentImage(null);
+                    _compareViewModel.Clear();
+                    UpdateStatus(StatusFormatter.ImageError(Path.GetFileName(path), UserFacingError.Describe(ex)), needsAttention: true);
+                    return;
+                }
                 if (recheck.Outcome == StatOutcome.Found)
                 {
                     if (AppLog.Enabled) AppLog.Info($"ShowImage stale-file failure ignored (file exists again) token={token} path={path}");
                     var retryIndex = _catalog.IndexOf(path);
-                    if (retryIndex >= 0) await PresentCoreAsync(retryIndex, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetried: true,
+                    if (retryIndex >= 0) await PresentCoreAsync(retryIndex, allowCompare, pathOverride, includeCaptureGroupInCompare, staleNotFoundRetries: staleNotFoundRetries + 1,
                         originalPreviousNavigationPath: previousNavigationPath);
                     return;
                 }
