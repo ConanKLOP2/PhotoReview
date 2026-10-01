@@ -63,11 +63,15 @@ internal static class WindowPlacementService
     /// Writes via a uniquely named temp file so several windows saving the same placement file (per-folder mode)
     /// never collide on a shared "*.tmp" name (IOException / one window overwriting another's half-written file).
     /// </summary>
-    internal static void WriteAtomically(string path, string content)
+    internal static void WriteAtomically(string path, string content, Action<string, string>? writeText = null)
     {
         var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllText(temp, content);
-        try { File.Move(temp, path, true); }
+        // RV-A15: the write is inside the try too, so a partial temp file left by a failed write (disk full) is deleted.
+        try
+        {
+            (writeText ?? File.WriteAllText)(temp, content);
+            File.Move(temp, path, true);
+        }
         catch { try { File.Delete(temp); } catch { /* best-effort; the original exception is rethrown */ } throw; }
     }
 

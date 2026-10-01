@@ -298,6 +298,32 @@ public sealed class ViewerStateTests
     }
 
     [Fact]
+    public void SwapSourceSize_FitWidthThenViewportGrows_RefitsAgainstTheCurrentViewport()
+    {
+        var state = new ViewerState { DpiScale = 1.0 };
+        state.SetSourceSize(2000, 4000);
+        state.ApplyInitialViewMode(InitialViewMode.FitWidth, 1000, 2000);
+
+        state.UpdateViewport(1900, 2000); // the window grew; zoom is not refit here (Stretch is None) but the axis viewport must follow
+        state.SwapSourceSize(2010, 4020); // same image, bigger decode
+
+        Assert.Equal(1900.0 / 2010, state.Zoom, 6); // not 1000 / 2010 (stale)
+    }
+
+    [Fact]
+    public void SwapSourceSize_FitHeightThenViewportGrows_RefitsAgainstTheCurrentViewport()
+    {
+        var state = new ViewerState { DpiScale = 1.0 };
+        state.SetSourceSize(4000, 2000);
+        state.ApplyInitialViewMode(InitialViewMode.FitHeight, 2000, 1000);
+
+        state.UpdateViewport(2000, 1700);
+        state.SwapSourceSize(4020, 2010);
+
+        Assert.Equal(1700.0 / 2010, state.Zoom, 6);
+    }
+
+    [Fact]
     public void ApplyInitialViewMode_FitHeight_ZoomsToFitHeightAfterRefreshingViewport()
     {
         var state = new ViewerState();

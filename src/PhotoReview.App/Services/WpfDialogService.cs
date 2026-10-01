@@ -62,8 +62,11 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
     }
 
     public bool ShowBatchReview(IReadOnlyList<string> paths)
+        => ShowBatchReview(paths.Select(path => new BatchReviewItem(path, null)).ToList());
+
+    public bool ShowBatchReview(IReadOnlyList<BatchReviewItem> items)
     {
-        var window = new BatchReviewWindow(paths)
+        var window = new BatchReviewWindow(items)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
@@ -76,7 +79,9 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
         var retryService = serviceProvider.GetService<RecoveryRetryService>();
         if (journal is null) return;
 
-        var entries = journal.ReadPendingAndFailedOperations().ToList(); // R2-F-17: one journal pass
+        // R2-F-17: one journal pass. RV-A14: an unreadable journal is reported instead of silently doing nothing.
+        var entries = TryReadRecoveryEntries(journal.ReadPendingAndFailedOperations, ShowError);
+        if (entries is null) return;
         Func<JournalEntry, Task<RecoveryRetryResult>>? retry = retryService is not null ? entry => retryService.RetryMoveOrCopyAsync(entry, confirmedFinishCancelled: true) : null; // the window confirms a cancelled entry explicitly first
         var window = new RecoveryWindow(entries, retry, dismissed => journal.Dismiss(dismissed), serviceProvider.GetService<IFileSystem>(),
             () => serviceProvider.GetService<SettingsStore>()?.Current.AllowPermanentDeleteWithoutRecycleBin == true)
@@ -84,6 +89,21 @@ public sealed class WpfDialogService(IServiceProvider serviceProvider) : IDialog
             Owner = System.Windows.Application.Current?.MainWindow
         };
         window.ShowDialog();
+    }
+
+    /// <summary>RV-A14: the journal entries for the Recovery window, or null after telling the user why the journal could not be read.</summary>
+    internal static List<JournalEntry>? TryReadRecoveryEntries(Func<IReadOnlyList<JournalEntry>> read, Action<string, string> showError)
+    {
+        try
+        {
+            return read().ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Error("Could not read the operation journal for the Recovery window", ex);
+            showError(Tr.RecoveryTitle, Tr.RecoveryReadFailed(ex.Message));
+            return null;
+        }
     }
 
     public void ShowDiagnostics()
