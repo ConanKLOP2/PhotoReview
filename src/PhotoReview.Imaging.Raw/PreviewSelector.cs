@@ -9,7 +9,7 @@ namespace PhotoReview.Imaging.Raw;
 /// Among JPEG previews, select the smallest with both sides &gt;= requested box (after orientation transpose),
 /// else the largest preview.
 /// Unknown preview sizes (Width == 0 or Height == 0) are resolved by walking the preview's JPEG marker segments with bounded per-segment reads (SOF may sit past 64 KB, e.g. Fujifilm RAF),
-/// largest-first, stopping as soon as the choice is certain.
+/// in largest-byte-length order. Every unknown-size candidate is resolved, because neither the byte length nor a resolved sibling bounds the pixel size of another candidate (a heavily compressed JPEG can be the largest by pixels), so no early stop is certain; the cost is paid once per file because <see cref="EmbeddedPreview.HeaderResolved"/> previews are cached with the container info.
 /// </summary>
 public static class PreviewSelector
 {
@@ -90,7 +90,9 @@ public static class PreviewSelector
             return ResolveDimensions(source, jpegPreviews[0], previews);
         }
 
-        // Resolve dimensions for candidates (largest byte length first)
+        // Resolve dimensions for every candidate (largest byte length first). There is deliberately no early stop:
+        // the candidate chosen depends on the pixel size of ALL candidates (smallest one fitting the box, or the largest
+        // area), which no byte-length order can bound. Known sizes cost nothing; walked headers are cached by the caller.
         // If dimensions are missing (0,0), walk the JPEG segments to the SOF
         var resolved = new List<EmbeddedPreview>(jpegPreviews.Count);
         foreach (var p in jpegPreviews.OrderByDescending(p => p.Length))

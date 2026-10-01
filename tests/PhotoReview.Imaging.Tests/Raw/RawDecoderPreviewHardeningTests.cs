@@ -118,6 +118,56 @@ public sealed class RawDecoderPreviewHardeningTests
         Assert.False(decoded.Downscaled);
     }
 
+    private sealed class ThrowingContainerReader : IRawContainerReader
+    {
+        public RawFormat Format => RawFormat.Dng;
+        public bool CanRead(ReadOnlySpan<byte> first64Bytes, string extension) => extension.Equals(".dng", StringComparison.OrdinalIgnoreCase);
+        public RawContainerInfo Read(IRawHeaderSource source, CancellationToken cancellationToken) =>
+            throw new InvalidDataException("RAW header read exceeded hard limit.");
+    }
+
+    private sealed class CountingFullDecoder : IImageDecoder
+    {
+        public int CallCount { get; private set; }
+        public ImageInfo ReadInfo(string path) => throw new NotSupportedException();
+        public IDecodedImage Decode(DecodeRequest request)
+        {
+            CallCount++;
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class CountingFallback : IRawPreviewFallback
+    {
+        public int CallCount { get; private set; }
+        public ReadOnlyMemory<byte> ReadJpegThumbnail(string path, RawFormat format)
+        {
+            CallCount++;
+            return ReadOnlyMemory<byte>.Empty;
+        }
+    }
+
+    [Fact]
+    public void Decode_ContainerReaderThrowsInvalidData_FailsLocalizedCorruptWithoutTryingAnyFallback()
+    {
+        // Contract (pinned): container parsing precedes every fallback, so a container the reader rejects is "RAW corrupt".
+        // The readers themselves therefore must not turn a recoverable condition (an over-budget preview JPEG) into this error.
+        using var temp = new TempRoot("raw-container-throws");
+        var path = temp.File("bad.dng", new byte[256]);
+        var full = new CountingFullDecoder();
+        var fallback = new CountingFallback();
+        var decoder = new RawDecoder(new WpfBitmapImageDecoder(),
+            registry: new RawContainerReaderRegistry([new ThrowingContainerReader()]),
+            previewFallback: fallback, noPreviewDecoder: full);
+
+        var ex = Assert.Throws<InvalidDataException>(() => decoder.Decode(new DecodeRequest(path, DecodeBox.Unbounded)));
+
+        Assert.True(UserFacingError.IsLocalized(ex));
+        Assert.Equal(Tr.ImageErrorRawCorrupt, UserFacingError.Describe(ex));
+        Assert.Equal(0, full.CallCount);
+        Assert.Equal(0, fallback.CallCount);
+    }
+
     private sealed class FixedFallback(byte[] thumbnail) : IRawPreviewFallback
     {
         public ReadOnlyMemory<byte> ReadJpegThumbnail(string path, RawFormat format) => thumbnail;

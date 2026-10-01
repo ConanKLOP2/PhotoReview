@@ -64,4 +64,52 @@ public sealed class TiffSubIfdTypeTests
         Assert.Equal(0x01020304L, TiffStructure.ReadUnsigned([4, 3, 2, 1], 13, littleEndian: true));
         Assert.Equal(0, TiffStructure.TypeSize(16)); // BigTIFF LONG8 stays unsupported
     }
+
+    // ---------------------------------------------------------------- RV-R03: DNG signed sizes and wide compression
+
+    private static RawContainerInfo ReadDng(byte[] data) => Read(new DngContainerReader(), data);
+
+    [Theory]
+    [InlineData((ushort)8)] // SSHORT
+    [InlineData((ushort)9)] // SLONG
+    public void Dng_NegativeImageSize_NeverYieldsNegativeSizes(ushort type)
+    {
+        // Raw-less IFD0 with a valid JPEG interchange preview but a signed -5 x -5 ImageWidth/ImageLength.
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(64, 48);
+        var file = new TiffBytes(true, 1000 + jpeg.Length).Header(8)
+            .Ifd(8, 0, At(0x0100, type, 1, unchecked((uint)-5)), At(0x0101, type, 1, unchecked((uint)-5)),
+                Long(0x0201, 1000), Long(0x0202, (uint)jpeg.Length));
+        file.Put(1000, jpeg);
+
+        var info = ReadDng(file.ToArray());
+
+        Assert.True(info.SensorWidth >= 0 && info.SensorHeight >= 0, $"sensor {info.SensorWidth}x{info.SensorHeight}");
+        Assert.All(info.Previews, p => Assert.True(p.Width >= 0 && p.Height >= 0, $"preview {p.Width}x{p.Height}"));
+    }
+
+    [Fact]
+    public void Dng_CompressionAboveUShort_IsNotTreatedAsJpegCompression()
+    {
+        // Compression LONG 65542 = 0x10006: truncated to (ushort) it became 6 and the lossy-JPEG strip was taken as a preview.
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(64, 48);
+        var file = new TiffBytes(true, 1000 + jpeg.Length).Header(8)
+            .Ifd(8, 0, Long(0x0103, 65542), Long(0x0111, 1000), Long(0x0117, (uint)jpeg.Length));
+        file.Put(1000, jpeg);
+
+        var info = ReadDng(file.ToArray());
+
+        Assert.Empty(info.Previews);
+    }
+
+    [Fact]
+    public void Dng_CompressionSix_StillYieldsTheStripPreview()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(64, 48);
+        var file = new TiffBytes(true, 1000 + jpeg.Length).Header(8)
+            .Ifd(8, 0, Short(0x0103, 6), Long(0x0111, 1000), Long(0x0117, (uint)jpeg.Length));
+        file.Put(1000, jpeg);
+
+        var preview = Assert.Single(ReadDng(file.ToArray()).Previews);
+        Assert.Equal((64, 48), (preview.Width, preview.Height));
+    }
 }

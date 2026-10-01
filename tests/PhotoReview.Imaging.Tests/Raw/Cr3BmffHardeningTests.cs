@@ -243,6 +243,54 @@ public sealed class Cr3BmffHardeningTests
         Assert.Equal(jpeg.Length, preview.Length);
     }
 
+    [Fact]
+    public void Read_TrakSampleIsLosslessJpegSof3_IsNotAPreviewCandidate()
+    {
+        // CR3 raw track: lossless JPEG (FFD8 FFC3 ...) shares the SOI with real previews but cannot be decoded as one.
+        var raw = LosslessJpeg(4000, 3000);
+        var prvwBox = PreviewUuidBox(SyntheticRawBuilder.CreateMinimalJpeg(1620, 1080), 1620, 1080);
+        var prefix = Cat(Ftyp(), prvwBox, Box("moov", TrakWithCo64(sampleSize: (uint)raw.Length, chunkOffset: 0)));
+        long chunkOffset = prefix.Length;
+        var file = Cat(Ftyp(), prvwBox, Box("moov", TrakWithCo64(sampleSize: (uint)raw.Length, chunkOffset: chunkOffset)), raw);
+
+        var info = Read(file);
+
+        var preview = Assert.Single(info.Previews);
+        Assert.Equal((1620, 1080), (preview.Width, preview.Height));
+        Assert.DoesNotContain(info.Previews, p => p.Offset == chunkOffset);
+    }
+
+    [Fact]
+    public void Read_TrakSampleIsLosslessJpegSof3AndPrvwCorrupt_YieldsNoPreviewRangeCoveringRawTrack()
+    {
+        var raw = LosslessJpeg(4000, 3000);
+        var badPrvw = PreviewUuidBox(new byte[64], 1620, 1080);
+        var prefix = Cat(Ftyp(), badPrvw, Box("moov", TrakWithCo64(sampleSize: (uint)raw.Length, chunkOffset: 0)));
+        long chunkOffset = prefix.Length;
+        var file = Cat(Ftyp(), badPrvw, Box("moov", TrakWithCo64(sampleSize: (uint)raw.Length, chunkOffset: chunkOffset)), raw);
+
+        var info = Read(file);
+
+        Assert.Empty(info.Previews);
+    }
+
+    [Fact]
+    public void Read_TrakSampleIsLossyJpeg_UsesProbedDimensions()
+    {
+        var jpeg = SyntheticRawBuilder.CreateMinimalJpeg(640, 480);
+        var prefix = Cat(Ftyp(), Box("moov", TrakWithCo64(sampleSize: (uint)jpeg.Length, chunkOffset: 0)));
+        var file = Cat(Ftyp(), Box("moov", TrakWithCo64(sampleSize: (uint)jpeg.Length, chunkOffset: prefix.Length)), jpeg);
+
+        var info = Read(file);
+
+        var preview = Assert.Single(info.Previews);
+        Assert.Equal((640, 480), (preview.Width, preview.Height));
+    }
+
+    private static byte[] LosslessJpeg(int width, int height) =>
+        // SOI, SOF3 (len 11: precision 14, h, w, 1 component), then filler standing in for entropy-coded sensor data.
+        Cat([0xFF, 0xD8, 0xFF, 0xC3, 0x00, 0x0B, 14], U16(height), U16(width), [1, 1, 0x11, 0], new byte[256]);
+
     // ---------------------------------------------------------------- BmffBoxNavigator
 
     [Fact]
