@@ -879,5 +879,8 @@
   "main.capturePair.badge.tooltipBound": "Press {key} to switch between the JPEG and the RAW of this capture.",
   "main.capturePair.badge.tooltipUnbound": "No key is assigned to switch between the JPEG and the RAW. Assign one in Settings > Shortcuts (\"Switch JPEG / RAW member\"), or use Compare.",
   "settings.rawPairMode.shortcutHint": "In the stacked modes only one file of a pair is shown. To see the other one, assign a key to \"Switch JPEG / RAW member\" under Shortcuts (no key is assigned by default), or open Compare.",
-  "settings.load.shortcutDisabled": "The shortcut for {name} conflicted with another action and was turned off. You can assign it again in Settings > Shortcuts."
+  "settings.load.shortcutDisabled": "The shortcut for {name} conflicted with another action and was turned off. You can assign it again in Settings > Shortcuts.",
+  "core.recovery.busy": "A file action is still running. Wait for it to finish, then retry.",
+  "recovery.readFailed": "The Recovery list could not be read from the operation journal: {reason}",
+  "status.lateBatchRecycled": "Duplicate cleanup finished after you left the folder: {done} file(s) moved to the Recycle Bin, {failed} failed. This cleanup cannot be undone with Ctrl+Z; open the Recycle Bin to restore files."
 }

@@ -18,11 +18,12 @@ internal static class ServiceFactories
     /// <summary>
     /// The retry re-reads <see cref="AppSettings.AllowPermanentDeleteWithoutRecycleBin"/> from the store on every call
     /// (a change made after construction applies), same rule as the first run of a permanent delete (Q-R8).
+    /// <paramref name="fileActionGate"/> is the app's single <see cref="FileActionService"/>: a retry takes its INV-4 gate (RV-C08).
     /// </summary>
     public static RecoveryRetryService CreateRecoveryRetryService(OperationJournal journal, IFileSystem fileSystem,
-        IClock clock, IRecycleBin recycleBin, SettingsStore settingsStore)
+        IClock clock, IRecycleBin recycleBin, SettingsStore settingsStore, FileActionService? fileActionGate = null)
         => new(journal, fileSystem, clock, recycleBin,
-            () => settingsStore.Current.AllowPermanentDeleteWithoutRecycleBin);
+            () => settingsStore.Current.AllowPermanentDeleteWithoutRecycleBin, fileActionGate);
 
     public static RawDecoder CreateRawDecoder(IImageDecoder standardDecoder, ISourceReader sourceReader,
         SourceBytesCache? sourceBytesCache)

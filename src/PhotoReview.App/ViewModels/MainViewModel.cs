@@ -758,6 +758,7 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         var previousRawSupport = _settingsStore.Current.RawSupportEnabled;
         var previousPairMode = _settingsStore.Current.RawPairMode;
         var previousRawFullDecode = _settingsStore.Current.RawFullDecode;
+        var previousSortMode = _settingsStore.Current.ImageSortMode;
         var changed = _dialogService.ShowSettings();
         if (!changed) return;
 
@@ -775,7 +776,9 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
         // file so no listed entry is left that the decoder now refuses and no stale grouping stays. The pair mode is
         // irrelevant while RAW support is off.
         var reloadFolder = (previousRawSupport != newRawSupport
-                || (newRawSupport && previousPairMode != _settingsStore.Current.RawPairMode))
+                || (newRawSupport && previousPairMode != _settingsStore.Current.RawPairMode)
+                // RV-D4 = A: the sort mode is read once per folder load, so a change re-sorts the open folder by reloading it.
+                || previousSortMode != _settingsStore.Current.ImageSortMode)
             && _currentSession?.Folder is { Length: > 0 };
         // The RAW full-decode setting is read when the zoom target is armed (ZoomDetailLoader.OnPreviewPresented), so the open
         // image must be re-presented (cheap: RAM-cached preview, no folder reload) for Never <-> OnZoom to apply to it.
@@ -1176,6 +1179,8 @@ public sealed partial class MainViewModel : ObservableObject, IFolderLoadSink, I
     {
         StatusText = status;
     }
+
+    void IDuplicateCleanupSink.ShowLateActionStatus(string status) => ((IFileActionSink)this).ShowLateActionStatus(status);
 
     async Task IDuplicateCleanupSink.OpenFolderAsync(string folder, string? initialPath)
     {

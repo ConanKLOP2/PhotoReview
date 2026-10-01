@@ -145,6 +145,33 @@ public sealed class CaptureGroupActionRollbackTests
     }
 
     /// <summary>A fully restored disk leaves nothing to retry: the outcome is a terminal Dismissed record, never a Failed Recovery item.</summary>
+    [Fact]
+    public async Task ExecuteGroupAsync_MoveFailsMidway_FatDestination_CompensationRestoresMovedMembers()
+    {
+        // RV-C01: the destination volume (FAT) rounds the moved JPEG's stamp to 2 s; the compensation must still recognize it
+        // as the file it moved and put it back, instead of leaving the pair split.
+        var fs = new InMemoryFileSystem();
+        var odd = Stamp.AddMilliseconds(1735);
+        fs.AddFile(Jpeg, "jpeg", odd);
+        fs.AddFile(Raw, "raw data", odd);
+        var journal = new OperationJournal(new AppPaths(@"C:\Users\test\AppData\Local"), fs, new FixedClock());
+        fs.StampOnMove = (destination, stamp) => destination.StartsWith(@"F:\", StringComparison.OrdinalIgnoreCase)
+            ? new DateTime(stamp.Ticks - stamp.Ticks % TimeSpan.FromSeconds(2).Ticks, DateTimeKind.Utc)
+            : stamp;
+        fs.MoveHook = (source, _) => source == Raw ? new IOException("simulated second-member failure") : null;
+
+        var result = await CreateService(fs, journal)
+            .ExecuteGroupAsync(new CaptureGroupActionRequest(new CaptureGroup(Jpeg, Raw), FileOperationType.Move, @"F:\selected"));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("simulated second-member failure", result.Error); // no "could not be rolled back" note
+        Assert.True(fs.FileExists(Jpeg));
+        Assert.True(fs.FileExists(Raw));
+        Assert.False(fs.FileExists(@"F:\selected\a.jpg"));
+        Assert.False(fs.FileExists(@"F:\selected\a.cr2"));
+        AssertFullyRolledBackAndNotRetryable(journal, result);
+    }
+
     private static void AssertFullyRolledBackAndNotRetryable(OperationJournal journal, CaptureGroupActionResult result)
     {
         Assert.Equal(JournalState.Dismissed, result.Entry!.State);

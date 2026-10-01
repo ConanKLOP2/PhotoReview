@@ -43,6 +43,8 @@ public sealed class SiblingFolderNavigator
 
     public async Task NavigateSiblingFolderAsync(int direction)
     {
+        // RV-A08: only -1/+1 are meaningful; 0 never advanced the search loop (an endless background spin).
+        if (direction is not (-1 or 1)) throw new ArgumentOutOfRangeException(nameof(direction));
         var currentSession = _getCurrentSession();
         var folder = currentSession?.Folder ?? (_catalog.Current != null ? Path.GetDirectoryName(_catalog.Current.Path) : null);
         if (string.IsNullOrWhiteSpace(folder)) return;
@@ -109,6 +111,7 @@ public sealed class SiblingFolderNavigator
 
     private string? FindImageFolder(IReadOnlyList<string> folders, int index, int direction, CancellationToken cancellationToken)
     {
+        if (direction is not (-1 or 1)) throw new ArgumentOutOfRangeException(nameof(direction));
         var rawEnabled = _getRawEnabled?.Invoke() ?? false;
         for (var i = index + direction; i >= 0 && i < folders.Count; i += direction)
         {

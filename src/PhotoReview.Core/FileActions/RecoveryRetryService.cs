@@ -27,13 +27,17 @@ public sealed class RecoveryRetryService
     private readonly IRecycleBin? _recycleBin;
 
     private readonly Func<bool>? _allowPermanentDelete;
+    private readonly FileActionService? _fileActionGate;
 
     /// <param name="allowPermanentDelete">Current value of the permanent-delete-without-Recycle-Bin setting (Q-R8), read at retry
     /// time. Null = not allowed: a group Delete retry never permanently deletes a journaled-Permanent member unless the setting is on now.</param>
+    /// <param name="fileActionGate">RV-C08: the app's INV-4 file-action gate. A retry takes it like any other file action and is
+    /// refused (<see cref="Tr.CoreRecoveryBusy"/>, nothing touched) while a Move/Copy/Delete/Undo holds it. Null = no gate (tests).</param>
     public RecoveryRetryService(OperationJournal journal, IFileSystem fileSystem, IClock clock, IRecycleBin? recycleBin = null,
-        Func<bool>? allowPermanentDelete = null)
+        Func<bool>? allowPermanentDelete = null, FileActionService? fileActionGate = null)
     {
         _allowPermanentDelete = allowPermanentDelete;
+        _fileActionGate = fileActionGate;
         _journal = journal ?? throw new ArgumentNullException(nameof(journal));
         _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -54,6 +58,22 @@ public sealed class RecoveryRetryService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(failed);
+        // RV-C08: a retry is a file action like any other (INV-4). Refused before anything is read or journaled while a
+        // Move/Copy/Delete/Undo holds the gate; the window's modality alone did not prevent the overlap.
+        if (_fileActionGate is not null && !_fileActionGate.TryBegin())
+            return new(false, Tr.CoreRecoveryBusy, null);
+        try
+        {
+            return await RetryCoreAsync(failed, confirmedFinishCancelled, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _fileActionGate?.End();
+        }
+    }
+
+    private async Task<RecoveryRetryResult> RetryCoreAsync(JournalEntry failed, bool confirmedFinishCancelled, CancellationToken ct)
+    {
         if (!confirmedFinishCancelled && string.Equals(failed.ErrorCode, JournalErrors.CancelledByUser, StringComparison.Ordinal))
             return new(false, Tr.CoreRecoveryCancelledNeedsConfirm, null);
 
@@ -201,7 +221,7 @@ public sealed class RecoveryRetryService
                     if (!string.IsNullOrWhiteSpace(folder)) _fileSystem.CreateDirectory(folder);
                     if (failed.Type == FileOperationType.Copy)
                     {
-                        _fileSystem.Copy(sourcePath, destinationPath);
+                        CopyNewOrRemovePartial(sourcePath, destinationPath, member.Size);
                         var copied = _fileSystem.GetFileStat(destinationPath);
                         if (copied?.Length != member.Size) throw new JournalCodedException(JournalErrors.RetryVerifyFailed);
                     }
@@ -229,6 +249,36 @@ public sealed class RecoveryRetryService
         }
     }
 
+    /// <summary>
+    /// RV-C03: create-new copy for a retry. A destination that appeared after the pre-checks is never overwritten nor deleted
+    /// (<see cref="Tr.CoreRecoveryDestinationExists"/>); when the copy itself fails after creating the destination, the partial
+    /// file is deleted while it is provably incomplete (strictly shorter than the source), so the entry stays retryable
+    /// instead of turning into a Conflict. The original failure is rethrown either way.
+    /// </summary>
+    private void CopyNewOrRemovePartial(string source, string destination, long sourceSize)
+    {
+        bool created;
+        try
+        {
+            created = _fileSystem.TryCopyNew(source, destination);
+        }
+        catch (Exception copyFailure) when (copyFailure is not OutOfMemoryException)
+        {
+            try
+            {
+                if (_fileSystem.GetFileStat(destination) is { } partial && partial.Length < sourceSize)
+                    _fileSystem.Delete(destination);
+            }
+            catch (Exception cleanup) when (cleanup is not OutOfMemoryException)
+            {
+                // Left in place: Recovery shows the conflict; the original failure (rethrown below) is what gets journaled,
+                // whatever this best-effort cleanup threw.
+            }
+            throw;
+        }
+        if (!created) throw new IOException(Tr.CoreRecoveryDestinationExists);
+    }
+
     private static RecoveryRetryResult AlreadyHandled() => new(false, Tr.CoreRecoveryAlreadyHandled, null, Superseded: true);
 
     // P02: `failed` is the Recovery window's snapshot. Another process sharing the journal (InstanceMode.PerFolder) may be
@@ -252,7 +302,7 @@ public sealed class RecoveryRetryService
 
             if (failed.Type == FileOperationType.Copy)
             {
-                _fileSystem.Copy(failed.Source, destination);
+                CopyNewOrRemovePartial(failed.Source, destination, prepared.Size);
                 tx.VerifyDestination(_fileSystem, destination, JournalErrors.RetryVerifyFailed);
             }
             else

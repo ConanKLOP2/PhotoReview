@@ -175,7 +175,7 @@ public sealed class DuplicateCleanupController
             // R7-4: the review dialog runs a nested dispatcher loop; a forwarded open can switch the folder meanwhile.
             var dialogFolderGeneration = _clock.CurrentFolder;
             var confirmed = false;
-            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove));
+            await _uiScheduler.InvokeAsync(() => confirmed = _dialogService.ShowBatchReview(remove.Select(path => new BatchReviewItem(path, _catalog.Find(path)?.Length)).ToList()));
             if (!confirmed)
             {
                 _sink.SetStatusText(StatusFormatter.BatchCanceled());
@@ -224,6 +224,14 @@ public sealed class DuplicateCleanupController
 
         if (!_clock.IsFolderCurrent(actionFolderGeneration))
         {
+            // RV-A10 / RV-D5 = A: the files are already in the Recycle Bin, so the user is told through the late-completion
+            // sink (like FileActionController.ReportLateCompletion). Unlike a single Move/Recycle, the batch is NOT
+            // registered for Undo (it never is, in any folder state), and the text says so; nothing is reloaded or touched
+            // in the folder the user is looking at now.
+            if (succeeded > 0 || failures.Count > 0)
+            {
+                _sink.ShowLateActionStatus(Tr.StatusLateBatchRecycled(succeeded, failures.Count));
+            }
             return;
         }
 

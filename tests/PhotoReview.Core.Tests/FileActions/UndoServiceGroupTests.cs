@@ -1,5 +1,6 @@
 using PhotoReview.Core;
 using PhotoReview.Core.Abstractions;
+using PhotoReview.Core.Catalog;
 using PhotoReview.Core.FileActions;
 using PhotoReview.Core.Localization;
 using PhotoReview.Core.Model;
@@ -652,4 +653,68 @@ public sealed class UndoServiceGroupTests
     private int DeleteGroupLines() =>
         _fs.ReadAllText(new AppPaths(@"C:\Users\test\AppData\Local").JournalFile)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries).Count(line => line.Contains("delete-group", StringComparison.Ordinal));
+    // RV-C01: a FAT destination stores write times rounded to 2 s, so the moved members never carry the exact source stamp.
+    private static DateTime RoundToFat(DateTime utc) =>
+        new(utc.Ticks - utc.Ticks % TimeSpan.FromSeconds(2).Ticks, DateTimeKind.Utc);
+
+    private static readonly DateTime OddStamp = Stamp.AddMilliseconds(1735);
+    private const string FatJpeg = @"F:\selected\a.jpg";
+    private const string FatRaw = @"F:\selected\a.cr2";
+
+    private async Task MoveGroupToFatAsync()
+    {
+        _fs.StampOnMove = (destination, stamp) =>
+            destination.StartsWith(@"F:\", StringComparison.OrdinalIgnoreCase) ? RoundToFat(stamp) : stamp;
+        _fs.AddFile(Jpeg, "jpeg", OddStamp);
+        _fs.AddFile(Raw, "raw data", OddStamp);
+        var moved = await new FileActionService(_journal, _fs, new FixedClock(), _bin)
+            .ExecuteGroupAsync(new CaptureGroupActionRequest(new CaptureGroup(Jpeg, Raw), FileOperationType.Move, @"F:\selected"));
+        Assert.True(moved.Succeeded, moved.Error);
+        Assert.NotEqual(OddStamp, _fs.GetFileStat(FatJpeg)!.LastWriteUtc); // precondition: the stamp really was rounded
+        _undo.RegisterGroup(moved);
+    }
+
+    [Fact]
+    public async Task UndoGroupMoveAsync_DestinationOnFatRoundedStamp_RestoresAllMembers()
+    {
+        await MoveGroupToFatAsync();
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(Jpeg));
+        Assert.True(_fs.FileExists(Raw));
+        Assert.False(_fs.FileExists(FatJpeg));
+        Assert.False(_fs.FileExists(FatRaw));
+        Assert.False(_undo.HasLastAction);
+    }
+
+    [Fact]
+    public async Task UndoGroupMoveAsync_MemberMovedBackByHandFromFat_CountsAsAlreadyRestored()
+    {
+        await MoveGroupToFatAsync();
+        _fs.Move(FatJpeg, Jpeg); // the user put the JPEG back by hand: it keeps the FAT-rounded stamp
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(Jpeg));
+        Assert.True(_fs.FileExists(Raw));
+        Assert.False(_fs.FileExists(FatRaw));
+    }
+
+    [Fact]
+    public async Task UndoGroupMoveAsync_FatDestinationStampMovedBy3Seconds_Refuses()
+    {
+        await MoveGroupToFatAsync();
+        _fs.AddFile(FatRaw, "RAW DATA", OddStamp.AddSeconds(3)); // same size, written later: another file
+
+        var result = await _undo.UndoLastAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.True(_fs.FileExists(FatJpeg));
+        Assert.True(_fs.FileExists(FatRaw));
+        Assert.False(_fs.FileExists(Jpeg));
+        Assert.False(_fs.FileExists(Raw));
+    }
 }

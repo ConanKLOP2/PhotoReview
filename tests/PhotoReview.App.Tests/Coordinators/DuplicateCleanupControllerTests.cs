@@ -150,6 +150,88 @@ public sealed class DuplicateCleanupControllerTests : IDisposable
         public void ClearPreloadedKeys() { }
     }
 
+    /// <summary>Four identical files: a.jpg is kept, the three numbered copies are the batch.</summary>
+    private static readonly string[] BatchOfThreeNames = ["a.jpg", "a (1).jpg", "a (2).jpg", "a (3).jpg"];
+
+    private (DuplicateCleanupController Controller, LateStatusSink Sink, GenerationClock Clock, HookedRecycleBin Bin) NewBatchOfThree()
+    {
+        var folder = Path.Combine(_root, "album");
+        Directory.CreateDirectory(folder);
+        var files = BatchOfThreeNames.Select(name => Path.Combine(folder, name)).ToArray();
+        foreach (var file in files) File.WriteAllBytes(file, new byte[2048]);
+        var catalog = new ReviewCatalog();
+        catalog.Reset(files);
+        var fs = new PhysicalFileSystem();
+        var clock = new GenerationClock();
+        var bin = new HookedRecycleBin();
+        var fileActions = new FileActionService(new OperationJournal(new AppPaths(_root), fs, new SystemClock()), fs, new SystemClock(), bin);
+        var sink = new LateStatusSink();
+        var controller = new DuplicateCleanupController(
+            clock, catalog, fileActions, new FileHashService(new SourceBytesCache(1024 * 1024)),
+            fs, dialogService: null, new InlineUiScheduler(),
+            preloadController: null, thumbnailCache: null, previewService: null, sink);
+        return (controller, sink, clock, bin);
+    }
+
+    [Fact(DisplayName = "RV-A10 / RV-D5: a batch that finishes after the folder changed reports a late-completion status with the counts and reloads nothing")]
+    public async Task RemoveDuplicates_FolderChangedDuringBatch_ReportsLateCompletion()
+    {
+        var (controller, sink, clock, bin) = NewBatchOfThree();
+        bin.OnRecycle = count =>
+        {
+            if (count == 1) clock.NextFolder(); // the user opens another folder after the first of three recycles
+        };
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Equal(3, bin.Recycled);
+        Assert.Equal([Tr.StatusLateBatchRecycled(3, 0)], sink.LateStatuses);
+        Assert.Equal(0, sink.Reloads);
+        Assert.DoesNotContain(sink.Statuses, status => status == StatusFormatter.BatchDone(3, 0));
+    }
+
+    [Fact(DisplayName = "RV-A10: per-file failures are aggregated (2 recycled, 1 IOException -> 1 failure in the status)")]
+    public async Task RemoveDuplicates_OneFileFails_StatusCountsTheFailure()
+    {
+        var (controller, sink, _, bin) = NewBatchOfThree();
+        bin.OnRecycle = count =>
+        {
+            if (count == 2) throw new IOException("locked by another process");
+        };
+
+        await controller.RemoveDuplicatesAsync(removeNumbered: true);
+
+        Assert.Equal(StatusFormatter.BatchDone(2, 1), sink.Statuses[^1]);
+    }
+
+    private sealed class LateStatusSink : IDuplicateCleanupSink
+    {
+        public List<string> Statuses { get; } = [];
+        public List<string> LateStatuses { get; } = [];
+        public int Reloads { get; private set; }
+        public void SetStatusText(string status) => Statuses.Add(status);
+        public void ShowLateActionStatus(string status) => LateStatuses.Add(status);
+        public Task OpenFolderAsync(string folder, string? initialPath = null)
+        {
+            Reloads++;
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Fake: deletes the file instead of touching the user's real Recycle Bin (AGENTS.md); a hook can fail or react per call.</summary>
+    private sealed class HookedRecycleBin : IRecycleBin
+    {
+        private int _count;
+        public int Recycled => Volatile.Read(ref _count);
+        public Action<int>? OnRecycle { get; set; }
+        public void SendToRecycleBin(string path)
+        {
+            OnRecycle?.Invoke(Interlocked.Increment(ref _count));
+            File.Delete(path);
+        }
+        public bool TryRestore(string originalPath, long expectedSize, DateTime expectedLastWriteUtc) => false;
+    }
+
     /// <summary>Fake: deletes the file instead of touching the user's real Recycle Bin (AGENTS.md).</summary>
     private sealed class DeletingRecycleBin : IRecycleBin
     {

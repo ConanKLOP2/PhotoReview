@@ -187,17 +187,19 @@ public sealed class ShortcutRouter
             return ReviewCommand.ToggleCaptureMember;
         }
 
-        // 8. Custom Actions
+        // 8. Custom Actions. RV-A03/RV-D3: file-changing commands (user Actions, Recycle) fire only with NO
+        // modifier, so Ctrl+Delete / Ctrl+Enter / Shift+Delete never move or delete by accident.
+        var noModifier = modifiers == ModifierKeys.None;
         foreach (var (actionKey, index) in _actionKeys)
         {
-            if (key == actionKey)
+            if (noModifier && key == actionKey)
             {
                 return ReviewCommand.Action(index);
             }
         }
 
         // 9. Recycle
-        if (_recycleKey.HasValue && key == _recycleKey.Value)
+        if (noModifier && _recycleKey.HasValue && key == _recycleKey.Value)
         {
             return ReviewCommand.Recycle;
         }

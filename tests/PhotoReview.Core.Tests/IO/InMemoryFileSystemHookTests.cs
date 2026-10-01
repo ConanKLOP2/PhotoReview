@@ -65,5 +65,31 @@ public class InMemoryFileSystemHookTests
         var ex = Assert.Throws<IOException>(() => _fs.Copy(_testFile, dst));
         Assert.Equal("Simulated out of disk space", ex.Message);
     }
+    [Fact]
+    public void StampOnMoveRewritesTheDestinationWriteTime()
+    {
+        var dst = Path.Combine("C:", "Testing", "dest.txt");
+        var stamp = new DateTime(2026, 9, 19, 9, 0, 1, 735, DateTimeKind.Utc);
+        _fs.AddFile(_testFile, "data", stamp);
+        _fs.StampOnMove = (destination, original) => destination == dst ? original.AddSeconds(-1) : original;
+
+        _fs.Move(_testFile, dst);
+
+        Assert.Equal(stamp.AddSeconds(-1), _fs.GetFileStat(dst)!.LastWriteUtc);
+    }
+
+    [Fact]
+    public void CopyFailsAfterBytesLeavesAPartialDestinationAndThrows()
+    {
+        var dst = Path.Combine("C:", "Testing", "dest.txt");
+        _fs.WriteAllTextAtomic(_testFile, "0123456789");
+        _fs.CopyFailsAfterBytes = 3;
+
+        Assert.Throws<IOException>(() => _fs.Copy(_testFile, dst));
+        Assert.Throws<IOException>(() => _fs.TryCopyNew(_testFile, dst + ".2"));
+
+        Assert.Equal("012", _fs.ReadAllText(dst));
+        Assert.Equal("012", _fs.ReadAllText(dst + ".2"));
+    }
 }
 

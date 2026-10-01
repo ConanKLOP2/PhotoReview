@@ -581,19 +581,31 @@ public sealed class ImagePresenter
                 // Q-R29 option C: the post-present refresh stat runs off the UI thread too.
                 var current = await StatOffUiThreadAsync(path, CancellationToken.None);
                 if (!_clock.IsNavigationCurrent(token)) return;
-                if (current.Outcome != StatOutcome.Found) return;
-                var currentInfo = current.Stat!;
-                // A capture-group member shown via pathOverride is a different file from the entry's representative:
-                // its stat must not overwrite the representative's Length/LastWriteUtc (that evicted the cache each toggle).
-                if (pathOverride is null && initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
+                if (current.Outcome != StatOutcome.Found)
                 {
-                    _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
+                    // RV-A04: the file was decoded and is on screen, but the refresh stat failed (vanished or a share hiccup).
+                    // Do not leave the status on "Loading" and skip the session save: report it ready with the size known
+                    // before the stat. The photo stays in the catalog; the next present's initial stat drops a missing file
+                    // or reports the error, so this one is not yanked from under the user.
+                    UpdateStatus(original is { } failedSize
+                        ? StatusFormatter.WithDimensions(index, _catalog.Count, initialSize, failedSize.Width, failedSize.Height, Path.GetFileName(path))
+                        : StatusFormatter.Ready(index, _catalog.Count, initialSize, Path.GetFileName(path)));
                 }
+                else
+                {
+                    var currentInfo = current.Stat!;
+                    // A capture-group member shown via pathOverride is a different file from the entry's representative:
+                    // its stat must not overwrite the representative's Length/LastWriteUtc (that evicted the cache each toggle).
+                    if (pathOverride is null && initialEntry is not null && (initialEntry.Length != currentInfo.Length || initialEntry.LastWriteUtc != currentInfo.LastWriteUtc))
+                    {
+                        _catalog.UpdateMetadata(path, currentInfo.Length, currentInfo.LastWriteUtc);
+                    }
 
-                // Unknown dimensions (the lookup failed for a file that is shown fine): the status line just omits them.
-                UpdateStatus(original is { } size
-                    ? StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, size.Width, size.Height, Path.GetFileName(path))
-                    : StatusFormatter.Ready(index, _catalog.Count, currentInfo.Length, Path.GetFileName(path)));
+                    // Unknown dimensions (the lookup failed for a file that is shown fine): the status line just omits them.
+                    UpdateStatus(original is { } size
+                        ? StatusFormatter.WithDimensions(index, _catalog.Count, currentInfo.Length, size.Width, size.Height, Path.GetFileName(path))
+                        : StatusFormatter.Ready(index, _catalog.Count, currentInfo.Length, Path.GetFileName(path)));
+                }
             }
 
             // 7. Cập nhật status, lưu session, ghi metric Presented

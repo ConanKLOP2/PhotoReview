@@ -377,6 +377,11 @@ public sealed partial class ViewerState : ObservableObject
     /// </summary>
     public void UpdateViewport(double viewportWidth, double viewportHeight, bool force = false)
     {
+        // RV-A11: a Fit-width/height zoom (Stretch is None) must keep the dimension it fills current, so a later
+        // SwapSourceSize refits against the present viewport and not the one of the moment the zoom was applied.
+        if (_fitAxis != FitAxis.None && viewportWidth > 1 && viewportHeight > 1 && double.IsFinite(viewportWidth) && double.IsFinite(viewportHeight))
+            _fitAxisViewport = _fitAxis == FitAxis.Width ? viewportWidth : viewportHeight;
+
         if (!force && Stretch != ViewerStretchMode.Uniform) return;
 
         if (viewportWidth > 1 && viewportHeight > 1 && double.IsFinite(viewportWidth) && double.IsFinite(viewportHeight))

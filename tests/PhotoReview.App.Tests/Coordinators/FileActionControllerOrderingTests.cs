@@ -27,11 +27,13 @@ public sealed class FileActionControllerOrderingTests : IDisposable
     private readonly UndoService _undo;
     private readonly FileActionController _controller;
     private readonly OperationJournal _journal;
+    private readonly FileActionService _fileActions;
+    private readonly PhysicalFileSystem _fs = new();
 
     public FileActionControllerOrderingTests()
     {
         Directory.CreateDirectory(_root);
-        var fs = new PhysicalFileSystem();
+        var fs = _fs;
         var bin = new NoBin();
         _journal = new OperationJournal(new AppPaths(_root), fs, new SystemClock());
         var fileActions = new FileActionService(_journal, fs, new SystemClock(), bin, (source, destination) =>
@@ -40,6 +42,7 @@ public sealed class FileActionControllerOrderingTests : IDisposable
             File.Move(source, destination);
             return Task.CompletedTask;
         });
+        _fileActions = fileActions;
         _undo = new UndoService(_journal, fs, bin, fileActions);
         var settings = new AppSettings
         {
@@ -84,6 +87,78 @@ public sealed class FileActionControllerOrderingTests : IDisposable
 
         Assert.Equal(StatusFormatter.ActionFailed("MoveToSub", Tr.CoreFileActionDestinationExists(Path.Combine(_root, "Sorted", "a.jpg"))), _sink.LastStatus);
         Assert.Equal([a, b], _catalog.Paths); // INV-5: the photo is back
+    }
+
+    // RV-A09: the fire-and-forget present of the next photo writes "Ready" when it finishes; the final "Moved to" must come after it.
+    // Deterministic: the test body runs on a manually pumped SynchronizationContext, so every continuation of the controller
+    // runs exactly when the test says (no timing, no delays).
+    [Fact(DisplayName = "Move to folder: the next photo's present still running does not overwrite the final \"Moved to\" status")]
+    public void MoveToFolder_NextPresentStillRunning_FinalStatusIsMovedTo()
+    {
+        var a = Make("a.jpg");
+        var b = Make("b.jpg");
+        var dest = Path.Combine(_root, "Dest");
+        Directory.CreateDirectory(dest);
+        _catalog.Reset([a, b]);
+        var settings = new AppSettings { MoveCopyReuseLastFolder = true, LastMoveToFolder = dest };
+        var controller = new FileActionController(
+            _catalog, _clock, _fileActions, _undo, dialogService: null, _preload,
+            ManagedNaturalComparer.Instance, () => settings, _sink, fileSystem: _fs);
+        var movedTo = Tr.StatusMovedToFolder("a.jpg", dest);
+        using var coreFinished = new ManualResetEventSlim(false);
+        _sink.OnNavigationStateChanged = coreFinished.Set; // the core run's finally: the file operation is done
+        _sink.HoldPresenter();
+
+        var previous = SynchronizationContext.Current;
+        var pump = new PumpedSynchronizationContext();
+        SynchronizationContext.SetSynchronizationContext(pump);
+        try
+        {
+            var run = controller.MoveOrCopyToFolderAsync(FileOperationType.Move, forcePicker: false, () => (null, a));
+
+            // Let the file operation finish, then run every continuation that is ready. Unfixed code writes "Moved to" (and
+            // completes) here, while the presenter is still held; fixed code is now waiting for the presenter.
+            pump.RunUntil(() => coreFinished.IsSet, TimeSpan.FromSeconds(30));
+            pump.RunQueued();
+
+            _sink.ReleasePresenter(); // the presenter finishes and writes its own status
+            pump.RunUntil(() => run.IsCompleted && _sink.LastPresent!.IsCompleted, TimeSpan.FromSeconds(30));
+            Assert.True(run.IsCompletedSuccessfully);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.Equal(movedTo, _sink.LastStatus);
+        Assert.True(File.Exists(Path.Combine(dest, "a.jpg")));
+    }
+
+    /// <summary>Queues every Post/Send; the test thread runs them explicitly (single-threaded, ordered).</summary>
+    private sealed class PumpedSynchronizationContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = [];
+
+        public override void Post(SendOrPostCallback d, object? state) => _queue.Add((d, state));
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+
+        /// <summary>Runs everything queued right now (and what that queues in turn) until the queue is empty.</summary>
+        public void RunQueued()
+        {
+            while (_queue.TryTake(out var item)) item.Callback(item.State);
+        }
+
+        /// <summary>Runs queued work, blocking for the next item (no polling), until the condition holds.</summary>
+        public void RunUntil(Func<bool> condition, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (!condition())
+            {
+                var remaining = deadline - DateTime.UtcNow;
+                Assert.True(remaining > TimeSpan.Zero, "Timed out waiting for the controller.");
+                if (_queue.TryTake(out var item, remaining)) item.Callback(item.State);
+            }
+        }
     }
 
     [Fact(DisplayName = "A Copy does not invalidate the in-flight present or cancel preload")]
@@ -175,12 +250,18 @@ public sealed class FileActionControllerOrderingTests : IDisposable
         public void ShowLateActionStatus(string status) { }
         public void OnCatalogChanged(string? removedPath) { }
         public void UpdateSessionPath(string currentPath) { }
-        public void NotifyNavigationStateChanged() { }
+        public Action? OnNavigationStateChanged { get; set; }
+        public void NotifyNavigationStateChanged() => OnNavigationStateChanged?.Invoke();
 
         public void HoldPresenter() => _gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         public void ReleasePresenter() => _gate!.SetResult();
 
-        public async Task PresentAsync(int index)
+        /// <summary>The most recent present started (the fire-and-forget one of an action), to wait for its end.</summary>
+        public Task? LastPresent { get; private set; }
+
+        public Task PresentAsync(int index) => LastPresent = PresentCoreAsync(index);
+
+        private async Task PresentCoreAsync(int index)
         {
             if (_gate is not null) await _gate.Task;
             LastStatus = "presented:" + index; // like ImagePresenter.UpdateStatus after the decode

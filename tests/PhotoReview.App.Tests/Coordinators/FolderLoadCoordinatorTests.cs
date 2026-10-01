@@ -43,6 +43,11 @@ public sealed partial class FolderLoadCoordinatorTests
         /// unblocked and the race under test never happened (FLAKY-FolderLoad, docs/refactoring/decisions).
         /// </summary>
         public Action? OnEnumerateFiles { get; set; }
+        /// <summary>RV-A07: runs on the scan thread after each directory entry of the listing is accepted (path, 1-based count).</summary>
+        public Action<string, int>? OnScanEntry { get; set; }
+        private int _scannedEntries;
+        /// <summary>RV-A07: directory entries the fake listing handed out (stops growing once the scan is cancelled).</summary>
+        public int ScannedEntries => Volatile.Read(ref _scannedEntries);
         /// <summary>AR16: files the readability probe reports as unreadable (path → reason).</summary>
         public Dictionary<string, string> Unreadable { get; } = new(StringComparer.OrdinalIgnoreCase);
         /// <summary>AR16: runs on the probe's background thread before each probe (used to hold the probe back).</summary>
@@ -134,7 +139,12 @@ public sealed partial class FolderLoadCoordinatorTests
                 .Where(kvp => kvp.Key.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase)
                     && !kvp.Key.Substring(fullDir.Length).Contains(Path.DirectorySeparatorChar)
                     && include(kvp.Key))
-                .Select(kvp => (kvp.Key, (FileStat?)new FileStat(kvp.Value.Length, FixedListingDate)))
+                .Select(kvp =>
+                {
+                    var count = Interlocked.Increment(ref _scannedEntries);
+                    OnScanEntry?.Invoke(kvp.Key, count);
+                    return (kvp.Key, (FileStat?)new FileStat(kvp.Value.Length, FixedListingDate));
+                })
                 .ToList();
         }
 
@@ -201,8 +211,11 @@ public sealed partial class FolderLoadCoordinatorTests
 
         public void ResetCaches() => ResetCachesCount++;
         public List<PhotoReview.Core.Session.SessionState> SessionsReceived { get; } = [];
+        /// <summary>RV-A05: runs first inside <see cref="OnCatalogReady"/> (a test makes a superseded load's sink throw).</summary>
+        public Action<string>? OnCatalogReadyHook { get; set; }
         public void OnCatalogReady(string folder, int count, PhotoReview.Core.Session.SessionState session)
         {
+            OnCatalogReadyHook?.Invoke(folder);
             CatalogReadyCount++;
             SessionsReceived.Add(session);
         }

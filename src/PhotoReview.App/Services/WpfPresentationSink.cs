@@ -22,6 +22,7 @@ public sealed class WpfPresentationSink : IPresentationSink
     private readonly Dispatcher? _dispatcher;
     private readonly ReviewMetrics? _metrics;
     private int _crossThreadLogged;
+    private RenderFrameTrace? _renderTrace;
 
     public WpfPresentationSink(
         Action<object?, bool>? onSetCurrentImage = null,
@@ -94,21 +95,18 @@ public sealed class WpfPresentationSink : IPresentationSink
                 // SECOND tick means the frame that actually contains the new image has finished
                 // rendering, which is the more accurate "time to see the new image" proxy; it is
                 // reported as a separate RenderedFrame event instead of replacing the first.
-                var tickCount = 0;
-                EventHandler? handler = null;
-                handler = (_, _) =>
-                {
-                    tickCount++;
-                    if (tickCount == 1)
+                // RV-A17: one pending trace at a time (RenderFrameTrace replaces it), so a minimized window that never
+                // renders cannot pile up Rendering handlers.
+                _renderTrace ??= new RenderFrameTrace(
+                    h => CompositionTarget.Rendering += h,
+                    h => CompositionTarget.Rendering -= h,
+                    (t, k, assigned) =>
                     {
-                        PhotoReviewPerf.Log.Rendered(token, PhotoReviewPerf.Ms(assignedTimestamp));
-                        PhotoReviewPerf.Log.Presented(token, kind);
-                        return;
-                    }
-                    CompositionTarget.Rendering -= handler;
-                    PhotoReviewPerf.Log.RenderedFrame(token, PhotoReviewPerf.Ms(assignedTimestamp));
-                };
-                CompositionTarget.Rendering += handler;
+                        PhotoReviewPerf.Log.Rendered(t, PhotoReviewPerf.Ms(assigned));
+                        PhotoReviewPerf.Log.Presented(t, k);
+                    },
+                    (t, assigned) => PhotoReviewPerf.Log.RenderedFrame(t, PhotoReviewPerf.Ms(assigned)));
+                _renderTrace.Start(token, kind, assignedTimestamp);
             }
         });
     }

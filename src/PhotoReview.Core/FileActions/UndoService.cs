@@ -205,9 +205,9 @@ public sealed class UndoService
                     _moveFingerprints[move.Destination] = fingerprint;
                 }
 
+                // RV-C01: destination-side compare, tolerant of a volume that rounds the write time (FAT 2 s, exFAT 10 ms).
                 if (destinationStat is null ||
-                    destinationStat.Length != fingerprint.Size ||
-                    destinationStat.LastWriteUtc != fingerprint.LastWriteUtc)
+                    !FileFingerprint.MatchesMovedDestination(destinationStat, fingerprint.Size, fingerprint.LastWriteUtc))
                 {
                     throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
                 }
@@ -221,12 +221,18 @@ public sealed class UndoService
                     move.Destination,
                     move.Source,
                     fingerprint.Size,
-                    fingerprint.LastWriteUtc,
+                    // The file being moved back as it is now (its stamp may be the destination volume's rounding of the
+                    // original), so Recovery/reconcile of this undo compare against what really sits at move.Destination.
+                    destinationStat.LastWriteUtc,
                     _clock.UtcNow,
                     Undo: true));
                 try
                 {
                     await tx.BeginAsync().ConfigureAwait(false);
+                    // RV-C07: the original folder may have been removed after the Move (it became empty); the group undo
+                    // recreates it too.
+                    var sourceFolder = Path.GetDirectoryName(move.Source);
+                    if (!string.IsNullOrEmpty(sourceFolder)) _fileSystem.CreateDirectory(sourceFolder);
                     if (_moveOverride is not null)
                     {
                         await _moveOverride(move.Destination, move.Source).ConfigureAwait(false);
@@ -248,7 +254,14 @@ public sealed class UndoService
                 // back at Source, or gone from Destination entirely). Drop it so the map does not grow unbounded
                 // across register+undo cycles.
                 _moveFingerprints.Remove(move.Destination);
-                _lastUndoAction = null;
+                // RV-C06: only forget the last action when it is this Move; a direct UndoMoveAsync call must not drop a later
+                // Recycle (or group action) that UndoLastAsync still has to undo.
+                if (_lastUndoAction is { Operation: FileOperationType.Move, GroupMembers: null } last
+                    && string.Equals(last.Source, move.Source, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(last.Destination, move.Destination, StringComparison.OrdinalIgnoreCase))
+                {
+                    _lastUndoAction = null;
+                }
                 return new UndoResult(true, FileOperationType.Move, move.Source, move.Destination, null);
             }
             catch (Exception ex)
@@ -351,24 +364,30 @@ public sealed class UndoService
                 member.Destination ?? throw new IOException(Tr.CoreUndoSourceOrDestinationChanged),
                 member.Source, member.Size, member.LastWriteUtc)).ToArray();
             var pending = new List<JournalGroupMember>();
-            foreach (var member in undoMembers)
+            for (var i = 0; i < undoMembers.Length; i++)
             {
+                var member = undoMembers[i];
                 var sourceStat = _fileSystem.GetFileStat(member.Source);
                 var destinationStat = _fileSystem.GetFileStat(member.Destination!);
                 if (sourceStat is not null && destinationStat is not null)
                     throw new IOException(Tr.CoreUndoSourceOrDestinationChanged);
                 // Already back at the original path: only when it is the moved file itself (size AND write time), not any
-                // file that happens to have the same length.
+                // file that happens to have the same length. RV-C01: it went through the move destination, whose volume may
+                // have rounded its write time, so the compare is the tolerant moved-file one.
                 if (sourceStat is null && destinationStat is not null
-                    && destinationStat.Length == member.Size && destinationStat.LastWriteUtc == member.LastWriteUtc)
+                    && FileFingerprint.MatchesMovedDestination(destinationStat, member.Size, member.LastWriteUtc))
                 {
                     restored.Add(member.Destination!);
                     continue;
                 }
+                // RV-C01: the file to move back sits on the move destination (destination-side compare, tolerant).
                 if (sourceStat is null || destinationStat is not null
-                    || sourceStat.Length != member.Size || sourceStat.LastWriteUtc != member.LastWriteUtc)
+                    || !FileFingerprint.MatchesMovedDestination(sourceStat, member.Size, member.LastWriteUtc))
                     throw new IOException(Tr.CoreUndoDestinationChangedAfterMove);
-                pending.Add(member);
+                // Journal the file as it is now (the stamp the destination volume stored), so a Recovery retry or a reconcile
+                // of this undo compares against what really sits there.
+                undoMembers[i] = member with { LastWriteUtc = sourceStat.LastWriteUtc };
+                pending.Add(undoMembers[i]);
             }
             if (pending.Count == 0)
             {

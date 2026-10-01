@@ -43,7 +43,15 @@ public sealed class ViewerStretchModeConverter : IValueConverter
 public sealed class CompareBorderBrushConverter : IValueConverter
 {
     private static readonly Brush SelectedBrush = Brushes.LimeGreen;
-    private static readonly Brush UnselectedBrush = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55));
+    // Frozen: a process-wide static brush must not be owned by whichever thread happens to touch this type first.
+    private static readonly Brush UnselectedBrush = CreateFrozenBrush(Color.FromRgb(0x55, 0x55, 0x55));
+
+    private static SolidColorBrush CreateFrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {

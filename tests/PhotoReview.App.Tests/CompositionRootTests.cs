@@ -30,6 +30,31 @@ namespace PhotoReview.App.Tests;
 public class CompositionRootTests
 {
     [Fact]
+    public async Task ConfigureServices_RecoveryRetryTakesTheFileActionGate()
+    {
+        // RV-C08: the Recovery retry must share the app's INV-4 gate, not run alongside a Move/Copy/Delete/Undo.
+        var services = new ServiceCollection();
+        App.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var gate = provider.GetRequiredService<FileActionService>();
+        var retry = provider.GetRequiredService<RecoveryRetryService>();
+        Assert.True(gate.TryBegin());
+        try
+        {
+            // Refused before anything is read: the paths do not need to exist.
+            var result = await retry.RetryMoveOrCopyAsync(new JournalEntry("rv-c08", FileOperationType.Move, JournalState.Failed,
+                @"Z:\rv-c08\a.jpg", @"Z:\rv-c08\sel\a.jpg", 1, DateTime.UnixEpoch, DateTime.UnixEpoch, "x"));
+
+            Assert.False(result.Succeeded);
+            Assert.Equal(PhotoReview.Core.Localization.Tr.CoreRecoveryBusy, result.Message);
+        }
+        finally
+        {
+            gate.End();
+        }
+    }
+
+    [Fact]
     public void ConfigureServices_RegistersAllExpectedCoreServices()
     {
         var services = new ServiceCollection();
