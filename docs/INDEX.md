@@ -17,7 +17,6 @@ Find a document by purpose. Read tiers: **T0** (every session, â‰¤18 KB total) Â
 | [`refactoring/HISTORY.md`](refactoring/HISTORY.md) | One line per finished group; how to recover removed plans from git | T1, "what was done before" |
 | [`refactoring/I18N-PLAN.md`](refactoring/I18N-PLAN.md) | Multi-language design (L00-L12, done) | T1, UI text |
 | [`refactoring/raw/`](refactoring/raw/PROGRESS.md) | Camera RAW (ADR 0009, merged in #239): `PROGRESS.md` (post-merge status, open items), `DECISIONS.md` (Q-RAW) | T1, RAW work |
-| [`refactoring/review-2026-10/`](refactoring/review-2026-10/PLAN.md) | Whole-code review 2026-10-01: fix plan (RV-* tasks, decisions RV-D1..D5, PR waves, tracker) | T1, review fixes |
 | [`../README.md`](../README.md) | Overview, setup, build, settings | T1, first-time setup |
 | [`../tests/Fixtures/README.md`](../tests/Fixtures/README.md) | Test fixtures and env vars | T1, tests |
 
