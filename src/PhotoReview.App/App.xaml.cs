@@ -132,8 +132,7 @@ public partial class App : System.Windows.Application, IDisposable
         services.AddSingleton<ThumbnailCache>(sp => new ThumbnailCache(
             diskDirectory: sp.GetRequiredService<IAppPaths>().ThumbnailCacheDir,
             persistNewThumbnails: false,
-            log: sp.GetService<ILog>(),
-            sourceBytesCache: sp.GetRequiredService<SourceBytesCachePolicy>().Cache));
+            log: sp.GetService<ILog>()));
         services.AddSingleton<SourceBytesCachePolicy>(sp =>
         {
             var settings = sp.GetRequiredService<SettingsStore>().Current;
@@ -182,8 +181,10 @@ public partial class App : System.Windows.Application, IDisposable
                     && settingsStore.Current.RawFullDecode == PhotoReview.Core.Model.RawFullDecode.OnZoom);
         });
 
-        services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>(sp =>
-            (getEntries, getTotalBytes) =>
+        // RV-I13: getSnapshotVersion (ReviewCatalog.StructuralVersion) lets a running preload lifetime notice a catalog
+        // change that did not go through Cancel() and restart on the new snapshot.
+        services.AddSingleton<Func<Func<CatalogEntry[]>, Func<long>, Func<int>, PreloadScheduler>>(sp =>
+            (getEntries, getTotalBytes, getSnapshotVersion) =>
             {
                 var settingsStore = sp.GetRequiredService<SettingsStore>();
                 var sourceBytesCache = sp.GetRequiredService<SourceBytesCachePolicy>().Cache;
@@ -202,7 +203,8 @@ public partial class App : System.Windows.Application, IDisposable
                     ? (path, token) => Task.Run(() => sourceBytesCache.TryPrefetch(path), token)
                     : null,
                 // feat/preload-window-setting: captured once at composition (applies after restart, Q-AR6/Q-R19).
-                window: PreloadWindow.FromSettings(settingsStore.Current));
+                window: PreloadWindow.FromSettings(settingsStore.Current),
+                snapshotVersion: getSnapshotVersion);
             });
 
         // 7. ViewModels & Coordinators

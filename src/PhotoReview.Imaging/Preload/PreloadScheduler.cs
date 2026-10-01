@@ -22,6 +22,8 @@ public sealed class PreloadScheduler : IDisposable
     // GetCurrentCacheKey(entry), which reuses the folder scan's Length/LastWriteUtc instead of
     // stat-ing every candidate examined during a preload scan.
     private readonly Func<CatalogEntry[]> _snapshotEntries;
+    // RV-I13: cheap change counter of the list behind _snapshotEntries (ReviewCatalog.StructuralVersion); null = never changes.
+    private readonly Func<int>? _snapshotVersion;
     private readonly PreloadOptions _options;
     private readonly IMemoryProbe _memoryProbe;
     private readonly IUiScheduler _ui;
@@ -69,7 +71,16 @@ public sealed class PreloadScheduler : IDisposable
     // against that, so every access goes through _preloadedKeysGate.
     private readonly HashSet<ImageCacheKey> _preloadedKeys = [];
     private readonly object _preloadedKeysGate = new();
+    // RV-I15: target box of the keys in _preloadedKeys (guarded by _preloadedKeysGate). Keys embed the box, so once
+    // previews are cached at another box (window resize) the old keys can never match again: they are dropped.
+    private DecodeBox _preloadedKeysBox;
     private readonly object _preloadCtsGate = new();
+    // RV-I12: id of the newest scheduler run, and whether that run already passed its final exit check (it will never
+    // look at the priority version again, so PreloadAroundAsync must start a new run instead of joining it).
+    // RV-I13: the _snapshotVersion value that run's entries snapshot was taken at. All guarded by _preloadCtsGate.
+    private long _schedulerRunId;
+    private bool _schedulerRunExiting;
+    private int _schedulerSnapshotVersion;
     private bool _disposed;
 
     public PreloadScheduler(
@@ -82,7 +93,8 @@ public sealed class PreloadScheduler : IDisposable
         IUiScheduler? uiScheduler = null,
         ILog? log = null,
         Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
-        NavigationPace? pace = null)
+        NavigationPace? pace = null,
+        Func<int>? snapshotVersion = null)
     {
         _target = target ?? throw new ArgumentNullException(nameof(target));
         _pace = pace ?? new NavigationPace();
@@ -94,6 +106,7 @@ public sealed class PreloadScheduler : IDisposable
         _ui = uiScheduler ?? ImmediateUiScheduler.Instance;
         _log = log ?? NullLog.Instance;
         _prefetchSourceBytes = prefetchSourceBytes;
+        _snapshotVersion = snapshotVersion;
 
         // D10: precedence is the explicit option/parameter, then the diagnostic environment variable
         var diagOverride = Environment.GetEnvironmentVariable("PHOTOREVIEW_DIAG_PRELOAD_WORKERS");
@@ -123,7 +136,8 @@ public sealed class PreloadScheduler : IDisposable
         IUiScheduler? uiScheduler = null,
         ILog? log = null,
         Func<string, CancellationToken, Task>? prefetchSourceBytes = null,
-        PreloadWindow? window = null)
+        PreloadWindow? window = null,
+        Func<int>? snapshotVersion = null)
         : this(target, metrics, snapshotEntries, totalSourceBytes,
             new PreloadOptions(
                 WorkerCount: workerCountOverride ?? DiagOptionsWorkers() ?? 8,
@@ -135,7 +149,9 @@ public sealed class PreloadScheduler : IDisposable
                 : throw new ArgumentNullException(nameof(memoryProbe), "A real memory probe or an explicit test override is required.")),
             uiScheduler,
             log,
-            prefetchSourceBytes)
+            prefetchSourceBytes,
+            pace: null,
+            snapshotVersion)
     {
     }
 
@@ -241,12 +257,22 @@ public sealed class PreloadScheduler : IDisposable
         // No-op when NotifyNavigation already recorded this index (the normal App path); keeps
         // direction tracking working for callers that only ever call PreloadAroundAsync.
         _pace.Record(center);
+        // RV-I13: read before the snapshot below is taken, so a change in between only costs one extra restart.
+        var snapshotVersion = _snapshotVersion?.Invoke() ?? 0;
         // Navigation changes priority, but an already running decode is useful
         // and must remain available to ShowImageAsync through the in-flight map.
         CancellationTokenSource cts;
         lock (_preloadCtsGate)
         {
             if (_disposed) return Task.CompletedTask;
+            if (snapshotVersion != _schedulerSnapshotVersion && _preloadSchedulerTask is { IsCompleted: false }
+                && ReferenceEquals(_preloadSchedulerCts, _preloadCts) && !_preloadCts.IsCancellationRequested)
+            {
+                // RV-I13: the entries changed without a Cancel() (e.g. an undo re-inserted a file): the running loop
+                // iterates a stale snapshot whose indices now name other files. Retire it exactly like Cancel() does.
+                _preloadCts.Cancel();
+                WakeScheduler();
+            }
             if (_preloadCts.IsCancellationRequested)
             {
                 PruneFinishedLifetimes();
@@ -257,7 +283,7 @@ public sealed class PreloadScheduler : IDisposable
             Volatile.Write(ref _preloadCenter, center);
             Interlocked.Increment(ref _preloadPriorityVersion);
             if (_preloadSchedulerTask is { IsCompleted: false } &&
-                ReferenceEquals(_preloadSchedulerCts, cts))
+                ReferenceEquals(_preloadSchedulerCts, cts) && !_schedulerRunExiting)
             {
                 WakeScheduler();
                 return _preloadSchedulerTask;
@@ -270,7 +296,10 @@ public sealed class PreloadScheduler : IDisposable
             // loop uses ConfigureAwait(false), so no continuation is ever posted to the Dispatcher
             // (Dispose drains this task synchronously on the UI thread).
             _preloadLifetimeTasks.RemoveAll(entry => entry.Task.IsCompleted);
-            _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotEntries(), cts.Token);
+            var runId = ++_schedulerRunId;
+            _schedulerRunExiting = false;
+            _schedulerSnapshotVersion = snapshotVersion;
+            _preloadSchedulerTask = RunPreloadSchedulerAsync(_snapshotEntries(), runId, cts.Token);
             _preloadLifetimeTasks.Add((cts, _preloadSchedulerTask));
             return _preloadSchedulerTask;
         }
@@ -293,7 +322,32 @@ public sealed class PreloadScheduler : IDisposable
         }
     }
 
-    private async Task RunPreloadSchedulerAsync(CatalogEntry[] entries, CancellationToken cancellationToken)
+    /// <summary>
+    /// RV-I12: the exit decision of run <paramref name="runId"/>, taken under the same gate <see cref="PreloadAroundAsync"/>
+    /// joins a running loop under. False when a navigation bumped the priority version since <paramref name="seenVersion"/>
+    /// (take another pass). True marks the run as exiting, so any later <see cref="PreloadAroundAsync"/> starts a new run
+    /// instead of returning this one, whose loop will not read the version again. A run paused for memory may still be
+    /// draining started workers after this: the new run then shares <see cref="_preloadSlots"/> with them (concurrency
+    /// stays bounded) and may queue a path one of them still holds; the target's in-flight dedup joins that decode.
+    /// </summary>
+    private bool TryExitRun(long runId, long seenVersion, bool paused, CancellationToken cancellationToken)
+    {
+        lock (_preloadCtsGate)
+        {
+            if (!paused && !cancellationToken.IsCancellationRequested
+                && Interlocked.Read(ref _preloadPriorityVersion) != seenVersion) return false;
+            if (runId == _schedulerRunId) _schedulerRunExiting = true;
+            return true;
+        }
+    }
+
+    private void MarkRunExiting(long runId)
+    {
+        lock (_preloadCtsGate)
+            if (runId == _schedulerRunId) _schedulerRunExiting = true;
+    }
+
+    private async Task RunPreloadSchedulerAsync(CatalogEntry[] entries, long runId, CancellationToken cancellationToken)
     {
         var workers = _workerCount;
         var running = new Dictionary<Task<PreloadOutcome>, string>();
@@ -463,9 +517,10 @@ public sealed class PreloadScheduler : IDisposable
                 if (paused || running.Count == 0)
                 {
                     // A navigation that landed after this pass read the version bumped it and woke nobody (there is
-                    // nothing to wait on): take another pass for the new centre instead of exiting.
-                    if (!paused && !cancellationToken.IsCancellationRequested
-                        && Interlocked.Read(ref _preloadPriorityVersion) != seenVersion) continue;
+                    // nothing to wait on): take another pass for the new centre instead of exiting. Checked under the
+                    // gate (RV-I12): a navigation after this point starts a new run instead of joining this one.
+                    if (!TryExitRun(runId, seenVersion, paused, cancellationToken)) continue;
+                    BeforeSchedulerExitForTests?.Invoke();
                     break;
                 }
                 var signalled = await Task.WhenAny(running.Keys.Append<Task>(wake)).ConfigureAwait(false);
@@ -493,6 +548,7 @@ public sealed class PreloadScheduler : IDisposable
         // (`_ = PreloadAroundAsync(...)`) is garbage collected.
         catch (Exception ex)
         {
+            MarkRunExiting(runId); // RV-I12: the next navigation starts a new run instead of joining this dying one
             _log.Error("Preload scheduler failed", ex);
             await DrainWorkersAsync(running.Keys).ConfigureAwait(false);
         }
@@ -634,7 +690,21 @@ public sealed class PreloadScheduler : IDisposable
                 // differ from the pre-decode `key` above if the source changed mid-flight.
                 var freshKey = _target.GetCurrentCacheKey(path);
                 var isHit = _target.TryGetCachedPreview(freshKey);
-                if (isHit) lock (_preloadedKeysGate) _preloadedKeys.Add(freshKey);
+                if (isHit)
+                {
+                    lock (_preloadedKeysGate)
+                    {
+                        // RV-I15: a new box (window resized) makes every key of the old box unmatchable: drop them.
+                        // The set only feeds the preload-hit metric (TryConsumePreloadedKey), never the queue logic,
+                        // so a box flip back and forth can at worst under-count hits; it can no longer grow unbounded.
+                        if (freshKey.TargetBox != _preloadedKeysBox)
+                        {
+                            _preloadedKeys.Clear();
+                            _preloadedKeysBox = freshKey.TargetBox;
+                        }
+                        _preloadedKeys.Add(freshKey);
+                    }
+                }
                 if (isHit && _target.CachedPreviewBytes(freshKey) is { } previewBytes)
                     _sizes.Record(freshKey.TargetBox, previewBytes);
                 if (perf)
@@ -665,6 +735,13 @@ public sealed class PreloadScheduler : IDisposable
             {
                 _log.Error($"Preload failed: {path}", ex);
             }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                // RV-I14: cancelled by someone else's token (not this lifetime): only this item failed. Letting it escape
+                // would reach the scheduler loop as an unexpected exception and end preload for the whole lifetime.
+                // Failed (not retried this lifetime) on purpose: a source that keeps cancelling must not be re-read every pass.
+                _log.Warn($"Preload cancelled by another source: {path} ({ex.Message})");
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // A corrupt/unsupported file (FileFormatException, NotSupportedException, ...) must skip only itself:
@@ -678,6 +755,12 @@ public sealed class PreloadScheduler : IDisposable
             _preloadSlots.Release();
         }
     }
+
+    /// <summary>Test seam (RV-I12): runs on the loop's exit path, after its final version check, before the run completes.</summary>
+    internal Action? BeforeSchedulerExitForTests { get; set; }
+
+    /// <summary>Test seam (RV-I15): number of warmed keys currently tracked.</summary>
+    internal int PreloadedKeyCountForTests { get { lock (_preloadedKeysGate) return _preloadedKeys.Count; } }
 
     /// <summary>Test seam: invoked with the path right AFTER a busy preload outcome was recorded in the backoff (set before the first pass).</summary>
     internal Action<string>? BusyNoted { get; set; }

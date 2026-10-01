@@ -69,7 +69,7 @@ public class CompositionRootTests
         Assert.NotNull(provider.GetRequiredService<ThumbnailCache>());
         Assert.NotNull(provider.GetRequiredService<PreviewStateContext>());
         Assert.NotNull(provider.GetRequiredService<PreviewImageService>());
-        Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>());
+        Assert.NotNull(provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, Func<int>, PreloadScheduler>>());
     }
 
     [Fact]
@@ -427,21 +427,16 @@ public class CompositionRootTests
         Assert.NotNull(policy.Cache);
 
         var fileHashService = provider.GetRequiredService<FileHashService>();
-        var thumbnailCache = provider.GetRequiredService<ThumbnailCache>();
         var previewImageService = provider.GetRequiredService<PreviewImageService>();
 
         var fileHashCache = typeof(FileHashService)
             .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(fileHashService);
-        var thumbnailCacheField = typeof(ThumbnailCache)
-            .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(thumbnailCache);
         var previewCacheField = typeof(PreviewImageService)
             .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(previewImageService);
 
         Assert.Same(policy.Cache, fileHashCache);
-        Assert.Same(policy.Cache, thumbnailCacheField);
         Assert.Same(policy.Cache, previewCacheField);
     }
 
@@ -472,8 +467,8 @@ public class CompositionRootTests
         App.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        var factory = provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, PreloadScheduler>>();
-        var scheduler = factory(() => [new CatalogEntry("image1.jpg")], () => 1024L);
+        var factory = provider.GetRequiredService<Func<Func<CatalogEntry[]>, Func<long>, Func<int>, PreloadScheduler>>();
+        var scheduler = factory(() => [new CatalogEntry("image1.jpg")], () => 1024L, () => 0);
 
         Assert.NotNull(scheduler);
         var probeField = typeof(PreloadScheduler).GetField("_memoryProbe", BindingFlags.Instance | BindingFlags.NonPublic);

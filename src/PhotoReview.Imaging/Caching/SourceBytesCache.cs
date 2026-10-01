@@ -24,6 +24,9 @@ public sealed class SourceBytesCache
     // (a global bump would make them skip caching and re-read from disk). One small entry per evicted path.
     private readonly ConcurrentDictionary<string, int> _pathVersions = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Test seam (RV-I16): number of per-path eviction versions still tracked.</summary>
+    internal int PathVersionCountForTests => _pathVersions.Count;
+
     /// <param name="sourceReader">
     /// Q-R29 option C-2 seam: null (every existing caller) uses <see cref="PhysicalSourceReader"/>,
     /// byte-for-byte the direct <see cref="FileStream"/> this cache opened before the seam existed.
@@ -182,6 +185,10 @@ public sealed class SourceBytesCache
     {
         lock (_publishGate)
         {
+            // RV-I16: the generation bump below already invalidates every in-flight read, so per-path versions are no
+            // longer needed. Cleared BEFORE the bump: a reader that sees the new generation then reads version 0 (or a
+            // later Evict's), never a pre-Clear version that would make its publish fail spuriously.
+            _pathVersions.Clear();
             Interlocked.Increment(ref _generation);
             _cache.Clear();
         }

@@ -60,7 +60,9 @@ public sealed class NavigationPace
             if (_lastIndex >= 0)
             {
                 var delta = index - _lastIndex;
-                _direction = delta > 0 ? 1 : -1;
+                // RV-I09: only a single step says which way the user travels. A jump (Home/End, a file action
+                // landing elsewhere) keeps the previous direction -- after Home, Next is still the review default.
+                if (Math.Abs(delta) == 1) _direction = delta;
                 var elapsedMs = (now - _lastTicks) * 1000.0 / Stopwatch.Frequency;
                 // Only single steps held/pressed in quick succession form a burst; a jump (Home, a
                 // sibling folder, a file action landing elsewhere) or a pause restarts the estimate.

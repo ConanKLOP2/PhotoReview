@@ -88,6 +88,25 @@ public sealed class NavigationPaceTests
         Assert.Equal(-1, pace.Direction);
     }
 
+    [Fact(DisplayName = "RV-I09: a Home/End jump keeps the previous direction; only single steps set it")]
+    public void Jump_KeepsPreviousDirection()
+    {
+        var pace = Create();
+        pace.Record(500);
+        pace.Record(0); // Home: forward stays the review default after a jump
+        Assert.Equal(1, pace.Direction);
+
+        pace.Record(1);
+        Assert.Equal(1, pace.Direction);
+
+        var back = Create();
+        back.Record(5);
+        back.Record(4);
+        Assert.Equal(-1, back.Direction);
+        back.Record(400); // End after a Prev: the backward travel direction is kept
+        Assert.Equal(-1, back.Direction);
+    }
+
     [Fact(DisplayName = "Lead is about keyRate x decodeTime once a burst is established, and zero before")]
     public void Lead_IsRateTimesDecode()
     {
