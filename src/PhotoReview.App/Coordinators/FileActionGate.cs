@@ -91,26 +91,43 @@ public sealed class FileActionGate
     /// exclusive holder (<see cref="TryEnter"/>/<see cref="RunExclusiveAsync"/>) currently holds the
     /// gate. Once accepted into the queue, the action always eventually runs -- it is never dropped.
     /// </summary>
+    /// <remarks>
+    /// RV-A01: <paramref name="work"/> is never started under <see cref="_lock"/>. The action's queue
+    /// slot (<see cref="_tail"/>) is published under the lock first, and only then -- outside it --
+    /// does the work start (still synchronously in the caller when the queue is idle, so a
+    /// confirmation dialog appears without an extra dispatcher hop). A modal shown in the work's
+    /// synchronous prefix runs a nested dispatcher loop; a second action submitted from that loop
+    /// therefore sees this action's slot and waits for it (FIFO, INV-4) instead of re-entering the
+    /// Monitor and running concurrently, and other threads never block on the gate meanwhile.
+    /// </remarks>
     public Task<bool> RunQueuedAsync(Func<Task> work)
     {
         ArgumentNullException.ThrowIfNull(work);
+        Task previous;
+        TaskCompletionSource turnDone;
         lock (_lock)
         {
             if (_held != 0) return Task.FromResult(false);
             _queueLength++;
-            var mine = RunAfterAsync(_tail, work);
-            _tail = mine;
-            return mine;
+            previous = _tail;
+            // Completed (always with success) once this action has finished and left the queue. It only
+            // orders the queue; the caller observes the action's own task below, which carries its
+            // result/exception/cancellation exactly. Asynchronous continuations: the next action never
+            // starts inline inside this one's finally.
+            turnDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _tail = turnDone.Task;
         }
+        return RunAfterAsync(previous, work, turnDone);
     }
 
-    private async Task<bool> RunAfterAsync(Task previous, Func<Task> work)
+    private async Task<bool> RunAfterAsync(Task previous, Func<Task> work, TaskCompletionSource turnDone)
     {
-        // Wait our turn regardless of how the previous queued action ended -- its own exception (if
-        // any) already propagates through ITS OWN returned task and must not stop the queue.
-        try { await previous; } catch { /* observed by its own caller */ }
         try
         {
+            // Wait our turn. `previous` is the predecessor's turnDone task, which only ever completes
+            // successfully (its own exception propagates through ITS OWN returned task), so a failed
+            // action never stops the queue.
+            await previous;
             await work();
             return true;
         }
@@ -122,6 +139,7 @@ public sealed class FileActionGate
                 _queueLength--;
                 released = TryTakeReleasedWaiterLocked();
             }
+            turnDone.TrySetResult();
             released?.TrySetResult();
         }
     }
