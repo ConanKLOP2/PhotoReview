@@ -101,6 +101,38 @@ public sealed class PreloadDecoderBusyTests
         Assert.Single(log.Infos, message => message.Contains("decoder busy", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact(DisplayName = "A path that used up its busy retries is preloaded again once a viewer decode cached it and it was later evicted")]
+    public async Task BusyPathAtTheRetryCap_ForgetsItsHistoryWhenItIsSeenCached()
+    {
+        var target = new BusyTarget(busyAttempts: int.MaxValue);
+        using var scheduler = new PreloadScheduler(target, new ReviewMetrics(), () => target.Entries, () => 1,
+            new PreloadOptions(WorkerCount: 4, FullFolderThresholdBytes: 1),
+            new FakeMemoryProbe(true), ImmediateUiScheduler.Instance, new RecordingLog()) { BusyNoted = _ => target.BusyWasRecorded() };
+        _ = scheduler.PreloadAroundAsync(0);
+        await target.WaitForPassesAsync(1).WaitAsync(Bound);
+        var busyAttempts = 1;
+        await target.BusyRecorded(busyAttempts).WaitAsync(Bound);
+        var pass = 1;
+        while (busyAttempts < PreloadBusyBackoff.MaxRetries + 1) // exhaust the retry cap exactly like the test above
+        {
+            pass++;
+            _ = scheduler.PreloadAroundAsync(0);
+            await target.WaitForPassesAsync(pass).WaitAsync(Bound);
+            if ((pass - 1) % (PreloadBusyBackoff.CooldownPasses + 1) == 0) await target.BusyRecorded(++busyAttempts).WaitAsync(Bound);
+        }
+
+        target.SetCached(BusyIndex, true); // the viewer decoded it by another route
+        _ = scheduler.PreloadAroundAsync(0);
+        await target.WaitForPassesAsync(++pass).WaitAsync(Bound);
+        target.SetCached(BusyIndex, false); // ... and the entry was evicted later
+        _ = scheduler.PreloadAroundAsync(0);
+        await target.WaitForPassesAsync(++pass).WaitAsync(Bound);
+        await target.BusyRecorded(busyAttempts + 1).WaitAsync(Bound);
+
+        target.ReleaseBlocked();
+        Assert.Equal(PreloadBusyBackoff.MaxRetries + 2, target.PreloadCount(BusyIndex)); // capped forever before the fix
+    }
+
     private sealed class RecordingLog : ILog
     {
         public ConcurrentQueue<string> Infos { get; } = new();
@@ -146,6 +178,10 @@ public sealed class PreloadDecoderBusyTests
         public int PreloadCount(int index) => _preloads.GetValueOrDefault(index);
         public bool IsCached(int index) => _cached.ContainsKey(Entries[index].Path);
         public void ReleaseBlocked() => _release.TrySetResult();
+        public void SetCached(int index, bool cached)
+        {
+            if (cached) _cached.TryAdd(Entries[index].Path, 0); else _cached.TryRemove(Entries[index].Path, out _);
+        }
 
         public bool TryGetCachedPreview(string path) => _cached.ContainsKey(path);
         public bool TryGetCachedPreview(ImageCacheKey key) => _cached.ContainsKey(key.Path);

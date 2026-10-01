@@ -93,6 +93,21 @@ public sealed class RecoveryRecycleGroupTests
     }
 
     [Fact]
+    public async Task Retry_RecycledMemberStillOnDisk_JournalsTheCodedErrorSoRecoveryCanLocalizeIt()
+    {
+        _fs.AddFile(Raw, new string('r', 10), Stamp);
+        _bin.KeepFileOnRecycle = true; // the bin call "succeeds" but the file is still there
+        var failed = FailedGroup(Member(Jpg), Member(Raw));
+        _journal.Append(failed);
+
+        var result = await _service.RetryMoveOrCopyAsync(failed);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(JournalErrors.SourceStillExistsAfterRecovery, result.Entry!.ErrorCode); // was null: a bare IOException carried only the identifier text
+    }
+
+
+    [Fact]
     public async Task Retry_PartlyRecycledGroup_RecyclesOnlyTheMembersStillPresentAndCommits()
     {
         _fs.AddFile(Raw, new string('r', 10), Stamp);
@@ -264,12 +279,13 @@ public sealed class RecoveryRecycleGroupTests
         public HashSet<string> NoBinPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public List<int> ThreadIds { get; } = [];
+        public bool KeepFileOnRecycle { get; set; }
 
         public void SendToRecycleBin(string path)
         {
             ThreadIds.Add(Environment.CurrentManagedThreadId);
             Recycled.Add(path);
-            fs.Delete(path);
+            if (!KeepFileOnRecycle) fs.Delete(path);
         }
 
         public bool CanRecycle(string path) => !NoBinPaths.Contains(path);
