@@ -1,6 +1,6 @@
 # Camera RAW support: post-merge record
 
-PR [#239](https://github.com/ConanKLOP2/PhotoReview/pull/239) was merged into `master` on 2026-10-01 (squash `2f2bf342`). Design and decisions: [ADR 0009](../../adr/0009-camera-raw-support.md), [DECISIONS.md](DECISIONS.md) (Q-RAW), [SURVEY.md](SURVEY.md) (pre-fix snapshot of the 23-file corpus). The long progress series (review waves, test/CI notes, resume checklist, the 2026-10-01 multi-agent review) was deleted after the merge; recover it with `git show 2f2bf342:docs/refactoring/raw/progress/<file>` (`01-review-and-fixes`, `02-tests-and-ci`, `03-decisions-and-open-items`, `04-in-progress-and-resume`, `05-multi-agent-review-2026-10-01`).
+PR [#239](https://github.com/ConanKLOP2/PhotoReview/pull/239) was merged into `master` on 2026-10-01 (squash `2f2bf342`). Design and decisions: [ADR 0009](../../adr/0009-camera-raw-support.md), [DECISIONS.md](DECISIONS.md) (Q-RAW); the pre-fix survey report was removed 2026-10-01 (`git show 2f2bf342:docs/refactoring/raw/SURVEY.md`). The long progress series (review waves, test/CI notes, resume checklist, the 2026-10-01 multi-agent review) was deleted after the merge; recover it with `git show 2f2bf342:docs/refactoring/raw/progress/<file>` (`01-review-and-fixes`, `02-tests-and-ci`, `03-decisions-and-open-items`, `04-in-progress-and-resume`, `05-multi-agent-review-2026-10-01`).
 
 ## Evidence
 

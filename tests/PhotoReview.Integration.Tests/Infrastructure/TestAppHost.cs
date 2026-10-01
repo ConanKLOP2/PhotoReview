@@ -85,7 +85,7 @@ internal static class TestAppHost
 }
 
 /// <summary>
-/// T14a test seam, migrated by AR02b (AR02-single-composition-root.md, AR02b step 2) from the
+/// T14a test seam, migrated by AR02b (AR02 plan, removed 2026-10-01, see git history, AR02b step 2) from the
 /// App project's now-deleted <c>MainWindowTestHooks.cs</c> (removed by AR02d once the last
 /// non-DI <c>MainWindow</c> constructors and <c>MainWindowHelpers.CreateTestViewModel</c> were
 /// deleted): plain data describing which AR02a DI seams a given test wants overridden, consumed

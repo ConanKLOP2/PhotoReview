@@ -24,7 +24,7 @@ The application must prioritize the following principles when processing and rev
 
 1. **Every session (T0, ≤18 KB total):** `AGENTS.md`, `task_on_progress.md`, `docs/INDEX.md` — establishes context, constraints, and links to scope-specific docs.
 2. **Per task (T1, ≤24 KB per file):** Use `INDEX.md` to find which single plan/architecture doc relates to the work. Read that file + relevant ADR. Do not pre-read all plans. `docs/refactoring/decisions/` and `docs/refactoring/perf/`: read only the one fragment file a link in `OPEN-DECISIONS.md`/`PERF-STATUS.md` points you to, never the whole directory.
-3. **Archive (T2, unlimited):** `docs/archive/` (ADR evidence only) is historical. Do not read unless referenced or verifying decisions. Use `git log --follow` for change rationale.
+3. **History (T2):** there is no `docs/archive/` any more (removed 2026-10-01). Use `git log --follow -- <path>` or `git show 2f2bf342:<path>` for change rationale and removed evidence.
 4. **Task completion:** When a task is done and reaches status DONE, compress it to one line in `docs/refactoring/HISTORY.md` and delete the plan/evidence files (git history keeps them); keep `task_on_progress.md` and `docs/ACTIVE-TASKS.md` to open work only — see the "Avoid append-conflicts" rule below for how these two get updated.
 
 ## Coding Conventions (Naming & Analyzer Warnings)

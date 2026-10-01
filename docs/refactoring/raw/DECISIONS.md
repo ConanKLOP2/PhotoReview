@@ -30,7 +30,7 @@ past the preview. **Decided (2026-09-28, user):** B.
 
 **Recommendation: A (LibRaw)**, behind `RawFullDecode = OnZoom`, with RAW-30 probing WIC so the survey
 can show whether B is good enough on the user's own machine. **Decided (2026-09-28, user):** A (LibRaw); RAW-30 probes WIC; revisit only if the survey shows WIC covers every format fast enough.
-**Outcome (2026-09-29/30):** the RAW-30 probe ran once ([SURVEY.md](SURVEY.md) section 4: WIC fully decoded 2 of 23 corpus
+**Outcome (2026-09-29/30):** the RAW-30 probe ran once (SURVEY.md section 4, removed 2026-10-01, `git show 2f2bf342:docs/refactoring/raw/SURVEY.md`: WIC fully decoded 2 of 23 corpus
 files on the survey machine, 1 more was preview-only, 20 were unavailable), so A stands. The WIC RAW full decoder and codec registry built
 on that probe were removed as unused (`54a1b1c6`; `git grep WicRawFullDecoder` finds only docs). The WIC comparison is survey history
 only; the app has no WIC RAW full-decode path. LibRaw decodes are serialised process-wide by a single-slot gate

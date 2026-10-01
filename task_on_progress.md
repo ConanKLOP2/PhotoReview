@@ -22,7 +22,7 @@ and perf measurements go in new fragment files under `docs/refactoring/decisions
 - **Kinetic pan:** the 2026-09-27 manual check failed (jerky arrow-key glide); #221 damped only the mouse-release glide. No manual
   re-check of arrow-key panning is on record.
 - **Ledger:** the TSV is a `3ef2bb5` snapshot (line numbers stale, note atop the
-  [WORK report](docs/refactoring/WORK-FULL-CODE-REVIEW-2026-09-27.md)); all 8,586 rows now carry a review status (#200, #223).
+  WORK report; both removed 2026-10-01, see HISTORY); all 8,586 rows had a review status (#200, #223).
 - **Caution:** `PerformanceHarnessWarmupTests.DefaultReportIsNotWrittenIntoThePhotoFolder` writes then deletes
   `%TEMP%\PhotoReview-Benchmark\photoreview-performance-report.json`; do not rerun it in isolation.
 - **Releases (Q-R24):** CI tags each merge and drafts a GitHub Release (README, "Releasing"); a human publishes it. Updates: manual check only (Q-R23).

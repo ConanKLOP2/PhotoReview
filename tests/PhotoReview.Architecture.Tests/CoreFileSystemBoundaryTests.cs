@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace PhotoReview.Architecture.Tests;
 
 /// <summary>
-/// AR11a (docs/refactoring/arch-review/AR11-settings-persistence.md): <c>PhotoReview.Core</c> reads/writes disk
+/// AR11a (AR11 plan, removed 2026-10-01, see git history): <c>PhotoReview.Core</c> reads/writes disk
 /// only through <see cref="PhotoReview.Core.Abstractions.IFileSystem"/> (INV-11) -- direct <c>File.</c>/
 /// <c>Directory.</c>/<c>FileInfo.</c>/<c>DirectoryInfo.</c> calls bypass the fakes tests use and any counting
 /// wrapper (e.g. <c>CountingFileSystem</c>) production wires around it. This guard was added when

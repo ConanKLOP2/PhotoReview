@@ -10,7 +10,7 @@ namespace PhotoReview.Architecture.Tests;
 
 /// <summary>
 /// Architecture rules for ST01-ST07 structure optimization refactoring.
-/// These tests enforce the design contracts established in STRUCTURE-OPTIMIZE-PLAN-2026-09-20.md
+/// These tests enforce the design contracts established in STRUCTURE-OPTIMIZE-PLAN-2026-09-20 (removed doc, see git history)
 /// </summary>
 public sealed class StructureOptimizeRulesTests
 {

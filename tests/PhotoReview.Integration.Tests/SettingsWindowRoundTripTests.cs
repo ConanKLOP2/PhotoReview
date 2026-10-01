@@ -8,7 +8,7 @@ using PhotoReview.Integration.Tests.Infrastructure;
 namespace PhotoReview.Integration.Tests;
 
 /// <summary>
-/// AR11b (docs/refactoring/arch-review/AR11-settings-persistence.md): every property in
+/// AR11b (AR11 plan, removed 2026-10-01, see git history): every property in
 /// <see cref="SettingsWindowRedesignTests.UiControlledProperties"/> is hand-mapped twice in
 /// <c>SettingsWindow.xaml.cs</c> -- once in <c>LoadFields</c> (settings -> control) and once in
 /// <c>Save_Click</c> (control -> settings). <see cref="SettingsWindowRedesignTests"/> only ever proves the

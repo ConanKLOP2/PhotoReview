@@ -4,12 +4,12 @@ using System.Collections.Generic;
 namespace PhotoReview.Core.Diagnostics;
 
 /// <summary>
-/// D05: diagnostic-only environment variables (see docs/archive/historical/PERF-DIAGNOSIS-TASKS.md
+/// D05: diagnostic-only environment variables (see PERF-DIAGNOSIS-TASKS (removed doc, see git history)
 /// D05/D10). Values are parsed once per process, on first access, via a
 /// <see cref="Lazy{T}"/> so a mid-run environment mutation (e.g. a test in the same AppDomain)
 /// never causes two reads in the same process to disagree. When none of these variables are set,
 /// every property below returns its "disabled" default and app behavior must be byte-for-byte the
-/// same as before this class existed (docs/archive/historical/PERF-DIAGNOSIS-TASKS.md quy tắc riêng #2).
+/// same as before this class existed (PERF-DIAGNOSIS-TASKS (removed doc, see git history), quy tắc riêng #2).
 ///
 /// <see cref="PreloadWorkers"/> and <see cref="DisableDiskCache"/> are consumed by D10
 /// (PreloadScheduler / PreviewImageService disk cache); D05 only declares them and covers them with
