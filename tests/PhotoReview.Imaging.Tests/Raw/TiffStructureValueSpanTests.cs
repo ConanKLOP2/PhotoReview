@@ -57,6 +57,16 @@ public sealed class TiffStructureValueSpanTests
     }
 
     [Fact]
+    public void ReadAscii_UndefinedValueLongerThanTheTextCap_IsClampedToTheAsciiCap()
+    {
+        var value = Enumerable.Repeat((byte)'A', 4000).ToArray(); // UNDEFINED spans may be up to MaxValueBytes, with no NUL
+
+        var text = TiffStructure.ReadAscii(value, 7);
+
+        Assert.Equal(TiffStructure.MaxAsciiBytes, text!.Length);
+    }
+
+    [Fact]
     public void Ascii_LongerThanTheCap_IsClampedNotRejected()
     {
         var tiff = Build(2, 1000, size: 2000);

@@ -202,6 +202,28 @@ public sealed class CompareViewModelTests
     }
 
     [Fact]
+    public async Task LoadAsync_WithCompareHash_JpegAndRawPair_DoesNotHashEitherFile()
+    {
+        var vm = new CompareViewModel();
+        var hashed = new List<string>();
+
+        var success = await vm.LoadAsync(
+            (@"C:photosimg1.jpg", @"C:photosimg1.cr2"),
+            token: 1,
+            isTokenCurrent: _ => true,
+            loadImageAsync: _ => Task.FromResult<object?>(new object()),
+            getHashAsync: path => { hashed.Add(path); return Task.FromResult("same"); },
+            compareSizeEnabled: false,
+            compareHashEnabled: true,
+            currentIndex: 0,
+            totalFiles: 1);
+
+        Assert.True(success);
+        Assert.Empty(hashed); // a JPEG and its RAW can never be identical: no whole-file read of the RAW
+        Assert.Equal(StatusFormatter.CompareHashText(false), vm.HashText);
+    }
+
+    [Fact]
     public async Task LoadAsync_WithCompareHash_DifferentHashes_SetsKhac()
     {
         var vm = new CompareViewModel();

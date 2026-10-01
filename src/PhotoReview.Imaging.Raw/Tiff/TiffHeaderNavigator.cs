@@ -159,7 +159,9 @@ public static class TiffHeaderNavigator
             long needed = ExifSummaryExtent(source, ifd0Offset, littleEndian, ExifSummaryIfd0Tags, out uint exifPointer);
             if (exifPointer > 0)
                 needed = Math.Max(needed, ExifSummaryExtent(source, exifPointer, littleEndian, ExifSummaryExifTags, out _));
-            length = Math.Max(length, Math.Min(needed, Math.Min(source.Length, RawContainerLimits.MaxExifBlockBytes)));
+            // Grow only when the whole extent fits: a block clamped below `needed` still cannot hold the structure (offsets are
+            // relative to 0), it would just make RawExif read and charge up to 4 MiB of header budget for no EXIF.
+            if (needed <= Math.Min(source.Length, RawContainerLimits.MaxExifBlockBytes)) length = Math.Max(length, needed);
         }
         catch (InvalidDataException)
         {

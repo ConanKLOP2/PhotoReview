@@ -119,6 +119,7 @@ public static class TiffStructure
     public static string? ReadAscii(ReadOnlySpan<byte> value, ushort type)
     {
         if (type is not (2 or 7)) return null;
+        if (value.Length > MaxAsciiBytes) value = value[..MaxAsciiBytes]; // UNDEFINED values may carry up to MaxValueBytes: keep the text cap of type 2
         var end = value.IndexOf((byte)0);
         if (end >= 0) value = value[..end];
         return value.IsEmpty ? null : Encoding.UTF8.GetString(value);

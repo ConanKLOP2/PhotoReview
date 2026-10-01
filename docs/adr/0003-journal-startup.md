@@ -131,8 +131,8 @@ assert journal consistency.
 - A group line whose member list holds a null element or a member with a missing/blank `Source` is quarantined by the
   parser (`JournalLineParser.HasValidGroupMembers`, `80492486`): it is dropped like any other malformed line, because a
   blank `Source` would make every later file check throw out of reconcile/Recovery. Compaction keeps such a line
-  verbatim: `JournalCompactionPlan` gets no entry for it from `JournalLineParser.TryParse` (line 52) and never drops an
-  unparseable line (`IsDroppable`, line 91), so it stays in the file byte for byte.
+  verbatim: `JournalCompactionPlan` gets no entry for it from `JournalLineParser.TryParse` and never drops an
+  unparseable line (the unparseable-entry check in `JournalCompactionPlan.IsDroppable`), so it stays in the file byte for byte.
 - `Committed` with a missing member becomes `Failed` (a Recovery item) in one case: the downgrade guard above re-checks a
   `Committed` verdict of a line an older build settled against EVERY member on disk.
 - Outcome-line contract (`JournalTransaction`): `Fail` and `DismissRolledBack` return the appended record, or `null` when

@@ -31,7 +31,7 @@ public sealed class LibRawBuildTargetTests : IDisposable
         var marker = Path.Combine(dir, "stub-ran.txt");
         var toolsDir = _root.Dir(Path.Combine(name, "tools"));
         File.WriteAllText(Path.Combine(toolsDir, "fetch-libraw.ps1"),
-            $"[IO.File]::WriteAllText('{marker}', 'ran')\r\nexit {stubExitCode}\r\n", new UTF8Encoding(false));
+            $"[IO.File]::WriteAllText('{marker.Replace("'", "''", StringComparison.Ordinal)}', 'ran')\r\nexit {stubExitCode}\r\n", new UTF8Encoding(false));
         var nativeDir = _root.Dir(Path.Combine(name, "native", "x64"));
         if (dllExists) File.WriteAllBytes(Path.Combine(nativeDir, "libraw.dll"), [1, 2, 3]);
 

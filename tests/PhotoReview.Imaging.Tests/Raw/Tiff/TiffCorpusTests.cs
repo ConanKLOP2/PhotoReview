@@ -52,7 +52,9 @@ public sealed class TiffCorpusTests
             parsedCount++;
         }
 
-        Assert.True(parsedCount >= 18, $"Expected at least 18 TIFF corpus files, parsed {parsedCount}");
+        // The full-corpus size is only demanded in strict mode: a partial local corpus (fetch-raw-samples -FormatFilter/-Limit) just skips.
+        if (!RawCorpus.RequireNonEmpty(parsedCount, "TIFF-based")) return;
+        if (RawCorpus.IsStrict) Assert.True(parsedCount >= 18, $"Expected at least 18 TIFF corpus files, parsed {parsedCount}");
     }
 
     // ------------------------------------------------------------------ corpus helpers
@@ -206,8 +208,8 @@ public sealed class TiffCorpusTests
             checkedFiles++;
         }
 
-        if (Directory.Exists(CorpusDir))
-            Assert.Equal(3, checkedFiles);
+        if (RawCorpus.IsStrict && Directory.Exists(CorpusDir))
+            Assert.Equal(3, checkedFiles); // the full corpus has three ORF samples; a partial local corpus is not an error
     }
 
     // ------------------------------------------------------------------ CR2 / RW2

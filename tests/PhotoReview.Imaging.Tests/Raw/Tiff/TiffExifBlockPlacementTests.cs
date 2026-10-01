@@ -76,7 +76,7 @@ public sealed class TiffExifBlockPlacementTests
 
         var info = Create(reader).Read(source, CancellationToken.None);
 
-        Assert.All(info.ExifBlocks, b => Assert.True(b.Length <= RawContainerLimits.MaxExifBlockBytes));
+        Assert.All(info.ExifBlocks, b => Assert.Equal(RawContainerLimits.DefaultExifBlockBytes, b.Length)); // an extent that cannot fit keeps the default block (was grown to the 4 MiB cap for nothing)
         Assert.Null(RawExif.TryReadExif(source, info)?.CameraMake);
     }
 
