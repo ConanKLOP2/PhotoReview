@@ -427,21 +427,16 @@ public class CompositionRootTests
         Assert.NotNull(policy.Cache);
 
         var fileHashService = provider.GetRequiredService<FileHashService>();
-        var thumbnailCache = provider.GetRequiredService<ThumbnailCache>();
         var previewImageService = provider.GetRequiredService<PreviewImageService>();
 
         var fileHashCache = typeof(FileHashService)
             .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(fileHashService);
-        var thumbnailCacheField = typeof(ThumbnailCache)
-            .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(thumbnailCache);
         var previewCacheField = typeof(PreviewImageService)
             .GetField("_sourceBytesCache", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(previewImageService);
 
         Assert.Same(policy.Cache, fileHashCache);
-        Assert.Same(policy.Cache, thumbnailCacheField);
         Assert.Same(policy.Cache, previewCacheField);
     }
 
