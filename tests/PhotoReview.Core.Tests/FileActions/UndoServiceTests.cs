@@ -505,5 +505,106 @@ public sealed class UndoServiceTests
         Assert.True(results.recycle.Succeeded);
         Assert.Equal(0, context.Posts);
     }
+
+    // RV-C01: a FAT destination volume stores write times rounded to 2 s, so a moved file's stamp there is never exactly the
+    // stamp the source had (the fingerprint Undo compares against).
+    private static DateTime RoundToFat(DateTime utc) =>
+        new(utc.Ticks - utc.Ticks % TimeSpan.FromSeconds(2).Ticks, DateTimeKind.Utc);
+
+    private const string FatSource = @"C:\photos\fat.jpg";
+    private const string FatDestination = @"F:\sorted\fat.jpg";
+    private static readonly DateTime OddStamp = new DateTime(2026, 9, 19, 9, 0, 1, DateTimeKind.Utc).AddMilliseconds(735);
+
+    private async Task<FileActionResult> MoveToFatAsync()
+    {
+        _fs.StampOnMove = (destination, stamp) =>
+            destination.StartsWith(@"F:\", StringComparison.OrdinalIgnoreCase) ? RoundToFat(stamp) : stamp;
+        _fs.AddFile(FatSource, "image-content", OddStamp);
+        var moved = await _fileActionService.ExecuteAsync(new FileActionRequest(FatSource, FileOperationType.Move, @"F:\sorted"));
+        Assert.True(moved.Succeeded, moved.Error);
+        Assert.NotEqual(OddStamp, _fs.GetFileStat(FatDestination)!.LastWriteUtc); // precondition: the stamp really was rounded
+        _service.Register(moved);
+        return moved;
+    }
+
+    [Fact]
+    public async Task UndoMoveAsync_DestinationOnFatRoundedStamp_RestoresFile()
+    {
+        await MoveToFatAsync();
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(FatSource));
+        Assert.False(_fs.FileExists(FatDestination));
+    }
+
+    [Fact]
+    public async Task UndoMoveAsync_DestinationSizeChanged_Refuses()
+    {
+        await MoveToFatAsync();
+        _fs.AddFile(FatDestination, "image-content-edited", RoundToFat(OddStamp));
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.False(_fs.FileExists(FatSource));
+        Assert.True(_fs.FileExists(FatDestination));
+        Assert.True(_service.CanUndoMove);
+    }
+
+    [Fact]
+    public async Task UndoMoveAsync_DestinationStampMovedBy3Seconds_Refuses()
+    {
+        await MoveToFatAsync();
+        // Same size, but written 3 s after the recorded stamp: more than any volume rounds, so it is another file.
+        _fs.AddFile(FatDestination, "image-CONTENT", OddStamp.AddSeconds(3));
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.False(_fs.FileExists(FatSource));
+        Assert.True(_fs.FileExists(FatDestination));
+        Assert.True(_service.CanUndoMove);
+    }
+
+    [Fact]
+    public async Task UndoMoveAsync_CalledDirectlyWhileLastActionIsRecycle_KeepsRecycleUndo()
+    {
+        // RV-C06: UndoMoveAsync pops the Move history; it must not forget a later, unrelated Recycle.
+        var source = @"C:\photos\photo1.jpg";
+        var destination = @"C:\photos\sorted\photo1.jpg";
+        var recycled = @"C:\photos\deleted.jpg";
+        var writeTime = new DateTime(2026, 9, 19, 9, 0, 0, DateTimeKind.Utc);
+        _fs.AddFile(destination, "image-content", writeTime);
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, writeTime, null));
+        _service.Register(new FileActionResult(true, FileOperationType.Recycle, recycled, null, 100, writeTime, null));
+
+        var move = await _service.UndoMoveAsync();
+        Assert.True(move.Succeeded, move.ErrorMessage);
+
+        Assert.True(_service.HasLastAction);
+        var recycle = await _service.UndoLastAsync();
+        Assert.True(recycle.Succeeded, recycle.ErrorMessage);
+        Assert.Equal(FileOperationType.Recycle, recycle.Operation);
+        Assert.Equal(recycled, _recycleBin.LastRestoredPath);
+    }
+
+    [Fact]
+    public async Task UndoMoveAsync_SourceFolderDeletedAfterMove_RecreatesFolderAndRestores()
+    {
+        // RV-C07: the original folder was removed after the Move (it became empty); the group undo recreates it, so must this.
+        var source = @"C:\photos\day1\photo1.jpg";
+        var destination = @"D:\sorted\photo1.jpg";
+        _fs.AddFile(destination, "image-content", OddStamp);
+        Assert.False(_fs.DirectoryExists(@"C:\photos\day1"));
+        _service.Register(new FileActionResult(true, FileOperationType.Move, source, destination, 13, OddStamp, null));
+
+        var result = await _service.UndoMoveAsync();
+
+        Assert.True(result.Succeeded, result.ErrorMessage);
+        Assert.True(_fs.FileExists(source));
+        Assert.False(_fs.FileExists(destination));
+    }
 }
 

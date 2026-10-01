@@ -871,5 +871,6 @@
   "main.capturePair.badge.tooltipBound": "Nhấn {key} để chuyển giữa ảnh JPEG và RAW của bộ ảnh này.",
   "main.capturePair.badge.tooltipUnbound": "Chưa gán phím để chuyển giữa JPEG và RAW. Hãy gán phím trong Cài đặt > Phím tắt (\"Chuyển giữa ảnh JPEG và RAW\"), hoặc dùng So sánh.",
   "settings.rawPairMode.shortcutHint": "Ở chế độ gộp chỉ hiện một tệp của mỗi cặp. Để xem tệp còn lại, hãy gán phím cho \"Chuyển giữa ảnh JPEG và RAW\" trong mục Phím tắt (mặc định chưa có phím), hoặc mở So sánh.",
-  "settings.load.shortcutDisabled": "Phím tắt của {name} bị trùng với thao tác khác nên đã bị tắt. Bạn có thể gán lại trong Cài đặt > Phím tắt."
+  "settings.load.shortcutDisabled": "Phím tắt của {name} bị trùng với thao tác khác nên đã bị tắt. Bạn có thể gán lại trong Cài đặt > Phím tắt.",
+  "core.recovery.busy": "Một thao tác tệp vẫn đang chạy. Hãy đợi thao tác đó xong rồi thử lại."
 }
